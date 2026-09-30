@@ -23,7 +23,7 @@ function runId(prefix: string): string {
 }
 
 export class DerridAIClient {
-  readonly events = new EventBus();
+  readonly events: EventBus;
   readonly annotations: AnnotationStore;
   readonly citations = {
     format: formatCitation,
@@ -44,13 +44,19 @@ export class DerridAIClient {
   private readonly repository: RecordRepository;
   private readonly searchEngine: SearchEngine;
   private readonly researchEngine: ResearchEngine;
+  private readonly hasEmbeddings: boolean;
+  private readonly hasGeneration: boolean;
 
   private constructor(
     private readonly manifest: PublicationManifest,
     options: DerridAIClientOptions,
     repository: RecordRepository,
+    events: EventBus,
   ) {
+    this.events = events;
     this.repository = repository;
+    this.hasEmbeddings = Boolean(options.embeddings);
+    this.hasGeneration = Boolean(options.generation);
     const locale = options.locale ?? manifest.locale ?? "en-US";
     this.searchEngine = new SearchEngine(
       manifest,
@@ -95,14 +101,7 @@ export class DerridAIClient {
       events,
       options.cache,
     );
-    const client = new DerridAIClient(manifest, options, repository);
-    // Repository progress must be emitted through the public bus.
-    (
-      repository as unknown as {
-        events: EventBus;
-      }
-    ).events = client.events;
-    return client;
+    return new DerridAIClient(manifest, options, repository, events);
   }
 
   async search(request: SearchRequest): Promise<SearchResponse> {
@@ -157,8 +156,8 @@ export class DerridAIClient {
         dimension: this.manifest.vector_index?.dimension,
       },
       provider: {
-        embeddings: Boolean(this.manifest.features?.semantic_search),
-        generation: Boolean(this.manifest.features?.research),
+        embeddings: this.hasEmbeddings,
+        generation: this.hasGeneration,
       },
     };
   }
