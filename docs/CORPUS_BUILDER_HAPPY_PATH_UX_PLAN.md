@@ -120,8 +120,8 @@ Status: **complete**
 - [x] Document the implementation plan before changing behavior.
 - [x] Re-read current Corpus Builder characterization/workspace/build-review tests before changing markup.
 - [x] Identify i18n source files for all touched Corpus Builder copy (`api/app/locales/{en_us,fr_ca}.py` with `web/src/i18n/enUsDefaults.json` as the frontend English fallback snapshot).
-- [ ] Preserve route-backed workspace behavior and existing deep links.
-- [ ] Add/adjust focused tests before or alongside each behavioral change.
+- [x] Preserve route-backed workspace behavior and existing deep links.
+- [x] Add/adjust focused tests alongside each behavioral change.
 
 ### Phase 1 — Workflow presentation: Setup / Build & review / Publish
 
@@ -354,7 +354,6 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Confirmed the implementation already supports concurrent build/review state, pause/resume at the build layer, bulk “ready” acceptance, and provenance-safe unreviewed publication.
 - Added this implementation plan before behavior changes.
 
-
 ### Checkpoint 1 — pause/resume from Review
 
 - Added an always-visible **Pause** action beside the compact run monitor when the corpus build is actively queued/running in Review.
@@ -362,7 +361,6 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Kept metadata-only follow-up operations distinct: Pause is shown only for the corpus build itself rather than implying that every auxiliary operation shares the same pause semantics.
 - Added focused component coverage for the Review pause action.
 - No new copy was required; the existing localized Pause/Resume strings are reused.
-
 
 ### Checkpoint 2 — review while the build continues
 
@@ -372,7 +370,6 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Added English, Québec French, and frontend English-fallback copy.
 - Extended the active-enrichment component test to cover the new concurrent-review affordance and explanatory copy.
 
-
 ### Checkpoint 3 — three-phase workflow presentation
 
 - Replaced the four peer phase buttons with **Setup → Build & review → Publish** at the user-facing level.
@@ -380,7 +377,6 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Added an in-phase Build/Review sub-navigation so users can switch between live status and Record review without reintroducing them as separate top-level phases.
 - Combined phase completion now requires both Build and Review completion.
 - Added English and Québec French labels plus focused workspace-header coverage.
-
 
 ### Checkpoint 4 — Setup becomes a Build plan
 
@@ -391,7 +387,6 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Corrected setup-state semantics so a blocking context/run-setting problem is reported as incomplete rather than optional.
 - Added English/Québec French/fallback copy and focused tests for the Build plan label and blocking run-setting state.
 
-
 ### Checkpoint 5 — faster review and clearer publication
 
 - Promoted **Accept clean (N)** only when ready Records actually exist, reducing disabled-control noise.
@@ -401,7 +396,6 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Flattened the nested Finish surface so Publish reads as one workspace rather than cards inside cards.
 - Renamed the provenance-safe skip-review path to **Use suggestions as-is & publish…** and updated the confirmation action/title in English, Québec French, frontend fallbacks, frontend tests, and the representative E2E workflow.
 
-
 ### Checkpoint 6 — momentum, contextual review, and current docs
 
 - Added a compact **Build timeline** activity strip to the live Build surface using only the build's persisted `build_events`; it shows recent real stage transitions and progress without fabricating an ETA or event stream.
@@ -410,7 +404,6 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Tightened the Build plan's source identity with media-aware extent facts while continuing to suppress page semantics for non-paginated media.
 - Made the published state read as completion by removing pre-publication readiness counters after a publication exists.
 - Updated `docs/ARCHITECTURE.md` and the User Guide to explain the three user-facing phases, four internal routes, concurrent Build/Review behavior, Build plan, Review controls, and provenance-safe suggestions-as-is publication.
-
 
 ### Checkpoint 7 — draft PR and validation handoff
 
