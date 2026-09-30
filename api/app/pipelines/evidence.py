@@ -59,6 +59,20 @@ class EvidencePipelineExecution:
     trace: PipelineRunTrace
 
 
+SUPPORTED_STRATEGIES = frozenset(
+    {
+        "query.evidence_field",
+        "retrieve.source_cosine",
+        "retrieve.lexical_bm25",
+        "rerank.cross_encoder",
+        "validate.evidence_support",
+        "validate.provenance",
+        "llm.closed_choice_evidence",
+        "select.top_k",
+    }
+)
+
+
 def _enabled_by_strategy(
     pipeline: PipelineDefinition,
 ) -> dict[str, list[PipelineStageDefinition]]:
@@ -98,18 +112,8 @@ def compile_evidence_pipeline(pipeline: PipelineDefinition) -> EvidencePipelineP
         raise ValueError("Evidence adapter can only compile evidence_suggestion pipelines.")
     reject_unhonoured_config(pipeline, "reviewer evidence")
 
-    supported = {
-        "query.evidence_field",
-        "retrieve.source_cosine",
-        "retrieve.lexical_bm25",
-        "rerank.cross_encoder",
-        "validate.evidence_support",
-        "validate.provenance",
-        "llm.closed_choice_evidence",
-        "select.top_k",
-    }
     enabled = [stage for stage in pipeline.stages if stage.enabled]
-    unsupported = sorted({stage.strategy for stage in enabled} - supported)
+    unsupported = sorted({stage.strategy for stage in enabled} - SUPPORTED_STRATEGIES)
     if unsupported:
         raise ValueError(
             "Evidence adapter does not implement strategy family/stage(s): "

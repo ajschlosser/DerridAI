@@ -1,17 +1,22 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 import PipelineDefinitionEditor from "./PipelineDefinitionEditor.vue";
+import { findTerm, purposeText, termLabel } from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   PipelineDefinition,
+  PipelinePurpose,
   PipelineStrategy,
   PipelineValidationResponse,
+  PipelineWorkflowVocabulary,
 } from "../../types/pipelines";
-
-defineProps<{
+const props = defineProps<{
   strategies: PipelineStrategy[];
+  purpose: PipelinePurpose | null;
+  vocabulary: PipelineWorkflowVocabulary;
   validation: PipelineValidationResponse | null;
   saving: boolean;
 }>();
@@ -25,6 +30,12 @@ const emit = defineEmits<{
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
+const category = computed(() =>
+  props.purpose ? findTerm(props.vocabulary.categories, props.purpose.category) : null,
+);
+const purposeLabel = computed(() =>
+  props.purpose ? purposeText(props.purpose, "label", t) : model.value.purpose,
+);
 </script>
 
 <template>
@@ -49,7 +60,25 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
       </button>
     </header>
 
-    <PipelineDefinitionEditor v-model="model" :strategies="strategies" />
+    <section class="editor-purpose" aria-labelledby="pipeline-editor-purpose">
+      <p id="pipeline-editor-purpose" class="purpose-line">
+        <span class="purpose-label">{{ t("pipelines.used_for", "Used for") }}</span>
+        <strong v-if="category">{{ termLabel(category, t) }}</strong>
+        <span v-if="category" aria-hidden="true">·</span>
+        <strong>{{ purposeLabel }}</strong>
+      </p>
+      <p class="purpose-help">
+        {{
+          i18n.tf(
+            "pipelines.editor_purpose_fixed",
+            "This new version remains a {purpose} pipeline. To create a pipeline for another workflow, begin from a pipeline for that workflow instead.",
+            { purpose: purposeLabel },
+          )
+        }}
+      </p>
+    </section>
+
+    <PipelineDefinitionEditor v-model="model" :strategies="strategies" :purpose="purpose" />
 
     <div
       v-if="validation"
@@ -118,6 +147,34 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
 </template>
 
 <style scoped>
+.editor-purpose {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid currentColor;
+  border-radius: 10px;
+  background: var(--soft);
+}
+.purpose-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.86rem;
+}
+.purpose-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+.purpose-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
 .editor-card {
   display: grid;
   gap: 16px;

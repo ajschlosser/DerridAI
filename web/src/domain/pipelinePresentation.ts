@@ -7,36 +7,16 @@ export function pipelineKey(pipeline: Pick<PipelineDefinition, "pipeline_id" | "
   return `${pipeline.pipeline_id}@${pipeline.version}`;
 }
 
+/**
+ * Localized label for a purpose ID when no catalog is at hand. Prefer
+ * `purposeLabelFor` from pipelineWorkflows, which reads the server's contract;
+ * this follows the server's `pipelines.purpose.<id>.label` key convention.
+ */
 export function pipelinePurposeLabel(purpose: string, t: PipelineTranslator) {
-  const labels: Record<string, string> = {
-    research: t("pipelines.purpose_research", "Research"),
-    evidence_suggestion: t("pipelines.purpose_evidence", "Evidence suggestion"),
-    evidence_recovery: t("pipelines.purpose_evidence_recovery", "Evidence recovery"),
-    vector_store_search: t("pipelines.purpose_store_search", "Vector Store search"),
-    metadata_prefill: t("pipelines.purpose_metadata_prefill", "Metadata pre-fill"),
-    precedent_evidence_remap: t(
-      "pipelines.purpose_precedent_remap",
-      "Precedent evidence remapping",
-    ),
-    corpus_metadata_enrichment: t(
-      "pipelines.purpose_corpus_metadata_enrichment",
-      "Corpus metadata enrichment",
-    ),
-    corpus_segmentation: t("pipelines.purpose_corpus_segmentation", "Corpus segmentation"),
-    corpus_document_manifest: t(
-      "pipelines.purpose_corpus_document_manifest",
-      "Corpus document manifest",
-    ),
-    corpus_text_touchup: t("pipelines.purpose_corpus_text_touchup", "Corpus text touch-up"),
-    corpus_reviewer_evidence_choice: t(
-      "pipelines.purpose_corpus_reviewer_evidence_choice",
-      "Reviewer evidence choice",
-    ),
-    metadata_precedents: t("pipelines.purpose_precedents", "Metadata precedents"),
-    claim_memory: t("pipelines.purpose_claim_memory", "Claim memory"),
-    response_memory: t("pipelines.purpose_response_memory", "Response memory"),
-  };
-  return labels[purpose] || purpose;
+  const key = `pipelines.purpose.${purpose.replaceAll(".", "_").replaceAll("-", "_")}.label`;
+  // No fallback text, so the bundled English default applies before the raw ID.
+  const label = t(key, "");
+  return label && label !== key ? label : purpose;
 }
 
 export function pipelineDefinitionStatusLabel(
@@ -324,4 +304,35 @@ export function pipelineConfigOptionLabel(key: string, value: string, t: Pipelin
     },
   };
   return labels[key]?.[value] || value;
+}
+
+export function pipelineDataTypeLabel(value: string, t: PipelineTranslator) {
+  const labels: Record<string, string> = {
+    query: t("pipelines.data_type.query_label", "Query"),
+    candidate_set: t("pipelines.data_type.candidate_set_label", "Candidate set"),
+    context_packet: t("pipelines.data_type.context_packet_label", "Context packet"),
+    model_output: t("pipelines.data_type.model_output_label", "Model output"),
+    evaluation: t("pipelines.data_type.evaluation_label", "Evaluation"),
+    any: t("pipelines.data_type.any_label", "Any input"),
+  };
+  return labels[value] || value;
+}
+
+/** Capability IDs come from the strategy registry; unknown ones show as-is. */
+export function pipelineCapabilityLabel(value: string, t: PipelineTranslator) {
+  const key = `pipelines.capability.${value}`;
+  const label = t(key, "");
+  return label && label !== key ? label : value.replaceAll("_", " ");
+}
+
+export function pipelineComputationLabel(
+  value: "deterministic" | "learned" | "generative",
+  t: PipelineTranslator,
+) {
+  const labels = {
+    deterministic: t("pipelines.deterministic", "Deterministic"),
+    learned: t("pipelines.learned_model", "Learned model"),
+    generative: t("pipelines.computation_generative", "Generative model"),
+  };
+  return labels[value];
 }

@@ -26,6 +26,7 @@ PREFILL_PURPOSE = "metadata_prefill"
 _RETRIEVE = "retrieve.metadata_exemplars"
 _NORMALIZE = "normalize.collection_relevance"
 _HINTS = "select.memory_hints"
+SUPPORTED_STRATEGIES = frozenset({_RETRIEVE, _NORMALIZE, _HINTS})
 # Pre-fill thresholds were calibrated against this conversion, so it is the
 # only one the adapter accepts until a metric-aware alternative is calibrated.
 NORMALIZATIONS = ("inverse_distance",)
@@ -57,7 +58,7 @@ def compile_prefill_pipeline(pipeline: PipelineDefinition) -> PrefillPlan:
         raise ValueError("Metadata pre-fill adapter can only compile metadata_prefill pipelines.")
     reject_unhonoured_config(pipeline, "metadata pre-fill")
     stages = [stage for stage in pipeline.stages if stage.enabled]
-    unsupported = sorted({stage.strategy for stage in stages} - {_RETRIEVE, _NORMALIZE, _HINTS})
+    unsupported = sorted({stage.strategy for stage in stages} - SUPPORTED_STRATEGIES)
     if unsupported:
         raise ValueError("Metadata pre-fill adapter does not implement strategy stage(s): " + ", ".join(unsupported))
 

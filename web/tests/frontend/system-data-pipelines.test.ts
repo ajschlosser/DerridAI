@@ -7,6 +7,11 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { pipelinesApi } from "../../src/api/pipelines";
 import SystemDataPipelines from "../../src/components/system-data/SystemDataPipelines.vue";
 import { pipelineKey } from "../../src/domain/pipelinePresentation";
+import {
+  contractPurposes,
+  contractStrategy,
+  contractVocabulary,
+} from "../../src/components/pipelines/fixtures/pipelineCatalogContract";
 import { useI18nStore } from "../../src/stores/i18n";
 import type {
   PipelineCatalog,
@@ -15,63 +20,14 @@ import type {
 } from "../../src/types/pipelines";
 
 const catalog: PipelineCatalog = {
+  purposes: contractPurposes,
+  vocabulary: contractVocabulary,
   strategies: [
-    {
-      strategy_id: "retrieve.chroma_similarity",
-      version: 1,
-      family: "candidate_generation",
-      label: "Chroma semantic similarity",
-      description: "Retrieve dense candidates.",
-      input_type: "query",
-      output_type: "candidate_set",
-      deterministic: false,
-      invokes_llm: false,
-      capabilities: ["embedding", "chroma"],
-      config_schema: {
-        type: "object",
-        properties: { fetch_k: { type: "integer", minimum: 1, maximum: 5000 } },
-      },
-    },
-    {
-      strategy_id: "validate.provenance",
-      version: 1,
-      family: "support_validation",
-      label: "Provenance gate",
-      description: "Require provenance before context packing.",
-      input_type: "candidate_set",
-      output_type: "candidate_set",
-      deterministic: true,
-      invokes_llm: false,
-      capabilities: [],
-      config_schema: { type: "object", properties: {} },
-    },
-    {
-      strategy_id: "pack.evidence_context",
-      version: 1,
-      family: "context_pack",
-      label: "Evidence context",
-      description: "Pack evidence.",
-      input_type: "candidate_set",
-      output_type: "context_packet",
-      deterministic: true,
-      invokes_llm: false,
-      capabilities: [],
-      config_schema: { type: "object", properties: {} },
-    },
-    {
-      strategy_id: "llm.generate_answer",
-      version: 1,
-      family: "llm",
-      label: "Generate answer",
-      description: "Generate the final answer.",
-      input_type: "context_packet",
-      output_type: "model_output",
-      deterministic: false,
-      invokes_llm: true,
-      capabilities: ["chat_model"],
-      config_schema: { type: "object", properties: {} },
-    },
-  ],
+    "retrieve.chroma_similarity",
+    "validate.provenance",
+    "pack.evidence_context",
+    "llm.generate_answer",
+  ].map(contractStrategy),
   pipelines: [
     {
       pipeline_id: "research.current",
@@ -176,6 +132,18 @@ const metrics: PipelineOperationalMetrics = {
   warning_run_count: 1,
   average_run_elapsed_ms: 900,
   p95_run_elapsed_ms: 1400,
+  workflows: [
+    {
+      category: "research",
+      features: ["research"],
+      run_count: 3,
+      failed_count: 1,
+      fallback_run_count: 1,
+      warning_run_count: 1,
+      average_elapsed_ms: 900,
+      p95_elapsed_ms: 1400,
+    },
+  ],
   features: [
     {
       feature: "research",
@@ -414,9 +382,9 @@ describe("System Data Pipeline Studio", () => {
   });
 
   it.each([
-    ["corpus_segmentation", "corpus.segmentation.custom", "Corpus segmentation"],
-    ["corpus_document_manifest", "corpus.document_manifest.custom", "Corpus document manifest"],
-    ["corpus_text_touchup", "corpus.text_touchup.custom", "Corpus text touch-up"],
+    ["corpus_segmentation", "corpus.segmentation.custom", "Segmentation"],
+    ["corpus_document_manifest", "corpus.document_manifest.custom", "Document manifest"],
+    ["corpus_text_touchup", "corpus.text_touchup.custom", "Text touch-up"],
     [
       "corpus_reviewer_evidence_choice",
       "corpus.reviewer_evidence_choice.custom",

@@ -20,6 +20,7 @@ from .models import (
     PipelineValidationIssue,
     PipelineValidationResult,
 )
+from .purposes import FAMILY_PHASES, effect_note, purpose_registry
 from .registry import StrategyRegistry, strategy_registry
 
 
@@ -63,6 +64,8 @@ class PipelineService:
             key_stem = item.strategy_id.replace(".", "_").replace("-", "_")
             payload["label_key"] = f"pipelines.strategy.{key_stem}.label"
             payload["description_key"] = f"pipelines.strategy.{key_stem}.description"
+            payload["phase"] = FAMILY_PHASES[item.family]
+            payload["effect_note"] = effect_note(item.family, item.scholarly_effect)
             rows.append(payload)
         return rows
 
@@ -75,6 +78,14 @@ class PipelineService:
     def validate(self, pipeline: PipelineDefinition) -> PipelineValidationResult:
         issues: list[PipelineValidationIssue] = []
         stages = {stage.id: stage for stage in pipeline.stages}
+        if purpose_registry.get(pipeline.purpose) is None:
+            issues.append(
+                PipelineValidationIssue(
+                    level="error",
+                    code="unknown_purpose",
+                    message=f"Pipeline purpose {pipeline.purpose!r} is not a registered workflow.",
+                )
+            )
         strategy_specs = {}
 
         for stage in pipeline.stages:

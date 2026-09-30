@@ -8,6 +8,7 @@ persistence monolith.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -100,6 +101,7 @@ class PipelineStore:
         self,
         *,
         feature: str | None = None,
+        features: Sequence[str] | None = None,
         owner: str | None = None,
         pipeline_id: str | None = None,
         status: str | None = None,
@@ -109,6 +111,7 @@ class PipelineStore:
     ) -> list[PipelineRunTrace]:
         return self.traces.list_runs(
             feature=feature,
+            features=features,
             owner=owner,
             pipeline_id=pipeline_id,
             status=status,
@@ -121,6 +124,7 @@ class PipelineStore:
         self,
         *,
         feature: str | None = None,
+        features: Sequence[str] | None = None,
         owner: str | None = None,
         pipeline_id: str | None = None,
         status: str | None = None,
@@ -128,6 +132,7 @@ class PipelineStore:
     ) -> int:
         return self.traces.count_runs(
             feature=feature,
+            features=features,
             owner=owner,
             pipeline_id=pipeline_id,
             status=status,

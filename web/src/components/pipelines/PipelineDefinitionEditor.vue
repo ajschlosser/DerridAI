@@ -1,13 +1,15 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { ref } from "vue";
 import PipelineStageEditor from "./PipelineStageEditor.vue";
 import { useI18nStore } from "../../stores/i18n";
-import type { PipelineDefinition, PipelineStrategy } from "../../types/pipelines";
+import type { PipelineDefinition, PipelinePurpose, PipelineStrategy } from "../../types/pipelines";
 import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   modelValue: PipelineDefinition;
   strategies: PipelineStrategy[];
+  purpose?: PipelinePurpose | null;
 }>();
 
 const emit = defineEmits<{
@@ -16,6 +18,9 @@ const emit = defineEmits<{
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
+// Operations the purpose's adapter cannot run stay reachable for inspect-only
+// versions, but only behind this explicit choice.
+const showAllStrategies = ref(false);
 
 function clonePipeline(): PipelineDefinition {
   return JSON.parse(JSON.stringify(props.modelValue)) as PipelineDefinition;
@@ -355,6 +360,20 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
           {{ t("pipelines.add_stage", "Add stage") }}
         </button>
       </header>
+      <label v-if="purpose" class="show-all-strategies">
+        <input v-model="showAllStrategies" type="checkbox" />
+        <span>
+          {{ t("pipelines.show_all_strategies", "Show operations this workflow cannot run") }}
+          <small>
+            {{
+              t(
+                "pipelines.show_all_strategies_help",
+                "Saving a version that uses one keeps it inspect-only: it can be viewed and compared but not made active.",
+              )
+            }}
+          </small>
+        </span>
+      </label>
 
       <PipelineStageEditor
         v-for="(stage, stageIndex) in modelValue.stages"
@@ -363,6 +382,8 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
         :stage-index="stageIndex"
         :stages="modelValue.stages"
         :strategies="strategies"
+        :purpose="purpose || null"
+        :show-all-strategies="showAllStrategies"
         :entry-stage-ids="modelValue.entry_stage_ids"
         @update-id="updateStageId"
         @update-strategy="updateStageStrategy"
@@ -379,6 +400,20 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
 </template>
 
 <style scoped>
+.show-all-strategies {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+.show-all-strategies input {
+  margin-top: 3px;
+}
+.show-all-strategies small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
 .pipeline-editor {
   display: grid;
   gap: 16px;

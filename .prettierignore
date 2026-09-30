@@ -20,3 +20,7 @@ web/tests/e2e/legacy-dom-baseline.spec.ts-snapshots/
 # (scripts/export_graphql_schema.py --check and npm run codegen:check).
 web/src/api/graphql/schema.graphql
 web/src/api/graphql/generated.ts
+
+# Generated Pipeline Studio catalog fixture: exact bytes are checked by
+# scripts/export_pipeline_catalog_fixture.py --check.
+web/src/components/pipelines/fixtures/pipelineCatalogContract.json

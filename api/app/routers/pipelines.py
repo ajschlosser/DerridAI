@@ -27,6 +27,7 @@ from ..pipelines.comparison import (
 from ..pipelines.manager import pipeline_manager
 from ..pipelines.metrics import aggregate_pipeline_metrics
 from ..pipelines.models import PipelineAssignment, PipelineDefinition
+from ..pipelines.purposes import WORKFLOW_CATEGORIES, purpose_registry
 from ..pipelines.store import pipeline_store
 from ..rag import run_rag_pipeline
 from ..services import store
@@ -465,10 +466,23 @@ def pipeline_benchmark(
     return {"benchmark": row.model_dump(mode="json")}
 
 
+def _category_features(category: str) -> list[str] | None:
+    """Features whose purpose belongs to a workflow category; None when unfiltered."""
+
+    if not category:
+        return None
+    if category not in {term.id for term in WORKFLOW_CATEGORIES}:
+        raise HTTPException(status_code=400, detail=f"Unknown workflow category {category!r}.")
+    return [
+        spec.consuming_feature for spec in purpose_registry.list() if spec.category == category
+    ]
+
+
 @router.get("/metrics")
 def pipeline_metrics(
     request: Request,
     feature: str = Query(default="", max_length=160),
+    category: str = Query(default="", max_length=40),
     owner: str = Query(default="", max_length=200),
     limit: int = Query(default=250, ge=1, le=1000),
 ) -> dict[str, Any]:
@@ -477,6 +491,7 @@ def pipeline_metrics(
     require_admin(request)
     rows = pipeline_store.list_runs(
         feature=feature or None,
+        features=_category_features(category),
         owner=owner or None,
         limit=limit,
         offset=0,
@@ -485,6 +500,7 @@ def pipeline_metrics(
         **aggregate_pipeline_metrics(rows),
         "sample_limit": limit,
         "feature_filter": feature or None,
+        "category_filter": category or None,
         "owner_filter": owner or None,
     }
 
@@ -493,6 +509,7 @@ def pipeline_metrics(
 def pipeline_runs(
     request: Request,
     feature: str = Query(default="", max_length=160),
+    category: str = Query(default="", max_length=40),
     owner: str = Query(default="", max_length=200),
     pipeline_id: str = Query(default="", max_length=160),
     status: str = Query(default="", max_length=40),
@@ -501,19 +518,20 @@ def pipeline_runs(
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
     require_admin(request)
-    filters = {
+    features = _category_features(category)
+    filters: dict[str, str | None] = {
         "feature": feature or None,
         "owner": owner or None,
         "pipeline_id": pipeline_id or None,
         "status": status or None,
         "query": q or None,
     }
-    rows = pipeline_store.list_runs(limit=limit, offset=offset, **filters)
+    rows = pipeline_store.list_runs(limit=limit, offset=offset, features=features, **filters)
     return {
         "runs": [row.model_dump(mode="json") for row in rows],
         "limit": limit,
         "offset": offset,
-        "total": pipeline_store.count_runs(**filters),
+        "total": pipeline_store.count_runs(features=features, **filters),
     }
 
 
