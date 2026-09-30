@@ -32,23 +32,27 @@ const titleKeys: Record<CorpusSetupSectionId, [string, string]> = {
     <h2 id="pdf-corpus-config-title" class="sr-only">
       {{ i18n.t("pdf_corpus.build_configuration") }}
     </h2>
-    <div class="corpus-setup-sections">
-      <CorpusSetupSection
-        v-for="section in sections"
-        :id="section.id"
-        :key="section.id"
-        :title="i18n.t(titleKeys[section.id][0])"
-        :description="i18n.t(titleKeys[section.id][1])"
-        :state="section.state"
-        :summary="section.summary"
-        :expanded="expanded === section.id"
-        :disabled="props.disabledSections?.includes(section.id)"
-        @toggle="$emit('toggle', section.id)"
-      >
-        <slot :name="section.id"></slot>
-      </CorpusSetupSection>
+    <div class="corpus-setup-layout">
+      <div class="corpus-setup-sections">
+        <CorpusSetupSection
+          v-for="section in sections"
+          :id="section.id"
+          :key="section.id"
+          :title="i18n.t(titleKeys[section.id][0])"
+          :description="i18n.t(titleKeys[section.id][1])"
+          :state="section.state"
+          :summary="section.summary"
+          :expanded="expanded === section.id"
+          :disabled="props.disabledSections?.includes(section.id)"
+          @toggle="$emit('toggle', section.id)"
+        >
+          <slot :name="section.id"></slot>
+        </CorpusSetupSection>
+      </div>
+      <aside class="corpus-setup-plan">
+        <slot name="footer"></slot>
+      </aside>
     </div>
-    <slot name="footer"></slot>
   </section>
 </template>
 
@@ -105,8 +109,28 @@ const titleKeys: Record<CorpusSetupSectionId, [string, string]> = {
   display: grid;
   gap: var(--space-4);
 }
+.corpus-setup-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(19rem, 23rem);
+  gap: var(--space-5);
+  align-items: start;
+}
 .corpus-setup-sections {
   display: grid;
+  min-width: 0;
   gap: var(--space-3);
+}
+.corpus-setup-plan {
+  position: sticky;
+  top: calc(var(--ref-topbar, 60px) + var(--space-4));
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .corpus-setup-layout {
+    grid-template-columns: 1fr;
+  }
+  .corpus-setup-plan {
+    position: static;
+  }
 }
 </style>
