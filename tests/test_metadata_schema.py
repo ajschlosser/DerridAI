@@ -125,6 +125,22 @@ def test_the_built_in_schema_describes_the_same_fields_as_the_code_does_today():
     assert schema.review_fields()[:3] == list(ms.CORE_FIELDS)
 
 
+def test_default_schema_cardinality_is_explicit_and_semantic():
+    schema = ms.default_schema()
+    by_name = schema.by_name()
+    for name in (
+        "quoted_speaker",
+        "quoted_author",
+        "quoted_work",
+        "quoted_position_holder",
+        "quoted_addressee",
+        "quoted_referent",
+    ):
+        assert by_name[name].type == "text", name
+    for name in ("semantic_function", "quotation_chain", "topics", "concepts", "persons", "works_referenced"):
+        assert by_name[name].type == "list", name
+
+
 @pytest.mark.parametrize(
     ("factory", "schema_id", "field_namespace", "required_fields", "corpus_fields"),
     [
@@ -242,7 +258,7 @@ def test_default_schema_assigns_curated_pos_and_ner_hints_to_every_configurable_
         "works_referenced": (["PROPN", "NOUN"], ["WORK_OF_ART", "LAW"]),
     }
 
-    assert schema.schema_version == "1.1.0"
+    assert schema.schema_version == "2.0.0"
     assert set(schema.by_name()) == set(expected)
     for name, (pos_tags, ner_tags) in expected.items():
         field = schema.by_name()[name]
@@ -261,11 +277,39 @@ def test_the_output_shape_is_generated_and_matches_the_hand_written_models():
         want -= {"language"}  # the document language is inherited, not asked of the model
         assert got == want, group
     quotation_fields = ("is_direct_quote", "quoted_speaker", "quoted_author", "quoted_work", "quoted_position_holder", "quoted_addressee", "quoted_referent", "quotation_chain")
+    scalar_quotation_fields = quotation_fields[1:-1]
     answer = ms.response_model_for(schema, "quotation").model_validate({
-        "metadata": {"is_direct_quote": None, **{n: [] for n in quotation_fields[1:]}},
+        "metadata": {
+            "is_direct_quote": None,
+            **{name: None for name in scalar_quotation_fields},
+            "quotation_chain": [],
+        },
         "field_assessments": {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "no_supported_value"} for name in quotation_fields},
     })
     assert answer.metadata.is_direct_quote is None
+    assert answer.metadata.quoted_speaker is None
+    assert answer.metadata.quotation_chain == []
+
+    populated = ms.response_model_for(schema, "quotation").model_validate({
+        "metadata": {
+            "is_direct_quote": True,
+            "quoted_speaker": "Emmanuel Levinas",
+            **{name: None for name in scalar_quotation_fields if name != "quoted_speaker"},
+            "quotation_chain": ["Derrida", "Levinas"],
+        },
+        "field_assessments": {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "supported_value" if name in {"is_direct_quote", "quoted_speaker", "quotation_chain"} else "no_supported_value"} for name in quotation_fields},
+    })
+    assert populated.metadata.quoted_speaker == "Emmanuel Levinas"
+    with pytest.raises(Exception):
+        ms.response_model_for(schema, "quotation").model_validate({
+            "metadata": {
+                "is_direct_quote": True,
+                "quoted_speaker": ["Emmanuel Levinas"],
+                **{name: None for name in scalar_quotation_fields if name != "quoted_speaker"},
+                "quotation_chain": [],
+            },
+            "field_assessments": {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "supported_value" if name in {"is_direct_quote", "quoted_speaker"} else "no_supported_value"} for name in quotation_fields},
+        })
     generated = ms.response_model_for(schema, "discourse").model_json_schema()
     assert "field_assessments" in generated["required"]
 
