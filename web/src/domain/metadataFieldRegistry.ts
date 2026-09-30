@@ -78,6 +78,31 @@ const LEGACY_FIELD_SPECS: Record<string, MetadataFieldSpec> = {
     suggestionFields: ["works_referenced", "quoted_work", "work", "document_title"],
     allowCustom: true,
   },
+  institutions_referenced: {
+    control: "multi-combobox",
+    suggestionFields: ["institutions_referenced"],
+    allowCustom: true,
+  },
+  locations_referenced: {
+    control: "multi-combobox",
+    suggestionFields: ["locations_referenced"],
+    allowCustom: true,
+  },
+  events_referenced: {
+    control: "multi-combobox",
+    suggestionFields: ["events_referenced"],
+    allowCustom: true,
+  },
+  groups_referenced: {
+    control: "multi-combobox",
+    suggestionFields: ["groups_referenced"],
+    allowCustom: true,
+  },
+  languages_referenced: {
+    control: "multi-combobox",
+    suggestionFields: ["languages_referenced"],
+    allowCustom: true,
+  },
   document_language: {
     control: "combobox",
     suggestionFields: ["document_language", "original_language", "language"],
