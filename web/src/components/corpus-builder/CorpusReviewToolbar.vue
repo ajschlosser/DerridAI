@@ -1,5 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { ref } from "vue";
 import type { MetadataSchema } from "../../api/metadataSchemas";
 import type { ReviewQueue } from "../../types/corpus";
 import { useI18nStore } from "../../stores/i18n";
@@ -7,6 +8,7 @@ import CorpusActionMenu, { type CorpusActionMenuItem } from "../CorpusActionMenu
 import CorpusBulkMetadataEditor from "../CorpusBulkMetadataEditor.vue";
 import CorpusReviewQueueTabs from "../CorpusReviewQueueTabs.vue";
 import UiButton from "../ui/UiButton.vue";
+import UiDialog from "../ui/UiDialog.vue";
 
 const props = defineProps<{
   total: number;
@@ -46,6 +48,12 @@ const emit = defineEmits<{
 const queue = defineModel<ReviewQueue>("queue", { required: true });
 const query = defineModel<string>("query", { required: true });
 const i18n = useI18nStore();
+const confirmingAcceptClean = ref(false);
+
+function confirmAcceptClean() {
+  confirmingAcceptClean.value = false;
+  emit("acceptClean");
+}
 </script>
 
 <template>
@@ -75,10 +83,12 @@ const i18n = useI18nStore();
 
     <div class="review-bulk">
       <UiButton
+        v-if="props.ready > 0"
         size="small"
         variant="primary"
-        :disabled="props.disabled || props.ready === 0"
-        @click="emit('acceptClean')"
+        class="review-ready-action"
+        :disabled="props.disabled"
+        @click="confirmingAcceptClean = true"
       >
         {{ i18n.tf("pdf_corpus.accept_clean", { count: props.ready }) }}
       </UiButton>
@@ -122,6 +132,28 @@ const i18n = useI18nStore();
         {{ i18n.t("ui.next") }}
       </UiButton>
     </div>
+
+    <UiDialog
+      :open="confirmingAcceptClean"
+      size="medium"
+      :title="i18n.tf('pdf_corpus.accept_clean', { count: props.ready })"
+      :description="i18n.tf('pdf_corpus.accept_clean_confirm', { count: props.ready })"
+      :close-label="i18n.t('ui.close')"
+      @close="confirmingAcceptClean = false"
+    >
+      <p class="accept-ready-dialog-copy">
+        {{ i18n.t("pdf_corpus.accept_clean_authority_help") }}
+      </p>
+      <template #footer>
+        <UiButton :label="i18n.t('ui.cancel')" @click="confirmingAcceptClean = false" />
+        <UiButton
+          variant="primary"
+          :label="i18n.tf('pdf_corpus.accept_clean', { count: props.ready })"
+          :disabled="props.disabled"
+          @click="confirmAcceptClean"
+        />
+      </template>
+    </UiDialog>
   </section>
 </template>
 
@@ -149,6 +181,9 @@ const i18n = useI18nStore();
   gap: var(--space-2);
   align-items: center;
 }
+.review-ready-action {
+  font-weight: var(--fw-bold);
+}
 .review-action-feedback {
   flex: 1 1 100%;
   margin: 0;
@@ -157,6 +192,12 @@ const i18n = useI18nStore();
   border-radius: var(--radius-control);
   background: var(--tone-ok-bg);
   color: var(--tone-ok-fg);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.accept-ready-dialog-copy {
+  margin: 0;
+  color: var(--text-secondary);
   font-size: var(--fs-sm);
   line-height: 1.5;
 }
