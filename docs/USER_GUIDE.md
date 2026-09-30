@@ -323,46 +323,77 @@ Users can clear `updates` for one record or for every loaded record. Clearing hi
 
 ## Create a static research site
 
-The administrator **Works** page includes **Create site** when a corpus database is selected. Choose any number of indexed works, give the site a title and optional description, then choose **Create & download**. DerridAI validates the selected records and downloads a ZIP containing four deployable files:
+The administrator **Works** page includes **Create site** when a corpus database is selected. Choose any number of indexed works, give the site a title and optional description, then choose an export format.
 
-- `index.html` — the small reference-site shell;
-- `derridai-publication.js` — the immutable publication manifest, localized strings, publication-safe Records, and derived vector chunks;
-- `derridai-sdk.js` — the framework-neutral TypeScript DerridAI SDK compiled as a browser IIFE;
-- `derridai-site.js` — the reference user interface, implemented as a thin consumer of the SDK.
+### Single HTML file
 
-The exported site is a read-mostly snapshot rather than another DerridAI server. Authoritative published Records remain structurally separate from vectors inside the publication package. Records and vectors are grouped by work and decoded only when an SDK operation needs them, and the SDK yields to the browser between substantial chunks so large publications do not have to be materialized synchronously at startup.
+Choose **Single HTML file** for direct local use. DerridAI downloads one `.html` file containing the immutable publication package, the DerridAI SDK, and the reference interface. Open the file directly from disk in a modern browser.
+
+This mode is intentionally network-independent. Its Content Security Policy sets `connect-src 'none'`, the reference site uses the SDK's inline publication data source, and no model-provider endpoint or API key is configured in the browser. Keyword search, Record browsing, filtering, local annotations, citations, and evidence retrieval therefore do not depend on HTTP or CORS. Semantic query embedding and generated answers require a host-supplied embedding or generation capability; the standalone local file does not reintroduce direct Ollama/OpenAI-compatible browser requests to provide them.
+
+### nginx Docker bundle
+
+Choose **nginx Docker bundle** when the site will be served over HTTP. The ZIP contains:
+
+- `index.html`
+- `derridai-publication.js`
+- `derridai-sdk.js`
+- `derridai-site.js`
+- `Dockerfile`
+- `nginx.conf`
+- `start.sh`
+- `stop.sh`
+- `README.txt`
+
+The Dockerfile uses a single `nginx:1.27-alpine` image and copies only the static publication files. There is no DerridAI API container, Node runtime, Python runtime, reverse proxy to the application, or Docker Compose dependency.
+
+After extracting the ZIP:
+
+```bash
+./start.sh
+```
+
+serves the site at `http://localhost:8080` by default. Stop and remove the container with:
+
+```bash
+./stop.sh
+```
+
+Set `DERRIDAI_SITE_PORT` to choose another host port. `DERRIDAI_SITE_IMAGE` and `DERRIDAI_SITE_CONTAINER` optionally override the generated image and container names. The nginx configuration also exposes `/healthz` for container health checks.
+
+### Publication architecture
+
+Both export formats use the same immutable publication snapshot. Authoritative published Records remain structurally separate from vectors. Records and vectors are grouped by work and decoded only when an SDK operation needs them, and the SDK yields to the browser between substantial chunks so large publications do not have to be materialized synchronously at startup.
 
 The **DerridAI SDK** owns publication access, Record loading, metadata filtering, lexical/semantic/hybrid retrieval, embedding-contract validation, MMR diversification, evidence-packet construction, deterministic citation formatting, local annotations, progress events, cancellation, and Research orchestration. The SDK does not render the site DOM and does not depend on Vue, React, Pinia, Vue Router, or the DerridAI application server.
 
-The SDK also does not use the browser endpoint/API-key model for AI services. A host application may inject an embedding capability and/or generation capability as JavaScript objects. DerridAI validates the resulting model identity and embedding dimensions against the publication contract, but transport is the host application's concern. The host may implement those capabilities through a same-origin server, Electron/Tauri bridge, native messaging, another application SDK, or another appropriate mechanism. The DerridAI SDK itself does not need an Ollama/OpenAI endpoint URL, an API key, or CORS configuration.
+AI execution is transport-neutral. A host application may inject embedding and generation capabilities as JavaScript objects. The host may implement those capabilities through a same-origin server, Electron/Tauri bridge, native messaging, another application SDK, or another appropriate mechanism. The DerridAI SDK itself does not need an Ollama/OpenAI endpoint URL, API key, or CORS configuration.
 
-Without a host embedding capability, the reference site continues to provide keyword search and metadata filtering. Without a host generation capability, **Research still performs retrieval and returns the auditable evidence packet**; it simply does not synthesize an answer. Provider failure therefore cannot make the publication itself unusable.
+Without a host embedding capability, the reference site continues to provide keyword search and metadata filtering. Without a host generation capability, **Research still performs retrieval and returns the auditable evidence packet**; it simply does not synthesize an answer.
 
-### Bring your own site
+### Bring your own Web application
 
-The generated reference site is optional presentation. A custom site can load `derridai-publication.js` and `derridai-sdk.js`, omit `derridai-site.js`, and render the returned SDK data however it wants:
+The generated reference interface is optional presentation. A custom site can load the publication and SDK, omit `derridai-site.js`, and render SDK results however it wants:
 
 ```html
 <script src="/research/derridai-publication.js"></script>
 <script src="/research/derridai-sdk.js"></script>
 <script>
-  const host = window.myResearchHost;
-
   const client = await DerridAI.createClient({
     dataSource: DerridAI.dataSources.inline(window.__DERRIDAI_SITE_PACKAGE__),
-    embeddings: host?.embeddings,
-    generation: host?.generation,
+    embeddings: window.myResearchHost?.embeddings,
+    generation: window.myResearchHost?.generation,
   });
 
   const results = await client.search({
     query: "unconditional hospitality",
-    mode: host?.embeddings ? "hybrid" : "keyword",
+    mode: window.myResearchHost?.embeddings ? "hybrid" : "keyword",
     filters: { work: ["Of Hospitality"] },
   });
 </script>
 ```
 
-The public SDK contract is deliberately transport-neutral: custom sites supply data, embedding, generation, and storage implementations rather than configuring DerridAI around REST endpoints. The built-in HTTP data-source adapter is only an optional way to load publication assets; it is not an AI-provider transport contract.
+TypeScript applications can also consume the SDK as an ESM package. From the DerridAI repository, `cd web && npm run build:sdk:package` emits ESM JavaScript and TypeScript declarations to `web/sdk/dist`; `npm run pack:sdk` creates an installable `@derridai/sdk` tarball. The public contract is the same one used by the reference published site.
 
 Annotations remain local to the browser unless the host supplies another storage implementation. Creating a later site export creates a new immutable publication snapshot; it does not mutate an earlier downloaded site.
 
