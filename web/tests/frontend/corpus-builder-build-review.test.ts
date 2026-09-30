@@ -120,7 +120,12 @@ describe("Corpus Builder build, review, and finish states", () => {
           record_count: 12,
           build_events: [
             { at: "2026-09-30T18:00:00Z", stage: "preparing", status: "running", progress: 0.02 },
-            { at: "2026-09-30T18:02:00Z", stage: "constructing_records", status: "running", progress: 0.4 },
+            {
+              at: "2026-09-30T18:02:00Z",
+              stage: "constructing_records",
+              status: "running",
+              progress: 0.4,
+            },
             { at: "2026-09-30T18:04:00Z", stage: "enriching", status: "running", progress: 0.72 },
           ],
         },
