@@ -70,11 +70,7 @@ const i18n = useI18nStore();
         {{ i18n.t("pdf_corpus.accept_unreviewed_snapshot_only") }}
       </p>
       <div class="publish-review__actions">
-        <UiButton
-          :label="i18n.t('ui.cancel')"
-          :disabled="busy"
-          @click="emit('close')"
-        />
+        <UiButton :label="i18n.t('ui.cancel')" :disabled="busy" @click="emit('close')" />
         <UiButton
           variant="primary"
           :label="i18n.t('pdf_corpus.accept_unreviewed_confirm_action')"
