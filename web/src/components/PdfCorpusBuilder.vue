@@ -2563,6 +2563,9 @@ defineExpose({
           :all-visible-selected="allVisibleSelected"
           :loading="recordsLoading"
           :hydrated="reviewHydrated"
+          :queue="reviewQueue"
+          :searching="Boolean(recordQuery.trim())"
+          :can-open-publish="hasRecordTopology"
           :disabled="busy !== ''"
           @root-change="setRecordListElement"
           @collapse="reviewQueueCollapsed = true"
@@ -2574,6 +2577,7 @@ defineExpose({
             reviewQueue = 'all';
             recordQuery = '';
           "
+          @open-publish="switchWorkspace('publish')"
         />
       </template>
       <template #record>
