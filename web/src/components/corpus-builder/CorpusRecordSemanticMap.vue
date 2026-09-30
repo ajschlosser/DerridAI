@@ -9,6 +9,12 @@
  * not evidence of a shared claim, and POS/NER terms are exact spans, not metadata values.
  */
 import { computed, ref, watch } from "vue";
+import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
+import UiRelationViewport from "../relations/UiRelationViewport.vue";
+import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
+import { useRelationNodeDrag } from "../../composables/relations/useRelationNodeDrag";
+import { relationBoundsForPoints } from "../../domain/relations/geometry";
+import type { RelationPoint, RelationViewportState } from "../../domain/relations/types";
 import {
   corpusBuildsApi,
   type RecordSemanticMap,
@@ -224,8 +230,8 @@ interface DiagramNode {
 }
 interface DiagramEdge {
   id: string;
-  from: Point;
-  to: Point;
+  source: string;
+  target: string;
   kind: string;
   faint: boolean;
   title: string;
@@ -308,8 +314,8 @@ const diagram = computed<{ centerLabel: string; nodes: DiagramNode[]; edges: Dia
       for (const node of inner)
         lines.push({
           id: `spoke:${node.id}`,
-          from: positions.get(centerId)!,
-          to: positions.get(node.id)!,
+          source: centerId,
+          target: node.id,
           kind: "membership",
           faint: true,
           title: i18n.t("pdf_corpus.semantic_map_in_record"),
@@ -321,8 +327,8 @@ const diagram = computed<{ centerLabel: string; nodes: DiagramNode[]; edges: Dia
       if (!from || !to) continue;
       lines.push({
         id: edge.id,
-        from,
-        to,
+        source: edge.source,
+        target: edge.target,
         kind: edge.relation_kind,
         faint: "in_record" in edge && edge.in_record === false,
         title: relationLabel(edge),
@@ -330,6 +336,35 @@ const diagram = computed<{ centerLabel: string; nodes: DiagramNode[]; edges: Dia
     }
     return { centerLabel, nodes, edges: lines };
   },
+);
+
+const layoutState = useRelationLayoutState();
+const viewport = ref<InstanceType<typeof UiRelationViewport> | null>(null);
+const viewportState = ref<RelationViewportState>({ pan: { x: 0, y: 0 }, zoom: 1 });
+
+const positionedNodes = computed<DiagramNode[]>(() =>
+  diagram.value.nodes.map((node) => ({
+    ...node,
+    point: layoutState.positionFor(node.id, node.point),
+  })),
+);
+const positionMap = computed(
+  () => new Map(positionedNodes.value.map((node) => [node.id, node.point])),
+);
+const diagramEdges = computed(() =>
+  diagram.value.edges
+    .map((edge) => {
+      const from = positionMap.value.get(edge.source);
+      const to = positionMap.value.get(edge.target);
+      return from && to ? { ...edge, from, to } : null;
+    })
+    .filter((edge): edge is DiagramEdge & { from: Point; to: Point } => Boolean(edge)),
+);
+const contentBounds = computed(() =>
+  relationBoundsForPoints(
+    positionedNodes.value.map((node) => node.point),
+    72,
+  ),
 );
 
 const localNodesByType = computed(() => {
@@ -355,77 +390,62 @@ function recordPreview(recordId: string) {
   return previews.value[recordId] || "";
 }
 
-// --- pan & zoom -------------------------------------------------------------------------------------------------
-const zoom = ref(1);
-const pan = ref({ x: 0, y: 0 });
-const mapSvg = ref<SVGSVGElement | null>(null);
-let drag: {
-  x: number;
-  y: number;
-  px: number;
-  py: number;
-  moved: boolean;
-  startedOnNode: boolean;
-} | null = null;
-const suppressNodeClick = ref(false);
-function setZoom(next: number) {
-  zoom.value = Math.max(0.5, Math.min(4, next));
-}
-function resetZoom() {
-  zoom.value = 1;
-  pan.value = { x: 0, y: 0 };
-}
-watch(current, resetZoom, { immediate: true });
-const viewBox = computed(() => {
-  const w = SIZE.width / zoom.value;
-  const h = SIZE.height / zoom.value;
-  const x = (SIZE.width - w) / 2 - pan.value.x;
-  const y = (SIZE.height - h) / 2 - pan.value.y;
-  return `${x} ${y} ${w} ${h}`;
+// --- shared viewport and node movement --------------------------------------------------------------------------
+const draggedNodeId = ref("");
+const nodeDrag = useRelationNodeDrag({
+  getZoom: () => viewportState.value.zoom,
+  onMove: (point) => {
+    if (draggedNodeId.value) layoutState.setPosition(draggedNodeId.value, point);
+  },
 });
-function onWheel(event: WheelEvent) {
-  event.preventDefault();
-  setZoom(zoom.value * (event.deltaY < 0 ? 1.15 : 1 / 1.15));
+
+function onViewportChange(state: RelationViewportState) {
+  viewportState.value = state;
 }
-function svgScale() {
-  const rect = mapSvg.value?.getBoundingClientRect();
-  return rect?.width ? SIZE.width / zoom.value / rect.width : 1;
+
+function fitMap() {
+  viewport.value?.fitView(contentBounds.value);
 }
-function onPointerDown(event: PointerEvent) {
-  if (event.button !== 0) return;
-  suppressNodeClick.value = false;
-  drag = {
-    x: event.clientX,
-    y: event.clientY,
-    px: pan.value.x,
-    py: pan.value.y,
-    moved: false,
-    startedOnNode: Boolean((event.target as Element | null)?.closest?.(".map-node")),
-  };
+
+function resetMapLayout() {
+  layoutState.clearPositions();
+  viewport.value?.resetView();
 }
-function onPointerMove(event: PointerEvent) {
-  if (!drag) return;
-  const dx = event.clientX - drag.x;
-  const dy = event.clientY - drag.y;
-  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
-  if (!drag.moved) mapSvg.value?.setPointerCapture?.(event.pointerId);
-  drag.moved = true;
-  const scale = svgScale();
-  pan.value = { x: drag.px + dx * scale, y: drag.py + dy * scale };
+
+watch(current, () => resetMapLayout());
+
+function onNodePointerDown(event: PointerEvent, node: DiagramNode) {
+  draggedNodeId.value = node.id;
+  nodeDrag.begin(event, node.point);
 }
-function onPointerUp(event: PointerEvent) {
-  suppressNodeClick.value = Boolean(drag?.moved && drag.startedOnNode);
-  const captured = mapSvg.value?.hasPointerCapture?.(event.pointerId);
-  drag = null;
-  if (captured) mapSvg.value?.releasePointerCapture?.(event.pointerId);
+
+function onNodePointerMove(event: PointerEvent) {
+  nodeDrag.update(event);
 }
+
+function onNodePointerEnd(event: PointerEvent) {
+  nodeDrag.end(event);
+  draggedNodeId.value = "";
+}
+
 function onNodeClick(event: MouseEvent, node: DiagramNode) {
   event.stopPropagation();
-  if (suppressNodeClick.value) {
-    suppressNodeClick.value = false;
+  if (nodeDrag.consumeClick(event)) return;
+  if (node.walkable) walkToNode(node);
+}
+
+function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
+  draggedNodeId.value = node.id;
+  if (nodeDrag.nudge(event, node.point)) {
+    draggedNodeId.value = "";
     return;
   }
-  if (node.walkable) walkToNode(node);
+  draggedNodeId.value = "";
+  if (!node.walkable) return;
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    walkToNode(node);
+  }
 }
 </script>
 
@@ -596,68 +616,89 @@ function onNodeClick(event: MouseEvent, node: DiagramNode) {
     </header>
 
     <div v-if="diagram.nodes.length > 1" class="semantic-map-canvas-wrap">
-      <svg
-        ref="mapSvg"
-        class="semantic-map-canvas"
-        :viewBox="viewBox"
-        role="group"
+      <UiRelationViewport
+        ref="viewport"
+        class="semantic-map-viewport"
         :aria-label="
           i18n.tf('pdf_corpus.semantic_map_accessible_label', { label: diagram.centerLabel })
         "
-        @wheel="onWheel"
-        @pointerdown="onPointerDown"
-        @pointermove="onPointerMove"
-        @pointerup="onPointerUp"
-        @pointercancel="onPointerUp"
+        :help-text="
+          i18n.t(
+            'pdf_corpus.semantic_map_interaction_help',
+            'Drag the background to pan. Drag any node to reposition it. Arrow keys pan, plus and minus zoom, and 0 resets the view. Hold Alt and use an arrow key to move a focused node.',
+          )
+        "
+        :resize-label="
+          i18n.t('pdf_corpus.semantic_map_resize', 'Resize record semantic map')
+        "
+        :initial-center="{ x: SIZE.width / 2, y: SIZE.height / 2 }"
+        :content-bounds="contentBounds"
+        :content-width="SIZE.width"
+        :content-height="SIZE.height"
+        :min-zoom="0.5"
+        :max-zoom="4"
+        resize-axis="vertical"
+        @viewport-change="onViewportChange"
       >
-        <g aria-hidden="true">
-          <line
-            v-for="edge in diagram.edges"
-            :key="edge.id"
-            :x1="edge.from.x"
-            :y1="edge.from.y"
-            :x2="edge.to.x"
-            :y2="edge.to.y"
-            :class="['map-edge', edge.kind, { faint: edge.faint }]"
-          >
-            <title>{{ edge.title }}</title>
-          </line>
-        </g>
-        <g
-          v-for="node in diagram.nodes"
-          :key="node.id"
-          :transform="`translate(${node.point.x}, ${node.point.y})`"
-          :class="['map-node', node.ring]"
-          :data-tone="node.ring === 'center' && currentMap ? 'record' : nodeTone(node.type)"
-          :role="node.walkable ? 'button' : undefined"
-          :tabindex="node.walkable ? 0 : undefined"
-          :aria-label="
-            node.walkable
-              ? i18n.tf('pdf_corpus.semantic_map_walk_to', { label: `${node.label}, ${node.type}` })
-              : undefined
-          "
-          @click="onNodeClick($event, node)"
-          @keydown.enter.prevent="node.walkable && walkToNode(node)"
-          @keydown.space.prevent="node.walkable && walkToNode(node)"
+        <svg
+          class="semantic-map-canvas"
+          :viewBox="`0 0 ${SIZE.width} ${SIZE.height}`"
+          :width="SIZE.width"
+          :height="SIZE.height"
+          aria-hidden="true"
         >
-          <rect
-            v-if="node.ring === 'center' && currentMap"
-            x="-8"
-            y="-6"
-            width="16"
-            height="12"
-            rx="3"
-          />
-          <circle v-else :r="node.ring === 'center' ? 7 : node.ring === 'inner' ? 5 : 4" />
-          <text
-            :x="node.ring === 'center' ? 0 : 11"
-            :y="node.ring === 'center' ? 22 : 4"
-            :text-anchor="node.ring === 'center' ? 'middle' : 'start'"
+          <g>
+            <line
+              v-for="edge in diagramEdges"
+              :key="edge.id"
+              :x1="edge.from.x"
+              :y1="edge.from.y"
+              :x2="edge.to.x"
+              :y2="edge.to.y"
+              :class="['map-edge', edge.kind, { faint: edge.faint }]"
+            >
+              <title>{{ edge.title }}</title>
+            </line>
+          </g>
+          <g
+            v-for="node in positionedNodes"
+            :key="node.id"
+            :transform="`translate(${node.point.x}, ${node.point.y})`"
+            :class="['map-node', node.ring]"
+            :data-tone="node.ring === 'center' && currentMap ? 'record' : nodeTone(node.type)"
+            :role="node.walkable ? 'button' : 'group'"
+            tabindex="0"
+            :aria-label="
+              node.walkable
+                ? i18n.tf('pdf_corpus.semantic_map_walk_to', { label: `${node.label}, ${node.type}` })
+                : node.label
+            "
+            @pointerdown.stop="onNodePointerDown($event, node)"
+            @pointermove.stop="onNodePointerMove"
+            @pointerup.stop="onNodePointerEnd"
+            @pointercancel.stop="onNodePointerEnd"
+            @click="onNodeClick($event, node)"
+            @keydown="onNodeKeydown($event, node)"
           >
-            {{ shortLabel(node.label) }}
-          </text>
-        </g>
-      </svg>
+            <rect
+              v-if="node.ring === 'center' && currentMap"
+              x="-8"
+              y="-6"
+              width="16"
+              height="12"
+              rx="3"
+            />
+            <circle v-else :r="node.ring === 'center' ? 7 : node.ring === 'inner' ? 5 : 4" />
+            <text
+              :x="node.ring === 'center' ? 0 : 11"
+              :y="node.ring === 'center' ? 22 : 4"
+              :text-anchor="node.ring === 'center' ? 'middle' : 'start'"
+            >
+              {{ shortLabel(node.label) }}
+            </text>
+          </g>
+        </svg>
+      </UiRelationViewport>
       <div class="semantic-map-legend">
         <span
           ><i class="legend-line semantic" />{{
@@ -676,35 +717,20 @@ function onNodeClick(event: MouseEvent, node: DiagramNode) {
           <input v-model="includeTerms" type="checkbox" />
           {{ i18n.t("pdf_corpus.semantic_map_include_terms") }}
         </label>
-        <span class="semantic-map-zoom">
-          <button
-            type="button"
-            class="btn small"
-            :title="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
-            :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
-            @click="setZoom(zoom / 1.25)"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            class="btn small"
-            :title="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
-            :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
-            @click="resetZoom"
-          >
-            {{ Math.round(zoom * 100) }}%
-          </button>
-          <button
-            type="button"
-            class="btn small"
-            :title="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
-            :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
-            @click="setZoom(zoom * 1.25)"
-          >
-            +
-          </button>
-        </span>
+        <UiRelationToolbar
+          class="semantic-map-zoom"
+          :aria-label="i18n.t('pdf_corpus.semantic_map_controls', 'Semantic map controls')"
+          :zoom-out-label="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
+          :zoom-in-label="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
+          :fit-label="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
+          :reset-label="
+            i18n.t('pdf_corpus.semantic_map_reset_layout', 'Reset map layout')
+          "
+          @zoom-out="viewport?.zoomBy(1 / 1.25)"
+          @zoom-in="viewport?.zoomBy(1.25)"
+          @fit="fitMap"
+          @reset="resetMapLayout"
+        />
       </div>
     </div>
     <p
@@ -1073,18 +1099,23 @@ button.mention:focus-visible,
   color: var(--muted);
 }
 .semantic-map-canvas-wrap {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
-  overflow: auto;
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.semantic-map-viewport {
+  width: 100%;
+  height: 600px;
+  min-height: 320px;
 }
 .semantic-map-canvas {
-  /* Drawn at natural size so labels keep the 12px minimum; the frame scrolls on narrow panels. */
+  position: absolute;
+  inset: 0;
   display: block;
   width: 820px;
   max-width: none;
   height: 600px;
-  margin-inline: auto;
+  overflow: visible;
 }
 .map-edge {
   stroke: var(--border-strong);
@@ -1133,8 +1164,12 @@ button.mention:focus-visible,
   stroke: var(--surface-raised);
   stroke-width: 3px;
 }
+.map-node {
+  cursor: grab;
+  touch-action: none;
+}
 .map-node[role="button"] {
-  cursor: pointer;
+  cursor: grab;
 }
 .map-node:focus {
   outline: none;
@@ -1147,8 +1182,8 @@ button.mention:focus-visible,
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-  padding: 0 var(--space-3) var(--space-3);
-  color: var(--muted);
+  padding: var(--space-2) 0 0;
+  color: var(--text-secondary);
   font-size: var(--fs-xs);
 }
 .semantic-map-legend span,
@@ -1163,8 +1198,8 @@ button.mention:focus-visible,
   gap: 4px;
   margin-inline-start: auto;
 }
-.semantic-map-zoom button {
-  min-width: 2.5em;
+.semantic-map-zoom {
+  margin-inline-start: auto;
 }
 .legend-line {
   display: inline-block;
