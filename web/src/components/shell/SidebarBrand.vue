@@ -48,3 +48,53 @@ const i18n = useI18nStore();
     </UiTooltip>
   </div>
 </template>
+
+<style scoped>
+.shell-brand-row {
+  min-height: 58px;
+  margin-bottom: 10px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+}
+
+.shell-brand-button {
+  min-height: 40px;
+  border-radius: 10px;
+  transition:
+    background-color var(--motion-fast, 120ms) var(--ease-standard, ease),
+    color var(--motion-fast, 120ms) var(--ease-standard, ease);
+}
+
+.shell-brand-button:hover,
+.shell-brand-button:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.shell-brand-word {
+  letter-spacing: -0.025em;
+}
+
+.sidebar-toggle {
+  flex-basis: 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  transition:
+    background-color var(--motion-fast, 120ms) var(--ease-standard, ease),
+    color var(--motion-fast, 120ms) var(--ease-standard, ease);
+}
+
+.sidebar-toggle:hover,
+.sidebar-toggle:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-brand-button,
+  .sidebar-toggle {
+    transition: none;
+  }
+}
+</style>

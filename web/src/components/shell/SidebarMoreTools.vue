@@ -5,7 +5,7 @@ import AppIcon from "../AppIcon.vue";
 import SidebarNavButton from "./SidebarNavButton.vue";
 import type { SidebarNavEntry } from "./sidebarNav";
 
-defineProps<{ items: SidebarNavEntry[]; open: boolean }>();
+defineProps<{ items: SidebarNavEntry[]; open: boolean; collapsed?: boolean }>();
 const emit = defineEmits<{ navigate: [string]; "update:open": [boolean] }>();
 const i18n = useI18nStore();
 
@@ -26,6 +26,7 @@ function onToggle(event: Event) {
         :id="item.id"
         :label="item.label"
         :icon="item.icon"
+        :collapsed="collapsed"
         :active="item.active"
         :disabled-reason="item.disabledReason"
         @navigate="$emit('navigate', $event)"

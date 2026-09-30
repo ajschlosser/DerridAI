@@ -781,6 +781,7 @@ watch(
   color: var(--text);
   box-shadow: 0 24px 80px color-mix(in srgb, var(--text) 24%, transparent);
 }
+
 .mobile-navigation-drawer::backdrop {
   background: color-mix(in srgb, var(--text) 38%, transparent);
 }

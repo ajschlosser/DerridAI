@@ -4,7 +4,7 @@ import { useI18nStore } from "../../stores/i18n";
 import SidebarNavButton from "./SidebarNavButton.vue";
 import type { SidebarNavEntry } from "./sidebarNav";
 
-defineProps<{ items: SidebarNavEntry[] }>();
+defineProps<{ items: SidebarNavEntry[]; collapsed?: boolean }>();
 defineEmits<{ navigate: [string] }>();
 const i18n = useI18nStore();
 </script>
@@ -16,6 +16,7 @@ const i18n = useI18nStore();
       :id="item.id"
       :label="item.label"
       :icon="item.icon"
+      :collapsed="collapsed"
       :active="item.active"
       :disabled-reason="item.disabledReason"
       @navigate="$emit('navigate', $event)"

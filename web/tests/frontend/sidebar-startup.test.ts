@@ -209,6 +209,15 @@ describe("sidebar at sign-in", () => {
     expect(compare?.element.closest(".shell-nav-section")?.querySelector("h2")?.textContent).toBe(
       "Corpora",
     );
+    expect(
+      wrapper
+        .findAll(".shell-navigation .nav-tooltip-wrap > button")
+        .every((button) => !button.element.closest(".ui-tooltip")),
+    ).toBe(true);
+
+    shell.snapshot.sidebarCollapsed = true;
+    await flushPromises();
+    expect(wrapper.findAll(".shell-navigation .ui-tooltip-anchor")).not.toHaveLength(0);
   });
 
   it("forgets the menu on sign-out so the next user never sees stale navigation", async () => {
@@ -325,6 +334,9 @@ describe("sidebar at sign-in", () => {
     expect(wrapper.findAll(".shell-nav-section h2").map((node) => node.text())).toContain(
       "Corpora",
     );
+    await wrapper.get(".shell-nav-search-clear").trigger("click");
+    expect((input.element as HTMLInputElement).value).toBe("");
+    expect(pageLabels(wrapper)).toContain("Corpus Builder");
   });
 
   it("remembers collapsed groups while keeping the active group expanded", async () => {

@@ -123,7 +123,17 @@ function isFavorite(id: string) {
         type="search"
         autocomplete="off"
         :placeholder="i18n.t('nav.filter_navigation')"
+        @keydown.esc="query = ''"
       />
+      <button
+        v-if="query"
+        type="button"
+        class="shell-nav-search-clear"
+        :aria-label="i18n.t('common.clear')"
+        @click="query = ''"
+      >
+        <AppIcon name="close" aria-hidden="true" />
+      </button>
     </label>
 
     <div
@@ -139,6 +149,7 @@ function isFavorite(id: string) {
             :id="item.id"
             :label="item.label"
             :icon="item.icon"
+            :collapsed="collapsed"
             :active="item.active"
             :disabled-reason="item.disabledReason"
             @navigate="navigate"
@@ -155,6 +166,7 @@ function isFavorite(id: string) {
             :id="item.id"
             :label="item.label"
             :icon="item.icon"
+            :collapsed="collapsed"
             :active="item.active"
             :disabled-reason="item.disabledReason"
             @navigate="navigate"
@@ -186,6 +198,7 @@ function isFavorite(id: string) {
             :id="item.id"
             :label="item.label"
             :icon="item.icon"
+            :collapsed="collapsed"
             :active="item.active"
             :disabled-reason="item.disabledReason"
             @navigate="navigate"
@@ -236,13 +249,14 @@ function isFavorite(id: string) {
   overflow-y: auto;
   padding: 2px 3px 12px;
   font-family: var(--font-ui);
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent;
 }
 
 .shell-nav-search {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr) 24px;
   align-items: center;
   gap: 9px;
   min-height: 38px;
@@ -287,6 +301,29 @@ function isFavorite(id: string) {
   opacity: 0.9;
 }
 
+.shell-nav-search-clear {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.shell-nav-search-clear:hover,
+.shell-nav-search-clear:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.shell-nav-search-clear :deep(svg) {
+  width: 14px;
+  height: 14px;
+}
+
 .shell-nav-shortcuts {
   display: grid;
   gap: 11px;
@@ -296,6 +333,10 @@ function isFavorite(id: string) {
 .shell-nav-section {
   display: grid;
   gap: 4px;
+}
+
+.shell-nav-section:not(.overview):not(.quick) {
+  padding-top: 6px;
 }
 
 .shell-nav-section.overview {
@@ -360,6 +401,10 @@ function isFavorite(id: string) {
 .shell-nav-group-toggle:focus-visible {
   background: var(--surface-hover);
   color: var(--text-2);
+}
+
+.shell-nav-group-toggle:focus-visible {
+  outline-offset: 1px;
 }
 
 .shell-nav-group-toggle > span {
@@ -467,7 +512,7 @@ function isFavorite(id: string) {
 }
 
 .shell-navigation.collapsed :deep(.nav-tooltip-wrap > button.active) {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 34%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 44%, transparent);
 }
 
 .shell-navigation.collapsed :deep(.nav-tooltip-wrap > button span) {

@@ -43,9 +43,14 @@ const i18n = useI18nStore();
 .shell-mini-status {
   display: grid;
   gap: 5px;
+  min-height: 56px;
+  align-content: center;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-inset) 68%, transparent);
   color: var(--muted);
   font-size: 0.8125rem;
-  padding: 0 5px;
 }
 .shell-mini-status span {
   display: flex;
