@@ -16,6 +16,7 @@ import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
 import { useRelationNodeDrag } from "../../composables/relations/useRelationNodeDrag";
 import { relationBoundsForPoints } from "../../domain/relations/geometry";
+import { RELATION_SURFACE_PRESETS } from "../../domain/relations/presets";
 import type { RelationViewportState } from "../../domain/relations/types";
 import {
   corpusBuildsApi,
@@ -40,6 +41,7 @@ const props = defineProps<{
 const emit = defineEmits<{ refreshed: [] }>();
 const i18n = useI18nStore();
 
+const surfacePreset = RELATION_SURFACE_PRESETS.semanticNetwork;
 const WIDTH = 960;
 const HEIGHT = 560;
 const DENSITIES = [40, 80, 150, 250] as const;
@@ -703,9 +705,9 @@ const pageText = computed(() => {
             :content-bounds="contentBounds"
             :content-width="WIDTH"
             :content-height="HEIGHT"
-            :min-zoom="0.5"
-            :max-zoom="6"
-            resize-axis="vertical"
+            :min-zoom="surfacePreset.minZoom"
+            :max-zoom="surfacePreset.maxZoom"
+            :resize-axis="surfacePreset.resizeAxis"
             @viewport-change="onViewportChange"
             @keydown.esc="selectedNodeId = ''"
           >
