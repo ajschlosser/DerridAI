@@ -1,6 +1,8 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import UiRelationChipNode from "../relations/UiRelationChipNode.vue";
+import UiRelationEdge from "../relations/UiRelationEdge.vue";
 import UiRelationNodeShell from "../relations/UiRelationNodeShell.vue";
 import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { relationBoundsForPoints } from "../../domain/relations/geometry";
@@ -39,6 +41,12 @@ const contentBounds = computed(() =>
 function screen(id: string) {
   const node = positioned.value.byId.get(id);
   return { x: ORIGIN + (node?.x || 0), y: ORIGIN + (node?.y || 0) };
+}
+
+function edgePath(sourceId: string, targetId: string) {
+  const source = screen(sourceId);
+  const target = screen(targetId);
+  return `M ${source.x} ${source.y} L ${target.x} ${target.y}`;
 }
 
 function moveNodeTo(id: string, point: RelationPoint) {
@@ -91,13 +99,10 @@ defineExpose({ zoomBy, fitView, resetView });
   >
     <template #default="{ zoom }">
       <svg class="semantic-map-edges" aria-hidden="true">
-        <line
+        <UiRelationEdge
           v-for="edge in graph.edges"
           :key="edge.id"
-          :x1="screen(edge.source).x"
-          :y1="screen(edge.source).y"
-          :x2="screen(edge.target).x"
-          :y2="screen(edge.target).y"
+          :path="edgePath(edge.source, edge.target)"
         />
       </svg>
       <UiRelationNodeShell
@@ -112,8 +117,7 @@ defineExpose({ zoomBy, fitView, resetView });
         :aria-label="`${kindLabel(node.kind)}: ${node.label}`"
         @move="moveNodeTo(node.id, $event)"
       >
-        <span class="semantic-map-dot" aria-hidden="true"></span>
-        <span class="semantic-map-label">{{ node.label }}</span>
+        <UiRelationChipNode :label="node.label" />
       </UiRelationNodeShell>
     </template>
   </UiRelationViewport>
@@ -133,21 +137,13 @@ defineExpose({ zoomBy, fitView, resetView });
   height: 1040px;
   overflow: visible;
 }
-.semantic-map-edges line {
-  stroke: var(--border-strong);
-  stroke-width: 1.5;
-}
 .semantic-map-node {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   max-width: 220px;
   min-height: 28px;
   margin: 0;
-  padding: 2px 8px 2px 2px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: var(--surface-card);
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-primary);
   font: inherit;
   font-size: 12px;
@@ -158,26 +154,17 @@ defineExpose({ zoomBy, fitView, resetView });
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 2px;
 }
-.semantic-map-dot {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--accent-fg);
+.semantic-map-node {
+  --relation-node-dot: var(--accent-fg);
 }
-.kind-topic .semantic-map-dot {
-  background: var(--tone-info-fg);
+.semantic-map-node.kind-topic {
+  --relation-node-dot: var(--tone-info-fg);
 }
-.kind-person .semantic-map-dot {
-  background: var(--tone-ok-fg);
+.semantic-map-node.kind-person {
+  --relation-node-dot: var(--tone-ok-fg);
 }
-.kind-record .semantic-map-dot {
-  background: var(--tone-warn-fg);
-}
-.semantic-map-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.semantic-map-node.kind-record {
+  --relation-node-dot: var(--tone-warn-fg);
 }
 .semantic-map-empty {
   margin: 0;
