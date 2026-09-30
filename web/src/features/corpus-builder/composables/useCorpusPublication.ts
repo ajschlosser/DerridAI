@@ -63,7 +63,7 @@ export function useCorpusPublication(options: {
       await options.refreshBuild();
       await options.refreshBuilds();
       options.setMessage(
-        result.celf_conformant === false
+        publishOptions.acceptUnreviewed
           ? options.tf("pdf_corpus.published_unreviewed", {
               count: result.record_count,
               unreviewed: result.unreviewed_record_count || 0,

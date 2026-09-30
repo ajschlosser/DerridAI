@@ -46,7 +46,7 @@ describe("unreviewed corpus publication", () => {
     const { composable, setMessage } = setup();
     await composable.publish({ acceptUnreviewed: true });
     expect(publish).toHaveBeenCalledWith("build-1", { acceptUnreviewed: true });
-    expect(setMessage).toHaveBeenCalledWith("pdf_corpus.published|3|abc");
+    expect(setMessage).toHaveBeenCalledWith("pdf_corpus.published_unreviewed|3|2|5");
   });
 
   it("keeps the normal publication path reviewed", async () => {
