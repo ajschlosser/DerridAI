@@ -134,6 +134,7 @@ describe("CorpusRecordSemanticMap", () => {
         .replace(/PERSON/, ""),
     ).toBe(text);
     expect(wrapper.findAll(".map-node[role='button']")).toHaveLength(2);
+    expect(wrapper.get(".semantic-map-canvas").attributes("aria-hidden")).toBeUndefined();
     expect(wrapper.get(".record-links").text()).toContain("r2");
   });
 
