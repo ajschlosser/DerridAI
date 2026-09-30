@@ -9178,4 +9178,5 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'site.runtime.use_selection': 'Use selected text',
  'site.runtime.view_record': 'View record',
  'site.runtime.work_filter': 'Work'
+ 'pdf_corpus.setup.summary.minutes': '{count} min',
 }

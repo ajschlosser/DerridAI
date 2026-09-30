@@ -211,6 +211,26 @@ describe("setup state", () => {
     expect(summary("none")).not.toContain("document_intelligence");
   });
 
+  it("summarises audio by its probed duration, and falls back to blocks without one", () => {
+    const summary = (duration?: number) =>
+      corpusSetupSectionStates(
+        input({
+          asset: {
+            filename: "Interview.wav",
+            media_kind: "audio",
+            block_count: 58,
+            duration_seconds: duration,
+          },
+        }),
+        [],
+        text,
+      ).find((state) => state.id === "source")!.summary;
+    expect(summary(3480)).toContain('"count":58');
+    expect(summary(3480)).toContain("minutes");
+    expect(summary(undefined)).toContain("blocks");
+    expect(summary(undefined)).not.toContain("minutes");
+  });
+
   it("does not invent page semantics for non-paginated media", () => {
     const states = corpusSetupSectionStates(
       input({ asset: { filename: "Interview.wav", media_kind: "audio", block_count: 58 } }),
