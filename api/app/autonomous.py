@@ -128,6 +128,7 @@ def settle_record(record: dict[str, Any], policy: Policy) -> dict[str, Any]:
         selected = assertion.model_copy(update={
             "assertion_id": f"{assertion.assertion_id}:policy:{len(decisions) + 1}",
             "value": proposed,
+            "legacy_status": None,
             "legacy_metadata": {**assertion.legacy_metadata, "autonomous_decision": decision},
             "reason": assertion.reason or f"Selected by autonomous policy; reported confidence {pct}.",
             "record_revision": int(record.get("record_revision") or assertion.record_revision or 1),
