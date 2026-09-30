@@ -83,7 +83,7 @@ function kindLabel(kind: string) {
           </button>
         </div>
         <UiRelationToolbar
-          :aria-label="i18n.t('semantic_map.zoom', 'Map controls')"
+          :accessible-label="i18n.t('semantic_map.zoom', 'Map controls')"
           :zoom-out-label="i18n.t('semantic_map.zoom_out', 'Zoom out')"
           :zoom-in-label="i18n.t('semantic_map.zoom_in', 'Zoom in')"
           :fit-label="i18n.t('semantic_map.fit', 'Fit map')"
