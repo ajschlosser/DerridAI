@@ -96,10 +96,13 @@ const providerSummary = computed(() =>
     :data-ready="ready ? 'true' : 'false'"
     aria-labelledby="build-readiness-title"
   >
-    <div class="build-command-status">
-      <span class="build-command-indicator" aria-hidden="true"></span>
-      <h3 id="build-readiness-title" role="status">{{ statement }}</h3>
-    </div>
+    <header class="build-plan-head">
+      <span class="build-plan-eyebrow">{{ i18n.t("pdf_corpus.readiness.build_plan") }}</span>
+      <div class="build-command-status">
+        <span class="build-command-indicator" aria-hidden="true"></span>
+        <h3 id="build-readiness-title" role="status">{{ statement }}</h3>
+      </div>
+    </header>
 
     <div
       class="build-command-summary"
@@ -118,9 +121,25 @@ const providerSummary = computed(() =>
     <div class="build-command-actions">
       <UiButton
         v-if="blocking"
+        variant="primary"
         :label="i18n.t('pdf_corpus.setup.fix')"
         @click="emit('editSection', blocking.section)"
       />
+      <UiButton
+        :variant="blocking ? 'default' : 'primary'"
+        button-class="build-action"
+        :disabled="!ready || busy"
+        @click="emit('build')"
+      >
+        {{
+          busy
+            ? i18n.t("pdf_corpus.starting")
+            : i18n.t(
+                activeBuildCount ? "pdf_corpus.start_another_build" : "pdf_corpus.build_records",
+                activeBuildCount ? "Start another build" : "Build record set",
+              )
+        }}
+      </UiButton>
       <details class="build-command-details">
         <summary>{{ i18n.t("pdf_corpus.readiness.review_setup", "Review setup") }}</summary>
         <div class="build-command-popover">
@@ -169,41 +188,30 @@ const providerSummary = computed(() =>
           </p>
         </div>
       </details>
-
-      <UiButton
-        variant="primary"
-        button-class="build-action"
-        :disabled="!ready || busy"
-        @click="emit('build')"
-      >
-        {{
-          busy
-            ? i18n.t("pdf_corpus.starting")
-            : i18n.t(
-                activeBuildCount ? "pdf_corpus.start_another_build" : "pdf_corpus.build_records",
-                activeBuildCount ? "Start another build" : "Build record set",
-              )
-        }}
-      </UiButton>
     </div>
   </section>
 </template>
 
 <style scoped>
 .build-command-bar {
-  position: sticky;
-  bottom: var(--space-3);
-  z-index: 12;
   display: grid;
-  grid-template-columns: minmax(12rem, 1fr) minmax(0, 1.5fr) auto;
   gap: var(--space-4);
-  align-items: center;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface-card) 94%, transparent);
-  box-shadow: var(--shadow-card);
-  backdrop-filter: blur(16px);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+.build-plan-head {
+  display: grid;
+  gap: var(--space-2);
+}
+.build-plan-eyebrow {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 .build-command-status {
   display: grid;
@@ -223,49 +231,40 @@ const providerSummary = computed(() =>
   background: var(--tone-ok-fg);
   box-shadow: 0 0 0 4px var(--tone-ok-bg);
 }
-.build-command-status h3,
-.build-command-status p {
-  margin: 0;
-}
 .build-command-status h3 {
-  font-size: var(--fs-sm);
-}
-.build-command-status p {
-  margin-top: 0.1rem;
-  overflow: hidden;
-  color: var(--text-secondary);
-  font-size: var(--fs-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin: 0;
+  font-size: var(--fs-lg, 1.125rem);
+  line-height: 1.3;
 }
 .build-command-summary {
   min-width: 0;
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  overflow: hidden;
+  display: grid;
+  gap: 0;
+  border-block: 1px solid var(--border-subtle);
 }
 .build-command-summary > span {
   min-width: 0;
-  padding: 0.28rem 0.55rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: var(--surface-subtle);
+  padding: var(--space-2) 0;
   color: var(--text-secondary);
-  font-size: var(--fs-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.build-command-summary > span + span {
+  border-top: 1px solid var(--border-subtle);
 }
 .build-command-summary .build-command-warning {
-  border-color: var(--tone-warn-border);
-  background: var(--tone-warn-bg);
   color: var(--tone-warn-fg);
+  font-weight: var(--fw-semibold);
 }
 .build-command-actions {
-  display: flex;
+  display: grid;
   gap: var(--space-2);
-  align-items: center;
+}
+.build-command-actions :deep(.ui-button-wrap),
+.build-command-actions :deep(.ui-button),
+.build-command-details > summary {
+  width: 100%;
 }
 .build-command-details {
   position: relative;
@@ -274,6 +273,7 @@ const providerSummary = computed(() =>
   min-height: 2.5rem;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding-inline: var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
@@ -296,15 +296,16 @@ const providerSummary = computed(() =>
 }
 .build-command-popover {
   position: absolute;
+  z-index: 20;
   inset-inline-end: 0;
-  bottom: calc(100% + var(--space-2));
+  top: calc(100% + var(--space-2));
   width: min(38rem, calc(100vw - var(--space-6)));
   display: grid;
   gap: var(--space-3);
   padding: var(--space-4);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
-  background: var(--surface-card);
+  background: var(--surface-overlay);
   box-shadow: var(--shadow-overlay);
 }
 dl {
@@ -357,46 +358,41 @@ dd small {
   font-size: var(--fs-sm);
 }
 .build-command-bar :deep(.build-action) {
-  min-width: 10rem;
-  min-height: 2.6rem;
+  min-height: 2.75rem;
   font-weight: var(--fw-bold);
 }
 @media (max-width: 1100px) {
   .build-command-bar {
-    grid-template-columns: minmax(0, 1fr) auto;
+    padding: var(--space-4);
   }
   .build-command-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2) var(--space-4);
+    border-block: 0;
+  }
+  .build-command-summary > span {
+    padding: 0;
+  }
+  .build-command-summary > span + span {
+    border-top: 0;
+  }
+  .build-command-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .build-command-details {
     grid-column: 1 / -1;
-    grid-row: 2;
   }
 }
 @media (max-width: 720px) {
-  .build-command-bar {
-    position: static;
+  .build-command-summary,
+  .build-command-actions,
+  dl {
     grid-template-columns: 1fr;
-  }
-  .build-command-summary {
-    grid-column: auto;
-    grid-row: auto;
-    flex-wrap: wrap;
-  }
-  .build-command-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-  .build-command-details > summary,
-  .build-command-bar :deep(.ui-button-wrap),
-  .build-command-bar :deep(.build-action) {
-    width: 100%;
-    justify-content: center;
   }
   .build-command-popover {
     position: static;
     width: auto;
     margin-top: var(--space-2);
-  }
-  dl {
-    grid-template-columns: 1fr;
   }
 }
 </style>
