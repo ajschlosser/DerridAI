@@ -5827,6 +5827,7 @@
   "pdf_corpus.workspace.setup": "Setup",
   "pdf_corpus.workspace.build": "Build",
   "pdf_corpus.workspace.review": "Review",
+  "pdf_corpus.workspace.build_review": "Build & review",
   "pdf_corpus.configure_sections": "Build configuration",
   "pdf_corpus.configure_source": "Source",
   "pdf_corpus.configure_structure": "Structure",
