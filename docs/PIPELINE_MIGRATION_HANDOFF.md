@@ -258,21 +258,34 @@ One trace is recorded per build; the build's `memory_prefill` summary carries th
 
 The provenance gate and top-K selection cannot be removed; candidates remain advisory current-Record correspondences. An unresolvable assignment yields no candidates (logged) rather than failing the panel or the enrichment cache.
 
+### 4.14 Corpus Builder metadata enrichment moved onto pipeline runtime
+
+`_execute_metadata_tasks()` no longer decides how a metadata group's model call runs. It resolves the `corpus_metadata_enrichment` assignment once per Record (built-in `corpus.metadata_enrichment.current@1`: `llm.structured_metadata` on the primary provider, 2 attempts, escalating on error or timeout to `llm.structured_metadata` on the review provider, 2 attempts) and runs each group through `EnrichmentSession` in `api/app/pipelines/corpus_metadata_enrichment.py`. `_chat_json()` takes `roles` and `escalated` so one stage runs one provider role; its default chain is unchanged for the callers that have not migrated (segmentation, manifest, touch-up, reviewer evidence choice).
+
+- Classification: provider role and attempts are pipeline settings. The correction/escalation prompt notes, the growing token budget, not retrying a timed-out provider, and the per-family `max_tokens`/timeouts from build settings stay server policy. The schema-derived prompt and response model, family routing (fast/deep, human-owned, adaptive skip, settle), reconciliation, evidence and autofill stay domain code outside the pipeline.
+- The compiler accepts one terminal structured stage with at most one terminal escalation stage on the other provider role. A review stage without a configured review provider is `unavailable`; with no edge, the primary failure is reported exactly as before.
+- Precedent retrieval for the prompt stays on its own `metadata_precedents` assignment; it is not a stage of this pipeline.
+- An unresolvable assignment fails the family with the reason before any model call; there is no hidden default.
+- Parity is pinned by `tests/test_corpus_metadata_enrichment_pipeline.py`, which runs the same scripted provider through the legacy chain and the pipeline and compares calls, prompts, token budgets, results and error text. Existing enrichment tests pass with only their `_chat_json` stub signatures widened to accept the new keywords.
+- One trace per Record (also on cancellation); each family's `metadata_execution_ledger` entry carries the pipeline identity, trace ID and the stages that ran. Traces carry provider, model, attempts, response-contract names and failure codes, never prompts or answers. The Corpus Builder does not display the identity yet.
+- Pipeline Studio renders enumerated settings (such as `provider_role`) as a choice list.
+
 ## 5. Current built-in assignments
 
 As of current `master`, built-in system assignments are:
 
-| Feature                      | Assigned pipeline               | Status |
-| ---------------------------- | ------------------------------- | ------ |
-| Research                     | `research.current@1`            | active |
-| Reviewer evidence suggestion | `evidence.reviewer.current@2`   | active |
-| Evidence recovery            | `evidence.recovery.cascade@1`   | active |
-| Vector Store search          | `store_search.similarity@1`     | active |
-| Metadata pre-fill            | `metadata.prefill.current@1`    | active |
-| Precedent evidence remapping | `precedent.remap.current@1`     | active |
-| Metadata precedents          | `metadata.precedents.current@1` | active |
-| Validated claim memory       | `memory.claim.current@1`        | active |
-| Prior response memory        | `memory.response.current@1`     | active |
+| Feature                      | Assigned pipeline                      | Status |
+| ---------------------------- | -------------------------------------- | ------ |
+| Research                     | `research.current@1`                   | active |
+| Reviewer evidence suggestion | `evidence.reviewer.current@2`          | active |
+| Evidence recovery            | `evidence.recovery.cascade@1`          | active |
+| Vector Store search          | `store_search.similarity@1`            | active |
+| Metadata pre-fill            | `metadata.prefill.current@1`           | active |
+| Precedent evidence remapping | `precedent.remap.current@1`            | active |
+| Corpus metadata enrichment   | `corpus.metadata_enrichment.current@1` | active |
+| Metadata precedents          | `metadata.precedents.current@1`        | active |
+| Validated claim memory       | `memory.claim.current@1`               | active |
+| Prior response memory        | `memory.response.current@1`            | active |
 
 There are also important draft/legacy definitions:
 
@@ -498,6 +511,8 @@ Migrated in section 4.13.
 ### 8.4 Generic/feature-specific LLM operations
 
 The original audit identified many generative/structured LLM uses beyond Research answer generation, including Corpus Builder segmentation/metadata work, touch-up/review operations, translation, and other utility calls.
+
+Corpus Builder metadata enrichment migrated in section 4.14; segmentation, manifest, touch-up, and reviewer evidence choice still call `_chat_json()` directly.
 
 Only claim that acceptance criterion “every generative LLM call resolves through a pipeline” is met after a fresh call-site audit.
 

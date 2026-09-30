@@ -18,6 +18,10 @@ export function pipelinePurposeLabel(purpose: string, t: PipelineTranslator) {
       "pipelines.purpose_precedent_remap",
       "Precedent evidence remapping",
     ),
+    corpus_metadata_enrichment: t(
+      "pipelines.purpose_corpus_metadata_enrichment",
+      "Corpus metadata enrichment",
+    ),
     metadata_precedents: t("pipelines.purpose_precedents", "Metadata precedents"),
     claim_memory: t("pipelines.purpose_claim_memory", "Claim memory"),
     response_memory: t("pipelines.purpose_response_memory", "Response memory"),
@@ -183,6 +187,8 @@ export function pipelineConfigLabel(key: string, t: PipelineTranslator) {
     lexical_weight: t("pipelines.config.lexical_weight.label", "Word-match weight"),
     min_score: t("pipelines.config.min_score.label", "Minimum support score"),
     min_similarity: t("pipelines.config.min_similarity.label", "Minimum similarity"),
+    provider_role: t("pipelines.config.provider_role.label", "Provider"),
+    attempts: t("pipelines.config.attempts.label", "Attempts"),
   };
   return labels[key] || key.replaceAll("_", " ");
 }
@@ -249,6 +255,14 @@ export function pipelineConfigHelp(key: string, t: PipelineTranslator) {
       "pipelines.config.min_similarity.help",
       "Technical name: min_similarity. Candidates below this semantic-similarity threshold are not allowed through the retrieval stage. Raising it makes memory more selective; lowering it admits looser analogies.",
     ),
+    provider_role: t(
+      "pipelines.config.provider_role.help",
+      "Technical name: provider_role. Which of the build's configured model providers runs this stage: the primary provider, or the separately configured review provider. A stage whose provider the build does not configure is reported as unavailable.",
+    ),
+    attempts: t(
+      "pipelines.config.attempts.help",
+      "Technical name: attempts. How many times this provider is asked when its answer does not validate. Each retry names the validation problem and allows a larger answer. A timed-out request is not retried.",
+    ),
   };
   return (
     help[key] ||
@@ -289,4 +303,14 @@ export function pipelineDataTypeHelp(value: string, t: PipelineTranslator) {
       "This is the technical data shape passed between pipeline stages.",
     )
   );
+}
+
+export function pipelineConfigOptionLabel(key: string, value: string, t: PipelineTranslator) {
+  const labels: Record<string, Record<string, string>> = {
+    provider_role: {
+      primary: t("pipelines.config.provider_role.primary", "Primary provider"),
+      review: t("pipelines.config.provider_role.review", "Review provider"),
+    },
+  };
+  return labels[key]?.[value] || value;
 }

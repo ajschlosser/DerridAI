@@ -426,12 +426,19 @@ DEFAULT_STRATEGIES = [
         strategy_id="llm.structured_metadata",
         family="llm",
         label="Structured metadata generation",
-        description="Run one schema-derived structured metadata task and validate the returned object at the backend boundary.",
+        description="Run one schema-derived structured metadata task and validate the returned object at the backend boundary. The active metadata schema supplies the task and answer shape; the stage chooses which configured provider answers and how many attempts it gets.",
         input_type="context_packet",
         output_type="model_output",
         deterministic=False,
         invokes_llm=True,
         capabilities=["chat_model", "structured_output"],
+        config_schema={
+            "type": "object",
+            "properties": {
+                "provider_role": {"type": "string", "enum": ["primary", "review"], "default": "primary"},
+                "attempts": {**_integer(1, 4), "default": 2},
+            },
+        },
     ),
     StrategySpec(
         strategy_id="llm.closed_choice_evidence",

@@ -849,9 +849,46 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             },
         ],
     ),
+    _pipeline(
+        pipeline_id="corpus.metadata_enrichment.current",
+        version=1,
+        name="Corpus metadata enrichment — current",
+        purpose="corpus_metadata_enrichment",
+        status="active",
+        entry_stage_ids=["primary"],
+        notes=(
+            "Runs each schema-derived metadata group on the build's primary "
+            "provider with two attempts. When those fail or time out and the "
+            "build configures a review provider, the review provider gets two "
+            "attempts of its own. The active metadata schema supplies the task; "
+            "every answer is validated, and review and evidence rules apply "
+            "after this pipeline."
+        ),
+        stages=[
+            {
+                "id": "primary",
+                "strategy": "llm.structured_metadata",
+                "config": {"provider_role": "primary", "attempts": 2},
+                "on_error": "review",
+                "on_timeout": "review",
+            },
+            {
+                "id": "review",
+                "strategy": "llm.structured_metadata",
+                "config": {"provider_role": "review", "attempts": 2},
+            },
+        ],
+    ),
 )
 
 BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
+    PipelineAssignment(
+        feature="corpus_metadata_enrichment",
+        pipeline_id="corpus.metadata_enrichment.current",
+        pipeline_version=1,
+        source="built_in",
+        override_allowed=True,
+    ),
     PipelineAssignment(
         feature="research",
         pipeline_id="research.current",

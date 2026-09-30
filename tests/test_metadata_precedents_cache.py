@@ -82,7 +82,7 @@ def _install(tmp_path: Path, records: list[dict]):
 
 
 def _enrich(repo, build_id, manager, monkeypatch):
-    def fake(_request, _prompt, *, response_model, max_tokens, schema_name, build_id="", attempts=1):
+    def fake(_request, _prompt, *, response_model, max_tokens, schema_name, build_id="", attempts=1, **_kwargs):
         return {"metadata": {}, "field_evidence": {}, "field_assessments": {}, "review_reason": ""}
 
     monkeypatch.setattr(manager, "_chat_json", fake)

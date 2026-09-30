@@ -55,6 +55,7 @@ from .corpus_extraction import (
     extract_source_document as _extract_source_document,
 )
 from .corpus_llm_helpers import (
+    StructuredOutputError,
     _context_window,
     _llm_config,
     _parse_json_robust,
@@ -2243,6 +2244,8 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         schema_name: str = "derridai_corpus",
         attempts: int = 2,
         build_id: str = "",
+        roles: tuple[str, ...] = ("primary", "review"),
+        escalated: bool = False,
     ) -> dict[str, Any]:
         """Generate and validate typed structured output with bounded retry/escalation.
 
@@ -2251,24 +2254,33 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         Pydantic-validated, and an optional separately configured review provider
         receives the same source-bound task only after the primary provider has
         exhausted its attempts.
+
+        ``roles`` limits the chain to some provider roles; a pipeline adapter runs one role
+        per stage and passes ``escalated`` when a fallback edge reached that stage, so the
+        stage gets the same escalation note a chained review provider does.
         """
         schema = response_model.model_json_schema()
-        request_chain: list[tuple[str, dict[str, Any]]] = [("primary", request)]
+        request_chain: list[tuple[str, dict[str, Any]]] = [("primary", request)] if "primary" in roles else []
         reviewer = request.get("_review_provider")
-        if isinstance(reviewer, dict) and reviewer:
+        if "review" in roles and isinstance(reviewer, dict) and reviewer:
             request_chain.append(("review", reviewer))
+        if not request_chain:
+            raise LookupError("No review provider is configured for this build.")
         all_failures: list[str] = []
+        timed_out = False
         for chain_index, (role, active_request) in enumerate(request_chain):
             provider, model, base_url, api_key, generation = _llm_config(active_request)
-            if chain_index > 0 and build_id:
+            escalating = chain_index > 0 or escalated
+            if escalating and build_id:
                 self._increment_metric(build_id, "escalations")
             failure: Exception | None = None
             diagnostic = ""
+            timed_out = False
             for attempt in range(1, max(1, attempts) + 1):
                 if build_id and self._cancelled(build_id):
                     raise InterruptedError("Corpus build cancelled")
                 retry_note = ""
-                if chain_index > 0 and attempt == 1:
+                if escalating and attempt == 1:
                     retry_note = (
                         "\n\nESCALATION REVIEW: a first-pass model could not produce a valid structured "
                         "answer. Independently perform the task from the supplied source evidence and "
@@ -2379,6 +2391,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     # the same expensive request obscures stalls rather than improving
                     # resilience; settle it for human review instead.
                     if "timeout" in type(exc).__name__.casefold() or "timed out" in str(exc).casefold():
+                        timed_out = True
                         if build_id:
                             self._increment_metric(build_id, "timeouts")
                         break
@@ -2410,10 +2423,12 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                         )
                         self._increment_metric(build_id, "structured_output_failures")
             all_failures.append(f"{role} {provider}/{model}: {failure}")
-        raise ValueError(
+        raise StructuredOutputError(
             "LLM structured output failed after bounded retry"
             + (" and review-provider escalation" if len(request_chain) > 1 else "")
-            + ": " + " | ".join(all_failures)
+            + ": " + " | ".join(all_failures),
+            failures=all_failures,
+            timed_out=timed_out,
         )
 
     def _document_manifest(self, asset: dict[str, Any], blocks: list[dict[str, Any]], request: dict[str, Any], build_id: str) -> dict[str, Any]:
