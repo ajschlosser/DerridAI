@@ -10,7 +10,7 @@ DerridAI is a local-first, provenance-preserving research environment for buildi
 
 DerridAI is also the originating reference implementation of **cELF 1.0 — the Capta-Enriched Lexical Format**, a provenance-preserving information architecture for AI-assisted documentary research. The implementation keeps source identity, record identity and revision, metadata assertions, evidence, generated claims, and support bindings separately inspectable instead of flattening them into one opaque vector store.
 
-Current version: **0.80.7 — Exeter** ([release notes](docs/notes/0.80.7.md)). This README describes the current `master` architecture, including post-Exeter work already merged to the repository.
+Current version: **0.81.0 — Fall River** ([release notes](docs/notes/0.81.0.md)). This README describes the Fall River architecture on the current `master` branch.
 
 ## What DerridAI does
 

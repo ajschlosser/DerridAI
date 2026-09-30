@@ -10,7 +10,7 @@ DerridAI ist eine lokal ausgerichtete, provenanzerhaltende Forschungsumgebung zu
 
 DerridAI ist außerdem die ursprüngliche Referenzimplementierung von **cELF 1.0 — Capta-Enriched Lexical Format**, einer provenanzerhaltenden Informationsarchitektur für KI-gestützte Dokumentforschung. Quellenidentität, Record-Identität und Revision, Metadaten-Assertions, Evidenz, generierte Claims und Support-Bindungen bleiben getrennt prüfbar, statt in einem undurchsichtigen Vektorspeicher zusammenzufallen.
 
-Aktuelle Version: **0.80.7 — Exeter** ([Release Notes](docs/notes/0.80.7.md)). Dieses README beschreibt die aktuelle `master`-Architektur einschließlich bereits zusammengeführter Arbeiten nach Exeter.
+Aktuelle Version: **0.81.0 — Fall River** ([Release Notes](docs/notes/0.81.0.md)). Dieses README beschreibt die aktuelle `master`-Architektur einschließlich bereits zusammengeführter Arbeiten nach Exeter.
 
 ## Was DerridAI bietet
 

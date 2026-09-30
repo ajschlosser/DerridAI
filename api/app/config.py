@@ -6,7 +6,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-APP_VERSION = "0.80.7"
+APP_VERSION = "0.81.0"
+APP_CODENAME = "Fall River"
 
 
 _GIT_COMMIT_FILE = Path("/app/git-commit")
@@ -42,11 +43,17 @@ def resolve_git_commit() -> str:
 APP_GIT_COMMIT = resolve_git_commit()
 
 
-def app_version_label(version: str = APP_VERSION, commit: str = APP_GIT_COMMIT) -> str:
-    """UI/API display form: ``0.62.1`` or ``0.62.1 (abc1234)``."""
+def app_version_label(
+    version: str = APP_VERSION,
+    commit: str = APP_GIT_COMMIT,
+    codename: str = APP_CODENAME,
+) -> str:
+    """UI/API release identity: ``0.81.0 — Fall River (abc1234)``."""
     version = str(version or "").strip() or APP_VERSION
+    codename = str(codename or "").strip()
     commit = str(commit or "").strip()
-    return f"{version} ({commit})" if commit else version
+    release = f"{version} — {codename}" if codename else version
+    return f"{release} ({commit})" if commit else release
 
 
 def _float_env(name: str, default: float) -> float:

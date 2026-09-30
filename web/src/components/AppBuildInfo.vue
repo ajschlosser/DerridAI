@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
-import { APP_GIT_COMMIT, APP_VERSION, COPYRIGHT_YEAR } from "../buildInfo";
+import { APP_CODENAME, APP_GIT_COMMIT, APP_VERSION, COPYRIGHT_YEAR, appVersionLabel } from "../buildInfo";
 
 const props = withDefaults(
   defineProps<{
@@ -24,7 +24,9 @@ const holder = computed(() => i18n.t("about.copyright_holder"));
 const copyright = computed(() =>
   i18n.tf("about.copyright", { year: COPYRIGHT_YEAR, holder: holder.value }),
 );
-const product = computed(() => i18n.tf("about.product_version", { version: APP_VERSION }));
+const product = computed(() =>
+  i18n.tf("about.product_version", { version: appVersionLabel(APP_VERSION, "", APP_CODENAME) }),
+);
 const commitLabel = computed(() => {
   const commit = String(APP_GIT_COMMIT || "").trim();
   return commit ? i18n.tf("about.build_commit", { commit }) : "";

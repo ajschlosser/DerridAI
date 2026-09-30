@@ -9,6 +9,7 @@ describe("AppBuildInfo", () => {
     const text = mount(AppBuildInfo).text();
     expect(text).toContain("The New England Transcendental Club of California");
     expect(text).toContain(`DerridAI ${pkg.version}`);
+    expect(text).toContain(pkg.codename);
     expect(text).toContain("© 2026");
   });
 

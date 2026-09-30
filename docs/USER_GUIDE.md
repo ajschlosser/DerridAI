@@ -921,7 +921,7 @@ One search box searches page titles and descriptions, page tasks and downstream 
 
 Settings is a Vue-native control center at **System → Settings**. A contents rail (a collapsible **Contents** control on smaller screens) groups:
 
-- **Workspace and appearance** — accent theme, light/dark/system color scheme, contrast, and **About DerridAI** (copyright and version; administrators also see the git commit). Theme choices are stored in this browser workspace, not on the server.
+- **Workspace and appearance** — accent theme, light/dark/system color scheme, contrast, and **About DerridAI** (copyright and release identity, including the version and codename; administrators also see the git commit, and the sign-in screen shows it for build identification). Theme choices are stored in this browser workspace, not on the server.
 - **Language and accessibility** — interface language, applied immediately. Dictionary editing remains on **Languages**.
 - **Research defaults** — response language for generated answers. Per-run generation still lives on **Research**.
 - **Review and AI behavior** — default provider profile, review preset, and interactive vs background LLM review.

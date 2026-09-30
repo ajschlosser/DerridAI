@@ -32,16 +32,26 @@ def test_all_declared_versions_agree():
     commit (see AGENTS.md). This test checks the working tree, not git tags. Do not
     hard-code the version in other tests.
     """
-    version = json.loads(read("web/package.json"))["version"]
+    package = json.loads(read("web/package.json"))
+    version = package["version"]
+    codename = package["codename"]
     assert re.fullmatch(SEMVER, version)
+    assert isinstance(codename, str) and codename.strip()
     declared = {
         "api/app/config.py": find_all(rf'APP_VERSION = "({SEMVER})"', "api/app/config.py"),
-        "web/index.html": find_all(rf"<title>DerridAI ({SEMVER})</title>", "web/index.html"),
-        "README.md": find_all(rf"Current version: \*\*({SEMVER})", "README.md"),
+        "web/index.html": find_all(rf"<title>DerridAI ({SEMVER}) — [^<]+</title>", "web/index.html"),
+        "README.md": find_all(rf"Current version: \*\*({SEMVER}) — [^*]+\*\*", "README.md"),
     }
     for path, found in declared.items():
         assert found, f"{path} does not declare a version"
         assert set(found) == {version}, f"{path} declares {found}, expected {version}"
+    assert find_all(r'APP_CODENAME = "([^"]+)"', "api/app/config.py") == [codename]
+    assert find_all(
+        rf"<title>DerridAI {re.escape(version)} — ([^<]+)</title>", "web/index.html"
+    ) == [codename]
+    assert find_all(
+        rf"Current version: \*\*{re.escape(version)} — ([^*]+)\*\*", "README.md"
+    ) == [codename]
     application = read("api/app/application.py")
     admin_routes = read("api/app/routers/admin.py")
     health_routes = read("api/app/routers/health.py")
@@ -51,7 +61,9 @@ def test_all_declared_versions_agree():
     assert "AppBuildInfo" in read("web/src/components/shell/TopbarAccount.vue")
     assert "AppBuildInfo" in read("web/src/components/AuthScreen.vue")
     assert "AppBuildInfo" in read("web/src/views/SettingsView.vue")
-    assert "APP_VERSION" in read("web/src/components/AppBuildInfo.vue")
+    build_info = read("web/src/components/AppBuildInfo.vue")
+    assert "APP_VERSION" in build_info
+    assert "APP_CODENAME" in build_info
     notes = ROOT / "docs" / "notes" / f"{version}.md"
     assert notes.is_file(), f"missing {notes.relative_to(ROOT)}"
-    assert notes.read_text(encoding="utf-8").lstrip().startswith(f"# {version} —")
+    assert notes.read_text(encoding="utf-8").lstrip().startswith(f"# {version} — {codename}")
