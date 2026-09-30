@@ -41,7 +41,7 @@
   if (!providerProfiles.some((profile) => profile.id === selectedProviderId)) {
     selectedProviderId = "";
   }
-  let sessionApiKey = "";
+  const sessionApiKeys = new Map();
   let view = "search";
   let client = null;
   let capabilities = null;
@@ -498,11 +498,12 @@
   async function rebuildClient() {
     const host = globalThis.__DERRIDAI_HOST_CAPABILITIES__ || {};
     const profile = profileById(selectedProviderId);
+    const apiKey = sessionApiKeys.get(selectedProviderId) || "";
     const embeddings = profile
-      ? directEmbeddingProvider(profile, sessionApiKey)
+      ? directEmbeddingProvider(profile, apiKey)
       : host.embeddings;
     const generation = profile
-      ? directGenerationProvider(profile, sessionApiKey)
+      ? directGenerationProvider(profile, apiKey)
       : host.generation;
     client = await sdk.createClient({
       dataSource: sdk.dataSources.inline(publicationPackage),
@@ -905,7 +906,7 @@
       class: "control",
       type: "password",
       autocomplete: "off",
-      value: sessionApiKey,
+      value: sessionApiKeys.get(selectedProviderId) || "",
       placeholder: t("site.runtime.api_key_session"),
       "aria-label": t("site.runtime.api_key"),
       "aria-describedby": "provider-key-help",
@@ -932,7 +933,10 @@
       );
     }
     refreshSummary();
-    select.addEventListener("change", refreshSummary);
+    select.addEventListener("change", () => {
+      key.value = sessionApiKeys.get(select.value) || "";
+      refreshSummary();
+    });
 
     const apply = node("button", {
       class: "primary",
@@ -941,7 +945,7 @@
       on: {
         click: async () => {
           selectedProviderId = select.value;
-          sessionApiKey = key.value;
+          if (selectedProviderId) sessionApiKeys.set(selectedProviderId, key.value);
           writeLocal(providerKey, selectedProviderId);
           status.className = "status";
           status.textContent = t("site.runtime.provider_applying");
@@ -973,6 +977,7 @@
           }
           status.className = "status";
           status.textContent = t("site.runtime.testing_provider");
+          if (select.value) sessionApiKeys.set(select.value, key.value);
           const result = await testProvider(profile, key.value);
           status.className = result.ok ? "status success" : "status error";
           status.replaceChildren(node("span", { text: result.message }));
