@@ -423,6 +423,7 @@ describe("publish workspace", () => {
     });
     expect(wrapper.get("#corpus-publish-title").text()).toBe("Published");
     expect(wrapper.text()).toContain("pub-1");
+    expect(wrapper.find(".publish-counts").exists()).toBe(false);
     expect(wrapper.find(".publication-blockers").exists()).toBe(false);
     expect(wrapper.find(".publication-readiness-list").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("Use suggestions as-is");
