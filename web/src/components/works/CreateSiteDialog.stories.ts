@@ -46,6 +46,19 @@ const meta = {
       },
     ],
     initialWork: "Glas",
+    languages: [
+      { code: "en-US", name: "English", flag: "🇺🇸" },
+      { code: "fr-CA", name: "Français", flag: "🇨🇦" },
+    ],
+    providerProfiles: [
+      {
+        id: "openai-main",
+        name: "OpenAI-compatible lab",
+        type: "openai",
+        base_url: "https://models.example.edu/v1",
+        model: "gpt-oss:20b",
+      },
+    ],
     busy: false,
     error: "",
   },
