@@ -81,18 +81,18 @@ Support/exemplar resolution is revision-aware. When the referenced source revisi
 
 All paths derive from `CHROMA_DATA_ROOT` (default `/data`).
 
-| Data                                                                                      | Storage                             | Authority / restart behavior                                             |
-| ----------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------ |
-| Users, roles, sessions, login throttle                                                    | Auth SQLite                         | Authoritative auth state                                                 |
-| Provider profiles, annotations, languages, job snapshots/history, provenance/memory state | System SQLite                       | Durable application state                                                |
-| Source assets, build/review checkpoints, publications                                     | Files under DerridAI data root      | Authoritative corpus/build artifacts; atomic writes where applicable     |
-| Document Intelligence / Semantic Content Graph checkpoints                                | Files under DerridAI data root      | Derived/rebuildable build projections; never canonical publication state |
-| Corpus Capture state, candidates, source/capture links                                    | System SQLite                       | Durable acquisition/provenance bookkeeping; not corpus content           |
-| Vector/search collections                                                                 | Chroma embedded path or HTTP server | Derived/rebuildable from canonical data                                  |
-| Metadata exemplar semantic projection                                                     | Internal Chroma/system projection   | Derived/rebuildable; hidden from ordinary research collections           |
-| Response cache                                                                            | Chroma/system cache role            | Operational cache, not corpus truth                                      |
-| Upsert request spool                                                                      | `UPSERT_JOB_SPOOL_PATH`             | Durable queued vector-build request material                             |
-| Browser workspaces/preferences                                                            | IndexedDB/localStorage              | Per-origin/browser UI state                                              |
+| Data                                                                                      | Storage                             | Authority / restart behavior                                                                                       |
+| ----------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Users, roles, sessions, login throttle                                                    | Auth SQLite                         | Authoritative auth state                                                                                           |
+| Provider profiles, annotations, languages, job snapshots/history, provenance/memory state | System SQLite                       | Durable application state; annotations retain scope, linked targets, thread parentage, and deleted-root tombstones |
+| Source assets, build/review checkpoints, publications                                     | Files under DerridAI data root      | Authoritative corpus/build artifacts; atomic writes where applicable                                               |
+| Document Intelligence / Semantic Content Graph checkpoints                                | Files under DerridAI data root      | Derived/rebuildable build projections; never canonical publication state                                           |
+| Corpus Capture state, candidates, source/capture links                                    | System SQLite                       | Durable acquisition/provenance bookkeeping; not corpus content                                                     |
+| Vector/search collections                                                                 | Chroma embedded path or HTTP server | Derived/rebuildable from canonical data                                                                            |
+| Metadata exemplar semantic projection                                                     | Internal Chroma/system projection   | Derived/rebuildable; hidden from ordinary research collections                                                     |
+| Response cache                                                                            | Chroma/system cache role            | Operational cache, not corpus truth                                                                                |
+| Upsert request spool                                                                      | `UPSERT_JOB_SPOOL_PATH`             | Durable queued vector-build request material                                                                       |
+| Browser workspaces/preferences                                                            | IndexedDB/localStorage              | Per-origin/browser UI state                                                                                        |
 
 Active job execution is process-local, but job snapshots/history are mirrored to SQLite. On restart, work left `queued`, `running`, or `cancelling` is marked failed/interrupted rather than automatically replayed; completed history remains inspectable. Job state is not coordinated across multiple API processes.
 

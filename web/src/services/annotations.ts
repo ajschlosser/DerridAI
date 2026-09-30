@@ -3,6 +3,8 @@ import type { AnnotationWorkspaceItem, AnnotationsWorkspaceSnapshot } from "../t
 import * as runtime from "../runtime/runtime.js";
 
 export interface CreateAnnotationInput {
+  scope?: "text" | "record" | "work";
+  linkedRecordIds?: string[];
   field: string;
   quote: string;
   note: string;
@@ -19,6 +21,10 @@ export interface AnnotationService {
   removeWorkspaceItem(annotation: AnnotationWorkspaceItem): Promise<void>;
   addToCurrentRecord(input: CreateAnnotationInput): Promise<unknown>;
   removeFromCurrentRecord(id: string): Promise<unknown>;
+  replyToAnnotation(
+    id: string,
+    input: Pick<CreateAnnotationInput, "quote" | "note" | "tags">,
+  ): Promise<unknown>;
 }
 
 export const annotationsService: AnnotationService = {
@@ -32,4 +38,5 @@ export const annotationsService: AnnotationService = {
   removeWorkspaceItem: (annotation) => runtime.removeAnnotationsWorkspaceItem(annotation),
   addToCurrentRecord: (input) => runtime.addCurrentRecordAnnotation(input),
   removeFromCurrentRecord: (id) => runtime.removeCurrentRecordAnnotation(id),
+  replyToAnnotation: (id, input) => runtime.replyToCurrentAnnotation(id, input),
 };

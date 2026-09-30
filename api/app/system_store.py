@@ -5,7 +5,7 @@ import copy
 import os
 import re
 import threading
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from .config import settings as app_settings
@@ -113,6 +113,14 @@ class SystemStore:
     def list_annotations(self, *, user_id: int | None = None) -> list[dict[str, Any]]:
         with self._lock:
             rows = copy.deepcopy(self.repository.list_annotations())
+        for row in rows:
+            row.setdefault("scope", "text" if row.get("quote") else "record")
+            row.setdefault("record_id", None)
+            row.setdefault("work", None)
+            row.setdefault("linked_record_ids", [])
+            row.setdefault("parent_id", None)
+            row.setdefault("thread_id", row.get("id"))
+            row.setdefault("deleted_at", None)
         if user_id is not None:
             rows = [row for row in rows if int(row.get("user_id") or 0) == int(user_id)]
         return rows
@@ -123,6 +131,17 @@ class SystemStore:
         item = copy.deepcopy(value if isinstance(value, dict) else {})
         item["id"] = str(item.get("id") or uuid.uuid4())
         item["created_at"] = str(item.get("created_at") or datetime.now(UTC).isoformat())
+        item["scope"] = str(item.get("scope") or ("text" if item.get("quote") else "record"))
+        item["record_id"] = str(item["record_id"]) if item.get("record_id") else None
+        item["work"] = str(item["work"]).strip() if item.get("work") else None
+        item["linked_record_ids"] = [
+            str(record_id).strip()
+            for record_id in item.get("linked_record_ids") or []
+            if str(record_id).strip()
+        ]
+        item["parent_id"] = str(item["parent_id"]).strip() if item.get("parent_id") else None
+        item["thread_id"] = str(item.get("thread_id") or item["id"])
+        item["deleted_at"] = str(item["deleted_at"]) if item.get("deleted_at") else None
         item["tags"] = [str(tag).strip() for tag in item.get("tags") or [] if str(tag).strip()]
         with self._lock:
             self.repository.put_annotation(item)
@@ -131,7 +150,16 @@ class SystemStore:
     def delete_annotation(self, annotation_id: str, *, user_id: int | None = None, admin: bool = False) -> bool:
         annotation_id = str(annotation_id or "").strip()
         with self._lock:
-            return self.repository.delete_annotation(annotation_id, user_id=user_id, admin=admin)
+            rows = self.repository.list_annotations()
+            target = next((row for row in rows if str(row.get("id") or "") == annotation_id), None)
+            if not target or (not admin and int(target.get("user_id") or 0) != int(user_id or -1)):
+                return False
+            target["deleted_at"] = datetime.now(UTC).isoformat()
+            target["note"] = ""
+            target["quote"] = ""
+            target["tags"] = []
+            self.repository.put_annotation(target)
+            return True
 
     def get_adjudication_cache(self, cache_key: str) -> dict[str, Any] | None:
         with self._lock:

@@ -42,6 +42,9 @@ const annotationQuote = ref("");
 const annotationNote = ref("");
 const annotationTags = ref("");
 const annotationField = ref("text");
+const annotationScope = ref<"text" | "record" | "work">("text");
+const annotationParentId = ref<string | null>(null);
+const annotationLinkedRecords = ref("");
 const annotationError = ref("");
 const semanticSources = ref<SemanticMapSource[]>([]);
 const semanticFocus = ref("");
@@ -185,6 +188,9 @@ function metadataSearch(field: string, value: string, contains = false) {
 }
 function openAnnotation(selection?: { field: string; quote: string }) {
   annotationField.value = selection?.field || "text";
+  annotationScope.value = selection?.quote ? "text" : "record";
+  annotationParentId.value = null;
+  annotationLinkedRecords.value = "";
   annotationQuote.value = selection?.quote || "";
   annotationNote.value = "";
   annotationTags.value = "";
@@ -194,21 +200,46 @@ function openAnnotation(selection?: { field: string; quote: string }) {
     annotationDialog.value?.querySelector<HTMLTextAreaElement>("#recordAnnotationNote")?.focus();
   });
 }
+function openReply(annotationId: string) {
+  annotationField.value = "text";
+  annotationScope.value = "record";
+  annotationParentId.value = annotationId;
+  annotationQuote.value = "";
+  annotationNote.value = "";
+  annotationTags.value = "";
+  annotationLinkedRecords.value = "";
+  annotationError.value = "";
+  void nextTick(() => annotationDialog.value?.showModal());
+}
 function closeAnnotation() {
   annotationDialog.value?.close();
 }
 async function saveAnnotation() {
   annotationError.value = "";
   try {
-    await annotationsService.addToCurrentRecord({
-      field: annotationField.value,
-      quote: annotationQuote.value,
-      note: annotationNote.value,
-      tags: annotationTags.value
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean),
-    });
+    const tags = annotationTags.value
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+    if (annotationParentId.value) {
+      await annotationsService.replyToAnnotation(annotationParentId.value, {
+        quote: annotationQuote.value,
+        note: annotationNote.value,
+        tags,
+      });
+    } else {
+      await annotationsService.addToCurrentRecord({
+        scope: annotationScope.value,
+        linkedRecordIds: annotationLinkedRecords.value
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean),
+        field: annotationField.value,
+        quote: annotationQuote.value,
+        note: annotationNote.value,
+        tags,
+      });
+    }
     closeAnnotation();
     await load();
   } catch (exc) {
@@ -416,6 +447,7 @@ onBeforeUnmount(() => {
           @change="quickChange"
           @add-annotation="openAnnotation()"
           @remove-annotation="removeAnnotation"
+          @reply-annotation="openReply"
           @open-pdf="(index) => action('open_pdf', { index })"
           @remove-pdf="(index) => action('remove_pdf', { index })"
           @remove-all-pdf="action('remove_all_pdf')"
@@ -443,7 +475,11 @@ onBeforeUnmount(() => {
             <div>
               <p>{{ i18n.t("annotations.record_notes") }}</p>
               <h2 id="recordAnnotationTitle">
-                {{ i18n.t("annotations.add_note_tags") }}
+                {{
+                  annotationParentId
+                    ? i18n.t("annotations.reply")
+                    : i18n.t("annotations.add_note_tags")
+                }}
               </h2>
             </div>
             <button type="button" :aria-label="i18n.t('ui.close')" @click="closeAnnotation">
@@ -451,7 +487,22 @@ onBeforeUnmount(() => {
             </button>
           </header>
           <div class="record-annotation-form">
+            <label v-if="!annotationParentId">
+              <span>{{ i18n.t("annotations.scope") }}</span>
+              <select v-model="annotationScope">
+                <option value="text">{{ i18n.t("annotations.scope_text") }}</option>
+                <option value="record">{{ i18n.t("annotations.scope_record") }}</option>
+                <option value="work">{{ i18n.t("annotations.scope_work") }}</option>
+              </select>
+            </label>
             <blockquote v-if="annotationQuote">{{ annotationQuote }}</blockquote>
+            <label v-if="!annotationParentId">
+              <span>{{ i18n.t("annotations.linked_records") }}</span>
+              <input
+                v-model="annotationLinkedRecords"
+                :placeholder="i18n.t('annotations.linked_records_placeholder')"
+              />
+            </label>
             <label
               ><span>{{ i18n.t("annotations.note") }}</span
               ><textarea

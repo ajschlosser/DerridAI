@@ -104,10 +104,11 @@ export function createAnnotationsWorkspace(deps: Deps) {
       ? []
       : memoCorpus("annotations-all", () => {
           const items: Loose[] = [];
-          for (const { file, record, index } of allRows()) {
+          const rows = allRows();
+          for (const { file, record, index } of rows) {
             const annotations = Array.isArray(record.annotations) ? record.annotations : [];
-            annotations.forEach((annotation: Any, annotationIndex: Any) =>
-              items.push({
+            annotations.forEach((annotation: Any, annotationIndex: Any) => {
+              const base = {
                 file,
                 record,
                 index,
@@ -115,8 +116,42 @@ export function createAnnotationsWorkspace(deps: Deps) {
                 annotationIndex,
                 work: String(record.work || "(Untitled work)"),
                 server: false,
-              }),
-            );
+              };
+              items.push(base);
+              const linked = new Set(
+                Array.isArray(annotation.linked_record_ids)
+                  ? annotation.linked_record_ids.map(String)
+                  : [],
+              );
+              if (annotation.scope === "work") {
+                for (const row of rows) {
+                  if (
+                    String(row.record?.work || "") === String(record.work || "") &&
+                    row.record !== record
+                  ) {
+                    items.push({
+                      ...base,
+                      record: row.record,
+                      file: row.file,
+                      index: row.index,
+                      projected: true,
+                    });
+                  }
+                }
+              } else {
+                for (const row of rows) {
+                  const rowId = String(row.record?._chroma_id || row.record?.record_id || "");
+                  if (linked.has(rowId))
+                    items.push({
+                      ...base,
+                      record: row.record,
+                      file: row.file,
+                      index: row.index,
+                      projected: true,
+                    });
+                }
+              }
+            });
           }
           return items;
         });
@@ -178,13 +213,22 @@ export function createAnnotationsWorkspace(deps: Deps) {
       item.server &&
       (state.userContext?.role === "admin" ||
         Number(annotation.user_id || 0) === Number(state.userContext?.id || -1));
-    const canDeleteLocal = !item.server && canUse("editLocalRecords");
+    const canDeleteLocal = !item.server && !item.projected && canUse("editLocalRecords");
     return {
       id: String(
         annotation.id || `${item.file?.id || "annotation"}-${item.index}-${item.annotationIndex}`,
       ),
+      scope:
+        annotation.scope === "work" || annotation.scope === "record" ? annotation.scope : "text",
       record_id: String(item.record?.record_id || tr("nav.record")),
       work: item.work,
+      linked_record_ids: Array.isArray(annotation.linked_record_ids)
+        ? annotation.linked_record_ids.map(String)
+        : [],
+      parent_id: annotation.parent_id ? String(annotation.parent_id) : null,
+      thread_id: String(annotation.thread_id || annotation.id || ""),
+      deleted_at: annotation.deleted_at || null,
+      reply_count: Number(annotation.reply_count || 0),
       field: annotation.field ? label(annotation.field) : tr("annotations.record_note"),
       quote: String(annotation.quote || ""),
       note: String(annotation.note || ""),
@@ -229,6 +273,10 @@ export function createAnnotationsWorkspace(deps: Deps) {
     syncUrl({ replace: true });
   }
   function openAnnotationsWorkspaceRecord(item: Any) {
+    if (item.scope === "work" && item.work) {
+      openAnnotationsWorkspaceWork(item.work);
+      return;
+    }
     if (item.server) {
       state.activeStore = String(item.source || state.activeStore || "");
       state.researcherRecordId = String(item.record_id || "");

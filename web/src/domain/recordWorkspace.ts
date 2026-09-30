@@ -181,7 +181,10 @@ export function createRecordWorkspace(deps: Deps) {
         .filter(
           (item: Any) =>
             String(item.store || "") === String(state.activeStore) &&
-            String(item.record_id || "") === id,
+            (String(item.record_id || "") === id ||
+              (Array.isArray(item.linked_record_ids) &&
+                item.linked_record_ids.map(String).includes(id)) ||
+              (item.scope === "work" && String(item.work || "") === String(record.work || ""))),
         )
         .map((item: Any, index: Any) =>
           normalizedRecordAnnotation(item, index, { removable: false }),
@@ -426,9 +429,16 @@ export function createRecordWorkspace(deps: Deps) {
   async function addCurrentRecordAnnotation(payload: Loose = {}) {
     if (!hasCapability("annotations.write")) throw new Error(tr("permissions.annotations_denied"));
     const field = String(payload.field || "text"),
+      scope = payload.scope === "work" || payload.scope === "record" ? payload.scope : "text",
       quote = String(payload.quote || "").trim(),
       note = String(payload.note || "").trim(),
-      tags = Array.isArray(payload.tags) ? payload.tags.map(String).filter(Boolean) : [];
+      tags = Array.isArray(payload.tags) ? payload.tags.map(String).filter(Boolean) : [],
+      linkedRecordIds = Array.isArray(payload.linkedRecordIds)
+        ? payload.linkedRecordIds
+            .map(String)
+            .map((value: string) => value.trim())
+            .filter(Boolean)
+        : [];
     if (!quote && !note && !tags.length) throw new Error(tr("annotations.empty"));
     if (isResearcher()) {
       const record = await researcherCurrentRecord();
@@ -437,8 +447,10 @@ export function createRecordWorkspace(deps: Deps) {
         method: "POST",
         body: JSON.stringify({
           store: state.activeStore,
-          record_id: String(record._chroma_id || record.record_id || ""),
+          scope,
+          record_id: scope === "work" ? null : String(record._chroma_id || record.record_id || ""),
           work: String(record.work || ""),
+          linked_record_ids: linkedRecordIds,
           page_start: record.page_start ?? null,
           page_end: record.page_end ?? null,
           field,
@@ -460,8 +472,11 @@ export function createRecordWorkspace(deps: Deps) {
       method: "POST",
       body: JSON.stringify({
         store: state.activeStore || null,
-        record_id: String(record._chroma_id || record.record_id || index + 1),
+        scope,
+        record_id:
+          scope === "work" ? null : String(record._chroma_id || record.record_id || index + 1),
         work: String(record.work || ""),
+        linked_record_ids: linkedRecordIds,
         page_start: record.page_start ?? null,
         page_end: record.page_end ?? null,
         field,
@@ -476,6 +491,11 @@ export function createRecordWorkspace(deps: Deps) {
     annotations.push({
       id: uid(),
       shared_annotation_id: shared?.id || null,
+      scope,
+      linked_record_ids: linkedRecordIds,
+      parent_id: null,
+      thread_id: shared?.thread_id || shared?.id || null,
+      deleted_at: null,
       field,
       quote,
       note,
@@ -489,6 +509,20 @@ export function createRecordWorkspace(deps: Deps) {
     shell();
     toast(tr("annotations.saved"), { tone: "success" });
     return getRecordWorkspaceSnapshot();
+  }
+  async function replyToCurrentAnnotation(annotationId: string, payload: Loose = {}) {
+    if (!hasCapability("annotations.write")) throw new Error(tr("permissions.annotations_denied"));
+    const result = await api(`/api/annotations/${encodeURIComponent(annotationId)}/replies`, {
+      method: "POST",
+      body: JSON.stringify({
+        quote: String(payload.quote || "").trim(),
+        note: String(payload.note || "").trim(),
+        tags: Array.isArray(payload.tags) ? payload.tags.map(String).filter(Boolean) : [],
+      }),
+    });
+    state.annotationsFetchedAt = 0;
+    await refreshServerAnnotations(true);
+    return result;
   }
   async function removeCurrentRecordAnnotation(annotationId: Any) {
     if (isResearcher() || !canUse("editLocalRecords"))
@@ -623,6 +657,7 @@ export function createRecordWorkspace(deps: Deps) {
     copyCurrentRecordJson,
     saveCurrentRecordChanges,
     addCurrentRecordAnnotation,
+    replyToCurrentAnnotation,
     removeCurrentRecordAnnotation,
     currentRecordPrimaryAction,
     searchCurrentRecordMetadata,

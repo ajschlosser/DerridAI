@@ -1057,14 +1057,43 @@ class ResearcherProviderStatusRequest(BaseModel):
 
 class AnnotationCreateRequest(BaseModel):
     store: str | None = Field(default=None, max_length=300)
-    record_id: str = Field(min_length=1, max_length=500)
+    scope: Literal["text", "record", "work"] | None = None
+    record_id: str | None = Field(default=None, max_length=500)
     work: str | None = Field(default=None, max_length=500)
+    linked_record_ids: list[str] = Field(default_factory=list, max_length=100)
+    parent_id: str | None = Field(default=None, max_length=200)
     page_start: int | str | None = None
     page_end: int | str | None = None
     field: str = Field(default="text", max_length=200)
     quote: str = Field(default="", max_length=10000)
     note: str = Field(default="", max_length=20000)
     tags: list[str] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_scope_targets(self) -> AnnotationCreateRequest:
+        if self.scope is None:
+            self.scope = "text" if self.quote.strip() else "record"
+        if self.scope in {"text", "record"} and not self.record_id:
+            raise ValueError("Text and record annotations require a record_id.")
+        if self.scope == "work" and not self.work:
+            raise ValueError("Work annotations require a work.")
+        if self.scope == "text" and not self.quote.strip():
+            raise ValueError("Text annotations require selected text.")
+        if self.record_id and self.record_id in self.linked_record_ids:
+            raise ValueError("The primary record must not be repeated in linked_record_ids.")
+        return self
+
+
+class AnnotationReplyRequest(BaseModel):
+    note: str = Field(default="", max_length=20000)
+    quote: str = Field(default="", max_length=10000)
+    tags: list[str] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_content(self) -> AnnotationReplyRequest:
+        if not self.note.strip() and not self.quote.strip() and not self.tags:
+            raise ValueError("Replies require text or tags.")
+        return self
 
 
 class LanguageDictionaryUpdate(BaseModel):
