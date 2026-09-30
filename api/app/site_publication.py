@@ -36,7 +36,7 @@ _SAFE_SLUG = re.compile(r"[^a-z0-9]+")
 
 @dataclass(frozen=True)
 class SiteBundle:
-    """A generated static site archive and its stable publication identity."""
+    """A generated site artifact and its stable publication identity."""
 
     payload: bytes
     filename: str
@@ -499,6 +499,18 @@ docker run --detach \\
   --restart unless-stopped \\
   --publish "${PORT}:80" \\
   "$IMAGE" >/dev/null
+
+attempt=0
+until docker exec "$CONTAINER" wget -q -O /dev/null http://127.0.0.1/healthz; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 30 ]; then
+    echo "nginx did not become healthy in time." >&2
+    docker logs "$CONTAINER" >&2 || true
+    docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+    exit 1
+  fi
+  sleep 1
+done
 
 echo "DerridAI research site: http://localhost:${PORT}"
 echo "Container: ${CONTAINER}"
