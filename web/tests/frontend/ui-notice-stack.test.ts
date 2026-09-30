@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import { beforeEach, describe, expect, it } from "vitest";
 import UiNoticeStack from "../../src/components/ui/UiNoticeStack.vue";
-import CorpusRunMonitor from "../../src/components/corpus-builder/CorpusRunMonitor.vue";
+import CorpusReviewRunStatus from "../../src/components/corpus-builder/CorpusReviewRunStatus.vue";
 
 const items = [
   { id: "a", tone: "error" as const, text: "The provider refused the request." },
@@ -84,7 +84,7 @@ describe("build warnings in the run monitor", () => {
       },
       error: "Provider timed out.",
     };
-    const wrapper = mount(CorpusRunMonitor, {
+    const wrapper = mount(CorpusReviewRunStatus, {
       props: { build: build as never, profiles: [] },
       global: {
         stubs: {

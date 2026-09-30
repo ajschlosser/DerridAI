@@ -90,7 +90,7 @@ const defaultSchema = {
   fields: [],
 };
 
-async function mountBuilder() {
+async function mountBuilder(query = "") {
   const pinia = createPinia();
   setActivePinia(pinia);
   useI18nStore().dictionary = {};
@@ -102,14 +102,14 @@ async function mountBuilder() {
       { path: "/schemas", name: "schemas", component: { template: "<div />" } },
     ],
   });
-  await router.push("/corpus-builder");
+  await router.push(`/corpus-builder${query}`);
   await router.isReady();
   const wrapper = shallowMount(PdfCorpusBuilder, {
     attachTo: document.body,
     global: { plugins: [pinia, router] },
   });
   await flushPromises();
-  return wrapper;
+  return Object.assign(wrapper, { router });
 }
 
 const reviewBuild = {
@@ -194,12 +194,83 @@ describe("PdfCorpusBuilder characterization", () => {
     expect(metadataSchemasApi.get).toHaveBeenCalledWith("default");
 
     expect(wrapper.findComponent({ name: "CorpusBuilderWorkspaceHeader" }).exists()).toBe(true);
-    expect(wrapper.findComponent({ name: "CorpusWorkflowStepper" }).exists()).toBe(true);
-    expect(wrapper.findComponent({ name: "CorpusSourceIngest" }).exists()).toBe(true);
-    expect(wrapper.findComponent({ name: "CorpusBuildReadiness" }).exists()).toBe(true);
-    expect(wrapper.get("#pdf-corpus-source-title").text()).toBe("Source document");
+    const steps = wrapper.findComponent({ name: "CorpusBuilderWorkspaceHeader" }).props("steps");
+    expect(steps.map((step: { id: string }) => step.id)).toEqual([
+      "setup",
+      "build",
+      "review",
+      "publish",
+    ]);
+    // Without a build only Setup can be entered.
+    expect(steps.map((step: { available: boolean }) => step.available)).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ]);
+    const setup = wrapper.findComponent({ name: "CorpusSetupWorkspace" });
+    expect(setup.props("sections").map((section: { id: string }) => section.id)).toEqual([
+      "source",
+      "structure",
+      "metadata",
+      "enrichment",
+      "advanced",
+    ]);
+    expect(setup.props("expanded")).toBe("source");
 
     wrapper.unmount();
+  });
+
+  describe("workspace routing", () => {
+    beforeEach(() => {
+      pdfCorpusApi.listBuilds.mockResolvedValue({
+        items: [reviewBuild],
+        total: 1,
+        offset: 0,
+        limit: 100,
+      });
+      pdfCorpusApi.build.mockResolvedValue({ ...reviewBuild, publication_readiness: {} });
+      pdfCorpusApi.listAssets.mockResolvedValue({
+        items: [{ asset_id: "asset-1", filename: "source.pdf", page_count: 1 }],
+      });
+    });
+
+    it.each([
+      ["build", "CorpusBuildWorkspace"],
+      ["review", "CorpusReviewWorkspace"],
+      ["publish", "CorpusPublishWorkspace"],
+    ])("renders %s from ?workspace=%s without a stepper or build rail", async (workspace, name) => {
+      const wrapper = await mountBuilder(`?workspace=${workspace}&build=build-1`);
+      expect(wrapper.findComponent({ name }).exists()).toBe(true);
+      expect(wrapper.find(".build-rail").exists()).toBe(false);
+      expect(wrapper.findComponent({ name: "CorpusWorkflowStepper" }).exists()).toBe(false);
+      const header = wrapper.findComponent({ name: "CorpusBuilderWorkspaceHeader" });
+      expect(header.props("workspace")).toBe(workspace);
+      wrapper.unmount();
+    });
+
+    it("keeps Publish available for a build that is not yet publishable and switches on request", async () => {
+      const wrapper = await mountBuilder("?workspace=build&build=build-1");
+      const steps = wrapper
+        .findComponent({ name: "CorpusBuilderWorkspaceHeader" })
+        .props("steps") as Array<{ id: string; available: boolean }>;
+      expect(steps.find((step) => step.id === "publish")?.available).toBe(true);
+      wrapper
+        .findComponent({ name: "CorpusBuilderWorkspaceHeader" })
+        .vm.$emit("workspace", "publish");
+      await flushPromises();
+      expect(wrapper.router.currentRoute.value.query.workspace).toBe("publish");
+      expect(wrapper.router.currentRoute.value.query.build).toBe("build-1");
+      wrapper.unmount();
+    });
+
+    it("moves publication blockers into Review before opening the queue", async () => {
+      const wrapper = await mountBuilder("?workspace=publish&build=build-1");
+      wrapper.findComponent({ name: "CorpusPublishWorkspace" }).vm.$emit("reviewRecords");
+      await flushPromises();
+      expect(wrapper.router.currentRoute.value.query.workspace).toBe("review");
+      wrapper.unmount();
+    });
   });
 
   it("keeps working on the built-in schema when the schema list comes back without items", async () => {

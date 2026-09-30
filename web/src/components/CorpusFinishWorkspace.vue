@@ -133,29 +133,8 @@ function fixBlocker(code?: string) {
 </script>
 
 <template>
-  <section class="finish-workspace" aria-labelledby="finish-corpus-title">
-    <header class="publication-head">
-      <div>
-        <span class="eyebrow">{{ i18n.t("pdf_corpus.finish_phase") }}</span>
-        <h2 id="finish-corpus-title">
-          {{
-            publication
-              ? i18n.t("pdf_corpus.published_revision")
-              : readiness.can_publish
-                ? i18n.t("pdf_corpus.ready_to_publish")
-                : i18n.t("pdf_corpus.finish_corpus_title")
-          }}
-        </h2>
-        <p>
-          {{
-            publication
-              ? i18n.t("pdf_corpus.finish_published_help")
-              : readiness.can_publish
-                ? i18n.t("pdf_corpus.finish_ready_help")
-                : i18n.t("pdf_corpus.finish_blocked_help")
-          }}
-        </p>
-      </div>
+  <section class="finish-workspace" :aria-label="i18n.t('pdf_corpus.publish.actions_label')">
+    <div class="publication-head">
       <div class="publication-primary finish-primary">
         <a
           v-if="publication"
@@ -182,7 +161,7 @@ function fixBlocker(code?: string) {
           {{ primaryLabel }}
         </button>
       </div>
-    </header>
+    </div>
 
     <section
       v-if="noPublishable"
@@ -256,7 +235,11 @@ function fixBlocker(code?: string) {
       <code>{{ publication.publication_id }}</code>
     </section>
 
-    <div v-if="readiness.missing_document_fields?.length" class="document-blocker" role="alert">
+    <div
+      v-if="!publication && readiness.missing_document_fields?.length"
+      class="document-blocker"
+      role="alert"
+    >
       <b>{{ i18n.t("pdf_corpus.readiness_blocker.required_document_metadata") }}</b
       ><span>{{
         readiness.missing_document_fields
@@ -266,7 +249,7 @@ function fixBlocker(code?: string) {
     </div>
 
     <section
-      v-if="blockers.length && !noPublishable"
+      v-if="!publication && blockers.length && !noPublishable"
       class="publication-blockers blockers"
       aria-labelledby="publication-blockers-title"
     >
@@ -301,7 +284,7 @@ function fixBlocker(code?: string) {
       </ul>
     </section>
 
-    <div v-if="!noPublishable" class="publication-readiness-list">
+    <div v-if="!publication && !noPublishable" class="publication-readiness-list">
       <section
         class="readiness-row"
         :data-state="Number(readiness.records_pending || 0) > 0 ? 'attention' : 'complete'"
@@ -569,24 +552,8 @@ function fixBlocker(code?: string) {
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--space-5);
+  gap: var(--space-3);
   align-items: flex-start;
-}
-.publication-head > div:first-child {
-  min-width: 0;
-  flex: 1 1 32rem;
-}
-.publication-head h2 {
-  margin: var(--space-1) 0 var(--space-2);
-  font-size: var(--fs-xl);
-}
-.publication-head p {
-  max-width: 78ch;
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--fs-sm);
-  line-height: 1.55;
 }
 .eyebrow,
 .readiness-state {
