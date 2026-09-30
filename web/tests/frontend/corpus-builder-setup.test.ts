@@ -19,6 +19,7 @@ function lastEmission(wrapper: any, event: string) {
 describe("Corpus Builder setup and launch controls", () => {
   it("gates launch on source, readiness, context safety, and busy state", async () => {
     const wrapper = mount(CorpusBuildReadiness, { props: { canStart: true, contextSafe: true } });
+    expect(wrapper.get(".build-plan-eyebrow").text()).toBe("Build plan");
     const action = wrapper.get(".build-action");
     expect(action.attributes("disabled")).toBeDefined();
     expect(wrapper.attributes("data-ready")).toBe("false");
