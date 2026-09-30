@@ -99,6 +99,15 @@ def _llm_config(request: dict[str, Any]) -> tuple[str, str, str | None, str | No
     return provider, model, request.get("base_url"), request.get("api_key"), generation
 
 
+def _provider_roles(request: dict[str, Any]) -> dict[str, tuple[str, str]]:
+    """Provider/model identity of each provider role the request configures."""
+    roles = {"primary": _llm_config(request)[:2]}
+    reviewer = request.get("_review_provider")
+    if isinstance(reviewer, dict) and reviewer:
+        roles["review"] = _llm_config(reviewer)[:2]
+    return roles
+
+
 def _parse_json_robust(raw: str) -> dict[str, Any]:
     """Parse model JSON conservatively, repairing only syntax-level defects.
 

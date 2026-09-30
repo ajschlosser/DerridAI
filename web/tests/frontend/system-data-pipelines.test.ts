@@ -413,6 +413,51 @@ describe("System Data Pipeline Studio", () => {
     );
   });
 
+  it("labels and assigns a corpus segmentation pipeline to its feature", async () => {
+    const segmentationCatalog = structuredClone(catalog);
+    segmentationCatalog.pipelines.push({
+      ...structuredClone(catalog.pipelines[0]),
+      pipeline_id: "corpus.segmentation.custom",
+      name: "Boundary questions — review first",
+      purpose: "corpus_segmentation",
+      built_in: false,
+      runtime_support: { supported: true, adapter: "corpus_segmentation" },
+    });
+    vi.spyOn(pipelinesApi, "catalog").mockResolvedValue(segmentationCatalog);
+    const assign = vi.spyOn(pipelinesApi, "setAssignment").mockResolvedValue({
+      assignment: {
+        feature: "corpus_segmentation",
+        pipeline_id: "corpus.segmentation.custom",
+        pipeline_version: 1,
+        scope: "system",
+        scope_id: null,
+        override_allowed: true,
+        source: "system",
+      },
+    });
+
+    const { wrapper } = await mountStudio();
+    const choice = wrapper
+      .findAll(".pipeline-choice")
+      .find((item) => item.text().includes("review first"));
+    await choice!.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Corpus segmentation");
+    const activate = wrapper
+      .findAll(".detail-actions .btn")
+      .find((item) => item.text().includes("Make active"));
+    await activate!.trigger("click");
+    await flushPromises();
+
+    expect(assign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feature: "corpus_segmentation",
+        pipeline_id: "corpus.segmentation.custom",
+      }),
+    );
+  });
+
   it("clones a definition into an immutable custom version editor", async () => {
     const { wrapper } = await mountStudio();
 
