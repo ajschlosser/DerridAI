@@ -12,7 +12,18 @@ describe("Corpus source ingest", () => {
       props: {
         assets: [],
         hits: [],
-        selectedAsset: { media_kind: "pdf", filename: "source.pdf" } as never,
+        selectedAsset: {
+          asset_id: "pdf-source",
+          sha256: "abcdef0123456789abcdef",
+          filename: "source.pdf",
+          created_at: "2026-09-23T08:00:00Z",
+          page_count: 1,
+          block_count: 1,
+          ocr_pages: 0,
+          warnings: [],
+          metadata: {},
+          media_kind: "pdf",
+        },
       },
     });
     const radios = wrapper.findAll('input[name="source-ocr-strategy"]');
@@ -28,7 +39,20 @@ describe("Corpus source ingest", () => {
 
   it("emits the selected OCR strategy as a numeric compatibility value", async () => {
     const wrapper = mount(CorpusSourceIngest, {
-      props: { selectedAsset: { media_kind: "image", filename: "source.png" } as never },
+      props: {
+        selectedAsset: {
+          asset_id: "image-source",
+          sha256: "abcdef0123456789abcdef",
+          filename: "source.png",
+          created_at: "2026-09-23T08:00:00Z",
+          page_count: 1,
+          block_count: 1,
+          ocr_pages: 1,
+          warnings: [],
+          metadata: {},
+          media_kind: "image",
+        },
+      },
     });
     await wrapper.find('input[value="difficult"]').setValue(true);
     expect(wrapper.emitted("update:illegibility")?.at(-1)).toEqual([50]);
