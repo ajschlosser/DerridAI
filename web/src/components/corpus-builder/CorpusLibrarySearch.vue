@@ -11,7 +11,10 @@ import {
 import { sortLanguageCodes } from "../../domain/languages";
 import { followResource } from "../../realtime/follow";
 import { useI18nStore } from "../../stores/i18n";
+import { groupWikisourceHits } from "../../features/corpus-builder/domain/wikisourceGroups";
 import AppIcon from "../AppIcon.vue";
+import LibraryCatalogueStatus from "./LibraryCatalogueStatus.vue";
+import LibraryResultList from "./LibraryResultList.vue";
 
 /**
  * Find a text in Project Gutenberg or Wikisource and import it, without leaving the dialog: results appear as you
@@ -94,7 +97,7 @@ const DEBOUNCE_MS = 350;
 
 const dialog = ref<HTMLDialogElement | null>(null);
 const input = ref<HTMLInputElement | null>(null);
-const results = ref<HTMLElement | null>(null);
+const results = ref<InstanceType<typeof LibraryResultList> | null>(null);
 const library = ref<Library>("gutenberg");
 let debounce: number | undefined;
 let stopFollowingGutenberg: (() => void) | undefined;
@@ -114,66 +117,12 @@ const host = computed(() => `${props.language}.wikisource.org`);
 
 const catalogueReady = computed(() => Boolean(props.gutenbergStatus?.search_ready));
 const collectionReady = computed(() => Boolean(props.gutenbergStatus?.ready));
-const archiveStatus = computed(() => String(props.gutenbergStatus?.archive.status || ""));
-const catalogueRefreshing = computed(() =>
-  ["refreshing", "indexing"].includes(String(props.gutenbergStatus?.catalogue.status || "")),
-);
 const canSearch = computed(() => library.value === "wikisource" || catalogueReady.value);
 const searching = computed(() => props.busy === library.value);
 const trimmed = computed(() => props.query.trim());
 const answeredQuery = computed(() => props.searched[library.value]);
 
-/** Wikisource hits grouped by work: a chapter (Work/Chapter I) offers its whole work first. */
-interface WorkGroup {
-  key: string;
-  work: string;
-  workUrl: string;
-  parts: WikisourceHit[];
-  snippet: string;
-  words: number;
-  isWorkPage: boolean;
-}
-function workUrl(hit: WikisourceHit, work: string) {
-  try {
-    return `${new URL(hit.url).origin}/wiki/${encodeURIComponent(work.replaceAll(" ", "_"))}`;
-  } catch {
-    return hit.url;
-  }
-}
-const workGroups = computed<WorkGroup[]>(() => {
-  const groups = new Map<string, WorkGroup>();
-  for (const hit of props.wikisourceHits) {
-    const work = hit.title.split("/")[0].trim() || hit.title;
-    const group = groups.get(work) || {
-      key: work,
-      work,
-      workUrl: workUrl(hit, work),
-      parts: [],
-      snippet: "",
-      words: 0,
-      isWorkPage: false,
-    };
-    if (hit.title === work) group.isWorkPage = true;
-    else group.parts.push(hit);
-    group.snippet ||= hit.snippet;
-    group.words += Number(hit.word_count || 0);
-    groups.set(work, group);
-  }
-  return [...groups.values()];
-});
-/** "Livre I · 4,120 words", "2 matching parts · 10,143 words", or just the length of a work's own page. */
-function partLine(group: WorkGroup) {
-  const parts =
-    group.parts.length === 1 && !group.isWorkPage
-      ? group.parts[0].title.slice(group.work.length + 1)
-      : group.parts.length > 1
-        ? i18n.tf("pdf_corpus.library.matching_parts", { count: group.parts.length })
-        : "";
-  const words = group.words
-    ? i18n.tf("pdf_corpus.library.words", { count: formatNumber(group.words) })
-    : "";
-  return [parts, words].filter(Boolean).join(" · ");
-}
+const workGroups = computed(() => groupWikisourceHits(props.wikisourceHits));
 const resultCount = computed(() =>
   library.value === "gutenberg" ? props.gutenbergHits.length : workGroups.value.length,
 );
@@ -186,42 +135,9 @@ const showEmpty = computed(
     resultCount.value === 0,
 );
 const showIdle = computed(() => !trimmed.value && resultCount.value === 0);
-const importingAny = computed(() => Boolean(props.importing));
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat(i18n.locale || undefined).format(value);
-}
-function formatBytes(value?: number | null) {
-  const bytes = Math.max(0, Number(value || 0));
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let size = bytes;
-  let unit = -1;
-  do {
-    size /= 1024;
-    unit += 1;
-  } while (size >= 1024 && unit < units.length - 1);
-  return `${size.toFixed(size >= 10 ? 1 : 2)} ${units[unit]}`;
-}
-const bytesOnDisk = computed(() => Number(props.gutenbergStatus?.archive.bytes_done || 0));
-function archiveAction(): "start" | "pause" | "resume" {
-  if (archiveStatus.value === "downloading") return "pause";
-  // After a pause or an error, bytes already on disk are kept and the download continues from them.
-  if (archiveStatus.value === "paused" || (archiveStatus.value === "error" && bytesOnDisk.value))
-    return "resume";
-  return "start";
-}
-function redownload() {
-  const size = formatBytes(bytesOnDisk.value);
-  if (!window.confirm(i18n.tf("pdf_corpus.gutenberg_redownload_confirm", { size }))) return;
-  emit("updateGutenbergArchive", "refetch");
-}
-function archiveActionLabel() {
-  if (["downloaded", "unpacking"].includes(archiveStatus.value))
-    return i18n.t("pdf_corpus.gutenberg_unpacking", "Unpacking collection…");
-  if (archiveStatus.value === "downloading") return i18n.t("pdf_corpus.gutenberg_pause_download");
-  if (archiveAction() === "resume") return i18n.t("pdf_corpus.gutenberg_resume_download");
-  return i18n.t("pdf_corpus.gutenberg_start_download");
 }
 
 // --- Searching -------------------------------------------------------------------------------------------------
@@ -281,10 +197,12 @@ function tabKeydown(event: KeyboardEvent) {
 }
 
 // --- Keyboard through the results: ↓ from the search box, ↑/↓ between rows, Escape back to the box --------------
-function resultButtons() {
-  return [
-    ...(results.value?.querySelectorAll<HTMLButtonElement>("[data-result-primary]") || []),
-  ].filter((button) => !button.disabled);
+function resultButtons(): HTMLButtonElement[] {
+  const list = results.value?.$el;
+  if (!(list instanceof HTMLElement)) return [];
+  return Array.from(list.querySelectorAll<HTMLButtonElement>("[data-result-primary]")).filter(
+    (button) => !button.disabled,
+  );
 }
 function focusFirstResult(event: KeyboardEvent) {
   const first = resultButtons()[0];
@@ -447,161 +365,32 @@ onBeforeUnmount(() => {
         <AppIcon name="warning" /><span>{{ error }}</span>
       </p>
 
-      <!-- Search needs the catalogue. Imports download one verified text; the local text collection is optional. -->
-      <section
+      <LibraryCatalogueStatus
         v-if="library === 'gutenberg' && (!catalogueReady || !collectionReady)"
-        class="ls-collection"
-      >
-        <p>
-          {{
-            catalogueReady
-              ? i18n.t("pdf_corpus.library.collection_needed")
-              : i18n.t("pdf_corpus.library.catalogue_needed")
-          }}
-        </p>
-        <div class="ls-collection-actions">
-          <button
-            v-if="!catalogueReady"
-            type="button"
-            class="btn small primary"
-            :disabled="disabled || busy === 'gutenberg-catalogue' || catalogueRefreshing"
-            @click="emit('refreshGutenbergCatalogue')"
-          >
-            {{
-              catalogueRefreshing
-                ? i18n.t("pdf_corpus.gutenberg_catalogue_refreshing", "Updating catalogue…")
-                : i18n.t("pdf_corpus.gutenberg_fetch_catalogue")
-            }}
-          </button>
-          <button
-            v-else
-            type="button"
-            class="btn small"
-            :disabled="
-              disabled ||
-              busy === 'gutenberg-archive' ||
-              ['downloaded', 'unpacking'].includes(archiveStatus)
-            "
-            @click="emit('updateGutenbergArchive', archiveAction())"
-          >
-            {{ archiveActionLabel() }}
-          </button>
-          <button
-            v-if="catalogueReady && archiveStatus === 'error' && bytesOnDisk"
-            type="button"
-            class="btn small quiet"
-            :disabled="disabled || busy === 'gutenberg-archive'"
-            @click="redownload"
-          >
-            {{ i18n.t("pdf_corpus.gutenberg_redownload") }}
-          </button>
-          <template v-if="gutenbergStatus?.archive.total_bytes">
-            <progress
-              class="ls-progress"
-              :value="gutenbergStatus.archive.bytes_done"
-              :max="gutenbergStatus.archive.total_bytes"
-              :aria-label="i18n.t('pdf_corpus.gutenberg_download_progress')"
-            />
-            <small
-              >{{ formatBytes(gutenbergStatus.archive.bytes_done) }} /
-              {{ formatBytes(gutenbergStatus.archive.total_bytes) }}</small
-            >
-          </template>
-        </div>
-        <small v-if="gutenbergStatus?.catalogue.error" class="ls-error-text">{{
-          gutenbergStatus.catalogue.error
-        }}</small>
-        <small v-if="gutenbergStatus?.archive.error" class="ls-error-text">{{
-          gutenbergStatus.archive.error
-        }}</small>
-      </section>
+        :status="gutenbergStatus"
+        :catalogue-ready="catalogueReady"
+        :disabled="disabled"
+        :busy="busy"
+        @refresh-catalogue="emit('refreshGutenbergCatalogue')"
+        @update-archive="emit('updateGutenbergArchive', $event)"
+      />
 
-      <ul
+      <LibraryResultList
         v-if="resultCount"
         id="library-results"
         ref="results"
-        class="ls-results"
-        :aria-label="
-          library === 'gutenberg'
-            ? i18n.t('pdf_corpus.gutenberg_results')
-            : i18n.t('pdf_corpus.wikisource')
-        "
-        :aria-busy="searching"
+        :library="library"
+        :gutenberg-hits="gutenbergHits"
+        :work-groups="workGroups"
+        :searching="searching"
+        :collection-ready="collectionReady"
+        :disabled="disabled"
+        :importing="importing"
+        :language-name="languageName"
         @keydown="resultsKeydown"
-      >
-        <template v-if="library === 'gutenberg'">
-          <li v-for="hit in gutenbergHits" :key="hit.etext_id" class="ls-row">
-            <div class="ls-row-main">
-              <b class="ls-row-title">{{ hit.title }}</b>
-              <span class="ls-row-meta"
-                >{{ hit.author || i18n.t("pdf_corpus.metadata_unset") }} ·
-                {{ hit.language ? languageName(hit.language) : "" }} · #{{ hit.etext_id }}</span
-              >
-            </div>
-            <button
-              type="button"
-              class="btn small primary"
-              data-result-primary
-              :disabled="disabled || importingAny"
-              :aria-label="i18n.tf('pdf_corpus.library.import_label', { title: hit.title })"
-              :aria-busy="importing === `gutenberg:${hit.etext_id}`"
-              :title="
-                collectionReady ? undefined : i18n.t('pdf_corpus.gutenberg_result_unavailable')
-              "
-              @click="emit('importGutenberg', hit.etext_id)"
-            >
-              {{
-                importing === `gutenberg:${hit.etext_id}`
-                  ? i18n.t("pdf_corpus.library.importing")
-                  : i18n.t("pdf_corpus.library.import")
-              }}
-            </button>
-          </li>
-        </template>
-        <template v-else>
-          <li v-for="group in workGroups" :key="group.key" class="ls-row">
-            <div class="ls-row-main">
-              <b class="ls-row-title">{{ group.work }}</b>
-              <span v-if="partLine(group)" class="ls-row-part">{{ partLine(group) }}</span>
-              <span v-if="group.snippet" class="ls-row-snippet">{{ group.snippet }}</span>
-            </div>
-            <div class="ls-row-actions">
-              <button
-                type="button"
-                class="btn small primary"
-                data-result-primary
-                :disabled="disabled || importingAny"
-                :aria-label="i18n.tf('pdf_corpus.library.import_work_label', { title: group.work })"
-                :aria-busy="importing === `wikisource:${group.workUrl}`"
-                @click="emit('importWikisource', group.workUrl)"
-              >
-                {{
-                  importing === `wikisource:${group.workUrl}`
-                    ? i18n.t("pdf_corpus.library.importing")
-                    : i18n.t("pdf_corpus.library.import_work")
-                }}
-              </button>
-              <button
-                v-if="group.parts.length === 1 && !group.isWorkPage"
-                type="button"
-                class="btn small quiet"
-                :disabled="disabled || importingAny"
-                :aria-label="
-                  i18n.tf('pdf_corpus.library.import_part_label', { title: group.parts[0].title })
-                "
-                :aria-busy="importing === `wikisource:${group.parts[0].url}`"
-                @click="emit('importWikisource', group.parts[0].url)"
-              >
-                {{
-                  importing === `wikisource:${group.parts[0].url}`
-                    ? i18n.t("pdf_corpus.library.importing")
-                    : i18n.t("pdf_corpus.library.import_part")
-                }}
-              </button>
-            </div>
-          </li>
-        </template>
-      </ul>
+        @import-gutenberg="emit('importGutenberg', $event)"
+        @import-wikisource="emit('importWikisource', $event)"
+      />
 
       <p v-else-if="showEmpty" class="ls-empty">
         {{ i18n.tf("pdf_corpus.library.no_results", { query: answeredQuery }) }}
@@ -805,88 +594,6 @@ onBeforeUnmount(() => {
   block-size: 16px;
   margin-top: 1px;
 }
-.ls-error-text {
-  color: var(--tone-danger-fg);
-}
-.ls-collection {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--tone-info-edge, var(--line));
-  border-radius: var(--radius-control);
-  color: var(--tone-info-fg);
-  background: var(--tone-info-bg);
-  font-size: var(--fs-sm);
-}
-.ls-collection p {
-  margin: 0;
-  line-height: 1.45;
-}
-.ls-collection-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.ls-progress {
-  flex: 1 1 8rem;
-  min-width: 6rem;
-}
-.ls-results {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.ls-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 4px;
-  border-bottom: 1px solid var(--border-subtle, var(--line));
-}
-.ls-row:last-child {
-  border-bottom: 0;
-}
-.ls-row:focus-within {
-  background: var(--surface-hover);
-}
-.ls-row-main {
-  display: grid;
-  flex: 1 1 auto;
-  gap: 2px;
-  min-width: 0;
-}
-.ls-row-title {
-  font-size: var(--fs-base);
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-.ls-row-meta,
-.ls-row-part {
-  color: var(--text-secondary, var(--muted));
-  font-size: var(--fs-sm);
-}
-.ls-row-snippet {
-  display: -webkit-box;
-  overflow: hidden;
-  color: var(--text-tertiary, var(--muted));
-  font-size: var(--fs-sm);
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-.ls-row-actions {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-}
-.ls-row .btn {
-  white-space: nowrap;
-}
 .btn.quiet {
   border-color: transparent;
   background: transparent;
@@ -960,13 +667,6 @@ onBeforeUnmount(() => {
   .ls-search:has(.ls-language) .ls-spinner {
     inset-inline-end: 12px;
     inset-block-start: 14px;
-  }
-  .ls-row {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .ls-row-actions {
-    flex-direction: row;
   }
 }
 </style>
