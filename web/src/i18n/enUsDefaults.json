@@ -8515,5 +8515,7 @@
   "site.create_no_provider_profiles": "No researcher LLM provider profiles are configured in DerridAI.",
   "site.create_provider_profiles": "LLM provider profiles",
   "site.create_provider_profiles_help": "Choose provider profiles to include as non-secret browser configuration for Research. Endpoints and model names are exported; API keys are never exported and must be entered by the visitor when required.",
-  "site.create_providers_selected": "{count} provider profiles selected"
+  "site.create_providers_selected": "{count} provider profiles selected",
+  "site.create_provider_openai": "OpenAI-compatible",
+  "site.create_provider_ollama": "Ollama"
 }
