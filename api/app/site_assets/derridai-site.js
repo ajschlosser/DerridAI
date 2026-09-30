@@ -72,14 +72,14 @@
     .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:.7rem;margin-top:.8rem}.field{display:grid;gap:.3rem}.field>span,.field>label{font-size:.8rem;font-weight:700;color:var(--muted)}
     .result{display:grid;gap:.5rem}.result-head{display:flex;gap:.7rem;justify-content:space-between;align-items:start}.score{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.82rem}
     .snippet{white-space:pre-wrap}.chips{display:flex;flex-wrap:wrap;gap:.35rem}.chip{font-size:.75rem;padding:.15rem .45rem;border-radius:999px;background:var(--raised)}
-    .status{min-height:1.5rem;color:var(--muted);margin:.6rem 0}.status.error{color:var(--danger)}.empty{text-align:center;padding:2.3rem;color:var(--muted)}
+    .status{min-height:1.5rem;color:var(--muted);margin:.6rem 0}.status.error{color:var(--danger)}.status.warning{font-weight:650}.empty{text-align:center;padding:2.3rem;color:var(--muted)}
     dialog{width:min(900px,calc(100% - 2rem));max-height:88vh;border:1px solid var(--border);border-radius:.9rem;background:var(--bg);color:var(--fg);box-shadow:var(--shadow);padding:0}
     dialog::backdrop{background:color-mix(in srgb,CanvasText 42%,transparent)}.dialog-head{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);padding:1rem;display:flex;justify-content:space-between;gap:1rem;align-items:start}
     .dialog-head h2{margin:0}.dialog-body{padding:1rem;display:grid;gap:1rem}.record-text{white-space:pre-wrap;font-family:Georgia,serif;font-size:1.04rem;line-height:1.7;border-block:1px solid var(--border);padding:1rem 0}
     .metadata{display:grid;grid-template-columns:minmax(9rem,auto) 1fr;gap:.35rem 1rem;font-size:.88rem}.metadata dt{font-weight:700}.metadata dd{margin:0;overflow-wrap:anywhere}
     textarea{min-height:6rem;resize:vertical}.annotation{border-left:3px solid var(--accent);padding:.7rem .9rem;background:var(--surface)}.annotation blockquote{margin:.35rem 0;font-family:Georgia,serif}
     .research-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(16rem,22rem);gap:1rem}.answer{white-space:pre-wrap;font-family:Georgia,serif;font-size:1.04rem}
-    details.settings>summary{cursor:pointer;font-weight:700}.evidence{display:grid;gap:.6rem}.evidence button{text-align:left;height:auto}.footer{margin-top:3rem;border-top:1px solid var(--border);padding:1.2rem 0 2.5rem;color:var(--muted);font-size:.8rem}
+    details.settings>summary{cursor:pointer;font-weight:700}.provider-test{display:grid;gap:.45rem;padding:.7rem;border:1px solid var(--border);border-radius:.55rem;background:var(--surface)}.provider-test.ok{border-color:color-mix(in srgb,green 55%,var(--border))}.provider-test.error{border-color:color-mix(in srgb,var(--danger) 65%,var(--border))}.provider-origin{overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem}.provider-command{display:block;overflow:auto;padding:.5rem;border-radius:.45rem;background:var(--raised);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;white-space:pre}.evidence{display:grid;gap:.6rem}.evidence button{text-align:left;height:auto}.footer{margin-top:3rem;border-top:1px solid var(--border);padding:1.2rem 0 2.5rem;color:var(--muted);font-size:.8rem}
     .work-button{width:100%;text-align:left;height:100%;padding:1rem}.work-button h2{font-size:1.1rem}.count{font-size:1.6rem;font-weight:800}
     @media(max-width:760px){.research-layout{grid-template-columns:1fr}.search-row{grid-template-columns:1fr}.top{position:static}.top-inner,.main{width:min(100% - 1rem,1180px)}}
     @media(prefers-reduced-motion:no-preference){dialog[open]{animation:site-in .14s ease-out}@keyframes site-in{from{opacity:0;transform:translateY(.3rem)}}}
@@ -696,14 +696,26 @@
 
   function filterFields() {
     const excluded = new Set(["text", "record_id", "source_spans", "field_assertions", "updates"]);
-    const fields = new Set();
-    for (const record of records) {
-      for (const [key, value] of Object.entries(record)) {
-        if (excluded.has(key) || value == null || typeof value === "object" && !Array.isArray(value)) continue;
-        fields.add(key);
-      }
-    }
-    return [...fields].sort((a, b) => a.localeCompare(b));
+    const declared = Array.isArray(publication.source_collection?.filter_fields)
+      ? publication.source_collection.filter_fields
+      : [];
+    const common = [
+      "document_author",
+      "publication_year",
+      "year",
+      "language",
+      "speaker",
+      "position_holder",
+      "stance",
+      "discourse_role",
+      "topics",
+      "concepts",
+      "persons",
+    ];
+    return [...new Set([...declared, ...common])]
+      .map(String)
+      .filter((key) => key && !excluded.has(key) && key !== "work")
+      .sort((a, b) => a.localeCompare(b));
   }
 
   function openRecord(record) {
@@ -776,51 +788,143 @@
 
   function searchView() {
     const panel = node("section", { class: "panel" });
-    const query = node("input", { class: "control", type: "search", placeholder: t("site.runtime.search_placeholder"), "aria-label": t("site.runtime.search") });
-    const submit = node("button", { class: "primary", type: "button", text: t("site.runtime.search") });
-    const mode = node("select", { class: "control", "aria-label": t("site.runtime.search_mode") },
+    const query = node("input", {
+      class: "control",
+      type: "search",
+      placeholder: t("site.runtime.search_placeholder"),
+      "aria-label": t("site.runtime.search"),
+    });
+    const submit = node("button", {
+      class: "primary",
+      type: "button",
+      text: t("site.runtime.search"),
+    });
+    const mode = node(
+      "select",
+      { class: "control", "aria-label": t("site.runtime.search_mode") },
       node("option", { value: "keyword", text: t("site.runtime.keyword") }),
-      node("option", { value: "semantic", text: t("site.runtime.semantic"), disabled: !publication.features?.semantic_search }),
-      node("option", { value: "hybrid", text: t("site.runtime.hybrid"), disabled: !publication.features?.semantic_search })
+      node("option", {
+        value: "semantic",
+        text: t("site.runtime.semantic"),
+        disabled: !publication.features?.semantic_search,
+      }),
+      node("option", {
+        value: "hybrid",
+        text: t("site.runtime.hybrid"),
+        disabled: !publication.features?.semantic_search,
+      }),
     );
     mode.value = publication.features?.semantic_search ? "hybrid" : "keyword";
-    const work = node("select", { class: "control", "aria-label": t("site.runtime.work_filter") },
+    const work = node(
+      "select",
+      { class: "control", "aria-label": t("site.runtime.work_filter") },
       node("option", { value: "", text: t("site.runtime.all_works") }),
-      ...(publication.works || []).map((item) => node("option", { value: item.work, text: item.work }))
+      ...(publication.works || []).map((item) =>
+        node("option", { value: item.work, text: item.work }),
+      ),
     );
-    const field = node("select", { class: "control", "aria-label": t("site.runtime.field_filter") },
+    const field = node(
+      "select",
+      { class: "control", "aria-label": t("site.runtime.field_filter") },
       node("option", { value: "", text: t("site.runtime.any_field") }),
-      ...filterFields().map((key) => node("option", { value: key, text: key.replaceAll("_", " ") }))
+      ...filterFields().map((key) =>
+        node("option", { value: key, text: key.replaceAll("_", " ") }),
+      ),
     );
-    const value = node("input", { class: "control", placeholder: t("site.runtime.filter_value"), "aria-label": t("site.runtime.filter_value") });
-    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
+    const value = node("input", {
+      class: "control",
+      placeholder: t("site.runtime.filter_value"),
+      "aria-label": t("site.runtime.filter_value"),
+    });
+    const status = node("div", {
+      class: "status",
+      role: "status",
+      "aria-live": "polite",
+    });
     const results = node("div", { class: "stack" });
 
     async function run() {
+      submit.disabled = true;
       status.className = "status";
       status.textContent = t("site.runtime.searching");
       results.replaceChildren();
       try {
-        const found = await retrieve(query.value, mode.value, { work: work.value, field: field.value, value: value.value }, 50);
-        lastResults = found;
-        status.textContent = t("site.runtime.results_count", { count: found.length });
-        if (!found.length) results.append(node("div", { class: "empty", text: t("site.runtime.no_results") }));
-        else results.append(...found.map((item, index) => resultCard(item, index + 1)));
+        const retrieval = await retrieve(
+          query.value,
+          mode.value,
+          { work: work.value, field: field.value, value: value.value },
+          50,
+          providerDefaults(),
+          (stage, current, total, workName) => {
+            status.textContent = t("site.runtime.loading_progress", {
+              stage:
+                stage === "vectors"
+                  ? t("site.runtime.loading_vectors")
+                  : t("site.runtime.loading_records"),
+              current,
+              total,
+              work: workName || "",
+            });
+          },
+        );
+        const found = retrieval.items;
+        status.className = retrieval.warning ? "status warning" : "status";
+        status.textContent = retrieval.warning
+          ? t("site.runtime.results_with_warning", {
+              count: found.length,
+              warning: retrieval.warning,
+            })
+          : t("site.runtime.results_count", { count: found.length });
+        if (!found.length) {
+          results.append(node("div", { class: "empty", text: t("site.runtime.no_results") }));
+        } else {
+          results.append(...found.map((item, index) => resultCard(item, index + 1)));
+        }
       } catch (error) {
         status.className = "status error";
-        status.textContent = t("site.runtime.search_failed", { error: error instanceof Error ? error.message : String(error) });
+        status.textContent = t("site.runtime.search_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        submit.disabled = false;
       }
     }
+
     submit.addEventListener("click", run);
-    query.addEventListener("keydown", (event) => { if (event.key === "Enter") run(); });
+    query.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") run();
+    });
     panel.append(
       node("div", { class: "search-row" }, query, submit),
-      node("div", { class: "filters" },
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.search_mode") }), mode),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.work_filter") }), work),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.field_filter") }), field),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_value") }), value)
-      ), status
+      node(
+        "div",
+        { class: "filters" },
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.search_mode") }),
+          mode,
+        ),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.work_filter") }),
+          work,
+        ),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.field_filter") }),
+          field,
+        ),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.filter_value") }),
+          value,
+        ),
+      ),
+      status,
     );
     return node("div", { class: "stack" }, panel, results);
   }
