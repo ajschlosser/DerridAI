@@ -7,7 +7,9 @@ describe("text noise settings", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
   it("exposes the threshold on a labelled range and emits a new copy", async () => {
-    const wrapper = mount(CorpusTextNoiseSettings, { props: { threshold: 45, llmAssist: false, mediaKind: "pdf" } });
+    const wrapper = mount(CorpusTextNoiseSettings, {
+      props: { threshold: 45, llmAssist: false, mediaKind: "pdf" },
+    });
     expect(wrapper.text()).toContain("Source illegibility");
     const slider = wrapper.get('input[type="range"]');
     expect(slider.attributes("aria-valuenow")).toBe("45");
