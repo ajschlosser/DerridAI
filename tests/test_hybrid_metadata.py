@@ -67,7 +67,7 @@ def test_hybrid_metadata_uses_constrained_llm_and_tracks_field_provenance(tmp_pa
     _asset,build=make_build(repo,1)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     record={"record_id":"r1","record_revision":1,"text":"Derrida analyzes hospitality.","text_length":30,"source_asset_id":"asset-aardvark","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}]}
-    def fake_chat(_request,prompt,*,response_model,max_tokens,schema_name,build_id=""):
+    def fake_chat(_request,prompt,*,response_model,max_tokens,schema_name,build_id="", **_kwargs):
         if schema_name=="derridai_record_discourse":
             assert "region_type MUST be one of" in prompt
             assert "primary_text MUST be true or false" in prompt
@@ -101,7 +101,7 @@ def test_manifest_llm_disagreement_is_prefilled_for_review(tmp_path:Path,monkeyp
     _asset,build=make_build(repo,1)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     record={"record_id":"r1","record_revision":1,"text":"Main text.","text_length":10,"pdf_pages":[1],"source_asset_id":"asset-aardvark","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}],"region_type":"main_text","primary_text":True,"metadata_field_status":{"region_type":{"status":"deterministic","method":"human_document_layout","confidence":.99,"reason":"Reviewer-defined document structure."},"primary_text":{"status":"deterministic","method":"human_document_layout","confidence":.99,"reason":"Reviewer-defined document structure."}}}
-    def fake_chat(_request,prompt,*,response_model,max_tokens,schema_name,build_id=""):
+    def fake_chat(_request,prompt,*,response_model,max_tokens,schema_name,build_id="", **_kwargs):
         if schema_name=="derridai_record_discourse":
             return {"metadata":{"region_type":"front_matter","primary_text":False,"discourse_role":"assertion"},"field_evidence":{"region_type":{"block_ids":["b1"],"confidence":.99,"reason":"model"},"primary_text":{"block_ids":["b1"],"confidence":.99,"reason":"model"},"discourse_role":{"block_ids":["b1"],"confidence":.99,"reason":"assertion"}},"field_assessments":{"region_type":{"confidence":.99,"needs_review":False,"reason":"model","outcome":"supported_value"},"primary_text":{"confidence":.99,"needs_review":False,"reason":"model","outcome":"supported_value"},"discourse_role":{"confidence":.99,"needs_review":False,"reason":"assertion","outcome":"supported_value"}},"review_reason":""}
         if schema_name=="derridai_record_quotation": return {"metadata":{},"field_evidence":{},"review_reason":""}

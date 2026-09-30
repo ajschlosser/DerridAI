@@ -1,7 +1,11 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed } from "vue";
-import { pipelineConfigHelp, pipelineConfigLabel } from "../../domain/pipelinePresentation";
+import {
+  pipelineConfigHelp,
+  pipelineConfigLabel,
+  pipelineConfigOptionLabel,
+} from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
 import UiTooltip from "../ui/UiTooltip.vue";
 import type { PipelineStage, PipelineStrategy } from "../../types/pipelines";
@@ -35,6 +39,10 @@ function configValue(key: string, rule: Record<string, unknown>) {
   if (rule.default !== undefined) return rule.default;
   return "";
 }
+
+function enumValues(rule: Record<string, unknown>) {
+  return Array.isArray(rule.enum) ? rule.enum.map(String) : null;
+}
 </script>
 
 <template>
@@ -67,6 +75,16 @@ function configValue(key: string, rule: Record<string, unknown>) {
       >
         <option value="true">{{ t("common.yes", "Yes") }}</option>
         <option value="false">{{ t("common.no", "No") }}</option>
+      </select>
+      <select
+        v-else-if="enumValues(rule)"
+        class="control"
+        :value="String(configValue(key, rule))"
+        @change="emit('updateConfig', key, ($event.target as HTMLSelectElement).value, rule)"
+      >
+        <option v-for="option in enumValues(rule)" :key="option" :value="option">
+          {{ pipelineConfigOptionLabel(key, option, t) }}
+        </option>
       </select>
       <input
         v-else

@@ -60,7 +60,7 @@ def test_confident_llm_value_is_auto_resolved_and_low_confidence_is_populated_fo
               "source_asset_id": "asset-elephant", "source_block_ids": ["b1"],
               "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}]}
 
-    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id=""):
+    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id="", **_kwargs):
         if schema_name == "derridai_record_discourse":
             evidence = {"block_ids": ["b1"], "confidence": 0.95, "reason": "explicit"}
             return {
@@ -115,7 +115,7 @@ def _enrich(tmp_path: Path, monkeypatch, record: dict, reply: dict):
     build = _install_minimal_build(repo)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
 
-    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id=""):
+    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id="", **_kwargs):
         if schema_name == "derridai_record_discourse":
             return reply
         return {"metadata": {}, "field_evidence": {}, "field_assessments": {}, "review_reason": ""}
@@ -209,7 +209,7 @@ def test_canonical_source_unit_ids_feed_evidence_prompt_and_deterministic_fallba
         "outcome": "supported_value",
     }
 
-    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id=""):
+    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id="", **_kwargs):
         prompts.append(prompt)
         if schema_name == "derridai_record_discourse":
             return reply

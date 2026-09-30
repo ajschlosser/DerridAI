@@ -91,3 +91,54 @@ export const CrossEncoderWithFallbacks: Story = {
     entryStageIds: ["retrieve"],
   },
 };
+
+const structuredMetadata: PipelineStrategy = {
+  strategy_id: "llm.structured_metadata",
+  version: 1,
+  family: "llm",
+  label: "Structured metadata generation",
+  description: "Run one schema-derived structured metadata task.",
+  input_type: "context_packet",
+  output_type: "model_output",
+  deterministic: false,
+  invokes_llm: true,
+  capabilities: ["chat_model", "structured_output"],
+  config_schema: {
+    type: "object",
+    properties: {
+      provider_role: { type: "string", enum: ["primary", "review"], default: "primary" },
+      attempts: { type: "integer", minimum: 1, maximum: 4, default: 2 },
+    },
+  },
+};
+
+const enrichmentStages: PipelineStage[] = [
+  {
+    id: "primary",
+    strategy: "llm.structured_metadata",
+    enabled: true,
+    config: { provider_role: "primary", attempts: 2 },
+    next: [],
+    on_empty: null,
+    on_unavailable: null,
+    on_timeout: "review",
+    on_error: "review",
+  },
+  {
+    id: "review",
+    strategy: "llm.structured_metadata",
+    enabled: true,
+    config: { provider_role: "review", attempts: 2 },
+    next: [],
+  },
+];
+
+export const StructuredMetadataWithEscalation: Story = {
+  args: {
+    stage: enrichmentStages[0],
+    stageIndex: 0,
+    stages: enrichmentStages,
+    strategies: [structuredMetadata],
+    entryStageIds: ["primary"],
+  },
+};

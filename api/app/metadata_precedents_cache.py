@@ -19,13 +19,13 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Any
 
-from .evidence_suggestions import rank_blocks_for_texts, record_source_blocks
+from .evidence_suggestions import record_source_blocks
 from .metadata_exemplars import prompt_example
+from .pipelines.precedent_remap import RemapSession
 
 CACHE_KEY = "metadata_precedents_cache"
 # Bump when the stored shape or its meaning changes; other versions are ignored and recomputed live.
 CACHE_VERSION = 1
-CANDIDATE_LIMIT = 3
 
 
 def precedent_mode(field: str, items: list[dict[str, Any]], telemetry: dict[str, Any]) -> str:
@@ -41,17 +41,20 @@ def rank_candidates(
     blocks_by_id: dict[str, dict[str, Any]],
     *,
     embed: Callable[[list[str]], list[list[float]]] | None = None,
+    session: RemapSession | None,
 ) -> list[list[dict[str, Any]]]:
-    """This record's blocks most similar to each precedent's reviewed evidence (one list per item)."""
+    """This record's blocks most similar to each precedent's reviewed evidence (one list per item).
+
+    Ranking runs the assigned ``precedent_evidence_remap`` pipeline through ``session``;
+    without one (the assignment could not be resolved) there are no candidates.
+    """
     queries = [str(item.get("evidence") or "").strip() for item in items]
     wanted = [index for index, query in enumerate(queries) if query]
     out: list[list[dict[str, Any]]] = [[] for _ in items]
     blocks = record_source_blocks(record, blocks_by_id)
-    if not wanted or not blocks:
+    if not wanted or not blocks or session is None:
         return out
-    ranked, _method = rank_blocks_for_texts(
-        [queries[index] for index in wanted], blocks, embed=embed, limit=CANDIDATE_LIMIT
-    )
+    ranked = session.rank([queries[index] for index in wanted], blocks, embed=embed)
     for index, picks in zip(wanted, ranked):
         out[index] = picks
     return out
@@ -74,11 +77,12 @@ def build_precedents_cache(
     something it could not re-verify.
     """
     stored: dict[str, Any] = {}
+    session = RemapSession.open()
     for field in dict.fromkeys(str(name) for name in fields if str(name)):
         items = [item for item in examples.get(field) or [] if isinstance(item, dict)]
         if any(not str(item.get("exemplar_id") or "") for item in items):
             continue
-        candidates = rank_candidates(items, record, blocks_by_id, embed=embed)
+        candidates = rank_candidates(items, record, blocks_by_id, embed=embed, session=session)
         refs = []
         for item, picks in zip(items, candidates):
             ref: dict[str, Any] = {
@@ -90,12 +94,17 @@ def build_precedents_cache(
                 ref["match"] = item["match"]
             refs.append(ref)
         stored[field] = {"mode": precedent_mode(field, items, telemetry), "refs": refs}
-    return {
+    cache: dict[str, Any] = {
         "version": CACHE_VERSION,
         "computed_at": computed_at,
         "fallback_reason": str(telemetry.get("fallback_reason") or ""),
         "fields": stored,
     }
+    identity = session.finish() if session is not None else None
+    if identity is not None:
+        # Which remap pipeline ranked the candidate source units; readers may ignore it.
+        cache["candidate_pipeline"] = identity
+    return cache
 
 
 def cached_field(record: dict[str, Any], field: str) -> tuple[dict[str, Any], dict[str, Any]] | None:

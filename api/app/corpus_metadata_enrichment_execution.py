@@ -22,7 +22,12 @@ from . import experiment, operation_events
 from .autofill import decide as decide_autofill
 from .autofill import in_audit_sample
 from .config import APP_VERSION
-from .corpus_llm_helpers import _context_window, _stage_limits, _stage_timeouts
+from .corpus_llm_helpers import (
+    _context_window,
+    _llm_config,
+    _stage_limits,
+    _stage_timeouts,
+)
 from .corpus_metadata import (
     DISCOURSE_ROLES,
     PROPOSITION_STATUS_VALUES,
@@ -70,6 +75,10 @@ from .metadata_schema import (
     response_model_for,
 )
 from .nlp_annotations import prompt_hints
+from .pipelines.corpus_metadata_enrichment import (
+    EnrichmentSession,
+    stage_attempts,
+)
 from .pipelines.evidence_recovery import (
     MISSING_SOURCE_DOCUMENT,
     execute_evidence_recovery,
@@ -97,7 +106,7 @@ class MetadataEnrichmentExecutionMixin:
         def _blocks_for(self, build_id: str) -> dict[str, dict[str, Any]]: ...
         def _editable_fields(self, build_id: str) -> set[str]: ...
         def _precedent_embedder(self) -> Any: ...
-        def _chat_json(self, request: dict[str, Any], prompt: str, *, response_model: type[BaseModel], max_tokens: int = ..., schema_name: str = ..., attempts: int = ..., build_id: str = ...) -> dict[str, Any]: ...
+        def _chat_json(self, request: dict[str, Any], prompt: str, *, response_model: type[BaseModel], max_tokens: int = ..., schema_name: str = ..., attempts: int = ..., build_id: str = ..., roles: tuple[str, ...] = ..., escalated: bool = ...) -> dict[str, Any]: ...
         def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True, use_progressive: bool = True) -> dict[str, Any]: ...
         def _increment_metric(self, build_id: str, key: str, amount: int = 1) -> None: ...
         def _latest_runtime_request(self, build_id: str, fallback: dict[str, Any]) -> dict[str, Any]: ...
@@ -520,7 +529,29 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         tasks: list[tuple[str, str, type[BaseModel], int, str]], build_id: str,
         stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
     ) -> list[tuple[str, dict[str, Any] | None, Exception | None]]:
-        """Run unsettled families with live ownership checks and durable stage callbacks."""
+        """Run unsettled families with live ownership checks and durable stage callbacks.
+
+        The corpus_metadata_enrichment pipeline decides how each model call runs. It is
+        resolved once per Record, on the first family that needs a call, and the Record's
+        calls are recorded as one pipeline trace (also when the build is cancelled).
+        """
+        pipeline: dict[str, Any] = {}
+        try:
+            results = self._run_metadata_tasks(record, request, tasks, build_id, stage_callback, pipeline)
+        except InterruptedError:
+            if isinstance(pipeline.get("session"), EnrichmentSession):
+                pipeline["session"].finish(cancelled=True)
+            raise
+        if isinstance(pipeline.get("session"), EnrichmentSession):
+            pipeline["session"].finish()
+        return results
+
+    def _run_metadata_tasks(
+        self, record: dict[str, Any], request: dict[str, Any],
+        tasks: list[tuple[str, str, type[BaseModel], int, str]], build_id: str,
+        stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
+        pipeline: dict[str, Any],
+    ) -> list[tuple[str, dict[str, Any] | None, Exception | None]]:
         stage_callback = self._with_progress_notes(build_id, stage_callback)
         requested_families = request.get("families")
         stage_results: list[tuple[str, dict[str, Any] | None, Exception | None]] = []
@@ -614,12 +645,18 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             # not interrupt an in-flight request, but the next family/record picks
             # up the newly selected profile.
             active_request = self._latest_runtime_request(build_id, request) if build_id else request
+            if "session" not in pipeline and "error" not in pipeline:
+                try:
+                    pipeline["session"] = EnrichmentSession.open()
+                except RuntimeError as exc:
+                    pipeline["error"] = exc
+            session: EnrichmentSession | None = pipeline.get("session")
             started_at = iso_now()
             ledger_context = {
                 "provider_profile_id": active_request.get("provider_profile_id"),
                 "provider": active_request.get("provider"),
                 "model": active_request.get("model"),
-                "attempts_allowed": 2,
+                "attempts_allowed": stage_attempts(session.plan.entry) if session else 0,
                 "input_chars": len(prompt),
                 "max_output_tokens": max_tokens,
                 "timeout_seconds": _stage_timeouts(active_request).get(task_name),
@@ -630,18 +667,18 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 stage_callback(record, task_name, "running", None)
             started_clock = time.monotonic()
             try:
-                result = self._chat_json(
-                    active_request,
-                    prompt,
-                    response_model=response_model,
-                    max_tokens=max_tokens,
-                    schema_name=schema_name,
-                    build_id=build_id,
+                if session is None:
+                    raise pipeline["error"]
+                result = session.run(
+                    self._structured_metadata_invoker(active_request, prompt, response_model, max_tokens, schema_name, build_id),
+                    response_contract=schema_name,
+                    providers=_provider_roles(active_request),
                 )
                 persisted_stage_results[task_name] = result
                 stage_status[task_name] = "complete"
                 stage_ledger[task_name] = {
-                    **ledger_context, "state": "complete", "started_at": started_at, "finished_at": iso_now(),
+                    **ledger_context, "pipeline": session.identity(),
+                    "state": "complete", "started_at": started_at, "finished_at": iso_now(),
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": None,
                 }
                 stage_results.append((task_name, result, None))
@@ -658,7 +695,8 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             except Exception as exc:
                 stage_status[task_name] = "failed"
                 stage_ledger[task_name] = {
-                    **ledger_context, "state": "failed", "started_at": started_at, "finished_at": iso_now(),
+                    **ledger_context, **({"pipeline": session.identity()} if session else {}),
+                    "state": "failed", "started_at": started_at, "finished_at": iso_now(),
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": str(exc)[:1200],
                 }
                 stage_results.append((task_name, None, exc))
@@ -669,6 +707,29 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     self._append_warning(build_id, f"{record.get('record_id')}: {task_name} metadata requires review ({exc})")
 
         return stage_results
+
+    def _structured_metadata_invoker(
+        self, active_request: dict[str, Any], prompt: str, response_model: type[BaseModel],
+        max_tokens: int, schema_name: str, build_id: str,
+    ) -> Callable[[str, int, bool], dict[str, Any]]:
+        """One pipeline stage's model call: a single provider role with the stage's attempts."""
+
+        def invoke(role: str, attempts: int, escalated: bool) -> dict[str, Any]:
+            if role not in _provider_roles(active_request):
+                raise LookupError("No review provider is configured for this build.")
+            return self._chat_json(
+                active_request,
+                prompt,
+                response_model=response_model,
+                max_tokens=max_tokens,
+                schema_name=schema_name,
+                build_id=build_id,
+                attempts=attempts,
+                roles=(role,),
+                escalated=escalated,
+            )
+
+        return invoke
 
 
     def _with_progress_notes(
@@ -1436,6 +1497,15 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     status["auto_populated"] = False
                     status["reason"] = ""
         return normalized
+
+
+def _provider_roles(request: dict[str, Any]) -> dict[str, tuple[str, str]]:
+    """Provider/model identity of each provider role the request configures."""
+    roles = {"primary": _llm_config(request)[:2]}
+    reviewer = request.get("_review_provider")
+    if isinstance(reviewer, dict) and reviewer:
+        roles["review"] = _llm_config(reviewer)[:2]
+    return roles
 
 
 def _nlp_hint_line(record: dict[str, Any], group_fields: list[str]) -> str:

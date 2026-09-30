@@ -590,9 +590,305 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             },
         ],
     ),
+    _pipeline(
+        pipeline_id="store_search.similarity",
+        version=1,
+        name="Store search — semantic similarity",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["dense"],
+        notes=(
+            "Nearest records by embedding distance."
+        ),
+        stages=[
+            {
+                "id": "dense",
+                "strategy": "retrieve.chroma_similarity",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="store_search.mmr",
+        version=1,
+        name="Store search — maximum marginal relevance",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["dense"],
+        notes=(
+            "Draws a candidate pool of the request's fetch_k nearest records, then "
+            "selects a relevance/diversity balance using the collection's distance "
+            "metric."
+        ),
+        stages=[
+            {
+                "id": "dense",
+                "strategy": "retrieve.chroma_similarity",
+                "next": ["mmr"],
+            },
+            {
+                "id": "mmr",
+                "strategy": "select.mmr",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="store_search.hybrid",
+        version=1,
+        name="Store search — hybrid (semantic + lexical)",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["query"],
+        notes=(
+            "Semantic and BM25-style lexical legs fused by reciprocal rank. An empty "
+            "query lists records by metadata filter; a collection that cannot embed "
+            "queries continues with the lexical leg; a query with no lexical terms "
+            "uses record-text matching for that leg."
+        ),
+        stages=[
+            {
+                "id": "query",
+                "strategy": "query.passthrough",
+                "next": ["dense", "lexical"],
+                "on_empty": "filter",
+            },
+            {
+                "id": "dense",
+                "strategy": "retrieve.chroma_similarity",
+                "next": ["fuse"],
+                "on_unavailable": "fuse",
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.lexical_bm25",
+                "next": ["fuse"],
+                "on_unavailable": "keyword",
+            },
+            {
+                "id": "keyword",
+                "strategy": "retrieve.store_keyword",
+                "next": ["fuse"],
+            },
+            {
+                "id": "fuse",
+                "strategy": "fusion.rrf",
+                "next": ["select"],
+            },
+            {
+                "id": "filter",
+                "strategy": "retrieve.store_filter",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="store_search.lexical",
+        version=1,
+        name="Store search — lexical (BM25-style)",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["query"],
+        notes=(
+            "Ranks stored record text and key metadata by BM25-style term weighting. "
+            "An empty query, or one with no lexical terms, uses record-text matching "
+            "instead."
+        ),
+        stages=[
+            {
+                "id": "query",
+                "strategy": "query.passthrough",
+                "next": ["lexical"],
+                "on_empty": "keyword",
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.lexical_bm25",
+                "next": ["select"],
+                "on_unavailable": "keyword",
+            },
+            {
+                "id": "keyword",
+                "strategy": "retrieve.store_keyword",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="store_search.keyword",
+        version=1,
+        name="Store search — record text contains",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["keyword"],
+        notes=(
+            "Case-insensitive substring match on record text."
+        ),
+        stages=[
+            {
+                "id": "keyword",
+                "strategy": "retrieve.store_keyword",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="store_search.filter",
+        version=1,
+        name="Store search — metadata filter",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["filter"],
+        notes=(
+            "Records matching the metadata filter, ignoring the query text."
+        ),
+        stages=[
+            {
+                "id": "filter",
+                "strategy": "retrieve.store_filter",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="metadata.prefill.current",
+        version=1,
+        name="Metadata pre-fill — reviewed precedents",
+        purpose="metadata_prefill",
+        status="active",
+        entry_stage_ids=["retrieve"],
+        notes=(
+            "Each source span of a new Record queries reviewed metadata exemplars "
+            "(positive and confirmed-absence, other builds only). Distances become "
+            "similarity as 1 / (1 + distance). Up to three hints per field surface "
+            "at similarity 0.72 or above. Pre-filling a value additionally needs two "
+            "agreeing earlier Records at mean similarity 0.88 and no rival within "
+            "0.05; those rules are DerridAI policy, not pipeline settings."
+        ),
+        stages=[
+            {
+                "id": "retrieve",
+                "strategy": "retrieve.metadata_exemplars",
+                "config": {"fetch_k": 8},
+                "next": ["normalize"],
+            },
+            {
+                "id": "normalize",
+                "strategy": "normalize.collection_relevance",
+                "config": {"method": "inverse_distance"},
+                "next": ["hints"],
+            },
+            {
+                "id": "hints",
+                "strategy": "select.memory_hints",
+                "config": {"limit": 3, "min_similarity": 0.72},
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="precedent.remap.current",
+        version=1,
+        name="Precedent evidence remapping — current Record",
+        purpose="precedent_evidence_remap",
+        status="active",
+        entry_stage_ids=["semantic"],
+        notes=(
+            "Ranks the current Record's own source units against a reviewed "
+            "precedent's evidence text by embedding similarity, falling back to "
+            "word overlap when no embedding service is available or it fails. "
+            "Only source units of the current Record can be candidates, and the "
+            "three best per precedent are kept. Candidates are advisory and bind "
+            "nothing."
+        ),
+        stages=[
+            {
+                "id": "semantic",
+                "strategy": "retrieve.source_cosine",
+                "next": ["provenance"],
+                "on_unavailable": "lexical",
+                "on_error": "lexical",
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.token_overlap",
+                "next": ["provenance"],
+            },
+            {
+                "id": "provenance",
+                "strategy": "validate.provenance",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+                "config": {"limit": 3},
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="corpus.metadata_enrichment.current",
+        version=1,
+        name="Corpus metadata enrichment — current",
+        purpose="corpus_metadata_enrichment",
+        status="active",
+        entry_stage_ids=["primary"],
+        notes=(
+            "Runs each schema-derived metadata group on the build's primary "
+            "provider with two attempts. When those fail or time out and the "
+            "build configures a review provider, the review provider gets two "
+            "attempts of its own. The active metadata schema supplies the task; "
+            "every answer is validated, and review and evidence rules apply "
+            "after this pipeline."
+        ),
+        stages=[
+            {
+                "id": "primary",
+                "strategy": "llm.structured_metadata",
+                "config": {"provider_role": "primary", "attempts": 2},
+                "on_error": "review",
+                "on_timeout": "review",
+            },
+            {
+                "id": "review",
+                "strategy": "llm.structured_metadata",
+                "config": {"provider_role": "review", "attempts": 2},
+            },
+        ],
+    ),
 )
 
 BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
+    PipelineAssignment(
+        feature="corpus_metadata_enrichment",
+        pipeline_id="corpus.metadata_enrichment.current",
+        pipeline_version=1,
+        source="built_in",
+        override_allowed=True,
+    ),
     PipelineAssignment(
         feature="research",
         pipeline_id="research.current",
@@ -604,6 +900,27 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
         feature="evidence_suggestion.reviewer",
         pipeline_id="evidence.reviewer.current",
         pipeline_version=2,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="precedent_evidence_remap",
+        pipeline_id="precedent.remap.current",
+        pipeline_version=1,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="metadata_prefill",
+        pipeline_id="metadata.prefill.current",
+        pipeline_version=1,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="vector_store_search",
+        pipeline_id="store_search.similarity",
+        pipeline_version=1,
         source="built_in",
         override_allowed=True,
     ),
