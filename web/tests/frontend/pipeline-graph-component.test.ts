@@ -83,14 +83,14 @@ describe("PipelineGraphDiagram relation interactions", () => {
 
     const node = wrapper.findAll(".diagram-node")[0];
     const before = readPosition(node.attributes("style") || "");
-    const edgeBefore = wrapper.get(".diagram-edges path").attributes("d");
+    const edgeBefore = wrapper.get(".diagram-edge").attributes("d");
     await node.trigger("pointerdown", { button: 0, pointerId: 2, clientX: 10, clientY: 10 });
     await node.trigger("pointermove", { pointerId: 2, clientX: 40, clientY: 25 });
     await node.trigger("pointerup", { pointerId: 2 });
     await flushPromises();
     const after = readPosition(node.attributes("style") || "");
     expect(after).toEqual({ left: before.left + 30, top: before.top + 15 });
-    expect(wrapper.get(".diagram-edges path").attributes("d")).not.toBe(edgeBefore);
+    expect(wrapper.get(".diagram-edge").attributes("d")).not.toBe(edgeBefore);
   });
 
   it("offers fit, reset, orientation, and resize controls", async () => {
