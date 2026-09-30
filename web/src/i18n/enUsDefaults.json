@@ -7766,8 +7766,14 @@
   "pipelines.strategy.llm_grade_rag.description": "Evaluate a generated answer against the evidence packet using the configured grading profile.",
   "pipelines.purpose_corpus_segmentation": "Corpus segmentation",
   "pipelines.purpose_corpus_document_manifest": "Corpus document manifest",
+  "pipelines.purpose_corpus_text_touchup": "Corpus text touch-up",
+  "pipelines.purpose_corpus_reviewer_evidence_choice": "Reviewer evidence choice",
   "pipelines.strategy.llm_boundary_classification.label": "Boundary classification",
   "pipelines.strategy.llm_boundary_classification.description": "Ask a chat model a closed-choice question about a record boundary: split or keep an ambiguous transition, or whether a suspicious record seam should stay or move. Returned block IDs are checked deterministically; a failed, omitted, or low-confidence answer keeps the boundary. The stage chooses which configured provider answers and how many attempts it gets.",
   "pipelines.strategy.llm_document_manifest.label": "Document manifest",
-  "pipelines.strategy.llm_document_manifest.description": "Ask a chat model once per analysis for a source-bound document manifest: bibliography, language and the main-text page range, from embedded file metadata and a sample of the whole document. Embedded metadata, a confident start-page inference and reviewer-confirmed structure still outrank the answer, and a failed call falls back to embedded metadata. The stage chooses which configured provider answers and how many attempts it gets."
+  "pipelines.strategy.llm_document_manifest.description": "Ask a chat model once per analysis for a source-bound document manifest: bibliography, language and the main-text page range, from embedded file metadata and a sample of the whole document. Embedded metadata, a confident start-page inference and reviewer-confirmed structure still outrank the answer, and a failed call falls back to embedded metadata. The stage chooses which configured provider answers and how many attempts it gets.",
+  "pipelines.strategy.llm_text_touchup.label": "Text touch-up",
+  "pipelines.strategy.llm_text_touchup.description": "Ask a chat model to propose cleaned-up text for one Record, on a reviewer request or during metadata enrichment when the build asks for it. The answer is checked against the source text and stays a proposal until a reviewer approves it. The stage chooses which configured provider answers and how many attempts it gets.",
+  "pipelines.strategy.llm_reviewer_evidence_choice.label": "Reviewer evidence choice",
+  "pipelines.strategy.llm_reviewer_evidence_choice.description": "When a reviewer asks, a chat model chooses which source-unit IDs of the Record support a metadata value. Every returned ID and its support are checked deterministically, and a suggestion stays advisory until the reviewer binds it. The stage chooses which configured provider answers and how many attempts it gets."
 }

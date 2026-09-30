@@ -279,6 +279,7 @@ from .nlp_annotations import annotate_record
 from .operation_events import note_corpus_build, note_record_metadata
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
+from .pipelines.corpus_text_touchup import TextTouchupSession
 from .rag import _citation_strings, chat_complete
 from .record_semantic_map import record_semantic_map, semantic_node_neighborhood
 from .run_guidance import find_guidance_matches
@@ -3768,7 +3769,32 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         _ = self.repo.get_build(build_id).get("request") or {}
         active_request = self._interactive_llm_request(build_id, request or None)
         prompt = build_text_touchup_prompt(current_text, instructions)
-        result = self._chat_json(active_request, prompt, response_model=TextTouchupResponseModel, max_tokens=min(8192, max(2048, len(current_text)//3)), schema_name="record_text_touchup", attempts=2, build_id=build_id)
+        max_tokens = min(8192, max(2048, len(current_text)//3))
+
+        def invoke(role: str, attempts: int, escalated: bool) -> dict[str, Any]:
+            if role not in _provider_roles(active_request):
+                raise LookupError("No review provider is configured for this build.")
+            return self._chat_json(
+                active_request, prompt, response_model=TextTouchupResponseModel, max_tokens=max_tokens,
+                schema_name="record_text_touchup", attempts=attempts, build_id=build_id,
+                roles=(role,), escalated=escalated,
+            )
+
+        # One trace per proposal. Without a resolvable pipeline no model is asked and the request fails
+        # with the reason, as any failed touch-up does; reviewed text is never touched here.
+        try:
+            session = TextTouchupSession.open()
+        except RuntimeError as exc:
+            raise ValueError(str(exc)) from exc
+        try:
+            result = session.run(invoke, response_contract="record_text_touchup", providers=_provider_roles(active_request))
+        except InterruptedError:
+            session.finish(cancelled=True)
+            raise
+        except Exception:
+            session.finish()
+            raise
+        session.finish()
         proposed = _sanitize_touchup_output(str(result.get("text") or ""), current_text)
         if not proposed:
             raise ValueError("LLM text touch-up returned empty text.")
@@ -3785,6 +3811,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             "warnings": list(result.get("warnings") or []),
             "provider": provider,
             "model": model,
+            "pipeline": session.identity(),
             "created_at": iso_now(),
         }
 
@@ -3839,6 +3866,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             "model": str(proposal.get("model") or ""),
             "created_at": iso_now(),
         }
+        if isinstance(proposal.get("pipeline"), dict):
+            record["text_touchup_proposal"]["pipeline"] = dict(proposal["pipeline"])
         record["needs_review"] = True
         record["metadata_needs_attention"] = True
         reasons = list(record.get("metadata_attention_reasons") or [])

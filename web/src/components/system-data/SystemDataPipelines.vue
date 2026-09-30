@@ -123,6 +123,8 @@ function featureForPurpose(purpose: string) {
     corpus_metadata_enrichment: "corpus_metadata_enrichment",
     corpus_segmentation: "corpus_segmentation",
     corpus_document_manifest: "corpus_document_manifest",
+    corpus_text_touchup: "corpus_text_touchup",
+    corpus_reviewer_evidence_choice: "corpus_reviewer_evidence_choice",
     metadata_precedents: "metadata_precedents",
     claim_memory: "claim_memory",
     response_memory: "response_memory",

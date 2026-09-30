@@ -416,6 +416,12 @@ describe("System Data Pipeline Studio", () => {
   it.each([
     ["corpus_segmentation", "corpus.segmentation.custom", "Corpus segmentation"],
     ["corpus_document_manifest", "corpus.document_manifest.custom", "Corpus document manifest"],
+    ["corpus_text_touchup", "corpus.text_touchup.custom", "Corpus text touch-up"],
+    [
+      "corpus_reviewer_evidence_choice",
+      "corpus.reviewer_evidence_choice.custom",
+      "Reviewer evidence choice",
+    ],
   ])("labels and assigns a %s pipeline to its feature", async (feature, pipelineId, label) => {
     const featureCatalog = structuredClone(catalog);
     featureCatalog.pipelines.push({

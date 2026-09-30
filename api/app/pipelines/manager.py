@@ -11,7 +11,12 @@ from .corpus_document_manifest import (
     compile_document_manifest_pipeline,
 )
 from .corpus_metadata_enrichment import ENRICHMENT_FEATURE, compile_enrichment_pipeline
+from .corpus_reviewer_evidence_choice import (
+    REVIEWER_EVIDENCE_CHOICE_FEATURE,
+    compile_reviewer_evidence_choice_pipeline,
+)
 from .corpus_segmentation import SEGMENTATION_FEATURE, compile_segmentation_pipeline
+from .corpus_text_touchup import TEXT_TOUCHUP_FEATURE, compile_text_touchup_pipeline
 from .defaults import (
     BUILT_IN_ASSIGNMENTS,
     BUILT_IN_PIPELINES,
@@ -227,6 +232,10 @@ class PipelineManager:
             compile_segmentation_pipeline(pipeline)
         elif assignment.feature == DOCUMENT_MANIFEST_FEATURE:
             compile_document_manifest_pipeline(pipeline)
+        elif assignment.feature == TEXT_TOUCHUP_FEATURE:
+            compile_text_touchup_pipeline(pipeline)
+        elif assignment.feature == REVIEWER_EVIDENCE_CHOICE_FEATURE:
+            compile_reviewer_evidence_choice_pipeline(pipeline)
         elif assignment.feature == PREFILL_FEATURE:
             compile_prefill_pipeline(pipeline)
         elif assignment.feature == SEARCH_FEATURE:
@@ -286,6 +295,12 @@ class PipelineManager:
             if pipeline.purpose == "corpus_document_manifest":
                 compile_document_manifest_pipeline(pipeline)
                 return {"supported": True, "adapter": "corpus_document_manifest"}
+            if pipeline.purpose == "corpus_text_touchup":
+                compile_text_touchup_pipeline(pipeline)
+                return {"supported": True, "adapter": "corpus_text_touchup"}
+            if pipeline.purpose == "corpus_reviewer_evidence_choice":
+                compile_reviewer_evidence_choice_pipeline(pipeline)
+                return {"supported": True, "adapter": "corpus_reviewer_evidence_choice"}
             if pipeline.purpose == "precedent_evidence_remap":
                 compile_remap_pipeline(pipeline)
                 return {"supported": True, "adapter": "precedent_evidence_remap"}
