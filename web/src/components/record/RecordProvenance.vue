@@ -69,13 +69,18 @@ const supporting = computed(() => {
     <ol v-if="nodes.length" class="provenance-path" :aria-label="i18n.t('record.attribution_path')">
       <li v-for="(node, index) in nodes" :key="node.key">
         <span class="provenance-step" aria-hidden="true">{{ index + 1 }}</span>
-        <button type="button" @click="emit('search', node.key, String(node.value))">
-          <small class="provenance-label"
-            >{{ node.label }}
-            <UiTooltip v-if="nodeHelp(node.key)" :text="nodeHelp(node.key)" placement="bottom" />
-          </small>
-          <strong>{{ node.value }}</strong>
-        </button>
+        <UiTooltip
+          :text="nodeHelp(node.key)"
+          placement="bottom"
+          trigger-mode="content"
+          :content-focusable="false"
+        >
+          <button type="button" @click="emit('search', node.key, String(node.value))">
+            <small class="provenance-label">{{ node.label }}</small>
+            <strong>{{ node.value }}</strong>
+            <span class="sr-only">{{ nodeHelp(node.key) }}</span>
+          </button>
+        </UiTooltip>
       </li>
     </ol>
     <p v-else class="provenance-empty">
