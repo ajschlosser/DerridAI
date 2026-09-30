@@ -250,3 +250,48 @@ def test_record_terms_carry_identity_only_when_lemmas_exist():
     assert found["identity_text"] == "boundary" and found["identity_version"] == SEMANTIC_IDENTITY_VERSION
     without = Doc([token("boundaries", 0, "", "NOUN"), token("matter", 11, "", "VERB")])
     assert "identity_text" not in record_terms(without, text)[0]
+
+
+# --- precedent retrieval ---------------------------------------------------------------------
+
+def test_match_conditions_compare_reviewed_values_by_identity(tmp_path):
+    from app.metadata_exemplar_retrieval import match_tier
+    from app.semantic_identity_store import reviewed_value_relation
+
+    repo, build, _ = install(tmp_path, "speaker", "x")
+    relation = reviewed_value_relation(repo, build["build_id"], default_schema())
+    precedent = {"reviewed_values": {"speaker": '"J.P. Dingus"'}}
+    # A restated reviewed value agrees instead of contradicting.
+    assert match_tier(precedent, {"speaker": '"JP Dingus"'}, ["speaker"], relation) == ("matched", ["speaker"])
+    assert match_tier(precedent, {"speaker": '"JP Dingus"'}, ["speaker"]) == ("differs", ["speaker"])
+    assert match_tier(precedent, {"speaker": '"Levinas"'}, ["speaker"], relation) == ("differs", ["speaker"])
+    # Unknown is skipped, not guessed either way.
+    assert match_tier(precedent, {"speaker": '"J. Dingus"'}, ["speaker"], relation) == ("not_compared", [])
+
+
+def test_selection_prefers_distinct_identities_but_keeps_every_precedent():
+    from app.metadata_exemplar_retrieval import _identity_first
+
+    canonical = {
+        "a": {"canonical_value_key": "person:entity_name:j p dingus"},
+        "b": {"canonical_value_key": "person:entity_name:j p dingus"},
+        "c": {"canonical_value_key": "person:entity_name:levinas"},
+        "d": {"canonical_value_key": None},
+        "e": {"canonical_value_key": None},
+    }
+    rows = [{"id": key} for key in "abcde"]
+    first, rest = _identity_first(rows, canonical)
+    assert [row["id"] for row in first] == ["a", "c", "d", "e"] and [row["id"] for row in rest] == ["b"]
+
+
+def test_projection_metadata_carries_identity_beside_exact_values():
+    from app.metadata_exemplar_retrieval import _projection
+
+    row = _projection({"metadata_exemplar_id": "mex-1", "field_value": "J.P. Dingus", "canonical_value_key": "person:entity_name:j p dingus",
+                       "semantic_identity_id": None, "equivalence_profile": "entity_name", "equivalence_version": 1}, "b")
+    assert row["field_value_json"] == '"J.P. Dingus"'
+    assert row["canonical_value_key"] == "person:entity_name:j p dingus" and row["semantic_identity_id"] == ""
+    assert row["equivalence_version"] == 1
+    identity_keys = ["canonical_value_key", "semantic_identity_id", "rejected_canonical_value_key",
+                     "rejected_semantic_identity_id", "equivalence_profile", "equivalence_version"]
+    assert all(row[key] is not None for key in identity_keys)  # Chroma metadata cannot hold None

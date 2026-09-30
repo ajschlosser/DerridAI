@@ -62,16 +62,27 @@ def _identity_id(kind: str, *parts: str) -> str:
 class SemanticIdentityRegistry:
     """An in-memory index of identities by kind and normalized alias."""
 
-    def __init__(self) -> None:
+    def __init__(self, parent: SemanticIdentityRegistry | None = None) -> None:
+        # ``parent`` is a shared, read-only base layer (for example a build's reviewed
+        # aliases) under a per-Record layer, so the base is not rebuilt for every Record.
+        self._parent = parent
         self._identities: dict[str, SemanticIdentityRef] = {}
         self._modes: dict[str, str] = {}
         self._index: dict[tuple[str, str, str], set[str]] = defaultdict(set)
 
     def __len__(self) -> int:
-        return len(self._identities)
+        return len(self._identities) + (len(self._parent) if self._parent is not None else 0)
 
     def identities(self) -> list[SemanticIdentityRef]:
-        return [self._identities[key] for key in sorted(self._identities)]
+        merged = {ref.identity_id: ref for ref in (self._parent.identities() if self._parent is not None else [])}
+        merged.update(self._identities)
+        return [merged[key] for key in sorted(merged)]
+
+    def _lookup(self, index_key: tuple[str, str, str]) -> dict[str, SemanticIdentityRef]:
+        found = self._parent._lookup(index_key) if self._parent is not None else {}
+        for key in self._index.get(index_key, set()):
+            found[key] = self._identities[key]
+        return found
 
     def register_projection(self, identity: SemanticIdentityRef, *, mode: EquivalenceMode | str = "text") -> None:
         """Add an identity, merging aliases and source ids into one already registered."""
@@ -93,7 +104,8 @@ class SemanticIdentityRegistry:
     def _tier(self, value: str, kind: str, mode: str, sources: frozenset[str]) -> tuple[SemanticIdentityRef | None, bool]:
         """(the identity ``value`` names within ``sources``, whether the lookup was ambiguous)."""
         for index_key in ((kind, "=", text_key(value)), (kind, mode, surface_key(value, mode))):
-            found = [self._identities[key] for key in sorted(self._index.get(index_key, set())) if self._identities[key].source in sources]
+            candidates = self._lookup(index_key)
+            found = [candidates[key] for key in sorted(candidates) if candidates[key].source in sources]
             if len(found) == 1:
                 return found[0], False
             if len(found) > 1:
@@ -260,13 +272,13 @@ def project_document_intelligence(
     return registered
 
 
-def registry_for_record(record: dict[str, Any], text_sha256: str | None = None) -> SemanticIdentityRegistry:
+def registry_for_record(record: dict[str, Any], text_sha256: str | None = None, *, parent: SemanticIdentityRegistry | None = None) -> SemanticIdentityRegistry:
     """A registry from one Record's current Document Intelligence projection.
 
     ``text_sha256`` is the digest of the Record's current text; a projection bound to other
     text is ignored rather than trusted.
     """
-    registry = SemanticIdentityRegistry()
+    registry = SemanticIdentityRegistry(parent)
     projection = record.get("document_intelligence") if isinstance(record, dict) else None
     if isinstance(projection, dict):
         bound = projection.get("record_text_sha256")

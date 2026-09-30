@@ -43,7 +43,7 @@ from .metadata_precedents_cache import (
     resolve_cached_precedents,
 )
 from .pipelines.precedent_remap import RemapSession
-from .semantic_identity_store import registry_factory
+from .semantic_identity_store import registry_factory, reviewed_value_relation
 
 
 class EditorialMemoryMixin:
@@ -239,6 +239,7 @@ class EditorialMemoryMixin:
                         source_document_id=source_document_id,
                         field_id=str(assertion.field_id or field_ids.get(field, "")),
                         schema=metadata_schema,
+                        registry=registry_for(row),
                     )
                     if exemplar is not None:
                         canonical_exemplars.append(exemplar)
@@ -264,6 +265,7 @@ class EditorialMemoryMixin:
                     source_document_id=source_document_id,
                     field_id=str(assertion.field_id or field_ids.get(field, "")),
                     schema=metadata_schema,
+                    registry=registry_for(row),
                 )
                 if exemplar is not None:
                     canonical_exemplars.append(exemplar)
@@ -430,6 +432,9 @@ class EditorialMemoryMixin:
                     field_correction_limits=field_correction_limits or None,
                     field_match_fields=field_match_fields or None,
                     current_values=reviewed_values(current_record),
+                    value_relation=reviewed_value_relation(
+                        self.repo, build_id, metadata_schema, str(current_record.get("language") or "")
+                    ),
                     packet_char_budget=(
                         metadata_pipeline_plan.packet_char_budget
                         if metadata_pipeline_plan is not None

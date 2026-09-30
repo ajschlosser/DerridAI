@@ -255,12 +255,13 @@ def registry_factory(repo: Any, build_id: str, schema: Any) -> Callable[[dict[st
     except (KeyError, RuntimeError):
         alias_sets = []
 
+    base = SemanticIdentityRegistry()
+    register_alias_sets(base, alias_sets, schema)
+
     def make(record: dict[str, Any]) -> SemanticIdentityRegistry:
         from .semantic_identity_registry import registry_for_record
 
-        registry = registry_for_record(record)
-        register_alias_sets(registry, alias_sets, schema)
-        return registry
+        return registry_for_record(record, parent=base)
 
     return make
 
@@ -279,3 +280,30 @@ def review_registry(repo: Any, build_id: str, record: dict[str, Any], schema: An
     except KeyError:
         pass
     return registry
+
+
+def reviewed_value_relation(repo: Any, build_id: str, schema: Any, language: str = "") -> Callable[[str, str, str], str]:
+    """Compare two JSON-encoded reviewed values of one field under the schema's policy.
+
+    Used by precedent retrieval's analogy conditions (``match_field_ids``): equivalent
+    reviewed values agree, different ones contradict, unknown ones are not compared.
+    """
+    from .semantic_identity_registry import compare_field_values
+
+    registry = SemanticIdentityRegistry()
+    try:
+        register_alias_sets(registry, list_alias_sets(repo, build_id), schema)
+    except (KeyError, RuntimeError):
+        pass
+    context = {"language": language}
+
+    def relation(field: str, left: str, right: str) -> str:
+        try:
+            left_value, right_value = json.loads(left), json.loads(right)
+        except (TypeError, ValueError):
+            return "exact" if left == right else "different"
+        if schema is None:
+            return "exact" if left_value == right_value else "different"
+        return compare_field_values(schema, field, left_value, right_value, record=context, registry=registry).relation
+
+    return relation

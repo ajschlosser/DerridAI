@@ -142,6 +142,7 @@ def derive_build_metadata_exemplars(
                 source_document_id=source_document_id,
                 field_id=str(assertion.field_id or field_ids.get(field, "")),
                 schema=schema,
+                registry=registry_for(row),
             )
             if exemplar is not None:
                 exemplars.append(exemplar)
