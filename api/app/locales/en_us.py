@@ -8673,4 +8673,5 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'pdf_corpus.semantic_map_interaction_help': 'Drag the background to pan. Drag any node to reposition it. Arrow keys pan, plus and minus zoom, and 0 resets the view. Hold Alt and use an arrow key to move a focused node.',
  'pdf_corpus.semantic_graph_reset_layout': 'Reset graph layout',
  'pdf_corpus.semantic_graph_resize': 'Resize semantic content graph',
+ 'pdf_corpus.scalar_cardinality_conflict': 'This field accepts one value, but this older record contains several. Edit it to one value before confirming; DerridAI will not merge or discard the existing values automatically.',
 }
