@@ -155,9 +155,23 @@ const resolvedValue = computed(() => {
     props.control === "multi-combobox" && leakedAssessment(props.value) ? [] : (props.value ?? ""),
   );
 });
+/**
+ * Historical records may carry an array for a field whose current contract is
+ * scalar. One-item arrays are losslessly compatible; multiple values require an
+ * explicit reviewer decision instead of being silently joined into one string.
+ */
+const scalarCardinalityConflict = computed(() => {
+  const value = unwrapMetadataValue(resolvedValue.value);
+  return !isMultiCombobox.value && Array.isArray(value) && value.length > 1;
+});
 function editableValue() {
   const value = unwrapMetadataValue(resolvedValue.value);
-  const text = Array.isArray(value) ? value.join(", ") : metadataValueText(value);
+  let text = metadataValueText(value);
+  if (Array.isArray(value)) {
+    if (isMultiCombobox.value) text = value.map((item) => metadataValueText(item)).join(", ");
+    else if (value.length === 1) text = metadataValueText(value[0]);
+    else text = value.map((item) => metadataValueText(item)).join("\n");
+  }
   if (props.control !== "enum") return text;
   // A <select> only shows a draft that is exactly one of its options. Map the value onto
   // its option, and with no value preselect the model's suggestion (never a sealed one).
@@ -218,10 +232,16 @@ function normalized() {
   return normalizeMetadataFieldValue(props.field, raw);
 }
 const selectionMissing = ref(false);
+const scalarCardinalityResolved = computed(
+  () =>
+    !scalarCardinalityConflict.value ||
+    (dirty.value && !String(draft.value ?? "").includes("\n")),
+);
 const canSave = computed(
   () =>
     !props.busy &&
     !props.saving &&
+    scalarCardinalityResolved.value &&
     draft.value !== "" &&
     draft.value !== undefined &&
     !(props.required && draft.value === null),
@@ -512,6 +532,9 @@ const traceRows = computed(() => {
         <b>{{ i18n.t("pdf_corpus.deterministic_suggestion") }}</b
         ><span>{{ constraint.reason }}</span>
       </div>
+      <p v-if="scalarCardinalityConflict" class="field-reason" role="alert">
+        {{ i18n.t("pdf_corpus.scalar_cardinality_conflict") }}
+      </p>
       <div class="value-control">
         <select
           v-if="control === 'enum'"
