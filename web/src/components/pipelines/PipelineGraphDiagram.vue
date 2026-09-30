@@ -8,6 +8,7 @@ import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
 import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
 import { relationBoundsForPoints } from "../../domain/relations/geometry";
+import { RELATION_SURFACE_PRESETS } from "../../domain/relations/presets";
 import {
   PIPELINE_NODE_HEIGHT,
   PIPELINE_NODE_WIDTH,
@@ -34,6 +35,7 @@ const props = defineProps<{
   description: string;
 }>();
 
+const surfacePreset = RELATION_SURFACE_PRESETS.pipelineDag;
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
 const selectedId = ref("");
@@ -258,7 +260,9 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
         :content-bounds="contentBounds"
         :content-width="diagram.width"
         :content-height="diagram.height"
-        resize-axis="vertical"
+        :min-zoom="surfacePreset.minZoom"
+        :max-zoom="surfacePreset.maxZoom"
+        :resize-axis="surfacePreset.resizeAxis"
       >
         <template #default="{ zoom }">
           <svg
