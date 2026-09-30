@@ -31,6 +31,7 @@ import fitz
 from pydantic import BaseModel, ValidationError
 
 from .autonomous import Policy as AutonomousPolicy
+from .celf_conformance import evaluate_celf_conformance
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
 from .corpus_build_lifecycle import BuildLifecycleMixin
@@ -167,7 +168,6 @@ from .corpus_models import (
 )
 from .corpus_operations import OperationsMixin
 from .corpus_pipeline import BuildScope
-from .celf_conformance import evaluate_celf_conformance
 from .corpus_publication import (
     build_text_touchup_prompt,
     mark_unreviewed_publication,
@@ -3938,19 +3938,30 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             for record in publishable
         ]
         conformance = evaluate_celf_conformance(build, publishable)
-        human_reviewed_count = sum(
-            1
-            for record in publishable
-            if str(record.get("acceptance_actor_kind") or "").casefold() == "human"
-            or str(record.get("accepted_by") or "").casefold() not in {"", "autonomous"}
-        )
-        autonomous_count = sum(
-            1
-            for record in publishable
-            if str(record.get("acceptance_actor_kind") or "").casefold() == "policy"
-            or str(record.get("accepted_by") or "").casefold() == "autonomous"
-            or bool(record.get("autonomous_decision"))
-        )
+        human_reviewed_count = 0
+        autonomous_count = 0
+        for record in publishable:
+            review_status = str(record.get("publication_review_status") or "")
+            actor_kind = str(record.get("acceptance_actor_kind") or "").casefold()
+            accepted_by = str(record.get("accepted_by") or "").casefold()
+            autonomous = (
+                review_status == "unreviewed_suggestion"
+                or actor_kind == "policy"
+                or accepted_by == "autonomous"
+                or bool(record.get("autonomous_decision"))
+            )
+            if autonomous:
+                autonomous_count += 1
+                continue
+            reviewed = (
+                review_status == "reviewer_accepted"
+                or actor_kind == "human"
+                or bool(accepted_by)
+                or bool(record.get("accepted"))
+                or str(record.get("review_disposition") or "") == "accepted"
+            )
+            if reviewed:
+                human_reviewed_count += 1
         if autonomous_count and human_reviewed_count:
             review_mode = "hybrid"
         elif autonomous_count:
