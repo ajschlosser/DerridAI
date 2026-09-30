@@ -277,7 +277,7 @@ def test_source_quality_failure_creates_unresolved_assertion_not_absence() -> No
 
 
 def test_accept_unreviewed_suggestions_accepts_model_values_but_keeps_human_and_invalid() -> None:
-    """Unreviewed acceptance makes suggestions present, stays `unreviewed`, and never touches human or invalid fields."""
+    """Autonomous selection preserves epistemic state and never touches human or invalid fields."""
     from app.field_assertions import accept_unreviewed_suggestions
 
     record = {"record_id": "r1", "record_revision": 1}
@@ -293,11 +293,12 @@ def test_accept_unreviewed_suggestions_accepts_model_values_but_keeps_human_and_
     assert accept_unreviewed_suggestions(record) == 2
 
     stance = current_assertion_by_name(record, "stance")
-    assert stance.value == "describe" and stance.value_status == "present"
-    assert stance.authority_status == "unreviewed" and stance.method == "unreviewed_bulk_accept"
+    assert stance.value == "describe" and stance.value_status == "unresolved"
+    assert stance.authority_status == "unreviewed" and stance.method == "llm"
+    assert stance.legacy_metadata["autonomous_decision"]["actor_kind"] == "autonomous_policy"
     assert stance.supersedes_assertion_id == low.assertion_id
     scope = current_assertion_by_name(record, "claim_scope")
-    assert scope.value == unselected.value and scope.value_status == "present"
+    assert scope.value == unselected.value and scope.value_status == "unresolved"
     assert current_assertion_by_name(record, "speaker").authority_status == "human_confirmed"
     assert current_assertion_by_name(record, "discourse_role").value_status == "invalid"
     assert record["stance"] == "describe" and record["claim_scope"] == "local"

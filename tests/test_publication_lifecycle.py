@@ -212,7 +212,7 @@ def test_build_warnings_are_provenance_and_travel_with_the_corpus(tmp_path:Path)
 
 
 def test_accept_unreviewed_publishes_suggestions_and_preserves_prior_decisions(tmp_path:Path):
-    """Publishing unreviewed skips review gates, keeps reviewer decisions, and is not cELF-conformant.
+    """The compatibility path preserves decisions and evaluates cELF independently of review mode.
 
     r1 was accepted by a reviewer, r2 is still pending with incomplete metadata, r3 was
     rejected. The normal publish is refused; the unreviewed publish succeeds, excludes r3,
@@ -240,8 +240,12 @@ def test_accept_unreviewed_publishes_suggestions_and_preserves_prior_decisions(t
     else:
         raise AssertionError("reviewed publication should still be blocked")
     publication=manager.publish(build["build_id"],accept_unreviewed=True)
-    assert publication["review_mode"]=="unreviewed"
+    assert publication["review_mode"]=="autonomous"
     assert publication["celf_conformant"] is False
+    assert any(
+        blocker["code"] == "missing_source_document_id"
+        for blocker in publication["celf_conformance"]["core"]["blockers"]
+    )
     assert publication["unreviewed_record_count"]==1
     assert publication["bypassed_review_blocker"]
     assert publication["unreviewed_accepted_field_count"]==1
@@ -252,9 +256,9 @@ def test_accept_unreviewed_publishes_suggestions_and_preserves_prior_decisions(t
     assert rows_out["r2"]["needs_review"] is False
     accepted=[
         assertion for bucket in rows_out["r2"]["field_assertions"].values() for assertion in bucket
-        if assertion.get("method")=="unreviewed_bulk_accept"
+        if assertion.get("legacy_metadata", {}).get("autonomous_decision")
     ]
-    assert [(a["field_name"],a["value"],a["authority_status"]) for a in accepted]==[("discourse_role","analysis","unreviewed")]
+    assert [(a["field_name"],a["value"],a["authority_status"],a["value_status"]) for a in accepted]==[("discourse_role","analysis","unreviewed","unresolved")]
     assert not any(
         assertion.get("field_name")=="publication_review_status"
         for bucket in rows_out["r2"].get("field_assertions",{}).values() for assertion in bucket

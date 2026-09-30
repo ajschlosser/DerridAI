@@ -61,6 +61,20 @@ def validate_publication_record(record: dict[str, Any]) -> list[str]:
         or not str(record.get("text") or "").strip()
     ):
         add("text is required")
+    if not str(record.get("source_document_id") or "").strip():
+        add("source_document_id is required")
+    spans = record.get("source_spans")
+    if not isinstance(spans, list) or not spans:
+        add("source_spans is required")
+    else:
+        source_document_id = str(record.get("source_document_id") or "")
+        for span in spans:
+            if not isinstance(span, dict):
+                add("source_spans must contain objects")
+                continue
+            span_source_id = str(span.get("source_document_id") or source_document_id)
+            if span_source_id != source_document_id:
+                add("source_spans must resolve to source_document_id")
     region = record.get("region_type")
     role = record.get("discourse_role")
     primary = record.get("primary_text")

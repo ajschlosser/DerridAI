@@ -167,6 +167,7 @@ from .corpus_models import (
 )
 from .corpus_operations import OperationsMixin
 from .corpus_pipeline import BuildScope
+from .celf_conformance import evaluate_celf_conformance
 from .corpus_publication import (
     build_text_touchup_prompt,
     mark_unreviewed_publication,
@@ -3899,9 +3900,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
     def publish(self, build_id: str, *, require_acceptance: bool = True, accept_unreviewed: bool = False) -> dict[str, Any]:
         """Publish an immutable snapshot of the build's non-rejected records.
 
-        With `accept_unreviewed`, every outstanding suggestion is published as-is without
-        mutating stored review state, so the reviewer can keep reviewing and republish a
-        conformant corpus later. Such a publication is marked not cELF-conformant.
+        With `accept_unreviewed`, every eligible suggestion is selected in the immutable
+        snapshot without mutating stored review state. The publication records autonomous
+        decision provenance and evaluates cELF conformance independently of review mode.
         """
         build = self.repo.get_build(build_id)
         if self.repo.records_projection_dirty(build_id):
@@ -3936,6 +3937,26 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             else record
             for record in publishable
         ]
+        conformance = evaluate_celf_conformance(build, publishable)
+        human_reviewed_count = sum(
+            1
+            for record in publishable
+            if str(record.get("acceptance_actor_kind") or "").casefold() == "human"
+            or str(record.get("accepted_by") or "").casefold() not in {"", "autonomous"}
+        )
+        autonomous_count = sum(
+            1
+            for record in publishable
+            if str(record.get("acceptance_actor_kind") or "").casefold() == "policy"
+            or str(record.get("accepted_by") or "").casefold() == "autonomous"
+            or bool(record.get("autonomous_decision"))
+        )
+        if autonomous_count and human_reviewed_count:
+            review_mode = "hybrid"
+        elif autonomous_count:
+            review_mode = "autonomous"
+        else:
+            review_mode = "reviewed"
         path = self.repo.publication_path(publication_id)
         result = write_jsonl_zst(
             path,
@@ -3976,9 +3997,12 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             "created_at": created_at,
             "provenance_warnings": build_warnings,
             "record_warning_count": sum(len(items) for items in record_warnings.values()),
-            "review_mode": "unreviewed" if accept_unreviewed else "reviewed",
-            # A publication that skipped any human-review gate is usable but not a valid cELF corpus.
-            "celf_conformant": not bypassed_review,
+            "review_mode": review_mode,
+            "decision_mode": review_mode,
+            "human_reviewed_record_count": human_reviewed_count,
+            "autonomous_record_count": autonomous_count,
+            "celf_conformance": conformance,
+            "celf_conformant": conformance["conformant"],
             "unreviewed_record_count": unreviewed_count,
             "unreviewed_accepted_field_count": accepted_field_count,
             "bypassed_review_blocker": bypassed_review or None,
