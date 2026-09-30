@@ -89,9 +89,7 @@ describe("build warnings in the run monitor", () => {
       },
     });
 
-    const pause = wrapper
-      .findAll("button")
-      .find((button) => button.text().trim() === "Pause");
+    const pause = wrapper.findAll("button").find((button) => button.text().trim() === "Pause");
     expect(pause).toBeDefined();
     await pause!.trigger("click");
     expect(wrapper.emitted("pause")).toEqual([[]]);
