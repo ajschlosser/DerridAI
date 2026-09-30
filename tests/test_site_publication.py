@@ -1,9 +1,10 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+import base64
 import io
 import json
-import re
+import struct
 import zipfile
 
 import pytest
@@ -31,17 +32,30 @@ def _record(record_id: str = "r1", work: str = "Glas") -> dict:
     }
 
 
-def _publication_from_index(index_html: str) -> dict:
-    match = re.search(
-        r'<script id="derridai-publication" type="application/json"[^>]*>(.*?)</script>',
-        index_html,
-        flags=re.DOTALL,
-    )
-    assert match
-    return json.loads(match.group(1))
+def _package_from_runtime(runtime: str) -> dict:
+    prefix = f"globalThis.{site_publication.PACKAGE_GLOBAL}="
+    assert runtime.startswith(prefix)
+    payload = runtime[len(prefix) :].split(";\n", 1)[0]
+    return json.loads(payload)
 
 
-def test_site_bundle_separates_authoritative_records_from_vectors(monkeypatch: pytest.MonkeyPatch) -> None:
+def _chunk_records(chunk: dict) -> list[dict]:
+    return json.loads(base64.b64decode(chunk["records_b64"]).decode("utf-8"))
+
+
+def _chunk_vectors(chunk: dict, dimension: int) -> list[list[float]]:
+    raw = base64.b64decode(chunk["vectors_b64"])
+    count = len(raw) // 4
+    values = struct.unpack(f"<{count}f", raw)
+    return [
+        list(values[offset : offset + dimension])
+        for offset in range(0, len(values), dimension)
+    ]
+
+
+def test_site_bundle_is_exactly_two_files_with_progressive_client_package(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         site_publication.store,
         "export_site_projection",
@@ -57,7 +71,8 @@ def test_site_bundle_separates_authoritative_records_from_vectors(monkeypatch: p
                 "filter_fields": ["work", "speaker"],
             },
             "records": [
-                {"record": _record(), "embedding": [0.1, 0.2, 0.3]},
+                {"record": _record("r1", "Glas"), "embedding": [0.1, 0.2, 0.3]},
+                {"record": _record("r2", "Rogues"), "embedding": [0.4, 0.5, 0.6]},
             ],
         },
     )
@@ -78,32 +93,77 @@ def test_site_bundle_separates_authoritative_records_from_vectors(monkeypatch: p
 
     bundle = site_publication.build_site_bundle(
         store_name="derrida-primary",
-        works=["Glas"],
-        title="Glas research site",
+        works=["Glas", "Rogues"],
+        title="Derrida research site",
         description="A static scholarly research site.",
     )
 
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
-        assert set(archive.namelist()) == {"index.html", "derridai-site.js"}
+        assert archive.namelist() == ["index.html", "derridai-site.js"]
         index_html = archive.read("index.html").decode("utf-8")
         runtime = archive.read("derridai-site.js").decode("utf-8")
 
-    publication = _publication_from_index(index_html)
-    assert publication["format"] == "derridai-static-site-v1"
+    assert "derridai-publication" not in index_html
+    assert "A publication-safe passage." not in index_html
+    assert "derridai-site.js" in index_html
+    assert "connect-src 'self' http: https:" in index_html
+
+    package = _package_from_runtime(runtime)
+    publication = package["manifest"]
+    chunks = package["chunks"]
+
+    assert publication["format"] == "derridai-static-site-v2"
     assert publication["corpus_id"] == "derrida-primary"
-    assert publication["works"][0]["work"] == "Glas"
-    assert publication["records"][0]["record_id"] == "r1"
-    assert "embedding" not in publication["records"][0]
-    assert publication["vector_index"]["record_ids"] == ["r1"]
-    assert publication["vector_index"]["vectors"] == [[0.1, 0.2, 0.3]]
-    assert publication["features"]["semantic_search"] is True
+    assert [work["work"] for work in publication["works"]] == ["Glas", "Rogues"]
+    assert publication["features"]["browser_llm"] is False
+    assert publication["features"]["external_provider_generation"] is True
+    assert publication["features"]["progressive_work_loading"] is True
+    assert publication["vector_index"]["dimension"] == 3
+    assert publication["vector_index"]["model"] == "bge-m3:latest"
+    assert "records" not in publication
+    assert "vectors" not in publication["vector_index"]
+
+    assert [chunk["work"] for chunk in chunks] == ["Glas", "Rogues"]
+    assert _chunk_records(chunks[0])[0]["record_id"] == "r1"
+    assert _chunk_records(chunks[1])[0]["record_id"] == "r2"
+    decoded = _chunk_vectors(chunks[0], 3)[0]
+    assert decoded == pytest.approx([0.1, 0.2, 0.3])
+
     assert publication["provider_profiles"][0]["id"] == "embed"
     assert "api_key" not in publication["provider_profiles"][0]
     assert "base_url" not in publication["provider_profiles"][0]
-    assert "MUST-NOT-LEAK" not in index_html
-    assert "site.runtime.research" in runtime
-    assert bundle.record_count == 1
-    assert bundle.work_count == 1
+    assert "MUST-NOT-LEAK" not in runtime
+    assert "testProviderConnection" in runtime
+    assert "OLLAMA_ORIGINS" in runtime
+    assert "semantic_provider_fallback" in runtime
+    assert bundle.record_count == 2
+    assert bundle.work_count == 2
+
+
+def test_site_chunks_records_and_vectors_by_work() -> None:
+    records = [
+        _record("g1", "Glas"),
+        _record("r1", "Rogues"),
+        _record("g2", "Glas"),
+    ]
+    vectors = [[1.0, 0.0], None, [0.0, 1.0]]
+
+    chunks = site_publication._chunk_publication(
+        selected_works=["Glas", "Rogues"],
+        records=records,
+        vectors=vectors,
+        dimension=2,
+    )
+
+    assert len(chunks) == 2
+    assert [record["record_id"] for record in _chunk_records(chunks[0])] == ["g1", "g2"]
+    assert chunks[0]["vector_ids"] == ["g1", "g2"]
+    decoded_vectors = _chunk_vectors(chunks[0], 2)
+    assert decoded_vectors[0] == pytest.approx([1.0, 0.0])
+    assert decoded_vectors[1] == pytest.approx([0.0, 1.0])
+    assert [record["record_id"] for record in _chunk_records(chunks[1])] == ["r1"]
+    assert chunks[1]["vector_ids"] == []
+    assert chunks[1]["vectors_b64"] == ""
 
 
 def test_site_bundle_blocks_when_a_selected_work_is_not_indexed(
