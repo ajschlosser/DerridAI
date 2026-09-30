@@ -115,7 +115,7 @@
     .metadata{display:grid;grid-template-columns:minmax(9rem,auto) 1fr;gap:.35rem 1rem;font-size:.9rem}.metadata dt{font-weight:800}.metadata dd{margin:0;overflow-wrap:anywhere}
     textarea{min-height:7rem;resize:vertical}.annotation{border-left:4px solid var(--accent);padding:.8rem 1rem;background:var(--surface)}.annotation blockquote{margin:.35rem 0;font-family:Georgia,serif}
     .research-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(18rem,24rem);gap:1rem}.answer{white-space:pre-wrap;font-family:Georgia,serif;font-size:1.04rem}
-    .evidence{display:grid;gap:.6rem}.evidence button{text-align:left;height:auto}.work-button{width:100%;text-align:left;height:100%;padding:1rem}.work-button h2{font-size:1.1rem}.count{font-size:1.6rem;font-weight:800}
+    .evidence{display:grid;gap:.6rem}.evidence button{text-align:left;height:auto}.work-button{width:100%;text-align:left;height:100%;padding:1rem}.work-title{display:block;font-size:1.1rem;font-weight:800}.count{font-size:1.6rem;font-weight:800}
     .provider-panel{display:grid;gap:.7rem}.provider-summary{padding:.65rem;border:1px solid var(--border);border-radius:.5rem;background:var(--bg);overflow-wrap:anywhere}
     .provider-command{display:block;margin-top:.5rem;overflow:auto;padding:.5rem;border:1px solid var(--border);border-radius:.4rem;background:var(--raised);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;white-space:pre}
     .tutorial-progress{font-weight:800;color:var(--muted)}.tutorial-copy{font-size:1.02rem;max-width:68ch}.tutorial-copy p{margin:.35rem 0 .9rem}
@@ -867,7 +867,7 @@
               },
             },
           },
-          node("h2", { text: item.work }),
+          node("span", { class: "work-title", text: item.work }),
           node("div", { class: "meta", text: (item.authors || []).join(", ") }),
           node("div", { class: "count", text: Number(item.record_count || 0).toLocaleString(locale) }),
           node("div", { class: "muted", text: t("site.runtime.records") }),
@@ -1376,6 +1376,11 @@
       class: "skip-link",
       href: "#site-main",
       text: t("site.runtime.skip_to_content"),
+      on: {
+        click: () => {
+          window.setTimeout(() => document.getElementById("site-main")?.focus(), 0);
+        },
+      },
     });
 
     const header = node(
