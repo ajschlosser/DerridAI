@@ -254,8 +254,7 @@ test("published tutorial is keyboard operable, skippable, and itself WCAG 2.2 AA
   ).toBe("skipped");
 });
 
-
-test("exported OpenAI-compatible profile powers vector retrieval and LLM Research with explicit method disclosure", async ({
+test("exported OpenAI profile powers vector + LLM Research with method disclosure", async ({
   page,
 }) => {
   const sdkSource = await readFile(
