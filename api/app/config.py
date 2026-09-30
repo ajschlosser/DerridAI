@@ -48,11 +48,11 @@ def app_version_label(
     commit: str = APP_GIT_COMMIT,
     codename: str = APP_CODENAME,
 ) -> str:
-    """UI/API release identity: ``0.81.0 — Fall River (abc1234)``."""
+    """UI/API release identity: ``0.81.0 - Fall River (abc1234)``."""
     version = str(version or "").strip() or APP_VERSION
     codename = str(codename or "").strip()
     commit = str(commit or "").strip()
-    release = f"{version} — {codename}" if codename else version
+    release = f"{version} - {codename}" if codename else version
     return f"{release} ({commit})" if commit else release
 
 

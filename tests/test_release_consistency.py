@@ -40,7 +40,7 @@ def test_all_declared_versions_agree():
     declared = {
         "api/app/config.py": find_all(rf'APP_VERSION = "({SEMVER})"', "api/app/config.py"),
         "web/index.html": find_all(
-            rf"<title>DerridAI ({SEMVER}) — [^<]+</title>", "web/index.html"
+            rf"<title>DerridAI ({SEMVER}) - [^<]+</title>", "web/index.html"
         ),
         "README.md": find_all(rf"Current version: \*\*({SEMVER}) — [^*]+\*\*", "README.md"),
     }
@@ -49,7 +49,7 @@ def test_all_declared_versions_agree():
         assert set(found) == {version}, f"{path} declares {found}, expected {version}"
     assert find_all(r'APP_CODENAME = "([^"]+)"', "api/app/config.py") == [codename]
     assert find_all(
-        rf"<title>DerridAI {re.escape(version)} — ([^<]+)</title>", "web/index.html"
+        rf"<title>DerridAI {re.escape(version)} - ([^<]+)</title>", "web/index.html"
     ) == [codename]
     assert find_all(
         rf"Current version: \*\*{re.escape(version)} — ([^*]+)\*\*", "README.md"

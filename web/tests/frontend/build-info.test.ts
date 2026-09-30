@@ -21,9 +21,9 @@ describe("buildInfo", () => {
 
   it("combines version, codename, and commit", () => {
     expect(appVersionLabel("1.2.3", "abc1234", "Test Release")).toBe(
-      "1.2.3 — Test Release (abc1234)",
+      "1.2.3 - Test Release (abc1234)",
     );
-    expect(appVersionLabel("1.2.3", "", "Test Release")).toBe("1.2.3 — Test Release");
+    expect(appVersionLabel("1.2.3", "", "Test Release")).toBe("1.2.3 - Test Release");
     expect(appVersionLabel("1.2.3", "", "")).toBe("1.2.3");
   });
 

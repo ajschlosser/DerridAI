@@ -12,6 +12,6 @@ export function appVersionLabel(
   const cleanVersion = String(version || "").trim() || APP_VERSION;
   const cleanCodename = String(codename || "").trim();
   const cleanCommit = String(commit || "").trim();
-  const release = cleanCodename ? `${cleanVersion} — ${cleanCodename}` : cleanVersion;
+  const release = cleanCodename ? `${cleanVersion} - ${cleanCodename}` : cleanVersion;
   return cleanCommit ? `${release} (${cleanCommit})` : release;
 }

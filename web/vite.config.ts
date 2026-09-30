@@ -25,7 +25,7 @@ function gitCommit(): string {
 const appVersion = pkg.version;
 const appCodename = pkg.codename;
 const appGitCommit = gitCommit();
-const releaseLabel = appCodename ? `${appVersion} — ${appCodename}` : appVersion;
+const releaseLabel = appCodename ? `${appVersion} - ${appCodename}` : appVersion;
 const versionLabel = appGitCommit ? `${releaseLabel} (${appGitCommit})` : releaseLabel;
 
 export default defineConfig({
