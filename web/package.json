@@ -1,7 +1,7 @@
 {
   "name": "derridai",
   "private": true,
-  "version": "0.80.7",
+  "version": "0.81.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -64,5 +64,6 @@
     "vue-tsc": "^3.0.6"
   },
   "author": "Aaron John Schlosser, PhD",
-  "copyright": "Copyright 2026 Aaron John Schlosser, PhD."
+  "copyright": "Copyright 2026 Aaron John Schlosser, PhD.",
+  "codename": "Fall River"
 }

@@ -10,7 +10,7 @@ A DerridAI helyi futtatásra épülő, provenienciát megőrző kutatási körny
 
 A DerridAI egyben a **cELF 1.0 — Capta-Enriched Lexical Format** eredeti referencia-implementációja, amely provenienciát megőrző információs architektúrát határoz meg MI-támogatott dokumentumkutatáshoz. A rendszer külön és ellenőrizhetően kezeli a forrásazonosságot, a rekordazonosságot és revíziót, a metaadat-állításokat, a bizonyítékot, a generált állításokat és a támogatási kapcsolatokat, ahelyett hogy mindezt egy átláthatatlan vektoradatbázisba lapítaná.
 
-Aktuális verzió: **0.80.7 — Exeter** ([kiadási jegyzetek](docs/notes/0.80.7.md)). Ez a README az aktuális `master` architektúrát írja le, beleértve az Exeter utáni, már beolvasztott változásokat is.
+Aktuális verzió: **0.81.0 — Fall River** ([kiadási jegyzetek](docs/notes/0.81.0.md)). Ez a README az aktuális `master` architektúrát írja le, beleértve az Exeter utáni, már beolvasztott változásokat is.
 
 ## Mit tud a DerridAI?
 

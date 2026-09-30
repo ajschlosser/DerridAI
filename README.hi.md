@@ -10,7 +10,7 @@ DerridAI एक local-first, provenance-preserving शोध वातावर�
 
 DerridAI **cELF 1.0 — Capta-Enriched Lexical Format** का मूल reference implementation भी है। cELF AI-सहायित documentary research के लिए provenance-preserving information architecture परिभाषित करता है। DerridAI source identity, record identity और revision, metadata assertions, evidence, generated claims और support bindings को अलग-अलग audit करने योग्य रूप में रखता है, न कि उन्हें एक opaque vector store में मिला देता है।
 
-वर्तमान संस्करण: **0.80.7 — Exeter** ([release notes](docs/notes/0.80.7.md)). यह README वर्तमान `master` architecture का वर्णन करता है, जिसमें Exeter के बाद repository में merge हो चुका कार्य भी शामिल है।
+वर्तमान संस्करण: **0.81.0 — Fall River** ([release notes](docs/notes/0.81.0.md)). यह README वर्तमान `master` architecture का वर्णन करता है, जिसमें Exeter के बाद repository में merge हो चुका कार्य भी शामिल है।
 
 ## DerridAI क्या करता है
 

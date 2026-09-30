@@ -11,10 +11,15 @@ sys.path.insert(0, str(ROOT / "api"))
 from app.config import app_version_label, resolve_git_commit
 
 
-def test_app_version_label_includes_commit_when_present():
-    assert app_version_label("1.2.3", "abc1234") == "1.2.3 (abc1234)"
-    assert app_version_label("1.2.3", "") == "1.2.3"
-    assert app_version_label("1.2.3", "  ") == "1.2.3"
+def test_app_version_label_includes_release_codename_and_commit():
+    assert (
+        app_version_label("1.2.3", "abc1234", "Test Release")
+        == "1.2.3 - Test Release (abc1234)"
+    )
+    assert (
+        app_version_label("1.2.3", "", "Test Release") == "1.2.3 - Test Release"
+    )
+    assert app_version_label("1.2.3", "  ", "") == "1.2.3"
 
 
 def test_git_commit_prefers_environment(monkeypatch):

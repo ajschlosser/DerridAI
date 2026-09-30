@@ -7,7 +7,10 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string };
+const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+  version: string;
+  codename: string;
+};
 
 function gitCommit(): string {
   const fromEnv = String(process.env.GIT_COMMIT || process.env.SOURCE_COMMIT || "").trim();
@@ -20,12 +23,15 @@ function gitCommit(): string {
 }
 
 const appVersion = pkg.version;
+const appCodename = pkg.codename;
 const appGitCommit = gitCommit();
-const versionLabel = appGitCommit ? `${appVersion} (${appGitCommit})` : appVersion;
+const releaseLabel = appCodename ? `${appVersion} - ${appCodename}` : appVersion;
+const versionLabel = appGitCommit ? `${releaseLabel} (${appGitCommit})` : releaseLabel;
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
+    __APP_CODENAME__: JSON.stringify(appCodename),
     __APP_GIT_COMMIT__: JSON.stringify(appGitCommit),
   },
   plugins: [

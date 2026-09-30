@@ -10,7 +10,7 @@ DerridAI est un environnement de recherche axé sur l’exécution locale et la 
 
 DerridAI est aussi l’implémentation de référence d’origine de **cELF 1.0 — Capta-Enriched Lexical Format**, une architecture d’information qui préserve la provenance pour la recherche documentaire assistée par IA. L’implémentation maintient séparément l’identité des sources, l’identité et les révisions des notices, les assertions de métadonnées, les preuves, les affirmations générées et leurs liens de support, plutôt que de les aplatir dans une base vectorielle opaque.
 
-Version actuelle : **0.80.7 — Exeter** ([notes de version](docs/notes/0.80.7.md)). Ce README décrit l’architecture actuelle de `master`, y compris les travaux postérieurs à Exeter déjà fusionnés dans le dépôt.
+Version actuelle : **0.81.0 — Fall River** ([notes de version](docs/notes/0.81.0.md)). Ce README décrit l’architecture actuelle de `master`, y compris les travaux postérieurs à Exeter déjà fusionnés dans le dépôt.
 
 ## Ce que fait DerridAI
 

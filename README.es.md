@@ -10,7 +10,7 @@ DerridAI es un entorno de investigación local-first que preserva la procedencia
 
 DerridAI también es la implementación de referencia original de **cELF 1.0 — Capta-Enriched Lexical Format**, una arquitectura de información que preserva la procedencia para investigación documental asistida por IA. La implementación mantiene separadas e inspeccionables la identidad de la fuente, la identidad y revisión del registro, las afirmaciones de metadatos, la evidencia, las afirmaciones generadas y sus vínculos de soporte, en vez de aplanarlas dentro de una base vectorial opaca.
 
-Versión actual: **0.80.7 — Exeter** ([notas de versión](docs/notes/0.80.7.md)). Este README describe la arquitectura actual de `master`, incluido el trabajo posterior a Exeter ya fusionado en el repositorio.
+Versión actual: **0.81.0 — Fall River** ([notas de versión](docs/notes/0.81.0.md)). Este README describe la arquitectura actual de `master`, incluido el trabajo posterior a Exeter ya fusionado en el repositorio.
 
 ## Qué hace DerridAI
 
