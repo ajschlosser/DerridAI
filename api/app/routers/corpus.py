@@ -752,6 +752,15 @@ def get_work_semantic_map_builds(work: str) -> dict[str, Any]:
     return {"build_ids": system_store.list_build_ids_for_work(work)}
 
 
+@router.get("/api/works/{work}/semantic-map-records")
+def get_work_semantic_map_records(work: str) -> dict[str, Any]:
+    """Published Record IDs (with their builds) of a Work, so a Record's semantic map can be opened from the Work.
+
+    IDs only: no text or metadata leaves here, so this is as safe for researchers as the build lookup above.
+    """
+    return {"records": system_store.list_records_for_work(work)}
+
+
 @router.get("/api/pdf/corpus-builds/{build_id}/semantic-content-graph/nodes/{node_id}")
 def get_pdf_corpus_semantic_graph_node(build_id: str, node_id: str) -> dict[str, Any]:
     """One semantic-graph node with its relations and Records, for graph walking."""

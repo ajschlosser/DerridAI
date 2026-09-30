@@ -15,6 +15,8 @@ const meta = {
         instructions:
           "Include philosophers whose positions are discussed, not incidental names in references.",
         look_for: ["Emmanuel Levinas", "Levinas"],
+        required: true,
+        default_placeholder: "[not established in source]",
       },
       works_referenced: {
         instructions: "Include works treated in the body text.",
@@ -29,3 +31,4 @@ type Story = StoryObj<typeof meta>;
 
 export const Seeded: Story = {};
 export const Empty: Story = { args: { modelValue: {} } };
+export const Disabled: Story = { args: { disabled: true } };

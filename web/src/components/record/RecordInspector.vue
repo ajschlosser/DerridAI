@@ -8,6 +8,7 @@ import RecordAnnotations from "./RecordAnnotations.vue";
 import RecordPdfLinks from "./RecordPdfLinks.vue";
 import RecordHistoryTimeline from "./RecordHistoryTimeline.vue";
 import InspectorLayoutEditor from "./InspectorLayoutEditor.vue";
+import CorpusSemanticGraphPanel from "../corpus-builder/CorpusSemanticGraphPanel.vue";
 import CorpusRecordSemanticMap from "../corpus-builder/CorpusRecordSemanticMap.vue";
 import UiLoadingState from "../ui/UiLoadingState.vue";
 import { corpusBuildsApi } from "../../api/corpus";
@@ -326,6 +327,10 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
           :build-id="semanticBuildId"
           :record="{ record_id: String(snapshot.record_id || ''), text: String(record.text || '') }"
           id-prefix="record-inspector"
+        />
+        <CorpusSemanticGraphPanel
+          v-if="semanticBuildId && !semanticLoading"
+          :build-id="semanticBuildId"
         />
       </section>
       <RecordPdfLinks

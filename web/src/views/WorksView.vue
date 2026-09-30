@@ -12,6 +12,7 @@ import { useWorksWorkspace } from "../composables/useWorksWorkspace";
 import * as runtime from "../runtime/runtime.js";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
+import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
 import CorpusSemanticGraphPanel from "../components/corpus-builder/CorpusSemanticGraphPanel.vue";
 import { corpusBuildsApi } from "../api/corpus";
 
@@ -108,6 +109,13 @@ const semanticMapWork = ref("");
 const semanticMapBuildId = ref("");
 const semanticMapExtraBuilds = ref(0);
 const semanticMapLoading = ref(false);
+const semanticMapTab = ref<"graph" | "records">("graph");
+const semanticMapRecords = ref<Array<{ record_id: string; build_id: string }>>([]);
+const semanticMapRecordId = ref("");
+const semanticMapRecord = computed(
+  () =>
+    semanticMapRecords.value.find((item) => item.record_id === semanticMapRecordId.value) || null,
+);
 const semanticMapError = ref(false);
 
 async function openWorkSemanticMap(work: string) {
@@ -116,8 +124,19 @@ async function openWorkSemanticMap(work: string) {
   semanticMapExtraBuilds.value = 0;
   semanticMapError.value = false;
   semanticMapLoading.value = true;
+  semanticMapTab.value = "graph";
+  semanticMapRecords.value = [];
+  semanticMapRecordId.value = "";
   semanticMapDialog.value?.showModal();
   try {
+    void corpusBuildsApi
+      .workSemanticMapRecords(work)
+      .then((result) => {
+        if (semanticMapWork.value !== work) return;
+        semanticMapRecords.value = result.records;
+        semanticMapRecordId.value = result.records[0]?.record_id || "";
+      })
+      .catch(() => undefined);
     const result = await corpusBuildsApi.workSemanticMapBuilds(work);
     const [first, ...rest] = result.build_ids;
     semanticMapBuildId.value = first || "";
@@ -409,7 +428,55 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
         <p v-if="semanticMapExtraBuilds" class="note">
           {{ i18n.tf("works.semantic_map_multiple_builds", { count: semanticMapExtraBuilds }) }}
         </p>
-        <CorpusSemanticGraphPanel :build-id="semanticMapBuildId" />
+        <div class="works-semantic-tabs" role="group" :aria-label="i18n.t('works.semantic_map')">
+          <button
+            type="button"
+            :aria-pressed="semanticMapTab === 'graph'"
+            :class="{ on: semanticMapTab === 'graph' }"
+            @click="semanticMapTab = 'graph'"
+          >
+            {{ i18n.t("works.semantic_map_tab_graph") }}
+          </button>
+          <button
+            type="button"
+            :aria-pressed="semanticMapTab === 'records'"
+            :class="{ on: semanticMapTab === 'records' }"
+            @click="semanticMapTab = 'records'"
+          >
+            {{ i18n.t("works.semantic_map_tab_records") }}
+          </button>
+        </div>
+        <CorpusSemanticGraphPanel
+          v-if="semanticMapTab === 'graph'"
+          :build-id="semanticMapBuildId"
+        />
+        <template v-else>
+          <p v-if="!semanticMapRecords.length" class="note">
+            {{ i18n.t("works.semantic_map_no_records") }}
+          </p>
+          <template v-else>
+            <label class="works-semantic-record-pick">
+              <span>{{ i18n.t("works.semantic_map_pick_record") }}</span>
+              <select v-model="semanticMapRecordId" class="control">
+                <option
+                  v-for="item in semanticMapRecords"
+                  :key="item.record_id"
+                  :value="item.record_id"
+                >
+                  {{ item.record_id }}
+                </option>
+              </select>
+            </label>
+            <CorpusRecordSemanticMap
+              v-if="semanticMapRecord"
+              :key="semanticMapRecord.record_id"
+              id-prefix="works"
+              :build-id="semanticMapRecord.build_id"
+              :record="{ record_id: semanticMapRecord.record_id }"
+              @open-record="semanticMapRecordId = $event"
+            />
+          </template>
+        </template>
       </template>
     </dialog>
   </main>

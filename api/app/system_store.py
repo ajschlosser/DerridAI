@@ -306,6 +306,10 @@ class SystemStore:
         with self._lock:
             return self.repository.list_build_ids_for_work(work)
 
+    def list_records_for_work(self, work: str, limit: int = 200) -> list[dict[str, str]]:
+        with self._lock:
+            return self.repository.list_records_for_work(work, limit)
+
     def embedding_defaults(self) -> dict[str, Any]:
         with self._lock:
             stored = self.repository.get_setting("embedding_defaults")

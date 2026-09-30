@@ -9,7 +9,10 @@ import {
 import { useCorpusIngestWarning } from "../../src/composables/useCorpusIngestWarning";
 import CorpusRecordFocusReview from "../../src/components/CorpusRecordFocusReview.vue";
 import ProviderProfileSelect from "../../src/components/ProviderProfileSelect.vue";
-import { useCorpusRunGuidance } from "../../src/composables/useCorpusRunGuidance";
+import {
+  RUN_GUIDANCE_STORAGE_KEY,
+  useCorpusRunGuidance,
+} from "../../src/composables/useCorpusRunGuidance";
 
 describe("ProviderProfileSelect availability", () => {
   it("shows unavailable configured profiles as disabled instead of silently hiding them", () => {
@@ -88,12 +91,49 @@ describe("useCorpusIngestWarning", () => {
           stance: { instructions: "  assess  ", look_for: [" support ", "", " ".repeat(2)] },
         };
         expect(composable.payload()).toEqual({
-          stance: { instructions: "assess", look_for: ["support"] },
+          stance: {
+            instructions: "assess",
+            look_for: ["support"],
+            required: false,
+            default_placeholder: "",
+          },
         });
         expect(composable.active.value).toEqual([
           { field: "stance", label: "Stance", instructions: "Focus", lookFor: ["support", ""] },
         ]);
         wrapper.unmount();
+      });
+
+      it("sends required fields and remembers guidance per schema", async () => {
+        localStorage.removeItem(RUN_GUIDANCE_STORAGE_KEY);
+        const field = { name: "stance", label: "Stance", group: "semantic" };
+        const schema = ref<any>({ id: "schema-a", fields: [field], groups: [] });
+        let composable!: ReturnType<typeof useCorpusRunGuidance>;
+        const Host = defineComponent({
+          setup() {
+            composable = useCorpusRunGuidance(schema, ref(null), (_, fallback) => fallback);
+            return () => h("div");
+          },
+        });
+        const wrapper = mount(Host);
+        composable.guidance.value = {
+          stance: { instructions: "", look_for: [], required: true, default_placeholder: " n/a " },
+          gone: { instructions: "stale field", look_for: [] },
+        };
+        expect(composable.payload()).toEqual({
+          stance: { instructions: "", look_for: [], required: true, default_placeholder: "n/a" },
+        });
+        await nextTick();
+        schema.value = { id: "schema-b", fields: [field], groups: [] };
+        await nextTick();
+        expect(composable.guidance.value).toEqual({});
+        schema.value = { id: "schema-a", fields: [field], groups: [] };
+        await nextTick();
+        expect(composable.guidance.value.stance.required).toBe(true);
+        wrapper.unmount();
+        const reopened = mount(Host);
+        expect(composable.guidance.value.stance.default_placeholder).toBe(" n/a ");
+        reopened.unmount();
       });
     });
     const wrapper = mount(Host);

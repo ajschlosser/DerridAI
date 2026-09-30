@@ -580,7 +580,10 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
               "
               @click="walkToMention(segment.mention.node_id || '', segment.text)"
             >
-              {{ segment.text }}<small>{{ segment.mention.tag || segment.mention.layer }}</small>
+              {{ segment.text
+              }}<small class="mention-tag" aria-hidden="true">{{
+                segment.mention.tag || segment.mention.layer
+              }}</small>
             </button>
             <mark
               v-else-if="segment.mention"
@@ -588,7 +591,9 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
               :data-layer="segment.mention.layer"
               :title="segment.mention.tag"
               >{{ segment.text
-              }}<small>{{ segment.mention.tag || segment.mention.layer }}</small></mark
+              }}<small class="mention-tag">{{
+                segment.mention.tag || segment.mention.layer
+              }}</small></mark
             >
             <template v-else>{{ segment.text }}</template>
           </template>
@@ -664,7 +669,7 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
           <g
             v-for="node in positionedNodes"
             :key="node.id"
-            :transform="`translate(${node.point.x}, ${node.point.y})`"
+            :transform="`translate(${node.point.x}, ${node.point.y}) scale(${1 / viewportState.zoom})`"
             :class="['map-node', node.ring]"
             :data-tone="node.ring === 'center' && currentMap ? 'record' : nodeTone(node.type)"
             :role="node.walkable ? 'button' : 'group'"
@@ -1040,7 +1045,7 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
   margin: 0;
   max-height: 280px;
   overflow: auto;
-  line-height: 1.9;
+  line-height: 2.2;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1063,11 +1068,28 @@ button.mention:focus-visible,
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
-.mention small {
-  margin-inline-start: 2px;
-  color: var(--muted);
+.mention-tag {
+  display: inline-block;
+  margin-inline-start: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  color: var(--text-2);
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: 0.15em;
+  white-space: nowrap;
+  user-select: none;
+}
+.mention[data-layer="quotation"] .mention-tag {
+  border-color: var(--tone-warn-border);
+}
+.mention[data-layer="entity"] .mention-tag {
+  border-color: var(--tone-ok-border);
 }
 .mention[data-layer="quotation"] {
   background: var(--tone-warn-bg);
@@ -1116,6 +1138,7 @@ button.mention:focus-visible,
   overflow: visible;
 }
 .map-edge {
+  vector-effect: non-scaling-stroke;
   --relation-edge-stroke: var(--border-strong);
   --relation-edge-opacity: 1;
   stroke-width: 1.4;

@@ -1008,6 +1008,18 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             ).fetchall()
         return [str(row["build_id"]) for row in rows]
 
+    def list_records_for_work(self, work: str, limit: int = 200) -> list[dict[str, str]]:
+        work = str(work or "").strip()
+        if not work:
+            return []
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT record_id, build_id FROM record_build_provenance WHERE work=? "
+                "ORDER BY updated_at DESC, record_id LIMIT ?",
+                (work, max(1, min(int(limit), 500))),
+            ).fetchall()
+        return [{"record_id": str(row["record_id"]), "build_id": str(row["build_id"])} for row in rows]
+
     def list_languages(self) -> dict[str, dict[str, Any]]:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
