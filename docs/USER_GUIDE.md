@@ -62,7 +62,7 @@ The `needs_review` historical chart reconstructs prior state from the current re
 
 ## Corpus term map
 
-This map is separate from the Record review **Semantic map** tab, which walks entities and relations inside a corpus build. The corpus term map draws concepts, topics, and persons that occur together in the corpus you can already see. It does not show record text. Drag the background to move the map. Drag a term to reposition it. Arrow keys pan the map, plus and minus change the zoom, and 0 resets the view.
+This map is separate from the Record review **Semantic map** tab, which walks entities and relations inside a corpus build. The corpus term map draws concepts, topics, and persons that occur together in the corpus you can already see. It does not show record text. Drag the background to move the map, drag a term to reposition it, use the map controls to zoom, fit, or reset the layout, and drag the resize handle to change the map height. Arrow keys pan the map, plus and minus change the zoom, 0 resets the view, and Alt+Arrow nudges a focused term.
 
 Open it from **Record view** or from **More tools → Semantic map**. Administrators can open it immediately. A new installation includes it for the Researcher role. On an installation that already has roles, turn on **Semantic map** under **Roles & permissions**. The placement control keeps the same map in one of four places:
 
@@ -72,6 +72,22 @@ Open it from **Record view** or from **More tools → Semantic map**. Administra
 - **Dedicated view** — the Semantic map page
 
 The choice is remembered in this browser.
+
+## Relationship-map controls
+
+DerridAI uses the same interaction model for relational diagrams even when the domain and layout differ. The corpus term map uses movable chips, the build-wide semantic content graph uses a force layout with entity dots, the Record semantic map uses a radial layout, Traceability uses source-to-claim lanes with cards, and Pipeline Studio uses a directed stage graph. Their domain meanings remain separate; moving a card or node changes only the presentation, not the Record, cELF relationship, semantic assertion, pipeline definition, or other authoritative data.
+
+On these maps and diagrams:
+
+- drag empty background space to pan;
+- drag a node or card to reposition it while its connected edges stay attached;
+- use the mouse wheel/trackpad or the map controls to zoom;
+- use **Fit** to frame the current content and **Reset layout** to discard manual node positions and return to the deterministic layout;
+- drag the resize handle to change the map height; the resize handle is keyboard-operable with the arrow keys;
+- when the map itself has focus, use Arrow keys to pan, plus/minus to zoom, and 0 to reset the view;
+- when a node has focus, use Alt+Arrow to nudge it without a pointer.
+
+These controls are presentation state only. They do not rewrite scholarly provenance or graph-domain data.
 
 ## Background operations
 
@@ -629,7 +645,7 @@ In Record Review, open **Entities & relationships** to inspect the build-wide co
 
 - a filter bar: search across labels and aliases, entity-type chips with counts (multi-select), a **Relationships** switch (All / Semantic / Observational), **Minimum mentions**, and **Map density** (top 40–250 entities);
 - a status line ("Showing 80 of 12,430 entities · 312 of 95,004 relationships") and a notice when the drawing is partial;
-- an interactive relationship map: circle size reflects mentions, colour reflects entity type, solid lines are evidence-aware semantic relations, dashed lines are computational observations, and dotted red lines are disputed relations. Hover or keyboard focus highlights an entity's neighbours; drag or use arrow keys to pan, scroll or **+**/**−** to zoom, **0** to fit;
+- an interactive relationship map: circle size reflects mentions, colour reflects entity type, solid lines are evidence-aware semantic relations, dashed lines are computational observations, and dotted red lines are disputed relations. Hover or keyboard focus highlights an entity's neighbours; drag the background to pan, drag an entity to reposition it, scroll or use the map controls to zoom, use **Fit** to frame the current view, **Reset graph layout** to discard manual positions, and the resize handle to change the map height;
 - **Explore neighbourhood** (or double-click an entity, or pick one from the index) to redraw the map around that entity with its strongest connections, with a breadcrumb back to the overview;
 - an inspector with aliases, mention/Record/connection counts, and — in a neighbourhood — the entity's relations grouped into evidence-aware relations (with Reviewer confirmed / Unreviewed / Disputed status and evidence-reference counts) and computational observations;
 - a complete, paged entity/concept index (50 per page) sortable by mentions, connections, Records, or name.
@@ -876,7 +892,7 @@ The **Response Library** page provides:
 
 Pipeline Studio is an administrator workspace at **AI & Automation → Pipeline Studio**. It has three sections:
 
-- **Pipelines** lists every saved version. Search and filters narrow the list by name, purpose, and status. The selected version opens as a pipeline diagram: stages are draggable nodes, with horizontal and vertical orientations; solid arrows are the normal path, and dashed arrows are fallbacks. Hover or focus a stage for its detail infobox, and use the stage details below the diagram for the full list. **Clone & edit** prepares a new immutable version; **Make active** changes the system assignment for that feature without rewriting past runs.
+- **Pipelines** lists every saved version. Search and filters narrow the list by name, purpose, and status. The selected version opens as a pipeline diagram: stages are draggable cards, the background is draggable for panning, the viewport can be zoomed, fitted, reset, and resized, and horizontal/vertical orientations remain available; solid arrows are the normal path, and dashed arrows are fallbacks. Hover or focus a stage for its detail infobox, and use the stage details below the diagram for the full list. **Clone & edit** prepares a new immutable version; **Make active** changes the system assignment for that feature without rewriting past runs.
 - **Executions** queries the full run history. Filter by text, purpose, pipeline, status, and owner, then page through the results. Selecting a run draws the same stage graph with runtime status, timing, and counts, and **Open configuration** returns to the saved version. **Delete** removes one trace. **Clear history** removes every trace. Definitions and assignments stay in place.
 - **Operations** keeps dry-run Research comparisons, immutable Research benchmarks, and sampled operational health.
 
