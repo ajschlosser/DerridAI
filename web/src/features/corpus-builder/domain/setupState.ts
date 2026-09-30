@@ -31,6 +31,8 @@ export interface CorpusSetupInput {
     media_kind?: string;
     page_count?: number;
     block_count?: number | null;
+    /** Time-based media only. */
+    duration_seconds?: number;
   } | null;
   /** Source has printed-page structure the reviewer is expected to confirm before building. */
   structureNeedsReview: boolean;
@@ -156,9 +158,13 @@ export function corpusSetupSectionStates(
           // Page semantics belong to paginated media only.
           hasPages(asset.media_kind) && Number(asset.page_count || 0) > 0
             ? text.tf("pdf_corpus.setup.summary.pages", { count: Number(asset.page_count) })
-            : Number(asset.block_count || 0) > 0
-              ? text.tf("pdf_corpus.setup.summary.blocks", { count: Number(asset.block_count) })
-              : "",
+            : Number(asset.duration_seconds || 0) > 0
+              ? text.tf("pdf_corpus.setup.summary.minutes", {
+                  count: Math.max(1, Math.round(Number(asset.duration_seconds) / 60)),
+                })
+              : Number(asset.block_count || 0) > 0
+                ? text.tf("pdf_corpus.setup.summary.blocks", { count: Number(asset.block_count) })
+                : "",
         ]
           .filter(Boolean)
           .join(" · ")

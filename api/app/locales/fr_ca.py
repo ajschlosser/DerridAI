@@ -9396,4 +9396,5 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.setup.media.html': 'HTML',
  'pdf_corpus.setup.media.url': 'URL',
  'pdf_corpus.setup.media.gutenberg': 'Gutenberg',
+ 'pdf_corpus.setup.summary.minutes': '{count} min',
 }

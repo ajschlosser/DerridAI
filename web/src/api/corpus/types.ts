@@ -112,6 +112,8 @@ export interface PdfAsset {
       extraction_methods?: Record<string, number>;
     }>;
   };
+  /** Audio sources only: probed at ingest; absent on assets stored before it was recorded. */
+  audio_provenance?: { duration_seconds?: number };
   extraction_noise?: {
     page_count?: number;
     unusable_page_count?: number;

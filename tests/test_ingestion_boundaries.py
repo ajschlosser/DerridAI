@@ -232,6 +232,9 @@ def test_diarization_failure_preserves_transcript_and_timed_evidence(
     asset = repo.save_asset(b"audio", filename="clip.wav")
     assert asset["source_transcription"] == TRANSCRIPT
     assert asset["audio_provenance"]["diarization_status"] == "failed"
+    # The Corpus Builder setup summary reads the probed duration from the stored asset.
+    assert asset["audio_provenance"]["duration_seconds"] == 4
+    assert repo.list_assets()[0]["audio_provenance"]["duration_seconds"] == 4
     assert asset["warnings"]
     blocks = [
         json.loads(line)

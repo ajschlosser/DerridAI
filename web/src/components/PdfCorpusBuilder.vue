@@ -1355,6 +1355,7 @@ const setupInput = computed<CorpusSetupInput>(() => ({
         media_kind: selectedAsset.value.media_kind,
         page_count: selectedAsset.value.page_count,
         block_count: selectedAsset.value.block_count,
+        duration_seconds: selectedAsset.value.audio_provenance?.duration_seconds,
       }
     : null,
   structureNeedsReview: Boolean(

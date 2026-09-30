@@ -9086,4 +9086,5 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'pdf_corpus.setup.media.html': 'HTML',
  'pdf_corpus.setup.media.url': 'URL',
  'pdf_corpus.setup.media.gutenberg': 'Gutenberg',
+ 'pdf_corpus.setup.summary.minutes': '{count} min',
 }
