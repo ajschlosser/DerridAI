@@ -538,11 +538,7 @@ const {
   tf: (key, values) => i18n.tf(key, values),
 });
 async function startBuild(fromMetadataPrompt = false) {
-  if (
-    !fromMetadataPrompt &&
-    missingDocumentFields.value.length &&
-    !missingMetadataComplete.value
-  ) {
+  if (!fromMetadataPrompt && missingDocumentFields.value.length && !missingMetadataComplete.value) {
     missingMetadataPromptOpen.value = true;
     return;
   }
