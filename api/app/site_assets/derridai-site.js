@@ -256,7 +256,7 @@
   }
 
   function cosine(a, b) {
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length || !a.length) return -1;
+    if (!a || !b || !a.length || a.length !== b.length) return -1;
     let dot = 0, aa = 0, bb = 0;
     for (let i = 0; i < a.length; i += 1) {
       const x = Number(a[i]), y = Number(b[i]);
@@ -364,47 +364,84 @@
     return String(body.choices?.[0]?.message?.content || "");
   }
 
-  function candidateRecords(filters = {}) {
-    return records.filter((record) => {
-      if (filters.work && String(record.work || "") !== filters.work) return false;
-      if (filters.field && filters.value) {
-        const raw = record[filters.field];
-        const text = Array.isArray(raw) ? raw.join(" ") : typeof raw === "object" ? JSON.stringify(raw) : String(raw ?? "");
-        if (!text.toLocaleLowerCase(locale).includes(String(filters.value).toLocaleLowerCase(locale))) return false;
-      }
-      return true;
+  async function retrieve(
+    query,
+    mode,
+    filters,
+    limit = 30,
+    config = providerDefaults(),
+    onProgress,
+  ) {
+    const candidates = await loadCandidateRecords(filters, (current, total, work) => {
+      onProgress?.("records", current, total, work);
     });
-  }
-
-  async function retrieve(query, mode, filters, limit = 30, config = providerDefaults()) {
-    const candidates = candidateRecords(filters);
     const lexical = lexicalScores(query, candidates);
-    if (mode === "keyword" || !query.trim()) return lexical.slice(0, limit);
-    if (!publication.features?.semantic_search) {
-      if (mode === "semantic") throw new Error(t("site.runtime.semantic_unavailable"));
-      return lexical.slice(0, limit);
+    if (mode === "keyword" || !query.trim()) {
+      return { items: lexical.slice(0, limit), warning: "" };
     }
-    const queryVector = await embedQuery(query, config);
+    if (!publication.features?.semantic_search) {
+      return {
+        items: lexical.slice(0, limit),
+        warning: t("site.runtime.semantic_unavailable_keyword_fallback"),
+      };
+    }
+
+    let queryVector;
+    try {
+      queryVector = await embedQuery(query, config);
+    } catch (error) {
+      return {
+        items: lexical.slice(0, limit),
+        warning: t("site.runtime.semantic_provider_fallback", {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      };
+    }
+
     const expected = Number(vectors.dimension || 0);
     if (expected && queryVector.length !== expected) {
-      throw new Error(t("site.runtime.embedding_dimension_mismatch", { expected, actual: queryVector.length }));
+      return {
+        items: lexical.slice(0, limit),
+        warning: t("site.runtime.semantic_provider_fallback", {
+          error: t("site.runtime.embedding_dimension_mismatch", {
+            expected,
+            actual: queryVector.length,
+          }),
+        }),
+      };
     }
-    const semantic = candidates.map((record) => ({
-      record,
-      score: cosine(queryVector, vectorById.get(String(record.record_id))),
-    })).filter((item) => item.score > -1).sort((a, b) => b.score - a.score);
-    if (mode === "semantic") return semantic.slice(0, limit);
+
+    await loadVectorChunks(filters, (current, total, work) => {
+      onProgress?.("vectors", current, total, work);
+    });
+    const semantic = candidates
+      .map((record) => ({
+        record,
+        score: cosine(queryVector, vectorById.get(String(record.record_id))),
+      }))
+      .filter((item) => item.score > -1)
+      .sort((a, b) => b.score - a.score);
+    if (mode === "semantic") return { items: semantic.slice(0, limit), warning: "" };
 
     const lexicalMax = Math.max(...lexical.map((item) => item.score), 1);
     const semMap = new Map(semantic.map((item) => [String(item.record.record_id), item.score]));
-    return lexical.map((item) => {
-      const semanticScore = semMap.get(String(item.record.record_id));
-      const semNorm = semanticScore == null ? 0 : (semanticScore + 1) / 2;
-      return { record: item.record, score: .45 * (item.score / lexicalMax) + .55 * semNorm };
-    }).concat(
-      semantic.filter((item) => !lexical.some((lex) => lex.record.record_id === item.record.record_id))
-        .map((item) => ({ record: item.record, score: .55 * ((item.score + 1) / 2) })),
-    ).sort((a, b) => b.score - a.score).slice(0, limit);
+    const merged = lexical
+      .map((item) => {
+        const semanticScore = semMap.get(String(item.record.record_id));
+        const semNorm = semanticScore == null ? 0 : (semanticScore + 1) / 2;
+        return { record: item.record, score: 0.45 * (item.score / lexicalMax) + 0.55 * semNorm };
+      })
+      .concat(
+        semantic
+          .filter(
+            (item) =>
+              !lexical.some((lex) => lex.record.record_id === item.record.record_id),
+          )
+          .map((item) => ({ record: item.record, score: 0.55 * ((item.score + 1) / 2) })),
+      )
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+    return { items: merged, warning: "" };
   }
 
   function mmr(items, limit = 10, lambda = .72) {
