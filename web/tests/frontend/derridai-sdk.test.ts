@@ -207,7 +207,9 @@ describe("DerridAI SDK", () => {
 
     expect(response.answer).toBeNull();
     expect(response.evidencePacket.evidence).toHaveLength(1);
-    expect(response.warnings.some((warning) => warning.code === "generation_unavailable")).toBe(true);
+    expect(response.warnings.some((warning) => warning.code === "generation_unavailable")).toBe(
+      true,
+    );
   });
 
   it("stores annotations through the injected storage contract", async () => {
