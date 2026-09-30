@@ -314,7 +314,20 @@ describe("automatic page detection", () => {
 
   it("hides OCR controls for non-image sources", () => {
     const wrapper = mount(CorpusSourceIngest, {
-      props: { selectedAsset: { media_kind: "text", filename: "source.txt" } as never },
+      props: {
+        selectedAsset: {
+          asset_id: "text-source",
+          sha256: "abcdef0123456789abcdef",
+          filename: "source.txt",
+          created_at: "2026-09-23T08:00:00Z",
+          page_count: 0,
+          block_count: 1,
+          ocr_pages: 0,
+          warnings: [],
+          metadata: {},
+          media_kind: "text",
+        },
+      },
     });
     expect(wrapper.find(".ocr-choice").exists()).toBe(false);
   });
