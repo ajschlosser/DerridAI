@@ -22,6 +22,7 @@ from .corpus_publication import serialize_public_record, validate_publication_re
 from .locales.en_us import EN_US
 from .locales.fr_ca import FR_CA
 from .services import store
+
 SITE_FORMAT = "derridai-static-site-v3"
 _ASSET_DIR = Path(__file__).with_name("site_assets")
 SITE_ASSET = _ASSET_DIR / "derridai-site.js"
