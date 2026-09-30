@@ -57,6 +57,9 @@ const warnings = computed(() =>
     (issue) => issue.severity === "warning" && !dismissed.value.has(issue.message),
   ),
 );
+const blockingCount = computed(
+  () => props.issues.filter((issue) => issue.severity === "blocking").length,
+);
 const warningNotices = computed<Notice[]>(() =>
   warnings.value.map((issue) => ({ id: issue.message, tone: "warning", text: issue.message })),
 );
@@ -121,35 +124,111 @@ const sourceFacts = computed(() => {
       :aria-label="i18n.t('pdf_corpus.readiness.configuration_summary')"
     >
       <div>
-        <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
-        <dd>
-          {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}
-          <small v-if="sourceFacts">{{ sourceFacts }}</small>
-        </dd>
+        <span>
+          <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
+          <dd>
+            {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}
+            <small v-if="sourceFacts">{{ sourceFacts }}</small>
+          </dd>
+        </span>
+        <button
+          type="button"
+          class="build-plan-edit"
+          :aria-label="
+            i18n.tf('pdf_corpus.setup.edit_section', {
+              section: i18n.t('pdf_corpus.configure_source'),
+            })
+          "
+          @click="emit('editSection', 'source')"
+        >
+          {{ i18n.t("pdf_corpus.setup.edit") }}
+        </button>
       </div>
       <div v-if="hasPages(mediaKind)">
-        <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
-        <dd>{{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}</dd>
+        <span>
+          <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
+          <dd>{{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}</dd>
+        </span>
+        <button
+          type="button"
+          class="build-plan-edit"
+          :aria-label="
+            i18n.tf('pdf_corpus.setup.edit_section', {
+              section: i18n.t('pdf_corpus.configure_structure'),
+            })
+          "
+          @click="emit('editSection', 'structure')"
+        >
+          {{ i18n.t("pdf_corpus.setup.edit") }}
+        </button>
       </div>
       <div v-if="schemaLabel">
-        <dt>{{ i18n.t("pdf_corpus.configure_metadata") }}</dt>
-        <dd>{{ schemaLabel }}</dd>
+        <span>
+          <dt>{{ i18n.t("pdf_corpus.configure_metadata") }}</dt>
+          <dd>{{ schemaLabel }}</dd>
+        </span>
+        <button
+          type="button"
+          class="build-plan-edit"
+          :aria-label="
+            i18n.tf('pdf_corpus.setup.edit_section', {
+              section: i18n.t('pdf_corpus.configure_metadata'),
+            })
+          "
+          @click="emit('editSection', 'metadata')"
+        >
+          {{ i18n.t("pdf_corpus.setup.edit") }}
+        </button>
       </div>
       <div>
-        <dt>{{ i18n.t("pdf_corpus.readiness.enrichment") }}</dt>
-        <dd>{{ modeLabel }}</dd>
+        <span>
+          <dt>{{ i18n.t("pdf_corpus.readiness.enrichment") }}</dt>
+          <dd>{{ modeLabel }} · {{ providerSummary }}</dd>
+        </span>
+        <button
+          type="button"
+          class="build-plan-edit"
+          :aria-label="
+            i18n.tf('pdf_corpus.setup.edit_section', {
+              section: i18n.t('pdf_corpus.configure_enrichment'),
+            })
+          "
+          @click="emit('editSection', 'enrichment')"
+        >
+          {{ i18n.t("pdf_corpus.setup.edit") }}
+        </button>
       </div>
       <div>
-        <dt>{{ i18n.t("pdf_corpus.readiness.llm") }}</dt>
-        <dd>{{ providerSummary }}</dd>
+        <span>
+          <dt>{{ i18n.t("pdf_corpus.readiness.record_size") }}</dt>
+          <dd>{{ sizing }}</dd>
+        </span>
+        <button
+          type="button"
+          class="build-plan-edit"
+          :aria-label="
+            i18n.tf('pdf_corpus.setup.edit_section', {
+              section: i18n.t('pdf_corpus.configure_structure'),
+            })
+          "
+          @click="emit('editSection', 'structure')"
+        >
+          {{ i18n.t("pdf_corpus.setup.edit") }}
+        </button>
       </div>
-      <div>
-        <dt>{{ i18n.t("pdf_corpus.readiness.record_size") }}</dt>
-        <dd>{{ sizing }}</dd>
-      </div>
-      <div v-if="warnings.length" class="build-command-warning">
-        <dt>{{ i18n.t("pdf_corpus.readiness.warnings", "Warnings") }}</dt>
-        <dd>{{ warnings.length }}</dd>
+      <div v-if="blockingCount || warnings.length" class="build-command-warning">
+        <span>
+          <dt>{{ i18n.t("pdf_corpus.attention_required") }}</dt>
+          <dd>
+            <template v-if="blockingCount">{{
+              i18n.tf("pdf_corpus.readiness.blocker_count", { count: blockingCount })
+            }}</template>
+            <template v-if="blockingCount && warnings.length"> · </template>
+            <template v-if="warnings.length">{{
+              i18n.tf("pdf_corpus.readiness.note_count", { count: warnings.length })
+            }}</template>
+          </dd>
+        </span>
       </div>
     </dl>
 
@@ -282,8 +361,15 @@ const sourceFacts = computed(() => {
 .build-command-summary > div {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
   padding: var(--space-2) 0;
+}
+.build-command-summary > div > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
 }
 .build-command-summary > div + div {
   border-top: 1px solid var(--border-subtle);
@@ -313,6 +399,25 @@ const sourceFacts = computed(() => {
 .build-command-summary .build-command-warning dt,
 .build-command-summary .build-command-warning dd {
   color: var(--tone-warn-fg);
+}
+.build-plan-edit {
+  min-height: 30px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--accent-fg);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.build-plan-edit:hover {
+  background: var(--surface-hover);
+}
+.build-plan-edit:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 1px;
 }
 .build-command-actions {
   display: grid;
