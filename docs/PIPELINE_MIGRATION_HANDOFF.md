@@ -200,6 +200,8 @@ Runtime contract (purpose `evidence_recovery`):
 
 Built-ins: `evidence.recovery.celf@1` (text support, then closed-choice model; no embeddings or reranking) and `evidence.recovery.cascade@1` (relevance-first order: text, similarity, cross-encoder, MMR, model). The cascade is non-cELF-guaranteed at its output boundary, so its suggestions remain advisory until direct evidence is bound and validated. Traces list only the stages that ran, in execution order, with `fallback_reason` on each stage that left along a fallback edge.
 
+Closed-choice model stage settings. `llm.closed_choice_evidence` has `provider_role` (`chain`, `primary`, `review`; default `chain`) and `attempts` (1–4, default 2), and recovery applies them. Enrichment's callback (`_evidence_closed_choice` in `corpus_metadata_enrichment_execution.py`) receives the stage's role and attempts. `chain` is the pre-pipeline behaviour: the primary provider, then the review provider when the build configures one, with `_chat_json()`'s escalation note and error text. The built-ins set neither key, so their calls are unchanged (no version bump). A clone can ask one provider per stage and express escalation as two closed-choice stages joined by `on_error`/`on_timeout`/`on_unavailable`; such a graph stays cELF-compliant. A missing provider role makes the stage `unavailable` without a model call, and a read timeout makes it `timed_out`, so the graph's fallback edges decide what follows (before, every failure was `failed`; the built-ins have no fallback edge on this stage, so they still end the run). The trace records the settings and the provider and model that actually answered. The reviewer-suggestion graph never calls a model, so it rejects both keys (`RECOVERY_ONLY_CONFIG`). When a closed-choice stage fails or times out and a fallback edge leads to another closed-choice stage, that stage is an escalation: its first provider gets `_chat_json()`'s escalation note, the build counts an escalation, and the trace records `escalated: true`. An empty answer, an unconfigured provider or a failed retrieval stage routing to the model is not an escalation, so the built-ins' prompts are unchanged. Parity is pinned by `tests/test_evidence_recovery_closed_choice.py`.
+
 The remaining direct `predict_scores()` callers are `rag.py` (Research pipeline) and `metadata_exemplar_retrieval.py` (metadata-precedent pipeline). Re-verify they are unreachable outside those pipelines before closing the CrossEncoder criterion.
 
 ### 4.11 General Vector Store search moved onto pipeline runtime
@@ -532,7 +534,7 @@ Migrated in section 4.13.
 
 The original audit identified many generative/structured LLM uses beyond Research answer generation, including Corpus Builder segmentation/metadata work, touch-up/review operations, translation, and other utility calls.
 
-Corpus Builder metadata enrichment migrated in section 4.14, segmentation's boundary questions in section 4.15, the document manifest in section 4.16, text touch-up in section 4.17 and the reviewer's **Ask the model** evidence choice in section 4.18. Still calling a model directly: `page_marker_chooser`, `_llm_text_noise_pass` and `preview_schema_group` (`_chat_json()`), evidence recovery's closed-choice callback (`_chat_json()` default chain), the catalogue-match lookup `llm_tools.run_work_metadata_lookup()` and the Records touch-up `llm.propose_touchup()` (`chat_complete()`). Planned: page-marker choice and the text-noise second reader as small slices of their own; the schema preview moves onto the `corpus_metadata_enrichment` pipeline so it runs like a build.
+Corpus Builder metadata enrichment migrated in section 4.14, segmentation's boundary questions in section 4.15, the document manifest in section 4.16, text touch-up in section 4.17 and the reviewer's **Ask the model** evidence choice in section 4.18; evidence recovery's closed-choice stage now applies its own provider role and attempts (section 4.10). Still calling a model directly: `page_marker_chooser`, `_llm_text_noise_pass` and `preview_schema_group` (`_chat_json()`), the catalogue-match lookup `llm_tools.run_work_metadata_lookup()` and the Records touch-up `llm.propose_touchup()` (`chat_complete()`). Planned: page-marker choice and the text-noise second reader as small slices of their own; the schema preview moves onto the `corpus_metadata_enrichment` pipeline so it runs like a build.
 
 Only claim that acceptance criterion “every generative LLM call resolves through a pipeline” is met after a fresh call-site audit.
 
@@ -560,6 +562,8 @@ Every slice follows the pattern of sections 4.14–4.18 unless a subsection belo
 - `corpus_manifest_workflow.py` `preview_schema_group` (run=true): send it through the existing `corpus_metadata_enrichment` pipeline (`EnrichmentSession`), not a new feature, so a schema preview runs like a build.
 
 #### 8.6.2 Evidence recovery's closed-choice call
+
+Done (section 4.10). The plan below is kept as the record of what was decided.
 
 Where: `_evidence_llm_choice` in `corpus_metadata_enrichment_execution.py` is passed as `llm_choice` to `execute_evidence_recovery()`; the recovery runtime (`pipelines/evidence_recovery.py`, `_Run._llm`) calls it when the graph reaches an `llm.closed_choice_evidence` stage. The callback runs the full default `_chat_json()` chain (primary ×2, then review ×2). The reviewer's Evidence-tab recovery (`corpus_review_actions.py`, around `execute_evidence_recovery(..., llm_choice=None)`) never calls a model.
 
@@ -854,7 +858,7 @@ Pipeline Studio now has its own canonical route. New Pipeline Studio UI should i
 The next person taking this work should begin with:
 
 1. fetch current `master`; confirm PR #312 (manifest, text touch-up, reviewer evidence choice) has merged, or finish its review first;
-2. read section 8.6 and pick the next call. Suggested order: evidence recovery (8.6.2, the only one inside a scholarly evidence chain), the three already-decided small slices (8.6.1), then the Records touch-up (8.6.3) and the catalogue match (8.6.4);
+2. read section 8.6 and pick the next call. Evidence recovery (8.6.2) is done; suggested order for the rest: the three already-decided small slices (8.6.1), then the Records touch-up (8.6.3) and the catalogue match (8.6.4);
 3. branch each slice from `master` and open its PR against `master`;
 4. run the full quality gates before reporting a slice done, and state in the PR which were not run;
 5. after section 8.6, run the generative-call audit (section 8.6.5), then benchmark integration (section 10, Step 1).

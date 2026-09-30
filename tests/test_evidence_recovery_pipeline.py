@@ -15,6 +15,7 @@ from app.pipelines.evidence import compile_evidence_pipeline
 from app.pipelines.evidence_recovery import (
     MISSING_SOURCE_DOCUMENT,
     RECOVERY_FEATURE,
+    ClosedChoiceAnswer,
     compile_recovery_pipeline,
     execute_evidence_recovery,
 )
@@ -176,9 +177,10 @@ def test_cascade_falls_to_mmr_similarity_when_cross_encoder_is_unavailable(monke
 def test_cascade_falls_to_llm_as_last_resort_and_accepts_unsupported_choice(monkeypatch, traces):
     _built_in(monkeypatch, CASCADE)
 
-    def llm_choice(prompt: str):
+    def llm_choice(prompt: str, role: str, attempts: int, escalated: bool):
         assert "topic" in prompt
-        return {"block_ids": ["b1", "invented"], "reason": "The model's own judgment."}
+        assert (role, attempts, escalated) == ("chain", 2, False), "built-ins keep the primary-then-review chain"
+        return ClosedChoiceAnswer({"block_ids": ["b1", "invented"], "reason": "The model's own judgment."})
 
     result = _recover(
         "an unrelated value", [{"block_id": "b1", "text": "Nothing relevant here."}],
@@ -194,7 +196,7 @@ def test_cascade_falls_to_llm_as_last_resort_and_accepts_unsupported_choice(monk
 def test_cascade_returns_none_when_the_llm_stage_raises(monkeypatch, traces):
     _built_in(monkeypatch, CASCADE)
 
-    def failing(_prompt: str):
+    def failing(_prompt: str, _role: str, _attempts: int, _escalated: bool):
         raise RuntimeError("provider unreachable")
 
     result = _recover(
@@ -223,9 +225,9 @@ def test_celf_chain_never_embeds_or_reranks(monkeypatch, traces):
     projection = Projection({"b1": [1.0, 0.0]})
     prompts = []
 
-    def llm_choice(prompt):
+    def llm_choice(prompt, _role, _attempts, _escalated):
         prompts.append(prompt)
-        return {"block_ids": ["b1"], "reason": "Paraphrases the value."}
+        return ClosedChoiceAnswer({"block_ids": ["b1"], "reason": "Paraphrases the value."})
 
     supported = _recover("hospitality", [{"block_id": "b1", "text": "Hospitality."}],
                          projection=projection, llm_choice=llm_choice)
@@ -289,7 +291,7 @@ def test_removed_stages_never_run(monkeypatch, traces):
     result = _recover(
         "an unrelated value", [{"block_id": "b1", "text": "Nothing lexical here."}],
         projection=Projection(error=RuntimeError("offline")),
-        llm_choice=lambda _prompt: pytest.fail("no model call outside the resolved graph"),
+        llm_choice=lambda *_args: pytest.fail("no model call outside the resolved graph"),
     )
     assert result.entry is None
 

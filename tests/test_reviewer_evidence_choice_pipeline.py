@@ -123,7 +123,8 @@ def test_compiler_rejects_the_evidence_graphs_closed_choice_stage() -> None:
     # The reviewer evidence and recovery graphs keep their own closed-choice strategy.
     source = built_in_pipeline(*BUILT_IN)
     pipeline = source.model_copy(update={
-        "stages": [stage.model_copy(update={"strategy": "llm.closed_choice_evidence"}) for stage in source.stages],
+        "stages": [stage.model_copy(update={"strategy": "llm.closed_choice_evidence", "config": {}})
+                   for stage in source.stages],
     })
     with pytest.raises(ValueError, match="does not implement"):
         compile_reviewer_evidence_choice_pipeline(pipeline)

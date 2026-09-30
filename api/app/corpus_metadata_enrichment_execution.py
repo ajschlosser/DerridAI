@@ -23,6 +23,7 @@ from .autofill import decide as decide_autofill
 from .autofill import in_audit_sample
 from .config import APP_VERSION
 from .corpus_llm_helpers import (
+    StructuredOutputError,
     _context_window,
     _provider_roles,
     _stage_limits,
@@ -81,6 +82,7 @@ from .pipelines.corpus_metadata_enrichment import (
 )
 from .pipelines.evidence_recovery import (
     MISSING_SOURCE_DOCUMENT,
+    ClosedChoiceAnswer,
     execute_evidence_recovery,
 )
 from .rag import _citation_strings
@@ -114,6 +116,44 @@ class MetadataEnrichmentExecutionMixin:
         def _record_family_effectiveness(self, build_id: str | None, family: str, result: dict[str, Any] | None, *, elapsed_ms: int = 0, provider_profile_id: str = "", provider: str = "", model: str = "") -> None: ...
         def _schema_for(self, build_id: str) -> MetadataSchema: ...
         def touchup_record_text(self, build_id: str, record_id: str, request: dict[str, Any], instructions: str = "", text_override: str | None = None) -> dict[str, Any]: ...
+
+    def _evidence_closed_choice(
+        self, request: dict[str, Any], prompt: str, role: str, attempts: int, *,
+        escalated: bool = False, build_id: str = "",
+    ) -> ClosedChoiceAnswer:
+        """Ask evidence recovery's closed-choice question with the stage's provider role and attempts.
+
+        ``chain`` runs the primary provider, then the review provider when one is configured,
+        with the escalation note and error text of ``_chat_json``'s own chain; asking one role
+        at a time lets the trace name the provider that answered. ``escalated`` (a failed
+        closed-choice stage routed here) gives the first provider asked the escalation note.
+        """
+        providers = _provider_roles(request)
+        if role != "chain" and role not in providers:
+            raise LookupError(f"No {role} provider is configured for this build.")
+        chain = [name for name in ("primary", "review") if name in providers] if role == "chain" else [role]
+        failures: list[str] = []
+        timed_out = False
+        for index, current in enumerate(chain):
+            try:
+                answer = self._chat_json(
+                    request, prompt, response_model=EvidenceChoiceModel, max_tokens=800,
+                    schema_name="evidence_choice", attempts=attempts, build_id=build_id,
+                    roles=(current,), escalated=escalated or index > 0,
+                )
+            except StructuredOutputError as exc:
+                failures.extend(exc.failures)
+                timed_out = exc.timed_out
+                continue
+            provider, model = providers[current]
+            return ClosedChoiceAnswer(answer, provider, model)
+        raise StructuredOutputError(
+            "LLM structured output failed after bounded retry"
+            + (" and review-provider escalation" if len(chain) > 1 else "")
+            + ": " + " | ".join(failures),
+            failures=failures,
+            timed_out=timed_out,
+        )
 
     def _keep_precedent_retrieval(
         self,
@@ -1087,10 +1127,9 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             SourceEmbeddingProjection(progressive_index.store) if progressive_index is not None else None
         )
 
-        def _evidence_llm_choice(prompt: str) -> dict[str, Any]:
-            return self._chat_json(
-                request, prompt, response_model=EvidenceChoiceModel, max_tokens=800,
-                schema_name="evidence_choice", attempts=2, build_id=build_id,
+        def _evidence_llm_choice(prompt: str, role: str, attempts: int, escalated: bool) -> ClosedChoiceAnswer:
+            return self._evidence_closed_choice(
+                request, prompt, role, attempts, escalated=escalated, build_id=build_id,
             )
 
         evidence_llm_choice = _evidence_llm_choice if evidence_cascade_llm_enabled(request) else None
