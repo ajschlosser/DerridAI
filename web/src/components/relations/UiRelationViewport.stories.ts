@@ -45,7 +45,7 @@ export const Interactive: Story = {
     template: `
       <div style="display:grid;gap:8px;max-width:900px">
         <UiRelationToolbar
-          aria-label="Map controls"
+          accessible-label="Map controls"
           zoom-out-label="Zoom out"
           zoom-in-label="Zoom in"
           fit-label="Fit map"
@@ -58,7 +58,7 @@ export const Interactive: Story = {
         <UiRelationViewport
           ref="viewport"
           style="height:420px"
-          aria-label="Relationship map"
+          accessible-label="Relationship map"
           help-text="Drag the background to pan. Drag nodes to reposition them. Hold Alt and use arrow keys to move a focused node."
           resize-label="Resize relationship map"
           :initial-center="{ x: 360, y: 220 }"
@@ -76,7 +76,7 @@ export const Interactive: Story = {
               :x="node.x"
               :y="node.y"
               :zoom="zoom"
-              :aria-label="node.label"
+              :accessible-label="node.label"
               style="width:170px;height:64px;padding:0;border:0;background:transparent;color:inherit;transform:translate(-50%,-50%)"
               @move="move(node.id, $event)"
             >
