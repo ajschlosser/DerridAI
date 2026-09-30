@@ -2584,6 +2584,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.accept_clean': 'Accepter les fiches nettes ({count})',
  'pdf_corpus.accept_clean_confirm': 'Accepter {count} fiche(s) sans problème? Les fiches ayant des problèmes de '
                                     'métadonnées, de topologie ou de source resteront à réviser.',
+ 'pdf_corpus.accept_clean_authority_help': 'Cette action enregistre votre décision de révision pour chaque Record prêt. Les Records dont les métadonnées, la topologie ou la source comportent encore des problèmes restent dans la file de révision.',
  'pdf_corpus.accept_clean_done': '{count} fiche(s) sans problème acceptée(s). Seules les exceptions restent.',
  'pdf_corpus.accept_next': 'Accepter et suivante',
  'pdf_corpus.warning_acknowledged_by': 'Pris acte par {actor} · {when}',
