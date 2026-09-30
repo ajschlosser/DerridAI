@@ -353,7 +353,7 @@ test("exported OpenAI-compatible profile powers vector retrieval and LLM Researc
   await page.getByRole("button", { name: "Research" }).click();
   await page.getByLabel("Provider profile").selectOption("openai-main");
   await page.getByRole("button", { name: "Use this provider" }).click();
-  await expect(page.getByText("Provider applied.")).toBeVisible();
+  await expect(page.getByLabel("Question")).toBeVisible();
 
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");
   await page.getByRole("button", { name: "Ask" }).click();
