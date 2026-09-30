@@ -23,7 +23,7 @@ from .locales.en_us import EN_US
 from .services import store
 from .system_store import normalize_locale_code, system_store
 
-SITE_FORMAT = "derridai-static-site-v3"
+SITE_FORMAT = "derridai-static-site-v4"
 _ASSET_DIR = Path(__file__).with_name("site_assets")
 SITE_ASSET = _ASSET_DIR / "derridai-site.js"
 SDK_ASSET = _ASSET_DIR / "derridai-sdk.js"
@@ -423,7 +423,7 @@ def build_site_bundle(
   <title>{html.escape(title)}</title>
 </head>
 <body>
-  <div id="app" role="status" aria-live="polite">Loading DerridAI research site…</div>
+  <div id="app" role="status" aria-live="polite">{html.escape(locale_dictionary["site.runtime.loading_site"])}</div>
   <script src="./{PUBLICATION_ASSET_NAME}" defer></script>
   <script src="./{SDK_ASSET_NAME}" defer></script>
   <script src="./{SITE_ASSET_NAME}" defer></script>
