@@ -545,8 +545,7 @@ async function startBuild(fromMetadataPrompt = false) {
   await startBuildOperation();
   if (currentBuild.value) await switchWorkspace("build");
 }
-async function continueBuildWithDocumentMetadata(skip = false) {
-  if (skip) documentMetadata.value = {};
+async function continueBuildWithDocumentMetadata() {
   missingMetadataPromptOpen.value = false;
   await startBuild(true);
 }
@@ -3687,7 +3686,7 @@ defineExpose({
       :title="i18n.t('pdf_corpus.missing_document_fields_title')"
       :description="i18n.t('pdf_corpus.missing_document_fields_help')"
       :close-label="i18n.t('common.close')"
-      @close="continueBuildWithDocumentMetadata(true)"
+      @close="missingMetadataPromptOpen = false"
     >
       <CorpusMissingDocumentFields
         v-model="documentMetadata"
@@ -3699,7 +3698,7 @@ defineExpose({
           variant="ghost"
           :label="i18n.t('pdf_corpus.missing_document_fields_skip', 'Skip for now')"
           :disabled="busy !== ''"
-          @click="continueBuildWithDocumentMetadata(true)"
+          @click="continueBuildWithDocumentMetadata()"
         />
         <UiButton
           variant="primary"
