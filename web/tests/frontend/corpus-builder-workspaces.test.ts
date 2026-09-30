@@ -396,7 +396,7 @@ describe("publish workspace", () => {
     expect(wrapper.get("[data-count='pending'] dd").text()).toBe("5");
     const unreviewed = wrapper
       .findAll("button")
-      .find((node) => node.text().includes("Publish with unreviewed"))!;
+      .find((node) => node.text().includes("Use suggestions as-is"))!;
     await unreviewed.trigger("click");
     expect(wrapper.emitted("publishUnreviewed")).toBeUndefined();
     const confirm = document.body.textContent || wrapper.text();
@@ -425,7 +425,7 @@ describe("publish workspace", () => {
     expect(wrapper.text()).toContain("pub-1");
     expect(wrapper.find(".publication-blockers").exists()).toBe(false);
     expect(wrapper.find(".publication-readiness-list").exists()).toBe(false);
-    expect(wrapper.text()).not.toContain("Publish with unreviewed");
+    expect(wrapper.text()).not.toContain("Use suggestions as-is");
   });
 });
 
