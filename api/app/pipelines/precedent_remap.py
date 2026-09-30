@@ -39,6 +39,7 @@ _SEMANTIC = "retrieve.source_cosine"
 _LEXICAL = "retrieve.token_overlap"
 _PROVENANCE = "validate.provenance"
 _SELECT = "select.top_k"
+SUPPORTED_STRATEGIES = frozenset({_SEMANTIC, _LEXICAL, _PROVENANCE, _SELECT})
 _METHODS = {_SEMANTIC: PRECEDENT_SEMANTIC_METHOD, _LEXICAL: PRECEDENT_LEXICAL_METHOD}
 
 
@@ -59,7 +60,7 @@ def compile_remap_pipeline(pipeline: PipelineDefinition) -> RemapPlan:
         raise ValueError("Precedent-remap adapter can only compile precedent_evidence_remap pipelines.")
     reject_unhonoured_config(pipeline, "precedent remap")
     stages = {stage.id: stage for stage in pipeline.stages if stage.enabled}
-    unsupported = sorted({stage.strategy for stage in stages.values()} - {_SEMANTIC, _LEXICAL, _PROVENANCE, _SELECT})
+    unsupported = sorted({stage.strategy for stage in stages.values()} - SUPPORTED_STRATEGIES)
     if unsupported:
         raise ValueError("Precedent-remap adapter does not implement strategy stage(s): " + ", ".join(unsupported))
     provenance = [stage for stage in stages.values() if stage.strategy == _PROVENANCE]

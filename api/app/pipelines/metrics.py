@@ -12,6 +12,7 @@ from collections import Counter, defaultdict
 from typing import Any
 
 from .models import PipelineRunTrace, PipelineStageTrace
+from .purposes import purpose_registry
 
 
 def _percentile(values: list[int], fraction: float) -> int | None:
@@ -50,6 +51,18 @@ def aggregate_pipeline_metrics(runs: list[PipelineRunTrace]) -> dict[str, Any]:
             "elapsed": [],
         }
     )
+    # Workflow rows group features by their purpose's category. Like every
+    # other figure here they describe computational health, not scholarship.
+    workflow_rows: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {
+            "run_count": 0,
+            "failed_count": 0,
+            "fallback_run_count": 0,
+            "warning_run_count": 0,
+            "features": set(),
+            "elapsed": [],
+        }
+    )
     strategy_rows: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
             "stage_ids": set(),
@@ -82,6 +95,16 @@ def aggregate_pipeline_metrics(runs: list[PipelineRunTrace]) -> dict[str, Any]:
         if run.total_elapsed_ms is not None:
             feature["elapsed"].append(int(run.total_elapsed_ms))
 
+        purpose = purpose_registry.for_feature(run.feature)
+        workflow = workflow_rows[purpose.category if purpose else "unclassified"]
+        workflow["run_count"] += 1
+        workflow["failed_count"] += int(run.status == "failed")
+        workflow["fallback_run_count"] += int(has_fallback)
+        workflow["warning_run_count"] += int(has_warning)
+        workflow["features"].add(run.feature)
+        if run.total_elapsed_ms is not None:
+            workflow["elapsed"].append(int(run.total_elapsed_ms))
+
         for stage in run.stages:
             row = strategy_rows[stage.strategy_id]
             row["stage_ids"].add(stage.stage_id)
@@ -109,6 +132,20 @@ def aggregate_pipeline_metrics(runs: list[PipelineRunTrace]) -> dict[str, Any]:
             }
         )
     features.sort(key=lambda row: (-int(row["run_count"]), str(row["feature"])))
+
+    workflows = []
+    for category, row in workflow_rows.items():
+        elapsed = row.pop("elapsed")
+        workflows.append(
+            {
+                "category": category,
+                **row,
+                "features": sorted(row["features"]),
+                "average_elapsed_ms": _average(elapsed),
+                "p95_elapsed_ms": _percentile(elapsed, 0.95),
+            }
+        )
+    workflows.sort(key=lambda row: (-int(row["run_count"]), str(row["category"])))
 
     strategies = []
     for strategy_id, row in strategy_rows.items():
@@ -149,6 +186,7 @@ def aggregate_pipeline_metrics(runs: list[PipelineRunTrace]) -> dict[str, Any]:
         "warning_run_count": warning_run_count,
         "average_run_elapsed_ms": _average(run_elapsed),
         "p95_run_elapsed_ms": _percentile(run_elapsed, 0.95),
+        "workflows": workflows,
         "features": features,
         "strategies": strategies,
     }

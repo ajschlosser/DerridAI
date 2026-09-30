@@ -28,6 +28,20 @@ StageFamily = Literal[
     "llm",
     "evaluation",
 ]
+# What a stage may establish about evidence, support or provenance. Separate
+# from ``StageFamily`` (how it computes) and from pipeline purpose (what the
+# whole workflow is for). A gate is computational validation, never reviewer
+# or scholarly authority.
+ScholarlyEffect = Literal[
+    "none",
+    "advisory",
+    "scope_constraint",
+    "eligibility_gate",
+    "provenance_gate",
+    "transformation",
+    "generation",
+    "evaluation",
+]
 
 
 class StrategySpec(BaseModel):
@@ -36,6 +50,7 @@ class StrategySpec(BaseModel):
     strategy_id: str = Field(min_length=1, max_length=120)
     version: int = Field(default=1, ge=1)
     family: StageFamily
+    scholarly_effect: ScholarlyEffect
     label: str = Field(min_length=1, max_length=160)
     description: str = Field(min_length=1, max_length=1200)
     input_type: str = Field(min_length=1, max_length=80)
