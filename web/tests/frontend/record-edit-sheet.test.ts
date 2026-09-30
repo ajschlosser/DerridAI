@@ -5,9 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import RecordEditSheet from "../../src/components/record/RecordEditSheet.vue";
 
 function fieldLabel(wrapper: ReturnType<typeof mount>, text: string) {
-  return wrapper
-    .findAll("label")
-    .find((label) => label.find("span").text().trim() === text)!;
+  return wrapper.findAll("label").find((label) => label.find("span").text().trim() === text)!;
 }
 
 describe("RecordEditSheet metadata cardinality", () => {
@@ -34,9 +32,7 @@ describe("RecordEditSheet metadata cardinality", () => {
     expect(quotedSpeaker.find("small").exists()).toBe(false);
 
     const topics = fieldLabel(wrapper, "Topics");
-    expect((topics.get("input").element as HTMLInputElement).value).toBe(
-      "hospitality, democracy",
-    );
+    expect((topics.get("input").element as HTMLInputElement).value).toBe("hospitality, democracy");
     expect(topics.get("small").text()).toContain("Separate multiple values");
 
     wrapper.unmount();
