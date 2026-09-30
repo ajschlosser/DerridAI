@@ -1,8 +1,9 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<script lang="ts">
+let tooltipSequence = 0;
+</script>
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref } from "vue";
-
-let tooltipSequence = 0;
 
 /**
  * Accessible, page-level tooltip behavior. The default trigger is the shared
