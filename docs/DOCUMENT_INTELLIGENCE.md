@@ -250,6 +250,23 @@ Node types currently include:
 - `place`;
 - generic `entity` when a provider category has no stronger normalized mapping.
 
+Nodes are semantic identities, not strings. Metadata values resolve through the build's semantic identity registry (reviewed alias sets and reviewed values) and each field's value-matching policy, so `J.P. Dingus` and `JP Dingus`, or `pushing the boundaries` and `push the boundaries` when a lemmatizer is installed, share one node. Each node keeps:
+
+- `surface_forms`: every surface observed for it;
+- `aliases`;
+- `canonical_value_key` and `identity_id` (when a reviewed identity names it);
+- `identity_version`;
+- `cluster_ids`, for provider provenance.
+
+The display label prefers a reviewed value, then a reviewed alias set's preferred form, then the provider's canonical label, then the most-supported surface. Merging is conservative:
+
+- Two identities a reviewer established as distinct never merge.
+- Identities stay scoped by kind: a person is never merged into a concept.
+- BookNLP characters that share a name stay apart.
+- spaCy's surface clusters merge when they are one identity; the merged cluster's old node id still resolves through `node_aliases`.
+
+Record metadata is never rewritten by the projection.
+
 The graph deliberately distinguishes two kinds of edges.
 
 ### Observational edges
@@ -283,7 +300,7 @@ A **Record map** contains the Record's local nodes (nodes whose Record coverage 
 
 A **node neighbourhood** contains the node, its adjacent relations (semantic first), its neighbours, and every Record in which it occurs or takes part in a relation.
 
-The Record-level **POS/NER term layer** is stored in `nlp_candidates.terms` by `nlp_annotations.annotate_record`: named entities plus proper-noun and noun runs, bounded per Record and bound to the Record-text digest. It is computed whenever a spaCy pipeline for the Record language is installed, whether or not a schema field declares POS/NER tags. Terms whose surface form matches an existing node label or alias join that node; the rest become `term` (POS) or entity-type nodes that link Records only by shared surface form. Terms are navigation aids and never metadata values, prompt authority, or evidence; `nlp_candidates` remains excluded from publication.
+The Record-level **POS/NER term layer** is stored in `nlp_candidates.terms` by `nlp_annotations.annotate_record`: named entities plus proper-noun and noun runs, bounded per Record and bound to the Record-text digest. It is computed whenever a spaCy pipeline for the Record language is installed, whether or not a schema field declares POS/NER tags. Each term keeps its exact `text`, `start` and `end`, and may carry a derived `identity_text`: the name identity of a PERSON entity, or the noun/verb lemmas of a POS run. It is omitted when the pipeline produced no lemmas. A term joins a node by surface first, then by that identity (a person's name identity, or a concept's lemma identity); the rest become `term` (POS) or entity-type nodes that link Records only by shared surface or identity text. Terms are navigation aids and never metadata values, prompt authority, or evidence; `nlp_candidates` remains excluded from publication.
 
 Each layer reports `ok`, `stale` (Record text changed after annotation, or the document run is stale), `missing` (not analysed yet), or `unavailable`. Stale or missing layers contribute no mentions or term nodes.
 

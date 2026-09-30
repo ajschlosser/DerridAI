@@ -47,6 +47,23 @@ The relation is computed once, at the review boundary, and recorded with its pro
 
 Only a `different` rejection becomes a correction precedent. Rejection rows written before equivalence existed stay in the audit history unchanged, but they are compared under the current policy when exemplars are rebuilt, so a trivial historical edit no longer becomes a hard negative. Positive and correction exemplars keep their exact `field_value` / `rejected_value` and add a derived `canonical_value_key` (and `rejected_canonical_value_key`). The key is `None` when no safe key exists, for example a lexical phrase with no lemmatizer installed.
 
+### Reviewed alias sets
+
+A reviewer can state that several surfaces name one identity of a kind: for example, that "Jacques Derrida", "J. Derrida" and "Derrida, Jacques" are one person. They do this in **Reviewed identities** in Corpus Builder review, or through `GET/POST/DELETE /api/pdf/corpus-builds/{id}/semantic-aliases`.
+
+- **Canonical state.** Alias sets are canonical reviewer state for the build, stored beside its records. They are never inferred from model output or provider clusters.
+- **Auditable history.** Editing a set retires it and records its replacement, and retiring keeps the set in the build's history.
+- **No shared surfaces.** Two active sets of one kind may not share a surface. Two sets whose surfaces only normalize alike (`J. P. Dingus`, `JP Dingus`) are how a reviewer keeps two similar names apart.
+- **Where they are used.** Review comparisons, correction exemplars, precedent matching, pre-fill voting and the Semantic Content Graph all consult them.
+
+### Identity in retrieval and suggestions
+
+- **Analogy conditions.** `match_field_ids` compares reviewed values as semantic values: an equivalent value agrees, a different one contradicts, and a comparison that cannot be decided is skipped.
+- **Precedent selection.** Each field's quota is filled with one precedent per semantic identity before equivalent restatements are used. Reviewed precedents are never merged or dropped.
+- **Pre-fill votes.** Metadata pre-fill groups precedent votes by identity under this build's policy, so restatements agree instead of splitting the vote. The offered value is an allowed value's own spelling, or else the best-supported, most recently reviewed surface. Every supporting surface stays on the hint.
+- **Adjudication cache.** The cache keeps its same-Record, same-text scope and the reviewer's exact `latest_value`. It stores an equivalent prior value only once and records `latest_canonical_key` and `prior_value_keys`. Older rows load unchanged.
+- **Enrichment metrics.** Metrics report `accepted_exact`, `accepted_equivalent` and `unresolved_reviews` separately. "Accepted" never means "kept exactly as proposed".
+
 ## Field identity and retrieval policy
 
 Schema fields have stable semantic identities independent of display labels. A deliberate rename can retain identity so compatible reviewed precedents remain attached to the same semantic field.

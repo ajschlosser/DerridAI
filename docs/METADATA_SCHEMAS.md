@@ -127,7 +127,7 @@ These controls affect advisory enrichment context only. They do not modify canon
 
 ## Value matching
 
-A field's optional `equivalence_profile` sets when two differently written values count as the same semantic value. It is used for review feedback and correction precedents. The stored value and its evidence are never rewritten.
+A field's optional `equivalence_profile` sets when two differently written values count as the same semantic value. It is used for review feedback, correction and precedent grouping, pre-fill votes, and the Semantic Content Graph, and is set under **Value matching** in the schema editor. The stored value and its evidence are never rewritten.
 
 <!-- prettier-ignore -->
 | `mode` | Treats as the same |
