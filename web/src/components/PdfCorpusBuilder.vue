@@ -984,7 +984,6 @@ const {
   focusQueueMove,
   navigateToQueueRecord,
   advanceFrom,
-  reviewMetadataRecord,
   openMetadataIssueQueue,
   openValidationIssueQueue,
   openTopologyIssueQueue,
@@ -2442,13 +2441,9 @@ defineExpose({
       v-else-if="workspaceMode === 'publish' && currentBuild"
       :build="currentBuild"
       :busy="busy !== ''"
-      :metadata-retry-running="metadataRetryRunning"
       :can-publish-unreviewed="canPublishUnreviewed"
       @retry-metadata="retryIncompleteMetadata"
       @review-metadata="reviewFromPublish(openMetadataIssueQueue)"
-      @review-metadata-record="
-        (recordId) => reviewFromPublish(() => reviewMetadataRecord(recordId))
-      "
       @review-validation="reviewFromPublish(() => openValidationIssueQueue())"
       @fix-issue="(issue) => reviewFromPublish(() => fixValidationIssue(issue))"
       @review-topology="reviewFromPublish(openTopologyIssueQueue)"
