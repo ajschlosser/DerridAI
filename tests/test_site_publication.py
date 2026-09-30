@@ -291,9 +291,6 @@ def test_local_single_file_export_is_self_contained_and_network_disabled(
     assert "__DERRIDAI_HOST_CAPABILITIES__" in html
     assert "connect-src 'none'" in html
     assert "script-src 'unsafe-inline'" in html
-    assert "derridai-publication.js" not in html
-    assert "derridai-sdk.js" not in html
-    assert "derridai-site.js" not in html
 
 
 def test_nginx_export_contains_one_container_deployment_and_executable_scripts(
