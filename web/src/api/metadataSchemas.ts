@@ -17,6 +17,13 @@ export interface RetrievalProfile {
   /** Stable field identities a precedent's reviewed value should agree on. */
   match_field_ids?: string[];
 }
+/** When differently written values count as the same semantic value. Stored values are never rewritten. */
+export type EquivalenceMode = "exact" | "text" | "entity_name" | "lexical_phrase" | "controlled";
+export interface EquivalenceProfile {
+  mode: EquivalenceMode;
+  collection_semantics?: "set" | "ordered";
+  identity_kind?: string | null;
+}
 export interface SchemaValue {
   value: string;
   definition: string;
@@ -40,6 +47,8 @@ export interface SchemaField {
   assess: boolean;
   review: boolean;
   retrieval_profile: RetrievalProfile;
+  /** Unset: DerridAI's policy for the field's semantic identity, then its type. */
+  equivalence_profile?: EquivalenceProfile | null;
   pos_tags: string[];
   ner_tags: string[];
 }

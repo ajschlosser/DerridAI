@@ -5,6 +5,11 @@ import type {
   CorpusLlmTraceEntry,
   DocumentIntelligenceRun,
   RecordSemanticMap,
+  SemanticAliasDraft,
+  SemanticAliasImportResult,
+  SemanticAliasList,
+  SemanticAliasSet,
+  SemanticAliasSource,
   SemanticContentGraph,
   SemanticContentGraphView,
   SemanticGraphViewParams,
@@ -70,6 +75,37 @@ export const corpusBuildsApi = {
   recordSemanticMap: (buildId: string, recordId: string) =>
     apiRequest<RecordSemanticMap>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/semantic-map`,
+    ),
+  semanticAliases: (buildId: string, includeRetired = false) =>
+    apiRequest<SemanticAliasList>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-aliases${
+        includeRetired ? "?include_retired=true" : ""
+      }`,
+    ),
+  saveSemanticAlias: (buildId: string, draft: SemanticAliasDraft) =>
+    apiRequest<SemanticAliasSet>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-aliases`,
+      { method: "POST", body: JSON.stringify(draft) },
+    ),
+  semanticAliasSources: (buildId: string) =>
+    apiRequest<{ items: SemanticAliasSource[] }>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-aliases/sources`,
+    ),
+  importSemanticAliases: (buildId: string, sourceBuildId: string, aliasSetIds?: string[]) =>
+    apiRequest<SemanticAliasImportResult>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-aliases/import`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          source_build_id: sourceBuildId,
+          alias_set_ids: aliasSetIds ?? null,
+        }),
+      },
+    ),
+  retireSemanticAlias: (buildId: string, aliasSetId: string) =>
+    apiRequest<SemanticAliasSet>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-aliases/${encodeURIComponent(aliasSetId)}`,
+      { method: "DELETE" },
     ),
   semanticGraphNode: (buildId: string, nodeId: string) =>
     apiRequest<SemanticNodeNeighborhood>(

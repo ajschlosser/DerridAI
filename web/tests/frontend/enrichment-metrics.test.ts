@@ -67,4 +67,46 @@ describe("Enrichment metrics", () => {
     expect(wrapper.find("a[download]").attributes("href")).toContain("enrichment-ledger.csv");
     wrapper.unmount();
   });
+
+  it("separates restated acceptances and undecided comparisons from exact acceptance", async () => {
+    vi.spyOn(pdfCorpusApi, "enrichmentMetrics").mockResolvedValue({
+      models: {
+        qwen3: model({
+          accepted_exact: 15,
+          accepted_equivalent: 2,
+          accepted_equivalent_rate: 0.1,
+          unresolved_reviews: 4,
+        }),
+      },
+      inter_model_agreement: { compared: 0, agreement: null },
+      unresolved_remaining: 0,
+      runs: ["r1"],
+      concurrency: { limit: 1, working: 0 },
+    });
+    const wrapper = mount(CorpusEnrichmentMetrics, {
+      props: { buildId: "b1" },
+      attachTo: document.body,
+    });
+    const details = wrapper.find("details").element as HTMLDetailsElement;
+    details.open = true;
+    details.dispatchEvent(new Event("toggle"));
+    await flushPromises();
+    const headers = wrapper
+      .findAll("thead tr")[0]
+      .findAll("th")
+      .map((th) => th.text());
+    const cells = wrapper
+      .find("tbody tr")
+      .findAll("td")
+      .map((td) => td.text());
+    // th[0] is the model column; data cells start at the second header.
+    const cell = (label: string) => cells[headers.indexOf(label) - 1];
+    expect(headers).not.toContain("Kept as proposed");
+    expect(cell("Accepted (same value)")).toBe("85%");
+    expect(cell("Accepted as restated")).toBe("10%");
+    expect(cell("Undecided comparisons")).toBe("4");
+    const restated = wrapper.findAll("thead th").find((th) => th.text() === "Accepted as restated");
+    expect(restated?.attributes("title")).toContain("counts as accepted");
+    wrapper.unmount();
+  });
 });

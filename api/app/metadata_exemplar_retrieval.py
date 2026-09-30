@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -86,6 +86,13 @@ def _projection(exemplar: dict[str, Any], scope_id: str) -> dict[str, Any]:
         "region_type": str(exemplar.get("region_type") or ""),
         "evidence_hash": str(evidence_ref.get("quote_hash") or ""),
         "evidence_block_ids_json": _json_value(evidence_ref.get("block_ids") or []),
+        # Derived identity of the exact values above; grouping aids, never replacements.
+        "canonical_value_key": str(exemplar.get("canonical_value_key") or ""),
+        "semantic_identity_id": str(exemplar.get("semantic_identity_id") or ""),
+        "rejected_canonical_value_key": str(exemplar.get("rejected_canonical_value_key") or ""),
+        "rejected_semantic_identity_id": str(exemplar.get("rejected_semantic_identity_id") or ""),
+        "equivalence_profile": str(exemplar.get("equivalence_profile") or ""),
+        "equivalence_version": int(exemplar.get("equivalence_version") or 0),
         # The embedded document is intentionally the small context window, never
         # the complete source record unless the evidence itself spans that record.
         "context_text": str(exemplar.get("context_text") or exemplar.get("evidence_text") or ""),
@@ -159,6 +166,7 @@ def _fallback_candidates(
     current_values: dict[str, str],
     field_match_fields: dict[str, list[str]],
     exclude_record_id: str,
+    value_relation: ValueRelation | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Return conservative lexical matches when semantic retrieval is unavailable."""
 
@@ -173,6 +181,7 @@ def _fallback_candidates(
             exemplar,
             current_values,
             list(field_match_fields.get(field) or []),
+            value_relation,
         )
         if tier == "differs":
             continue
@@ -254,23 +263,62 @@ def _where(
     return {"$and": terms}
 
 
+ValueRelation = Callable[[str, str, str], str]
+
+
+def _exact_relation(_field: str, left: str, right: str) -> str:
+    return "exact" if left == right else "different"
+
+
 def match_tier(
     exemplar: dict[str, Any],
     current_values: dict[str, str],
     match_fields: Iterable[str],
+    relation: ValueRelation | None = None,
 ) -> tuple[str, list[str]]:
     """Compare a precedent with the current record on the policy's declared fields.
 
     Only fields reviewed on *both* sides are compared; an unreviewed side is never
-    guessed. Returns ("matched" | "not_compared" | "differs", compared field names).
+    guessed. ``relation`` decides whether two reviewed values are the same semantic
+    value (by default, exact equality): an equivalent value agrees, a different one
+    contradicts, and an unknown comparison is skipped rather than guessed. Returns
+    ("matched" | "not_compared" | "differs", compared field names).
     """
     theirs = exemplar.get("reviewed_values") if isinstance(exemplar.get("reviewed_values"), dict) else {}
-    compared = [name for name in match_fields if name in current_values and name in theirs]
+    decide = relation or _exact_relation
+    compared: list[str] = []
+    differs = False
+    for name in match_fields:
+        if name not in current_values or name not in theirs:
+            continue
+        verdict = "exact" if current_values[name] == theirs[name] else decide(name, current_values[name], theirs[name])
+        if verdict == "unknown":
+            continue
+        compared.append(name)
+        differs = differs or verdict not in {"exact", "equivalent"}
     if not compared:
         return "not_compared", []
-    if all(current_values[name] == theirs[name] for name in compared):
-        return "matched", compared
-    return "differs", compared
+    return ("differs" if differs else "matched"), compared
+
+
+def _identity_first(rows: list[dict[str, Any]], canonical: dict[str, dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split ranked candidates into the best per semantic identity and the equivalent rest.
+
+    Two reviewed Records with equivalent values stay two precedents; the rest are only
+    used when the quota cannot be filled otherwise, so a packet is not spent on restatements.
+    """
+    first: list[dict[str, Any]] = []
+    rest: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        exemplar = canonical.get(str(row.get("id") or ""), {})
+        key = (str(exemplar.get("canonical_value_key") or ""), str(exemplar.get("rejected_canonical_value_key") or ""))
+        if not key[0] or key not in seen:
+            seen.add(key)
+            first.append(row)
+        else:
+            rest.append(row)
+    return first, rest
 
 
 def _as_sequence(value: Any) -> list[Any]:
@@ -672,6 +720,7 @@ class ChromaMetadataExemplarIndex:
         exclude_record_id: str,
         reason: str,
         fallback_kind: str = "unavailable",
+        value_relation: ValueRelation | None = None,
     ) -> dict[str, Any]:
         raw = _fallback_candidates(
             canonical=canonical,
@@ -681,6 +730,7 @@ class ChromaMetadataExemplarIndex:
             current_values=current_values or {},
             field_match_fields=field_match_fields or {},
             exclude_record_id=exclude_record_id,
+            value_relation=value_relation,
         )
         selected: dict[str, list[dict[str, Any]]] = {}
         considered = 0
@@ -699,7 +749,8 @@ class ChromaMetadataExemplarIndex:
                     row for row in rows
                     if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
                 ]
-                field_selected.extend(pool[:quota])
+                distinct, restated = _identity_first(pool, canonical)
+                field_selected.extend([*distinct, *restated][:quota])
             if field_selected:
                 selected[field] = field_selected
 
@@ -785,8 +836,13 @@ class ChromaMetadataExemplarIndex:
         cross_encoder_model: str | None = None,
         cross_encoder_timeout_seconds: float | None = None,
         allow_lexical_fallback: bool = True,
+        value_relation: ValueRelation | None = None,
     ) -> dict[str, Any]:
-        """Sync canonical exemplars, retrieve per field, and return a bounded packet."""
+        """Sync canonical exemplars, retrieve per field, and return a bounded packet.
+
+        ``value_relation`` compares reviewed values for ``field_match_fields`` under the
+        schema's equivalence policy; without it they compare exactly.
+        """
 
         started_total = time.monotonic()
         canonical = {
@@ -825,6 +881,7 @@ class ChromaMetadataExemplarIndex:
                 exclude_record_id=exclude_record_id,
                 reason=self._disabled_reason,
                 fallback_kind="unavailable",
+                value_relation=value_relation,
             )
         if not canonical or not str(query_text or "").strip() or not ordered_fields:
             return {
@@ -902,7 +959,7 @@ class ChromaMetadataExemplarIndex:
                     )
                     if semantic_similarity < floor:
                         continue
-                    tier, compared = match_tier(exemplar, current_values or {}, match_fields)
+                    tier, compared = match_tier(exemplar, current_values or {}, match_fields, value_relation)
                     if tier == "differs":
                         continue  # declared analogy conditions contradict this precedent
                     lexical_similarity = _lexical_overlap(
@@ -992,19 +1049,21 @@ class ChromaMetadataExemplarIndex:
                         row for row in rows
                         if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
                     ]
-                    for tier in MATCH_TIERS:
-                        remaining = quota - sum(
-                            1 for row in selected
-                            if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
-                        )
-                        if remaining > 0:
-                            selected.extend(
-                                _mmr(
-                                    [row for row in pool if row["match_tier"] == tier],
-                                    remaining,
-                                    lambda_mult=mmr_lambda,
-                                )
+                    distinct, restated = _identity_first(pool, canonical)
+                    for candidates in (distinct, restated):
+                        for tier in MATCH_TIERS:
+                            remaining = quota - sum(
+                                1 for row in selected
+                                if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
                             )
+                            if remaining > 0:
+                                selected.extend(
+                                    _mmr(
+                                        [row for row in candidates if row["match_tier"] == tier],
+                                        remaining,
+                                        lambda_mult=mmr_lambda,
+                                    )
+                                )
                 if selected:
                     selected_raw[field] = selected
 
@@ -1087,4 +1146,5 @@ class ChromaMetadataExemplarIndex:
                 exclude_record_id=exclude_record_id,
                 reason=self._disabled_reason,
                 fallback_kind=fallback_kind,
+                value_relation=value_relation,
             )

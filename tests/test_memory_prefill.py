@@ -159,3 +159,48 @@ def test_the_ledger_accepts_the_namespaced_derivation_methods():
 @pytest.mark.parametrize("value,expected", [("interrogation" if False else ROLE_A, True), ("nope", False), (None, False)])
 def test_allowed_values(value, expected):
     assert mp._allowed(default_schema(), "discourse_role", value) is expected
+
+
+def test_equivalent_values_vote_together_and_offer_a_reviewed_surface():
+    """Restatements of one person agree instead of splitting the vote (semantic identity)."""
+    hits = [
+        ({**meta("persons", ["J.P. Dingus"], "b-old", "x1"), "reviewed_at": "2026-01-01"}, 0.05),
+        ({**meta("persons", ["JP Dingus"], "b-old", "x2"), "reviewed_at": "2026-03-01"}, 0.06),
+    ]
+    record, summary = run(hits)
+    assert summary["prefilled"] == 1
+    # Equal support: the most recently reviewed surface is offered, and both are kept on the hint.
+    assert record["persons"] == ["JP Dingus"]
+    [hint] = record["memory_hints"]["persons"]
+    assert hint["support"] == 2 and hint["surface_forms"] == [["J.P. Dingus"], ["JP Dingus"]]
+    # A different person is still a rival, not a vote.
+    record, summary = run([(meta("persons", ["J.P. Dingus"], "b-old", "x1"), 0.05), (meta("persons", ["Levinas"], "b-old", "x2"), 0.05)])
+    assert summary["prefilled"] == 0 and len(record["memory_hints"]["persons"]) == 2
+
+
+def test_adjudication_cache_dedupes_equivalent_prior_values(monkeypatch):
+    from app import metadata_adjudication_cache as cache
+    from app.metadata_schema import default_schema
+    from app.semantic_identity import canonical_value_key
+
+    rows = {}
+    store = type("Store", (), {
+        "get_adjudication_cache": staticmethod(lambda key: rows.get(key)),
+        "put_adjudication_cache": staticmethod(lambda key, record_id, field, cardinality, digest, payload: rows.__setitem__(key, payload)),
+    })
+    monkeypatch.setattr(cache, "system_store", store)
+    profile = default_schema().equivalence_profile_for("speaker")
+    key = lambda value: canonical_value_key(value, profile=profile)  # noqa: E731
+    # A row written before identity keys existed still loads and is keyed on the next write.
+    cache.remember(record_id="r1", text="t", field="speaker", value="J. P. Dingus")
+    cache.remember(record_id="r1", text="t", field="speaker", value="JP Dingus", value_key=key)
+    cache.remember(record_id="r1", text="t", field="speaker", value="Levinas", value_key=key)
+    row = cache.suggestions(record_id="r1", text="t", field="speaker", cardinality="single")
+    assert row["latest_value"] == "Levinas"
+    assert row["prior_values"] == ["J. P. Dingus", "Levinas"]
+    assert row["prior_value_keys"] == [key("J. P. Dingus"), key("Levinas")]
+    assert row["latest_canonical_key"] == key("Levinas")
+    cache.remember(record_id="r1", text="t", field="speaker", value="J.P. Dingus", value_key=key)
+    row = cache.suggestions(record_id="r1", text="t", field="speaker", cardinality="single")
+    assert row["latest_value"] == "J.P. Dingus"  # exactly what the reviewer chose
+    assert len(row["prior_values"]) == 2

@@ -27,6 +27,7 @@ from .enrichment_ledger import (
     RESUMED,
     REVIEW_EVENTS,
     SUSPENDED,
+    UNRESOLVED,
 )
 from .experiment_stats import cohens_kappa, two_proportion, wilson
 from .field_assertions import current_assertions, migrate_record_assertions
@@ -104,6 +105,9 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
     reviews = [e for e in events if e["kind"] in REVIEW_EVENTS]
     calls = [e for e in events if e["kind"] == CALL]
     accepted = [e for e in reviews if e["kind"] == ACCEPTED]
+    # A reviewer who restated the value (J.P. -> J. P.) accepted it; it is counted apart so
+    # "accepted" is never read as "kept exactly as proposed".
+    accepted_equivalent = [e for e in accepted if e.get("equivalence_relation") == "equivalent"]
     corrected = [e for e in reviews if e["kind"] == CORRECTED]
     rejected = [e for e in reviews if e["kind"] == REJECTED]
     scored = [e for e in reviews if isinstance(e.get("confidence"), (int, float))]
@@ -155,7 +159,8 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         severities[str(e.get("severity") or ("cleared" if e["kind"] == REJECTED else "unknown"))] += 1
     firsts = [t for t in (_seconds(e) for e in calls) if t is not None]
     useful = [t for t in (_seconds(e) for e in events if e["kind"] in (AUTOFILLED, ACCEPTED)) if t is not None]
-    blind = [e for e in events if e["kind"] == BLIND_LABEL]
+    # An unresolved comparison is neither agreement nor disagreement.
+    blind = [e for e in events if e["kind"] == BLIND_LABEL and e.get("equivalence_relation") != "unknown"]
     blind_agreed = sum(1 for e in blind if e.get("agreed"))
     return {
         # Anchoring: how much more often people agree with the model when they can see its value than when they cannot.
@@ -179,6 +184,11 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         "reviews": len(reviews),
         "autofilled": len(autofilled),
         "acceptance_rate": _rate(len(accepted), len(reviews)),  # 1
+        "accepted_exact": len(accepted) - len(accepted_equivalent),
+        "accepted_equivalent": len(accepted_equivalent),
+        "accepted_equivalent_rate": _rate(len(accepted_equivalent), len(reviews)),
+        # Reviewer values saved when equivalence could not be decided; outside every denominator.
+        "unresolved_reviews": sum(1 for e in events if e["kind"] == UNRESOLVED),
         "brier_score": brier,  # 2 (0 is perfect; 0.25 is a coin toss)
         "reliability": reliability,  # 2
         "correction_rate": _rate(len(corrected), len(reviews)),  # 3

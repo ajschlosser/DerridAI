@@ -30,6 +30,41 @@ DerridAI distinguishes:
 
 Stale revisions, broken evidence bindings, unresolved assertions, and incompatible schema identities are excluded or surfaced as stale rather than silently repaired.
 
+## Value equivalence
+
+A surface value is not a semantic identity, and a semantic identity is not evidence. `semantic_identity.py` decides deterministically, without embeddings or model calls, whether a reviewer's value is the same value the model proposed. It compares under the field's equivalence profile (see [METADATA_SCHEMAS.md](METADATA_SCHEMAS.md#value-matching)) and returns one of four relations:
+
+| Relation     | Example                                                     | Review feedback                                                            |
+| ------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `exact`      | identical values                                            | accepted                                                                   |
+| `equivalent` | `J.P. Dingus` → `J. P. Dingus`; `pushing` → `push` (lemmas) | accepted; evidence kept; no rejection or hard negative                     |
+| `different`  | `Derrida` → `Levinas`; `critique` → `deconstruction`        | corrected or cleared; remembered as a rejection                            |
+| `unknown`    | `J. Dingus` → `John Dingus`; inflection with no lemmatizer  | neutral: the reviewer's value stands, but it is neither kept nor corrected |
+
+Established identities come first. An explicit reviewed alias can make two surfaces equivalent or keep two similar surfaces apart, and punctuation rules never merge two distinct reviewed identities. Document Intelligence entity clusters are advisory: they can turn an `unknown` comparison into `equivalent`, but never override a deterministic difference. Identities are scoped by kind, so a person called Derrida never merges with a concept labelled Derrida.
+
+The relation is computed once, at the review boundary, and recorded with its profile, reasons and `equivalence_version` on the ledger row, the review decision, and any `llm_rejections` row. A later algorithm version never reinterprets an earlier decision. Neither value is rewritten: the model's assertion still states exactly what the model proposed, and the reviewer's exact surface becomes the current value. An equivalent edit carries the prior evidence forward without promoting it: model-selected evidence stays model-selected. A `different` or `unknown` edit starts without evidence, as before. An `unknown` edit is written to the ledger as `review_unresolved`, which is excluded from acceptance, calibration and autofill-suspension counts.
+
+Only a `different` rejection becomes a correction precedent. Rejection rows written before equivalence existed stay in the audit history unchanged, but they are compared under the current policy when exemplars are rebuilt, so a trivial historical edit no longer becomes a hard negative. Positive and correction exemplars keep their exact `field_value` / `rejected_value` and add a derived `canonical_value_key` (and `rejected_canonical_value_key`). The key is `None` when no safe key exists, for example a lexical phrase with no lemmatizer installed.
+
+### Reviewed alias sets
+
+A reviewer can state that several surfaces name one identity of a kind: for example, that "Jacques Derrida", "J. Derrida" and "Derrida, Jacques" are one person. They do this in **Reviewed identities** in Corpus Builder review, or through `GET/POST/DELETE /api/pdf/corpus-builds/{id}/semantic-aliases`.
+
+- **Canonical state.** Alias sets are canonical reviewer state for the build, stored beside its records. They are never inferred from model output or provider clusters.
+- **Auditable history.** Editing a set retires it and records its replacement, and retiring keeps the set in the build's history.
+- **No shared surfaces.** Two active sets of one kind may not share a surface. Two sets whose surfaces only normalize alike (`J. P. Dingus`, `JP Dingus`) are how a reviewer keeps two similar names apart.
+- **Importing from another corpus.** A reviewer can import another build's active sets (all of them, or chosen ones) through **Import from another corpus** or `GET …/semantic-aliases/sources` and `POST …/semantic-aliases/import`. An import is a copy that records `imported_from` (source build, set, title, original reviewer). Later edits in the source build therefore never change this corpus. A set whose surfaces already belong to an identity here is skipped and reported, never merged, and so is a set already imported (an edited import keeps its provenance).
+- **Where they are used.** Review comparisons, correction exemplars, precedent matching, pre-fill voting and the Semantic Content Graph all consult them.
+
+### Identity in retrieval and suggestions
+
+- **Analogy conditions.** `match_field_ids` compares reviewed values as semantic values: an equivalent value agrees, a different one contradicts, and a comparison that cannot be decided is skipped.
+- **Precedent selection.** Each field's quota is filled with one precedent per semantic identity before equivalent restatements are used. Reviewed precedents are never merged or dropped.
+- **Pre-fill votes.** Metadata pre-fill groups precedent votes by identity under this build's policy, so restatements agree instead of splitting the vote. The offered value is an allowed value's own spelling, or else the best-supported, most recently reviewed surface. Every supporting surface stays on the hint.
+- **Adjudication cache.** The cache keeps its same-Record, same-text scope and the reviewer's exact `latest_value`. It stores an equivalent prior value only once and records `latest_canonical_key` and `prior_value_keys`. Older rows load unchanged.
+- **Enrichment metrics.** Metrics report `accepted_exact`, `accepted_equivalent` and `unresolved_reviews` separately. "Accepted" never means "kept exactly as proposed".
+
 ## Field identity and retrieval policy
 
 Schema fields have stable semantic identities independent of display labels. A deliberate rename can retain identity so compatible reviewed precedents remain attached to the same semantic field.

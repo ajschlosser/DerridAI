@@ -349,6 +349,68 @@ export interface RecordSemanticMap {
   epistemic_note?: string;
 }
 
+/** A reviewer's statement that several surfaces name one identity of a kind. */
+export interface SemanticAliasSet {
+  alias_set_id: string;
+  kind: string;
+  canonical_label: string;
+  aliases: string[];
+  reason?: string;
+  reviewer?: string;
+  created_at: string;
+  retired_at?: string | null;
+  replaces?: string | null;
+  replaced_by?: string;
+  /** Set when a reviewer copied this identity from another corpus build. */
+  imported_from?: {
+    build_id: string;
+    alias_set_id: string;
+    build_title?: string;
+    reviewer?: string | null;
+    created_at?: string;
+  } | null;
+}
+
+/** Another corpus build whose reviewed identities can be imported. */
+export interface SemanticAliasSource {
+  build_id: string;
+  title: string;
+  created_at?: string;
+  alias_sets: number;
+  kinds: string[];
+}
+
+export interface SemanticAliasImportResult {
+  imported: SemanticAliasSet[];
+  skipped: Array<{
+    build_id: string;
+    alias_set_id: string;
+    canonical_label: string;
+    reason: "conflict" | "already_imported" | string;
+    detail?: string;
+  }>;
+}
+
+/** An identity kind the build's schema compares, and the fields that use it. */
+export interface SemanticAliasKind {
+  kind: string;
+  mode: string;
+  fields: string[];
+}
+
+export interface SemanticAliasList {
+  items: SemanticAliasSet[];
+  kinds: SemanticAliasKind[];
+}
+
+export interface SemanticAliasDraft {
+  kind: string;
+  canonical_label: string;
+  aliases: string[];
+  reason?: string;
+  replaces?: string | null;
+}
+
 export interface SemanticNodeNeighborhood {
   version: number;
   kind: "semantic_node_neighborhood" | string;
@@ -1188,6 +1250,12 @@ export interface EnrichmentModelMetrics {
   reviews: number;
   autofilled: number;
   acceptance_rate: number | null;
+  /** Accepted reviews split by whether the reviewer restated the value (J.P. → J. P.). */
+  accepted_exact?: number;
+  accepted_equivalent?: number;
+  accepted_equivalent_rate?: number | null;
+  /** Reviewer values saved when equivalence could not be decided; in no denominator. */
+  unresolved_reviews?: number;
   brier_score: number | null;
   correction_rate: number | null;
   rejection_rate: number | null;

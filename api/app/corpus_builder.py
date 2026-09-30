@@ -254,6 +254,7 @@ from .enrichment_ledger import (
     BLIND_LABEL,
     CORRECTED,
     REJECTED,
+    UNRESOLVED,
     EnrichmentLedger,
 )
 from .error_severity import severity as error_severity
@@ -291,6 +292,13 @@ from .semantic_content_graph import (
     build_semantic_content_graph,
     semantic_content_graph_view,
 )
+from .semantic_identity import SEMANTIC_IDENTITY_VERSION, ValueEquivalenceResult
+from .semantic_identity_registry import (
+    SemanticIdentityRegistry,
+    compare_field_values,
+    registry_for_record,
+)
+from .semantic_identity_store import alias_digest, build_registry, review_registry
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
@@ -1835,7 +1843,10 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             )
             projection_counts = project_annotations_to_records(records, analysis)
             self.repo.save_checkpoint(build_id, "document_intelligence", analysis)
-            semantic_graph = build_semantic_content_graph(records, analysis, schema=schema)
+            semantic_graph = build_semantic_content_graph(
+                records, analysis, schema=schema,
+                registry=build_registry(self.repo, build_id, schema=schema, records=records),
+            )
             self.repo.save_checkpoint(build_id, "semantic_content_graph", semantic_graph)
             build = self.repo.get_build(build_id)
             build["document_intelligence"] = {
@@ -1936,14 +1947,19 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             len(analysis.get("characters") or []),
             bool(analysis.get("stale")),
             str(analysis.get("profile") or ""),
+            alias_digest(self.repo, build_id),
+            SEMANTIC_IDENTITY_VERSION,
         )
         cached = self._semantic_graph_cache.get(build_id)
         if cached is not None and cached[0] == key:
             return cached[1], records, analysis
+        schema = self._schema_for(build_id)
         graph = build_semantic_content_graph(
             records,
             graph_analysis,
-            schema=self._schema_for(build_id),
+            schema=schema,
+            # Reviewer-presented records: a value sealed for blind review names no identity.
+            registry=build_registry(self.repo, build_id, schema=schema, records=records),
         )
         with self._lock:
             self._semantic_graph_cache.pop(build_id, None)
@@ -2113,28 +2129,56 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             build["llm_model_effectiveness"] = model_stats
             self.repo.save_build(build)
 
-    def _record_human_llm_feedback(self, build_id: str, field: str, prior_value: Any, new_value: Any, prior_status: dict[str, Any] | None, record: dict[str, Any] | None = None) -> None:
+    def _review_registry(self, build_id: str, record: dict[str, Any] | None, schema: MetadataSchema | None) -> SemanticIdentityRegistry | None:
+        """Reviewed aliases for the build plus the Record's own analysis; None if neither can be read."""
+        if record is None:
+            return None
+        try:
+            return review_registry(self.repo, build_id, record, schema)
+        except (KeyError, RuntimeError):
+            return registry_for_record(record)
+
+    def _record_human_llm_feedback(self, build_id: str, field: str, prior_value: Any, new_value: Any, prior_status: dict[str, Any] | None, record: dict[str, Any] | None = None, equivalence: ValueEquivalenceResult | None = None) -> None:
+        """Score a reviewer's decision against the model value it replaced.
+
+        ``equivalence`` is computed once at the review boundary. An equivalent surface edit
+        is an acceptance; only a ``different`` value is a correction and becomes a remembered
+        rejection; an ``unknown`` one is neutral and teaches nothing either way.
+        """
         info = prior_status or {}
         method = str(info.get("method") or "")
         state = str(info.get("status") or "")
         if "llm" not in method and state != "model_inferred":
             return
+        try:
+            schema: MetadataSchema | None = self._schema_for(build_id)
+        except (KeyError, ValueError):
+            schema = None  # without the build's policy, values compare exactly
         if info.get("blind") and info.get("model") and record is not None:
             sealed = self._ledger.sealed_value(build_id, str(record.get("record_id") or ""), field)
-            self._ledger.append(BLIND_LABEL, model=str(info["model"]), field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), value=sealed, new_value=new_value, agreed=sealed == new_value, severity=None if sealed == new_value else error_severity(sealed, new_value), **(info.get("conditions") or {}))
+            blind = compare_field_values(schema, field, sealed, new_value, record=record, registry=self._review_registry(build_id, record, schema))
+            self._ledger.append(BLIND_LABEL, model=str(info["model"]), field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), value=sealed, new_value=new_value, agreed=blind.same, severity=None if blind.same else error_severity(sealed, new_value), **blind.audit(), **(info.get("conditions") or {}))
             record.setdefault("blind_reveals", {})[field] = sealed  # now that they have decided, the reviewer may see it
             return
-        kept = prior_value == new_value
+        if equivalence is None:
+            equivalence = compare_field_values(schema, field, prior_value, new_value, record=record, registry=self._review_registry(build_id, record, schema))
+        relation = equivalence.relation
+        kept = equivalence.same
         if info.get("model"):
-            kind = ACCEPTED if kept else (REJECTED if new_value in (None, "", []) else CORRECTED)
-            self._ledger.append(kind, model=str(info["model"]), field=field, build_id=build_id, record_id=str((record or {}).get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), value=prior_value, new_value=new_value, severity=None if kept else error_severity(prior_value, new_value), **(info.get("conditions") or {}))
+            if relation == "unknown":
+                kind = UNRESOLVED
+            else:
+                kind = ACCEPTED if kept else (REJECTED if new_value in (None, "", []) else CORRECTED)
+            self._ledger.append(kind, model=str(info["model"]), field=field, build_id=build_id, record_id=str((record or {}).get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), value=prior_value, new_value=new_value, severity=None if kept or relation == "unknown" else error_severity(prior_value, new_value), surface_changed=relation != "exact", **equivalence.audit(), **(info.get("conditions") or {}))
+        if relation == "unknown":
+            return
         if record is not None and not kept and prior_value not in (None, "", []):
             # Remembered: the next pass is shown this as a value people turned down, and it lowers the
             # model's blended confidence on this field through the ledger.
             rejections = [r for r in record.get("llm_rejections") or [] if isinstance(r, dict)]
-            rejections.append({"field": field, "rejected_value": prior_value, "chosen_value": new_value, "model": info.get("model"), "at": iso_now()})
+            rejections.append({"field": field, "rejected_value": prior_value, "chosen_value": new_value, "model": info.get("model"), "at": iso_now(), **equivalence.audit()})
             record["llm_rejections"] = rejections[-40:]
-        family = next((name for name, fields in self._schema_for(build_id).family_fields().items() if field in fields), None)
+        family = next((name for name, fields in (schema or self._schema_for(build_id)).family_fields().items() if field in fields), None)
         if not family:
             return
         key = "human_accepted_fields" if kept else "human_corrected_fields"
@@ -2159,7 +2203,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 band = "high" if pct >= 0.85 else "medium" if pct >= 0.65 else "low"
                 band_stats = field_stats.get(band) if isinstance(field_stats.get(band), dict) else {}
                 band_stats["reviewed"] = int(band_stats.get("reviewed") or 0) + 1
-                if prior_value == new_value:
+                if kept:
                     band_stats["accepted"] = int(band_stats.get("accepted") or 0) + 1
                 else:
                     band_stats["corrected"] = int(band_stats.get("corrected") or 0) + 1
@@ -3067,7 +3111,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             self.repo.save_build(current_build)
             # Pre-fill from reviewed precedents matched on each record's source spans (advisory).
             memory_prefill = (
-                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id)
+                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema))
                 if bool(request.get("memory_prefill", True))
                 else {"status": "disabled"}
             )

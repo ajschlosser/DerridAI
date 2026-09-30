@@ -28,8 +28,12 @@ BLIND_LABEL = "blind_label"  # a person's value for a field whose model value th
 RECHECK_SEAL, RECHECK = "recheck_seal", "recheck"  # a decision set aside to be asked again, and the second answer
 SUSPENDED, RESUMED = "suspended", "resumed"  # the autofill policy switching a model and field off, and back on
 ACCEPTED, CORRECTED, REJECTED = "accepted", "corrected", "rejected"
+# A reviewer replaced a model value with one whose equivalence could be neither established nor
+# ruled out. The reviewer's value stands, but the row is neutral: it counts as neither an
+# acceptance nor a correction, so it stays out of every precision denominator.
+UNRESOLVED = "review_unresolved"
 REVIEW_EVENTS = {ACCEPTED, CORRECTED, REJECTED}
-HUMAN_EVENTS = REVIEW_EVENTS | {BLIND_LABEL, RECHECK_SEAL, RECHECK, "second_label"}
+HUMAN_EVENTS = REVIEW_EVENTS | {UNRESOLVED, BLIND_LABEL, RECHECK_SEAL, RECHECK, "second_label"}
 
 
 class EnrichmentLedger:

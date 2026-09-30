@@ -62,6 +62,8 @@ from ..models import (
     PdfCorpusRecordTextPatch,
     PdfCorpusReviewDecision,
     PdfCorpusSecondOpinion,
+    PdfCorpusSemanticAliasImport,
+    PdfCorpusSemanticAliasSet,
     PdfCorpusTextTouchupProposalStatus,
     PdfCorpusTextTouchupRequest,
     PdfDocumentLayoutPatch,
@@ -72,6 +74,7 @@ from ..models import (
 )
 from ..pdf_tools import extract_pdf_text
 from ..provider_profile_options import profile_generation_options
+from ..semantic_identity_store import AliasConflict
 from ..source_media import (
     fetch_source_url,
     load_gutenberg_etext,
@@ -944,6 +947,63 @@ def decide_pdf_corpus_record_metadata_batch(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/semantic-aliases")
+def get_pdf_corpus_semantic_aliases(build_id: str, include_retired: bool = False) -> dict[str, Any]:
+    """Reviewed alias sets: which surfaces a reviewer has said name one identity."""
+    try:
+        return pdf_corpus_builds.semantic_aliases(build_id, include_retired=include_retired)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/semantic-aliases")
+def create_pdf_corpus_semantic_alias(build_id: str, body: PdfCorpusSemanticAliasSet) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.save_semantic_alias(
+            build_id, kind=body.kind, canonical_label=body.canonical_label,
+            aliases=body.aliases, reason=body.reason, replaces=body.replaces,
+        )
+    except AliasConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build or alias set not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/semantic-aliases/sources")
+def get_pdf_corpus_semantic_alias_sources(build_id: str) -> dict[str, Any]:
+    """Other corpus builds with reviewed identities that can be imported into this one."""
+    try:
+        return {"items": pdf_corpus_builds.semantic_alias_sources(build_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/semantic-aliases/import")
+def import_pdf_corpus_semantic_aliases(build_id: str, body: PdfCorpusSemanticAliasImport) -> dict[str, Any]:
+    """Copy reviewed identities from another build; clashes are skipped and reported."""
+    try:
+        return pdf_corpus_builds.import_semantic_aliases(build_id, body.source_build_id, body.alias_set_ids)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build or alias set not found") from exc
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.delete("/api/pdf/corpus-builds/{build_id}/semantic-aliases/{alias_set_id}")
+def retire_pdf_corpus_semantic_alias(build_id: str, alias_set_id: str) -> dict[str, Any]:
+    """Retire a reviewed alias set; it stays in the build's history."""
+    try:
+        return pdf_corpus_builds.retire_semantic_alias(build_id, alias_set_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build or alias set not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

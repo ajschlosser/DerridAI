@@ -55,6 +55,7 @@ from .corpus_segmentation import (
 )
 from .enrichment_ledger import ACCEPTED
 from .field_assertions import (
+    FieldAssertion,
     confirm_absence,
     confirm_assertion,
     create_human_assertion,
@@ -69,6 +70,17 @@ from .nlp_annotations import annotate_record
 from .pipelines.corpus_reviewer_evidence_choice import ReviewerEvidenceChoiceSession
 from .provenance_memory import persist_record_decision
 from .rag import _citation_strings
+from .reviewer_context import current_reviewer
+from .semantic_identity import ValueEquivalenceResult, canonical_value_key
+from .semantic_identity_registry import compare_field_values
+from .semantic_identity_store import (
+    alias_sources,
+    create_alias_set,
+    import_alias_sets,
+    list_alias_sets,
+    retire_alias_set,
+    review_registry,
+)
 from .system_store import system_store
 
 
@@ -85,6 +97,39 @@ def _serialize_record_mutation(method):
         with self._lock:
             return method(self, *args, **kwargs)
     return wrapped
+
+
+def _equivalent_evidence(prior: FieldAssertion | None, equivalence: ValueEquivalenceResult) -> list[dict[str, Any]] | None:
+    """Evidence an equivalent surface edit keeps, with its authority unchanged.
+
+    Restating the same value does not invalidate the source that supports it, and it does
+    not review that source either: model-selected evidence stays model-selected. A value
+    that is different, or not known to be the same, starts without evidence as before.
+    """
+    if prior is None or equivalence.relation != "equivalent" or not prior.evidence:
+        return None
+    return [
+        {**item, "carried_from_assertion_id": prior.assertion_id}
+        for item in prior.evidence
+        if isinstance(item, dict)
+    ]
+
+
+def _identity_key_for(schema: MetadataSchema, field: str, record: dict[str, Any], registry: Any) -> Any:
+    """A value's semantic identity key under ``field``'s policy, for derived memory."""
+    try:
+        profile = schema.equivalence_profile_for(field)
+    except KeyError:
+        return None
+    language = str(record.get("language") or "")
+    return lambda value: canonical_value_key(value, profile=profile, language=language, registry=registry)
+
+
+def _equivalence_audit(prior_value: Any, equivalence: ValueEquivalenceResult) -> dict[str, Any]:
+    """Audit fields for a review decision that replaced a different surface form."""
+    if equivalence.relation == "exact" or prior_value in (None, "", []):
+        return {}
+    return {"prior_value": prior_value, **equivalence.audit()}
 
 
 class ReviewActionsMixin:
@@ -123,7 +168,7 @@ class ReviewActionsMixin:
         def _edit_model(self, build_id: str) -> type[BaseModel]: ...
         def _refresh_workflow_fields(self, build: dict[str, Any]) -> dict[str, Any]: ...
         def _interactive_llm_request(self, build_id: str, override: dict[str, Any] | None = None) -> dict[str, Any]: ...
-        def _record_human_llm_feedback(self, build_id: str, field: str, prior_value: Any, new_value: Any, prior_status: dict[str, Any] | None, record: dict[str, Any] | None = None) -> None: ...
+        def _record_human_llm_feedback(self, build_id: str, field: str, prior_value: Any, new_value: Any, prior_status: dict[str, Any] | None, record: dict[str, Any] | None = None, equivalence: ValueEquivalenceResult | None = None) -> None: ...
         def _request_second_opinion(self, build_id: str, record: dict[str, Any], field: str, value: Any) -> None: ...
         def _log_second_opinion(self, build_id: str, record: dict[str, Any], field: str, value: Any, item: dict[str, Any]) -> bool: ...
         def _schedule_recheck(self, build_id: str, record: dict[str, Any], field: str, value: Any) -> None: ...
@@ -716,11 +761,13 @@ class ReviewActionsMixin:
                 skipped.add(key)
                 continue
             answered_again = self._score_recheck(build_id, target, key, value, prior_status)
+            # Decided once here and passed on: feedback, evidence and the audit trail agree.
+            equivalence = compare_field_values(schema, key, prior_value, value, record=target, registry=review_registry(self.repo, build_id, target, schema))
             if not answered_again:
-                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, target)
+                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, target, equivalence=equivalence)
                 self._schedule_recheck(build_id, target, key, value)
                 self._request_second_opinion(build_id, target, key, value)
-            if prior_value != value and isinstance(target.get("metadata_evidence"), dict):
+            if not equivalence.same and isinstance(target.get("metadata_evidence"), dict):
                 evidence_map = dict(target.get("metadata_evidence") or {})
                 evidence_map.pop(key, None)
                 target["metadata_evidence"] = evidence_map
@@ -742,6 +789,7 @@ class ReviewActionsMixin:
                         prior_assertion is not None
                         and prior_assertion.value_status == "present"
                         and prior_assertion.value != value
+                        and equivalence.relation != "equivalent"
                     )
                     create_human_assertion(
                         target,
@@ -756,9 +804,10 @@ class ReviewActionsMixin:
                             else "Confirmed during record review."
                         ),
                         method="human_record_override" if is_manifest_override else "human",
+                        evidence=_equivalent_evidence(prior_assertion, equivalence),
                     )
                 project_record_assertions(target)
-                decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human_override" if is_manifest_override else "human"})
+                decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human_override" if is_manifest_override else "human", **_equivalence_audit(prior_value, equivalence)})
         constraint_changes = apply_metadata_constraints(target, schema)
         for item in constraint_changes:
             decision_log.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
@@ -844,8 +893,9 @@ class ReviewActionsMixin:
                 prior_status = dict(statuses.get(key) or {}) if isinstance(statuses.get(key), dict) else {}
                 prior_value = record.get(key)
                 prior_assertion = current_assertion_by_name(record, key)
-                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, record)
-                if prior_value != value and isinstance(record.get("metadata_evidence"), dict):
+                equivalence = compare_field_values(schema, key, prior_value, value, record=record, registry=review_registry(self.repo, build_id, record, schema))
+                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, record, equivalence=equivalence)
+                if not equivalence.same and isinstance(record.get("metadata_evidence"), dict):
                     evidence_map = dict(record.get("metadata_evidence") or {})
                     evidence_map.pop(key, None)
                     record["metadata_evidence"] = evidence_map
@@ -853,6 +903,7 @@ class ReviewActionsMixin:
                     prior_assertion is not None
                     and prior_assertion.value_status == "present"
                     and prior_assertion.value != value
+                    and equivalence.relation != "equivalent"
                 )
                 if (
                     prior_assertion is not None
@@ -875,9 +926,10 @@ class ReviewActionsMixin:
                         override=override,
                         reason="Applied through bulk record metadata editing.",
                         method="human_bulk_override" if override else "human_bulk",
+                        evidence=_equivalent_evidence(prior_assertion, equivalence),
                     )
                 project_record_assertions(record)
-                decisions.append({"field": key, "value": value, "at": iso_now(), "source": "human_bulk"})
+                decisions.append({"field": key, "value": value, "at": iso_now(), "source": "human_bulk", **_equivalence_audit(prior_value, equivalence)})
             constraint_changes = apply_metadata_constraints(record, schema)
             for item in constraint_changes:
                 decisions.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
@@ -926,6 +978,52 @@ class ReviewActionsMixin:
 
 
     @_serialize_record_mutation
+    def semantic_aliases(self, build_id: str, *, include_retired: bool = False) -> dict[str, Any]:
+        """Reviewed alias sets for the build, and the identity kinds its schema compares."""
+        schema = self._schema_for(build_id)
+        kinds: dict[str, dict[str, Any]] = {}
+        for name in schema.field_names():
+            try:
+                profile = schema.equivalence_profile_for(name)
+            except KeyError:
+                continue
+            if profile.identity_kind and profile.mode in {"entity_name", "text", "lexical_phrase", "controlled"}:
+                entry = kinds.setdefault(profile.identity_kind, {"kind": profile.identity_kind, "mode": profile.mode, "fields": []})
+                entry["fields"].append(name)
+        return {
+            "items": list_alias_sets(self.repo, build_id, include_retired=include_retired),
+            "kinds": sorted(kinds.values(), key=lambda item: str(item["kind"])),
+        }
+
+    def save_semantic_alias(self, build_id: str, *, kind: str, canonical_label: str, aliases: list[str], reason: str = "", replaces: str | None = None) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
+        entry = create_alias_set(
+            self.repo, build_id, kind=kind, canonical_label=canonical_label, aliases=aliases,
+            reason=reason, reviewer=current_reviewer.get(), replaces=replaces,
+        )
+        # Correction precedents are re-derived under the new identities.
+        self._schedule_metadata_exemplar_projection(build_id)
+        return entry
+
+    def semantic_alias_sources(self, build_id: str) -> list[dict[str, Any]]:
+        """Other corpus builds whose reviewed identities can be imported here."""
+        return alias_sources(self.repo, build_id)
+
+    def import_semantic_aliases(self, build_id: str, source_build_id: str, alias_set_ids: list[str] | None = None) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
+        result = import_alias_sets(
+            self.repo, build_id, source_build_id, alias_set_ids=alias_set_ids, reviewer=current_reviewer.get(),
+        )
+        if result["imported"]:
+            self._schedule_metadata_exemplar_projection(build_id)
+        return result
+
+    def retire_semantic_alias(self, build_id: str, alias_set_id: str) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
+        entry = retire_alias_set(self.repo, build_id, alias_set_id, reviewer=current_reviewer.get())
+        self._schedule_metadata_exemplar_projection(build_id)
+        return entry
+
     def metadata_decision(self, build_id: str, record_id: str, field: str, value: Any, expected_revision: int | None = None, confirm_no_supported_value: bool = False, evidence_block_ids: list[str] | None = None, evidence_source: str | None = None, evidence_note: str = "", external_evidence_block_ids: list[str] | None = None) -> dict[str, Any]:
         """Persist one human metadata decision and return authoritative review state.
 
@@ -1074,6 +1172,7 @@ class ReviewActionsMixin:
                     schema_version=str(build.get("schema_version") or ""),
                     decision=decision,
                     field_id=schema.field_id(name),
+                    value_key=_identity_key_for(schema, name, current_record, review_registry(self.repo, build_id, current_record, schema)),
                 )
             except Exception as exc:  # noqa: BLE001 - derived memory must not fail a saved decision
                 warnings.append(f"Adjudication memory was not updated for {name}: {exc}")

@@ -417,6 +417,7 @@ def create_human_assertion(
     actor: str | None = None,
     reason: str = "",
     method: str = "human_review",
+    evidence: list[dict[str, Any]] | None = None,
 ) -> FieldAssertion:
     present = value not in (None, "", [])
     return _new_assertion(
@@ -433,6 +434,7 @@ def create_human_assertion(
         reason=reason or ("Human record-level override." if override else "Human-reviewed value."),
         supersedes_assertion_id=supersedes.assertion_id if supersedes else None,
         field_id_override=supersedes.field_id if supersedes else None,
+        evidence=copy.deepcopy(evidence or []),
     )
 
 

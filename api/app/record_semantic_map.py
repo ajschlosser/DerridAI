@@ -25,6 +25,7 @@ from typing import Any
 
 from .nlp_annotations import current_terms
 from .semantic_content_graph import _slug, document_entity_node_id
+from .semantic_identity import text_key
 
 RECORD_SEMANTIC_MAP_VERSION = 1
 MAX_LOCAL_NODES = 80
@@ -103,14 +104,23 @@ class _SemanticIndex:
         self._fold_in_terms()
 
     def _fold_in_terms(self) -> None:
-        by_label: dict[str, str] = {}
         # Graph nodes are ordered by mention count, so an ambiguous label resolves to
-        # the most established node deterministically.
+        # the most established node deterministically. A term joins a node by exact
+        # surface first, then by the node's semantic identity: a person's name identity,
+        # or a concept's lemma identity. A term with no safe identity stays its own node.
+        by_label: dict[str, str] = {}
+        by_name: dict[str, str] = {}
+        by_lemma: dict[str, str] = {}
         for node_id, node in self.nodes.items():
-            for value in [node.get("label"), *(node.get("aliases") or [])]:
-                key = _normalize(value).casefold()
+            for value in [node.get("label"), *(node.get("aliases") or []), *(node.get("surface_forms") or [])]:
+                key = text_key(str(value or ""))
                 if key:
                     by_label.setdefault(key, node_id)
+            parts = str(node.get("canonical_value_key") or "").split(":", 2)
+            if len(parts) == 3 and parts[1] == "entity_name" and node.get("type") in {"person", "character"}:
+                by_name.setdefault(parts[2], node_id)
+            elif len(parts) == 3 and parts[1] == "lexical_phrase":
+                by_lemma.setdefault(parts[2], node_id)
         for record_id, record in self.record_by_id.items():
             terms = current_terms(record)
             if terms is None:
@@ -131,14 +141,17 @@ class _SemanticIndex:
                     continue
                 source = str(term.get("source") or "")
                 tag = str(term.get("tag") or "")
-                node_id = by_label.get(surface.casefold())
+                identity = str(term.get("identity_text") or "")
+                node_id = by_label.get(text_key(surface)) or (
+                    (by_name if source == "ner" else by_lemma).get(identity) if identity else None
+                )
                 if node_id:
                     node = self.nodes[node_id]
                     if record_id not in node["record_ids"]:
                         node["record_ids"].append(record_id)
                 else:
                     kind = _NER_KINDS.get(tag, "entity") if source == "ner" else "term"
-                    node_id = f"term:{kind}:{_slug(surface)}"
+                    node_id = f"term:{kind}:{_slug(identity or surface)}"
                     node = self.nodes.setdefault(
                         node_id,
                         {
@@ -152,7 +165,9 @@ class _SemanticIndex:
                             "tags": [],
                         },
                     )
-                    by_label[surface.casefold()] = node_id
+                    by_label[text_key(surface)] = node_id
+                    if surface not in node["aliases"] and surface != node["label"]:
+                        node["aliases"].append(surface)
                     node["mention_count"] = int(node.get("mention_count") or 0) + 1
                     if record_id not in node["record_ids"]:
                         node["record_ids"].append(record_id)
@@ -169,6 +184,9 @@ class _SemanticIndex:
                     }
                 )
             self.term_mentions[record_id] = mentions
+
+    def _resolve_id(self, node_id: str) -> str:
+        return str((self.graph.get("node_aliases") or {}).get(node_id) or node_id)
 
     def _records_for_node(self, node_id: str) -> list[str]:
         """Every Record in which the node occurs or takes part in a relation."""
@@ -204,7 +222,7 @@ class _SemanticIndex:
         for item in local.get("entities") or []:
             if not isinstance(item, dict):
                 continue
-            node_id = document_entity_node_id(str(item.get("entity_id") or ""), str(item.get("label") or ""))
+            node_id = self._resolve_id(document_entity_node_id(str(item.get("entity_id") or ""), str(item.get("label") or "")))
             mentions.append(
                 {
                     "start": int(item.get("start") or 0),
@@ -221,7 +239,7 @@ class _SemanticIndex:
                 continue
             speaker_id = str(item.get("speaker_entity_id") or "")
             speaker_node = (
-                document_entity_node_id(speaker_id, str(item.get("speaker") or "")) if speaker_id else ""
+                self._resolve_id(document_entity_node_id(speaker_id, str(item.get("speaker") or ""))) if speaker_id else ""
             )
             mentions.append(
                 {
@@ -389,6 +407,8 @@ class _SemanticIndex:
         }
 
     def node_neighborhood(self, node_id: str) -> dict[str, Any]:
+        # A Document Intelligence cluster merged into an identity node keeps answering to its id.
+        node_id = str((self.graph.get("node_aliases") or {}).get(node_id) or node_id)
         node = self.nodes.get(node_id)
         if node is None:
             raise KeyError(node_id)

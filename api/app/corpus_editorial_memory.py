@@ -43,6 +43,7 @@ from .metadata_precedents_cache import (
     resolve_cached_precedents,
 )
 from .pipelines.precedent_remap import RemapSession
+from .semantic_identity_store import registry_factory, reviewed_value_relation
 
 
 class EditorialMemoryMixin:
@@ -62,6 +63,7 @@ class EditorialMemoryMixin:
         def _append_warning(self, build_id: str, message: str) -> None: ...
         def _blocks_for(self, build_id: str) -> dict[str, dict[str, Any]]: ...
         def _editable_fields(self, build_id: str) -> set[str]: ...
+        def _schema_for(self, build_id: str) -> Any: ...
 
 
     def _editorial_memory(
@@ -117,6 +119,13 @@ class EditorialMemoryMixin:
             or build.get("metadata_schema_version")
             or ""
         )
+        try:
+            # Equivalence policy for corrections and precedent identity keys; without a
+            # readable schema, values compare exactly as before.
+            metadata_schema: Any = self._schema_for(build_id)
+        except Exception:  # noqa: BLE001 - advisory memory must not fail enrichment
+            metadata_schema = None
+        registry_for = registry_factory(self.repo, build_id, metadata_schema)
         schema_fields = {
             str(item.get("name") or ""): item
             for item in schema_payload.get("fields") or []
@@ -229,6 +238,8 @@ class EditorialMemoryMixin:
                         schema_version=schema_version,
                         source_document_id=source_document_id,
                         field_id=str(assertion.field_id or field_ids.get(field, "")),
+                        schema=metadata_schema,
+                        registry=registry_for(row),
                     )
                     if exemplar is not None:
                         canonical_exemplars.append(exemplar)
@@ -253,6 +264,8 @@ class EditorialMemoryMixin:
                     schema_version=schema_version,
                     source_document_id=source_document_id,
                     field_id=str(assertion.field_id or field_ids.get(field, "")),
+                    schema=metadata_schema,
+                    registry=registry_for(row),
                 )
                 if exemplar is not None:
                     canonical_exemplars.append(exemplar)
@@ -306,6 +319,8 @@ class EditorialMemoryMixin:
                 schema_version=schema_version,
                 source_document_id=source_document_id,
                 field_ids=field_ids,
+                schema=metadata_schema,
+                registry_for=registry_for,
             ):
                 field = str(correction.get("field_name") or "")
                 if (
@@ -417,6 +432,9 @@ class EditorialMemoryMixin:
                     field_correction_limits=field_correction_limits or None,
                     field_match_fields=field_match_fields or None,
                     current_values=reviewed_values(current_record),
+                    value_relation=reviewed_value_relation(
+                        self.repo, build_id, metadata_schema, str(current_record.get("language") or "")
+                    ),
                     packet_char_budget=(
                         metadata_pipeline_plan.packet_char_budget
                         if metadata_pipeline_plan is not None
@@ -559,7 +577,7 @@ class EditorialMemoryMixin:
             "example_token_estimate": example_token_estimate,
             "progressive_retrieval": retrieval_telemetry,
             "pipeline_trace": metadata_pipeline_trace,
-            "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id]),
+            "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id], metadata_schema, registry_for),
         }
         if include_canonical:
             memory["canonical_exemplars"] = {
