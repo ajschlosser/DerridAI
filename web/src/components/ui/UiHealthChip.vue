@@ -17,17 +17,12 @@ withDefaults(
 </script>
 <template>
   <UiTooltip v-if="detail" :text="detail" placement="bottom" trigger-mode="content">
-    <span v-bind="attrs" class="ui-health-chip" :data-available="available ? 'true' : 'false'">
+    <span v-bind="attrs" class="ui-health-chip" :data-available="String(available)">
       <span class="ui-health-dot" aria-hidden="true"></span>
       <span>{{ label }}</span>
     </span>
   </UiTooltip>
-  <span
-    v-else
-    v-bind="attrs"
-    class="ui-health-chip"
-    :data-available="available ? 'true' : 'false'"
-  >
+  <span v-else v-bind="attrs" class="ui-health-chip" :data-available="String(available)">
     <span class="ui-health-dot" aria-hidden="true"></span>
     <span>{{ label }}</span>
   </span>
