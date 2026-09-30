@@ -83,7 +83,7 @@ defineExpose({ zoomBy, fitView, resetView });
     v-if="nodes.length"
     ref="viewport"
     class="semantic-map-canvas"
-    :aria-label="i18n.t('semantic_map.title', 'Semantic map')"
+    :accessible-label="i18n.t('semantic_map.title', 'Semantic map')"
     :help-text="
       i18n.t(
         'semantic_map.drag_help',
@@ -117,7 +117,7 @@ defineExpose({ zoomBy, fitView, resetView });
         :x="ORIGIN + node.x"
         :y="ORIGIN + node.y"
         :zoom="zoom"
-        :aria-label="`${kindLabel(node.kind)}: ${node.label}`"
+        :accessible-label="`${kindLabel(node.kind)}: ${node.label}`"
         @move="moveNodeTo(node.id, $event)"
       >
         <UiRelationChipNode :label="node.label" />
