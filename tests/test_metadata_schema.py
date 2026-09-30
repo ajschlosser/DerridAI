@@ -141,6 +141,20 @@ def test_default_schema_cardinality_is_explicit_and_semantic():
         assert by_name[name].type == "list", name
 
 
+def test_legacy_cardinality_normalization_is_lossless_or_explicitly_ambiguous():
+    schema = ms.default_schema()
+    quoted_speaker = schema.by_name()["quoted_speaker"]
+    topics = schema.by_name()["topics"]
+
+    assert ms.normalize_legacy_cardinality(quoted_speaker, ["Levinas"]) == ("Levinas", False)
+    assert ms.normalize_legacy_cardinality(quoted_speaker, []) == (None, False)
+    assert ms.normalize_legacy_cardinality(
+        quoted_speaker, ["Levinas", "Heidegger"]
+    ) == (["Levinas", "Heidegger"], True)
+    assert ms.normalize_legacy_cardinality(topics, "hospitality") == (["hospitality"], False)
+    assert ms.normalize_legacy_cardinality(topics, ["hospitality"]) == (["hospitality"], False)
+
+
 @pytest.mark.parametrize(
     ("factory", "schema_id", "field_namespace", "required_fields", "corpus_fields"),
     [
