@@ -6,6 +6,7 @@ import CorpusBuilderWorkspaceHeader from "../../src/components/corpus-builder/Co
 import CorpusBuildHistoryMenu from "../../src/components/CorpusBuildHistoryMenu.vue";
 import CorpusPublishWorkspace from "../../src/components/corpus-builder/CorpusPublishWorkspace.vue";
 import CorpusReviewHeader from "../../src/components/corpus-builder/CorpusReviewHeader.vue";
+import CorpusReviewToolbar from "../../src/components/corpus-builder/CorpusReviewToolbar.vue";
 import CorpusReviewQueueTabs from "../../src/components/CorpusReviewQueueTabs.vue";
 import CorpusSetupSection from "../../src/components/corpus-builder/CorpusSetupSection.vue";
 import CorpusSetupWorkspace from "../../src/components/corpus-builder/CorpusSetupWorkspace.vue";
@@ -452,6 +453,47 @@ describe("review header", () => {
     hasPreviousPage: false,
     hasNextPage: false,
   };
+
+  it("confirms bulk acceptance in an accessible dialog before emitting the decision", async () => {
+    const wrapper = mount(CorpusReviewToolbar, {
+      props: {
+        queue: "all",
+        query: "",
+        total: 20,
+        ready: 5,
+        issues: 4,
+        metadata: 1,
+        topology: 0,
+        sourceProblems: 0,
+        accepted: 10,
+        rejected: 1,
+        bulkActionItems: [],
+        bulkActionFeedback: "",
+        bulkMetadataOpen: false,
+        schema: null,
+        knownValues: {},
+        regionTypes: [],
+        discourseRoles: [],
+        selectedCount: 0,
+        bulkTotalCount: 20,
+        bulkDisabled: false,
+        pageNumber: 1,
+        pageCount: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      } as never,
+      global: { stubs: { Teleport: true } },
+    });
+    await wrapper.get(".review-ready-action button").trigger("click");
+    expect(wrapper.emitted("acceptClean")).toBeUndefined();
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
+    expect(wrapper.get('[role="dialog"]').text()).toContain("records your review decision");
+    const confirm = wrapper
+      .findAll('[role="dialog"] button')
+      .find((button) => button.text().includes("Accept clean"));
+    await confirm!.trigger("click");
+    expect(wrapper.emitted("acceptClean")).toEqual([[]]);
+  });
 
   it("keeps counts, view switch, focus and the toolbar in one surface", async () => {
     const wrapper = mount(CorpusReviewHeader, {
