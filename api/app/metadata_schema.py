@@ -6,8 +6,9 @@ field's type, its allowed values and the instruction the model receives. The thr
 depends on (region type, primary text, discourse role) are the locked core: every schema has them, in the "discourse"
 group, and a schema cannot change or remove them. Everything else is the schema's to define.
 
-The historical built-in schema, `default_schema()`, describes exactly the fields and instructions DerridAI has always
-used, so choosing it changes nothing. Additional built-in domain profiles are registered in
+The built-in schema, `default_schema()`, preserves DerridAI's historical scholarly field identities while expressing
+their current value contracts explicitly. Historical storage shapes are compatibility inputs, not the authority for
+field cardinality. Additional built-in domain profiles are registered in
 `metadata_schema_profiles`; they use this same generic contract rather than adding domain-specific runtime branches.
 A build takes a copy of its schema when it starts and never reads the saved one again, so editing or deleting a saved
 schema cannot alter a build that used it.
@@ -724,7 +725,7 @@ _QUOTATION_INTRO = (
 )
 _QUOTATION_FOOTER = (
     "For every populated quoted_* or quotation_chain field, include field_evidence using only current-record block IDs, confidence 0..1, and a "
-    "short reason. Use [] when unsupported.\n"
+    "short reason. Use null for an unsupported scalar quotation relation and [] for an unsupported quotation_chain.\n"
     "Return one field_assessments entry for every one of {assessed_fields}, even when its metadata value is null or empty. Each assessment must "
     "contain confidence (0..1 or null), needs_review, reason, and outcome. Use outcome=\"supported_value\", "
     "outcome=\"no_supported_value\", or outcome=\"uncertain\" according to the source evidence.\n"
@@ -795,7 +796,7 @@ def _f(name: str, label: str, type_: FieldType, group: str, **kw: Any) -> Schema
 
 
 def default_schema() -> MetadataSchema:
-    """The fields and instructions DerridAI has always used."""
+    """DerridAI's built-in scholarly fields with authoritative current value types."""
     values = lambda items: [SchemaValue(value=v) for v in items]  # noqa: E731
     fields = [
         _f("region_author", "Region author", "text", "discourse"),
@@ -809,15 +810,16 @@ def default_schema() -> MetadataSchema:
         _f("claim_scope", "Claim scope", "text", "discourse", assess=True),
         _f("semantic_function", "Semantic function", "list", "discourse"),
         _f("is_direct_quote", "Direct quotation", "boolean", "quotation", assess=True),
-        *[_f(n, lab, "list", "quotation", assess=True) for n, lab in (
+        *[_f(n, lab, "text", "quotation", assess=True) for n, lab in (
             ("quoted_speaker", "Quoted speaker"), ("quoted_author", "Quoted author"), ("quoted_work", "Quoted work"),
             ("quoted_position_holder", "Quoted position holder"), ("quoted_addressee", "Quoted addressee"),
-            ("quoted_referent", "Quoted referent"), ("quotation_chain", "Quotation chain"))],
+            ("quoted_referent", "Quoted referent"))],
+        _f("quotation_chain", "Quotation chain", "list", "quotation", assess=True),
         *[_f(n, lab, "list", "indexing", assess=True) for n, lab in (
             ("topics", "Topics"), ("concepts", "Concepts"), ("persons", "Persons"), ("works_referenced", "Works referenced"))],
     ]
     return MetadataSchema(
-        id=DEFAULT_SCHEMA_ID, schema_version="1.1.0", name="DerridAI scholarly default",
+        id=DEFAULT_SCHEMA_ID, schema_version="2.0.0", name="DerridAI scholarly default",
         description="Discourse and attribution, quotation relations, and semantic indexing: the fields DerridAI has always produced.",
         groups=[
             SchemaGroup(key="discourse", label="Discourse and attribution", intro=_DISCOURSE_INTRO, fields_heading="Hybrid classification fields are constrained:",
