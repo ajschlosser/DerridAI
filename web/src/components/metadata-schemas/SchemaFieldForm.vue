@@ -4,7 +4,7 @@
 import { computed, useId } from "vue";
 import { useSchemaCopy } from "../../composables/useSchemaCopy";
 import { NER_TAG_OPTIONS, UNIVERSAL_POS_TAG_OPTIONS } from "../../domain/nlpTags";
-import type { SchemaField } from "../../api/metadataSchemas";
+import type { EquivalenceMode, SchemaField } from "../../api/metadataSchemas";
 import UiButton from "../ui/UiButton.vue";
 import UiTagPicker from "../ui/UiTagPicker.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
@@ -19,6 +19,38 @@ const props = defineProps<{
 }>();
 const { t } = useSchemaCopy();
 const matchTitleId = useId();
+const matchingNoteId = useId();
+const kindHelpId = useId();
+
+const MATCHING_MODES: EquivalenceMode[] = [
+  "exact",
+  "text",
+  "entity_name",
+  "lexical_phrase",
+  "controlled",
+];
+/** "" means the field has no policy of its own and follows DerridAI's default for it. */
+const matchingMode = computed(() => props.field.equivalence_profile?.mode ?? "");
+function setMatchingMode(mode: string) {
+  if (!mode) {
+    props.field.equivalence_profile = null;
+    return;
+  }
+  props.field.equivalence_profile = {
+    collection_semantics: "set",
+    identity_kind: null,
+    ...props.field.equivalence_profile,
+    mode: mode as EquivalenceMode,
+  };
+}
+function setMatchingOrder(order: string) {
+  if (props.field.equivalence_profile)
+    props.field.equivalence_profile.collection_semantics = order === "ordered" ? "ordered" : "set";
+}
+function setIdentityKind(kind: string) {
+  if (props.field.equivalence_profile)
+    props.field.equivalence_profile.identity_kind = kind.trim() || null;
+}
 
 const posTagOptions = computed(() =>
   UNIVERSAL_POS_TAG_OPTIONS.map((o) => ({
@@ -187,6 +219,65 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
         />
       </label>
     </div>
+
+    <fieldset class="schema-memory value-matching">
+      <legend>
+        {{ t("value_matching", "Value matching") }}
+        <UiTooltip :text="t('value_matching_help')" />
+      </legend>
+      <div class="matching-controls">
+        <label class="schema-field"
+          ><span>{{
+            t("value_matching_mode", "Treat two values as the same when they match as")
+          }}</span
+          ><select
+            class="control"
+            :value="matchingMode"
+            :aria-describedby="matchingNoteId"
+            @change="setMatchingMode(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">
+              {{ t("value_matching_default", "DerridAI default for this field") }}
+            </option>
+            <option v-for="mode in MATCHING_MODES" :key="mode" :value="mode">
+              {{ t(`value_matching_${mode}`) }}
+            </option>
+          </select></label
+        >
+        <label v-if="field.equivalence_profile && field.type === 'list'" class="schema-field"
+          ><span>{{ t("value_matching_order", "List order") }}</span
+          ><select
+            class="control"
+            :value="field.equivalence_profile.collection_semantics ?? 'set'"
+            @change="setMatchingOrder(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="set">
+              {{ t("value_matching_order_set", "Order does not matter") }}
+            </option>
+            <option value="ordered">
+              {{ t("value_matching_order_ordered", "Order matters") }}
+            </option>
+          </select></label
+        >
+        <label v-if="field.equivalence_profile" class="schema-field"
+          ><span>{{ t("value_matching_kind", "Identity kind (optional)") }}</span
+          ><input
+            class="control"
+            type="text"
+            maxlength="120"
+            pattern="[a-z][a-z0-9_.\-]*"
+            spellcheck="false"
+            autocomplete="off"
+            :value="field.equivalence_profile.identity_kind ?? ''"
+            :aria-describedby="kindHelpId"
+            @change="setIdentityKind(($event.target as HTMLInputElement).value)"
+          /><small :id="kindHelpId" class="hint">{{ t("value_matching_kind_help") }}</small></label
+        >
+      </div>
+      <p :id="matchingNoteId" class="memory-intro">
+        {{ t(`value_matching_${matchingMode || "default"}_note`) }}
+      </p>
+    </fieldset>
 
     <fieldset class="schema-memory">
       <legend>{{ t("memory", "Memory & retrieval") }}</legend>
@@ -392,6 +483,11 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-inset);
+}
+.matching-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 10px 12px;
 }
 .schema-memory legend {
   padding: 0 4px;
