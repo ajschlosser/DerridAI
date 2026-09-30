@@ -158,7 +158,9 @@ def test_site_chunks_records_and_vectors_by_work() -> None:
     assert len(chunks) == 2
     assert [record["record_id"] for record in _chunk_records(chunks[0])] == ["g1", "g2"]
     assert chunks[0]["vector_ids"] == ["g1", "g2"]
-    assert _chunk_vectors(chunks[0], 2) == pytest.approx([[1.0, 0.0], [0.0, 1.0]])
+    decoded_vectors = _chunk_vectors(chunks[0], 2)
+    assert decoded_vectors[0] == pytest.approx([1.0, 0.0])
+    assert decoded_vectors[1] == pytest.approx([0.0, 1.0])
     assert [record["record_id"] for record in _chunk_records(chunks[1])] == ["r1"]
     assert chunks[1]["vector_ids"] == []
     assert chunks[1]["vectors_b64"] == ""
