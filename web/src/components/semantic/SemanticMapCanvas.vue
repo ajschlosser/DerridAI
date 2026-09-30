@@ -6,6 +6,7 @@ import UiRelationEdge from "../relations/UiRelationEdge.vue";
 import UiRelationNodeShell from "../relations/UiRelationNodeShell.vue";
 import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { relationBoundsForPoints } from "../../domain/relations/geometry";
+import { RELATION_SURFACE_PRESETS } from "../../domain/relations/presets";
 import type { RelationPoint } from "../../domain/relations/types";
 import { useI18nStore } from "../../stores/i18n";
 import type { SemanticMapGraph, SemanticMapNode } from "../../domain/semanticMap";
@@ -13,6 +14,7 @@ import type { SemanticMapGraph, SemanticMapNode } from "../../domain/semanticMap
 const props = defineProps<{ graph: SemanticMapGraph }>();
 const i18n = useI18nStore();
 
+const surfacePreset = RELATION_SURFACE_PRESETS.semanticFree;
 const ORIGIN = 520;
 const CONTENT_SIZE = ORIGIN * 2;
 const nodes = ref<SemanticMapNode[]>([]);
@@ -93,8 +95,9 @@ defineExpose({ zoomBy, fitView, resetView });
     :content-bounds="contentBounds"
     :content-width="CONTENT_SIZE"
     :content-height="CONTENT_SIZE"
-    :max-zoom="2.6"
-    resize-axis="vertical"
+    :min-zoom="surfacePreset.minZoom"
+    :max-zoom="surfacePreset.maxZoom"
+    :resize-axis="surfacePreset.resizeAxis"
     layer-marker="data-semantic-map-layer"
   >
     <template #default="{ zoom }">
