@@ -12,7 +12,6 @@ import { useI18nStore } from "../stores/i18n";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
-import { sourceMediaCapabilities } from "../domain/sourceMedia";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
 import CorpusInitializationDialog from "./CorpusInitializationDialog.vue";
@@ -78,16 +77,9 @@ import CorpusReviewAdvancedMetadata from "./corpus-builder/CorpusReviewAdvancedM
 import CorpusReviewInspector from "./corpus-builder/CorpusReviewInspector.vue";
 import CorpusReviewHeader from "./corpus-builder/CorpusReviewHeader.vue";
 import CorpusReviewRunStatus from "./corpus-builder/CorpusReviewRunStatus.vue";
-import {
-  corpusSetupIssues,
-  corpusSetupSectionStates,
-  type CorpusSetupInput,
-  type CorpusSetupSectionId,
-} from "../features/corpus-builder/domain/setupState";
-import {
-  corpusPrimaryStatus,
-  corpusWorkflowSteps,
-} from "../features/corpus-builder/domain/workflowPresentation";
+import type { CorpusSetupSectionId } from "../features/corpus-builder/domain/setupState";
+import { useCorpusSourceView } from "../features/corpus-builder/composables/useCorpusSourceView";
+import { useCorpusSetupState } from "../features/corpus-builder/composables/useCorpusSetupState";
 import { useCorpusWorkspaceNavigation } from "../features/corpus-builder/composables/useCorpusWorkspaceNavigation";
 import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vue";
 import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
@@ -1182,46 +1174,25 @@ const activeBuildProfileId = computed<string>(() => {
 const activeModelLabel = computed<string>(() => String(currentBuild.value?.model || "—"));
 const pageNumber = computed(() => Math.floor(recordOffset.value / pageSize) + 1);
 const pageCount = computed(() => Math.max(1, Math.ceil(recordTotal.value / pageSize)));
-const selectedSourceCapabilities = computed(() =>
-  sourceMediaCapabilities(selectedAsset.value?.media_kind),
-);
-// Printed-page mapping is a source capability, not a synonym for "has pages".
-const paginatedSource = computed(() => selectedSourceCapabilities.value.printedPagination);
-const imageSourceUrl = computed(() =>
-  selectedSourceCapabilities.value.imageViewer && selectedAssetId.value
-    ? corpusBuilderApi.assetContentUrl(selectedAssetId.value)
-    : "",
-);
-const audioSourceUrl = computed(() =>
-  selectedSourceCapabilities.value.audioPlayer && selectedAssetId.value
-    ? corpusBuilderApi.assetContentUrl(selectedAssetId.value)
-    : "",
-);
-const sourcePdfUrl = computed(() =>
-  selectedSourceCapabilities.value.pdfViewer && selectedAssetId.value
-    ? corpusBuilderApi.assetContentUrl(selectedAssetId.value)
-    : "",
-);
-const recordPdfPages = computed(() =>
-  Array.from(
-    new Set((selectedRecord.value?.pdf_pages || []).map(Number).filter((value) => value > 0)),
-  ).sort((a, b) => a - b),
-);
-const selectedPdfPageIndex = computed(() =>
-  Math.max(0, recordPdfPages.value.indexOf(selectedPdfPage.value)),
-);
-const selectedPageMeta = computed(
-  () =>
-    selectedAsset.value?.pages?.find(
-      (page) => Number(page.pdf_page) === Number(selectedPdfPage.value),
-    ) || null,
-);
-const selectedPageBlocks = computed(() =>
-  visibleBlocks.value.filter(
-    (block) => !paginatedSource.value || Number(block.page) === Number(selectedPdfPage.value),
-  ),
-);
-const evidenceIdsArray = computed(() => Array.from(evidenceBlockIds.value));
+const {
+  selectedSourceCapabilities,
+  paginatedSource,
+  imageSourceUrl,
+  audioSourceUrl,
+  sourcePdfUrl,
+  recordPdfPages,
+  selectedPdfPageIndex,
+  selectedPageMeta,
+  selectedPageBlocks,
+  evidenceIdsArray,
+} = useCorpusSourceView({
+  selectedAsset,
+  selectedAssetId,
+  selectedRecord,
+  selectedPdfPage,
+  visibleBlocks,
+  evidenceBlockIds,
+});
 const activeCorpusProfile = computed(
   () =>
     corpusProfiles.value.find(
@@ -1348,57 +1319,47 @@ const selectedStructureSummary = computed(() => {
     );
   return parts.join(" · ");
 });
-const setupInput = computed<CorpusSetupInput>(() => ({
-  asset: selectedAsset.value
-    ? {
-        filename: selectedAsset.value.filename,
-        media_kind: selectedAsset.value.media_kind,
-        page_count: selectedAsset.value.page_count,
-        block_count: selectedAsset.value.block_count,
-        duration_seconds: selectedAsset.value.audio_provenance?.duration_seconds,
-      }
-    : null,
-  structureNeedsReview: Boolean(
-    paginatedSource.value &&
-      selectedAsset.value?.pages?.length &&
-      !selectedAsset.value.document_layout?.main_text_pdf_start,
-  ),
-  structureSummary: selectedStructureSummary.value,
-  recordSizingValid: recordSizingValid.value,
-  targetChars: recordSizing.value.preferred_record_chars,
-  toleranceChars: recordSizing.value.record_length_tolerance,
-  schemaName: chosenSchema.value?.name || "",
-  schemaVersion: chosenSchema.value?.schema_version || "",
-  guidanceFieldCount: Object.keys(runGuidancePayload()).length,
-  missingDocumentFieldCount: missingDocumentFields.value.length,
-  providerLabel: selectedProviderLabel.value,
-  modelLabel: selectedProfileModel.value || manualModel.value,
-  enrichmentMode: enrichmentMode.value,
-  documentIntelligenceProfile: documentIntelligenceProfile.value,
-  profileActiveBuildCount: selectedProviderId.value ? selectedProfileActiveBuildCount.value : 0,
-  contextSafe: contextSafe.value,
-}));
 const setupText = {
   t: (key: string, fallback?: string) => i18n.t(key, fallback),
   tf: (key: string, values: Record<string, string | number>) => i18n.tf(key, values),
 };
-const setupIssues = computed(() => corpusSetupIssues(setupInput.value, setupText));
-const setupSections = computed(() =>
-  corpusSetupSectionStates(setupInput.value, setupIssues.value, setupText),
-);
-const primaryStatus = computed(() => corpusPrimaryStatus(currentBuild.value, setupText));
-const workflowSteps = computed(() =>
-  corpusWorkflowSteps(
-    workspaceMode.value,
-    { hasBuild: Boolean(currentBuild.value), hasRecordTopology: hasRecordTopology.value },
-    {
-      build: currentBuild.value,
-      hasSource: Boolean(selectedAsset.value),
-      setupCanStart: canStartConcurrentBuild.value,
-      hasRecordTopology: hasRecordTopology.value,
-    },
-  ),
-);
+const {
+  setupIssues,
+  setupSections,
+  primaryStatus,
+  workflowSteps,
+  toggleSetupSection,
+  openSetupSection,
+} = useCorpusSetupState({
+  text: setupText,
+  currentBuild,
+  selectedAsset,
+  workspaceMode,
+  hasRecordTopology,
+  canStart: canStartConcurrentBuild,
+  expandedSection: configurationSection,
+  setupFacts: () => ({
+    structureNeedsReview: Boolean(
+      paginatedSource.value &&
+        selectedAsset.value?.pages?.length &&
+        !selectedAsset.value.document_layout?.main_text_pdf_start,
+    ),
+    structureSummary: selectedStructureSummary.value,
+    recordSizingValid: recordSizingValid.value,
+    targetChars: recordSizing.value.preferred_record_chars,
+    toleranceChars: recordSizing.value.record_length_tolerance,
+    schemaName: chosenSchema.value?.name || "",
+    schemaVersion: chosenSchema.value?.schema_version || "",
+    guidanceFieldCount: Object.keys(runGuidancePayload()).length,
+    missingDocumentFieldCount: missingDocumentFields.value.length,
+    providerLabel: selectedProviderLabel.value,
+    modelLabel: selectedProfileModel.value || manualModel.value,
+    enrichmentMode: enrichmentMode.value,
+    documentIntelligenceProfile: documentIntelligenceProfile.value,
+    profileActiveBuildCount: selectedProviderId.value ? selectedProfileActiveBuildCount.value : 0,
+    contextSafe: contextSafe.value,
+  }),
+});
 /** Build shows until Records can be reviewed, and while a manifest still needs the reviewer's decision. */
 const showBuildWorkspace = computed(
   () =>
@@ -1410,12 +1371,6 @@ const showBuildWorkspace = computed(
 async function reviewFromPublish(action: () => unknown) {
   await switchWorkspace("review");
   await action();
-}
-function toggleSetupSection(section: CorpusSetupSectionId) {
-  configurationSection.value = configurationSection.value === section ? "" : section;
-}
-function openSetupSection(section: CorpusSetupSectionId) {
-  configurationSection.value = section;
 }
 
 const statusNotices = computed<Notice[]>(() => [
