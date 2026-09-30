@@ -483,12 +483,13 @@ citations use time ranges and available speaker labels, never synthetic page
 numbers. Correcting a transcript creates a record revision and retains the
 original transcription.
 
-For PDF and image sources, the builder offers an OCR strategy: use embedded text
-when available, prefer OCR for difficult scans, or always OCR. OCR controls are
-not shown for text, Word/RTF, audio, URL, Gutenberg, or other non-image sources.
-Printed-page detection runs automatically during source ingestion using
-deterministic extraction, with the configured model used only as a fallback when
-no credible sequence is found.
+For a local PDF or image upload, the builder first stages the selected file,
+then offers its OCR strategy before ingestion: use embedded text when available,
+prefer OCR for difficult scans, or always OCR. Non-image files ingest directly
+without OCR controls, and already-ingested sources do not expose extraction
+settings that can no longer affect them. Printed-page detection runs automatically
+during source ingestion using deterministic extraction, with the configured model
+used only as a fallback when no credible sequence is found.
 
 Ingestion rejects malformed or unsupported files and embedded Word/RTF active
 content; it never runs document macros, fields, or linked objects. Non-PDF files
