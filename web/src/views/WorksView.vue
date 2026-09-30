@@ -169,7 +169,11 @@ const semanticMapRecord = computed(
     semanticMapRecords.value.find((item) => item.record_id === semanticMapRecordId.value) || null,
 );
 const semanticMapError = ref(false);
+const semanticMapUsesRuntimeFallback = ref(false);
 const semanticMapSources = ref<SemanticMapSource[]>([]);
+const semanticMapFallbackSources = computed(() =>
+  semanticMapSources.value.filter((source) => source.work === semanticMapWork.value),
+);
 
 async function openWorkSemanticMap(work: string) {
   semanticMapWork.value = work;
@@ -180,6 +184,7 @@ async function openWorkSemanticMap(work: string) {
   semanticMapTab.value = "graph";
   semanticMapRecords.value = [];
   semanticMapRecordId.value = "";
+  semanticMapUsesRuntimeFallback.value = false;
   const allSources = runtime.listSemanticMapSources?.();
   semanticMapSources.value = allSources?.records || [];
   semanticMapDialog.value?.showModal();
@@ -196,9 +201,9 @@ async function openWorkSemanticMap(work: string) {
     const [first, ...rest] = result.build_ids;
     semanticMapBuildId.value = first || "";
     semanticMapExtraBuilds.value = rest.length;
-    semanticMapError.value = !first;
+    semanticMapUsesRuntimeFallback.value = !first;
   } catch {
-    semanticMapError.value = true;
+    semanticMapUsesRuntimeFallback.value = true;
   } finally {
     semanticMapLoading.value = false;
   }
@@ -497,7 +502,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
       </header>
       <UiLoadingState v-if="semanticMapLoading" :label="i18n.t('ui.loading')" />
       <p v-else-if="semanticMapError">{{ i18n.t("works.semantic_map_unavailable") }}</p>
-      <template v-else-if="semanticMapBuildId">
+      <template v-else-if="semanticMapBuildId || semanticMapUsesRuntimeFallback">
         <p v-if="semanticMapExtraBuilds" class="note">
           {{ i18n.tf("works.semantic_map_multiple_builds", { count: semanticMapExtraBuilds }) }}
         </p>
@@ -543,7 +548,13 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
           aria-labelledby="works-semantic-tab-graph"
           tabindex="0"
         >
-          <CorpusSemanticGraphPanel :build-id="semanticMapBuildId" />
+          <CorpusSemanticGraphPanel v-if="semanticMapBuildId" :build-id="semanticMapBuildId" />
+          <SemanticMapFrame
+            v-else
+            variant="page"
+            :sources="semanticMapFallbackSources"
+            :show-close="false"
+          />
         </div>
         <SemanticMapFrame
           v-if="semanticMapTab === 'crossWorks'"
