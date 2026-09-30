@@ -8910,4 +8910,8 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'traceability.diagram_fit': 'Ajuster la carte',
  'traceability.diagram_reset_layout': 'Réinitialiser la disposition',
  'traceability.diagram_resize': 'Redimensionner la carte des relations',
+ 'pdf_corpus.semantic_map_controls': 'Commandes de la carte sémantique',
+ 'pdf_corpus.semantic_map_reset_layout': 'Réinitialiser la disposition de la carte',
+ 'pdf_corpus.semantic_map_resize': 'Redimensionner la carte sémantique de la fiche',
+ 'pdf_corpus.semantic_map_interaction_help': 'Faites glisser l’arrière-plan pour déplacer la vue. Faites glisser n’importe quel nœud pour le repositionner. Les flèches déplacent la vue, plus et moins règlent le zoom et 0 réinitialise la vue. Maintenez Alt et utilisez une flèche pour déplacer un nœud sélectionné.',
 }
