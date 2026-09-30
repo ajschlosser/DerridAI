@@ -21,6 +21,21 @@ from .config import settings
 from .models import OllamaTouchupOptions
 from .rag import _extract_json
 
+
+class StructuredOutputError(ValueError):
+    """Every attempt of one or more provider roles failed to return a valid structured answer.
+
+    ``failures`` holds one ``"<role> <provider>/<model>: <error>"`` entry per role that ran, and
+    ``timed_out`` says whether the last role stopped on a read timeout (pipeline timeout edges
+    route on it).
+    """
+
+    def __init__(self, message: str, *, failures: list[str], timed_out: bool = False) -> None:
+        super().__init__(message)
+        self.failures = failures
+        self.timed_out = timed_out
+
+
 _TRANSPORT_MARKERS = (
     "disconnected", "connection reset", "connection refused", "connection aborted", "broken pipe", "errno 97", "errno 104",
     "errno 111", "temporarily unavailable", "remote end closed", "eof occurred",

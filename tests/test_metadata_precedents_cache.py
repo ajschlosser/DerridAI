@@ -24,7 +24,6 @@ from app.corpus_publication import serialize_public_record  # noqa: E402
 from app.evidence_suggestions import (  # noqa: E402
     PRECEDENT_LEXICAL_METHOD,
     PRECEDENT_SEMANTIC_METHOD,
-    rank_blocks_for_texts,
     record_source_blocks,
 )
 from app.metadata_precedents_cache import CACHE_KEY  # noqa: E402
@@ -83,7 +82,7 @@ def _install(tmp_path: Path, records: list[dict]):
 
 
 def _enrich(repo, build_id, manager, monkeypatch):
-    def fake(_request, _prompt, *, response_model, max_tokens, schema_name, build_id="", attempts=1):
+    def fake(_request, _prompt, *, response_model, max_tokens, schema_name, build_id="", attempts=1, **_kwargs):
         return {"metadata": {}, "field_evidence": {}, "field_assessments": {}, "review_reason": ""}
 
     monkeypatch.setattr(manager, "_chat_json", fake)
@@ -93,10 +92,19 @@ def _enrich(repo, build_id, manager, monkeypatch):
     return record
 
 
+def _rank(queries, blocks, embed=None):
+    """Rank through the assigned precedent_evidence_remap pipeline, as production does."""
+    from app.pipelines.precedent_remap import RemapSession
+
+    ranked = RemapSession.open().rank(queries, blocks, embed=embed)
+    methods = {item["method"] for picks in ranked for item in picks}
+    return ranked, (methods.pop() if len(methods) == 1 else None)
+
+
 def test_ranking_uses_only_this_records_blocks_and_never_copies_the_query():
     record = _target()
     blocks = record_source_blocks(record, {key: {"block_id": key, "text": text} for key, text in BLOCKS.items()})
-    ranked, method = rank_blocks_for_texts([PRECEDENT_EVIDENCE], blocks)
+    ranked, method = _rank([PRECEDENT_EVIDENCE], blocks)
 
     assert method == PRECEDENT_LEXICAL_METHOD
     assert [item["block_id"] for item in ranked[0]][0] == "tb2"
@@ -108,14 +116,14 @@ def test_ranking_uses_only_this_records_blocks_and_never_copies_the_query():
 def test_semantic_ranking_uses_the_embedder_and_falls_back_to_lexical_when_it_fails():
     blocks = [{"block_id": "x", "text": "alpha"}, {"block_id": "y", "text": "beta"}]
     vectors = {"query": [1.0, 0.0], "alpha": [0.3, 1.0], "beta": [0.9, 0.1]}
-    ranked, method = rank_blocks_for_texts(["query"], blocks, embed=lambda texts: [vectors[t] for t in texts])
+    ranked, method = _rank(["query"], blocks, embed=lambda texts: [vectors[t] for t in texts])
     assert method == PRECEDENT_SEMANTIC_METHOD
     assert [item["block_id"] for item in ranked[0]] == ["y", "x"]
 
     def broken(_texts):
         raise RuntimeError("embedding service down")
 
-    ranked, method = rank_blocks_for_texts(["beta"], blocks, embed=broken)
+    ranked, method = _rank(["beta"], blocks, embed=broken)
     assert method == PRECEDENT_LEXICAL_METHOD
     assert [item["block_id"] for item in ranked[0]] == ["y"]
 

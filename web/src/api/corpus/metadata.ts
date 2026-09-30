@@ -93,6 +93,15 @@ export interface MetadataPrecedents {
   /** Kept precedents that changed or are hidden from this reviewer since enrichment; not shown. */
   stale_count?: number;
   items: MetadataPrecedent[];
+  /** Live searches only: the remap pipeline that ranked each item's candidate source units. */
+  candidate_pipeline?: {
+    feature: string;
+    pipeline_id: string;
+    pipeline_version: number;
+    pipeline_hash: string;
+    trace_id: string;
+    trace_warning?: string;
+  };
 }
 
 /** A reviewer-validated Research claim whose support cites a record. */

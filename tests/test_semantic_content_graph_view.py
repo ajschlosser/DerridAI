@@ -141,6 +141,9 @@ def test_manager_reuses_graph_until_records_change(tmp_path, monkeypatch):
     build = manager.create({"asset_id": "a"})
     records = [{"record_id": "r1", "record_revision": 1, "text": "x", "concepts": ["trace", "différance"]}]
     manager.repo.save_records(build["build_id"], records)
+    durable_writes = []
+    monkeypatch.setattr(manager.repo, "save_checkpoint", lambda *args, **kwargs: durable_writes.append("checkpoint"))
+    monkeypatch.setattr(manager.repo, "save_build", lambda *args, **kwargs: durable_writes.append("build"))
     calls = []
     real = cb.build_semantic_content_graph
     monkeypatch.setattr(cb, "build_semantic_content_graph", lambda *a, **k: calls.append(1) or real(*a, **k))
@@ -148,6 +151,7 @@ def test_manager_reuses_graph_until_records_change(tmp_path, monkeypatch):
     first = manager.semantic_content_graph_view(build["build_id"], node_limit=1)
     manager.semantic_content_graph_view(build["build_id"], query="trace")
     assert len(calls) == 1
+    assert durable_writes == []
     assert len(first["view"]["nodes"]) == 1 and first["view"]["truncated_nodes"] is True
 
     records.append({"record_id": "r2", "record_revision": 1, "text": "y", "concepts": ["supplement"]})
