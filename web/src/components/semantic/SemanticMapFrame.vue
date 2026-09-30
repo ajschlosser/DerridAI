@@ -11,8 +11,9 @@ import {
   type SemanticMapSource,
 } from "../../domain/semanticMap";
 import * as runtime from "../../runtime/runtime.js";
-import SemanticMapCanvas from "./SemanticMapCanvas.vue";
+import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
+import SemanticMapCanvas from "./SemanticMapCanvas.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -85,21 +86,17 @@ function kindLabel(kind: string) {
             {{ i18n.t(`semantic_map.placement.${item}`, placementLabel[item]) }}
           </button>
         </div>
-        <div
-          class="semantic-map-zoom"
-          role="group"
-          :aria-label="i18n.t('semantic_map.zoom', 'Zoom')"
-        >
-          <button type="button" @click="canvas?.zoomBy(1 / 1.15)">
-            {{ i18n.t("semantic_map.zoom_out", "Zoom out") }}
-          </button>
-          <button type="button" @click="canvas?.zoomBy(1.15)">
-            {{ i18n.t("semantic_map.zoom_in", "Zoom in") }}
-          </button>
-          <button type="button" @click="canvas?.resetView()">
-            {{ i18n.t("semantic_map.reset", "Reset view") }}
-          </button>
-        </div>
+        <UiRelationToolbar
+          :accessible-label="i18n.t('semantic_map.zoom', 'Map controls')"
+          :zoom-out-label="i18n.t('semantic_map.zoom_out', 'Zoom out')"
+          :zoom-in-label="i18n.t('semantic_map.zoom_in', 'Zoom in')"
+          :fit-label="i18n.t('semantic_map.fit', 'Fit map')"
+          :reset-label="i18n.t('semantic_map.reset', 'Reset layout')"
+          @zoom-out="canvas?.zoomBy(1 / 1.15)"
+          @zoom-in="canvas?.zoomBy(1.15)"
+          @fit="canvas?.fitView()"
+          @reset="canvas?.resetView()"
+        />
         <button v-if="showClose" type="button" class="semantic-map-close" @click="map.disable()">
           {{ i18n.t("semantic_map.close", "Close map") }}
         </button>
@@ -164,8 +161,7 @@ function kindLabel(kind: string) {
   gap: 8px;
   align-items: center;
 }
-.semantic-map-placements,
-.semantic-map-zoom {
+.semantic-map-placements {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;

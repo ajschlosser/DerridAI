@@ -169,6 +169,63 @@ describe("CorpusSemanticGraphPanel", () => {
     await flushPromises();
     expect(corpusBuildsApi.semanticContentGraphView.mock.calls.at(-1)![1].index_offset).toBe(50);
   });
+
+  it("uses one tab stop for the dense node set and roves focus with arrow keys", async () => {
+    const wrapper = await openPanel();
+    const graphNodes = wrapper.findAll(".graph-node");
+    expect(graphNodes.filter((item) => item.attributes("tabindex") === "0")).toHaveLength(1);
+    expect(graphNodes.filter((item) => item.attributes("tabindex") === "-1")).toHaveLength(
+      graphNodes.length - 1,
+    );
+
+    const first = graphNodes[0];
+    const second = graphNodes[1];
+    await first.trigger("focus");
+    await first.trigger("keydown", { key: "ArrowRight" });
+    await flushPromises();
+
+    expect(first.attributes("tabindex")).toBe("-1");
+    expect(second.attributes("tabindex")).toBe("0");
+
+    await second.trigger("keydown", { key: "Home" });
+    await flushPromises();
+    expect(first.attributes("tabindex")).toBe("0");
+  });
+
+  it("uses the shared relation viewport and keeps edges attached while nodes move", async () => {
+    const wrapper = await openPanel();
+    const viewport = wrapper.get(".graph-viewport");
+    const layer = wrapper.get("[data-relation-viewport-layer]");
+    const beforePan = layer.attributes("style") || "";
+
+    await viewport.trigger("pointerdown", { button: 0, pointerId: 11, clientX: 20, clientY: 20 });
+    await viewport.trigger("pointermove", { pointerId: 11, clientX: 65, clientY: 45 });
+    await viewport.trigger("pointerup", { pointerId: 11 });
+    expect(layer.attributes("style")).not.toBe(beforePan);
+
+    const node = wrapper.findAll(".graph-node")[0];
+    const beforeNode = node.attributes("transform");
+    const edge = wrapper.get(".graph-edge");
+    const beforeEdge = edge.attributes("d");
+
+    await node.trigger("pointerdown", { button: 0, pointerId: 12, clientX: 10, clientY: 10 });
+    await node.trigger("pointermove", { pointerId: 12, clientX: 38, clientY: 24 });
+    await node.trigger("pointerup", { pointerId: 12 });
+    await flushPromises();
+
+    expect(node.attributes("transform")).not.toBe(beforeNode);
+    expect(edge.attributes("d")).not.toBe(beforeEdge);
+
+    const afterDrag = node.attributes("transform");
+    await node.trigger("keydown", { key: "ArrowRight", altKey: true });
+    await flushPromises();
+    expect(node.attributes("transform")).not.toBe(afterDrag);
+
+    expect(wrapper.text()).toContain("Reset graph layout");
+    const handle = wrapper.get("[data-relation-resize-handle]");
+    await handle.trigger("keydown", { key: "ArrowDown" });
+    expect(viewport.attributes("style")).toContain("height:");
+  });
 });
 
 describe("semantic graph layout", () => {

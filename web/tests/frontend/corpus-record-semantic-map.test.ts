@@ -134,6 +134,7 @@ describe("CorpusRecordSemanticMap", () => {
         .replace(/PERSON/, ""),
     ).toBe(text);
     expect(wrapper.findAll(".map-node[role='button']")).toHaveLength(2);
+    expect(wrapper.get(".semantic-map-canvas").attributes("aria-hidden")).toBeUndefined();
     expect(wrapper.get(".record-links").text()).toContain("r2");
   });
 
@@ -185,5 +186,40 @@ describe("CorpusRecordSemanticMap", () => {
     });
     await flushPromises();
     expect(corpusBuildsApi.recordSemanticMap).toHaveBeenCalledTimes(3);
+  });
+  it("uses the shared draggable, zoomable, resizable relation viewport", async () => {
+    const wrapper = mountMap();
+    await flushPromises();
+
+    const viewport = wrapper.get(".semantic-map-viewport");
+    const layer = wrapper.get("[data-relation-viewport-layer]");
+    const beforePan = layer.attributes("style") || "";
+    await viewport.trigger("pointerdown", { button: 0, pointerId: 4, clientX: 20, clientY: 20 });
+    await viewport.trigger("pointermove", { pointerId: 4, clientX: 65, clientY: 40 });
+    await viewport.trigger("pointerup", { pointerId: 4 });
+    expect(layer.attributes("style")).not.toBe(beforePan);
+
+    const node = wrapper.findAll(".map-node[role='button']")[0];
+    const beforeTransform = node.attributes("transform");
+    const edge = wrapper.findAll(".map-edge")[0];
+    const beforeEdge = edge.attributes("d");
+
+    await node.trigger("pointerdown", { button: 0, pointerId: 5, clientX: 10, clientY: 10 });
+    await node.trigger("pointermove", { pointerId: 5, clientX: 30, clientY: 25 });
+    await node.trigger("pointerup", { pointerId: 5 });
+    await flushPromises();
+
+    expect(node.attributes("transform")).not.toBe(beforeTransform);
+    expect(edge.attributes("d")).not.toBe(beforeEdge);
+
+    const afterDrag = node.attributes("transform");
+    await node.trigger("keydown", { key: "ArrowRight", altKey: true });
+    await flushPromises();
+    expect(node.attributes("transform")).not.toBe(afterDrag);
+
+    expect(wrapper.text()).toContain("Reset map layout");
+    const handle = wrapper.get("[data-relation-resize-handle]");
+    await handle.trigger("keydown", { key: "ArrowDown" });
+    expect(viewport.attributes("style")).toContain("height:");
   });
 });
