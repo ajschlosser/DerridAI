@@ -22,21 +22,17 @@ function evidenceRef(
   return {
     evidenceId: `E${index + 1}`,
     recordId: String(record.record_id),
-    recordRevision:
-      record.record_revision == null ? undefined : String(record.record_revision),
+    recordRevision: record.record_revision == null ? undefined : String(record.record_revision),
     publicationId: manifest.publication_id,
     work: record.work == null ? undefined : String(record.work),
     citation: formatCitation(record).plain,
     text: String(record.text ?? ""),
     speaker: record.speaker == null ? undefined : String(record.speaker),
-    quotedSpeaker:
-      record.quoted_speaker == null ? undefined : String(record.quoted_speaker),
-    positionHolder:
-      record.position_holder == null ? undefined : String(record.position_holder),
+    quotedSpeaker: record.quoted_speaker == null ? undefined : String(record.quoted_speaker),
+    positionHolder: record.position_holder == null ? undefined : String(record.position_holder),
     stance: record.stance == null ? undefined : String(record.stance),
     target: record.target == null ? undefined : String(record.target),
-    discourseRole:
-      record.discourse_role == null ? undefined : String(record.discourse_role),
+    discourseRole: record.discourse_role == null ? undefined : String(record.discourse_role),
   };
 }
 
@@ -95,9 +91,7 @@ export class ResearchEngine {
     );
     const evidencePacket: EvidencePacket = {
       publicationId: this.manifest.publication_id,
-      evidence: selected.map((item, index) =>
-        evidenceRef(this.manifest, item.record, index),
-      ),
+      evidence: selected.map((item, index) => evidenceRef(this.manifest, item.record, index)),
     };
 
     const warnings: ResearchWarning[] = [];
