@@ -9,6 +9,8 @@
  * not evidence of a shared claim, and POS/NER terms are exact spans, not metadata values.
  */
 import { computed, ref, watch } from "vue";
+import UiRelationDotNode from "../relations/UiRelationDotNode.vue";
+import UiRelationEdge from "../relations/UiRelationEdge.vue";
 import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
 import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
@@ -399,6 +401,10 @@ const nodeDrag = useRelationNodeDrag({
   },
 });
 
+function linePath(from: Point, to: Point) {
+  return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+}
+
 function onViewportChange(state: RelationViewportState) {
   viewportState.value = state;
 }
@@ -648,17 +654,13 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
           aria-hidden="true"
         >
           <g>
-            <line
+            <UiRelationEdge
               v-for="edge in diagramEdges"
               :key="edge.id"
-              :x1="edge.from.x"
-              :y1="edge.from.y"
-              :x2="edge.to.x"
-              :y2="edge.to.y"
+              :path="linePath(edge.from, edge.to)"
+              :title="edge.title"
               :class="['map-edge', edge.kind, { faint: edge.faint }]"
-            >
-              <title>{{ edge.title }}</title>
-            </line>
+            />
           </g>
           <g
             v-for="node in positionedNodes"
@@ -680,22 +682,19 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
             @click="onNodeClick($event, node)"
             @keydown="onNodeKeydown($event, node)"
           >
-            <rect
-              v-if="node.ring === 'center' && currentMap"
-              x="-8"
-              y="-6"
-              width="16"
-              height="12"
-              rx="3"
+            <template v-if="node.ring === 'center' && currentMap">
+              <rect x="-8" y="-6" width="16" height="12" rx="3" />
+              <text x="0" y="22" text-anchor="middle">
+                {{ shortLabel(node.label) }}
+              </text>
+            </template>
+            <UiRelationDotNode
+              v-else
+              :radius="node.ring === 'center' ? 7 : node.ring === 'inner' ? 5 : 4"
+              :label="shortLabel(node.label)"
+              show-label
+              :label-offset="node.ring === 'center' ? 8 : 6"
             />
-            <circle v-else :r="node.ring === 'center' ? 7 : node.ring === 'inner' ? 5 : 4" />
-            <text
-              :x="node.ring === 'center' ? 0 : 11"
-              :y="node.ring === 'center' ? 22 : 4"
-              :text-anchor="node.ring === 'center' ? 'middle' : 'start'"
-            >
-              {{ shortLabel(node.label) }}
-            </text>
           </g>
         </svg>
       </UiRelationViewport>
@@ -1118,45 +1117,52 @@ button.mention:focus-visible,
   overflow: visible;
 }
 .map-edge {
-  stroke: var(--border-strong);
+  --relation-edge-stroke: var(--border-strong);
+  --relation-edge-opacity: 1;
   stroke-width: 1.4;
 }
 .map-edge.observational {
   stroke-dasharray: 5 5;
-  opacity: 0.6;
+  --relation-edge-opacity: 0.6;
 }
 .map-edge.membership {
-  stroke: var(--line);
+  --relation-edge-stroke: var(--line);
   stroke-width: 1;
 }
 .map-edge.faint {
-  opacity: 0.35;
+  --relation-edge-opacity: 0.35;
 }
-.map-node circle,
+.map-node {
+  --relation-node-dot: var(--muted);
+  --relation-node-dot-border: var(--surface-raised);
+  --relation-node-dot-border-width: 2;
+  --relation-node-label: var(--text);
+  --relation-node-label-halo: var(--surface-raised);
+}
 .map-node rect {
   fill: var(--muted);
   stroke: var(--surface-raised);
   stroke-width: 2;
 }
-.map-node[data-tone="person"] circle {
-  fill: var(--tone-info-edge);
+.map-node[data-tone="person"] {
+  --relation-node-dot: var(--tone-info-edge);
 }
-.map-node[data-tone="concept"] circle {
-  fill: var(--accent);
+.map-node[data-tone="concept"] {
+  --relation-node-dot: var(--accent);
 }
-.map-node[data-tone="work"] circle {
-  fill: var(--tone-ok-edge);
+.map-node[data-tone="work"] {
+  --relation-node-dot: var(--tone-ok-edge);
 }
-.map-node[data-tone="entity"] circle {
-  fill: var(--tone-warn-edge);
+.map-node[data-tone="entity"] {
+  --relation-node-dot: var(--tone-warn-edge);
 }
 .map-node[data-tone="record"] rect {
   fill: var(--text);
 }
-.map-node.outer circle {
-  opacity: 0.7;
+.map-node.outer {
+  --relation-node-dot-opacity: 0.7;
 }
-.map-node text {
+.map-node > text {
   fill: var(--text);
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
@@ -1174,9 +1180,9 @@ button.mention:focus-visible,
 .map-node:focus {
   outline: none;
 }
-.map-node:focus-visible circle {
-  stroke: var(--focus-ring);
-  stroke-width: 4;
+.map-node:focus-visible {
+  --relation-node-dot-border: var(--focus-ring);
+  --relation-node-dot-border-width: 4;
 }
 .semantic-map-legend {
   display: flex;
