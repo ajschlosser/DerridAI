@@ -992,6 +992,7 @@ def accept_unreviewed_suggestions(record: dict[str, Any]) -> int:
         }
         store_assertion(record, candidate.model_copy(update={
             "assertion_id": f"assertion-{uuid.uuid4().hex}",
+            "legacy_status": None,
             "legacy_metadata": {**candidate.legacy_metadata, "autonomous_decision": decision},
             "reason": candidate.reason or "Selected by autonomous policy without human confirmation.",
             "record_revision": int(record.get("record_revision") or candidate.record_revision or 1),
