@@ -148,7 +148,7 @@ test.describe("Corpus Builder composed workflow", () => {
       "31 Records remain unreviewed",
     );
     await expect(
-      page.getByRole("button", { name: "Publish with unreviewed suggestions" }),
+      page.getByRole("button", { name: "Use suggestions as-is & publish" }),
     ).toBeVisible();
     await expectWcag2AA(page, ".corpus-publish-workspace");
     await page.goto(story("corpus-builder-publish-workspace--published"));
