@@ -97,6 +97,7 @@ import RecordContextReader from "./corpus-builder/RecordContextReader.vue";
 import MovableRecordModal from "./corpus-builder/MovableRecordModal.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusSemanticGraphPanel from "./corpus-builder/CorpusSemanticGraphPanel.vue";
+import CorpusSemanticAliasPanel from "./corpus-builder/CorpusSemanticAliasPanel.vue";
 import CorpusRecordSemanticMap from "./corpus-builder/CorpusRecordSemanticMap.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusMissingDocumentFields from "./corpus-builder/CorpusMissingDocumentFields.vue";
@@ -2957,6 +2958,13 @@ defineExpose({
             :summary="currentBuild.semantic_content_graph"
             :disabled="busy !== '' || buildRunning"
             @refreshed="refreshBuild"
+          />
+
+          <CorpusSemanticAliasPanel
+            v-if="currentBuild"
+            :build-id="currentBuild.build_id"
+            :disabled="busy !== ''"
+            @changed="refreshBuild"
           />
 
           <div ref="reviewFrameEl" class="review-frame">

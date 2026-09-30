@@ -349,6 +349,40 @@ export interface RecordSemanticMap {
   epistemic_note?: string;
 }
 
+/** A reviewer's statement that several surfaces name one identity of a kind. */
+export interface SemanticAliasSet {
+  alias_set_id: string;
+  kind: string;
+  canonical_label: string;
+  aliases: string[];
+  reason?: string;
+  reviewer?: string;
+  created_at: string;
+  retired_at?: string | null;
+  replaces?: string | null;
+  replaced_by?: string;
+}
+
+/** An identity kind the build's schema compares, and the fields that use it. */
+export interface SemanticAliasKind {
+  kind: string;
+  mode: string;
+  fields: string[];
+}
+
+export interface SemanticAliasList {
+  items: SemanticAliasSet[];
+  kinds: SemanticAliasKind[];
+}
+
+export interface SemanticAliasDraft {
+  kind: string;
+  canonical_label: string;
+  aliases: string[];
+  reason?: string;
+  replaces?: string | null;
+}
+
 export interface SemanticNodeNeighborhood {
   version: number;
   kind: "semantic_node_neighborhood" | string;
