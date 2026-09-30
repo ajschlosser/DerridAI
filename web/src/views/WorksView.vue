@@ -44,7 +44,12 @@ function closeCreateSite() {
   createSiteError.value = "";
 }
 
-async function createSite(payload: { title: string; description: string; works: string[] }) {
+async function createSite(payload: {
+  title: string;
+  description: string;
+  works: string[];
+  export_format: "local-single-file" | "nginx-docker";
+}) {
   if (!snapshot.value?.activeStore || createSiteBusy.value) return;
   createSiteBusy.value = true;
   createSiteError.value = "";
@@ -55,6 +60,7 @@ async function createSite(payload: { title: string; description: string; works: 
       title: payload.title,
       description: payload.description,
       locale: i18n.locale === "fr-CA" ? "fr-CA" : "en-US",
+      export_format: payload.export_format,
     });
     const url = URL.createObjectURL(download.blob);
     const link = document.createElement("a");

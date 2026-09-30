@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from ..http_auth import require_admin
-from ..site_publication import build_site_bundle
+from ..site_publication import build_local_site_file, build_nginx_site_bundle
 
 router = APIRouter(tags=["sites"])
 
@@ -19,14 +19,20 @@ class SiteExportRequest(BaseModel):
     title: str = Field(default="", max_length=300)
     description: str = Field(default="", max_length=4000)
     locale: Literal["en-US", "fr-CA"] = "en-US"
+    export_format: Literal["local-single-file", "nginx-docker"] = "nginx-docker"
 
 
 @router.post("/api/sites/export")
 def export_site(body: SiteExportRequest, request: Request) -> Response:
-    """Create a static ZIP from selected Works in one corpus collection."""
+    """Create a local single-file or nginx/Docker research-site export."""
     require_admin(request)
     try:
-        bundle = build_site_bundle(
+        builder = (
+            build_local_site_file
+            if body.export_format == "local-single-file"
+            else build_nginx_site_bundle
+        )
+        bundle = builder(
             store_name=body.store,
             works=body.works,
             title=body.title,
@@ -39,7 +45,11 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return Response(
         content=bundle.payload,
-        media_type="application/zip",
+        media_type=(
+            "text/html; charset=utf-8"
+            if body.export_format == "local-single-file"
+            else "application/zip"
+        ),
         headers={
             "Content-Disposition": f'attachment; filename="{bundle.filename}"',
             "X-DerridAI-Publication-ID": bundle.publication_id,

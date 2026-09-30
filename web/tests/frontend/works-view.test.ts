@@ -223,8 +223,32 @@ describe("WorksView", () => {
       title: "Glas research site",
       description: "",
       locale: "en-US",
+      export_format: "local-single-file",
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("can export the research site as a single-container nginx bundle", async () => {
+    const wrapper = await mountWorks();
+    await wrapper.get("#createSite").trigger("click");
+    await flushPromises();
+
+    const dialog = wrapper.get(".create-site-dialog");
+    await dialog.get("input[type='checkbox']").setValue(true);
+    await dialog.get("input[value='nginx-docker']").setValue(true);
+    await dialog.get("input[placeholder='Research collection']").setValue("Hosted Glas");
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith({
+      store: "derrida-primary",
+      works: ["Glas"],
+      title: "Hosted Glas",
+      description: "",
+      locale: "en-US",
+      export_format: "nginx-docker",
+    });
     wrapper.unmount();
   });
 
