@@ -16,6 +16,7 @@ const props = defineProps<{
   running: boolean;
   canResume: boolean;
   hasRecordTopology: boolean;
+  readyCount?: number;
   busy?: boolean;
   providerLabel?: string;
   modelLabel?: string;
@@ -36,6 +37,18 @@ const rail = computed(() => corpusStageRail(props.build));
 const operation = computed(() => status.value.detail);
 const settled = computed(() => isAutomatedProcessingDone(props.build));
 const recordCount = computed(() => Number(props.build.record_count || 0));
+const readyCount = computed(() => Math.max(0, Number(props.readyCount || 0)));
+const reviewAvailableWhileRunning = computed(
+  () => props.running && props.hasRecordTopology && recordCount.value > 0,
+);
+const reviewLabel = computed(() =>
+  reviewAvailableWhileRunning.value && readyCount.value > 0
+    ? i18n.tf("pdf_corpus.primary_status.review_ready", { count: readyCount.value })
+    : i18n.t("pdf_corpus.primary_status.review_records"),
+);
+const reviewPrimary = computed(
+  () => settled.value || (reviewAvailableWhileRunning.value && readyCount.value > 0),
+);
 const liveCount = computed(() => {
   if (String(props.build.stage) === "enriching" && props.running) {
     return {
@@ -77,8 +90,8 @@ function confirmDelete() {
         />
         <UiButton
           v-if="hasRecordTopology && recordCount > 0"
-          :variant="settled ? 'primary' : 'default'"
-          :label="i18n.t('pdf_corpus.primary_status.review_records')"
+          :variant="reviewPrimary ? 'primary' : 'default'"
+          :label="reviewLabel"
           @click="emit('openReview')"
         />
         <UiButton
@@ -110,6 +123,9 @@ function confirmDelete() {
     </header>
 
     <p v-if="operation" class="primary-status-operation" role="status">{{ operation }}</p>
+    <p v-if="reviewAvailableWhileRunning" class="primary-status-review-help">
+      {{ i18n.t("pdf_corpus.primary_status.review_while_running_help") }}
+    </p>
 
     <div
       class="primary-status-track"
@@ -232,6 +248,15 @@ function confirmDelete() {
   font-size: var(--fs-sm);
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+.primary-status-review-help {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: 3px solid var(--tone-info-border);
+  background: var(--tone-info-bg);
+  color: var(--tone-info-fg);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
 }
 .primary-status-track {
   height: 8px;
