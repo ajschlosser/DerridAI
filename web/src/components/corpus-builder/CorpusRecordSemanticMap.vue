@@ -653,6 +653,7 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
       >
         <svg
           class="semantic-map-canvas"
+          :style="{ '--map-zoom': viewportState.zoom }"
           :viewBox="`0 0 ${SIZE.width} ${SIZE.height}`"
           :width="SIZE.width"
           :height="SIZE.height"
@@ -1138,18 +1139,17 @@ button.mention:focus-visible,
   overflow: visible;
 }
 .map-edge {
-  vector-effect: non-scaling-stroke;
   --relation-edge-stroke: var(--border-strong);
   --relation-edge-opacity: 1;
-  stroke-width: 1.4;
+  stroke-width: calc(1.4px / var(--map-zoom, 1));
 }
 .map-edge.observational {
-  stroke-dasharray: 5 5;
+  stroke-dasharray: calc(5px / var(--map-zoom, 1)) calc(5px / var(--map-zoom, 1));
   --relation-edge-opacity: 0.6;
 }
 .map-edge.membership {
   --relation-edge-stroke: var(--line);
-  stroke-width: 1;
+  stroke-width: calc(1px / var(--map-zoom, 1));
 }
 .map-edge.faint {
   --relation-edge-opacity: 0.35;

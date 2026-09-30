@@ -774,6 +774,7 @@ const pageText = computed(() => {
           >
             <svg
               class="graph-canvas"
+              :style="{ '--map-zoom': viewportState.zoom }"
               :viewBox="`0 0 ${WIDTH} ${HEIGHT}`"
               :width="WIDTH"
               :height="HEIGHT"
@@ -783,7 +784,7 @@ const pageText = computed(() => {
                   v-for="edge in edges"
                   :key="edge.id"
                   :path="edgePath(edge)"
-                  :width="edgeWidth(edge)"
+                  :width="edgeWidth(edge) / viewportState.zoom"
                   :title="`${relationLabel(edge.predicate)} · ${authorityLabel(edge.authority_status)}`"
                   :class="[
                     'graph-edge',
@@ -1474,7 +1475,6 @@ const pageText = computed(() => {
   color: var(--muted);
 }
 .graph-edge {
-  vector-effect: non-scaling-stroke;
   fill: none;
   stroke: var(--border-strong);
   opacity: 0.5;
@@ -1485,12 +1485,12 @@ const pageText = computed(() => {
   opacity: 0.7;
 }
 .graph-edge.observational {
-  stroke-dasharray: 4 4;
+  stroke-dasharray: calc(4px / var(--map-zoom, 1)) calc(4px / var(--map-zoom, 1));
   opacity: 0.35;
 }
 .graph-edge.disputed {
   stroke: var(--tone-danger-border);
-  stroke-dasharray: 1 3;
+  stroke-dasharray: calc(1px / var(--map-zoom, 1)) calc(3px / var(--map-zoom, 1));
   opacity: 0.85;
 }
 .graph-edge.dim {
