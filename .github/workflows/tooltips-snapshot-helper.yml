@@ -1,0 +1,46 @@
+name: Tooltip snapshot helper
+
+on:
+  push:
+    branches:
+      - task/tooltips-help
+
+permissions:
+  contents: read
+
+jobs:
+  snapshots:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Restore Playwright Chromium cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build production app
+        run: npm run build:ci
+      - name: Refresh intentional legacy DOM snapshots
+        run: npm run test:e2e:legacy -- --update-snapshots
+        continue-on-error: true
+      - name: Package refreshed snapshots
+        working-directory: .
+        run: tar -czf /tmp/legacy-snapshots.tar.gz web/tests/e2e/legacy-dom-baseline.spec.ts-snapshots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tooltip-legacy-snapshots
+          path: /tmp/legacy-snapshots.tar.gz
+          if-no-files-found: error
+          retention-days: 1
