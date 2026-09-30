@@ -25,6 +25,7 @@ withDefaults(
   overflow: hidden;
   padding: var(--relation-node-padding, 8px 10px);
   border: 1px solid var(--relation-node-border, var(--border-subtle));
+  border-style: var(--relation-node-border-style, solid);
   border-radius: var(--relation-node-radius, var(--radius-card));
   background: var(--relation-node-bg, var(--surface-card));
   color: var(--relation-node-fg, var(--text-primary));
