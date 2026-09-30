@@ -8,7 +8,7 @@
  * or one entity's neighbourhood) and a paged index, and states plainly when
  * the drawing is partial.
  */
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import UiRelationDotNode from "../relations/UiRelationDotNode.vue";
 import UiRelationEdge from "../relations/UiRelationEdge.vue";
 import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
@@ -328,6 +328,26 @@ const contentBounds = computed(() =>
 const viewport = ref<InstanceType<typeof UiRelationViewport> | null>(null);
 const viewportState = ref<RelationViewportState>({ pan: { x: 0, y: 0 }, zoom: 1 });
 const draggedNodeId = ref("");
+const rovingNodeId = ref("");
+
+watch(
+  drawnNodes,
+  (next) => {
+    if (!next.length) {
+      rovingNodeId.value = "";
+      return;
+    }
+    if (next.some((node) => node.id === rovingNodeId.value)) return;
+    const preferred =
+      (selectedNodeId.value && next.some((node) => node.id === selectedNodeId.value)
+        ? selectedNodeId.value
+        : "") ||
+      (focusId.value && next.some((node) => node.id === focusId.value) ? focusId.value : "") ||
+      next[0].id;
+    rovingNodeId.value = preferred;
+  },
+  { immediate: true },
+);
 
 const nodeDrag = useRelationNodeDrag({
   getZoom: () => viewportState.value.zoom,
@@ -352,6 +372,7 @@ function resetLayout() {
 function onNodePointerDown(event: PointerEvent, node: DrawnNode) {
   draggedNodeId.value = node.id;
   selectedNodeId.value = node.id;
+  rovingNodeId.value = node.id;
   nodeDrag.begin(event, { x: node.x, y: node.y });
 }
 
@@ -369,6 +390,44 @@ function onNodeClick(event: MouseEvent, node: DrawnNode) {
   selectNode(node.id);
 }
 
+function moveRovingFocus(event: KeyboardEvent) {
+  if (event.altKey || event.ctrlKey || event.metaKey) return false;
+  const forward = event.key === "ArrowRight" || event.key === "ArrowDown";
+  const backward = event.key === "ArrowLeft" || event.key === "ArrowUp";
+  if (!forward && !backward && event.key !== "Home" && event.key !== "End") return false;
+
+  const current = event.currentTarget as SVGGElement | null;
+  const items = current?.parentElement
+    ? Array.from(current.parentElement.querySelectorAll<SVGGElement>(".graph-node"))
+    : [];
+  const currentIndex = current ? items.indexOf(current) : -1;
+  if (currentIndex < 0 || !items.length) return false;
+
+  const nextIndex =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? items.length - 1
+        : forward
+          ? (currentIndex + 1) % items.length
+          : (currentIndex - 1 + items.length) % items.length;
+  const next = items[nextIndex];
+  const nextId = next.dataset.nodeId || "";
+  if (!nextId) return false;
+
+  event.preventDefault();
+  event.stopPropagation();
+  rovingNodeId.value = nextId;
+  hoveredNodeId.value = nextId;
+  void nextTick(() => next.focus());
+  return true;
+}
+
+function onNodeFocus(id: string) {
+  rovingNodeId.value = id;
+  hoveredNodeId.value = id;
+}
+
 function onNodeKeydown(event: KeyboardEvent, node: DrawnNode) {
   draggedNodeId.value = node.id;
   if (nodeDrag.nudge(event, { x: node.x, y: node.y })) {
@@ -376,6 +435,7 @@ function onNodeKeydown(event: KeyboardEvent, node: DrawnNode) {
     return;
   }
   draggedNodeId.value = "";
+  if (moveRovingFocus(event)) return;
   if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
     selectNode(node.id);
@@ -393,6 +453,7 @@ watch(layoutIdentity, (next, previous) => {
 
 function selectNode(id: string) {
   selectedNodeId.value = id;
+  rovingNodeId.value = id;
 }
 function focusNode(id: string, label: string) {
   if (!id || id === focusId.value) return;
@@ -401,6 +462,7 @@ function focusNode(id: string, label: string) {
     at >= 0 ? focusTrail.value.slice(0, at + 1) : [...focusTrail.value, { id, label }].slice(-6);
   focusId.value = id;
   selectedNodeId.value = id;
+  rovingNodeId.value = id;
   indexOffset.value = 0;
 }
 function backToOverview() {
@@ -746,7 +808,8 @@ const pageText = computed(() => {
                     },
                   ]"
                   role="button"
-                  tabindex="0"
+                  :data-node-id="node.id"
+                  :tabindex="node.id === rovingNodeId ? 0 : -1"
                   :aria-label="nodeAriaLabel(node)"
                   :aria-pressed="node.id === selectedNodeId"
                   @click.stop="onNodeClick($event, node)"
@@ -757,7 +820,7 @@ const pageText = computed(() => {
                   @pointercancel.stop="onNodePointerEnd"
                   @pointerenter="hoveredNodeId = node.id"
                   @pointerleave="hoveredNodeId = ''"
-                  @focus="hoveredNodeId = node.id"
+                  @focus="onNodeFocus(node.id)"
                   @blur="hoveredNodeId = ''"
                   @keydown="onNodeKeydown($event, node)"
                 >
