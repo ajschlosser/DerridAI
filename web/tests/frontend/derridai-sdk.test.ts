@@ -6,7 +6,6 @@ import {
   dataSources,
   MemoryStorage,
   type GenerationRequest,
-  type InlineDataSource,
   type PublicationRecord,
 } from "../../sdk/src";
 
