@@ -89,9 +89,11 @@ const counts = computed(() => [
   >
     <header class="publish-summary" :data-tone="summary.tone">
       <div class="publish-summary-copy">
-        <span class="eyebrow">{{ i18n.t("pdf_corpus.publish.readiness_title") }}</span>
+        <span class="eyebrow">{{
+          published ? i18n.t("pdf_corpus.publication") : i18n.t("pdf_corpus.publish.readiness_title")
+        }}</span>
         <h2 id="corpus-publish-title" role="status">{{ summary.label }}</h2>
-        <dl class="publish-counts">
+        <dl v-if="!published" class="publish-counts">
           <div v-for="item in counts" :key="item.id" :data-count="item.id">
             <dt>{{ item.label }}</dt>
             <dd>{{ Number(item.value).toLocaleString() }}</dd>
