@@ -22,8 +22,9 @@ def test_a_confident_proposal_is_taken_and_labelled_as_the_models_not_a_persons(
     info = r["metadata_field_status"]["stance"]
     assert info["status"] == "model_inferred" and info["method"] == "llm" and info["autonomous"] is True
     assert info["evaluation_status"] == "value_supported"
+    assert info["value_status"] == "unresolved"
     assert info["autonomous_decision"]["field"] == "stance"
-    assert "no person reviewed" in info["reason"]
+    assert info["autonomous_decision"]["actor_kind"] == "autonomous_policy"
 
 
 def test_a_doubtful_proposal_is_left_or_taken_by_policy():
