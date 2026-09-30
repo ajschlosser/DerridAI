@@ -113,7 +113,6 @@ onBeforeUnmount(hide);
       :tabindex="contentFocusable ? 0 : undefined"
       :aria-label="label || undefined"
       :aria-describedby="id"
-      :aria-expanded="open ? 'true' : undefined"
       @focus.capture="show"
       @blur.capture="hide"
       @click="toggle"
