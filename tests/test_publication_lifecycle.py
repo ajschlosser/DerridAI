@@ -240,12 +240,11 @@ def test_accept_unreviewed_publishes_suggestions_and_preserves_prior_decisions(t
     else:
         raise AssertionError("reviewed publication should still be blocked")
     publication=manager.publish(build["build_id"],accept_unreviewed=True)
-    assert publication["review_mode"]=="autonomous"
-    assert publication["celf_conformant"] is False
-    assert any(
-        blocker["code"] == "missing_source_document_id"
-        for blocker in publication["celf_conformance"]["core"]["blockers"]
-    )
+    assert publication["review_mode"]=="hybrid"
+    assert publication["human_reviewed_record_count"]==1
+    assert publication["autonomous_record_count"]==1
+    assert publication["celf_conformant"] is True
+    assert publication["celf_conformance"]["core"]["blockers"] == []
     assert publication["unreviewed_record_count"]==1
     assert publication["bypassed_review_blocker"]
     assert publication["unreviewed_accepted_field_count"]==1
