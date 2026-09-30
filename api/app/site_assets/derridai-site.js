@@ -286,13 +286,187 @@
     localStorage.setItem(providerKey, JSON.stringify(safe));
   }
 
-  async function requestJson(url, init) {
-    const response = await fetch(url, init);
+  function providerError(message, kind = "provider", status = 0) {
+    const error = new Error(message);
+    error.kind = kind;
+    error.status = status;
+    return error;
+  }
+
+  function providerOrigin() {
+    return location.origin === "null" ? "null" : location.origin;
+  }
+
+  function isLoopbackHost(hostname) {
+    return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(
+      String(hostname || "").toLocaleLowerCase(),
+    );
+  }
+
+  function providerUrl(config) {
+    const raw = String(config.baseUrl || "").trim();
+    if (!raw) throw providerError(t("site.runtime.endpoint_required"), "configuration");
+    let parsed;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      throw providerError(t("site.runtime.endpoint_invalid"), "configuration");
+    }
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      throw providerError(t("site.runtime.endpoint_http_required"), "configuration");
+    }
+    if (
+      location.protocol === "https:" &&
+      parsed.protocol === "http:" &&
+      !isLoopbackHost(parsed.hostname)
+    ) {
+      throw providerError(
+        t("site.runtime.provider_mixed_content", { endpoint: parsed.origin }),
+        "mixed-content",
+      );
+    }
+    return raw.replace(/\/$/, "");
+  }
+
+  function providerHeaders(config, json = false) {
+    const headers = {};
+    if (json) headers["Content-Type"] = "application/json";
+    if (config.type !== "ollama" && config.apiKey) {
+      headers.Authorization = `Bearer ${config.apiKey}`;
+    }
+    return headers;
+  }
+
+  async function requestJson(url, init = {}) {
+    let response;
+    try {
+      response = await fetch(url, init);
+    } catch (cause) {
+      throw providerError(
+        t("site.runtime.provider_browser_blocked", { endpoint: url }),
+        "network",
+      );
+    }
     const text = await response.text();
     let body;
-    try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
-    if (!response.ok) throw new Error(body?.error?.message || body?.detail || text || `${response.status} ${response.statusText}`);
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = {};
+    }
+    if (!response.ok) {
+      const message =
+        body?.error?.message ||
+        body?.error ||
+        body?.detail ||
+        text ||
+        `${response.status} ${response.statusText}`;
+      const kind =
+        response.status === 401 || response.status === 403
+          ? "authentication"
+          : response.status === 404
+            ? "not-found"
+            : "provider";
+      throw providerError(String(message), kind, response.status);
+    }
     return body;
+  }
+
+  async function noCorsReachabilityProbe(url) {
+    try {
+      await fetch(url, { method: "GET", mode: "no-cors", cache: "no-store" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function testProviderConnection(config) {
+    let base;
+    try {
+      base = providerUrl(config);
+    } catch (error) {
+      return {
+        ok: false,
+        kind: error.kind || "configuration",
+        message: error.message,
+        origin: providerOrigin(),
+      };
+    }
+
+    const discoveryUrl =
+      config.type === "ollama" ? `${base}/api/tags` : `${base}/models`;
+    let body;
+    try {
+      body = await requestJson(discoveryUrl, {
+        method: "GET",
+        headers: providerHeaders(config),
+        cache: "no-store",
+      });
+    } catch (error) {
+      if (error.kind === "network") {
+        const reachable = await noCorsReachabilityProbe(discoveryUrl);
+        if (reachable) {
+          return {
+            ok: false,
+            kind: "cors",
+            message: t("site.runtime.provider_cors_blocked", {
+              origin: providerOrigin(),
+            }),
+            origin: providerOrigin(),
+            endpoint: base,
+          };
+        }
+      }
+      return {
+        ok: false,
+        kind: error.kind || "provider",
+        message: error.message,
+        origin: providerOrigin(),
+        endpoint: base,
+      };
+    }
+
+    const modelNames =
+      config.type === "ollama"
+        ? (body.models || [])
+            .flatMap((item) => [item?.name, item?.model])
+            .filter(Boolean)
+            .map(String)
+        : (body.data || []).map((item) => String(item?.id || "")).filter(Boolean);
+    const missing = [];
+    if (config.chatModel && modelNames.length && !modelNames.includes(config.chatModel)) {
+      missing.push(config.chatModel);
+    }
+    if (
+      config.embeddingModel &&
+      modelNames.length &&
+      !modelNames.includes(config.embeddingModel)
+    ) {
+      missing.push(config.embeddingModel);
+    }
+
+    if (missing.length) {
+      return {
+        ok: false,
+        kind: "model",
+        message: t("site.runtime.provider_models_missing", {
+          models: [...new Set(missing)].join(", "),
+        }),
+        origin: providerOrigin(),
+        endpoint: base,
+        models: modelNames,
+      };
+    }
+
+    return {
+      ok: true,
+      kind: "ready",
+      message: t("site.runtime.provider_ready"),
+      origin: providerOrigin(),
+      endpoint: base,
+      models: modelNames,
+    };
   }
 
   async function embedQuery(query, config) {
