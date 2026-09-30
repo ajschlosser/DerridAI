@@ -479,9 +479,9 @@ _START_SCRIPT = """#!/bin/sh
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-IMAGE=\${DERRIDAI_SITE_IMAGE:-derridai-research-site}
-CONTAINER=\${DERRIDAI_SITE_CONTAINER:-derridai-research-site}
-PORT=\${DERRIDAI_SITE_PORT:-8080}
+IMAGE=${DERRIDAI_SITE_IMAGE:-derridai-research-site}
+CONTAINER=${DERRIDAI_SITE_CONTAINER:-derridai-research-site}
+PORT=${DERRIDAI_SITE_PORT:-8080}
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker is required but was not found on PATH." >&2
@@ -497,17 +497,17 @@ docker build --tag "$IMAGE" "$SCRIPT_DIR"
 docker run --detach \\
   --name "$CONTAINER" \\
   --restart unless-stopped \\
-  --publish "\${PORT}:80" \\
+  --publish "${PORT}:80" \\
   "$IMAGE" >/dev/null
 
-echo "DerridAI research site: http://localhost:\${PORT}"
-echo "Container: \${CONTAINER}"
+echo "DerridAI research site: http://localhost:${PORT}"
+echo "Container: ${CONTAINER}"
 """
 
 _STOP_SCRIPT = """#!/bin/sh
 set -eu
 
-CONTAINER=\${DERRIDAI_SITE_CONTAINER:-derridai-research-site}
+CONTAINER=${DERRIDAI_SITE_CONTAINER:-derridai-research-site}
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker is required but was not found on PATH." >&2
@@ -516,9 +516,9 @@ fi
 
 if docker container inspect "$CONTAINER" >/dev/null 2>&1; then
   docker rm -f "$CONTAINER" >/dev/null
-  echo "Stopped \${CONTAINER}."
+  echo "Stopped ${CONTAINER}."
 else
-  echo "Container \${CONTAINER} is not running."
+  echo "Container ${CONTAINER} is not running."
 fi
 """
 
