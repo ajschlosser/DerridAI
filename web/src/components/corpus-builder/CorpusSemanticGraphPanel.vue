@@ -32,6 +32,7 @@ import {
 import { readDocumentIntelligence } from "../../features/corpus-builder/api/documentIntelligenceReads";
 import { layoutGraph, nodeRadius, type LayoutPoint } from "../../domain/semanticGraphLayout";
 import { useI18nStore } from "../../stores/i18n";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   buildId: string;
@@ -810,15 +811,21 @@ const pageText = computed(() => {
               <p :class="['type-pill', hueClass(selectedNode.type)]">
                 <i class="swatch" aria-hidden="true" />{{ selectedNode.type }}
               </p>
-              <button
-                type="button"
-                class="icon-btn small"
-                :aria-label="i18n.t('pdf_corpus.semantic_graph_clear_selection')"
-                :title="i18n.t('pdf_corpus.semantic_graph_clear_selection')"
-                @click="selectedNodeId = ''"
+              <UiTooltip
+                :text="i18n.t('pdf_corpus.semantic_graph_clear_selection')"
+                trigger-mode="content"
+                :content-focusable="false"
+                placement="bottom"
               >
-                ×
-              </button>
+                <button
+                  type="button"
+                  class="icon-btn small"
+                  :aria-label="i18n.t('pdf_corpus.semantic_graph_clear_selection')"
+                  @click="selectedNodeId = ''"
+                >
+                  ×
+                </button>
+              </UiTooltip>
             </div>
             <h4>{{ selectedNode.label }}</h4>
             <p v-if="selectedNode.aliases?.length" class="graph-aliases">
