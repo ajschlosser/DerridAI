@@ -5,13 +5,20 @@ import PipelineStageConnections from "./PipelineStageConnections.vue";
 import PipelineStrategyConfigFields from "./PipelineStrategyConfigFields.vue";
 import {
   pipelineDataTypeHelp,
+  pipelineDataTypeLabel,
   pipelineStageFamilyHelp,
   pipelineStageFamilyLabel,
   pipelineStrategyDescription,
   pipelineStrategyLabel,
 } from "../../domain/pipelinePresentation";
+import { purposeText, strategyPickerGroups } from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
-import type { PipelineStage, PipelineStrategy } from "../../types/pipelines";
+import type {
+  PipelinePurpose,
+  PipelineStage,
+  PipelineStrategy,
+  PipelineStrategyFit,
+} from "../../types/pipelines";
 import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
@@ -20,6 +27,9 @@ const props = defineProps<{
   stages: PipelineStage[];
   strategies: PipelineStrategy[];
   entryStageIds: string[];
+  /** The pipeline's purpose; its adapter decides which strategies are supported. */
+  purpose?: PipelinePurpose | null;
+  showAllStrategies?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -48,19 +58,81 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
 const strategy = computed(
   () => props.strategies.find((item) => item.strategy_id === props.stage.strategy) || null,
 );
-const strategiesByFamily = computed(() => {
-  const groups = new Map<string, PipelineStrategy[]>();
-  for (const item of props.strategies) {
-    const rows = groups.get(item.family) || [];
-    rows.push(item);
-    groups.set(item.family, rows);
-  }
-  return [...groups.entries()].map(([family, strategies]) => ({
-    family,
-    strategies: [...strategies].sort((a, b) =>
+function byFamilyThenLabel(rows: PipelineStrategy[]) {
+  return [...rows].sort(
+    (a, b) =>
+      a.family.localeCompare(b.family) ||
       pipelineStrategyLabel(a, t).localeCompare(pipelineStrategyLabel(b, t), i18n.locale),
-    ),
-  }));
+  );
+}
+function optionText(item: PipelineStrategy) {
+  return `${pipelineStrategyLabel(item, t)} · ${pipelineStageFamilyLabel(item.family, t)}`;
+}
+const fit = computed<PipelineStrategyFit>(() =>
+  props.purpose ? props.purpose.strategy_fit[props.stage.strategy] || "inspect_only" : "supported",
+);
+const purposeLabel = computed(() => (props.purpose ? purposeText(props.purpose, "label", t) : ""));
+const optionGroups = computed(() => {
+  if (!props.purpose) {
+    return [
+      {
+        id: "all",
+        label: t("pipelines.strategy_group_all", "Registered operations"),
+        disabled: false,
+        strategies: byFamilyThenLabel(props.strategies),
+      },
+    ];
+  }
+  const groups = strategyPickerGroups(props.strategies, props.purpose);
+  // The stage's current strategy always stays listed so the select can show it.
+  const keep = (rows: PipelineStrategy[]) =>
+    props.showAllStrategies ? rows : rows.filter((row) => row.strategy_id === props.stage.strategy);
+  return [
+    {
+      id: "supported",
+      label: t("pipelines.strategy_group_supported", "Supported for this workflow"),
+      disabled: false,
+      strategies: byFamilyThenLabel(groups.supported),
+    },
+    {
+      id: "inspect_only",
+      label: t("pipelines.strategy_group_inspect_only", "Other operations — inspect only"),
+      disabled: false,
+      strategies: byFamilyThenLabel(keep(groups.inspect_only)),
+    },
+    {
+      id: "output_contract",
+      label: t(
+        "pipelines.strategy_group_output_contract",
+        "Unsupported — changes this workflow’s output",
+      ),
+      disabled: true,
+      strategies: byFamilyThenLabel(keep(groups.output_contract)),
+    },
+  ].filter((group) => group.strategies.length);
+});
+const fitNote = computed(() => {
+  if (!props.purpose || fit.value === "supported") return "";
+  if (fit.value === "output_contract") {
+    return i18n.tf(
+      "pipelines.strategy_fit_output_contract",
+      "{strategy} produces {output}, but a {purpose} pipeline must return {contract}. This version cannot run.",
+      {
+        strategy: strategy.value ? pipelineStrategyLabel(strategy.value, t) : props.stage.strategy,
+        output: pipelineDataTypeLabel(strategy.value?.output_type || "", t),
+        purpose: purposeLabel.value,
+        contract: pipelineDataTypeLabel(props.purpose.output_type, t),
+      },
+    );
+  }
+  return i18n.tf(
+    "pipelines.strategy_fit_inspect_only",
+    "{strategy} is not run by the {purpose} adapter. A version that uses it stays inspect-only.",
+    {
+      strategy: strategy.value ? pipelineStrategyLabel(strategy.value, t) : props.stage.strategy,
+      purpose: purposeLabel.value,
+    },
+  );
 });
 </script>
 
@@ -102,22 +174,34 @@ const strategiesByFamily = computed(() => {
           <select
             class="control"
             :value="stage.strategy"
+            :aria-describedby="fitNote ? `stage-fit-${stageIndex}` : undefined"
             @change="emit('updateStrategy', stageIndex, ($event.target as HTMLSelectElement).value)"
           >
             <optgroup
-              v-for="group in strategiesByFamily"
-              :key="group.family"
-              :label="pipelineStageFamilyLabel(group.family, t)"
+              v-for="group in optionGroups"
+              :key="group.id"
+              :label="group.label"
+              :data-fit="group.id"
             >
               <option
                 v-for="option in group.strategies"
                 :key="option.strategy_id"
                 :value="option.strategy_id"
+                :disabled="group.disabled && option.strategy_id !== stage.strategy"
               >
-                {{ pipelineStrategyLabel(option, t) }}
+                {{ optionText(option) }}
               </option>
             </optgroup>
           </select>
+          <small
+            v-if="fitNote"
+            :id="`stage-fit-${stageIndex}`"
+            class="stage-fit-note"
+            :data-fit="fit"
+            role="note"
+          >
+            {{ fitNote }}
+          </small>
           <small class="stage-field-help">{{
             t(
               "pipelines.strategy_safety_summary",
@@ -274,6 +358,13 @@ const strategiesByFamily = computed(() => {
 </template>
 
 <style scoped>
+.stage-fit-note {
+  display: block;
+  padding: 4px 8px;
+  border-left: 3px solid currentColor;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
 .stage-settings-card {
   display: grid;
   gap: 10px;

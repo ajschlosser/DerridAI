@@ -2,51 +2,13 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import PipelineStageList from "./PipelineStageList.vue";
 import type { PipelineDefinition, PipelineStrategy } from "../../types/pipelines";
+import { contractStrategy } from "./fixtures/pipelineCatalogContract";
 
 const strategies: PipelineStrategy[] = [
-  {
-    strategy_id: "retrieve.chroma_similarity",
-    version: 1,
-    family: "candidate_generation",
-    label: "Chroma semantic similarity",
-    description: "Retrieve nearest candidates from a compatible Chroma collection.",
-    input_type: "query",
-    output_type: "candidate_set",
-    deterministic: false,
-    invokes_llm: false,
-    capabilities: ["embedding", "chroma"],
-    config_schema: {
-      type: "object",
-      properties: { fetch_k: { type: "integer", minimum: 1, maximum: 5000 } },
-    },
-  },
-  {
-    strategy_id: "rerank.cross_encoder",
-    version: 1,
-    family: "rerank",
-    label: "Cross-encoder reranker",
-    description: "Score query/candidate pairs with the shared cross-encoder boundary.",
-    input_type: "candidate_set",
-    output_type: "candidate_set",
-    deterministic: false,
-    invokes_llm: false,
-    capabilities: ["cross_encoder"],
-    config_schema: { type: "object", properties: {} },
-  },
-  {
-    strategy_id: "llm.generate_answer",
-    version: 1,
-    family: "llm",
-    label: "Research answer generation",
-    description: "Generate the evidence-grounded Research answer.",
-    input_type: "context_packet",
-    output_type: "model_output",
-    deterministic: false,
-    invokes_llm: true,
-    capabilities: ["chat_model"],
-    config_schema: { type: "object", properties: {} },
-  },
-];
+  "retrieve.chroma_similarity",
+  "rerank.cross_encoder",
+  "llm.generate_answer",
+].map(contractStrategy);
 
 const pipeline: PipelineDefinition = {
   pipeline_id: "research.example",

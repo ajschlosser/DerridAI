@@ -658,7 +658,12 @@ def test_metadata_prompts_receive_only_examples_for_their_family(monkeypatch):
                 "record_id": "r-quote",
                 "value": ["Levinas"],
                 "excerpt": "QUOTATION_ONLY_PROGRESSIVE_MARKER",
-            }
+            },
+            {
+                "record_id": "r-ambiguous-quote",
+                "value": ["Levinas", "Heidegger"],
+                "excerpt": "AMBIGUOUS_QUOTATION_CARDINALITY_MARKER",
+            },
         ],
     }
 
@@ -679,6 +684,9 @@ def test_metadata_prompts_receive_only_examples_for_their_family(monkeypatch):
     assert "SPEAKER_ONLY_PROGRESSIVE_MARKER" in prompts["discourse"]
     assert "QUOTATION_ONLY_PROGRESSIVE_MARKER" not in prompts["discourse"]
     assert "QUOTATION_ONLY_PROGRESSIVE_MARKER" in prompts["quotation"]
+    assert '"value": "Levinas"' in prompts["quotation"]
+    assert '"value": ["Levinas"]' not in prompts["quotation"]
+    assert "AMBIGUOUS_QUOTATION_CARDINALITY_MARKER" not in prompts["quotation"]
     assert "SPEAKER_ONLY_PROGRESSIVE_MARKER" not in prompts["quotation"]
 
 

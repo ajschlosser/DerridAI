@@ -150,12 +150,12 @@ class RecordMetadataModel(BaseModel):
     stance: str | None = None
     claim_scope: str | None = None
     is_direct_quote: bool | None = None
-    quoted_speaker: list[str] = Field(default_factory=list)
-    quoted_author: list[str] = Field(default_factory=list)
-    quoted_work: list[str] = Field(default_factory=list)
-    quoted_position_holder: list[str] = Field(default_factory=list)
-    quoted_addressee: list[str] = Field(default_factory=list)
-    quoted_referent: list[str] = Field(default_factory=list)
+    quoted_speaker: str | None = None
+    quoted_author: str | None = None
+    quoted_work: str | None = None
+    quoted_position_holder: str | None = None
+    quoted_addressee: str | None = None
+    quoted_referent: str | None = None
     quotation_chain: list[str] = Field(default_factory=list)
     topics: list[str] = Field(default_factory=list)
     concepts: list[str] = Field(default_factory=list)
@@ -267,12 +267,12 @@ class DiscourseMetadataResponseModel(BaseModel):
 class QuotationMetadataModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     is_direct_quote: bool | None
-    quoted_speaker: list[str] = Field(max_length=12)
-    quoted_author: list[str] = Field(max_length=12)
-    quoted_work: list[str] = Field(max_length=12)
-    quoted_position_holder: list[str] = Field(max_length=12)
-    quoted_addressee: list[str] = Field(max_length=12)
-    quoted_referent: list[str] = Field(max_length=12)
+    quoted_speaker: str | None
+    quoted_author: str | None
+    quoted_work: str | None
+    quoted_position_holder: str | None
+    quoted_addressee: str | None
+    quoted_referent: str | None
     quotation_chain: list[str] = Field(max_length=16)
 
 

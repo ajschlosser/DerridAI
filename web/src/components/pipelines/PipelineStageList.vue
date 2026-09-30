@@ -11,13 +11,20 @@ import {
   pipelineStrategyDescription,
   pipelineStrategyLabel,
 } from "../../domain/pipelinePresentation";
+import { findTerm, termDescription, termLabel } from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
-import type { PipelineDefinition, PipelineStage, PipelineStrategy } from "../../types/pipelines";
+import type {
+  PipelineDefinition,
+  PipelineStage,
+  PipelineStrategy,
+  PipelineWorkflowVocabulary,
+} from "../../types/pipelines";
 import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   pipeline: PipelineDefinition;
   strategies: PipelineStrategy[];
+  vocabulary?: PipelineWorkflowVocabulary;
 }>();
 
 const i18n = useI18nStore();
@@ -30,6 +37,9 @@ function t(key: string, fallback: string) {
 }
 function strategy(stage: PipelineStage) {
   return strategyMap.value.get(stage.strategy);
+}
+function effectNote(stage: PipelineStage) {
+  return findTerm(props.vocabulary?.effect_notes, strategy(stage)?.effect_note);
 }
 function outgoing(stage: PipelineStage) {
   const values = [
@@ -102,6 +112,18 @@ function compactConfig(config: Record<string, unknown>) {
             </span>
           </div>
         </div>
+        <p
+          v-if="effectNote(stage)"
+          class="stage-effect"
+          :data-effect="strategy(stage)?.scholarly_effect"
+        >
+          <span class="sr-only">{{ t("pipelines.scholarly_effect", "Scholarly effect") }}:</span>
+          {{ termLabel(effectNote(stage)!, t) }}
+          <UiTooltip
+            :text="termDescription(effectNote(stage)!, t)"
+            :label="t('pipelines.explain_scholarly_effect', 'Explain this scholarly effect')"
+          />
+        </p>
         <p v-if="strategy(stage)" class="stage-description">
           {{ pipelineStrategyDescription(strategy(stage), t) }}
         </p>
@@ -127,6 +149,30 @@ function compactConfig(config: Record<string, unknown>) {
 </template>
 
 <style scoped>
+.stage-effect {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  justify-self: start;
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.stage-effect[data-effect="advisory"],
+.stage-effect[data-effect="none"] {
+  color: var(--muted);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .pipeline-stage-list {
   display: grid;
   gap: 8px;

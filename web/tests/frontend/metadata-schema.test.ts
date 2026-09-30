@@ -5,7 +5,7 @@ import CorpusMetadataResolutionPanel from "../../src/components/CorpusMetadataRe
 import MetadataSchemaEditor from "../../src/components/MetadataSchemaEditor.vue";
 import MetadataEnrichmentDialog from "../../src/components/MetadataEnrichmentDialog.vue";
 import { metadataSchemasApi, type MetadataSchema } from "../../src/api/metadataSchemas";
-import { schemaFieldSpec } from "../../src/domain/metadataFieldRegistry";
+import { metadataFieldSpec, schemaFieldSpec } from "../../src/domain/metadataFieldRegistry";
 
 const field = (over: Record<string, unknown>) => ({
   name: "x_field",
@@ -119,6 +119,28 @@ describe("how a schema field is edited", () => {
     expect(
       spec({ type: "choice", strict: false, values: [{ value: "a", definition: "" }] }),
     ).toMatchObject({ control: "combobox", allowCustom: true });
+  });
+});
+
+describe("metadata field cardinality", () => {
+  it("keeps scalar legacy and document fields scalar while preserving genuine lists", () => {
+    expect(metadataFieldSpec("quoted_speaker", [], []).control).toBe("combobox");
+    expect(metadataFieldSpec("quoted_work", [], []).control).toBe("combobox");
+    expect(metadataFieldSpec("document_language", [], []).control).toBe("combobox");
+    expect(metadataFieldSpec("original_language", [], []).control).toBe("combobox");
+    expect(metadataFieldSpec("quotation_chain", [], []).control).toBe("multi-combobox");
+    expect(metadataFieldSpec("topics", [], []).control).toBe("multi-combobox");
+  });
+
+  it("lets a pinned schema override compatibility cardinality", () => {
+    const customQuotedSpeaker = field({
+      name: "quoted_speaker",
+      type: "list",
+      group: "quotation",
+    });
+    expect(metadataFieldSpec("quoted_speaker", [], [], customQuotedSpeaker as never).control).toBe(
+      "multi-combobox",
+    );
   });
 });
 

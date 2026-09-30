@@ -26,6 +26,113 @@ const SPEAKER_FIELDS = [
 ];
 const TARGET_FIELDS = ["target", "quoted_addressee", "quoted_referent"];
 
+/**
+ * Compatibility contract for fields owned by DerridAI or records created before
+ * a pinned metadata schema was available. Cardinality lives here in one place;
+ * callers must not infer it from the runtime value shape or a field-name list.
+ */
+const LEGACY_FIELD_SPECS: Record<string, MetadataFieldSpec> = {
+  semantic_function: {
+    control: "multi-combobox",
+    suggestionFields: ["semantic_function"],
+    allowCustom: true,
+  },
+  quoted_speaker: {
+    control: "combobox",
+    suggestionFields: SPEAKER_FIELDS,
+    allowCustom: true,
+  },
+  quoted_author: {
+    control: "combobox",
+    suggestionFields: SPEAKER_FIELDS,
+    allowCustom: true,
+  },
+  quoted_work: {
+    control: "combobox",
+    suggestionFields: [
+      "quoted_work",
+      "works_referenced",
+      "work",
+      "document_title",
+      "original_title",
+    ],
+    allowCustom: true,
+  },
+  quoted_position_holder: {
+    control: "combobox",
+    suggestionFields: SPEAKER_FIELDS,
+    allowCustom: true,
+  },
+  quoted_addressee: {
+    control: "combobox",
+    suggestionFields: [...TARGET_FIELDS, ...SPEAKER_FIELDS],
+    allowCustom: true,
+  },
+  quoted_referent: {
+    control: "combobox",
+    suggestionFields: [...TARGET_FIELDS, ...SPEAKER_FIELDS],
+    allowCustom: true,
+  },
+  quotation_chain: {
+    control: "multi-combobox",
+    suggestionFields: [
+      "quotation_chain",
+      "quoted_speaker",
+      "quoted_author",
+      "quoted_work",
+      "quoted_position_holder",
+    ],
+    allowCustom: true,
+  },
+  topics: { control: "multi-combobox", suggestionFields: ["topics"], allowCustom: true },
+  concepts: { control: "multi-combobox", suggestionFields: ["concepts"], allowCustom: true },
+  persons: {
+    control: "multi-combobox",
+    suggestionFields: ["persons", ...SPEAKER_FIELDS],
+    allowCustom: true,
+  },
+  works_referenced: {
+    control: "multi-combobox",
+    suggestionFields: ["works_referenced", "quoted_work", "work", "document_title"],
+    allowCustom: true,
+  },
+  institutions_referenced: {
+    control: "multi-combobox",
+    suggestionFields: ["institutions_referenced"],
+    allowCustom: true,
+  },
+  locations_referenced: {
+    control: "multi-combobox",
+    suggestionFields: ["locations_referenced"],
+    allowCustom: true,
+  },
+  events_referenced: {
+    control: "multi-combobox",
+    suggestionFields: ["events_referenced"],
+    allowCustom: true,
+  },
+  groups_referenced: {
+    control: "multi-combobox",
+    suggestionFields: ["groups_referenced"],
+    allowCustom: true,
+  },
+  languages_referenced: {
+    control: "multi-combobox",
+    suggestionFields: ["languages_referenced"],
+    allowCustom: true,
+  },
+  document_language: {
+    control: "combobox",
+    suggestionFields: ["document_language", "original_language", "language"],
+    allowCustom: true,
+  },
+  original_language: {
+    control: "combobox",
+    suggestionFields: ["original_language", "document_language", "language"],
+    allowCustom: true,
+  },
+};
+
 // Closed semantic vocabularies belong here. Open scholarly identifiers remain
 // editable comboboxes even when the application can suggest known values.
 export const PROPOSITION_STATUS_VALUES = [
@@ -106,29 +213,13 @@ export function metadataFieldSpec(
   )
     return { control: "boolean" };
   if (field === "year" || field === "publication_year") return { control: "number" };
-  if (
-    [
-      "semantic_function",
-      "quoted_speaker",
-      "quoted_author",
-      "quoted_work",
-      "quoted_position_holder",
-      "quoted_addressee",
-      "quoted_referent",
-      "quotation_chain",
-      "topics",
-      "concepts",
-      "persons",
-      "works_referenced",
-      "document_language",
-      "original_language",
-    ].includes(field)
-  ) {
-    const suggestions = field.includes("quoted_")
-      ? SPEAKER_FIELDS
-      : ["topics", "concepts", "persons", "works_referenced", ...SPEAKER_FIELDS, ...TARGET_FIELDS];
-    return { control: "multi-combobox", suggestionFields: suggestions, allowCustom: true };
-  }
+  const legacySpec = LEGACY_FIELD_SPECS[field];
+  if (legacySpec)
+    return {
+      ...legacySpec,
+      suggestionFields: legacySpec.suggestionFields ? [...legacySpec.suggestionFields] : undefined,
+      allowedValues: legacySpec.allowedValues ? [...legacySpec.allowedValues] : undefined,
+    };
   if (SPEAKER_FIELDS.includes(field))
     return { control: "combobox", suggestionFields: SPEAKER_FIELDS, allowCustom: true };
   if (TARGET_FIELDS.includes(field))

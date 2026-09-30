@@ -1,12 +1,27 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed } from "vue";
-import type { PipelineOperationalMetrics } from "../../types/pipelines";
+import { pipelineStrategyLabel } from "../../domain/pipelinePresentation";
+import {
+  findTerm,
+  purposeForFeature,
+  purposeText,
+  termLabel,
+} from "../../domain/pipelineWorkflows";
+import type {
+  PipelineOperationalMetrics,
+  PipelinePurpose,
+  PipelineStrategy,
+  PipelineWorkflowVocabulary,
+} from "../../types/pipelines";
 import { useI18nStore } from "../../stores/i18n";
 import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   metrics: PipelineOperationalMetrics;
+  strategies?: PipelineStrategy[];
+  purposes?: PipelinePurpose[];
+  vocabulary?: PipelineWorkflowVocabulary;
 }>();
 
 const i18n = useI18nStore();
@@ -14,6 +29,21 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
 
 const failedRuns = computed(() => Number(props.metrics.status_counts.failed || 0));
 const topStrategies = computed(() => props.metrics.strategies.slice(0, 10));
+
+function workflowLabel(category: string) {
+  const term = findTerm(props.vocabulary?.categories, category);
+  return term ? termLabel(term, t) : t("pipelines.unregistered_purpose", "Unregistered purpose");
+}
+
+function featureLabel(feature: string) {
+  const purpose = purposeForFeature(props.purposes || [], feature);
+  return purpose ? purposeText(purpose, "label", t) : "";
+}
+
+function strategyLabel(strategyId: string) {
+  const strategy = (props.strategies || []).find((item) => item.strategy_id === strategyId);
+  return strategy ? pipelineStrategyLabel(strategy, t) : "";
+}
 
 function formatDuration(value: number | null | undefined) {
   if (value == null) return "—";
@@ -111,15 +141,60 @@ function formatCount(value: number | null | undefined) {
     </div>
 
     <div v-if="metrics.sampled_run_count" class="metrics-grid">
+      <section v-if="metrics.workflows?.length" aria-labelledby="pipeline-workflow-metrics-title">
+        <h4 id="pipeline-workflow-metrics-title">
+          {{ t("pipelines.metrics_by_workflow", "By workflow") }}
+        </h4>
+        <p class="section-help">
+          {{
+            t(
+              "pipelines.metrics_by_workflow_help",
+              "Runs grouped by what each pipeline is for. Fewer failures or lower latency describe computational health; they do not mean a workflow produces better scholarship.",
+            )
+          }}
+        </p>
+        <div class="table-shell">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">{{ t("pipelines.used_for", "Used for") }}</th>
+                <th scope="col">{{ t("pipelines.metric_runs", "Runs") }}</th>
+                <th scope="col">{{ t("pipelines.metric_fallbacks", "Fallbacks") }}</th>
+                <th scope="col">{{ t("pipelines.metric_failed", "Failed") }}</th>
+                <th scope="col">{{ t("pipelines.metric_p95", "p95 time") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in metrics.workflows"
+                :key="row.category"
+                :data-category="row.category"
+              >
+                <td>
+                  <strong>{{ workflowLabel(row.category) }}</strong>
+                  <small>
+                    {{ row.features.map((feature) => featureLabel(feature) || feature).join(", ") }}
+                  </small>
+                </td>
+                <td>{{ formatCount(row.run_count) }}</td>
+                <td>{{ formatCount(row.fallback_run_count) }}</td>
+                <td>{{ formatCount(row.failed_count) }}</td>
+                <td>{{ formatDuration(row.p95_elapsed_ms) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section aria-labelledby="pipeline-feature-metrics-title">
         <h4 id="pipeline-feature-metrics-title">
-          {{ t("pipelines.metrics_by_feature", "By feature") }}
+          {{ t("pipelines.metrics_by_purpose", "By purpose") }}
         </h4>
         <div class="table-shell">
           <table>
             <thead>
               <tr>
-                <th scope="col">{{ t("pipelines.metric_feature", "Feature") }}</th>
+                <th scope="col">{{ t("pipelines.filter_purpose", "Purpose") }}</th>
                 <th scope="col">{{ t("pipelines.metric_runs", "Runs") }}</th>
                 <th scope="col">{{ t("pipelines.metric_fallbacks", "Fallbacks") }}</th>
                 <th scope="col">{{ t("pipelines.metric_failed", "Failed") }}</th>
@@ -129,7 +204,8 @@ function formatCount(value: number | null | undefined) {
             <tbody>
               <tr v-for="row in metrics.features" :key="row.feature">
                 <td>
-                  <code>{{ row.feature }}</code>
+                  <span v-if="featureLabel(row.feature)">{{ featureLabel(row.feature) }}</span>
+                  <code :class="{ secondary: featureLabel(row.feature) }">{{ row.feature }}</code>
                 </td>
                 <td>{{ formatCount(row.run_count) }}</td>
                 <td>{{ formatCount(row.fallback_run_count) }}</td>
@@ -169,7 +245,12 @@ function formatCount(value: number | null | undefined) {
             <tbody>
               <tr v-for="row in topStrategies" :key="row.strategy_id">
                 <td>
-                  <code>{{ row.strategy_id }}</code>
+                  <span v-if="strategyLabel(row.strategy_id)">{{
+                    strategyLabel(row.strategy_id)
+                  }}</span>
+                  <code :class="{ secondary: strategyLabel(row.strategy_id) }">{{
+                    row.strategy_id
+                  }}</code>
                   <small v-if="row.stage_ids.length">{{ row.stage_ids.join(", ") }}</small>
                 </td>
                 <td>{{ formatCount(row.executions) }}</td>
@@ -204,6 +285,11 @@ function formatCount(value: number | null | undefined) {
 </template>
 
 <style scoped>
+code.secondary {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
 .metrics-workspace {
   display: grid;
   gap: 14px;

@@ -679,7 +679,7 @@ class PdfCorpusExperiment(BaseModel):
 
 
 class PdfCorpusAutonomy(BaseModel):
-    """Hands-free mode: nobody reviews the records, so a stated policy makes the decisions. Off unless enabled."""
+    """Autonomous decision policy; it never grants human authority."""
 
     enabled: bool = False
     passes: int = Field(default=1, ge=0, le=3)
@@ -971,7 +971,8 @@ class PdfCorpusTextTouchupProposalStatus(BaseModel):
 
 class PdfCorpusPublishRequest(BaseModel):
     require_acceptance: bool = True
-    # Skip every human-review gate and publish outstanding suggestions as-is (not cELF-conformant).
+    # Compatibility path for older clients. This changes decision provenance,
+    # but does not determine cELF conformance.
     accept_unreviewed: bool = False
 
 class RAGGradeRequest(BaseModel):

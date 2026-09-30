@@ -71,6 +71,20 @@ def _require_next(stage: PipelineStageDefinition, target: str) -> None:
         )
 
 
+SUPPORTED_STRATEGIES = frozenset(
+    {
+        "retrieve.metadata_exemplars",
+        "filter.metadata_scope",
+        "fusion.metadata_hybrid",
+        "rerank.cross_encoder",
+        "select.metadata_quotas",
+        "select.mmr",
+        "pack.metadata_precedents",
+        "fallback.metadata_precedents_lexical",
+    }
+)
+
+
 def compile_metadata_precedent_pipeline(
     pipeline: PipelineDefinition,
 ) -> MetadataPrecedentPipelinePlan:
@@ -83,18 +97,8 @@ def compile_metadata_precedent_pipeline(
 
     reject_unhonoured_config(pipeline, "metadata-precedent")
 
-    supported = {
-        "retrieve.metadata_exemplars",
-        "filter.metadata_scope",
-        "fusion.metadata_hybrid",
-        "rerank.cross_encoder",
-        "select.metadata_quotas",
-        "select.mmr",
-        "pack.metadata_precedents",
-        "fallback.metadata_precedents_lexical",
-    }
     enabled = [stage for stage in pipeline.stages if stage.enabled]
-    unsupported = sorted({stage.strategy for stage in enabled} - supported)
+    unsupported = sorted({stage.strategy for stage in enabled} - SUPPORTED_STRATEGIES)
     if unsupported:
         raise ValueError(
             "Metadata-precedent adapter does not implement strategy stage(s): "

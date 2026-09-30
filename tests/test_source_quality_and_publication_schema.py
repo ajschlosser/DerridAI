@@ -54,7 +54,9 @@ def test_publication_schema_is_namespaced_unicode_safe_and_enum_valid():
     public = {
         "record_id": "rec-1",
         "text": "Édouard Glissant writes of relation — 東京",
+        "source_document_id": "source-1",
         "source_block_ids": ["p001-b001"],
+        "source_spans": [{"source_document_id": "source-1", "block_id": "p001-b001"}],
         "region_type": cb.REGION_TYPES[0],
         "discourse_role": cb.DISCOURSE_ROLES[0],
         "primary_text": True,

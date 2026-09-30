@@ -22,8 +22,14 @@ import {
   pipelineStageFamilyLabel,
   pipelineStrategyLabel,
 } from "../../domain/pipelinePresentation";
+import { findTerm, pipelinePhaseSequence, termLabel } from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
-import type { PipelineRunTrace, PipelineStage, PipelineStrategy } from "../../types/pipelines";
+import type {
+  PipelineRunTrace,
+  PipelineStage,
+  PipelineStrategy,
+  PipelineWorkflowVocabulary,
+} from "../../types/pipelines";
 import UiTooltipInfobox, { type TooltipInfoboxRow } from "../ui/UiTooltipInfobox.vue";
 
 const props = defineProps<{
@@ -33,6 +39,8 @@ const props = defineProps<{
   execution?: PipelineRunTrace | null;
   title: string;
   description: string;
+  /** When given, nodes and the phase strip read in workflow terms. */
+  vocabulary?: PipelineWorkflowVocabulary;
 }>();
 
 const surfacePreset = RELATION_SURFACE_PRESETS.pipelineDag;
@@ -128,6 +136,27 @@ function familyFor(strategyId: string) {
   return strategyFor(strategyId)?.family || "";
 }
 
+function phaseLabelFor(strategyId: string) {
+  const term = findTerm(props.vocabulary?.phases, strategyFor(strategyId)?.phase);
+  return term ? termLabel(term, t) : "";
+}
+
+function effectNoteFor(strategyId: string) {
+  const term = findTerm(props.vocabulary?.effect_notes, strategyFor(strategyId)?.effect_note);
+  return term ? termLabel(term, t) : "";
+}
+
+const phases = computed(() =>
+  props.vocabulary
+    ? pipelinePhaseSequence(
+        { stages: props.stages, entry_stage_ids: props.entryStageIds },
+        props.strategies,
+      )
+        .map((id) => findTerm(props.vocabulary?.phases, id))
+        .filter((term) => term !== null)
+    : [],
+);
+
 function labelFor(strategyId: string) {
   const strategy = strategyFor(strategyId);
   return strategy ? pipelineStrategyLabel(strategy, t) : strategyId;
@@ -160,6 +189,11 @@ function infoRows(node: (typeof nodes.value)[number]): TooltipInfoboxRow[] {
     { label: t("pipelines.status", "Status"), value: statusLabel(node) },
     { label: t("pipelines.term_strategy", "Strategy"), value: labelFor(node.strategy) },
   ];
+  if (effectNoteFor(node.strategy))
+    rows.push({
+      label: t("pipelines.scholarly_effect", "Scholarly effect"),
+      value: effectNoteFor(node.strategy),
+    });
   if (node.elapsedMs != null)
     rows.push({ label: t("pipelines.duration", "Duration"), value: duration(node.elapsedMs) });
   if (node.inputCount != null || node.outputCount != null)
@@ -241,6 +275,16 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
       </div>
     </header>
 
+    <ol
+      v-if="phases.length"
+      class="phase-strip"
+      :aria-label="t('pipelines.workflow_phases', 'Workflow phases')"
+    >
+      <li v-for="(term, index) in phases" :key="`${term.id}-${index}`">
+        {{ termLabel(term, t) }}
+      </li>
+    </ol>
+
     <div v-if="diagram.nodes.length" class="diagram-layout">
       <UiRelationViewport
         ref="viewport"
@@ -317,7 +361,10 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
               <UiRelationCardNode>
                 <span class="node-kicker">
                   <span v-if="node.entry">{{ t("pipelines.node_entry", "Entry") }}</span>
-                  <span>{{ pipelineStageFamilyLabel(familyFor(node.strategy), t) }}</span>
+                  <span>{{
+                    phaseLabelFor(node.strategy) ||
+                    pipelineStageFamilyLabel(familyFor(node.strategy), t)
+                  }}</span>
                 </span>
                 <strong>{{ node.id }}</strong>
                 <span>{{ labelFor(node.strategy) }}</span>
@@ -349,6 +396,14 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
           <div>
             <dt>{{ t("pipelines.term_strategy", "Strategy") }}</dt>
             <dd>{{ labelFor(selected.strategy) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t("pipelines.strategy_family", "Family") }}</dt>
+            <dd>{{ pipelineStageFamilyLabel(familyFor(selected.strategy), t) }}</dd>
+          </div>
+          <div v-if="effectNoteFor(selected.strategy)">
+            <dt>{{ t("pipelines.scholarly_effect", "Scholarly effect") }}</dt>
+            <dd>{{ effectNoteFor(selected.strategy) }}</dd>
           </div>
           <div>
             <dt>{{ t("pipelines.status", "Status") }}</dt>
@@ -402,6 +457,25 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
 .pipeline-diagram {
   display: grid;
   gap: 12px;
+}
+.phase-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+}
+.phase-strip li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+}
+.phase-strip li + li::before {
+  color: var(--muted);
+  content: "→" / "";
 }
 .pipeline-diagram header h4 {
   margin: 0;

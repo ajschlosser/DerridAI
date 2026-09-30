@@ -14,7 +14,11 @@ from typing import Any
 
 from .corpus_metadata import REVIEW_METADATA_FIELDS
 from .corpus_record_quality import iso_now
-from .field_assertions import current_assertion_by_name, migrate_record_assertions
+from .field_assertions import (
+    current_assertion_by_name,
+    current_assertions,
+    migrate_record_assertions,
+)
 
 
 def _metadata_value_missing(field: str, value: Any) -> bool:
@@ -35,6 +39,20 @@ def _sync_record_metadata_state(
     reviewable = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
     incomplete: list[str] = []
     review_fields: list[str] = []
+    policy_settled = (
+        {
+            str(field)
+            for field in (record.get("autonomous_decision") or {}).get("settled_fields", [])
+        }
+        if isinstance(record.get("autonomous_decision"), dict)
+        else set()
+    )
+    policy_settled.update(
+        str(assertion.field_name)
+        for assertion in current_assertions(record)
+        if assertion.field_name
+        and isinstance((assertion.legacy_metadata or {}).get("autonomous_decision"), dict)
+    )
     for field in required:
         assertion = current_assertion_by_name(record, field)
         state = ""
@@ -46,11 +64,13 @@ def _sync_record_metadata_state(
             )
         if state == "confirmed_absent":
             continue
-        if _metadata_value_missing(field, record.get(field)) or state in {"unresolved", "invalid"}:
+        if field not in policy_settled and (
+            _metadata_value_missing(field, record.get(field)) or state in {"unresolved", "invalid"}
+        ):
             incomplete.append(field)
     for field in reviewable:
         assertion = current_assertion_by_name(record, field)
-        if assertion is not None and (
+        if field not in policy_settled and assertion is not None and (
             assertion.value_status in {"unresolved", "invalid"} or assertion.evaluation_status == "evaluation_failed"
         ):
             review_fields.append(field)
@@ -59,7 +79,11 @@ def _sync_record_metadata_state(
     record["metadata_complete"] = not record["metadata_incomplete_fields"] and not record["metadata_review_fields"]
     record["metadata_needs_attention"] = not record["metadata_complete"]
     if record["metadata_needs_attention"]:
-        record["metadata_attention_reasons"] = ["Record metadata requires a human decision before acceptance."]
+        record["metadata_attention_reasons"] = [
+            "Record metadata requires a human decision before acceptance."
+            if not policy_settled
+            else "Autonomous policy selected a candidate; inspect its preserved uncertainty and decision provenance."
+        ]
     else:
         record["metadata_attention_reasons"] = []
 

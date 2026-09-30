@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
+from collections.abc import Sequence
 from typing import Any
 
 from .models import PipelineRunTrace, PipelineStageTrace
@@ -18,15 +20,19 @@ def _like_term(value: str) -> str:
 def _run_filter_params(
     *,
     feature: str | None,
+    features: Sequence[str] | None,
     owner: str | None,
     pipeline_id: str | None,
     status: str | None,
     query: str | None,
 ) -> tuple[Any, ...]:
     like = _like_term(str(query).strip()) if str(query or "").strip() else None
+    feature_list = json.dumps(sorted(features)) if features is not None else None
     return (
         feature,
         feature,
+        feature_list,
+        feature_list,
         owner,
         owner,
         pipeline_id,
@@ -153,6 +159,7 @@ class PipelineTraceStore:
         self,
         *,
         feature: str | None = None,
+        features: Sequence[str] | None = None,
         owner: str | None = None,
         pipeline_id: str | None = None,
         status: str | None = None,
@@ -164,6 +171,7 @@ class PipelineTraceStore:
         page_offset = max(0, int(offset))
         params = _run_filter_params(
             feature=feature,
+            features=features,
             owner=owner,
             pipeline_id=pipeline_id,
             status=status,
@@ -175,6 +183,7 @@ class PipelineTraceStore:
                 SELECT run_id
                 FROM pipeline_runs
                 WHERE (? IS NULL OR feature=?)
+                  AND (? IS NULL OR feature IN (SELECT value FROM json_each(?)))
                   AND (? IS NULL OR owner=?)
                   AND (? IS NULL OR pipeline_id=?)
                   AND (? IS NULL OR status=?)
@@ -200,6 +209,7 @@ class PipelineTraceStore:
         self,
         *,
         feature: str | None = None,
+        features: Sequence[str] | None = None,
         owner: str | None = None,
         pipeline_id: str | None = None,
         status: str | None = None,
@@ -207,6 +217,7 @@ class PipelineTraceStore:
     ) -> int:
         params = _run_filter_params(
             feature=feature,
+            features=features,
             owner=owner,
             pipeline_id=pipeline_id,
             status=status,
@@ -218,6 +229,7 @@ class PipelineTraceStore:
                 SELECT COUNT(*)
                 FROM pipeline_runs
                 WHERE (? IS NULL OR feature=?)
+                  AND (? IS NULL OR feature IN (SELECT value FROM json_each(?)))
                   AND (? IS NULL OR owner=?)
                   AND (? IS NULL OR pipeline_id=?)
                   AND (? IS NULL OR status=?)
