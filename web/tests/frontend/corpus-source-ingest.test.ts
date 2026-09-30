@@ -8,7 +8,13 @@ const body = () => new DOMWrapper(document.body);
 
 describe("Corpus source ingest", () => {
   it("places the OCR strategy radios before choose source PDF", () => {
-    const wrapper = mount(CorpusSourceIngest, { props: { assets: [], hits: [] } });
+    const wrapper = mount(CorpusSourceIngest, {
+      props: {
+        assets: [],
+        hits: [],
+        selectedAsset: { media_kind: "pdf", filename: "source.pdf" } as never,
+      },
+    });
     const radios = wrapper.findAll('input[name="source-ocr-strategy"]');
     const choose = wrapper.get("button.source-choose");
     expect(radios).toHaveLength(3);
@@ -21,7 +27,9 @@ describe("Corpus source ingest", () => {
   });
 
   it("emits the selected OCR strategy as a numeric compatibility value", async () => {
-    const wrapper = mount(CorpusSourceIngest);
+    const wrapper = mount(CorpusSourceIngest, {
+      props: { selectedAsset: { media_kind: "image", filename: "source.png" } as never },
+    });
     await wrapper.find('input[value="difficult"]').setValue(true);
     expect(wrapper.emitted("update:illegibility")?.at(-1)).toEqual([50]);
     await wrapper.find('input[value="always"]').setValue(true);
@@ -329,6 +337,11 @@ describe("automatic page detection", () => {
         },
       },
     });
+    expect(wrapper.find(".ocr-choice").exists()).toBe(false);
+  });
+
+  it("hides OCR controls until a source media kind is selected", () => {
+    const wrapper = mount(CorpusSourceIngest, { props: { assets: [], hits: [] } });
     expect(wrapper.find(".ocr-choice").exists()).toBe(false);
   });
 });
