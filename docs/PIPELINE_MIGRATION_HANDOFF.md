@@ -288,6 +288,16 @@ The two boundary questions segmentation asks a model now run through the `corpus
 - Not in this slice: evidence recovery's closed-choice callback during enrichment (`_evidence_llm_choice` in `corpus_metadata_enrichment_execution.py`) still runs the default `_chat_json()` chain inside the recovery stage; its provider role and attempts are not yet stage settings.
 - Parity is pinned by `tests/test_reviewer_evidence_choice_pipeline.py`.
 
+### 4.19 Workflow semantics: purposes, scholarly effects and Pipeline Studio information architecture
+
+Pipeline purpose, strategy family and scholarly effect are now separate server-owned dimensions (see [Architecture → Pipeline semantics](ARCHITECTURE.md#pipeline-semantics)).
+
+- `pipelines/purposes.py` registers each purpose's workflow category, consuming feature, input/output/authority semantics and required guarantees, plus closed vocabularies (categories, guarantees, phases, scholarly effects, effect notes) with locale keys. `pipelines/workflows.py` maps each purpose to its one adapter and replaces the manager's two `if` chains; adapters' strategy allowlists are module constants (`SUPPORTED_STRATEGIES`, `memory.supported_strategies()`).
+- A new purpose needs: a `PipelinePurposeSpec`, a `PURPOSE_ADAPTERS` entry, en-US/fr-CA keys for its six texts, and a regenerated `web/src/components/pipelines/fixtures/pipelineCatalogContract.json` (a backend test fails until the fixture matches the served catalog).
+- A new strategy must declare `scholarly_effect`; its phase and effect note derive from family and effect.
+- Classification: `evidence_suggestion`, `evidence_recovery`, `precedent_evidence_remap` and `corpus_reviewer_evidence_choice` are Evidence; `metadata_precedents`, `metadata_prefill` and `corpus_metadata_enrichment` are Metadata; `corpus_document_manifest`, `corpus_segmentation` and `corpus_text_touchup` are Corpus processing.
+- Behavior changes: assignment rejects a pipeline whose purpose is not the one the feature consumes, and validation rejects an unregistered purpose. Run history and metrics accept `category`.
+
 ## 5. Current built-in assignments
 
 As of current `master`, built-in system assignments are:
