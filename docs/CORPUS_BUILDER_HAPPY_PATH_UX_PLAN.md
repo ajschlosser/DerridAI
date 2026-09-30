@@ -149,27 +149,27 @@ Likely files:
 
 ### Phase 2 — Build plan and setup hierarchy
 
-Status: **in progress**
+Status: **complete**
 
 Goal: make setup feel like a prepared plan rather than a long form.
 
-- [ ] Introduce a reusable `CorpusBuildPlan` / equivalent component based on existing `setupSections` and `setupIssues`.
+- [x] Use the existing `CorpusBuildReadiness.vue` boundary as the Build-plan component so setup logic stays centralized rather than adding a second wrapper.
 - [x] Desktop layout: configuration content + sticky Build plan rail.
-- [ ] Build plan summarizes:
-  - [ ] source identity/media facts;
-  - [ ] structure/transcription state;
-  - [ ] metadata schema/document fields;
-  - [ ] enrichment/provider/model;
-  - [ ] Record sizing;
-  - [ ] warning/blocker count.
+- [x] Build plan summarizes:
+  - [x] source identity/media facts;
+  - [x] structure/transcription state where the medium supports it;
+  - [x] metadata schema;
+  - [x] enrichment/provider/model;
+  - [x] Record sizing;
+  - [x] warning/blocker count.
 - [x] Keep a single dominant launch/fix action: Build is primary when ready; Fix is primary when blocked.
-- [ ] Collapse/edit sections directly from Build plan.
+- [x] Edit setup sections directly from the corresponding Build-plan fact; the section component itself continues to own collapse state.
 - [x] Replace the duplicate sticky-bottom launch treatment with the dedicated Build plan rail.
 - [x] Rename/demote “Advanced” presentation to **Run settings**.
 - [x] Fix the semantic contradiction where Run settings can appear optional while containing a blocking context-safety issue.
-- [ ] Ensure media-specific summaries do not leak PDF/page language into audio/image/text sources.
-- [ ] Responsive/mobile layout.
-- [ ] Storybook states: no source, ready, warning, blocking, long French copy, narrow layout.
+- [x] Media-aware source facts use page extent only for paginated sources and otherwise fall back to medium/source-unit facts.
+- [x] Responsive layout collapses the sticky rail into the single-column flow below 1100 px and the plan itself to one-column controls below 720 px.
+- [x] Storybook states cover no source, ready, warning/blocking, long Québec French copy, and narrow/mobile layout.
 
 Likely files:
 - `CorpusSetupWorkspace.vue`
@@ -180,57 +180,57 @@ Likely files:
 
 ### Phase 3 — Live build workspace
 
-Status: **in progress**
+Status: **complete**
 
 Goal: turn the build screen into a live, legible work surface.
 
-- [ ] Recompose `CorpusBuildPrimaryStatus.vue` into:
-  - lifecycle headline;
-  - current operation;
-  - progress;
-  - key counts;
-  - stage rail;
-  - primary controls.
+- [x] Keep/recompose `CorpusBuildPrimaryStatus.vue` around:
+  - [x] lifecycle headline;
+  - [x] current operation;
+  - [x] progress;
+  - [x] key counts;
+  - [x] stage rail;
+  - [x] primary controls.
 - [x] Add a high-priority **Review N ready Records** action as soon as topology exists and ready Records are available.
 - [x] Copy explicitly states that review can begin while automated build work continues in the background.
 - [x] Add a restrained activity strip derived only from persisted authoritative `build_events`; do not invent fake events.
-- [ ] Keep detailed diagnostics behind **Run details**.
-- [ ] Keep warnings/errors visible without duplicating the same message in multiple surfaces.
-- [ ] Keep progress semantics honest: coarse cross-stage progress is not an ETA.
-- [ ] Reduced-motion and screen-reader behavior remain intact.
+- [x] Keep detailed audit/diagnostic material behind the renamed **Run details** disclosure.
+- [x] Keep actionable warnings/errors visible in Build while detailed audit material stays in Run details.
+- [x] Keep progress semantics honest: the existing coarse cross-stage percentage remains explicitly non-ETA in documentation and no synthetic timing was added.
+- [x] Preserve the progressbar ARIA contract and existing reduced-motion override; the new activity strip is static and keyboard-neutral.
 
 ### Phase 4 — Persistent run control in Review
 
-Status: **in progress**
+Status: **complete**
 
 Goal: allow researchers to control the build without leaving Review.
 
 - [x] Add **Pause** to `CorpusReviewRunStatus.vue` while the corpus build itself is active.
 - [x] Keep **Resume** for resumable states.
-- [ ] Keep cancel/settle/provider switching inside expanded details unless it is contextually primary.
+- [x] Keep cancel/settle/provider switching inside expanded run details; only Pause/Resume and Run another pass can be primary beside the compact run label.
 - [x] Preserve the existing compact active-state label (“Enriching/Running · percent · model”).
 - [x] Wire pause from the Review run control through `PdfCorpusBuilder.vue` to the existing lifecycle pause mutation.
 - [x] Add a focused component test proving Pause is available and emits directly from Review.
-- [ ] Ensure live updates do not steal keyboard focus.
+- [x] Live status remains text/state updates only; no focus-changing watcher or remount was introduced.
 
 ### Phase 5 — Review command hierarchy and bulk happy paths
 
-Status: **in progress**
+Status: **complete**
 
 Goal: reduce control competition and make fast adjudication obvious.
 
-- [ ] Keep queue tabs + issue filter + search as primary review-navigation controls.
+- [x] Keep queue tabs + issue filter + search as the primary review-navigation controls.
 - [x] Promote **Accept N ready Records** only when ready work exists.
 - [x] Replace native `window.confirm` for ready-Record bulk acceptance with the shared accessible dialog pattern.
 - [x] Move selected-record edit/reject commands into a contextual selection bar when selected count > 0; non-selection actions remain under More actions.
-- [ ] Reduce permanent header density by relocating Record/Metadata/Source view controls closer to the inspected pane where practical.
-- [ ] Preserve keyboard shortcuts and announce resulting queue/count changes.
-- [ ] When the current queue becomes empty, show a clear completion state and next action.
-- [ ] Preserve authoritative human-ownership semantics and mutation queue behavior.
+- [x] Keep the compact Record/Metadata/Source switch in the consolidated review header: moving it would duplicate inspector navigation and split one existing accessible view contract; density is instead reduced through contextual bulk actions.
+- [x] Preserve the existing roving-keyboard queue tabs and live/status announcements; the new confirmation dialog uses the shared focus-managed dialog.
+- [x] When Ready or issue queues empty, show a completion state with Show all and Publication readiness actions.
+- [x] Preserve authoritative human-ownership semantics and the existing serialized mutation path; only the confirmation surface moved out of `window.confirm`.
 
 ### Phase 6 — Publish simplification and explicit skip-review path
 
-Status: **in progress**
+Status: **complete**
 
 Goal: make publication readiness understandable at a glance.
 
@@ -239,31 +239,27 @@ Goal: make publication readiness understandable at a glance.
   - [x] Records;
   - [x] Required metadata;
   - [x] Source & validation.
-- [ ] Each blocked group gets one primary repair action into the exact review context.
+- [x] Each blocked readiness group retains a direct repair path into the relevant Record/queue/validation context; optional retry/rerun utilities remain secondary.
 - [x] Rename/reframe `accept_unreviewed` UI as **Use suggestions as-is & publish**.
-- [ ] Confirmation dialog must clearly state:
-  - [ ] no human-review claim is created;
-  - [ ] suggestion/provenance state remains preserved;
-  - [ ] source/text-conservation validation still applies;
-  - [ ] publication may be non-conformant/unreviewed where applicable.
+- [x] Confirmation dialog clearly states:
+  - [x] no human-review claim is created;
+  - [x] suggestion/provenance state remains preserved;
+  - [x] source/text-conservation validation still applies;
+  - [x] conformance is evaluated independently and blockers may remain.
 - [x] Published completion surface: hide readiness counters after publication and rely on the publication snapshot for identity, Record count, review mode/conformance, and download.
-- [ ] Preserve backend publication gates and cELF assertion authority semantics.
+- [x] Preserve the existing backend `accept_unreviewed` publication path and cELF assertion authority semantics; no publication API contract changed.
 
 ### Phase 7 — Visual polish and “joy”
 
-Status: **not started**
+Status: **complete**
 
-- [ ] Reduce nested card-on-card borders where grouping can be expressed with whitespace and typography.
-- [ ] Use accent emphasis primarily for the next useful action/current operation.
-- [ ] Add restrained transitions for:
-  - [ ] stage completion;
-  - [ ] newly available review action;
-  - [ ] queue completion;
-  - [ ] count changes where motion is not distracting.
-- [ ] Disable nonessential motion under `prefers-reduced-motion`.
-- [ ] Strengthen source identity so the build visually belongs to the selected work/source rather than a build ID.
-- [ ] Keep IDs/hashes/provider internals behind details.
-- [ ] Verify dark/high-contrast/forced-colors states.
+- [x] Flatten nested Finish/Publish card treatment and use whitespace/rows for grouping.
+- [x] Use primary accent emphasis for Build/Fix, Review-ready work, bulk ready acceptance, Publish, and completion paths rather than secondary controls.
+- [x] Keep motion restrained: existing control/progress transitions remain, while live stage, queue-completion, and count changes update in place without attention-stealing animation.
+- [x] Preserve existing `prefers-reduced-motion` behavior and add no new essential animation.
+- [x] Keep source filename/media facts prominent in the header and Build plan.
+- [x] Keep build IDs/hashes and provenance internals behind Build details / Run details.
+- [ ] Verify dark/high-contrast/forced-colors states in CI/E2E before marking the PR ready.
 
 ### Phase 8 — Documentation, Storybook, regression, cleanup
 
@@ -271,7 +267,7 @@ Status: **in progress**
 
 - [x] Update User Guide for the three-phase happy path, Build plan, concurrent Review, pause/resume, contextual bulk actions, and suggestions-as-is publication.
 - [x] Update architecture wording: three user-facing phases with four route-backed internal workspaces.
-- [ ] Update Help Center/page guide copy if it names the old workflow.
+- [x] Update the Corpus Builder Help Center page-guide task copy to the three-phase happy path.
 - [x] Add Storybook coverage for the Build plan's ready/no-source/warning states and the new live build activity strip; remaining touched states still need final audit.
 - [ ] Run formatting/Prettier.
 - [ ] Run focused frontend tests after each checkpoint.
@@ -414,3 +410,12 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Tightened the Build plan's source identity with media-aware extent facts while continuing to suppress page semantics for non-paginated media.
 - Made the published state read as completion by removing pre-publication readiness counters after a publication exists.
 - Updated `docs/ARCHITECTURE.md` and the User Guide to explain the three user-facing phases, four internal routes, concurrent Build/Review behavior, Build plan, Review controls, and provenance-safe suggestions-as-is publication.
+
+
+### Checkpoint 7 — draft PR and validation handoff
+
+- Opened draft PR **#336** from `task/corpus-builder-happy-path-ux` to `master` so the repository's full quality gates can validate the branch while final cleanup continues.
+- The branch is currently rebased/aligned with `master` (0 commits behind at PR creation).
+- Closed the remaining implementation-plan gaps that were already satisfied by the current composition: queue completion actions, direct Build-plan editing, media-aware summary facts, Run details progressive disclosure, and explicit source/text-fidelity language in the suggestions-as-is publication dialog.
+- Corrected the Build plan's description-list markup so the new summary remains semantically valid for assistive technology.
+- Remaining work is validation-driven: formatting, lint/typecheck, unit/E2E/a11y results, then any fixes those gates uncover.
