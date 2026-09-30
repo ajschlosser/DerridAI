@@ -141,7 +141,7 @@ async function mountStaticSite(page: Page) {
   };
   const packageValue = {
     manifest: {
-      format: "derridai-static-site-v3",
+      format: "derridai-static-site-v4",
       publication_id: "sitepub-a11y",
       corpus_id: "test",
       created_at: "2026-09-30T12:00:00Z",
@@ -252,7 +252,7 @@ test("exported OpenAI-compatible profile powers vector retrieval and LLM Researc
   vector.writeFloatLE(0, 4);
   const packageValue = {
     manifest: {
-      format: "derridai-static-site-v3",
+      format: "derridai-static-site-v4",
       publication_id: "sitepub-provider",
       corpus_id: "test",
       created_at: "2026-09-30T12:00:00Z",
