@@ -2746,6 +2746,23 @@ function listSemanticMapSources() {
   return { records, focusId: String(focus.record_id || focus._chroma_id || "") };
 }
 
+/** Open a Record reached from a derived semantic-map node when it is in a local file. */
+function openSemanticRecord(recordId) {
+  const wanted = String(recordId || "");
+  if (!wanted) return false;
+  for (const file of state.files || []) {
+    const index = (file.records || []).findIndex(
+      (record) => String(record.record_id || record._chroma_id || "") === wanted,
+    );
+    if (index >= 0) {
+      navigateTo("record", { fileId: file.id, index });
+      return true;
+    }
+  }
+  navigateTo("global");
+  return false;
+}
+
 function translatedNavLabel(item) {
   const keys = {
     home: "nav.dashboard",
@@ -3442,6 +3459,7 @@ export {
   renderOperationsPanel,
   researcherDbRecords,
   listSemanticMapSources,
+  openSemanticRecord,
   searchByMetadata,
   mountOperationsPanelHost,
   wireCorpusBuildsHomeCard,

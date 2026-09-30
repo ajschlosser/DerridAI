@@ -6,6 +6,9 @@ import UiRelationEdge from "../relations/UiRelationEdge.vue";
 import UiRelationEdgeLabel from "../relations/UiRelationEdgeLabel.vue";
 import UiRelationNodeShell from "../relations/UiRelationNodeShell.vue";
 import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
+import UiRelationDensityControls, {
+  type RelationDensity,
+} from "../relations/UiRelationDensityControls.vue";
 import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
 import { relationBoundsForPoints } from "../../domain/relations/geometry";
@@ -30,7 +33,6 @@ const layoutState = useRelationLayoutState();
 const surfacePreset = RELATION_SURFACE_PRESETS.provenanceLanes;
 
 type LaneId = "source" | "record" | "metadata" | "evidence" | "research";
-type DiagramDensity = "compact" | "standard" | "wide";
 type PositionedNode = ResearchObjectNode & { x: number; y: number; lane: LaneId };
 
 const laneOrder: LaneId[] = ["source", "record", "metadata", "evidence", "research"];
@@ -52,10 +54,9 @@ const laneLabels = computed<Record<LaneId, string>>(() => ({
 const nodeWidth = 154;
 const nodeHeight = 66;
 const topOffset = 56;
-const density = ref<DiagramDensity>("compact");
-const densityOptions: DiagramDensity[] = ["compact", "standard", "wide"];
+const density = ref<RelationDensity>("compact");
 const densitySpacing: Record<
-  DiagramDensity,
+  RelationDensity,
   { canvasWidth: number; laneWidth: number; laneGap: number; nodeGap: number }
 > = {
   compact: { canvasWidth: 980, laneWidth: 184, laneGap: 10, nodeGap: 24 },
@@ -219,7 +220,7 @@ function resetLayout() {
   viewport.value?.resetView();
 }
 
-function chooseDensity(next: DiagramDensity) {
+function chooseDensity(next: RelationDensity) {
   if (density.value === next) return;
   density.value = next;
   layoutState.clearPositions();
@@ -234,27 +235,16 @@ function chooseDensity(next: DiagramDensity) {
     :aria-label="ariaLabel || i18n.t('traceability.diagram_label', 'Relationship diagram')"
   >
     <div class="diagram-tools">
-      <div
-        class="diagram-density-controls"
-        role="group"
-        :aria-label="i18n.t('traceability.diagram_density', 'Card spacing')"
-      >
-        <button
-          v-for="option in densityOptions"
-          :key="option"
-          type="button"
-          :aria-pressed="density === option"
-          :class="{ selected: density === option }"
-          @click="chooseDensity(option)"
-        >
-          {{
-            i18n.t(
-              `traceability.diagram_density_${option}`,
-              option.charAt(0).toUpperCase() + option.slice(1),
-            )
-          }}
-        </button>
-      </div>
+      <UiRelationDensityControls
+        :model-value="density"
+        :accessible-label="i18n.t('traceability.diagram_density', 'Card spacing')"
+        :labels="{
+          compact: i18n.t('traceability.diagram_density_compact', 'Compact'),
+          standard: i18n.t('traceability.diagram_density_standard', 'Standard'),
+          wide: i18n.t('traceability.diagram_density_wide', 'Wide'),
+        }"
+        @update:model-value="chooseDensity"
+      />
       <UiRelationToolbar
         :accessible-label="i18n.t('traceability.diagram_controls', 'Relationship map controls')"
         :zoom-out-label="i18n.t('traceability.diagram_zoom_out', 'Zoom out')"
@@ -376,32 +366,6 @@ function chooseDensity(next: DiagramDensity) {
   align-items: center;
   gap: 6px;
   justify-content: flex-end;
-}
-.diagram-density-controls {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.diagram-density-controls button {
-  min-height: 32px;
-  padding: 5px 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-card);
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-.diagram-density-controls button.selected {
-  border-color: var(--border-interactive);
-  background: var(--surface-selected);
-  color: var(--text-primary);
-  font-weight: 750;
-}
-.diagram-density-controls button:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
 }
 .diagram-viewport {
   width: 100%;

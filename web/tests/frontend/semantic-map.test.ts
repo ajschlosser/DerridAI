@@ -49,6 +49,22 @@ describe("semantic map layout", () => {
     );
   });
 
+  it("clusters linked terms while separating disconnected components", () => {
+    const graph = buildSemanticMap([
+      { id: "a", work: "A", concepts: ["trace", "writing"], topics: [], persons: [] },
+      { id: "b", work: "B", concepts: ["trace", "writing"], topics: [], persons: [] },
+      { id: "c", work: "C", concepts: ["ethics", "justice"], topics: [], persons: [] },
+      { id: "d", work: "D", concepts: ["ethics", "justice"], topics: [], persons: [] },
+    ]);
+    const point = (label: string) => graph.nodes.find((node) => node.label === label)!;
+    const distance = (left: ReturnType<typeof point>, right: ReturnType<typeof point>) =>
+      Math.hypot(left.x - right.x, left.y - right.y);
+    expect(distance(point("trace"), point("writing"))).toBeLessThan(
+      distance(point("trace"), point("ethics")),
+    );
+    expect(distance(point("trace"), point("ethics"))).toBeGreaterThan(100);
+  });
+
   it("pans the map by the pointer delta and moves a term independently of that pan", () => {
     expect(panBy({ x: 10, y: 4 }, { x: 30, y: -8 })).toEqual({ x: 40, y: -4 });
     expect(moveNode({ x: 0, y: 0 }, { x: 20, y: 10 }, 2)).toEqual({ x: 10, y: 5 });
@@ -106,6 +122,20 @@ describe("SemanticMapCanvas", () => {
     await handle.trigger("keydown", { key: "ArrowDown" });
     expect(surface.attributes("style")).toContain("height: 252px");
   });
+
+  it("offers spacing modes and expands the map canvas in wide mode", async () => {
+    const graph = buildSemanticMap(sources, "r1");
+    const wrapper = mount(SemanticMapCanvas, { props: { graph } });
+    await flushPromises();
+    const compactWidth = wrapper.get("[data-semantic-map-layer]").attributes("style");
+
+    await wrapper.setProps({ density: "wide" });
+    expect(wrapper.find(".semantic-map-canvas").exists()).toBe(true);
+    expect(wrapper.get("[data-semantic-map-layer]").attributes("style")).not.toBe(compactWidth);
+    expect(wrapper.get("[data-semantic-map-layer]").attributes("style")).toContain(
+      "width: 1747.2px",
+    );
+  });
 });
 
 describe("SemanticMapFrame", () => {
@@ -126,5 +156,6 @@ describe("SemanticMapFrame", () => {
     expect(wrapper.get("[role='radiogroup']").attributes("aria-label")).toBe(
       "Where to show the map",
     );
+    expect(wrapper.get(".ui-relation-density-controls").text()).toContain("Wide spacing");
   });
 });

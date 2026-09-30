@@ -141,9 +141,7 @@ export function createWorksWorkspace(deps: Deps) {
             id: metric.id,
             field: metric.field,
             title: metric.title,
-            heading: String(metric.title || "")
-              .replace(" in the work", "")
-              .replace(" mentioned in the work", ""),
+            heading: metric.heading,
             type: metric.type === "pie" ? "pie" : "bars",
             values: metric.values.map((value: Any) => ({
               key: String(value.key),

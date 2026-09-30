@@ -15,6 +15,8 @@ import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
 import CorpusSemanticGraphPanel from "../components/corpus-builder/CorpusSemanticGraphPanel.vue";
+import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
+import type { SemanticMapSource } from "../domain/semanticMap";
 import { corpusBuildsApi } from "../api/corpus";
 import { sitesApi } from "../api/sites";
 
@@ -159,7 +161,7 @@ const semanticMapWork = ref("");
 const semanticMapBuildId = ref("");
 const semanticMapExtraBuilds = ref(0);
 const semanticMapLoading = ref(false);
-const semanticMapTab = ref<"graph" | "records">("graph");
+const semanticMapTab = ref<"graph" | "records" | "crossWorks">("graph");
 const semanticMapRecords = ref<Array<{ record_id: string; build_id: string }>>([]);
 const semanticMapRecordId = ref("");
 const semanticMapRecord = computed(
@@ -167,6 +169,7 @@ const semanticMapRecord = computed(
     semanticMapRecords.value.find((item) => item.record_id === semanticMapRecordId.value) || null,
 );
 const semanticMapError = ref(false);
+const semanticMapSources = ref<SemanticMapSource[]>([]);
 
 async function openWorkSemanticMap(work: string) {
   semanticMapWork.value = work;
@@ -177,6 +180,8 @@ async function openWorkSemanticMap(work: string) {
   semanticMapTab.value = "graph";
   semanticMapRecords.value = [];
   semanticMapRecordId.value = "";
+  const allSources = runtime.listSemanticMapSources?.();
+  semanticMapSources.value = allSources?.records || [];
   semanticMapDialog.value?.showModal();
   try {
     void corpusBuildsApi
@@ -496,10 +501,13 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
         <p v-if="semanticMapExtraBuilds" class="note">
           {{ i18n.tf("works.semantic_map_multiple_builds", { count: semanticMapExtraBuilds }) }}
         </p>
-        <div class="works-semantic-tabs" role="group" :aria-label="i18n.t('works.semantic_map')">
+        <div class="works-semantic-tabs" role="tablist" :aria-label="i18n.t('works.semantic_map')">
           <button
             type="button"
-            :aria-pressed="semanticMapTab === 'graph'"
+            id="works-semantic-tab-graph"
+            role="tab"
+            aria-controls="works-semantic-panel-graph"
+            :aria-selected="semanticMapTab === 'graph'"
             :class="{ on: semanticMapTab === 'graph' }"
             @click="semanticMapTab = 'graph'"
           >
@@ -507,18 +515,53 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
           </button>
           <button
             type="button"
-            :aria-pressed="semanticMapTab === 'records'"
+            id="works-semantic-tab-records"
+            role="tab"
+            aria-controls="works-semantic-panel-records"
+            :aria-selected="semanticMapTab === 'records'"
             :class="{ on: semanticMapTab === 'records' }"
             @click="semanticMapTab = 'records'"
           >
             {{ i18n.t("works.semantic_map_tab_records") }}
           </button>
+          <button
+            type="button"
+            id="works-semantic-tab-cross-works"
+            role="tab"
+            aria-controls="works-semantic-panel-cross-works"
+            :aria-selected="semanticMapTab === 'crossWorks'"
+            :class="{ on: semanticMapTab === 'crossWorks' }"
+            @click="semanticMapTab = 'crossWorks'"
+          >
+            {{ i18n.t("works.semantic_map_tab_cross_works") }}
+          </button>
         </div>
-        <CorpusSemanticGraphPanel
+        <div
           v-if="semanticMapTab === 'graph'"
-          :build-id="semanticMapBuildId"
+          id="works-semantic-panel-graph"
+          role="tabpanel"
+          aria-labelledby="works-semantic-tab-graph"
+          tabindex="0"
+        >
+          <CorpusSemanticGraphPanel :build-id="semanticMapBuildId" />
+        </div>
+        <SemanticMapFrame
+          v-if="semanticMapTab === 'crossWorks'"
+          variant="modal"
+          :sources="semanticMapSources"
+          focus-id=""
+          id="works-semantic-panel-cross-works"
+          role="tabpanel"
+          aria-labelledby="works-semantic-tab-cross-works"
+          tabindex="0"
         />
-        <template v-else>
+        <div
+          v-if="semanticMapTab === 'records'"
+          id="works-semantic-panel-records"
+          role="tabpanel"
+          aria-labelledby="works-semantic-tab-records"
+          tabindex="0"
+        >
           <p v-if="!semanticMapRecords.length" class="note">
             {{ i18n.t("works.semantic_map_no_records") }}
           </p>
@@ -544,7 +587,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
               @open-record="semanticMapRecordId = $event"
             />
           </template>
-        </template>
+        </div>
       </template>
     </dialog>
   </main>
