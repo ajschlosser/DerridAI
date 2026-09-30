@@ -106,6 +106,27 @@ def test_site_bundle_separates_authoritative_records_from_vectors(monkeypatch: p
     assert bundle.work_count == 1
 
 
+def test_site_bundle_blocks_when_a_selected_work_is_not_indexed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        site_publication.store,
+        "export_site_projection",
+        lambda _store_name, _works: {
+            "store": {"name": "derrida-primary"},
+            "records": [{"record": _record(work="Glas"), "embedding": None}],
+        },
+    )
+    monkeypatch.setattr(site_publication.system_store, "researcher_profiles", lambda: [])
+
+    with pytest.raises(ValueError, match="Missing: Rogues"):
+        site_publication.build_site_bundle(
+            store_name="derrida-primary",
+            works=["Glas", "Rogues"],
+            title="Partial export",
+        )
+
+
 def test_site_bundle_blocks_records_that_are_not_publication_valid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
