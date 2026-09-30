@@ -16,6 +16,7 @@ import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
 import { useRelationNodeDrag } from "../../composables/relations/useRelationNodeDrag";
 import { relationBoundsForPoints } from "../../domain/relations/geometry";
+import { RELATION_SURFACE_PRESETS } from "../../domain/relations/presets";
 import type { RelationViewportState } from "../../domain/relations/types";
 import {
   corpusBuildsApi,
@@ -46,6 +47,7 @@ const props = withDefaults(
 const emit = defineEmits<{ openRecord: [recordId: string]; refreshed: [] }>();
 const i18n = useI18nStore();
 
+const surfacePreset = RELATION_SURFACE_PRESETS.semanticRadial;
 const MAX_TRAIL = 30;
 const MAX_INNER = 24;
 const MAX_OUTER = 16;
@@ -641,9 +643,9 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
         :content-bounds="contentBounds"
         :content-width="SIZE.width"
         :content-height="SIZE.height"
-        :min-zoom="0.5"
-        :max-zoom="4"
-        resize-axis="vertical"
+        :min-zoom="surfacePreset.minZoom"
+        :max-zoom="surfacePreset.maxZoom"
+        :resize-axis="surfacePreset.resizeAxis"
         @viewport-change="onViewportChange"
       >
         <svg
