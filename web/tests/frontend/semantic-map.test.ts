@@ -255,7 +255,7 @@ describe("SemanticMapFrame", () => {
 
     const personFilter = wrapper
       .findAll(".semantic-map-kind-filters button")
-      .find((button) => button.text().includes("person"));
+      .find((button) => button.text().toLowerCase().includes("person"));
     expect(personFilter).toBeTruthy();
     await personFilter!.trigger("click");
     expect(wrapper.find('[data-relation-node-id="person:rousseau"]').exists()).toBe(false);
