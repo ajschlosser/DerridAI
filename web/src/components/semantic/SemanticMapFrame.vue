@@ -255,7 +255,11 @@ function clearSearch() {
             </fieldset>
             <fieldset>
               <legend>{{ i18n.t("semantic_map.placement", "Where to show the map") }}</legend>
-              <div class="semantic-map-placements" role="radiogroup">
+              <div
+                class="semantic-map-placements"
+                role="radiogroup"
+                :aria-label="i18n.t('semantic_map.placement', 'Where to show the map')"
+              >
                 <button
                   v-for="item in SEMANTIC_MAP_PLACEMENTS"
                   :key="item"
