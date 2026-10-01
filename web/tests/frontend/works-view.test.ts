@@ -147,6 +147,14 @@ const siteApi = vi.hoisted(() => ({
 vi.mock("../../src/api/sites", () => ({ sitesApi: siteApi }));
 vi.mock("../../src/api/corpus", () => ({
   corpusBuildsApi: {
+    workSemanticMap: vi.fn(async () => ({
+      kind: "work_semantic_map",
+      work: "Glas",
+      generation: "test-generation",
+      status: "empty",
+      sources: [],
+      records: [],
+    })),
     workSemanticMapRecords: vi.fn(async () => ({ records: [] })),
   },
 }));
