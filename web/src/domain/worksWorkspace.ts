@@ -396,9 +396,6 @@ export function createWorksWorkspace(deps: Deps) {
     persistPrefs();
     navigateTo("global");
   }
-  function searchWork(work: Any) {
-    searchWorkRecords(work);
-  }
   function searchWorkOverview(work: Any) {
     state.globalSearch = "";
     state.globalFilters = [{ id: uid(), field: "work", op: "eq", value: String(work || "") }];
@@ -461,7 +458,6 @@ export function createWorksWorkspace(deps: Deps) {
     syncWork,
     syncAllWorks,
     searchWorkRecords,
-    searchWork,
     searchWorkOverview,
     openWorkMetadataEditorForVue,
     openWorkMetadataLlmDialogForVue,

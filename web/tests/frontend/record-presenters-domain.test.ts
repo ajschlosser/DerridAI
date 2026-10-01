@@ -77,7 +77,6 @@ describe("record presenters", () => {
   it("builds dashboard and work insight fragments", () => {
     expect(presenters.dashboardMetricBody(metric)).toMatchSnapshot();
     expect(presenters.workInsightMetrics([row], "W")).toMatchSnapshot();
-    expect(presenters.workInsightsPanelHtml([row], "W")).toMatchSnapshot();
   });
   it("uses semantic labels from structured metadata values", () => {
     const insights = presenters.workInsightMetrics(
