@@ -39,6 +39,69 @@ def _search(monkeypatch, *, user=ADMIN, embeddings=None, **body):
     return stores_router.search("db", SearchRequest(**{"n_results": 3, **body}), None)
 
 
+def _result_ids(result) -> list[str]:
+    return [row["id"] for row in result["results"]]
+
+
+@pytest.mark.parametrize(
+    ("mode", "query", "options", "expected_ids"),
+    [
+        pytest.param("similarity", "", {}, ["r5", "r4", "r2"], id="similarity-empty-query"),
+        pytest.param("mmr", "writing", {}, ["r3", "r4", "r5"], id="mmr-defaults"),
+        pytest.param("hybrid", "", {}, ["r1", "r2", "r3"], id="hybrid-empty-query"),
+        pytest.param(
+            "hybrid",
+            "stranger",
+            {"embed_error": True},
+            ["r5", "r1", "r2"],
+            id="hybrid-without-embeddings",
+        ),
+        pytest.param("hybrid", "!!!", {}, ["r5", "r4", "r2"], id="hybrid-no-lexical-tokens"),
+        pytest.param("lexical", "", {}, ["r1", "r2", "r3"], id="lexical-empty-query"),
+        pytest.param("lexical", "!!!", {}, [], id="lexical-no-tokens"),
+        pytest.param("keyword", "STRANGER", {}, ["r1", "r2", "r5"], id="keyword-case-folding"),
+        pytest.param(
+            "filter",
+            "",
+            {"where": {"work": "Of Hospitality"}},
+            ["r1", "r5"],
+            id="filter-only",
+        ),
+        pytest.param(
+            "filter",
+            "",
+            {"where": {"work": {"$contains": "hospitality"}}},
+            ["r1", "r5"],
+            id="contains-filter",
+        ),
+    ],
+)
+def test_store_search_edge_cases_are_current_pipeline_invariants(
+    monkeypatch,
+    mode,
+    query,
+    options,
+    expected_ids,
+) -> None:
+    """Keep useful migration edge cases without freezing the old route implementation."""
+
+    options = dict(options)
+    embed_error = options.pop("embed_error", False)
+    embeddings = (
+        FakeEmbeddings(error=ValueError("no embedding function"))
+        if embed_error
+        else None
+    )
+    result = _search(
+        monkeypatch,
+        query=query,
+        mode=mode,
+        embeddings=embeddings,
+        **options,
+    )
+    assert _result_ids(result) == expected_ids
+
+
 def _variant(mode, pipeline_id, stages):
     source = built_in_pipeline(*MODE_PIPELINES[mode])
     return source.model_copy(
