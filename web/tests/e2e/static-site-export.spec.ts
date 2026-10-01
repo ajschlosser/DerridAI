@@ -1,6 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { expect, test } from "@playwright/test";
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -58,6 +58,59 @@ test("single-file export works directly from file://", async ({ page }) => {
   await expect(evidenceRegion.getByRole("button", { name: /\[E1\] Glas/ })).toBeVisible();
 
   expect(networkRequests).toEqual([]);
+});
+
+test("same-origin provider paths resolve against the served publication origin", async ({ page }) => {
+  const html = await readFile(fixturePath("local-provider.html"), "utf-8");
+  const providerRequests: string[] = [];
+
+  await page.route("https://site.example.test/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/") {
+      await route.fulfill({ status: 200, contentType: "text/html", body: html });
+      return;
+    }
+    if (url.pathname === "/provider/models") {
+      providerRequests.push(url.pathname);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: [{ id: "gpt-oss:20b" }] }),
+      });
+      return;
+    }
+    if (url.pathname === "/provider/chat/completions") {
+      providerRequests.push(url.pathname);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          choices: [{ message: { content: "Answer generated through the same-origin proxy." } }],
+        }),
+      });
+      return;
+    }
+    await route.abort();
+  });
+
+  await page.goto("https://site.example.test/");
+  await page.getByRole("button", { name: "Skip tutorial" }).click();
+
+  await page.getByRole("button", { name: "Models", exact: true }).click();
+  const form = page.getByRole("form", { name: "Add an endpoint" });
+  await form.getByLabel("Name", { exact: true }).fill("Same-origin proxy");
+  await form.getByLabel("Endpoint URL").fill("/provider");
+  await form.getByLabel("Model", { exact: true }).fill("gpt-oss:20b");
+  await form.getByLabel("Use for embeddings").uncheck();
+  await form.getByLabel("Use for Research answers").check();
+  await form.getByRole("button", { name: "Save endpoint" }).click();
+
+  await page.getByRole("button", { name: "Research" }).click();
+  await page.getByLabel("Question").fill("What does the passage say about hospitality?");
+  await page.getByRole("button", { name: "Ask" }).click();
+
+  await expect(page.getByText("Answer generated through the same-origin proxy.")).toBeVisible();
+  expect(providerRequests).toContain("/provider/chat/completions");
 });
 
 test("single-file export preserves evidence when reader-configured providers are unreachable", async ({
