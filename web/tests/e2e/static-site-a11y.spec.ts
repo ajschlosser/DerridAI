@@ -699,7 +699,7 @@ test("a different embedding model builds a local IndexedDB index before semantic
   expect(embedRequests).toEqual([]);
 
   await page.getByRole("button", { name: "Models", exact: true }).click();
-  await page.getByRole("button", { name: "Download model & build index" }).click();
+  await page.getByRole("button", { name: "Build local index" }).click();
   await expect(page.locator('[data-index="ready"]')).toContainText("Local index ready: 2 Records");
   await expect(page.locator('[data-index="ready"]')).toContainText("IndexedDB");
   expect(embedRequests.flat()).toEqual([
