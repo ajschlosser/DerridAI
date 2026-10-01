@@ -2,6 +2,8 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
+import { VueQueryPlugin } from "@tanstack/vue-query";
+import { queryClient } from "../../src/realtime/dataQuery";
 
 const runtime = vi.hoisted(() => ({
   getResearchWorkspaceSnapshot: vi.fn(),
@@ -47,7 +49,9 @@ async function mountView(component: object, path: string, role: "admin" | "resea
   });
   await router.push(path);
   await router.isReady();
-  const wrapper = mount(component, { global: { plugins: [pinia, router] } });
+  const wrapper = mount(component, {
+    global: { plugins: [pinia, router, [VueQueryPlugin, { queryClient }]] },
+  });
   await flushPromises();
   return wrapper;
 }

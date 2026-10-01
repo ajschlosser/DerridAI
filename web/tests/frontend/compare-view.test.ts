@@ -3,6 +3,8 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
+import { VueQueryPlugin } from "@tanstack/vue-query";
+import { queryClient } from "../../src/realtime/dataQuery";
 
 const records = {
   a: { record_id: "r-a", work: "Glas", document_author: "Derrida", text: "left" },
@@ -47,7 +49,7 @@ async function mountView() {
   await router.isReady();
   const wrapper = mount(CompareView, {
     attachTo: document.body,
-    global: { plugins: [pinia, router] },
+    global: { plugins: [pinia, router, [VueQueryPlugin, { queryClient }]] },
   });
   await flushPromises();
   return wrapper;

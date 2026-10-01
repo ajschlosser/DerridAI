@@ -32,4 +32,5 @@ DATA_RESOURCES: dict[str, DataResource] = {
     "vector_collections": DataResource(),
     "metadata_exemplars": DataResource(),
     "response_library": DataResource(),
+    "corpus_records": DataResource(),
 }

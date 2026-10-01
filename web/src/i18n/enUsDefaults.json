@@ -4947,6 +4947,8 @@
   "users.delete_named": "Delete {username}",
   "users.empty_description": "Create an account above to get started.",
   "users.empty_title": "No user accounts yet",
+  "realtime.newer_data": "Newer data is available. What you are reading has not changed.",
+  "realtime.load_newer": "Load newer",
   "users.enable_named": "Enable {username}",
   "users.reset_password": "Reset password",
   "users.reset_password_for": "Reset password for {username}",

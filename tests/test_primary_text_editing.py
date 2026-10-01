@@ -197,3 +197,21 @@ def test_update_record_updates_only_the_target_indexed_record(tmp_path: Path):
     )
 
 
+
+
+def test_committed_record_update_notes_corpus_records_but_batch_save_does_not(tmp_path: Path):
+    from app import operation_events
+
+    record = {
+        "record_id": "r1",
+        "record_revision": 1,
+        "text": "first",
+        "source_spans": [{"block_id": "b1", "page": 1}],
+    }
+    repo, build = install_repo(tmp_path, record)
+    operation_events.drain()
+    repo.save_records(build["build_id"], [record])
+    assert "corpus_records" not in operation_events.drain().resources
+
+    repo.update_record(build["build_id"], {**record, "record_revision": 2, "text": "reviewed"})
+    assert "corpus_records" in operation_events.drain().resources
