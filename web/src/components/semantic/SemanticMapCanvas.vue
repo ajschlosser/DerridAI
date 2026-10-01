@@ -45,10 +45,7 @@ function targetSizeForZoom(zoom: number) {
 
 function isDecluttered(node: SemanticMapNode, zoom: number) {
   return (
-    zoom < 0.58 &&
-    node.weight <= 1 &&
-    node.kind !== "record" &&
-    node.id !== props.selectedId
+    zoom < 0.58 && node.weight <= 1 && node.kind !== "record" && node.id !== props.selectedId
   );
 }
 
