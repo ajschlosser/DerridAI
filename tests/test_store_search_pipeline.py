@@ -236,6 +236,71 @@ def test_rebound_store_search_pipeline_is_reported_executable() -> None:
     assert support["supported"] is True
 
 
+# --- Current behavior at former migration-characterization edges -----------------------------
+
+
+@pytest.mark.parametrize(
+    ("mode", "query", "where", "embedding_error", "expected_ids"),
+    [
+        ("similarity", "", None, False, ["r5", "r4", "r2"]),
+        ("mmr", "writing", None, False, ["r3", "r4", "r5"]),
+        ("hybrid", "", None, False, ["r1", "r2", "r3"]),
+        ("hybrid", "stranger", None, True, ["r5", "r1", "r2"]),
+        ("hybrid", "!!!", None, False, ["r5", "r4", "r2"]),
+        ("lexical", "", None, False, ["r1", "r2", "r3"]),
+        ("lexical", "!!!", None, False, []),
+        ("keyword", "STRANGER", None, False, ["r1", "r2", "r5"]),
+        ("filter", "", {"work": "Of Hospitality"}, False, ["r1", "r5"]),
+        ("filter", "", {"work": {"$contains": "hospitality"}}, False, ["r1", "r5"]),
+    ],
+)
+def test_store_search_edge_cases_are_current_pipeline_contracts(
+    monkeypatch, traces, mode, query, where, embedding_error, expected_ids
+) -> None:
+    embeddings = (
+        FakeEmbeddings(error=ValueError("no embedding function")) if embedding_error else None
+    )
+    result = _search(
+        monkeypatch,
+        query=query,
+        mode=mode,
+        where=where,
+        embeddings=embeddings,
+    )
+
+    assert [row["id"] for row in result["results"]] == expected_ids
+    assert result["pipeline"]["pipeline_id"] == MODE_PIPELINES[mode][0]
+    assert traces[0].status == "completed"
+
+
+def test_hybrid_without_embeddings_records_lexical_fallback(monkeypatch, traces) -> None:
+    broken = FakeEmbeddings(error=ValueError("no embedding function"))
+    result = _search(
+        monkeypatch,
+        query="stranger",
+        mode="hybrid",
+        embeddings=broken,
+    )
+
+    assert result["results"]
+    assert all("lexical_score" in row for row in result["results"])
+    stages = {stage.stage_id: stage for stage in traces[0].stages}
+    assert stages["dense"].status == "unavailable"
+    assert stages["lexical"].status == "completed"
+
+
+def test_hybrid_without_lexical_tokens_uses_only_semantic_hits(monkeypatch, traces) -> None:
+    result = _search(monkeypatch, query="!!!", mode="hybrid")
+
+    assert result["results"]
+    assert all(
+        row.get("retrieval_hits") == [{"type": "semantic", "rank": index}]
+        for index, row in enumerate(result["results"], start=1)
+    )
+    stages = {stage.stage_id: stage for stage in traces[0].stages}
+    assert stages["lexical"].output_count == 0
+
+
 # --- Parallel branches ---------------------------------------------------------------------
 
 
