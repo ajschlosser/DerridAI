@@ -611,8 +611,36 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 f"derridai_record_{group.key}",
             )
         requested_families = request.get("families")
+        routing_skip_reasons: dict[str, str] = {}
+
+        def family_has_strong_memory_prefill(group_key: str) -> bool:
+            """Whether every field in one family already has a strong memory proposal.
+
+            Metadata-memory prefill requires multiple agreeing reviewed precedents and a
+            high similarity/no-close-rival policy before it creates a derridai:memory
+            assertion. For the indexing family, that is enough to surface the advisory
+            candidates directly instead of paying an LLM to restate them. An explicit
+            family rerun still bypasses this router.
+            """
+            fields = [field.name for field in schema.fields_in(group_key)]
+            if not fields:
+                return False
+            for field_name in fields:
+                assertion = current_assertion_by_name(record, field_name)
+                if (
+                    assertion is None
+                    or assertion.derivation_method != "derridai:memory"
+                    or assertion.evaluation_status != "value_supported"
+                    or assertion.value_status != "present"
+                    or assertion.value in (None, "", [])
+                    or not isinstance(assertion.confidence, (int, float))
+                    or float(assertion.confidence) < 0.88
+                ):
+                    return False
+            return True
+
         if isinstance(requested_families, list) and requested_families:
-            # Explicit human reruns bypass Fast-mode routing, but only for the
+            # Explicit human reruns bypass automatic routing, but only for the
             # selected family/families. This prevents a text correction from
             # needlessly repeating every expensive metadata task.
             requested = {str(value) for value in requested_families}
@@ -624,29 +652,45 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             # scheduled unless the family is already human-owned. This catches
             # bad or unreviewed main-text page ranges while also supplying the
             # high-value discourse_role proposal. Quotation is signal-routed in
-            # both Fast and Deep modes: punctuation/attribution language or a
-            # current Document Intelligence quotation is required before spending
-            # a model call. Indexing keeps its existing mode gate; any group a
-            # schema adds runs every time.
+            # both Fast and Deep modes. Indexing is skipped when it is disabled
+            # or when every indexing field already has a strong, source-span-bound
+            # reviewed-memory prefill. Any custom group keeps its existing behavior.
             for name, spec in all_task_specs.items():
                 if name == "quotation" and not quote_signal:
+                    routing_skip_reasons[name] = (
+                        "No quotation punctuation, attribution language, or current "
+                        "Document Intelligence quotation required this model family."
+                    )
                     continue
                 if name == "indexing" and not semantic_indexing:
+                    routing_skip_reasons[name] = "Semantic indexing is disabled for this enrichment run."
+                    continue
+                if name == "indexing" and family_has_strong_memory_prefill(name):
+                    routing_skip_reasons[name] = (
+                        "All indexing fields already have strong reviewed-memory prefills; "
+                        "the advisory values are surfaced directly for review."
+                    )
                     continue
                 tasks.append(spec)
         selected_names = {item[0] for item in tasks}
-        # Normal Fast-mode routing settles unneeded families as skipped. An
-        # explicit selective rerun must leave every unselected family's prior
-        # terminal state and normalized metadata untouched.
+        # Automatic routing settles unneeded families as skipped. An explicit
+        # selective rerun must leave every unselected family's prior terminal
+        # state and normalized metadata untouched.
         if not (isinstance(requested_families, list) and requested_families):
             for skipped_family in set(all_task_specs) - selected_names:
+                reason = routing_skip_reasons.get(
+                    skipped_family,
+                    "Skipped by automatic enrichment routing.",
+                )
                 record.setdefault("metadata_stage_status", {})[skipped_family] = "skipped"
                 record.setdefault("metadata_execution_ledger", {})[skipped_family] = {
-                    "state": "skipped", "finished_at": iso_now(),
-                    "error": "Skipped by fast enrichment routing; no strong signal required this LLM family.",
+                    "state": "skipped",
+                    "finished_at": iso_now(),
+                    "error": reason,
+                    "reason_code": "automatic_routing_skip",
                 }
                 if stage_callback:
-                    stage_callback(record, skipped_family, "skipped", "Fast enrichment routing")
+                    stage_callback(record, skipped_family, "skipped", reason)
         return tasks, source_ids, obvious_apparatus
 
 
