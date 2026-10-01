@@ -159,18 +159,21 @@ def test_topology_sanity_catches_absolute_oversize_and_reports_distribution():
     assert finding["severity"]=="warning" and finding["record_id"]=="r1"
 
 
-def test_segmentation_cache_fingerprint_changes_with_prompt_or_text(tmp_path):
-    """The boundary cache key changes when the text changes.
+def test_segmentation_cache_fingerprint_changes_with_prompt_text_or_language(tmp_path):
+    """The boundary cache key changes when evidence or document context changes.
 
-    Why: reusing a cached boundary verdict for edited text would give a stale decision.
+    Why: reusing a cached boundary verdict for edited text or a corrected
+    documentary language would give a stale decision.
     """
     repo,build,manager=_build(tmp_path,2)
     req={"provider":"ollama","model":"test"}
     a={"block_id":"a","text":"one"}; b={"block_id":"b","text":"two"}
-    first=manager._boundary_cache_fingerprint(a,b,req)
+    first=manager._boundary_cache_fingerprint(a,b,req,manifest={"language":"en"})
     b["text"]="changed"
-    second=manager._boundary_cache_fingerprint(a,b,req)
+    second=manager._boundary_cache_fingerprint(a,b,req,manifest={"language":"en"})
+    third=manager._boundary_cache_fingerprint(a,b,req,manifest={"language":"fr"})
     assert first!=second
+    assert second!=third
 
 
 
