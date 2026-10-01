@@ -344,6 +344,10 @@ class SystemStore:
                 audience=audience,
             )
 
+    def put_semantic_map_projections(self, rows: list[dict[str, Any]]) -> int:
+        with self._lock:
+            return self.repository.put_semantic_map_projections(rows)
+
     def get_semantic_map_projection(
         self,
         scope_type: str,
