@@ -118,11 +118,25 @@
     .evidence{display:grid;gap:.6rem}.evidence button{text-align:left;height:auto}.work-button{width:100%;text-align:left;height:100%;padding:1rem}.work-title{display:block;font-size:1.1rem;font-weight:800}.count{font-size:1.6rem;font-weight:800}
     .provider-panel{display:grid;gap:.7rem}.provider-summary{padding:.65rem;border:1px solid var(--border);border-radius:.5rem;background:var(--bg);overflow-wrap:anywhere}
     .provider-command{display:block;margin-top:.5rem;overflow:auto;padding:.5rem;border:1px solid var(--border);border-radius:.4rem;background:var(--raised);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;white-space:pre}
-    .tutorial-progress{font-weight:800;color:var(--muted)}.tutorial-copy{font-size:1.02rem;max-width:68ch}.tutorial-copy p{margin:.35rem 0 .9rem}
+    [data-tour]{scroll-margin:6rem 0 1rem}
+    dialog.tour{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:hidden}
+    dialog.tour::backdrop{background:transparent}
+    dialog.tour.tour-centered{background:rgba(0,0,0,.72)}
+    .tour-spot{position:fixed;border-radius:.65rem;outline:3px solid var(--accent);box-shadow:0 0 0 200vmax rgba(0,0,0,.72);pointer-events:none}
+    .tour-centered .tour-spot{display:none}
+    @media(prefers-reduced-motion:no-preference){.tour-spot{transition:left .2s,top .2s,width .2s,height .2s}}
+    .tour-card{position:fixed;width:min(26rem,calc(100% - 1rem));max-height:calc(100% - 1rem);overflow:auto;background:var(--bg);color:var(--fg);border:2px solid var(--border);border-radius:.9rem;box-shadow:var(--shadow)}
+    .tour-centered .tour-card{top:50%;left:50%;transform:translate(-50%,-50%)}
+    .tour-dock .tour-card{left:.5rem;right:.5rem;bottom:.5rem;top:auto;width:auto}
+    .tour-dock-top .tour-card{left:.5rem;right:.5rem;top:.5rem;bottom:auto;width:auto}
+    .tour-card .dialog-head{position:static;flex-direction:column;gap:.15rem}.tour-card h2{margin:0;font-size:1.15rem}
+    .tour-bar{height:.3rem;background:var(--raised)}.tour-bar span{display:block;height:100%;background:var(--accent)}
+    .tour-hint{padding-block:0;font-size:.875rem}
+    .tutorial-progress{font-weight:800;color:var(--muted);font-size:.875rem}.tutorial-copy{margin:0;font-size:1.02rem}
     .footer{margin-top:3rem;border-top:1px solid var(--border);padding:1.2rem 0 2.5rem;color:var(--muted);font-size:.875rem}
     .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
     @media(max-width:760px){.research-layout{grid-template-columns:1fr}.search-row{grid-template-columns:1fr}.top{position:static}.top-inner,.main{width:min(100% - 1rem,1180px)}.main{scroll-margin-top:1rem}.header-controls{width:100%}}
-    @media(forced-colors:active){button,.control,.panel,.card,.method-badge,.toggle{forced-color-adjust:auto}.method-badge[data-active="true"]{outline:2px solid CanvasText}}
+    @media(forced-colors:active){.tour-spot{outline:4px solid Highlight}button,.control,.panel,.card,.method-badge,.toggle{forced-color-adjust:auto}.method-badge[data-active="true"]{outline:2px solid CanvasText}}
   `;
   document.head.appendChild(style);
 
@@ -533,6 +547,7 @@
       "div",
       {
         class: "method-strip",
+        "data-tour": "methods",
         role: "group",
         "aria-label": t("site.runtime.method_disclosure"),
       },
@@ -832,10 +847,10 @@
     panel.append(
       heading,
       methods,
-      node("div", { class: "search-row" }, query, submit),
+      node("div", { class: "search-row", "data-tour": "search" }, query, submit),
       node(
         "div",
-        { class: "filters" },
+        { class: "filters", "data-tour": "filters" },
         node("label", { class: "field" }, node("span", { text: t("site.runtime.search_mode") }), mode),
         node("label", { class: "field" }, node("span", { text: t("site.runtime.work_filter") }), work),
         node("label", { class: "field" }, node("span", { text: t("site.runtime.field_filter") }), field),
@@ -849,7 +864,7 @@
   function worksView() {
     return node(
       "section",
-      { class: "grid", "aria-label": t("site.runtime.works") },
+      { class: "grid", "data-tour": "works", "aria-label": t("site.runtime.works") },
       ...(publication.works || []).map((item) =>
         node(
           "button",
@@ -880,6 +895,7 @@
   function providerPanel() {
     const panel = node("section", {
       class: "panel provider-panel",
+      "data-tour": "provider",
       "aria-labelledby": "provider-heading",
     });
     panel.append(node("h3", { id: "provider-heading", text: t("site.runtime.provider_settings") }));
@@ -1115,7 +1131,7 @@
       { class: "research-layout" },
       node(
         "section",
-        { class: "panel stack", "aria-labelledby": "research-heading" },
+        { class: "panel stack", "data-tour": "research", "aria-labelledby": "research-heading" },
         node("h2", { id: "research-heading", text: t("site.runtime.research") }),
         methods,
         question,
@@ -1129,7 +1145,7 @@
         providerPanel(),
         node(
           "section",
-          { class: "panel stack", "aria-labelledby": "evidence-heading" },
+          { class: "panel stack", "data-tour": "evidence", "aria-labelledby": "evidence-heading" },
           node("h3", { id: "evidence-heading", text: t("site.runtime.evidence") }),
           evidence,
         ),
@@ -1140,11 +1156,15 @@
   async function notesView() {
     const items = await client.annotations.list();
     if (!items.length) {
-      return node("div", { class: "panel empty", text: t("site.runtime.no_annotations") });
+      return node("div", {
+        class: "panel empty",
+        "data-tour": "notes",
+        text: t("site.runtime.no_annotations"),
+      });
     }
     return node(
       "section",
-      { class: "stack", "aria-label": t("site.runtime.annotations") },
+      { class: "stack", "data-tour": "notes", "aria-label": t("site.runtime.annotations") },
       ...items.map((item) => {
         const status = node("span", { class: "status", role: "status", "aria-live": "polite" });
         return node(
@@ -1197,93 +1217,202 @@
     );
   }
 
-  function tutorialSteps() {
-    return [
-      {
-        title: t("site.runtime.tutorial_welcome_title"),
-        body: t("site.runtime.tutorial_welcome_body"),
-      },
-      {
-        title: t("site.runtime.tutorial_search_title"),
-        body: t("site.runtime.tutorial_search_body"),
-      },
-      {
-        title: t("site.runtime.tutorial_methods_title"),
-        body: t("site.runtime.tutorial_methods_body"),
-      },
-      {
-        title: t("site.runtime.tutorial_research_title"),
-        body: t("site.runtime.tutorial_research_body"),
-      },
-      {
-        title: t("site.runtime.tutorial_accessibility_title"),
-        body: t("site.runtime.tutorial_accessibility_body"),
-      },
-    ];
-  }
+  // Guided tour: dims the page, spotlights one real element at a time, and explains it. Targets are found by
+  // data-tour anchors because render() rebuilds the page; a step may switch view first. Steps without a target
+  // (or whose target is missing or empty) fall back to a centered card.
+  const TOUR_STEPS = [
+    { id: "welcome" },
+    { id: "nav", target: "nav" },
+    { id: "works", view: "works", target: "works" },
+    { id: "search", view: "search", target: "search" },
+    { id: "filters", view: "search", target: "filters" },
+    { id: "methods", view: "search", target: "methods" },
+    { id: "research", view: "research", target: "research" },
+    { id: "provider", view: "research", target: "provider" },
+    { id: "evidence", view: "research", target: "evidence" },
+    { id: "notes", view: "notes", target: "notes" },
+    { id: "controls", target: "controls" },
+    { id: "restart", target: "tutorial" },
+  ];
 
   function openTutorial() {
-    const steps = tutorialSteps();
+    if (document.querySelector("dialog.tour")) return;
+    const startView = view;
+    const openedFromButton = document.activeElement?.dataset?.tour === "tutorial";
+    const last = TOUR_STEPS.length - 1;
     let index = 0;
+    let busy = false;
+    let outcome = "skipped";
+    let target = null;
+
     const dialog = node("dialog", {
+      class: "tour",
       "aria-labelledby": "tutorial-title",
       "aria-describedby": "tutorial-body",
     });
+    const spot = node("div", { class: "tour-spot", "aria-hidden": "true" });
     const title = node("h2", { id: "tutorial-title" });
     const progress = node("div", { class: "tutorial-progress" });
-    const body = node("div", { id: "tutorial-body", class: "tutorial-copy" });
+    const body = node("p", { id: "tutorial-body", class: "tutorial-copy" });
+    const fill = node("span");
     const previous = node("button", { type: "button", text: t("site.runtime.previous") });
     const next = node("button", { class: "primary", type: "button" });
     const skip = node("button", {
       type: "button",
       text: t("site.runtime.skip_tutorial"),
-      on: {
-        click: () => {
-          writeLocal(tutorialKey, "skipped");
-          dialog.close();
-        },
-      },
+      on: { click: () => dialog.close() },
     });
-
-    function paint() {
-      const step = steps[index];
-      title.textContent = step.title;
-      progress.textContent = t("site.runtime.tutorial_progress", {
-        current: index + 1,
-        total: steps.length,
-      });
-      body.replaceChildren(node("p", { text: step.body }));
-      previous.disabled = index === 0;
-      next.textContent =
-        index === steps.length - 1 ? t("site.runtime.finish") : t("site.runtime.next");
-    }
-
-    previous.addEventListener("click", () => {
-      if (index > 0) index -= 1;
-      paint();
-      next.focus();
-    });
-    next.addEventListener("click", () => {
-      if (index === steps.length - 1) {
-        writeLocal(tutorialKey, "done");
-        dialog.close();
-        return;
-      }
-      index += 1;
-      paint();
-      next.focus();
-    });
-
-    dialog.append(
-      node("div", { class: "dialog-head" }, title, progress),
-      node("div", { class: "dialog-body" }, body),
+    const card = node(
+      "div",
+      { class: "tour-card" },
+      node("div", { class: "tour-bar", "aria-hidden": "true" }, fill),
+      node(
+        "div",
+        { "aria-live": "polite", "aria-atomic": "true" },
+        node("div", { class: "dialog-head" }, title, progress),
+        node("div", { class: "dialog-body" }, body),
+      ),
+      node("div", { class: "dialog-body muted tour-hint", text: t("site.runtime.tutorial_hint") }),
       node("div", { class: "dialog-actions" }, skip, previous, next),
     );
-    dialog.addEventListener("close", () => dialog.remove());
+
+    function place() {
+      const rect = target ? target.getBoundingClientRect() : null;
+      const centered = !rect || (rect.width === 0 && rect.height === 0);
+      dialog.classList.toggle("tour-centered", centered);
+      dialog.classList.remove("tour-dock", "tour-dock-top");
+      for (const property of ["top", "left"]) card.style[property] = "";
+      if (centered) return;
+
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const pad = 6;
+      const edge = 8;
+      const gap = 14;
+      const box = {
+        left: Math.max(rect.left - pad, 4),
+        top: Math.max(rect.top - pad, 4),
+        right: Math.min(rect.right + pad, vw - 4),
+        bottom: Math.min(rect.bottom + pad, vh - 4),
+      };
+      Object.assign(spot.style, {
+        left: `${box.left}px`,
+        top: `${box.top}px`,
+        width: `${Math.max(box.right - box.left, 0)}px`,
+        height: `${Math.max(box.bottom - box.top, 0)}px`,
+      });
+
+      const width = card.offsetWidth;
+      const height = card.offsetHeight;
+      const clampLeft = (value) => Math.min(Math.max(value, edge), Math.max(vw - width - edge, edge));
+      const clampTop = (value) => Math.min(Math.max(value, edge), Math.max(vh - height - edge, edge));
+      const put = (left, top) => {
+        card.style.left = `${clampLeft(left)}px`;
+        card.style.top = `${clampTop(top)}px`;
+      };
+      // Docked full-width card: below the target when it fits there, else above it.
+      const dock = () =>
+        dialog.classList.add(
+          box.bottom + edge + height > vh && box.top - edge >= height ? "tour-dock-top" : "tour-dock",
+        );
+      if (vw <= 760) dock();
+      else if (vh - box.bottom - gap - edge >= height) put(box.left, box.bottom + gap);
+      else if (box.top - gap - edge >= height) put(box.left, box.top - gap - height);
+      else if (vw - box.right - gap - edge >= width) put(box.right + gap, box.top);
+      else if (box.left - gap - edge >= width) put(box.left - gap - width, box.top);
+      else dock();
+    }
+
+    function reveal() {
+      if (!target || target.closest("header.top")) return;
+      const rect = target.getBoundingClientRect();
+      const usable = window.innerHeight - (window.innerWidth <= 760 ? card.offsetHeight + 24 : 0);
+      if (rect.top < 72 || rect.bottom > usable) {
+        // A phone docks the card over the lower part of the screen, so bring the target to the top.
+        if (window.innerWidth <= 760) window.scrollBy(0, rect.top - 16);
+        else target.scrollIntoView({ block: rect.height > usable ? "start" : "center", inline: "nearest" });
+      }
+    }
+
+    let queued = 0;
+    function reposition() {
+      if (queued) return;
+      queued = window.requestAnimationFrame(() => {
+        queued = 0;
+        place();
+      });
+    }
+
+    async function show(nextIndex) {
+      if (busy) return;
+      busy = true;
+      try {
+        index = nextIndex;
+        const step = TOUR_STEPS[index];
+        if (step.view && step.view !== view) {
+          view = step.view;
+          await render();
+        }
+        title.textContent = t(`site.runtime.tutorial_${step.id}_title`);
+        body.textContent = t(`site.runtime.tutorial_${step.id}_body`);
+        progress.textContent = t("site.runtime.tutorial_progress", {
+          current: index + 1,
+          total: TOUR_STEPS.length,
+        });
+        fill.style.width = `${((index + 1) / TOUR_STEPS.length) * 100}%`;
+        previous.disabled = index === 0;
+        next.textContent = index === last ? t("site.runtime.finish") : t("site.runtime.next");
+        target = step.target ? document.querySelector(`[data-tour="${step.target}"]`) : null;
+        place();
+        reveal();
+        place();
+        next.focus();
+      } finally {
+        busy = false;
+      }
+    }
+
+    function move(delta) {
+      if (busy) return;
+      if (delta > 0 && index === last) {
+        outcome = "done";
+        dialog.close();
+      } else if (index + delta >= 0) {
+        show(index + delta);
+      }
+    }
+
+    previous.addEventListener("click", () => move(-1));
+    next.addEventListener("click", () => move(1));
+    dialog.addEventListener("keydown", (event) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const rtl = document.documentElement.dir === "rtl";
+      if (event.key === (rtl ? "ArrowLeft" : "ArrowRight")) {
+        event.preventDefault();
+        move(1);
+      } else if (event.key === (rtl ? "ArrowRight" : "ArrowLeft")) {
+        event.preventDefault();
+        move(-1);
+      }
+    });
+    dialog.addEventListener("close", async () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+      writeLocal(tutorialKey, outcome);
+      dialog.remove();
+      if (view !== startView) {
+        view = startView;
+        await render();
+      }
+      if (openedFromButton) document.querySelector('[data-tour="tutorial"]')?.focus();
+    });
+
+    dialog.append(spot, card);
     document.body.append(dialog);
-    paint();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
     dialog.showModal();
-    next.focus();
+    show(0);
   }
 
   function navButton(key, target) {
@@ -1358,12 +1487,18 @@
 
     return node(
       "div",
-      { class: "header-controls", role: "group", "aria-label": t("site.runtime.display_controls") },
+      {
+        class: "header-controls",
+        "data-tour": "controls",
+        role: "group",
+        "aria-label": t("site.runtime.display_controls"),
+      },
       node("label", { class: "compact-field" }, node("span", { text: t("site.runtime.language") }), languageSelect),
       node("label", { class: "compact-field" }, node("span", { text: t("site.runtime.theme") }), themeSelect),
       contrast,
       node("button", {
         type: "button",
+        "data-tour": "tutorial",
         text: t("site.runtime.tutorial"),
         on: { click: openTutorial },
       }),
@@ -1398,7 +1533,7 @@
         ),
         node(
           "nav",
-          { "aria-label": t("site.runtime.navigation") },
+          { "data-tour": "nav", "aria-label": t("site.runtime.navigation") },
           navButton("site.runtime.search", "search"),
           navButton("site.runtime.works", "works"),
           navButton("site.runtime.research", "research"),
