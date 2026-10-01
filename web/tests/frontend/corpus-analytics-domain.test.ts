@@ -142,3 +142,33 @@ describe("corpus analytics", () => {
     expect(builds).toBe(1);
   });
 });
+
+describe("work index de-duplication", () => {
+  type Row = { file: Record<string, unknown>; record: Record<string, unknown>; index: number };
+  const build = (rows: Row[]) =>
+    createCorpusAnalytics({
+      allRows: () => rows,
+      memoCorpus: (_key: string, builder: () => unknown) => builder(),
+    } as never).workIndex() as Map<string, { count: number; review: number; rows: Row[] }>;
+  const load = (name: string, dirty: number[] = []): Row[] =>
+    [1, 2, 3, 4].map((n, index) => ({
+      file: { id: name, name, dirty: new Set(dirty) },
+      record: { work: "W", record_id: `r${n}`, needs_review: n === 1 },
+      index,
+    }));
+
+  it("counts a record once when it is loaded in two files", () => {
+    const item = build([...load("a"), ...load("b")]).get("W");
+    expect(item?.count).toBe(4);
+    expect(item?.review).toBe(1);
+  });
+  it("keeps the copy with unsaved edits", () => {
+    const item = build([...load("a"), ...load("b", [2])]).get("W");
+    expect(item?.rows[2].file.name).toBe("b");
+    expect(item?.rows[0].file.name).toBe("a");
+  });
+  it("never merges records without an id", () => {
+    const rows = load("a").map((row) => ({ ...row, record: { work: "W" } }));
+    expect(build(rows).get("W")?.count).toBe(4);
+  });
+});
