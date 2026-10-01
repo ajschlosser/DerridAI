@@ -8,6 +8,7 @@ import sqlite3
 from collections.abc import Sequence
 from typing import Any
 
+from .. import operation_events
 from .models import PipelineRunTrace, PipelineStageTrace
 from .storage import PipelineDatabase, dump_json, load_json
 
@@ -81,6 +82,7 @@ class PipelineTraceStore:
             for stage in trace.stages:
                 self._put_stage_with_connection(conn, trace.run_id, stage)
             conn.commit()
+            operation_events.note_resource_changed("pipeline_runs")
         return trace
 
     def put_stage(self, run_id: str, stage: PipelineStageTrace) -> PipelineStageTrace:
@@ -93,6 +95,7 @@ class PipelineTraceStore:
                 raise KeyError(run_id)
             self._put_stage_with_connection(conn, run_id, stage)
             conn.commit()
+            operation_events.note_resource_changed("pipeline_runs")
         return stage
 
     @staticmethod
@@ -256,6 +259,7 @@ class PipelineTraceStore:
             conn.execute("DELETE FROM pipeline_stage_runs WHERE run_id=?", (str(run_id),))
             conn.execute("DELETE FROM pipeline_runs WHERE run_id=?", (str(run_id),))
             conn.commit()
+            operation_events.note_resource_changed("pipeline_runs")
         return True
 
     def snapshot(self) -> dict[str, list[dict[str, Any]]]:
@@ -295,4 +299,5 @@ class PipelineTraceStore:
             conn.execute("DELETE FROM pipeline_stage_runs")
             conn.execute("DELETE FROM pipeline_runs")
             conn.commit()
+            operation_events.note_resource_changed("pipeline_runs")
         return counts

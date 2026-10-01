@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from .. import operation_events
 from .benchmark import (
     ResearchPipelineBenchmarkCase,
     ResearchPipelineBenchmarkRun,
@@ -527,6 +528,8 @@ class PipelineStore:
                         ),
                     )
                 conn.commit()
+                operation_events.note_resource_changed("pipelines")
+                operation_events.note_resource_changed("pipeline_runs")
             except Exception:
                 conn.rollback()
                 raise

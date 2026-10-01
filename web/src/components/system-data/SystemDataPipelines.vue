@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import PipelineDefinitionsWorkspace from "../pipelines/PipelineDefinitionsWorkspace.vue";
 import PipelineExecutionsWorkspace from "../pipelines/PipelineExecutionsWorkspace.vue";
 import PipelineOperationsWorkspace from "../pipelines/PipelineOperationsWorkspace.vue";
@@ -17,6 +17,10 @@ import {
   type PipelineRunFilters,
   type PipelineStudioSection,
 } from "../../features/pipelines/composables/usePipelineStudioNavigation";
+import {
+  PIPELINE_RUN_PAGE_SIZE,
+  usePipelineStudioData,
+} from "../../features/pipelines/composables/usePipelineStudioData";
 import { pipelinesApi } from "../../api/pipelines";
 import { pipelineKey } from "../../domain/pipelinePresentation";
 import { defaultPipelineKey } from "../../domain/pipelineStudioPresentation";
@@ -24,22 +28,13 @@ import { purposeById } from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   PipelineAssignment,
-  PipelineCatalog,
   PipelineDefinition,
-  PipelineOperationalMetrics,
-  PipelineRunTrace,
   PipelineValidationResponse,
 } from "../../types/pipelines";
 
 const i18n = useI18nStore();
-const catalog = ref<PipelineCatalog | null>(null);
-const runs = ref<PipelineRunTrace[]>([]);
-const focusedRun = ref<PipelineRunTrace | null>(null);
-const metrics = ref<PipelineOperationalMetrics | null>(null);
-const loading = ref(true);
 const error = ref("");
-const runTotal = ref(0);
-const runLimit = 25;
+const runLimit = PIPELINE_RUN_PAGE_SIZE;
 const draft = ref<PipelineDefinition | null>(null);
 const validation = ref<PipelineValidationResponse | null>(null);
 const saving = ref(false);
@@ -68,11 +63,18 @@ const {
   selectOperationsSection,
   syncRouteState,
 } = usePipelineStudioNavigation(() => {
-  if (catalog.value)
-    void loadRuns().catch((exc) => {
-      error.value = exc instanceof Error ? exc.message : String(exc);
-    });
+  // Filters and offset are part of the executions query key; navigation needs no explicit reload.
 });
+const {
+  catalog,
+  metrics,
+  runs,
+  runTotal,
+  focusedRun,
+  loading,
+  error: loadError,
+  reload: load,
+} = usePipelineStudioData({ runFilters, runOffset, selectedRunId: selectedTraceId });
 
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
 
@@ -123,59 +125,13 @@ const canAssignSelected = computed(() => {
   );
 });
 
-async function loadRuns() {
-  const tracePage = await pipelinesApi.runs({
-    category: runFilters.value.category || undefined,
-    feature: runFilters.value.feature || undefined,
-    owner: runFilters.value.owner || undefined,
-    pipelineId: runFilters.value.pipelineId || undefined,
-    status: runFilters.value.status || undefined,
-    query: runFilters.value.query || undefined,
-    limit: runLimit,
-    offset: runOffset.value,
-  });
-  runs.value = tracePage.runs || [];
-  runTotal.value = tracePage.total ?? runs.value.length;
-  if (selectedTraceId.value && !runs.value.some((item) => item.run_id === selectedTraceId.value)) {
-    try {
-      focusedRun.value = (await pipelinesApi.run(selectedTraceId.value)).run;
-    } catch {
-      focusedRun.value = null;
-      selectedTraceId.value = runs.value[0]?.run_id || "";
-    }
-  } else if (!selectedTraceId.value && runs.value.length) {
-    selectedTraceId.value = runs.value[0].run_id;
-    focusedRun.value = runs.value[0];
-  } else {
-    focusedRun.value = runs.value.find((item) => item.run_id === selectedTraceId.value) || null;
-  }
-}
-
-async function load() {
-  loading.value = true;
-  error.value = "";
-  try {
-    const [nextCatalog, nextMetrics] = await Promise.all([
-      pipelinesApi.catalog(),
-      pipelinesApi.metrics({ limit: 250 }),
-    ]);
-    catalog.value = nextCatalog;
-    metrics.value = nextMetrics;
-    await loadRuns();
-
-    if (
-      !selectedKey.value ||
-      !nextCatalog.pipelines.some((item) => pipelineKey(item) === selectedKey.value)
-    ) {
-      selectedKey.value = defaultPipelineKey(nextCatalog);
-    }
-    syncRouteState();
-  } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
-  } finally {
-    loading.value = false;
-  }
-}
+// Pick a sensible default once the catalog is known; later catalogs keep the user's choice.
+watch(catalog, (next) => {
+  if (!next) return;
+  if (!selectedKey.value || !next.pipelines.some((item) => pipelineKey(item) === selectedKey.value))
+    selectedKey.value = defaultPipelineKey(next);
+  syncRouteState();
+});
 
 async function beginClone() {
   const source = selectedPipeline.value;
@@ -264,28 +220,18 @@ async function resetSelectedAssignment() {
   }
 }
 
-async function applyRunFilters(filters: PipelineRunFilters) {
+function applyRunFilters(filters: PipelineRunFilters) {
   runFilters.value = filters;
   runOffset.value = 0;
   selectedTraceId.value = "";
   error.value = "";
-  try {
-    await loadRuns();
-    syncRouteState();
-  } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
-  }
+  syncRouteState();
 }
 
-async function changeRunPage(offset: number) {
+function changeRunPage(offset: number) {
   runOffset.value = offset;
   error.value = "";
-  try {
-    await loadRuns();
-    syncRouteState();
-  } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
-  }
+  syncRouteState();
 }
 
 async function deleteRun(runId: string) {
@@ -303,10 +249,7 @@ async function deleteRun(runId: string) {
   try {
     await pipelinesApi.deleteRun(runId);
     if (selectedTraceId.value === runId) selectedTraceId.value = "";
-    await Promise.all([
-      loadRuns(),
-      pipelinesApi.metrics({ limit: 250 }).then((next) => (metrics.value = next)),
-    ]);
+    await load();
     syncRouteState();
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
@@ -328,12 +271,8 @@ async function clearHistory() {
   try {
     await pipelinesApi.clearRuns();
     selectedTraceId.value = "";
-    focusedRun.value = null;
     runOffset.value = 0;
-    await Promise.all([
-      loadRuns(),
-      pipelinesApi.metrics({ limit: 250 }).then((next) => (metrics.value = next)),
-    ]);
+    await load();
     syncRouteState();
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
@@ -347,11 +286,6 @@ async function viewExecutions(category: string) {
   selectedTraceId.value = "";
   error.value = "";
   section.value = "executions";
-  try {
-    await loadRuns();
-  } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
-  }
   syncRouteState("push");
 }
 
@@ -370,12 +304,9 @@ const studioTabs = computed(() => [
   { id: "executions", label: t("pipelines.studio_executions", "Executions") },
   { id: "operations", label: t("pipelines.studio_operations", "Operations") },
 ]);
-const notices = computed<Notice[]>(() =>
-  error.value ? [{ id: "pipeline-error", tone: "error", text: error.value }] : [],
-);
-
-onMounted(() => {
-  void load();
+const notices = computed<Notice[]>(() => {
+  const text = error.value || loadError.value;
+  return text ? [{ id: "pipeline-error", tone: "error", text }] : [];
 });
 </script>
 
@@ -394,12 +325,6 @@ onMounted(() => {
       :actions-label="t('pipelines.studio_actions', 'Pipeline Studio actions')"
     >
       <template #actions>
-        <UiButton
-          icon="refresh"
-          :label="t('common.refresh', 'Refresh')"
-          :disabled="loading"
-          @click="load"
-        />
         <UiButton
           icon="help"
           :label="t('pipelines.help_button', 'Help')"

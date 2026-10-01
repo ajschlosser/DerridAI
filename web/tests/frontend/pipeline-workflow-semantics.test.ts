@@ -1,6 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { VueQueryPlugin } from "@tanstack/vue-query";
+import { queryClient } from "../../src/realtime/dataQuery";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
@@ -107,6 +109,8 @@ function text(wrapper: { text: () => string }) {
 }
 
 beforeEach(() => {
+  queryClient.clear();
+  queryClient.setDefaultOptions({ queries: { retry: false } });
   setActivePinia(createPinia());
   useI18nStore().dictionary = {};
   vi.restoreAllMocks();
@@ -652,7 +656,9 @@ describe("Pipeline Studio routes", () => {
     });
     await router.push({ name: "pipelines", query });
     await router.isReady();
-    const wrapper = mount(SystemDataPipelines, { global: { plugins: [router] } });
+    const wrapper = mount(SystemDataPipelines, {
+      global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
     return { wrapper, router };
   }
@@ -714,7 +720,9 @@ describe("Pipeline Studio routes", () => {
       routes: [{ path: "/pipelines", name: "pipelines", component: SystemDataPipelines }],
     });
     await router.push({ name: "pipelines" });
-    const wrapper = mount(SystemDataPipelines, { global: { plugins: [router] } });
+    const wrapper = mount(SystemDataPipelines, {
+      global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
     expect(wrapper.get('[role="status"]').text()).toContain("Loading");
   });
@@ -727,9 +735,12 @@ describe("Pipeline Studio routes", () => {
       routes: [{ path: "/pipelines", name: "pipelines", component: SystemDataPipelines }],
     });
     await router.push({ name: "pipelines" });
-    const wrapper = mount(SystemDataPipelines, { global: { plugins: [router] } });
-    await flushPromises();
-    expect(wrapper.get('[role="alert"]').text()).toContain("catalog offline");
+    const wrapper = mount(SystemDataPipelines, {
+      global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
+    });
+    await vi.waitFor(() =>
+      expect(wrapper.get('[role="alert"]').text()).toContain("catalog offline"),
+    );
   });
 });
 
