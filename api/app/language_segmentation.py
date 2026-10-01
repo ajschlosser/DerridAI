@@ -363,15 +363,28 @@ def infer_language_from_text(text: str) -> str:
 
 
 def resolve_profile(language: str | None = None, text: str = "") -> LanguageSegmentationProfile:
-    """Resolve reviewed/declared language first, then a conservative script fallback."""
+    """Resolve declared language first, then a conservative script fallback.
+
+    A declared but unsupported language is never silently treated as a different
+    language merely because it shares a script. It receives script-appropriate
+    punctuation/case behavior without borrowing another language's abbreviations,
+    continuation words, or heading vocabulary.
+    """
     code = normalize_language(language)
     if code in _PROFILES:
         return _PROFILES[code]
     inferred = infer_language_from_text(text)
+    if code:
+        inferred_profile = _PROFILES.get(inferred)
+        if inferred_profile is None:
+            return LanguageSegmentationProfile(code=code)
+        return LanguageSegmentationProfile(
+            code=code,
+            script=inferred_profile.script,
+            uses_case=inferred_profile.uses_case,
+        )
     if inferred in _PROFILES:
         return _PROFILES[inferred]
-    if code:
-        return LanguageSegmentationProfile(code=code)
     return _PROFILES["und"]
 
 
