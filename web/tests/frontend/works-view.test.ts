@@ -405,11 +405,27 @@ describe("WorksView", () => {
     await wrapper.get("#worksSort").setValue("records-desc");
     expect(runtime.setWorksView).toHaveBeenCalledWith({ sort: "records-desc" });
     await wrapper.get(".works-toolbar-views .ui-button-wrap:last-child button").trigger("click");
-    expect(runtime.setWorksView).toHaveBeenCalledWith({ viewMode: "compact" });
+    expect(runtime.setWorksView).toHaveBeenCalledWith({ viewMode: "list" });
     const filters = wrapper.findAll("button").find((button) => button.text().includes("Filters"))!;
     await filters.trigger("click");
     await wrapper.get("#works-filter-panel input[type='checkbox']").setValue(true);
     expect(runtime.setWorksView).toHaveBeenCalledWith({ needsReview: true });
+    wrapper.unmount();
+  });
+
+  it("renders List mode as a semantic dense table rather than compressed cards", async () => {
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(adminSnapshot({ viewMode: "list" }));
+    const wrapper = await mountWorks();
+
+    const table = wrapper.get("table.works-list");
+    expect(table.get("thead").text()).toContain("Work");
+    expect(table.get("thead").text()).toContain("Author / year");
+    expect(table.get("thead").text()).toContain("Index status");
+    expect(table.get("tbody tr").text()).toContain("Glas");
+    expect(wrapper.find(".works-card").exists()).toBe(false);
+
+    await table.get(".works-list-select").trigger("click");
+    expect(runtime.setWorksOverview).toHaveBeenCalledWith("Glas");
     wrapper.unmount();
   });
 
