@@ -218,12 +218,9 @@ export function workMetadataPresentationRows(rows: Loose[]): WorkMetadataPresent
     );
     const unique = new Set(meaningful.map((value) => JSON.stringify(value)));
     return {
-      field_id:
-        identities.get(field) ||
-        DOCUMENT_FIELD_IDENTITIES[field] ||
-        `legacy.${field}`,
+      field_id: identities.get(field) || DOCUMENT_FIELD_IDENTITIES[field] || `legacy.${field}`,
       field,
-      value: mixed ? null : values[0] ?? null,
+      value: mixed ? null : (values[0] ?? null),
       mixed,
       unique_count: mixed ? unique.size : 0,
       empty: meaningful.length === 0,
