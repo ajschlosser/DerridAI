@@ -241,7 +241,7 @@ describe("WorksView", () => {
       locale: "en-US",
       languages: ["en-US", "fr-CA"],
       provider_profile_ids: ["openai-main"],
-      export_format: "local-single-file",
+      export_format: "two-file",
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
     wrapper.unmount();
@@ -268,7 +268,7 @@ describe("WorksView", () => {
       locale: "en-US",
       languages: ["en-US"],
       provider_profile_ids: [],
-      export_format: "local-single-file",
+      export_format: "two-file",
     });
     wrapper.unmount();
   });
