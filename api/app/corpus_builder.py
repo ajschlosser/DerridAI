@@ -2317,13 +2317,14 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
     ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
         """Hydrate one current graph/index and reuse it for every map read."""
         generation = self._semantic_generation(build_id)
-        cached = self._semantic_graph_cache.get(build_id)
+        cache_id = f"{build_id}:{self._semantic_audience()}"
+        cached = self._semantic_graph_cache.get(cache_id)
         if cached is not None and cached[0] == generation:
             return cached[1], cached[2], cached[3]
 
-        lock = self._semantic_projection_lock(f"graph:{build_id}")
+        lock = self._semantic_projection_lock(f"graph:{cache_id}")
         with lock:
-            cached = self._semantic_graph_cache.get(build_id)
+            cached = self._semantic_graph_cache.get(cache_id)
             if cached is not None and cached[0] == generation:
                 return cached[1], cached[2], cached[3]
 
@@ -2339,13 +2340,13 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
 
             saved = system_store.get_semantic_map_projection(
                 scope_type="semantic_graph",
-                scope_id=build_id,
+                scope_id=cache_id,
             )
             graph = self._projection_payload(saved, generation)
             if graph is None:
                 system_store.put_semantic_map_projection(
                     scope_type="semantic_graph",
-                    scope_id=build_id,
+                    scope_id=cache_id,
                     generation=generation,
                     status="building",
                 )
@@ -2360,7 +2361,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     )
                     system_store.put_semantic_map_projection(
                         scope_type="semantic_graph",
-                        scope_id=build_id,
+                        scope_id=cache_id,
                         generation=generation,
                         status="ready",
                         payload=graph,
@@ -2368,7 +2369,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 except Exception as exc:
                     system_store.put_semantic_map_projection(
                         scope_type="semantic_graph",
-                        scope_id=build_id,
+                        scope_id=cache_id,
                         generation=generation,
                         status="failed",
                         error=f"{type(exc).__name__}: {exc}",
@@ -2377,8 +2378,8 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
 
             index = SemanticMapIndex(graph, records)
             with self._lock:
-                self._semantic_graph_cache.pop(build_id, None)
-                self._semantic_graph_cache[build_id] = (
+                self._semantic_graph_cache.pop(cache_id, None)
+                self._semantic_graph_cache[cache_id] = (
                     generation,
                     graph,
                     records,
@@ -2393,10 +2394,11 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self, build_id: str
     ) -> tuple[str, SemanticMapIndex, dict[str, Any]]:
         generation = self._semantic_generation(build_id)
-        cached = self._semantic_graph_cache.get(build_id)
+        cache_id = f"{build_id}:{self._semantic_audience()}"
+        cached = self._semantic_graph_cache.get(cache_id)
         if cached is None or cached[0] != generation:
             self._current_semantic_graph(build_id)
-            cached = self._semantic_graph_cache.get(build_id)
+            cached = self._semantic_graph_cache.get(cache_id)
         if cached is None or cached[0] != generation:
             raise RuntimeError("Semantic graph cache did not hydrate.")
         return generation, cached[4], cached[3]
@@ -2404,7 +2406,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
     def record_semantic_map(self, build_id: str, record_id: str) -> dict[str, Any]:
         """Return a saved Record projection, materializing it once when absent/stale."""
         generation = self._semantic_generation(build_id)
-        scope_id = f"{build_id}:{record_id}"
+        scope_id = f"{build_id}:{self._semantic_audience()}:{record_id}"
         saved = system_store.get_semantic_map_projection(
             scope_type="record_semantic_map",
             scope_id=scope_id,
@@ -2472,7 +2474,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
     def semantic_graph_node(self, build_id: str, node_id: str) -> dict[str, Any]:
         """Return one saved node neighbourhood without rewalking the full graph."""
         generation = self._semantic_generation(build_id)
-        scope_id = f"{build_id}:{node_id}"
+        scope_id = f"{build_id}:{self._semantic_audience()}:{node_id}"
         saved = system_store.get_semantic_map_projection(
             scope_type="semantic_node_neighborhood",
             scope_id=scope_id,
@@ -2562,26 +2564,27 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         generation = hashlib.sha256(
             json.dumps(material, sort_keys=True, ensure_ascii=False).encode("utf-8")
         ).hexdigest()
+        work_scope_id = f"{self._semantic_audience()}:{work}"
         saved = system_store.get_semantic_map_projection(
             scope_type="work_semantic_map",
-            scope_id=work,
+            scope_id=work_scope_id,
         )
         payload = self._projection_payload(saved, generation)
         if payload is not None:
             return self._with_projection_meta(payload, generation=generation, source="saved")
 
-        lock = self._semantic_projection_lock(f"work:{work}")
+        lock = self._semantic_projection_lock(f"work:{work_scope_id}")
         with lock:
             saved = system_store.get_semantic_map_projection(
                 scope_type="work_semantic_map",
-                scope_id=work,
+                scope_id=work_scope_id,
             )
             payload = self._projection_payload(saved, generation)
             if payload is not None:
                 return self._with_projection_meta(payload, generation=generation, source="saved")
             system_store.put_semantic_map_projection(
                 scope_type="work_semantic_map",
-                scope_id=work,
+                scope_id=work_scope_id,
                 generation=generation,
                 status="building",
             )
@@ -2623,7 +2626,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 }
                 system_store.put_semantic_map_projection(
                     scope_type="work_semantic_map",
-                    scope_id=work,
+                    scope_id=work_scope_id,
                     generation=generation,
                     status="ready",
                     payload=payload,
@@ -2631,7 +2634,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             except Exception as exc:
                 system_store.put_semantic_map_projection(
                     scope_type="work_semantic_map",
-                    scope_id=work,
+                    scope_id=work_scope_id,
                     generation=generation,
                     status="failed",
                     error=f"{type(exc).__name__}: {exc}",
