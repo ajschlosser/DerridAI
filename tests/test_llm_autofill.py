@@ -38,8 +38,11 @@ def test_a_confident_value_is_filled_even_though_the_model_asked_for_review(tmp_
 
 
 def test_no_cited_evidence_keeps_it_in_review(tmp_path):
-    status = reconcile(manager(tmp_path), cite=False)["metadata_field_status"]["discourse_role"]
+    result = reconcile(manager(tmp_path), cite=False)
+    status = result["metadata_field_status"]["discourse_role"]
     assert status["status"] != "model_inferred" or not status.get("autofilled")
+    assert result["metadata_evidence"]["discourse_role"]["block_ids"] == []
+    assert result["metadata_evidence"]["discourse_role"]["confidence"] is None
 
 
 def test_below_the_bar_it_still_needs_review(tmp_path):

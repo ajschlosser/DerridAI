@@ -174,6 +174,39 @@ describe("Corpus Builder metadata review", () => {
     expect(state.applyAuthoritativeRecord).toHaveBeenCalled();
   });
 
+  it("optimistically settles review state before persistence completes", async () => {
+    const state = setup();
+    state.selectedRecord.value = row({
+      target: "Kant",
+      metadata_incomplete_fields: ["target"],
+      metadata_review_fields: ["speaker", "target"],
+      acceptance_blocking_fields: ["target"],
+      review_issue_codes: ["metadata"],
+      review_state: "metadata",
+      metadata_complete: false,
+      metadata_field_status: {
+        target: { status: "unresolved", method: "llm" },
+        speaker: { status: "unresolved", method: "llm" },
+      },
+    });
+
+    await state.review.resolveMetadataField("target", "hospitality");
+
+    expect(state.selectedRecord.value?.metadata_incomplete_fields).toEqual([]);
+    expect(state.selectedRecord.value?.metadata_review_fields).toEqual(["speaker"]);
+    expect(state.selectedRecord.value?.acceptance_blocking_fields).toEqual([]);
+    expect(state.selectedRecord.value?.metadata_complete).toBe(false);
+    expect(state.selectedRecord.value?.metadata_field_status?.target).toMatchObject({
+      status: "human_confirmed",
+      authority_status: "human_confirmed",
+      evaluation_status: "value_supported",
+      value_status: "present",
+      optimistic_review: true,
+    });
+    // Persistence has not run yet; this state is deliberately local and immediate.
+    expect(state.queued).toHaveLength(1);
+  });
+
   it("saves a value and its selected-text evidence in one optimistic request", async () => {
     const state = setup();
     corpusBuilderApi.metadataDecision.mockResolvedValue({
@@ -234,12 +267,33 @@ describe("Corpus Builder metadata review", () => {
 
   it("releases a confirmed-no-value decision before persistence completes", async () => {
     const state = setup();
+    state.selectedRecord.value = row({
+      target: "Kant",
+      metadata_incomplete_fields: ["target"],
+      metadata_review_fields: ["target"],
+      acceptance_blocking_fields: ["target"],
+      review_issue_codes: ["metadata"],
+      review_state: "metadata",
+      metadata_complete: false,
+      metadata_field_status: { target: { status: "unresolved", method: "llm" } },
+    });
 
     await state.review.resolveMetadataNoValue("target");
 
     expect(state.review.metadataSavingField.value).toBe("");
     expect(state.review.metadataSavedField.value).toBe("target");
     expect(state.selectedRecord.value?.target).toBeNull();
+    expect(state.selectedRecord.value?.metadata_incomplete_fields).toEqual([]);
+    expect(state.selectedRecord.value?.metadata_review_fields).toEqual([]);
+    expect(state.selectedRecord.value?.metadata_complete).toBe(true);
+    expect(state.selectedRecord.value?.review_issue_codes).toEqual([]);
+    expect(state.selectedRecord.value?.review_state).toBe("ready");
+    expect(state.selectedRecord.value?.metadata_field_status?.target).toMatchObject({
+      status: "confirmed_absent",
+      evaluation_status: "no_supported_value",
+      value_status: "confirmed_absent",
+      optimistic_review: true,
+    });
     expect(state.queued).toHaveLength(1);
   });
 
@@ -344,6 +398,18 @@ describe("Corpus Builder metadata review", () => {
       changed_fields: ["speaker", "target"],
     });
 
+    state.selectedRecord.value = row({
+      metadata_review_fields: ["speaker", "target"],
+      metadata_incomplete_fields: [],
+      review_issue_codes: ["metadata"],
+      review_state: "metadata",
+      metadata_complete: false,
+      metadata_field_status: {
+        speaker: { status: "unresolved", method: "llm" },
+        target: { status: "unresolved", method: "llm" },
+      },
+    });
+
     await state.review.resolveMetadataSuggestions({
       speaker: "Jacques Derrida",
       target: "hospitality",
@@ -352,6 +418,9 @@ describe("Corpus Builder metadata review", () => {
     // The optimistic batch does not lock the panel while persistence runs.
     expect(state.review.metadataSavingField.value).toBe("");
     expect(state.selectedRecord.value?.target).toBe("hospitality");
+    expect(state.selectedRecord.value?.metadata_review_fields).toEqual([]);
+    expect(state.selectedRecord.value?.metadata_complete).toBe(true);
+    expect(state.selectedRecord.value?.review_state).toBe("ready");
     expect(state.queued).toHaveLength(1);
 
     await state.queued[0](false);

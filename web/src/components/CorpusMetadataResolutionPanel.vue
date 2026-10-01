@@ -223,6 +223,12 @@ function canonicalStatus(field: string): Record<string, unknown> | null {
 // Values stored before the API dropped structured-output residue from lists (an evidence ID, a confidence score) are
 // read without it, so neither the editor nor "Accept all suggestions" can save it back.
 function fieldValue(field: string) {
+  const legacy = props.record.metadata_field_status?.[field] as Record<string, unknown> | undefined;
+  // A reviewer decision is applied immediately in Record Review. Until its
+  // serialized write returns, the canonical assertion projection still
+  // describes the preceding model state and must not repaint the old value.
+  if (legacy?.optimistic_review === true)
+    return withoutTransportItems(unwrapMetadataValue(props.record[field]));
   const assertion = assertionByField.value[field];
   if (!assertion) return withoutTransportItems(unwrapMetadataValue(props.record[field]));
   if (assertion.value_status === "confirmed_absent") return null;
@@ -364,6 +370,7 @@ function memoryHints(field: string): MemoryHint[] {
 }
 function status(field: string) {
   const legacy = (props.record.metadata_field_status?.[field] || {}) as Record<string, unknown>;
+  if (legacy.optimistic_review === true) return legacy;
   const canonical = canonicalStatus(field);
   return canonical ? { ...legacy, ...canonical } : legacy;
 }
@@ -473,9 +480,9 @@ function calibrated(field: string) {
     ? { reviewed: Number(row.reviewed || 0), acceptanceRate: Number(row.acceptance_rate || 0) }
     : null;
 }
-// After a decision, focus moves to the next field still to decide (its Confirm button, so Enter confirms it), and once
-// none is left the parent is told, so it can offer the record decision. It waits for the save to finish, since the
-// other fields' buttons are disabled while one field is being written.
+// After a decision, focus moves to the next field still to decide (its Confirm button, so Enter confirms it).
+// Record Review applies decision state optimistically, so the last decision can report completion immediately;
+// an explicit blocking caller can still hold `savingField` / `batchSaving` until it is ready to advance.
 const root = ref<HTMLElement | null>(null);
 const advanceFrom = ref<string | null>(null);
 function decided(field: string) {
@@ -655,7 +662,10 @@ function displayValue(field: string) {
             }
           "
           @save-with-human-source="
-            (value, note) => emit('resolveWithHumanSource', field, value, note)
+            (value, note) => {
+              emit('resolveWithHumanSource', field, value, note);
+              decided(field);
+            }
           "
           @browse-evidence="(value) => emit('browseEvidence', field, value)"
           @dirty="(value) => emit('dirty', value)"

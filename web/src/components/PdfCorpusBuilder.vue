@@ -1871,8 +1871,17 @@ function reviewShortcut(event: KeyboardEvent) {
     focusFirstMetadataBlocker();
   }
 }
-/** Every field is decided from the panel: hand the keyboard to the record decision, so Enter accepts. */
-function handleMetadataComplete() {
+/**
+ * Metadata-queue review is a conveyor: once the current Record has no metadata
+ * decisions left, move forward immediately from the optimistic local state.
+ * Other review queues keep the existing "Accept & next" handoff because a
+ * finished metadata panel does not imply that the Record itself was accepted.
+ */
+async function handleMetadataComplete() {
+  if (reviewQueue.value === "metadata" && selectedRecord.value && !selectedMetadataBlocked.value) {
+    await focusQueueMove(1);
+    return;
+  }
   void nextTick(() => decisionDock.value?.focusAccept());
 }
 watch(selectedProviderId, (profileId) => {
@@ -3109,6 +3118,7 @@ defineExpose({
         @resolve-metadata-many="resolveMetadataSuggestions"
         @confirm-no-metadata-value="resolveMetadataNoValue"
         @metadata-dirty="handleMetadataDirty"
+        @metadata-complete="handleMetadataComplete"
         @llm-touchup="openLlmTouchup"
         @accept="toggleAccept"
         @reject="rejectRecord"

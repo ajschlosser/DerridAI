@@ -45,12 +45,14 @@ def test_group_prompt_receives_only_its_own_guidance_and_never_calls_matches_pro
     assert "hospitality" not in prompt
 
 
-def test_required_guidance_has_a_reviewable_fallback_placeholder():
+def test_required_guidance_uses_celf_absence_instead_of_a_text_placeholder():
     prompt = format_group_guidance(
         ["mood"],
         {
             "mood": {
                 "required": True,
+                # Compatibility input from an older saved guidance file. It must
+                # never be copied into scholarly metadata or the model prompt.
                 "default_placeholder": "[not established in source]",
             }
         },
@@ -58,8 +60,9 @@ def test_required_guidance_has_a_reviewable_fallback_placeholder():
     )
 
     assert "REQUIRED FOR THIS RUN" in prompt
-    assert "[not established in source]" in prompt
-    assert "mark the result unresolved" in prompt
+    assert "outcome=no_supported_value" in prompt
+    assert "null/empty" in prompt
+    assert "[not established in source]" not in prompt
 
 
 def test_build_request_bounds_and_deduplicates_guidance_terms():
@@ -161,12 +164,30 @@ def test_required_run_guidance_field_enters_review_queue_when_model_returns_no_v
         record,
         profile,
         [],
-        [("discourse", {"metadata": {}, "field_assessments": {}}, None)],
+        [
+            (
+                "discourse",
+                {
+                    "metadata": {"region_author": None},
+                    "field_assessments": {
+                        "region_author": {
+                            "confidence": 0.92,
+                            "needs_review": False,
+                            "reason": "No author is established in this passage.",
+                            "outcome": "no_supported_value",
+                        }
+                    },
+                },
+                None,
+            )
+        ],
         False,
         request={
             "run_guidance": {
                 "region_author": {
                     "required": True,
+                    # Old build requests may still carry this compatibility
+                    # member. Reconciliation must ignore it as a value.
                     "default_placeholder": "[not established in source]",
                 }
             }
@@ -174,9 +195,12 @@ def test_required_run_guidance_field_enters_review_queue_when_model_returns_no_v
         schema=schema,
     )
 
-    assert result["region_author"] == "[not established in source]"
+    assert result.get("region_author") is None
     assert "region_author" in result["metadata_incomplete_fields"]
-    assert result["metadata_field_status"]["region_author"]["reason_code"] == "required_placeholder"
+    status = result["metadata_field_status"]["region_author"]
+    assert status["reason_code"] == "required_no_supported_value"
+    assert status["suggested_absence"] is True
+    assert status["proposed_value"] is None
 
 
 def test_run_guidance_match_diagnostics_do_not_leak_into_published_records():
