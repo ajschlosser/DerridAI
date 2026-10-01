@@ -335,6 +335,23 @@ export interface RecordSemanticLinkedRecord {
 
 export type SemanticLayerStatus = "ok" | "stale" | "missing" | "unavailable" | string;
 
+export interface WorkSemanticMapSource {
+  id: string;
+  work: string;
+  concepts: string[];
+  topics: string[];
+  persons: string[];
+}
+
+export interface WorkSemanticMapProjection {
+  state: "ready" | "building" | "stale_building" | "empty" | "failed" | string;
+  kind: "work_semantic_map_sources" | string;
+  work: string;
+  sources: WorkSemanticMapSource[];
+  record_count: number;
+  build_generations: Record<string, number>;
+}
+
 export interface RecordSemanticMap {
   version: number;
   kind: "record_semantic_map" | string;
