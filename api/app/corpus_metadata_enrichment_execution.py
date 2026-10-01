@@ -164,23 +164,19 @@ class MetadataEnrichmentExecutionMixin:
     ) -> None:
         """Keep this pass's precedent retrieval on the record for Record Review.
 
-        The retrieval already ran for the prompt; keeping references to it (and ranking this
-        record's own blocks against each precedent's evidence) spares the reviewer a second
-        search. It is advisory: if it cannot be kept, the panel searches live instead.
+        The retrieval already ran for the prompt, so keep only its precedent references.
+        Evidence remapping onto this Record is reviewer-only assistance and is deferred until
+        the precedents panel is opened. If the refs cannot be kept, the panel searches live.
         """
         examples = editorial_memory.get("examples") if isinstance(editorial_memory, dict) else None
         telemetry = editorial_memory.get("progressive_retrieval") if isinstance(editorial_memory, dict) else None
         try:
             examples = examples if isinstance(examples, dict) else {}
-            blocks = self._blocks_for(build_id) if any(examples.values()) else {}
             record[PRECEDENTS_CACHE_KEY] = build_precedents_cache(
                 sorted(self._editable_fields(build_id)),
                 examples,
                 telemetry if isinstance(telemetry, dict) else {},
-                record,
-                blocks,
                 computed_at=iso_now(),
-                embed=self._precedent_embedder(),
             )
         except Exception as exc:  # noqa: BLE001 - advisory; Record Review falls back to a live search
             record.pop(PRECEDENTS_CACHE_KEY, None)
@@ -680,8 +676,12 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         for task_name, prompt, response_model, max_tokens, schema_name in tasks:
             if build_id:
                 try:
-                    live_rows = self.repo.load_records(build_id)
-                    live_record = next((row for row in live_rows if str(row.get("record_id") or "") == str(record.get("record_id") or "")), None)
+                    # Ownership is a Record-local concurrency check. Reading the
+                    # complete corpus before every metadata family turns a safety
+                    # invariant into O(records × families) repository I/O.
+                    live_record = self.repo.get_record(
+                        build_id, str(record.get("record_id") or "")
+                    )
                 except Exception as exc:
                     reason = (
                         f"Could not verify live reviewer ownership before {task_name} metadata enrichment: {exc}"
