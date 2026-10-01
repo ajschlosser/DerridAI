@@ -763,6 +763,84 @@ def get_work_semantic_map_records(work: str) -> dict[str, Any]:
     return {"records": system_store.list_records_for_work(work)}
 
 
+@router.get("/api/works/{work}/semantic-map")
+def get_work_semantic_map(work: str) -> dict[str, Any]:
+    """Durable derived source projection for the work-level semantic map."""
+    return pdf_corpus_builds.work_semantic_map(work)
+
+
+@router.get("/api/records/{record_id}/semantic-map")
+def get_record_semantic_map(record_id: str) -> dict[str, Any]:
+    """Resolve and materialize a published Record's semantic map on demand."""
+    build_id = system_store.get_record_build_id(record_id)
+    if not build_id:
+        # Legacy published Records may predate build provenance. Treat that as a
+        # valid empty projection rather than exposing a dead "map unavailable" state.
+        return {
+            "version": 1,
+            "kind": "record_semantic_map",
+            "record_id": record_id,
+            "record_revision": 0,
+            "record_text_sha256": "",
+            "layers": {
+                "document_intelligence": {"status": "missing"},
+                "terms": {"status": "missing"},
+            },
+            "mentions": [],
+            "nodes": [],
+            "edges": [],
+            "linked_records": [],
+            "summary": {
+                "local_nodes": 0,
+                "shown_local_nodes": 0,
+                "neighbor_nodes": 0,
+                "in_record_edges": 0,
+                "outward_edges": 0,
+                "linked_records": 0,
+            },
+            "projection": {
+                "status": "ready",
+                "generation": "legacy-no-provenance",
+                "source": "empty",
+            },
+            "epistemic_note": (
+                "No build provenance is available for this legacy Record; the empty map "
+                "is a valid derived state and can be regenerated after the Record is republished."
+            ),
+        }
+    try:
+        return pdf_corpus_builds.record_semantic_map(build_id, record_id)
+    except KeyError:
+        return {
+            "version": 1,
+            "kind": "record_semantic_map",
+            "record_id": record_id,
+            "record_revision": 0,
+            "record_text_sha256": "",
+            "layers": {
+                "document_intelligence": {"status": "missing"},
+                "terms": {"status": "missing"},
+            },
+            "mentions": [],
+            "nodes": [],
+            "edges": [],
+            "linked_records": [],
+            "summary": {
+                "local_nodes": 0,
+                "shown_local_nodes": 0,
+                "neighbor_nodes": 0,
+                "in_record_edges": 0,
+                "outward_edges": 0,
+                "linked_records": 0,
+            },
+            "projection": {
+                "status": "ready",
+                "generation": "missing-build",
+                "source": "empty",
+            },
+        }
+
+
 @router.get("/api/pdf/corpus-builds/{build_id}/semantic-content-graph/nodes/{node_id}")
 def get_pdf_corpus_semantic_graph_node(build_id: str, node_id: str) -> dict[str, Any]:
     """One semantic-graph node with its relations and Records, for graph walking."""
