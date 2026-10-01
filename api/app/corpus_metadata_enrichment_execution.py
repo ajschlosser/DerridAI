@@ -209,8 +209,14 @@ class MetadataEnrichmentExecutionMixin:
         telemetry = editorial_memory.get("progressive_retrieval") if isinstance(editorial_memory, dict) else None
         try:
             examples = examples if isinstance(examples, dict) else {}
+            requested_fields = editorial_memory.get("requested_fields")
+            fields = (
+                [str(field) for field in requested_fields if str(field)]
+                if isinstance(requested_fields, list)
+                else sorted(self._editable_fields(build_id))
+            )
             record[PRECEDENTS_CACHE_KEY] = build_precedents_cache(
-                sorted(self._editable_fields(build_id)),
+                fields,
                 examples,
                 telemetry if isinstance(telemetry, dict) else {},
                 computed_at=iso_now(),
