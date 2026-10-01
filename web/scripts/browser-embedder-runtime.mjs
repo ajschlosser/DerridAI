@@ -72,7 +72,11 @@ function isNodeRuntime() {
 }
 
 function moduleSpecifierForSource(source) {
-  if (!isNodeRuntime() && typeof Blob !== "undefined" && typeof URL.createObjectURL === "function") {
+  if (
+    !isNodeRuntime() &&
+    typeof Blob !== "undefined" &&
+    typeof URL.createObjectURL === "function"
+  ) {
     return URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
   }
 
@@ -152,12 +156,21 @@ function responseForAsset(key, method) {
 function modelAssetKey(url) {
   if (!url.href.startsWith(VIRTUAL_MODEL_ROOT)) return null;
 
-  const marker = `/resolve/${EMBEDDER_INFO.model.revision}/`;
-  const markerIndex = url.pathname.indexOf(marker);
-  if (markerIndex < 0) return null;
+  const modelRoot = new URL(`${EMBEDDER_INFO.model.id}/`, VIRTUAL_MODEL_ROOT).pathname;
+  const resolvePrefix = `${modelRoot}resolve/`;
+  if (!url.pathname.startsWith(resolvePrefix)) return null;
 
-  const relative = decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
-  return `model/${relative}`;
+  const remainder = url.pathname.slice(resolvePrefix.length);
+  const separator = remainder.indexOf("/");
+  if (separator < 1) return null;
+
+  const requestedRevision = decodeURIComponent(remainder.slice(0, separator));
+  if (requestedRevision !== "main" && requestedRevision !== EMBEDDER_INFO.model.revision) {
+    return null;
+  }
+
+  const relative = decodeURIComponent(remainder.slice(separator + 1));
+  return relative ? `model/${relative}` : null;
 }
 
 async function embeddedFetch(input, init = undefined) {
