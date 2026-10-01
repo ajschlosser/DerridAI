@@ -181,6 +181,22 @@ class SQLiteRepositoryBase:
                 CREATE INDEX IF NOT EXISTS idx_semantic_memory_outbox_status
                     ON semantic_memory_outbox(status, created_at);
 
+                CREATE TABLE IF NOT EXISTS semantic_map_projections (
+                    scope_type TEXT NOT NULL,
+                    scope_id TEXT NOT NULL,
+                    generation TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'ready',
+                    payload_json TEXT,
+                    error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(scope_type, scope_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_semantic_map_projection_generation
+                    ON semantic_map_projections(scope_type, generation);
+                CREATE INDEX IF NOT EXISTS idx_semantic_map_projection_status
+                    ON semantic_map_projections(status, updated_at DESC);
+
                 CREATE TABLE IF NOT EXISTS generated_claims (
                     claim_id TEXT PRIMARY KEY,
                     run_id TEXT,
@@ -691,6 +707,104 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                 "WHERE item_id=? AND status='dirty'",
                 [(now, item_id) for item_id in ids],
             )
+            conn.commit()
+            return int(cursor.rowcount or 0)
+
+    def put_semantic_map_projection(
+        self,
+        *,
+        scope_type: str,
+        scope_id: str,
+        generation: str,
+        status: str = "ready",
+        payload: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        """Persist one rebuildable semantic-map projection in System Data.
+
+        Projections are deliberately separate from corpus records. They may be
+        replaced or deleted at any time because their authority is entirely
+        derived from the current corpus/build state.
+        """
+        scope_type = str(scope_type or "").strip()
+        scope_id = str(scope_id or "").strip()
+        generation = str(generation or "").strip()
+        status = str(status or "ready").strip() or "ready"
+        if not scope_type or not scope_id or not generation:
+            raise ValueError("Semantic-map projections require scope_type, scope_id, and generation.")
+        now = _iso_now()
+        payload_json = _json_dumps(payload) if isinstance(payload, dict) else None
+        with self._lock, self._connect() as conn:
+            existing = conn.execute(
+                "SELECT created_at FROM semantic_map_projections WHERE scope_type=? AND scope_id=?",
+                (scope_type, scope_id),
+            ).fetchone()
+            created_at = str(existing["created_at"]) if existing is not None else now
+            conn.execute(
+                """
+                INSERT INTO semantic_map_projections
+                    (scope_type,scope_id,generation,status,payload_json,error,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?)
+                ON CONFLICT(scope_type,scope_id) DO UPDATE SET
+                    generation=excluded.generation,
+                    status=excluded.status,
+                    payload_json=excluded.payload_json,
+                    error=excluded.error,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    scope_type,
+                    scope_id,
+                    generation,
+                    status,
+                    payload_json,
+                    str(error) if error else None,
+                    created_at,
+                    now,
+                ),
+            )
+            conn.commit()
+        return {
+            "scope_type": scope_type,
+            "scope_id": scope_id,
+            "generation": generation,
+            "status": status,
+            "payload": dict(payload) if isinstance(payload, dict) else None,
+            "error": str(error) if error else None,
+            "created_at": created_at,
+            "updated_at": now,
+        }
+
+    def get_semantic_map_projection(self, *, scope_type: str, scope_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT scope_type,scope_id,generation,status,payload_json,error,created_at,updated_at
+                FROM semantic_map_projections
+                WHERE scope_type=? AND scope_id=?
+                LIMIT 1
+                """,
+                (str(scope_type), str(scope_id)),
+            ).fetchone()
+        if row is None:
+            return None
+        value = dict(row)
+        payload = _json_loads(value.pop("payload_json", None), None)
+        value["payload"] = payload if isinstance(payload, dict) else None
+        return value
+
+    def delete_semantic_map_projection(self, *, scope_type: str, scope_id: str | None = None) -> int:
+        with self._lock, self._connect() as conn:
+            if scope_id is None:
+                cursor = conn.execute(
+                    "DELETE FROM semantic_map_projections WHERE scope_type=?",
+                    (str(scope_type),),
+                )
+            else:
+                cursor = conn.execute(
+                    "DELETE FROM semantic_map_projections WHERE scope_type=? AND scope_id=?",
+                    (str(scope_type), str(scope_id)),
+                )
             conn.commit()
             return int(cursor.rowcount or 0)
 
