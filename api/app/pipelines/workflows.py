@@ -37,6 +37,7 @@ from .corpus_text_touchup import TEXT_TOUCHUP, compile_text_touchup_pipeline
 from .models import PipelineDefinition, StrategySpec
 from .purposes import PipelinePurposeSpec, purpose_registry, serialize_purpose
 from .registry import StrategyRegistry, strategy_registry
+from .wiring import bindings_changing_wiring
 
 StrategyFit = Literal["supported", "inspect_only", "output_contract"]
 
@@ -114,6 +115,17 @@ def runtime_support(pipeline: PipelineDefinition) -> dict[str, Any]:
         plan = adapter.compile(pipeline)
     except ValueError as exc:
         return {"supported": False, "adapter": None, "reason": str(exc)}
+    changed = bindings_changing_wiring(pipeline, strategy_registry, purpose_registry.get(pipeline.purpose))
+    if changed:
+        return {
+            "supported": False,
+            "adapter": None,
+            "reason": (
+                "The runtime adapter takes stage inputs from the graph edges and cannot "
+                "apply explicit input bindings that change them: " + ", ".join(changed) + ". "
+                "The pipeline stays inspect-only."
+            ),
+        }
     details = adapter.describe(plan) if adapter.describe else {}
     return {"supported": True, "adapter": pipeline.purpose, **details}
 

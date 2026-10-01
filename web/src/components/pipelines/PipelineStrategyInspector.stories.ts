@@ -43,3 +43,24 @@ type Story = StoryObj<typeof meta>;
 export const Used: Story = {};
 
 export const Unused: Story = { args: { usage: { pipelines: [], categories: [] } } };
+
+export const WithObservedLatency: Story = {
+  args: {
+    latency: {
+      samples: 40,
+      p50_ms: 850,
+      p90_ms: 1600,
+      reliable: true,
+      executions: 44,
+      median_ms_per_input: 3,
+      by_model: [{ provider: "local", model: "ms-marco-MiniLM", samples: 40, p50_ms: 850 }],
+      observed_scaling: {
+        exponent: 1.08,
+        r_squared: 0.94,
+        points: 40,
+        min_input: 8,
+        max_input: 400,
+      },
+    },
+  },
+};

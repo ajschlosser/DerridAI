@@ -1,15 +1,34 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
+import PipelineAnalysisPanel from "./PipelineAnalysisPanel.vue";
 import PipelineEditorVersionDetails from "./PipelineEditorVersionDetails.vue";
 import PipelineGraphDiagram from "./PipelineGraphDiagram.vue";
 import PipelineStageEditor from "./PipelineStageEditor.vue";
 import PipelineStageNavigator from "./PipelineStageNavigator.vue";
+import PipelineStagePalette from "./PipelineStagePalette.vue";
+import PipelineTypeChip from "./PipelineTypeChip.vue";
+import {
+  lensBadges,
+  stagesWithWiringProblems,
+  type DiagramLens,
+} from "../../domain/pipelineAnalysisPresentation";
+import {
+  clearStageBindings,
+  insertStage,
+  removeBindingReferences,
+  renameBindingReferences,
+  setInputBinding,
+  type BindingChoice,
+  type InsertMode,
+} from "../../domain/pipelineBindings";
 import { useI18nStore } from "../../stores/i18n";
 import type {
+  PipelineAnalysis,
   PipelineDefinition,
   PipelinePurpose,
   PipelineStrategy,
+  PipelineStrategyLatency,
   PipelineWorkflowVocabulary,
 } from "../../types/pipelines";
 
@@ -18,6 +37,11 @@ const props = defineProps<{
   strategies: PipelineStrategy[];
   purpose?: PipelinePurpose | null;
   vocabulary?: PipelineWorkflowVocabulary;
+  /** Server analysis of this draft; undefined hides the wiring and performance panels. */
+  analysis?: PipelineAnalysis | null;
+  analysisLoading?: boolean;
+  analysisError?: string;
+  strategyLatency?: Record<string, PipelineStrategyLatency> | null;
 }>();
 
 const emit = defineEmits<{
@@ -34,6 +58,19 @@ const selectedIndex = ref(0);
 const stageEditor = ref<InstanceType<typeof PipelineStageEditor> | null>(null);
 const selectedStage = computed(() => props.modelValue.stages[selectedIndex.value] || null);
 const selectedStageId = computed(() => selectedStage.value?.id ?? "");
+const paletteOpen = ref(false);
+const lens = ref<DiagramLens>("structure");
+const bindNotice = ref("");
+const selectedStrategy = computed(
+  () => props.strategies.find((item) => item.strategy_id === selectedStage.value?.strategy) ?? null,
+);
+const badges = computed(() => lensBadges(props.analysis ?? null, lens.value, t));
+const flaggedStageIds = computed(() => [...stagesWithWiringProblems(props.analysis ?? null)]);
+const lensOptions = computed<Array<{ id: DiagramLens; label: string }>>(() => [
+  { id: "structure", label: t("pipelines.lens_structure", "Structure") },
+  { id: "latency", label: t("pipelines.lens_latency", "Latency") },
+  { id: "complexity", label: t("pipelines.lens_complexity", "Complexity") },
+]);
 
 watch(
   () => props.modelValue.stages.length,
@@ -75,6 +112,7 @@ function updateStageId(stageIndex: number, value: string) {
   }
 
   next.entry_stage_ids = next.entry_stage_ids.map((id) => (id === previous ? normalized : id));
+  renameBindingReferences(next, previous, normalized);
   for (const row of next.stages) {
     row.next = row.next.map((id) => (id === previous ? normalized : id));
     row.on_empty = replaceStageReference(row.on_empty, previous, normalized);
@@ -91,8 +129,10 @@ function updateStageStrategy(stageIndex: number, strategyId: string) {
   if (!stage) return;
   stage.strategy = strategyId;
   // Configuration is owned by the registered strategy schema. Carrying keys
-  // across a strategy switch can silently change runtime behavior.
+  // across a strategy switch can silently change runtime behavior. The same
+  // goes for input bindings: ports belong to the strategy.
   stage.config = {};
+  clearStageBindings(stage);
   emit("update:modelValue", next);
 }
 
@@ -164,38 +204,36 @@ function updateConfig(
   emit("update:modelValue", next);
 }
 
-function addStage() {
-  const next = clonePipeline();
-  const strategy =
-    props.strategies.find((item) => item.strategy_id === "query.passthrough") ||
-    props.strategies[0];
-  if (!strategy) return;
+function openPalette() {
+  paletteOpen.value = true;
+}
 
-  const used = new Set(next.stages.map((stage) => stage.id));
-  const stem =
-    strategy.strategy_id
-      .split(".")
-      .pop()
-      ?.replace(/[^a-z0-9_]+/gi, "_") || "stage";
-  let suffix = next.stages.length + 1;
-  let id = stem;
-  while (used.has(id)) id = `${stem}_${suffix++}`;
-
-  next.stages.push({
-    id,
-    strategy: strategy.strategy_id,
-    enabled: true,
-    config: {},
-    next: [],
-    on_empty: null,
-    on_unavailable: null,
-    on_timeout: null,
-    on_error: null,
-  });
-  if (!next.entry_stage_ids.length) next.entry_stage_ids = [id];
-  emit("update:modelValue", next);
-  selectedIndex.value = next.stages.length - 1;
+function addFromPalette(strategyId: string, mode: InsertMode) {
+  const result = insertStage(
+    props.modelValue,
+    strategyId,
+    mode === "entry" ? null : selectedStageId.value || null,
+    mode,
+  );
+  paletteOpen.value = false;
+  emit("update:modelValue", result.pipeline);
+  selectedIndex.value = result.pipeline.stages.length - 1;
   void nextTick(() => stageEditor.value?.focus());
+}
+
+function bindInput(stageIndex: number, port: string, choice: BindingChoice | null) {
+  const stage = props.modelValue.stages[stageIndex];
+  if (!stage) return;
+  const next = setInputBinding(props.modelValue, stage.id, port, choice);
+  if (!next) {
+    bindNotice.value = t(
+      "pipelines.ports_cycle",
+      "That stage runs after this one, so it cannot feed it. Choose an earlier stage.",
+    );
+    return;
+  }
+  bindNotice.value = "";
+  emit("update:modelValue", next);
 }
 
 function removeStage(stageIndex: number) {
@@ -205,6 +243,7 @@ function removeStage(stageIndex: number) {
   if (!removed) return;
 
   next.entry_stage_ids = next.entry_stage_ids.filter((id) => id !== removed.id);
+  removeBindingReferences(next, removed.id);
   for (const stage of next.stages) {
     stage.next = stage.next.filter((id) => id !== removed.id);
     for (const key of ["on_empty", "on_unavailable", "on_timeout", "on_error"] as const) {
@@ -241,6 +280,43 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
 
     <div class="pipeline-editor-workspace">
       <div class="pipeline-editor-main">
+        <ul
+          v-if="analysis?.wiring.run_inputs.length"
+          class="run-inputs"
+          :aria-label="t('pipelines.run_inputs_label', 'Inputs the workflow supplies')"
+        >
+          <li v-for="input in analysis.wiring.run_inputs" :key="input.name">
+            <span class="run-inputs-kicker">{{
+              t("pipelines.run_inputs_kicker", "Workflow supplies")
+            }}</span>
+            <code>{{ input.name }}</code>
+            <PipelineTypeChip :type="input.data_type" />
+            <span class="run-inputs-uses">
+              {{
+                input.consumers.length
+                  ? input.consumers.map((use) => `${use.stage}.${use.port}`).join(", ")
+                  : t("pipelines.ports_unused", "Not used by any stage.")
+              }}
+            </span>
+          </li>
+        </ul>
+        <div
+          v-if="analysis !== undefined"
+          class="lens"
+          role="group"
+          :aria-label="t('pipelines.lens_label', 'What the diagram shows on each stage')"
+        >
+          <button
+            v-for="option in lensOptions"
+            :key="option.id"
+            type="button"
+            class="lens-option"
+            :aria-pressed="lens === option.id"
+            @click="lens = option.id"
+          >
+            {{ option.label }}
+          </button>
+        </div>
         <PipelineGraphDiagram
           :stages="modelValue.stages"
           :entry-stage-ids="modelValue.entry_stage_ids"
@@ -255,6 +331,8 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
           "
           :selected-stage-id="selectedStageId"
           :show-inspector="false"
+          :badges="badges"
+          :flagged-stage-ids="flaggedStageIds"
           @update:selected-stage-id="selectStageById"
         />
         <PipelineStageNavigator
@@ -264,8 +342,18 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
           :entry-stage-ids="modelValue.entry_stage_ids"
           :can-add="strategies.length > 0"
           @select="selectedIndex = $event"
-          @add="addStage"
+          @add="openPalette"
           @move="moveStage"
+        />
+        <PipelineAnalysisPanel
+          v-if="analysis !== undefined"
+          :analysis="analysis"
+          :loading="analysisLoading"
+          :error="analysisError"
+          :strategies="strategies"
+          :vocabulary="vocabulary"
+          :selected-stage-id="selectedStageId"
+          @select-stage="selectStageById"
         />
       </div>
 
@@ -280,6 +368,10 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
         :vocabulary="vocabulary"
         :show-all-strategies="showAllStrategies"
         :entry-stage-ids="modelValue.entry_stage_ids"
+        :wiring="analysis?.wiring.stages[selectedStage.id] ?? null"
+        :wiring-loading="analysisLoading"
+        :wiring-error="bindNotice || analysisError"
+        @bind-input="bindInput"
         @update-id="updateStageId"
         @update-strategy="updateStageStrategy"
         @update-enabled="toggleStageEnabled"
@@ -291,6 +383,18 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
         @update-config="updateConfig"
       />
     </div>
+
+    <PipelineStagePalette
+      v-if="paletteOpen"
+      :strategies="strategies"
+      :purpose="purpose || null"
+      :vocabulary="vocabulary"
+      :anchor="selectedStage"
+      :anchor-strategy="selectedStrategy"
+      :latency="strategyLatency"
+      @close="paletteOpen = false"
+      @add="addFromPalette"
+    />
   </div>
 </template>
 
@@ -309,6 +413,63 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
   display: grid;
   gap: var(--space-4);
   min-width: 0;
+}
+.run-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.run-inputs li {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset);
+  font-size: 0.8125rem;
+}
+.run-inputs-kicker {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.run-inputs-uses {
+  color: var(--text-secondary);
+}
+.lens {
+  display: inline-flex;
+  justify-self: start;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+.lens-option {
+  min-height: var(--control-height);
+  padding: 4px 14px;
+  border: 0;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.lens-option + .lens-option {
+  border-inline-start: 1px solid var(--border-subtle);
+}
+.lens-option[aria-pressed="true"] {
+  background: var(--ui-accent-soft);
+  color: var(--accent-fg);
+}
+.lens-option:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-offset) * -1);
 }
 @media (max-width: 1100px) {
   .pipeline-editor-workspace {

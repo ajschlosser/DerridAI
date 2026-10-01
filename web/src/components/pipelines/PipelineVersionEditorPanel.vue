@@ -10,9 +10,11 @@ import { pipelineStatusTone } from "../../domain/pipelineStudioPresentation";
 import { findTerm, purposeText, termLabel } from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
 import type {
+  PipelineAnalysis,
   PipelineDefinition,
   PipelinePurpose,
   PipelineStrategy,
+  PipelineStrategyLatency,
   PipelineValidationResponse,
   PipelineWorkflowVocabulary,
 } from "../../types/pipelines";
@@ -22,6 +24,11 @@ const props = defineProps<{
   vocabulary: PipelineWorkflowVocabulary;
   validation: PipelineValidationResponse | null;
   saving: boolean;
+  /** Server analysis of the draft (wiring, cost, latency); omit to hide those panels. */
+  analysis?: PipelineAnalysis | null;
+  analysisLoading?: boolean;
+  analysisError?: string;
+  strategyLatency?: Record<string, PipelineStrategyLatency> | null;
 }>();
 
 const model = defineModel<PipelineDefinition>({ required: true });
@@ -33,6 +40,7 @@ const emit = defineEmits<{
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
+
 const category = computed(() =>
   props.purpose ? findTerm(props.vocabulary.categories, props.purpose.category) : null,
 );
@@ -97,7 +105,13 @@ const showIssues = computed(
           <span v-if="category" aria-hidden="true"> · </span>
           <span>{{ purposeLabel }}</span>
         </p>
-        <h3 id="pipeline-editor-title">{{ t("pipelines.new_version", "New pipeline version") }}</h3>
+        <h3 id="pipeline-editor-title">
+          {{
+            model.derived_from
+              ? t("pipelines.new_version", "New pipeline version")
+              : t("pipelines.new_pipeline_heading", "New pipeline")
+          }}
+        </h3>
         <p class="editor-subtitle">
           {{ model.name || t("pipelines.unnamed_pipeline", "Unnamed pipeline") }} ·
           <code>{{ model.pipeline_id || "—" }}@{{ model.version }}</code>
@@ -183,6 +197,10 @@ const showIssues = computed(
       :strategies="strategies"
       :purpose="purpose"
       :vocabulary="vocabulary"
+      :analysis="analysis"
+      :analysis-loading="analysisLoading"
+      :analysis-error="analysisError"
+      :strategy-latency="strategyLatency"
     />
 
     <div v-if="showIssues" class="validation-issues" :data-valid="validation!.validation.valid">

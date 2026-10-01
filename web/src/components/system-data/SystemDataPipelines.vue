@@ -22,6 +22,8 @@ import {
   usePipelineStudioData,
 } from "../../features/pipelines/composables/usePipelineStudioData";
 import { pipelinesApi } from "../../api/pipelines";
+import { usePipelineAnalysis } from "../../composables/usePipelineAnalysis";
+import { useStrategyLatency } from "../../composables/useStrategyLatency";
 import { pipelineKey } from "../../domain/pipelinePresentation";
 import { defaultPipelineKey } from "../../domain/pipelineStudioPresentation";
 import { purposeById } from "../../domain/pipelineWorkflows";
@@ -40,7 +42,16 @@ const validation = ref<PipelineValidationResponse | null>(null);
 const saving = ref(false);
 const assigning = ref(false);
 const cloning = ref(false);
+const creating = ref(false);
 const helpOpen = ref(false);
+// The server explains the draft as it is edited: how every input is wired, what each stage
+// costs, and how long it is expected to take from recorded runs.
+const {
+  analysis: draftAnalysis,
+  loading: analysisLoading,
+  error: analysisError,
+} = usePipelineAnalysis(draft);
+const { latency: strategyLatency } = useStrategyLatency();
 
 const {
   section,
@@ -147,6 +158,21 @@ async function beginClone() {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
     cloning.value = false;
+  }
+}
+
+async function beginNew(purposeId: string) {
+  if (creating.value) return;
+  creating.value = true;
+  error.value = "";
+  try {
+    const prepared = await pipelinesApi.newDraft(purposeId);
+    draft.value = prepared.pipeline;
+    validation.value = null;
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    creating.value = false;
   }
 }
 
@@ -374,15 +400,21 @@ const notices = computed<Notice[]>(() => {
         :can-assign="canAssignSelected"
         :assigning="assigning"
         :cloning="cloning"
+        :creating="creating"
         :draft="draft"
         :draft-purpose="purposeFor(draft)"
         :validation="validation"
         :saving="saving"
+        :analysis="draftAnalysis"
+        :analysis-loading="analysisLoading"
+        :analysis-error="analysisError"
+        :strategy-latency="strategyLatency"
         @select="selectPipeline"
         @update:workflow="selectWorkflow"
         @update:filters="setPipelineFilters"
         @update:draft="draft = $event"
         @clone="beginClone"
+        @create="beginNew"
         @assign="assignSelected"
         @reset-assignment="resetSelectedAssignment"
         @cancel="draft = null"
@@ -398,6 +430,7 @@ const notices = computed<Notice[]>(() => {
         :vocabulary="vocabulary"
         :selected-strategy-id="selectedStrategy"
         :filters="strategyFilters"
+        :strategy-latency="strategyLatency"
         @select-strategy="selectStrategy"
         @open-pipeline="selectPipeline"
         @update:filters="setStrategyFilters"

@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from .contracts import with_contract
 from .models import StrategySpec
 
 
@@ -24,7 +25,7 @@ class StrategyRegistry:
     def register(self, spec: StrategySpec) -> None:
         if spec.strategy_id in self._specs:
             raise ValueError(f"Duplicate pipeline strategy: {spec.strategy_id}")
-        self._specs[spec.strategy_id] = spec
+        self._specs[spec.strategy_id] = spec if spec.inputs else with_contract(spec)
 
     def get(self, strategy_id: str) -> StrategySpec | None:
         return self._specs.get(str(strategy_id))

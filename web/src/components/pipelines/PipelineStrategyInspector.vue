@@ -1,7 +1,9 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed } from "vue";
+import PipelineTypeChip from "./PipelineTypeChip.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
+import { formatMs, sampleLabel } from "../../domain/pipelineAnalysisPresentation";
 import {
   pipelineCapabilityLabel,
   pipelineComputationLabel,
@@ -24,6 +26,7 @@ import { useI18nStore } from "../../stores/i18n";
 import type {
   PipelinePurpose,
   PipelineStrategy,
+  PipelineStrategyLatency,
   PipelineWorkflowVocabulary,
 } from "../../types/pipelines";
 
@@ -32,6 +35,8 @@ const props = defineProps<{
   usage: StrategyUsage;
   purposes: PipelinePurpose[];
   vocabulary: PipelineWorkflowVocabulary;
+  /** Observed latency for this strategy, when recent runs exist. */
+  latency?: PipelineStrategyLatency | null;
 }>();
 const emit = defineEmits<{ openPipeline: [key: string] }>();
 
@@ -46,6 +51,23 @@ const categories = computed(() =>
     .map((id) => findTerm(props.vocabulary.categories, id))
     .filter((term) => term !== null),
 );
+function term(list: "cost_drivers" | "complexity_orders", id: string) {
+  const found = findTerm(props.vocabulary[list], id);
+  return found ? termLabel(found, t) : id;
+}
+const ORDER_IDS = [
+  "constant",
+  "sublinear",
+  "linear_in_candidates",
+  "linearithmic",
+  "linear_in_scope",
+  "superlinear",
+  "model_inference",
+  "generation",
+];
+function complexityOrderId(order: number) {
+  return ORDER_IDS[order] ?? "constant";
+}
 const configKeys = computed(() => {
   const properties = (props.strategy.config_schema as { properties?: Record<string, unknown> })
     .properties;
@@ -110,6 +132,100 @@ const configKeys = computed(() => {
               :text="termDescription(effect, t)"
               :label="t('pipelines.explain_scholarly_effect', 'Explain this scholarly effect')"
             />
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section aria-labelledby="strategy-contract-title">
+      <h4 id="strategy-contract-title">
+        {{ t("pipelines.strategy_contract", "Inputs, outputs and cost") }}
+      </h4>
+      <dl>
+        <div>
+          <dt>{{ t("pipelines.ports_inputs", "Inputs") }}</dt>
+          <dd class="port-rows">
+            <span v-for="port in strategy.inputs || []" :key="port.name" class="port-row">
+              <code>{{ port.name }}</code>
+              <PipelineTypeChip :type="port.data_type" />
+              <small>
+                {{
+                  port.required
+                    ? t("pipelines.ports_required", "Required")
+                    : t("pipelines.ports_optional", "Optional")
+                }}
+                <template v-if="port.multiple">
+                  · {{ t("pipelines.ports_merges", "merges several sources") }}
+                </template>
+              </small>
+            </span>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ t("pipelines.ports_outputs", "Outputs") }}</dt>
+          <dd class="port-rows">
+            <span v-for="port in strategy.outputs || []" :key="port.name" class="port-row">
+              <code>{{ port.name }}</code>
+              <PipelineTypeChip :type="port.data_type" />
+            </span>
+          </dd>
+        </div>
+        <template v-if="strategy.complexity">
+          <div>
+            <dt>{{ t("pipelines.complexity_time", "Time") }}</dt>
+            <dd>
+              <code>{{ strategy.complexity.time }}</code>
+              · {{ term("complexity_orders", complexityOrderId(strategy.complexity.order)) }}
+            </dd>
+          </div>
+          <div>
+            <dt>{{ t("pipelines.complexity_space", "Space") }}</dt>
+            <dd>
+              <code>{{ strategy.complexity.space }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ t("pipelines.complexity_driver", "Mostly spent on") }}</dt>
+            <dd>{{ term("cost_drivers", strategy.complexity.driver) }}</dd>
+          </div>
+        </template>
+        <div>
+          <dt>{{ t("pipelines.strategy_observed_latency", "Observed latency") }}</dt>
+          <dd v-if="latency && latency.samples">
+            {{ formatMs(latency.p50_ms, t) }}
+            <small> p90 {{ formatMs(latency.p90_ms, t) }} · {{ sampleLabel(latency, t) }} </small>
+            <small v-if="latency.median_ms_per_input" class="block">
+              {{
+                i18n.tf("pipelines.latency_per_item", "≈ {time} per candidate", {
+                  time: formatMs(latency.median_ms_per_input, t),
+                })
+              }}
+            </small>
+            <small v-if="latency.observed_scaling" class="block">
+              {{
+                i18n.tf(
+                  "pipelines.strategy_observed_scaling",
+                  "Elapsed time grows roughly as n^{exponent} (R² {r2}, {points} runs)",
+                  {
+                    exponent: latency.observed_scaling.exponent,
+                    r2: latency.observed_scaling.r_squared,
+                    points: latency.observed_scaling.points,
+                  },
+                )
+              }}
+            </small>
+            <small
+              v-for="row in latency.by_model"
+              :key="`${row.provider}:${row.model}`"
+              class="block"
+            >
+              {{ row.model || row.provider || "?" }}: {{ formatMs(row.p50_ms, t) }} ({{
+                sampleLabel(row, t)
+              }})
+            </small>
+          </dd>
+          <dd v-else class="empty">
+            {{ t("pipelines.strategy_no_latency", "No recorded runs yet") }}
           </dd>
         </div>
       </dl>
@@ -291,6 +407,20 @@ const configKeys = computed(() => {
 }
 .strategy-technical dl {
   margin-top: var(--space-2);
+}
+.port-rows {
+  display: grid;
+  gap: var(--space-1);
+}
+.port-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.block {
+  display: block;
+  color: var(--text-secondary);
 }
 .sr-only {
   position: absolute;

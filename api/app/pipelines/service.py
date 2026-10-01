@@ -22,6 +22,7 @@ from .models import (
 )
 from .purposes import FAMILY_PHASES, effect_note, purpose_registry
 from .registry import StrategyRegistry, strategy_registry
+from .wiring import ordering_only_edges, resolve_wiring
 
 
 def canonical_pipeline_json(pipeline: PipelineDefinition) -> str:
@@ -103,6 +104,13 @@ class PipelineService:
             strategy_specs[stage.id] = spec
             issues.extend(self._validate_config(stage.id, stage.config, spec.config_schema))
 
+        issues.extend(
+            resolve_wiring(pipeline, self.registry, purpose_registry.get(pipeline.purpose))[
+                "issues"
+            ]
+        )
+
+        ordering_only = ordering_only_edges(pipeline, self.registry)
         incoming: dict[str, set[str]] = defaultdict(set)
         for stage in pipeline.stages:
             fallback_targets = {
@@ -116,6 +124,8 @@ class PipelineService:
                 source_spec = strategy_specs.get(stage.id)
                 target_spec = strategy_specs.get(target)
                 if source_spec is None or target_spec is None:
+                    continue
+                if (stage.id, target) in ordering_only:
                     continue
                 # A fallback edge hands the target the input the failed stage
                 # was given, so either the stage's output or input type fits.
