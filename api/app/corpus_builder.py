@@ -2254,6 +2254,58 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             "current_text_sha256": current_sha256,
         }
 
+    def _semantic_generation(self, build_id: str) -> str:
+        """Cheap identity for every derived semantic projection of one build."""
+        state = self.repo.semantic_projection_state(build_id)
+        material = "|".join(
+            (
+                str(SEMANTIC_PROJECTION_VERSION),
+                str(build_id),
+                str(int(state.get("revision") or 0)),
+                alias_digest(self.repo, build_id),
+                str(SEMANTIC_IDENTITY_VERSION),
+            )
+        )
+        return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+    def _semantic_projection_lock(self, key: str) -> threading.Lock:
+        with self._lock:
+            lock = self._semantic_projection_locks.get(key)
+            if lock is None:
+                lock = threading.Lock()
+                self._semantic_projection_locks[key] = lock
+            return lock
+
+    @staticmethod
+    def _projection_payload(
+        saved: dict[str, Any] | None,
+        generation: str,
+    ) -> dict[str, Any] | None:
+        if (
+            isinstance(saved, dict)
+            and saved.get("status") == "ready"
+            and saved.get("generation") == generation
+            and isinstance(saved.get("payload"), dict)
+        ):
+            return dict(saved["payload"])
+        return None
+
+    def _with_projection_meta(
+        self,
+        payload: dict[str, Any],
+        *,
+        generation: str,
+        source: str,
+    ) -> dict[str, Any]:
+        return {
+            **payload,
+            "projection": {
+                "status": "ready",
+                "generation": generation,
+                "source": source,
+            },
+        }
+
     def _current_semantic_graph(
         self, build_id: str
     ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
