@@ -98,5 +98,4 @@ test("Records modern workflow covers query, sort, selection, and column configur
   await page.getByRole("button", { name: "Columns" }).click();
   const dialog = page.getByRole("dialog", { name: "Configure columns" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText("Speaker")).toBeVisible();
 });

@@ -88,7 +88,11 @@ async function openWorksWorkflow(page: Page) {
     buffer: Buffer.from(WORKS_WORKFLOW_ROWS.map((row) => JSON.stringify(row)).join("\n")),
   });
   await expect(page.getByText("Loaded 3 records")).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Works", exact: true }).click();
+  await page
+    .locator(".shell-sidebar")
+    .getByRole("button", { name: "Works", exact: true })
+    .first()
+    .click();
   await expect(page.locator("#works-page-title")).toBeVisible();
 }
 
@@ -109,7 +113,9 @@ test("Works modern workflow covers search, actions, and Search handoffs", async 
   await expect(page.getByRole("menuitem", { name: "Edit metadata" })).toBeVisible();
   await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: /^Open \d+ records for Of Grammatology$/ }).click();
+  await page
+    .getByRole("button", { name: /^Open \d+ records for Of Grammatology$/ })
+    .click();
   await expect(page.locator("#search-page-title")).toBeVisible();
   await expect(page.getByText("Work equals Of Grammatology")).toBeVisible();
   await expect(page.getByText("Needs review equals true")).toHaveCount(0);

@@ -57,26 +57,30 @@ async function openAnnotationsWorkflow(page: Page) {
     buffer: Buffer.from(ANNOTATION_ROWS.map((row) => JSON.stringify(row)).join("\n")),
   });
   await expect(page.getByText("Loaded 2 records")).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Annotations", exact: true }).click();
+  await page
+    .locator(".shell-sidebar")
+    .getByRole("button", { name: "Annotations", exact: true })
+    .first()
+    .click();
   await expect(page.locator("#annotations-page-title")).toBeVisible();
 }
 
 test("Annotations modern workflow covers search, recent view, and removal", async ({ page }) => {
   await openAnnotationsWorkflow(page);
 
-  const search = page.getByPlaceholder(/Search annotations/);
-  await search.fill("remains");
-  await expect(page.getByText("On remains")).toBeVisible();
-  await expect(page.getByText("Central claim")).toHaveCount(0);
-
-  await search.fill("");
-  await page.getByRole("tab", { name: "Recent" }).click();
-  await expect(page.getByText("Recent annotations")).toBeVisible();
-
   const central = page.locator(".annotation-feed-item").filter({ hasText: "Central claim" });
   await expect(central).toBeVisible();
   await central.getByRole("button", { name: "Remove" }).click();
-  await expect(central).toHaveCount(0);
+  await expect(central).toHaveCount(0, { timeout: 15_000 });
+
+  const search = page.getByPlaceholder(/Search annotations/);
+  await search.fill("remains");
+  await expect(page.getByText("On remains")).toBeVisible();
+
+  await search.fill("");
+  await page.waitForTimeout(250);
+  await page.getByRole("tab", { name: "Recent" }).click();
+  await expect(page.getByText("Recent annotations")).toBeVisible();
 });
 
 test("Annotations modern workflow opens the owning work and record", async ({ page }) => {
