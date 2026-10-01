@@ -43,6 +43,15 @@ function targetSizeForZoom(zoom: number) {
   return Math.max(MIN_SCREEN_TARGET, MIN_SCREEN_TARGET / safeZoom);
 }
 
+function isDecluttered(node: SemanticMapNode, zoom: number) {
+  return (
+    zoom < 0.58 &&
+    node.weight <= 1 &&
+    node.kind !== "record" &&
+    node.id !== props.selectedId
+  );
+}
+
 function densityAdjusted(source: readonly SemanticMapNode[]): SemanticMapNode[] {
   const scale = densityScale[props.density];
   if (scale === 1) return source.map((node) => ({ ...node }));
@@ -247,8 +256,7 @@ defineExpose({ zoomBy, fitView, resetView, centerNode });
             selected: node.id === selectedId,
             related: selectedId && relatedIds.has(node.id) && node.id !== selectedId,
             dimmed: selectedId && !relatedIds.has(node.id),
-            decluttered:
-              zoom < 0.58 && node.weight <= 1 && node.kind !== 'record' && node.id !== selectedId,
+            decluttered: isDecluttered(node, zoom),
           },
         ]"
         :node-id="node.id"
@@ -256,6 +264,7 @@ defineExpose({ zoomBy, fitView, resetView, centerNode });
         :y="frame.origin.y + node.y"
         :zoom="zoom"
         :accessible-label="`${kindLabel(node.kind)}: ${node.label}`"
+        :interactive="!isDecluttered(node, zoom)"
         :style="{ '--semantic-map-target-size': `${targetSizeForZoom(zoom)}px` }"
         @move="moveNodeTo(node.id, $event)"
         @activate="emit('activate', node)"
