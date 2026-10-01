@@ -354,6 +354,20 @@ export interface WorkSemanticMap {
   kind: "work_semantic_map" | string;
   work: string;
   sources: WorkSemanticMapSource[];
+  topology?: {
+    nodes: Array<{
+      id: string;
+      label: string;
+      kind: "concept" | "topic" | "person" | "record";
+      weight: number;
+    }>;
+    edges: Array<{
+      id: string;
+      source: string;
+      target: string;
+      weight: number;
+    }>;
+  };
   summary: {
     records: number;
     mapped_records: number;
