@@ -381,6 +381,8 @@ Every search and Research screen includes a persistent method disclosure showing
 
 The Research panel lists the safe provider profiles selected at export time. Choosing an OpenAI-compatible or Ollama profile configures both generation and, when the publication has a compatible embedding contract, query embedding through that endpoint. **Test connection** verifies browser reachability/model discovery before use. Provider failures never erase locally retrieved evidence; Research can still return the auditable evidence packet when generation is unavailable.
 
+In the reference site, the words you searched for are highlighted in each result snippet and in the Record you open from it. Highlighting follows the keyword matching the site itself uses, whole words compared without regard to case, plus the whole phrase when it appears verbatim, so semantic-only results are highlighted only where the words really occur. When the first match lies beyond the start of a long Record, the snippet is taken from around it. Highlights keep a visible underline and weight as well as colour, so they remain visible in high-contrast and forced-colors modes.
+
 ### Publication architecture
 
 Both export formats use the same immutable publication snapshot. Authoritative published Records remain structurally separate from vectors. Records and vectors are grouped by work and decoded only when an SDK operation needs them, and the SDK yields to the browser between substantial chunks so large publications do not have to be materialized synchronously at startup.
