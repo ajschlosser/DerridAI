@@ -14,6 +14,7 @@ import WorksWorkspaceHeader from "../components/works/WorksWorkspaceHeader.vue";
 import CreateSiteDialog from "../components/works/CreateSiteDialog.vue";
 import { useWorksWorkspace } from "../composables/useWorksWorkspace";
 import UiDialog from "../components/ui/UiDialog.vue";
+import UiButton from "../components/ui/UiButton.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
 import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
