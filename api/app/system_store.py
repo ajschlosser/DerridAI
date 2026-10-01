@@ -219,6 +219,44 @@ class SystemStore:
         with self._lock:
             return self.repository.complete_semantic_memory_dirty(item_ids)
 
+    def put_semantic_map_projection(
+        self,
+        *,
+        scope_type: str,
+        scope_id: str,
+        generation: str,
+        status: str = "ready",
+        payload: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        with self._lock:
+            return self.repository.put_semantic_map_projection(
+                scope_type=scope_type,
+                scope_id=scope_id,
+                generation=generation,
+                status=status,
+                payload=payload,
+                error=error,
+            )
+
+    def get_semantic_map_projection(
+        self, *, scope_type: str, scope_id: str
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            return self.repository.get_semantic_map_projection(
+                scope_type=scope_type,
+                scope_id=scope_id,
+            )
+
+    def delete_semantic_map_projection(
+        self, *, scope_type: str, scope_id: str | None = None
+    ) -> int:
+        with self._lock:
+            return self.repository.delete_semantic_map_projection(
+                scope_type=scope_type,
+                scope_id=scope_id,
+            )
+
     def put_generated_claim(self, payload: dict[str, Any]) -> None:
         with self._lock:
             self.repository.put_generated_claim(payload)
