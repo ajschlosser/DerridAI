@@ -87,23 +87,27 @@ function decodedTextAsset(key) {
 function transformersModuleSpecifier() {
   const onnxSpecifier = moduleSpecifierForSource(decodedTextAsset(ORT_JAVASCRIPT_ASSET_KEY));
   const transformersSource = decodedTextAsset(TRANSFORMERS_ASSET_KEY);
-  const quotedImports = [
-    '"onnxruntime-web/webgpu"',
-    "'onnxruntime-web/webgpu'",
-  ];
+  const expectedImports = ["onnxruntime-web/webgpu", "onnxruntime-common"];
 
   let rewritten = transformersSource;
-  let replacements = 0;
-  for (const quotedImport of quotedImports) {
-    const occurrences = rewritten.split(quotedImport).length - 1;
-    if (occurrences === 0) continue;
-    replacements += occurrences;
-    rewritten = rewritten.split(quotedImport).join(JSON.stringify(onnxSpecifier));
+  const replacedImports = new Set();
+
+  for (const importSpecifier of expectedImports) {
+    for (const quote of ['"', "'"]) {
+      const quotedImport = `${quote}${importSpecifier}${quote}`;
+      const occurrences = rewritten.split(quotedImport).length - 1;
+      if (occurrences === 0) continue;
+      replacedImports.add(importSpecifier);
+      rewritten = rewritten.split(quotedImport).join(JSON.stringify(onnxSpecifier));
+    }
   }
 
-  if (replacements === 0) {
+  const missingImports = expectedImports.filter(
+    (importSpecifier) => !replacedImports.has(importSpecifier),
+  );
+  if (missingImports.length > 0) {
     throw new Error(
-      "Embedded Transformers.js did not contain the expected ONNX Runtime Web import.",
+      `Embedded Transformers.js did not contain the expected ONNX Runtime imports: ${missingImports.join(", ")}.`,
     );
   }
 
