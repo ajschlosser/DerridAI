@@ -1,7 +1,7 @@
 # Works Workspace UX Redesign — Implementation Handoff
 
-**Repository:** `ajschlosser/DerridAI`  
-**Prepared:** 2026-09-30  
+**Repository:** `ajschlosser/DerridAI`\
+**Prepared:** 2026-09-30\
 **Authoritative default branch at handoff:** `master` @ `790d72c7b99e45ada8822b178ef4cf6c0b09ee94`
 
 ## Objective
@@ -181,8 +181,8 @@ Show:
 
 Example copy concept:
 
-> Loaded workspace  
-> 4 source files · 3,218 records  
+> Loaded workspace\
+> 4 source files · 3,218 records\
 > These are the corpus files currently open in this browser workspace.
 
 ### Right: Corpus database
