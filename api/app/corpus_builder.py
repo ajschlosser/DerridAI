@@ -298,6 +298,7 @@ from .record_semantic_map import (
     record_semantic_map,
     semantic_node_neighborhood,
 )
+from .reviewer_context import current_reviewer
 from .run_guidance import find_guidance_matches
 from .semantic_content_graph import (
     _records_digest as _semantic_records_digest,
@@ -2212,6 +2213,12 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 self._semantic_graph_cache.pop(next(iter(self._semantic_graph_cache)))
         return graph, records, analysis
 
+    @staticmethod
+    def _semantic_reviewer_scope() -> str:
+        """Opaque reviewer partition for blind-review-safe derived projections."""
+        reviewer = str(current_reviewer.get() or "system")
+        return hashlib.sha256(reviewer.encode("utf-8")).hexdigest()[:12]
+
     def _semantic_projection_generation(self, build_id: str) -> str:
         """Cheap identity for every input that can change a semantic-map projection."""
         self.repo.get_build(build_id)
@@ -2229,6 +2236,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 f"records:{record_sig[0]}:{record_sig[1]}",
                 f"aliases:{alias_sig[0]}:{alias_sig[1]}",
                 f"analysis:{analysis_sig[0]}:{analysis_sig[1]}",
+                f"reviewer:{self._semantic_reviewer_scope()}",
             )
         )
         return hashlib.sha256(token.encode("utf-8")).hexdigest()[:24]
@@ -2261,7 +2269,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         if cached is not None and cached[0] == generation:
             return cached[1], cached[2]
 
-        projection_key = f"semantic-index:{build_id}"
+        projection_key = f"semantic-index:{build_id}:{self._semantic_reviewer_scope()}"
         persisted = system_store.get_semantic_map_projection(projection_key)
         if (
             persisted
@@ -2352,7 +2360,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
     def record_semantic_map(self, build_id: str, record_id: str) -> dict[str, Any]:
         """Return a persisted Record projection, generating it on first/stale access."""
         generation = self._semantic_projection_generation(build_id)
-        projection_key = f"semantic-record:{build_id}:{record_id}"
+        projection_key = (
+            f"semantic-record:{build_id}:{record_id}:{self._semantic_reviewer_scope()}"
+        )
         persisted = system_store.get_semantic_map_projection(projection_key)
         if (
             persisted
@@ -2391,7 +2401,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         """Return a persisted node neighbourhood from the shared traversal index."""
         generation = self._semantic_projection_generation(build_id)
         node_key = hashlib.sha256(node_id.encode("utf-8")).hexdigest()[:24]
-        projection_key = f"semantic-node:{build_id}:{node_key}"
+        projection_key = (
+            f"semantic-node:{build_id}:{node_key}:{self._semantic_reviewer_scope()}"
+        )
         persisted = system_store.get_semantic_map_projection(projection_key)
         if (
             persisted
@@ -2445,7 +2457,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             json.dumps(material, ensure_ascii=False, sort_keys=True).encode("utf-8")
         ).hexdigest()[:24]
         work_key = hashlib.sha256(work.casefold().encode("utf-8")).hexdigest()[:24]
-        projection_key = f"semantic-work:{work_key}"
+        projection_key = (
+            f"semantic-work:{work_key}:{self._semantic_reviewer_scope()}"
+        )
         persisted = system_store.get_semantic_map_projection(projection_key)
         if (
             persisted
