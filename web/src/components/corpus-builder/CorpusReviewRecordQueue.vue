@@ -108,8 +108,14 @@ function recordSelectionChanged(recordId: string, event: Event) {
   <nav ref="queueRoot" class="records-pane" tabindex="-1" aria-labelledby="pdf-corpus-records-pane">
     <div class="pane-head">
       <b id="pdf-corpus-records-pane">{{ i18n.t("pdf_corpus.review_queue") }}</b>
-      <button type="button" class="link-button queue-toggle" @click="emit('collapse')">
-        {{ i18n.t("pdf_corpus.hide_queue") }}
+      <button
+        type="button"
+        class="link-button queue-toggle"
+        :title="i18n.t('pdf_corpus.hide_queue')"
+        @click="emit('collapse')"
+      >
+        <span aria-hidden="true">«</span>
+        <span class="sr-only">{{ i18n.t("pdf_corpus.hide_queue") }}</span>
       </button>
       <label class="select-visible">
         <input

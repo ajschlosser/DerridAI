@@ -266,6 +266,28 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.emitted("restoreRejected")).toHaveLength(1);
   });
 
+  it("never leaves 'Inspect remaining work' as a dead button: it goes to the first blocker", async () => {
+    const build: any = {
+      ...buildBase,
+      publication_readiness: {
+        ...buildBase.publication_readiness,
+        can_publish: false,
+        next_action: "inspect",
+        blockers: [{ code: "boundary_attention", count: 2 }],
+      },
+    };
+    const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
+    const primary = wrapper.get(".finish-primary button");
+    expect(primary.attributes("disabled")).toBeUndefined();
+    await primary.trigger("click");
+    expect(wrapper.emitted("reviewTopology")).toHaveLength(1);
+    await wrapper.setProps({
+      build: { ...build, publication_readiness: { ...build.publication_readiness, blockers: [] } },
+    });
+    await wrapper.get(".finish-primary button").trigger("click");
+    expect(wrapper.emitted("reviewRecords")).toHaveLength(1);
+  });
+
   it("routes blocker repair actions to the owning review surface", async () => {
     const build: any = {
       ...buildBase,
