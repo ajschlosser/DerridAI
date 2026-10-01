@@ -226,6 +226,26 @@ describe("Corpus Builder focus review interactions", () => {
     wrapper.unmount();
   });
 
+  it("forwards metadata completion so the parent can advance the active queue", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record },
+      global: {
+        stubs: {
+          ...stubs,
+          CorpusMetadataResolutionPanel: {
+            template:
+              "<button data-complete @click=\"$emit('complete')\">Complete metadata</button>",
+          },
+        },
+      },
+    });
+
+    await wrapper.get("[data-complete]").trigger("click");
+
+    expect(wrapper.emitted("metadataComplete")).toHaveLength(1);
+    wrapper.unmount();
+  });
+
   it("forwards Save all suggestions from focus-mode metadata review", async () => {
     const wrapper = mount(CorpusRecordFocusReview, {
       props: { record },

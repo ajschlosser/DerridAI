@@ -1793,7 +1793,7 @@
       "family": "llm",
       "scholarly_effect": "generation",
       "label": "Closed-choice evidence selection",
-      "description": "Ask a chat model to choose only among the current Record's source-unit IDs, then validate the IDs deterministically. It reads every source unit of the Record, not only upstream candidates. In evidence recovery the stage chooses which configured provider answers (by default the primary provider, then the review provider) and how many attempts each gets.",
+      "description": "Ask a chat model to choose only among source-unit IDs from the current Record, then validate the IDs deterministically. Evidence recovery may scope the choice to a bounded upstream shortlist, falling back to the Record's source units when no shortlist exists. The stage also chooses which configured provider answers (by default the primary provider, then the review provider) and how many attempts each gets.",
       "input_type": "any",
       "output_type": "candidate_set",
       "deterministic": false,
@@ -1818,6 +1818,20 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 4,
+            "default": 2
+          },
+          "candidate_scope": {
+            "type": "string",
+            "enum": [
+              "all",
+              "input_or_all"
+            ],
+            "default": "all"
+          },
+          "candidate_limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32,
             "default": 2
           }
         }

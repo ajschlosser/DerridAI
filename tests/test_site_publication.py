@@ -140,6 +140,53 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     assert bundle.record_count == 2
     assert bundle.work_count == 2
 
+
+def test_site_bundle_can_omit_vectors_and_preserve_source_embedding_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        site_publication.store,
+        "export_site_projection",
+        lambda store_name, works: {
+            "store": {
+                "name": store_name,
+                "embedding_provider": "ollama",
+                "embedding_model": "bge-m3:latest",
+                "embedding_dimension": 3,
+                "distance_metric": "cosine",
+                "text_field": "text",
+            },
+            "records": [
+                {"record": _record("r1", "Glas"), "embedding": [0.1, 0.2, 0.3]},
+            ],
+        },
+    )
+
+    bundle = site_publication.build_site_bundle(
+        store_name="derrida-primary",
+        works=["Glas"],
+        title="Browser-indexed Derrida",
+        include_vectors=False,
+    )
+
+    with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
+        package = _package_from_runtime(archive.read("derridai-site.js").decode("utf-8"))
+
+    manifest = package["manifest"]
+    chunk = package["chunks"][0]
+    assert bundle.include_vectors is False
+    assert manifest["features"]["semantic_search"] is False
+    assert manifest["features"]["semantic_record_count"] == 0
+    assert manifest["features"]["publication_vectors_included"] is False
+    assert manifest["vector_index"]["model"] == "bge-m3:latest"
+    assert manifest["vector_index"]["dimension"] is None
+    assert manifest["source_collection"]["embedding_model"] == "bge-m3:latest"
+    assert manifest["source_collection"]["embedding_dimension"] == 3
+    assert _chunk_records(chunk)[0]["record_id"] == "r1"
+    assert chunk["vector_ids"] == []
+    assert chunk["vectors_b64"] == ""
+
+
 def test_site_bundle_exports_only_selected_installed_languages_and_no_provider_profiles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

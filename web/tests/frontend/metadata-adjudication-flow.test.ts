@@ -159,6 +159,29 @@ describe("a field's decision controls", () => {
     wrapper.unmount();
   });
 
+  it("shows a model-proposed absence as a starred no-value state without filling the field", () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "speaker",
+        value: null,
+        control: "text",
+        open: true,
+        status: {
+          status: "unresolved",
+          method: "llm",
+          evaluation_status: "no_supported_value",
+          suggested_absence: true,
+          confidence: 0.92,
+        },
+      },
+    });
+    expect(wrapper.get(".proposal").text()).toContain("★");
+    expect(wrapper.get(".proposal").text()).toContain("No value");
+    expect(wrapper.text()).not.toContain("[not established in source]");
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("");
+    wrapper.unmount();
+  });
+
   it("closes an optional edit on Cancel without saving", async () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
       props: { field: "speaker", value: "Jacques Derrida", control: "text", status: {} },

@@ -39,6 +39,9 @@ class SiteExportRequest(BaseModel):
     record_profile: Literal["complete", "reader"] = "complete"
     # Accepted for older clients. Every export includes Transformers.js; model weights are never packaged.
     include_transformers: bool = True
+    # Copy the active collection's derived vectors into the publication. When false, Records and the source
+    # embedding contract are still published so each browser can build its own local semantic index.
+    include_vectors: bool = True
 
 
 @router.get("/api/sites/export-options")
@@ -104,6 +107,7 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
             locale=body.locale,
             languages=body.languages or [body.locale],
             include_transformers=body.include_transformers,
+            include_vectors=body.include_vectors,
             record_profile=body.record_profile,
         )
     except (KeyError, ValueError) as exc:
@@ -129,5 +133,6 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
             "X-DerridAI-Work-Count": str(bundle.work_count),
             "X-DerridAI-Record-Profile": bundle.record_profile,
             "X-DerridAI-Transformers-Runtime": "included",
+            "X-DerridAI-Publication-Vectors": "included" if body.include_vectors else "omitted",
         },
     )

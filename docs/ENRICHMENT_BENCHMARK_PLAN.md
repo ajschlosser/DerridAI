@@ -27,8 +27,14 @@ A faster run is not considered successful merely because it emits fewer useful p
 Already merged:
 
 - Record-targeted enrichment ownership checks and checkpoints instead of repeated whole-corpus hot-path reads/writes.
-- Direct-support-first cELF evidence recovery as the built-in default.
-- Automatic closed-choice evidence-model fallback disabled unless explicitly enabled.
+- PR #366 made direct-support-first cELF evidence recovery the built-in default and disabled
+  automatic closed-choice evidence-model fallback unless explicitly enabled.
+- The current `fix/evidence-recovery-cascade-v2` follow-up restores richer automatic evidence
+  retrieval through `evidence.recovery.cascade@2`: semantic retrieval, CrossEncoder and MMR
+  build a bounded shortlist but cannot establish evidence; only direct-support validation or
+  closed-choice support adjudication may feed provenance. The final model sees at most four
+  ranked candidates in the normal path and is enabled by default. Legacy cascade v1 and cELF v1
+  remain available for controlled comparison.
 - Lazy precedent-evidence remapping for reviewer inspection.
 - Family-level call latency telemetry.
 - Signal-routed quotation enrichment in both Fast and Deep modes.
@@ -92,6 +98,13 @@ Required quality metrics:
 - human/deterministic assertion overwrite count, which must remain zero.
 
 The benchmark should expose descriptive metrics and acceptance gates; it must not collapse these dimensions into a single opaque “quality score.”
+
+The corrected evidence cascade should be benchmarked as three explicit arms where the fixture
+permits it: `evidence.recovery.cascade@1` (legacy recall behavior),
+`evidence.recovery.celf@1` (latency-oriented direct-support default from PR #366), and
+`evidence.recovery.cascade@2` (support-validated richer retrieval). Record both
+evidence-recovery wall time and useful suggestion coverage; do not infer success from fewer calls
+or fewer suggestions alone.
 
 ## Reproducibility contract
 
@@ -279,6 +292,11 @@ Default project target:
 - Implemented the Phase B immutable enrichment benchmark fixture and compatibility gate; the fixture stores only hashes/identities for source text and bindings and strips provider credentials/endpoints.
 - Implemented Phase C result artifact and declared-tolerance comparison (raw values, deltas, per-gate status, no overall winner).
 - Closed the remaining useful gap from superseded PR #376: built-in metadata prompts now prevent assessment-only values, invocation telemetry includes reported-event coverage plus p50/p95 per-family physical calls, and a regression test proves the Record timing event is emitted only after durable persistence is readable.
+- Added `evidence.recovery.cascade@2` on the evidence-recovery follow-up: CrossEncoder/MMR are
+  ranking-only, deterministic support or bounded closed-choice adjudication is required before
+  provenance, and the model cannot select an ID outside its ranked shortlist. The richer pipeline
+  is the built-in default again, with the model fallback enabled by default. Its latency/coverage
+  effect remains a benchmark question rather than an assumed improvement.
 
 ## Non-goals for this tranche
 

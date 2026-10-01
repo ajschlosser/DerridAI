@@ -759,7 +759,8 @@ def test_enrichment_evidence_is_bound_to_the_recovery_pipeline_identity(tmp_path
     )
     pipeline = out["metadata_evidence"]["mood"]["pipeline"]
     assert pipeline["feature"] == "evidence_recovery"
-    assert pipeline["pipeline_id"] == "evidence.recovery.celf"
+    assert pipeline["pipeline_id"] == "evidence.recovery.cascade"
+    assert pipeline["pipeline_version"] == 2
     assert pipeline["pipeline_hash"] and pipeline["trace_id"]
 
 

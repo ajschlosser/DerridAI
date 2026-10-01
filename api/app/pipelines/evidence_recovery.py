@@ -410,7 +410,15 @@ class _Run:
             {
                 "block_id": row["block_id"],
                 "score": round(float(row["score"]), 4),
-                "semantic_score": round(float(row["score"]), 4),
+                "semantic_score": round(
+                    float(row.get("semantic_score", row["score"])),
+                    4,
+                ),
+                **(
+                    {"cross_encoder_score": round(float(row["cross_encoder_score"]), 4)}
+                    if isinstance(row.get("cross_encoder_score"), (int, float))
+                    else {}
+                ),
                 "mmr_score": round(float(row.get("mmr_score") or 0.0), 4),
             }
             for row in selected
@@ -433,10 +441,35 @@ class _Run:
         reason = None if kept else f"No candidate reached direct-support score {min_score:.2f}."
         return _Outcome("completed", kept, reason, {"parameters": {"min_score": min_score, "validator": METHOD}})
 
-    def _llm(self, config: dict[str, Any], _rows: list[dict[str, Any]]) -> _Outcome:
+    def _llm(self, config: dict[str, Any], rows: list[dict[str, Any]]) -> _Outcome:
         role = str(config.get("provider_role", CLOSED_CHOICE_DEFAULT_ROLE))
         attempts = min(4, max(1, int(config.get("attempts", CLOSED_CHOICE_DEFAULT_ATTEMPTS))))
+        candidate_scope = str(config.get("candidate_scope") or "all")
+        candidate_limit = max(1, int(config.get("candidate_limit", self.plan.selection_limit)))
+        if candidate_scope not in {"all", "input_or_all"}:
+            return _Outcome(
+                "failed",
+                [],
+                f"Unknown closed-choice candidate_scope {candidate_scope!r}.",
+                {"parameters": {"candidate_scope": candidate_scope}},
+            )
+
+        candidate_blocks = self.blocks
+        if candidate_scope == "input_or_all" and rows:
+            by_id = {str(block.get("block_id") or ""): block for block in self.blocks}
+            ranked_ids = [
+                str(row.get("block_id") or "")
+                for row in rows[:candidate_limit]
+                if str(row.get("block_id") or "")
+            ]
+            candidate_blocks = [by_id[block_id] for block_id in ranked_ids if block_id in by_id]
+
         parameters: dict[str, Any] = {"provider_role": role, "attempts": attempts}
+        if "candidate_scope" in config or "candidate_limit" in config:
+            parameters["candidate_scope"] = candidate_scope
+            parameters["candidate_count"] = len(candidate_blocks)
+            if candidate_scope == "input_or_all":
+                parameters["candidate_limit"] = candidate_limit
         if self.escalated:
             parameters["escalated"] = True
         if self.llm_choice is None:
@@ -444,8 +477,41 @@ class _Run:
         if role not in CLOSED_CHOICE_ROLES:
             return _Outcome("failed", [], f"Unknown provider role {role!r}.", {"parameters": parameters})
         try:
-            choice = self.llm_choice(llm_prompt(self.field, self.value, self.blocks), role, attempts, self.escalated)
-            picks = validate_llm_choice(choice.answer, self.blocks, self.value, limit=self.plan.selection_limit)
+            choice = self.llm_choice(
+                llm_prompt(self.field, self.value, candidate_blocks),
+                role,
+                attempts,
+                self.escalated,
+            )
+            picks = validate_llm_choice(
+                choice.answer,
+                candidate_blocks,
+                self.value,
+                limit=self.plan.selection_limit,
+            )
+            if rows:
+                upstream = {
+                    str(row.get("block_id") or ""): row
+                    for row in rows
+                    if str(row.get("block_id") or "")
+                }
+                ranking_keys = (
+                    "semantic_score",
+                    "cross_encoder_score",
+                    "mmr_score",
+                    "support_score",
+                )
+                picks = [
+                    {
+                        **pick,
+                        **{
+                            key: upstream[str(pick.get("block_id") or "")][key]
+                            for key in ranking_keys
+                            if key in upstream.get(str(pick.get("block_id") or ""), {})
+                        },
+                    }
+                    for pick in picks
+                ]
         except LookupError as exc:
             return _Outcome("unavailable", [], str(exc)[:300], {"parameters": parameters})
         except Exception as exc:  # noqa: BLE001 - the graph's fallback edges decide what follows
@@ -591,18 +657,34 @@ def execute_recovery_pipeline(
 
 def _entry(items: list[dict[str, Any]], winner: str) -> dict[str, Any]:
     top = items[0]
+    support_note = (
+        " It also passed deterministic direct-support validation."
+        if isinstance(top.get("support_score"), (int, float))
+        else ""
+    )
     if winner == _LLM:
         reason = f"Suggested by the evidence cascade's model choice ({top.get('reason') or 'no reason given'})."
     elif winner == _RERANK:
-        reason = f"Suggested by the evidence cascade's cross-encoder rerank (top score {top['score']:.3f})."
+        reason = (
+            f"Suggested by the evidence cascade's cross-encoder rerank (top score {top['score']:.3f})."
+            + support_note
+        )
     elif winner == _MMR:
+        semantic_score = float(top.get("semantic_score", top["score"]))
+        cross_encoder_score = top.get("cross_encoder_score")
+        ranking = f"semantic score {semantic_score:.3f}"
+        if isinstance(cross_encoder_score, (int, float)):
+            ranking = f"cross-encoder score {float(cross_encoder_score):.3f}; {ranking}"
         reason = (
             "Suggested by the evidence cascade's maximum marginal relevance "
-            f"selection (top semantic score {top['score']:.3f}; "
-            f"MMR objective {top['mmr_score']:.3f})."
+            f"selection ({ranking}; MMR objective {top['mmr_score']:.3f})."
+            + support_note
         )
     elif winner == _SEMANTIC:
-        reason = f"Suggested by the evidence cascade's semantic similarity (top score {top['score']:.3f})."
+        reason = (
+            f"Suggested by the evidence cascade's semantic similarity (top score {top['score']:.3f})."
+            + support_note
+        )
     else:
         reason = f"Suggested by the evidence cascade's deterministic match ({top.get('reason') or 'direct support'})."
     return advisory_evidence_entry(items, _METHODS[winner], reason)

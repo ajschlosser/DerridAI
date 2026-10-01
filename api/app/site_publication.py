@@ -55,6 +55,7 @@ class SiteBundle:
     record_count: int
     work_count: int
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE
+    include_vectors: bool = True
 
 
 def _slug(value: str) -> str:
@@ -261,6 +262,7 @@ def build_site_bundle(
     languages: Sequence[str] | None = None,
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
     include_transformers: bool = True,
+    include_vectors: bool = True,
     transformers_delivery: str = "inline",
 ) -> SiteBundle:
     """Create an SDK-backed static research site from one immutable publication snapshot.
@@ -328,7 +330,7 @@ def build_site_bundle(
         ids.add(record_id)
         full_records.append(public_record)
 
-        vector = item.get("embedding")
+        vector = item.get("embedding") if include_vectors else None
         if vector is None:
             vectors.append(None)
             continue
@@ -439,6 +441,7 @@ def build_site_bundle(
             "lexical_search": True,
             "semantic_search": semantic_count > 0,
             "semantic_record_count": semantic_count,
+            "publication_vectors_included": semantic_count > 0,
             "local_annotations": True,
             "research": True,
             "shared_state": False,
@@ -502,6 +505,7 @@ def build_site_bundle(
         record_count=len(public_records),
         work_count=len(selected_works),
         record_profile=record_profile,
+        include_vectors=include_vectors,
     )
 
 
@@ -526,6 +530,7 @@ def build_local_site_file(
     languages: Sequence[str] | None = None,
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
     include_transformers: bool = True,
+    include_vectors: bool = True,
 ) -> SiteBundle:
     """Create one self-contained HTML file for direct local use.
 
@@ -542,6 +547,7 @@ def build_local_site_file(
         locale=locale,
         languages=languages,
         record_profile=record_profile,
+        include_vectors=include_vectors,
     )
     files = _core_site_files(core)
     index_html = files["index.html"].decode("utf-8")
@@ -571,6 +577,7 @@ def build_local_site_file(
         record_count=core.record_count,
         work_count=core.work_count,
         record_profile=core.record_profile,
+        include_vectors=core.include_vectors,
     )
 
 
@@ -726,6 +733,7 @@ def build_nginx_site_bundle(
     languages: Sequence[str] | None = None,
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
     include_transformers: bool = True,
+    include_vectors: bool = True,
 ) -> SiteBundle:
     """Create a deployable multi-file site served by exactly one nginx container.
 
@@ -741,6 +749,7 @@ def build_nginx_site_bundle(
         locale=locale,
         languages=languages,
         record_profile=record_profile,
+        include_vectors=include_vectors,
         transformers_delivery="files",
     )
     files = _core_site_files(core)
@@ -772,4 +781,5 @@ def build_nginx_site_bundle(
         record_count=core.record_count,
         work_count=core.work_count,
         record_profile=core.record_profile,
+        include_vectors=core.include_vectors,
     )

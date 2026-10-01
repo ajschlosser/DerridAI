@@ -8,6 +8,7 @@
     "build": "npm run build:sdk && npm run build:sdk:package && vue-tsc --noEmit && vite build",
     "build:browser-embedder": "node scripts/build-browser-embedder.mjs",
     "typecheck": "vue-tsc --noEmit && tsc --noEmit -p sdk/tsconfig.json",
+    "typecheck:app": "vue-tsc --noEmit",
     "preview": "vite preview --host 0.0.0.0",
     "storybook": "storybook dev -p 6006 --host 0.0.0.0",
     "build-storybook": "storybook build",
@@ -35,7 +36,8 @@
     "check:sdk:package": "npm run build:sdk:package && node -e \"import('./sdk/dist/index.js').then((m) => { if (typeof m.createClient !== 'function') process.exit(1); })\" && npm pack ./sdk --dry-run >/dev/null && npm run check:sdk:consumer",
     "check:sdk:consumer": "node scripts/check-sdk-consumer.mjs",
     "build:sdk:check": "npm run build:sdk && git diff --exit-code -- ../api/app/site_assets/derridai-sdk.js",
-    "pack:sdk": "npm run build:sdk:package && npm pack ./sdk"
+    "pack:sdk": "npm run build:sdk:package && npm pack ./sdk",
+    "check:legacy-snapshots": "node scripts/check-legacy-snapshots.mjs"
   },
   "dependencies": {
     "@tanstack/vue-query": "^5.104.0",

@@ -39,6 +39,9 @@ function select(field: string) {
   emit("select", props.selectedField === field ? "" : field);
 }
 function confidencePercent(field: string): number | null {
+  // A score with no bound span is not evidence confidence. Older records can
+  // still contain that shape, so suppress it at the presentation boundary too.
+  if (!spanCount(field)) return null;
   const value = props.evidence?.[field]?.confidence;
   return typeof value === "number" && Number.isFinite(value) ? Math.round(value * 100) : null;
 }

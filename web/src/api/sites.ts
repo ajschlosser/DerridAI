@@ -18,6 +18,8 @@ export interface SiteExportRequest {
   record_profile: SiteRecordProfile;
   /** Every export includes Transformers.js. Kept so older clients still send a value. */
   include_transformers: boolean;
+  /** Copy the current collection vectors into the publication; otherwise browsers build their own index. */
+  include_vectors: boolean;
 }
 
 export interface TransformersDownloadEvent {

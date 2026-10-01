@@ -647,17 +647,30 @@ test("the built-in browser model builds a semantic index in one compatibility-fi
   await mountProviderSite(page, { transformers_runtime: "files" });
 
   await page.getByRole("button", { name: "Models", exact: true }).click();
-  await expect(page.getByLabel("Embedding model")).toHaveValue("Xenova/multilingual-e5-small");
+  await expect(page.getByLabel("Embedding model")).toHaveValue("Xenova/bge-m3");
   await expect(page.getByLabel("Where to run the model")).toHaveValue("wasm");
   await expect(page.locator('[data-index="ready"]')).toContainText(
-    "Published vectors use bge-m3:latest; this browser uses Xenova/multilingual-e5-small",
+    "Published vectors use bge-m3:latest; this browser uses Xenova/bge-m3",
   );
 
-  // No separate provider test or model-download step is required. Building applies the current browser model,
-  // downloads it if needed, embeds the Records, and persists the derived index.
-  await page.getByRole("button", { name: "Download model & build index" }).click();
+  // Search exposes the same complete happy path. The reader does not need to visit Models or run a separate
+  // provider test/download action just because the publication's BGE vectors cannot be mixed with E5.
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByLabel("Search mode")).toHaveValue("semantic");
+  await expect(page.getByRole("button", { name: "Enable semantic search" })).toBeVisible();
+  await page.getByRole("button", { name: "Enable semantic search" }).click();
   await expect(page.locator('[data-index="ready"]')).toContainText("Local index ready: 2 Records");
   await expect(page.locator('[data-index="ready"]')).toContainText("IndexedDB");
+
+  // Semantic is the default once a semantic index is available. Search-term highlighting remains a
+  // keyword-search affordance and is intentionally absent from semantic results.
+  await expect(page.getByLabel("Search mode")).toHaveValue("semantic");
+  await page.locator(".search-row input").fill("hospitality");
+  await page.locator(".search-row button").click();
+  await expect(page.locator(".result .snippet mark")).toHaveCount(0);
+  await page.getByLabel("Search mode").selectOption("keyword");
+  await page.locator(".search-row button").click();
+  await expect(page.locator(".result .snippet mark")).toHaveText(["Hospitality"]);
 
   const pipelineCall = await page.evaluate(
     () =>
@@ -673,10 +686,9 @@ test("the built-in browser model builds a semantic index in one compatibility-fi
   );
   expect(pipelineCall).toMatchObject({
     task: "feature-extraction",
-    model: "Xenova/multilingual-e5-small",
+    model: "Xenova/bge-m3",
     options: {
       device: "wasm",
-      revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
       dtype: "q8",
     },
   });
@@ -695,11 +707,13 @@ test("a different embedding model builds a local IndexedDB index before semantic
   await page.getByLabel("Search mode").selectOption("semantic");
   await page.locator(".search-row input").fill("hospitality");
   await page.locator(".search-row button").click();
-  await expect(page.getByRole("status").filter({ hasText: "needs a local index" })).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "needs a local browser index" }),
+  ).toBeVisible();
   expect(embedRequests).toEqual([]);
 
-  await page.getByRole("button", { name: "Models", exact: true }).click();
-  await page.getByRole("button", { name: "Build local index" }).click();
+  // A remote embedding endpoint gets the same one-click index control directly in Search.
+  await page.getByRole("button", { name: "Enable semantic search" }).click();
   await expect(page.locator('[data-index="ready"]')).toContainText("Local index ready: 2 Records");
   await expect(page.locator('[data-index="ready"]')).toContainText("IndexedDB");
   expect(embedRequests.flat()).toEqual([
@@ -707,8 +721,9 @@ test("a different embedding model builds a local IndexedDB index before semantic
     "Mourning keeps the other within.",
   ]);
 
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.getByLabel("Search mode")).toHaveValue("hybrid");
+  // Building the index re-renders the current Search view. Do not click the Search nav control here:
+  // the view also contains the Search submit button, so an unscoped role lookup would be ambiguous.
+  await expect(page.getByLabel("Search mode")).toHaveValue("semantic");
   await page.getByLabel("Search mode").selectOption("semantic");
   await page.locator(".search-row input").fill("hospitality");
   await page.locator(".search-row button").click();
@@ -741,6 +756,6 @@ test("embeddings run in the browser with WebGPU or WebAssembly", async ({ page }
   const device = page.getByLabel("Where to run the model");
   await expect(device).toContainText("WebGPU");
   await expect(device).toContainText("WebAssembly");
-  await expect(page.getByRole("button", { name: "Download model" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download / test model" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Delete cached model" })).toBeVisible();
 });

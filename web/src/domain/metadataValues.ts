@@ -24,6 +24,7 @@ const NOTHING = new Set([
   "not mentioned",
   "not identified",
   "not identifiable",
+  "not established in source",
   "no value",
   "no author",
   "no speaker",
