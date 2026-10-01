@@ -36,6 +36,13 @@ const densityScale: Record<SemanticMapDensity, number> = {
   wide: 1.25,
 };
 
+const MIN_SCREEN_TARGET = 28;
+
+function targetSizeForZoom(zoom: number) {
+  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return Math.max(MIN_SCREEN_TARGET, MIN_SCREEN_TARGET / safeZoom);
+}
+
 function densityAdjusted(source: readonly SemanticMapNode[]): SemanticMapNode[] {
   const scale = densityScale[props.density];
   if (scale === 1) return source.map((node) => ({ ...node }));
@@ -249,6 +256,7 @@ defineExpose({ zoomBy, fitView, resetView, centerNode });
         :y="frame.origin.y + node.y"
         :zoom="zoom"
         :accessible-label="`${kindLabel(node.kind)}: ${node.label}`"
+        :style="{ '--semantic-map-target-size': `${targetSizeForZoom(zoom)}px` }"
         @move="moveNodeTo(node.id, $event)"
         @activate="emit('activate', node)"
       >
@@ -283,18 +291,29 @@ defineExpose({ zoomBy, fitView, resetView, centerNode });
   opacity: 0.14;
 }
 .semantic-map-node {
-  max-width: 220px;
-  min-height: 28px;
+  width: var(--semantic-map-target-size, 28px);
+  height: var(--semantic-map-target-size, 28px);
+  max-width: none;
+  min-height: 0;
   margin: 0;
   padding: 0;
+  overflow: visible;
   border: 0;
   background: transparent;
   color: var(--text-primary);
   font: inherit;
   font-size: 12px;
   line-height: 1.3;
-  transform: translate(-12px, -14px);
+  transform: translate(-50%, -50%);
   transition: opacity 120ms ease;
+}
+.semantic-map-node :deep(.ui-relation-chip-node) {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max-content;
+  max-width: 220px;
+  transform: translate(-9px, -50%);
 }
 .semantic-map-node:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
