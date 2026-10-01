@@ -299,6 +299,11 @@ from .semantic_identity_registry import (
     registry_for_record,
 )
 from .semantic_identity_store import alias_digest, build_registry, review_registry
+from .language_segmentation import (
+    ends_sentence_text,
+    profile_metadata as language_segmentation_profile,
+    starts_mid_sentence_text,
+)
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
@@ -646,19 +651,26 @@ def metric_stage_of(schema_name: str) -> str:
     )
 
 
-def annotate_boundary_suspects(records: list[dict[str, Any]]) -> int:
-    # Flag likely sentence/paragraph cuts between adjacent records without
-    # automatically rewriting scholarly boundaries on weak heuristics.
+def annotate_boundary_suspects(
+    records: list[dict[str, Any]],
+    language: str | None = None,
+) -> int:
+    """Flag likely sentence/quotation cuts without assuming Latin lowercase rules."""
     count = 0
-    continuation_re = re.compile(r"^(?:[a-zà-öø-ÿ]|[,;:)\]])")
     for left, right in zip(records, records[1:]):
         lt = str(left.get("text") or "").rstrip()
         rt = str(right.get("text") or "").lstrip()
         if not lt or not rt:
             continue
-        incomplete_left = not bool(re.search(r"[.!?…][\"'’”)]?$", lt))
-        continuation_right = bool(continuation_re.search(rt))
-        open_quote = (lt.count('"') % 2 == 1) or (lt.count('“') > lt.count('”'))
+        incomplete_left = not ends_sentence_text(lt, language)
+        continuation_right = starts_mid_sentence_text(rt, language)
+        open_quote = (
+            (lt.count('"') % 2 == 1)
+            or (lt.count("“") > lt.count("”"))
+            or (lt.count("「") > lt.count("」"))
+            or (lt.count("『") > lt.count("』"))
+            or (lt.count("«") > lt.count("»"))
+        )
         if incomplete_left and (continuation_right or open_quote):
             reason = "Possible sentence/quotation continuation across this record boundary."
             for row, edge in ((left, "end"), (right, "start")):
@@ -666,7 +678,10 @@ def annotate_boundary_suspects(records: list[dict[str, Any]]) -> int:
                 flags.append({"code": "boundary_suspect", "edge": edge, "reason": reason})
                 row["boundary_quality_issues"] = flags
                 row["needs_review"] = True
-                if not row.get("review_reason") or str(row.get("review_reason")).lower() == "pending human review.":
+                if (
+                    not row.get("review_reason")
+                    or str(row.get("review_reason")).lower() == "pending human review."
+                ):
                     row["review_reason"] = reason
             count += 1
     return count
@@ -890,9 +905,18 @@ class PdfCorpusRepository:
         origin = _json_read(self.asset_meta_path(origin_id))
         if not isinstance(origin, dict):
             raise KeyError(origin_id)
+        if not resolved.get("language"):
+            initial = origin.get("initial_metadata") if isinstance(origin.get("initial_metadata"), dict) else {}
+            embedded = origin.get("metadata") if isinstance(origin.get("metadata"), dict) else {}
+            source_language = initial.get("language") or embedded.get("language")
+            if source_language not in (None, ""):
+                resolved = {**resolved, "language": str(source_language)}
         size_key = resolved.get("chars", "") if resolved["mode"] != "auto" else f"auto{resolved['max_chars']}"
         per_key = f"|per{resolved['per']}" if resolved.get("per") else ""
-        digest = hashlib.sha256(f"{origin_id}|units|{resolved['mode']}|{size_key}{per_key}".encode()).hexdigest()
+        language_key = f"|lang{resolved['language']}" if resolved.get("language") else ""
+        digest = hashlib.sha256(
+            f"{origin_id}|units|{resolved['mode']}|{size_key}{per_key}{language_key}".encode()
+        ).hexdigest()
         derived_id = f"pdf-{digest[:24]}"
         meta_path = self.asset_meta_path(derived_id)
         with self._lock:
@@ -922,6 +946,10 @@ class PdfCorpusRepository:
                 "created_at": iso_now(),
                 "derived_from_asset_id": origin_id,
                 "unit_policy": resolved,
+                "unit_segmentation": language_segmentation_profile(
+                    str(resolved.get("language") or "") or None,
+                    "\n".join(str(block.get("text") or "") for block in blocks[:8]),
+                ),
                 "pages": pages,
                 "block_count": len(derived_blocks),
                 "included_block_count": len(derived_blocks) - excluded,
@@ -3046,8 +3074,25 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # The build's own ceiling bounds any join: sentence ends are preferred, never at the cost of the record size
         # the build asked for (the profile's generic limit let a small-record build grow records to 10,500 characters).
         ceiling = _record_sizing_policy(request, self._profile_for(build_id))["absolute_record_chars"]
-        boundaries, sentence_report = snap_boundaries_to_sentences(semantic_blocks, boundaries, hard_max_chars=ceiling)
-        self._update(build_id, sentence_boundary_report={key: len(value) for key, value in sentence_report.items()})
+        segmentation_language = str(
+            manifest.get("language")
+            or manifest.get("document_language")
+            or ""
+        ).strip() or None
+        boundaries, sentence_report = snap_boundaries_to_sentences(
+            semantic_blocks,
+            boundaries,
+            hard_max_chars=ceiling,
+            language=segmentation_language,
+        )
+        self._update(
+            build_id,
+            sentence_boundary_report={key: len(value) for key, value in sentence_report.items()},
+            sentence_boundary_language_profile=language_segmentation_profile(
+                segmentation_language,
+                "\n".join(str(block.get("text") or "") for block in semantic_blocks[:8]),
+            ),
+        )
         self.repo.save_checkpoint(build_id, "boundaries", boundaries)
 
         self._update(build_id, stage="constructing_records", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.36))
@@ -3055,7 +3100,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         if not records:
             records = _construct_records(asset, source_blocks, boundaries)
             _mark_segmentation_review(records, list(self.repo.get_build(build_id).get("segmentation_unresolved_regions") or []))
-            boundary_suspect_count = annotate_boundary_suspects(records)
+            boundary_suspect_count = annotate_boundary_suspects(
+                records, segmentation_language
+            )
             if boundary_suspect_count:
                 current_build = self.repo.get_build(build_id)
                 current_build["boundary_suspect_count"] = boundary_suspect_count
