@@ -540,7 +540,6 @@ def build_local_site_file(
     ``include_transformers`` is accepted for older callers and is always treated as true.
     """
     del include_transformers
-    nginx_config, host_gateway = _nginx_config(provider_proxy_upstream)
     core = build_site_bundle(
         store_name=store_name,
         works=works,
@@ -844,6 +843,7 @@ def build_nginx_site_bundle(
     callers and is always treated as true.
     """
     del include_transformers
+    nginx_config, host_gateway = _nginx_config(provider_proxy_upstream)
     core = build_site_bundle(
         store_name=store_name,
         works=works,
