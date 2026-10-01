@@ -9,9 +9,6 @@ on the manager.
 
 from __future__ import annotations
 
-import ast
-import json
-import re
 from typing import Any
 
 import httpx
@@ -19,7 +16,7 @@ from pydantic import ValidationError
 
 from .config import settings
 from .models import OllamaTouchupOptions
-from .rag import _extract_json
+from .structured_json import parse_json_object
 
 
 class StructuredOutputError(ValueError):
@@ -30,10 +27,18 @@ class StructuredOutputError(ValueError):
     route on it).
     """
 
-    def __init__(self, message: str, *, failures: list[str], timed_out: bool = False) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        failures: list[str],
+        timed_out: bool = False,
+        truncated: bool = False,
+    ) -> None:
         super().__init__(message)
         self.failures = failures
         self.timed_out = timed_out
+        self.truncated = truncated
 
 
 _TRANSPORT_MARKERS = (
@@ -109,66 +114,14 @@ def _provider_roles(request: dict[str, Any]) -> dict[str, tuple[str, str]]:
 
 
 def _parse_json_robust(raw: str) -> dict[str, Any]:
-    """Parse model JSON conservatively, repairing only syntax-level defects.
+    """Parse one model JSON object through the shared repair-first policy.
 
-    The repair path never fabricates semantic values.  It handles the common
-    local-model failures seen in long corpus runs: Markdown fences, leading
-    prose, trailing commas and a response truncated after a complete object.
+    Syntax-level defects are repaired locally before the caller spends another
+    model turn. Structurally incomplete or token-limited output raises a
+    StructuredJsonTruncatedError instead of being repaired into apparently
+    complete data.
     """
-    value = str(raw or "").strip()
-    if not value:
-        raise ValueError("LLM returned an empty response.")
-    try:
-        return _extract_json(value)
-    except Exception:  # noqa: S110 — strict first pass; recovery below raises if nothing parses.
-        pass
-    value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.I)
-    value = re.sub(r"\s*```$", "", value)
-    start = value.find("{")
-    if start < 0:
-        raise ValueError("LLM response did not contain a JSON object.")
-    # Find the last balanced object rather than assuming the final character
-    # is a brace; routed/local providers occasionally append diagnostics.
-    depth = 0
-    in_string = False
-    escaped = False
-    end = -1
-    for idx, char in enumerate(value[start:], start=start):
-        if in_string:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == '"':
-                in_string = False
-            continue
-        if char == '"':
-            in_string = True
-        elif char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                end = idx
-                break
-    if end < 0:
-        raise ValueError("LLM JSON object was truncated before its closing brace.")
-    candidate = value[start:end + 1]
-    candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
-    try:
-        parsed = json.loads(candidate)
-    except json.JSONDecodeError as exc:
-        # Some otherwise capable local models occasionally emit a Python-like
-        # object (single quotes / True / False / None) even while JSON mode is
-        # requested. ``literal_eval`` is deliberately limited to literals and
-        # therefore repairs syntax without executing code or inventing values.
-        try:
-            parsed = ast.literal_eval(candidate)
-        except (ValueError, SyntaxError) as literal_exc:
-            raise ValueError(f"LLM returned malformed JSON: {exc.msg} at character {exc.pos}.") from literal_exc
-    if not isinstance(parsed, dict):
-        raise ValueError("LLM response JSON was not an object.")
-    return parsed
+    return parse_json_object(raw)
 
 
 def _stage_limits(request: dict[str, Any]) -> dict[str, int]:
