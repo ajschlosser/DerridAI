@@ -662,7 +662,10 @@ function displayValue(field: string) {
             }
           "
           @save-with-human-source="
-            (value, note) => emit('resolveWithHumanSource', field, value, note)
+            (value, note) => {
+              emit('resolveWithHumanSource', field, value, note);
+              decided(field);
+            }
           "
           @browse-evidence="(value) => emit('browseEvidence', field, value)"
           @dirty="(value) => emit('dirty', value)"
