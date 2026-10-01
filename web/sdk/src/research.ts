@@ -2,7 +2,6 @@
 
 import { formatCitation } from "./citations";
 import { EventBus } from "./events";
-import { isAbortError } from "./errors";
 import { SearchEngine } from "./search";
 import type {
   EvidencePacket,
@@ -156,7 +155,6 @@ export class ResearchEngine {
         warnings,
       };
     } catch (error) {
-      if (isAbortError(error)) throw error;
       warnings.push({
         code: "generation_unavailable",
         message:
