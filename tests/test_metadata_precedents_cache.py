@@ -26,7 +26,7 @@ from app.evidence_suggestions import (  # noqa: E402
     PRECEDENT_SEMANTIC_METHOD,
     record_source_blocks,
 )
-from app.metadata_precedents_cache import CACHE_KEY  # noqa: E402
+from app.metadata_precedents_cache import CACHE_KEY, cached_field  # noqa: E402
 from app.reviewer_context import current_reviewer  # noqa: E402
 
 PRECEDENT_EVIDENCE = "For Levinas, responsibility precedes the freedom of the subject."
@@ -153,6 +153,20 @@ def test_enrichment_keeps_references_only_and_review_reads_them_back(tmp_path, m
     assert item["evidence"] == PRECEDENT_EVIDENCE  # shown as the precedent's evidence, never as this record's
     assert item["candidate_source_units"][0]["block_id"] == "tb2"
     assert all(unit["block_id"] in {"tb1", "tb2"} for unit in item["candidate_source_units"])
+
+
+def test_unscheduled_family_is_not_cached_as_an_empty_precedent_search(tmp_path, monkeypatch):
+    repo, build_id, manager = _install(tmp_path, [_precedent(), _target()])
+    record = _enrich(repo, build_id, manager, monkeypatch)
+
+    # Default Fast routing did not schedule quotation for this ordinary prose
+    # record. An omitted cache entry is important: Record Review must search live
+    # later rather than mistake "not searched" for "searched and found nothing".
+    assert "quoted_speaker" not in record[CACHE_KEY]["fields"]
+    assert cached_field(record, "quoted_speaker") is None
+
+    live = manager.metadata_precedents(build_id, "t", "quoted_speaker")
+    assert live["source"] == "live"
 
 
 def test_a_precedent_changed_after_enrichment_is_reported_stale_not_shown(tmp_path, monkeypatch):
