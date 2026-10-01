@@ -2,10 +2,20 @@
 from __future__ import annotations
 
 import argparse
+import atexit
+import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+_storage_root = Path(tempfile.mkdtemp(prefix="derridai-publication-acceptance-"))
+atexit.register(shutil.rmtree, _storage_root, ignore_errors=True)
+os.environ.setdefault("CHROMA_DATA_ROOT", str(_storage_root))
+os.environ.setdefault("CHROMA_PATH", str(_storage_root / "chroma"))
+os.environ.setdefault("AUTH_DB_PATH", str(_storage_root / ".home" / "derridai-auth.sqlite3"))
+os.environ.setdefault("SYSTEM_DB_PATH", str(_storage_root / ".home" / "derridai-system.sqlite3"))
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import site_publication  # noqa: E402
