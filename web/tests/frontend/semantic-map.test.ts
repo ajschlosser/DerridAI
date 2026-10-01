@@ -1,6 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 import SemanticMapCanvas from "../../src/components/semantic/SemanticMapCanvas.vue";
 import SemanticMapFrame from "../../src/components/semantic/SemanticMapFrame.vue";
@@ -11,9 +11,11 @@ import {
   type SemanticMapSource,
 } from "../../src/domain/semanticMap";
 import { useSemanticMapStore } from "../../src/stores/semanticMap";
+import * as runtime from "../../src/runtime/runtime.js";
 
 vi.mock("../../src/runtime/runtime.js", () => ({
   navigateView: vi.fn(),
+  openSemanticRecord: vi.fn(),
   listSemanticMapSources: vi.fn(() => ({ records: [], focusId: "" })),
 }));
 
@@ -34,6 +36,8 @@ const sources: SemanticMapSource[] = [
   },
 ];
 
+beforeEach(() => vi.clearAllMocks());
+
 describe("semantic map layout", () => {
   it("links terms that occur together and keeps the layout stable", () => {
     const first = buildSemanticMap(sources, "r1");
@@ -49,7 +53,7 @@ describe("semantic map layout", () => {
     );
   });
 
-  it("clusters linked terms while separating disconnected components", () => {
+  it("clusters linked terms while compactly packing disconnected components", () => {
     const graph = buildSemanticMap([
       { id: "a", work: "A", concepts: ["trace", "writing"], topics: [], persons: [] },
       { id: "b", work: "B", concepts: ["trace", "writing"], topics: [], persons: [] },
@@ -62,7 +66,60 @@ describe("semantic map layout", () => {
     expect(distance(point("trace"), point("writing"))).toBeLessThan(
       distance(point("trace"), point("ethics")),
     );
-    expect(distance(point("trace"), point("ethics"))).toBeGreaterThan(100);
+
+    const denseDisconnected = buildSemanticMap(
+      Array.from({ length: 10 }, (_, index) => ({
+        id: `record-${index}`,
+        work: `Work ${index}`,
+        concepts: [`concept-${index}-a`, `concept-${index}-b`],
+        topics: [],
+        persons: [],
+      })),
+    );
+    const xs = denseDisconnected.nodes.map((node) => node.x);
+    const ys = denseDisconnected.nodes.map((node) => node.y);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(1800);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(1400);
+  });
+
+  it("balances per-Record term kinds instead of exhausting the budget on concepts", () => {
+    const graph = buildSemanticMap([
+      {
+        id: "balanced",
+        work: "Balanced",
+        concepts: ["c1", "c2", "c3", "c4", "c5", "c6", "c7"],
+        topics: ["topic-kept"],
+        persons: ["person-kept"],
+      },
+    ]);
+    expect(graph.nodes.map((node) => node.label)).toEqual(
+      expect.arrayContaining(["topic-kept", "person-kept"]),
+    );
+  });
+
+  it("weights repeated co-occurrences and distinguishes duplicate Record labels", () => {
+    const graph = buildSemanticMap([
+      {
+        id: "record-alpha",
+        work: "Shared Work",
+        concepts: ["trace", "writing"],
+        topics: [],
+        persons: [],
+      },
+      {
+        id: "record-beta",
+        work: "Shared Work",
+        concepts: ["trace", "writing"],
+        topics: [],
+        persons: [],
+      },
+    ]);
+    const cooccurrence = graph.edges.find(
+      (edge) => edge.source.includes("trace") && edge.target.includes("writing"),
+    );
+    expect(cooccurrence?.weight).toBe(2);
+    const records = graph.nodes.filter((node) => node.kind === "record");
+    expect(new Set(records.map((node) => node.label)).size).toBe(2);
   });
 
   it("pans the map by the pointer delta and moves a term independently of that pan", () => {
@@ -123,23 +180,28 @@ describe("SemanticMapCanvas", () => {
     expect(surface.attributes("style")).toContain("height: 252px");
   });
 
-  it("offers spacing modes and expands the map canvas in wide mode", async () => {
+  it("changes spacing within clusters without multiplying the whole map by the old wide factor", async () => {
     const graph = buildSemanticMap(sources, "r1");
     const wrapper = mount(SemanticMapCanvas, { props: { graph } });
     await flushPromises();
-    const compactWidth = wrapper.get("[data-semantic-map-layer]").attributes("style");
+
+    const width = () => {
+      const style = wrapper.get("[data-semantic-map-layer]").attributes("style") || "";
+      return Number(style.match(/width:\s*([\d.]+)px/)?.[1]);
+    };
+    const compactWidth = width();
 
     await wrapper.setProps({ density: "wide" });
-    expect(wrapper.find(".semantic-map-canvas").exists()).toBe(true);
-    expect(wrapper.get("[data-semantic-map-layer]").attributes("style")).not.toBe(compactWidth);
-    expect(wrapper.get("[data-semantic-map-layer]").attributes("style")).toContain(
-      "width: 1747.2px",
-    );
+    await flushPromises();
+    const wideWidth = width();
+
+    expect(wideWidth).toBeGreaterThanOrEqual(compactWidth);
+    expect(wideWidth).toBeLessThan(compactWidth * 1.4);
   });
 });
 
 describe("SemanticMapFrame", () => {
-  it("offers the four placements", async () => {
+  it("keeps placement and density controls in the View menu", async () => {
     const map = useSemanticMapStore();
     map.enable("record");
     const router = createRouter({
@@ -156,6 +218,50 @@ describe("SemanticMapFrame", () => {
     expect(wrapper.get("[role='radiogroup']").attributes("aria-label")).toBe(
       "Where to show the map",
     );
-    expect(wrapper.get(".ui-relation-density-controls").text()).toContain("Wide spacing");
+    expect(wrapper.get(".semantic-map-view-menu").text()).toContain("Wide spacing");
+  });
+
+  it("selects a Record for inspection before navigating to it", async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/", name: "record", component: { template: "<div/>" } }],
+    });
+    await router.push("/");
+    const wrapper = mount(SemanticMapFrame, {
+      props: { variant: "page", sources, focusId: "r1", showClose: false },
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-relation-node-id="record:r1"]').trigger("click");
+    expect(wrapper.find(".semantic-map-inspector").exists()).toBe(true);
+    expect(runtime.openSemanticRecord).not.toHaveBeenCalled();
+
+    await wrapper.get(".semantic-map-open-record").trigger("click");
+    expect(runtime.openSemanticRecord).toHaveBeenCalledWith("r1");
+  });
+
+  it("filters by node kind and can focus the selected neighborhood", async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/", name: "record", component: { template: "<div/>" } }],
+    });
+    await router.push("/");
+    const wrapper = mount(SemanticMapFrame, {
+      props: { variant: "page", sources, focusId: "r1", showClose: false },
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    const personFilter = wrapper
+      .findAll(".semantic-map-kind-filters button")
+      .find((button) => button.text().includes("person"));
+    expect(personFilter).toBeTruthy();
+    await personFilter!.trigger("click");
+    expect(wrapper.find('[data-relation-node-id="person:rousseau"]').exists()).toBe(false);
+
+    await wrapper.get('[data-relation-node-id="record:r1"]').trigger("click");
+    await wrapper.get(".semantic-map-focus-action").trigger("click");
+    expect(wrapper.text()).toContain("Show all");
   });
 });
