@@ -1077,7 +1077,7 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     ),
     PipelineAssignment(
         feature="evidence_recovery",
-        pipeline_id="evidence.recovery.cascade",
+        pipeline_id="evidence.recovery.celf",
         pipeline_version=1,
         source="built_in",
         override_allowed=True,
