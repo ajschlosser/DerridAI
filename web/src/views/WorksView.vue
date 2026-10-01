@@ -7,6 +7,7 @@ import { useShellStore } from "../stores/shell";
 import AppIcon from "../components/AppIcon.vue";
 import WorksOverviewCard from "../components/works/WorksOverviewCard.vue";
 import WorksLibraryCard from "../components/works/WorksLibraryCard.vue";
+import WorksLibraryList from "../components/works/WorksLibraryList.vue";
 import WorksCorpusContext from "../components/works/WorksCorpusContext.vue";
 import WorksLibraryToolbar from "../components/works/WorksLibraryToolbar.vue";
 import WorksWorkspaceHeader from "../components/works/WorksWorkspaceHeader.vue";
@@ -392,7 +393,7 @@ onBeforeUnmount(() => {
         <section
           id="worksGrid"
           class="works-library"
-          :class="{ compact: snapshot.viewMode === 'compact' }"
+          :class="{ list: snapshot.viewMode === 'list' }"
           :aria-label="i18n.t('nav.works')"
         >
           <UiLoadingState
@@ -405,31 +406,55 @@ onBeforeUnmount(() => {
             variant="skeleton"
             :skeleton-count="Math.min(4, snapshot.works.length)"
           />
-          <WorksLibraryCard
-            v-for="work in visibleWorks"
-            :key="work.work"
-            :work="work"
+          <WorksLibraryList
+            v-if="snapshot.viewMode === 'list'"
+            :works="visibleWorks"
             :mode="snapshot.mode"
-            :compact="snapshot.viewMode === 'compact'"
-            :selected="snapshot.selectedWork === work.work"
+            :selected-work="snapshot.selectedWork"
             :can-sync="snapshot.capabilities.canSync"
             :sync-disabled-reason="snapshot.dbUnavailableReason"
-            @select="selectWork(work.work)"
-            @sync="works.syncWork(work.work)"
-            @populate="works.populateWork(work.work)"
-            @edit="works.editMetadata(work.work)"
-            @review="works.reviewFlagged(work.work)"
-            @improve="works.autoImprove(work.work)"
-            @remove="works.removeWork(work.work)"
+            @select="selectWork"
+            @sync="works.syncWork"
+            @populate="works.populateWork"
+            @edit="works.editMetadata"
+            @review="works.reviewFlagged"
+            @improve="works.autoImprove"
+            @remove="works.removeWork"
             @records="
-              snapshot.mode === 'admin'
-                ? works.searchRecords(work.work)
-                : works.browseResearcher(work.work)
+              (work) =>
+                snapshot.mode === 'admin'
+                  ? works.searchRecords(work)
+                  : works.browseResearcher(work)
             "
-            @flagged="works.searchRecords(work.work, true)"
-            @inspect="works.inspectMixed(work.work, $event)"
-            @semantic-map="openWorkSemanticMap(work.work)"
+            @flagged="(work) => works.searchRecords(work, true)"
+            @semantic-map="openWorkSemanticMap"
           />
+          <template v-else>
+            <WorksLibraryCard
+              v-for="work in visibleWorks"
+              :key="work.work"
+              :work="work"
+              :mode="snapshot.mode"
+              :selected="snapshot.selectedWork === work.work"
+              :can-sync="snapshot.capabilities.canSync"
+              :sync-disabled-reason="snapshot.dbUnavailableReason"
+              @select="selectWork(work.work)"
+              @sync="works.syncWork(work.work)"
+              @populate="works.populateWork(work.work)"
+              @edit="works.editMetadata(work.work)"
+              @review="works.reviewFlagged(work.work)"
+              @improve="works.autoImprove(work.work)"
+              @remove="works.removeWork(work.work)"
+              @records="
+                snapshot.mode === 'admin'
+                  ? works.searchRecords(work.work)
+                  : works.browseResearcher(work.work)
+              "
+              @flagged="works.searchRecords(work.work, true)"
+              @inspect="works.inspectMixed(work.work, $event)"
+              @semantic-map="openWorkSemanticMap(work.work)"
+            />
+          </template>
           <p v-if="!snapshot.works.length" class="works-empty">
             {{
               snapshot.totalWorks
@@ -640,9 +665,9 @@ onBeforeUnmount(() => {
   align-content: start;
   min-width: 0;
 }
-.works-library.compact {
+.works-library.list {
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2);
+  gap: 0;
 }
 .works-empty {
   grid-column: 1 / -1;
