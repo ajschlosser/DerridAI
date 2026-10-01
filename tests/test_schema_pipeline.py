@@ -294,6 +294,92 @@ def test_enrich_record_promotes_direct_ner_candidates_before_indexing_generation
     assert set(metadata_model.model_fields) == {"topics", "concepts"}
 
 
+def test_scoped_indexing_reconciliation_preserves_preexisting_nlp_candidates(tmp_path):
+    m, bid = manager(tmp_path)
+    schema = m._schema_for(bid)
+    text = "Rousseau discusses Of Grammatology and hospitality."
+    record = {
+        "record_id": "nlp-reconcile",
+        "record_revision": 1,
+        "text": text,
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+        "nlp_candidates": {
+            "status": "ok",
+            "engine": "spacy",
+            "engine_version": "3.8.7",
+            "model": "en_core_web_lg",
+            "text_sha256": text_digest(text),
+            "fields": {
+                "persons": [{
+                    "start": 0,
+                    "end": 8,
+                    "text": "Rousseau",
+                    "source": "ner",
+                    "tag": "PERSON",
+                }],
+                "works_referenced": [{
+                    "start": 19,
+                    "end": 34,
+                    "text": "Of Grammatology",
+                    "source": "ner",
+                    "tag": "WORK_OF_ART",
+                }],
+            },
+        },
+    }
+    from app.metadata_candidates import apply_indexing_nlp_candidates
+
+    apply_indexing_nlp_candidates(record, schema)
+    persons_before = current_assertion_by_name(record, "persons")
+    works_before = current_assertion_by_name(record, "works_referenced")
+    record["metadata_stage_status"] = {"indexing": "complete"}
+    record["metadata_execution_ledger"] = {"indexing": {"state": "complete"}}
+
+    out = m._reconcile_metadata_results(
+        record,
+        m._profile_for(bid),
+        ["b1"],
+        [(
+            "indexing",
+            {
+                "metadata": {
+                    "topics": ["hospitality"],
+                    "concepts": ["hospitality"],
+                },
+                "field_assessments": {
+                    "topics": {
+                        "confidence": 0.9,
+                        "needs_review": False,
+                        "reason": "Explicit subject matter.",
+                        "outcome": "supported_value",
+                    },
+                    "concepts": {
+                        "confidence": 0.85,
+                        "needs_review": False,
+                        "reason": "Explicit concept.",
+                        "outcome": "supported_value",
+                    },
+                },
+                "field_evidence": {},
+                "review_reason": "",
+            },
+            None,
+        )],
+        False,
+        request={"provider": "ollama", "model": "test"},
+        build_id=bid,
+        schema=schema,
+    )
+
+    assert out["persons"] == ["Rousseau"]
+    assert out["works_referenced"] == ["Of Grammatology"]
+    assert current_assertion_by_name(out, "persons").assertion_id == persons_before.assertion_id
+    assert current_assertion_by_name(out, "works_referenced").assertion_id == works_before.assertion_id
+    assert out["topics"] == ["hospitality"]
+    assert out["concepts"] == ["hospitality"]
+
+
 def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path):
     m, bid = manager(tmp_path)
     schema = m._schema_for(bid)
