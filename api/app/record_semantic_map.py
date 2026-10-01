@@ -78,7 +78,7 @@ def _node_ref(node: dict[str, Any]) -> dict[str, Any]:
     return {"id": node["id"], "label": node.get("label") or "", "type": node.get("type") or ""}
 
 
-class _SemanticIndex:
+class SemanticMapIndex:
     """The build graph plus Record term occurrences, indexed for traversal."""
 
     def __init__(self, graph: dict[str, Any], records: list[dict[str, Any]]) -> None:
@@ -96,12 +96,45 @@ class _SemanticIndex:
                 }
         self.edges = [edge for edge in graph.get("edges") or [] if isinstance(edge, dict)]
         self.edges_by_node: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+        self.edges_by_record: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
         for edge in self.edges:
             self.edges_by_node[str(edge.get("source") or "")].append(edge)
             self.edges_by_node[str(edge.get("target") or "")].append(edge)
+            for record_id in edge.get("record_ids") or []:
+                record_id = str(record_id or "")
+                if record_id in self.record_order:
+                    self.edges_by_record[record_id].append(edge)
         self.term_mentions: dict[str, list[dict[str, Any]]] = {}
         self.term_state: dict[str, str] = {}
         self._fold_in_terms()
+
+        # Materialize the inverted indexes once. Record navigation used to rebuild
+        # these memberships by scanning every node/edge on every map request.
+        self.records_by_node: dict[str, list[str]] = {}
+        self.nodes_by_record: defaultdict[str, set[str]] = defaultdict(set)
+        for node_id, node in self.nodes.items():
+            found = {
+                str(record_id)
+                for record_id in node.get("record_ids") or []
+                if str(record_id) in self.record_order
+            }
+            for edge in self.edges_by_node.get(node_id, []):
+                found.update(
+                    str(record_id)
+                    for record_id in edge.get("record_ids") or []
+                    if str(record_id) in self.record_order
+                )
+            ordered = sorted(found, key=lambda value: self.record_order[value])
+            self.records_by_node[node_id] = ordered
+            for record_id in node.get("record_ids") or []:
+                record_id = str(record_id or "")
+                if record_id in self.record_order:
+                    self.nodes_by_record[record_id].add(node_id)
+        for record_id, edges in self.edges_by_record.items():
+            for edge in edges:
+                self.nodes_by_record[record_id].update(
+                    {str(edge.get("source") or ""), str(edge.get("target") or "")}
+                )
 
     def _fold_in_terms(self) -> None:
         # Graph nodes are ordered by mention count, so an ambiguous label resolves to
@@ -190,13 +223,7 @@ class _SemanticIndex:
 
     def _records_for_node(self, node_id: str) -> list[str]:
         """Every Record in which the node occurs or takes part in a relation."""
-        found = set(self.nodes[node_id].get("record_ids") or [])
-        for edge in self.edges_by_node.get(node_id, []):
-            found.update(str(value) for value in edge.get("record_ids") or [] if value)
-        return sorted(
-            (value for value in found if value in self.record_order),
-            key=lambda value: self.record_order[value],
-        )
+        return self.records_by_node.get(node_id, [])
 
     def _idf(self, document_frequency: int) -> float:
         total = max(1, len(self.record_order))
@@ -270,12 +297,8 @@ class _SemanticIndex:
             key=lambda item: (item["start"], -item["end"], item["layer"]),
         )
 
-        record_edges = [edge for edge in self.edges if record_id in (edge.get("record_ids") or [])]
-        local_ids: set[str] = {
-            node_id for node_id, node in self.nodes.items() if record_id in node["record_ids"]
-        }
-        for edge in record_edges:
-            local_ids.update({str(edge["source"]), str(edge["target"])})
+        record_edges = self.edges_by_record.get(record_id, [])
+        local_ids: set[str] = set(self.nodes_by_record.get(record_id, ()))
         local_ids.update(item["node_id"] for item in mentions if item.get("node_id"))
         local_ids &= set(self.nodes)
 
@@ -448,7 +471,7 @@ def record_semantic_map(
     analysis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Bounded semantic map centred on one Record; raises KeyError for an unknown Record."""
-    return _SemanticIndex(graph, records).record_map(record_id, analysis if isinstance(analysis, dict) else {})
+    return SemanticMapIndex(graph, records).record_map(record_id, analysis if isinstance(analysis, dict) else {})
 
 
 def semantic_node_neighborhood(
@@ -457,4 +480,4 @@ def semantic_node_neighborhood(
     node_id: str,
 ) -> dict[str, Any]:
     """One node, its adjacent relations, and the Records it occurs in; KeyError if unknown."""
-    return _SemanticIndex(graph, records).node_neighborhood(node_id)
+    return SemanticMapIndex(graph, records).node_neighborhood(node_id)
