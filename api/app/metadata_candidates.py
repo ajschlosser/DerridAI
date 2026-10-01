@@ -36,6 +36,22 @@ MAX_DIRECT_NER_VALUES: dict[str, int] = {
 }
 
 
+def is_direct_nlp_indexing_candidate(assertion: Any) -> bool:
+    """Whether one NLP assertion was produced by this narrow resolver policy."""
+    if assertion is None or getattr(assertion, "derivation_method", None) != "derridai:nlp":
+        return False
+    metadata = getattr(assertion, "legacy_metadata", None)
+    metadata = metadata if isinstance(metadata, dict) else {}
+    semantic_id = str(metadata.get("semantic_compatibility_id") or "")
+    return bool(
+        getattr(assertion, "evaluation_status", None) == "value_supported"
+        and getattr(assertion, "authority_status", None) == "unreviewed"
+        and metadata.get("candidate_only") is True
+        and metadata.get("reason_code") == "direct_ner_indexing_candidate"
+        and semantic_id in DIRECT_NER_INDEXING_SEMANTICS
+    )
+
+
 def _available_for_candidate(record: dict[str, Any], field_name: str) -> bool:
     """Do not replace any selected present value or human-owned assertion."""
     current = current_assertion_by_name(record, field_name)
@@ -63,7 +79,7 @@ def apply_indexing_nlp_candidates(record: dict[str, Any], schema: Any) -> dict[s
         if field.type == "list" and semantic_id in DIRECT_NER_INDEXING_SEMANTICS:
             eligible_fields.append(field)
     if not eligible_fields:
-        return {"resolved_fields": [], "values": {}}
+        return {"resolved_fields": [], "deferred_fields": {}, "values": {}}
 
     structured = current_field_candidates(
         record,
