@@ -161,13 +161,32 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - run: npm run format:repo:check
+      - name: Check changed Prettier-managed files
+        working-directory: .
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || [ -z "$BASE_SHA" ] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            cd web
+            npm run format:repo:check
+            exit 0
+          fi
+
+          git diff --name-only -z "$BASE_SHA" "$HEAD_SHA" -- \
+            '*.md' '*.json' '*.yml' '*.yaml' '*.js' '*.mjs' '*.cjs' \
+            '*.ts' '*.tsx' '*.vue' '*.css' '*.scss' '*.html' \
+            | xargs -0 --no-run-if-empty ./web/node_modules/.bin/prettier \
+              --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
 
   backend-lint:
     needs: changes
@@ -276,10 +295,32 @@ jobs:
         run: npm run typecheck:app
       - name: Typecheck tests and test configuration
         run: npm run typecheck:tests
-      - name: Unit/component tests
-        run: npm run test:unit
       - name: Guard legacy snapshot ownership
         run: npm run check:legacy-snapshots
+
+  frontend-unit:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    name: frontend-unit (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/2", "2/2"]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Unit/component tests
+        run: npm run test:unit -- --shard=${{ matrix.shard }}
 
   frontend-build:
     needs: changes
@@ -486,6 +527,7 @@ jobs:
       - api-contract
       - frontend-lint
       - frontend-static
+      - frontend-unit
       - frontend-build
       - frontend-legacy
       - frontend-e2e
@@ -502,6 +544,7 @@ jobs:
           CONTRACT_RESULT: ${{ needs.api-contract.result }}
           LINT_RESULT: ${{ needs.frontend-lint.result }}
           STATIC_RESULT: ${{ needs.frontend-static.result }}
+          UNIT_RESULT: ${{ needs.frontend-unit.result }}
           BUILD_RESULT: ${{ needs.frontend-build.result }}
           LEGACY_RESULT: ${{ needs.frontend-legacy.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
@@ -529,7 +572,7 @@ jobs:
             exit 0
           fi
 
-          for result in "$LINT_RESULT" "$STATIC_RESULT" "$BUILD_RESULT" "$LEGACY_RESULT" "$E2E_RESULT" "$A11Y_RESULT"; do
+          for result in "$LINT_RESULT" "$STATIC_RESULT" "$UNIT_RESULT" "$BUILD_RESULT" "$LEGACY_RESULT" "$E2E_RESULT" "$A11Y_RESULT"; do
             if [ "$result" != "success" ]; then
               echo "A frontend quality gate did not succeed: $result"
               exit 1
