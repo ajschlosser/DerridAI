@@ -85,11 +85,7 @@ function onMenu(id: string) {
 </script>
 
 <template>
-  <article
-    class="works-card"
-    :class="{ selected: props.selected }"
-    :data-work="props.work.work"
-  >
+  <article class="works-card" :class="{ selected: props.selected }" :data-work="props.work.work">
     <button
       type="button"
       class="works-card-select"
