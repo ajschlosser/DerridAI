@@ -28,7 +28,7 @@ def test_parse_json_object_repairs_malformed_complete_json():
 
 
 def test_parse_json_object_extracts_complete_object_from_wrapped_response():
-    raw = 'Model preface\n\x60\x60\x60json\n{"answer": 1}\n\x60\x60\x60\nprovider diagnostic'
+    raw = 'Model preface\n```json\n{"answer": 1}\n```\nprovider diagnostic'
     assert sj.parse_json_object(raw) == {"answer": 1}
 
 
@@ -63,6 +63,7 @@ def test_parse_json_object_honours_provider_output_limit_before_repair(monkeypat
 
     assert called is False
     assert error.value.finish_reason == "length"
+    assert sj.finish_reason_is_truncated("max_new_tokens") is True
 
 
 def test_parse_json_object_rejects_non_object_garbage_as_malformed():
