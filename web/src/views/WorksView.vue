@@ -20,7 +20,12 @@ import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
 import type { WorksFilters, WorksSort, WorksViewMode } from "../types/works";
 import type { SemanticMapSource } from "../domain/semanticMap";
 import { corpusBuildsApi } from "../api/corpus";
-import { sitesApi, type SiteExportFormat, type SiteExportOptions } from "../api/sites";
+import {
+  sitesApi,
+  type SiteExportFormat,
+  type SiteExportOptions,
+  type SiteRecordProfile,
+} from "../api/sites";
 
 const auth = useAuthStore();
 const i18n = useI18nStore();
@@ -64,6 +69,7 @@ async function createSite(payload: {
   description: string;
   works: string[];
   export_format: SiteExportFormat;
+  record_profile: SiteRecordProfile;
   languages: string[];
   provider_profile_ids: string[];
 }) {
@@ -82,6 +88,7 @@ async function createSite(payload: {
       languages: payload.languages,
       provider_profile_ids: payload.provider_profile_ids,
       export_format: payload.export_format,
+      record_profile: payload.record_profile,
     });
     const url = URL.createObjectURL(download.blob);
     const link = document.createElement("a");
