@@ -464,14 +464,12 @@ class _Run:
             ]
             candidate_blocks = [by_id[block_id] for block_id in ranked_ids if block_id in by_id]
 
-        parameters: dict[str, Any] = {
-            "provider_role": role,
-            "attempts": attempts,
-            "candidate_scope": candidate_scope,
-            "candidate_count": len(candidate_blocks),
-        }
-        if candidate_scope == "input_or_all":
-            parameters["candidate_limit"] = candidate_limit
+        parameters: dict[str, Any] = {"provider_role": role, "attempts": attempts}
+        if "candidate_scope" in config or "candidate_limit" in config:
+            parameters["candidate_scope"] = candidate_scope
+            parameters["candidate_count"] = len(candidate_blocks)
+            if candidate_scope == "input_or_all":
+                parameters["candidate_limit"] = candidate_limit
         if self.escalated:
             parameters["escalated"] = True
         if self.llm_choice is None:
