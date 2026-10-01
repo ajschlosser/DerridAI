@@ -422,5 +422,5 @@ export function moveNode(point: MapPoint, delta: MapPoint, scale: number): MapPo
 
 export function clampScale(scale: number): number {
   if (!Number.isFinite(scale)) return 1;
-  return Math.min(2.6, Math.max(0.22, scale));
+  return Math.min(2.6, Math.max(0.35, scale));
 }
