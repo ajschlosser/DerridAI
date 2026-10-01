@@ -602,7 +602,16 @@ def build_group_prompt(
             definitions.append((field.definitions_heading or f"{field.name} values", described))
     lines += [f"- {note}" for note in group.notes]
 
-    parts = [group.intro.rstrip()]
+    scoped_names = ([*CORE_FIELDS] if group_key == CORE_GROUP else []) + [field.name for field in fields]
+    intro = group.intro.rstrip().replace("{fields}", _oxford(scoped_names))
+    parts = [intro]
+    if field_names is not None:
+        parts.append(
+            "THIS MODEL CALL IS FIELD-SCOPED. Return metadata and assessments only for: "
+            + _oxford(scoped_names)
+            + ". Other fields in this metadata family are already resolved by a higher-priority "
+            "candidate or are outside this call's contract."
+        )
     if lines:
         parts.append((group.fields_heading.rstrip() + "\n" if group.fields_heading else "") + "\n".join(lines))
     for heading, mapping in definitions:
@@ -943,7 +952,7 @@ _QUOTATION_FOOTER = (
 )
 _INDEXING_INTRO = (
     "Infer ONLY conservative semantic indexing metadata for one immutable DerridAI record.\n"
-    "Return topics, concepts, persons, and works_referenced that are materially present in this record. Do not infer discourse attribution, "
+    "Return {fields} when materially present in this record. Do not infer discourse attribution, "
     "quotation ownership, bibliography, summaries, or source text. Prefer a short precise list to speculative coverage; emit brief noun phrases "
     "or proper names, not full sentences or explanatory clauses. Example: concepts=[\"cities of refuge\"] is acceptable; concepts=[\"The concept "
     "and practice of 'cities of refuge' as a form of cosmopolitics distinct from state sovereignty.\"] is not."
