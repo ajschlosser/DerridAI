@@ -630,9 +630,11 @@ def _best_safety_boundary(
         structural = 0.0
         if str(right.get("type") or "body").casefold() in heading_types:
             structural += 1.0
-        if looks_like_speaker_start(str(right.get("text") or ""), language):
+        right_language = _block_language(right, language)
+        left_language = _block_language(left, language)
+        if looks_like_speaker_start(str(right.get("text") or ""), right_language):
             structural += 0.8
-        if ends_sentence_text(str(left.get("text") or "").strip(), language):
+        if ends_sentence_text(str(left.get("text") or "").strip(), left_language):
             structural += 0.25
         if ends_quote(str(left.get("text") or "").strip()):
             structural += 0.15
