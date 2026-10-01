@@ -105,6 +105,42 @@ def test_safe_direct_ner_indexing_candidates_become_unreviewed_assertions():
     assert persons.legacy_metadata["reason_code"] == "direct_ner_indexing_candidate"
 
 
+def test_crowded_direct_ner_set_is_deferred_to_semantic_indexing():
+    text = "Alice Bob Carol David Eve."
+    names = ["Alice", "Bob", "Carol", "David", "Eve"]
+    record = {
+        "record_id": "crowded",
+        "record_revision": 1,
+        "text": text,
+        "metadata_field_status": {},
+        "nlp_candidates": {
+            "status": "ok",
+            "engine": "spacy",
+            "engine_version": "3.8.7",
+            "model": "en_core_web_lg",
+            "text_sha256": text_digest(text),
+            "fields": {
+                "persons": [
+                    {
+                        "start": text.index(name),
+                        "end": text.index(name) + len(name),
+                        "text": name,
+                        "source": "ner",
+                        "tag": "PERSON",
+                    }
+                    for name in names
+                ]
+            },
+        },
+    }
+
+    summary = apply_indexing_nlp_candidates(record, default_schema())
+
+    assert summary["resolved_fields"] == []
+    assert "persons" not in record
+    assert "exceed the conservative candidate-only limit" in summary["deferred_fields"]["persons"]
+
+
 def test_stale_nlp_projection_is_never_promoted():
     record = _record()
     record["text"] += " Revised."
