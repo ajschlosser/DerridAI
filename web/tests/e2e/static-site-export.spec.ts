@@ -11,9 +11,9 @@ function fixturePath(): string {
   );
 }
 
-test("generated single-file publication works directly from file:// without an application server", async ({
-  page,
-}) => {
+test(
+  "generated single-file publication works directly from file:// without an application server",
+  async ({ page }) => {
   const html = fixturePath();
   await access(html);
 
@@ -58,4 +58,5 @@ test("generated single-file publication works directly from file:// without an a
   ).toBeVisible();
 
   expect(networkRequests).toEqual([]);
-});
+  },
+);
