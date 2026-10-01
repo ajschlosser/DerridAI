@@ -697,11 +697,13 @@ test("a different embedding model builds a local IndexedDB index before semantic
   await page.getByLabel("Search mode").selectOption("semantic");
   await page.locator(".search-row input").fill("hospitality");
   await page.locator(".search-row button").click();
-  await expect(page.getByRole("status").filter({ hasText: "needs a local index" })).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "needs a local browser index" }),
+  ).toBeVisible();
   expect(embedRequests).toEqual([]);
 
   // A remote embedding endpoint gets the same one-click index control directly in Search.
-  await page.getByRole("button", { name: "Build local index" }).click();
+  await page.getByRole("button", { name: "Enable semantic search" }).click();
   await expect(page.locator('[data-index="ready"]')).toContainText("Local index ready: 2 Records");
   await expect(page.locator('[data-index="ready"]')).toContainText("IndexedDB");
   expect(embedRequests.flat()).toEqual([
@@ -743,6 +745,6 @@ test("embeddings run in the browser with WebGPU or WebAssembly", async ({ page }
   const device = page.getByLabel("Where to run the model");
   await expect(device).toContainText("WebGPU");
   await expect(device).toContainText("WebAssembly");
-  await expect(page.getByRole("button", { name: "Download model" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download / test model" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Delete cached model" })).toBeVisible();
 });
