@@ -26,6 +26,7 @@ async function importTestRuntime() {
   const fakeTransformers = `
     // synthetic runtime ${runtimeInstance}
     import { ortMarker } from "onnxruntime-web/webgpu";
+    import { ortMarker as ortCommonMarker } from "onnxruntime-common";
 
     export const env = {
       allowLocalModels: true,
@@ -45,6 +46,7 @@ async function importTestRuntime() {
       fetched: [],
       env,
       ortMarker,
+      ortCommonMarker,
       pipelineOptions: null,
     };
 
@@ -184,6 +186,7 @@ describe("self-contained browser embedder runtime", () => {
             };
           };
           ortMarker: string;
+          ortCommonMarker: string;
           pipelineOptions: {
             task: string;
             model: string;
@@ -206,6 +209,7 @@ describe("self-contained browser embedder runtime", () => {
     });
     expect(state.fetched[0].config).toEqual({ model_type: "bert" });
     expect(state.ortMarker).toBe("embedded-ort");
+    expect(state.ortCommonMarker).toBe("embedded-ort");
     expect(state.pipelineOptions).toMatchObject({
       task: "feature-extraction",
       model: "Xenova/multilingual-e5-small",
