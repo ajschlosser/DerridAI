@@ -180,7 +180,7 @@ def test_metadata_families_checkpoint_independently_and_record_execution_ledger(
     record={"record_id":"r1","record_revision":1,"text":"Derrida discusses hospitality.","text_length":30,"source_asset_id":"asset-elephant","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}]}
     events=[]
     monkeypatch.setattr(manager,'_chat_json',lambda _request,prompt,*,response_model,max_tokens,schema_name,build_id='',**_kwargs:_metadata_result(schema_name))
-    manager._enrich_record(record,{}, {"provider":"ollama","model":"test-model","stage_timeouts":{"discourse":90}},build_id=build['build_id'],stage_callback=lambda snapshot,task,state,error:events.append((task,state,dict(snapshot.get('metadata_stage_status') or {}))))
+    manager._enrich_record(record,{}, {"provider":"ollama","model":"test-model","stage_timeouts":{"discourse":90},"families":["discourse","quotation","indexing"]},build_id=build['build_id'],stage_callback=lambda snapshot,task,state,error:events.append((task,state,dict(snapshot.get('metadata_stage_status') or {}))))
     assert [(task,state) for task,state,_ in events]==[("discourse","running"),("discourse","complete"),("quotation","running"),("quotation","complete"),("indexing","running"),("indexing","complete")]
     assert record['metadata_stage_status']=={'discourse':'complete','quotation':'complete','indexing':'complete'}
     assert record['metadata_execution_ledger']['discourse']['provider']=='ollama'
@@ -205,7 +205,7 @@ def test_metadata_resume_reuses_completed_family_checkpoint(tmp_path,monkeypatch
         called.append(schema_name)
         return _metadata_result(schema_name)
     monkeypatch.setattr(manager,'_chat_json',fake)
-    manager._enrich_record(record,{}, {"provider":"ollama","model":"test-model"},build_id=build['build_id'])
+    manager._enrich_record(record,{}, {"provider":"ollama","model":"test-model","families":["discourse","quotation","indexing"]},build_id=build['build_id'])
     assert called==['derridai_record_quotation','derridai_record_indexing']
     assert record['metadata_complete'] is True
 
