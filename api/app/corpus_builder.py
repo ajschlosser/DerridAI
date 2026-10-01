@@ -296,19 +296,16 @@ from .record_semantic_map import build_semantic_map_projections
 from .reviewer_context import current_reviewer
 from .run_guidance import find_guidance_matches
 from .semantic_content_graph import (
-    _records_digest as _semantic_records_digest,
-)
-from .semantic_content_graph import (
     build_semantic_content_graph,
     semantic_content_graph_view,
 )
-from .semantic_identity import SEMANTIC_IDENTITY_VERSION, ValueEquivalenceResult
+from .semantic_identity import ValueEquivalenceResult
 from .semantic_identity_registry import (
     SemanticIdentityRegistry,
     compare_field_values,
     registry_for_record,
 )
-from .semantic_identity_store import alias_digest, build_registry, review_registry
+from .semantic_identity_store import build_registry, review_registry
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
