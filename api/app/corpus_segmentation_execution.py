@@ -19,6 +19,7 @@ from .corpus_models import (
     BoundaryBatchResponseModel,
 )
 from .corpus_record_quality import iso_now
+from .language_segmentation import profile_metadata
 from .corpus_segmentation import (
     _apply_boundary_adjudication_to_records,
     _boundary_audit_candidates,
@@ -360,11 +361,16 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         binary classifier's omission/failure/low confidence also means KEEP.
         """
         profile=self._profile_for(build_id)
+        language = str(
+            manifest.get("language")
+            or manifest.get("document_language")
+            or ""
+        ).strip() or None
         threshold=float(profile.get("min_boundary_confidence") or 0.72)
         sizing_policy=_record_sizing_policy(request,profile)
         _=sizing_policy["absolute_record_chars"]
         index_by_id={str(block.get("block_id") or ""):i for i,block in enumerate(blocks)}
-        candidates=_deterministic_boundary_candidates(blocks,profile)
+        candidates=_deterministic_boundary_candidates(blocks,profile,language)
         state=self.repo.load_checkpoint(build_id,"local_boundary_state",{})
         if not isinstance(state,dict): state={}
         decisions=state.get("decisions") if isinstance(state.get("decisions"),dict) else {}
@@ -467,7 +473,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         # size-optimized boundaries record that they are retrieval boundaries, not
         # claims that the argument itself ends there.
         accepted, normalization_reviews, normalization_metrics = _normalize_topology(
-            blocks, accepted, sizing_policy
+            blocks, accepted, sizing_policy, language
         )
         boundary_reviews.extend(normalization_reviews)
         provisional=[item for item in accepted if item.get("boundary_kind") in {"retrieval_size_optimized","absolute_size_safety"}]
@@ -489,6 +495,10 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             "absolute_safety_boundary_count":int(normalization_metrics.get("absolute_safety_splits") or 0),
             "long_exception_record_count":int(normalization_metrics.get("long_exception_records") or 0),
             "record_sizing_policy":sizing_policy,
+            "segmentation_language_profile":profile_metadata(
+                language,
+                "\n".join(str(block.get("text") or "") for block in blocks[:8]),
+            ),
             "boundary_deterministic_split_count":deterministic_split_count,
             "boundary_deterministic_keep_count":deterministic_keep_count,
             "boundary_llm_adjudication_count":len(llm_candidates),
