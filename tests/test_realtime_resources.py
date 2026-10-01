@@ -184,9 +184,8 @@ def test_record_content_mutations_note_corpus_records_but_not_a_protection_flip(
 
 
 def test_benchmark_cases_and_results_note_pipeline_benchmarks(tmp_path):
-    from test_pipeline_benchmark import _case, _run
-
     from app.pipelines.store import PipelineStore
+    from test_pipeline_benchmark import _case, _run
 
     store = PipelineStore(tmp_path / "b.db")
     case = _case()
