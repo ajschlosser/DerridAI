@@ -13,11 +13,13 @@ const props = withDefaults(
     accessibleLabel: string;
     draggable?: boolean;
     locked?: boolean;
+    interactive?: boolean;
     nudgeStep?: number;
   }>(),
   {
     draggable: true,
     locked: false,
+    interactive: true,
     nudgeStep: 8,
   },
 );
@@ -35,40 +37,48 @@ const drag = useRelationNodeDrag({
 });
 
 function onPointerDown(event: PointerEvent) {
-  if (!props.draggable || props.locked) return;
+  if (!props.interactive || !props.draggable || props.locked) return;
   drag.begin(event, point.value);
 }
 
 function onPointerMove(event: PointerEvent) {
-  if (!props.draggable || props.locked) return;
+  if (!props.interactive || !props.draggable || props.locked) return;
   drag.update(event);
 }
 
 function onPointerEnd(event: PointerEvent) {
+  if (!props.interactive) return;
   drag.end(event);
 }
 
 function onClick(event: MouseEvent) {
-  if (drag.consumeClick(event)) return;
+  if (!props.interactive || drag.consumeClick(event)) return;
   emit("activate", event);
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (!props.draggable || props.locked) return;
+  if (!props.interactive || !props.draggable || props.locked) return;
   drag.nudge(event, point.value);
 }
 </script>
 
 <template>
-  <button
-    type="button"
+  <component
+    :is="interactive ? 'button' : 'div'"
+    :type="interactive ? 'button' : undefined"
     class="ui-relation-node-shell"
-    :class="{ dragging: drag.dragging.value, locked }"
+    :class="{
+      dragging: drag.dragging.value,
+      locked,
+      interactive,
+      inert: !interactive,
+    }"
     :style="{ left: `${x}px`, top: `${y}px` }"
-    data-relation-node
+    :data-relation-node="interactive ? '' : undefined"
     :data-relation-node-id="nodeId"
     :data-node-id="nodeId"
-    :aria-label="accessibleLabel"
+    :aria-label="interactive ? accessibleLabel : undefined"
+    :aria-hidden="interactive ? undefined : 'true'"
     @pointerdown.stop="onPointerDown"
     @pointermove.stop="onPointerMove"
     @pointerup.stop="onPointerEnd"
@@ -77,7 +87,7 @@ function onKeydown(event: KeyboardEvent) {
     @keydown="onKeydown"
   >
     <slot />
-  </button>
+  </component>
 </template>
 
 <style scoped>
@@ -86,10 +96,13 @@ function onKeydown(event: KeyboardEvent) {
   touch-action: none;
   user-select: none;
 }
-.ui-relation-node-shell:not(.locked) {
+.ui-relation-node-shell.interactive:not(.locked) {
   cursor: grab;
 }
-.ui-relation-node-shell.dragging:not(.locked) {
+.ui-relation-node-shell.interactive.dragging:not(.locked) {
   cursor: grabbing;
+}
+.ui-relation-node-shell.inert {
+  pointer-events: none;
 }
 </style>

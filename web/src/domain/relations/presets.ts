@@ -38,7 +38,7 @@ export const RELATION_SURFACE_PRESETS = {
     layout: "free",
     nodeVisual: "chip",
     edgeVisual: "line",
-    minZoom: 0.45,
+    minZoom: 0.35,
     maxZoom: 2.6,
     resizeAxis: "vertical",
     draggableNodes: true,
