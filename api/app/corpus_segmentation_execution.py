@@ -19,7 +19,6 @@ from .corpus_models import (
     BoundaryBatchResponseModel,
 )
 from .corpus_record_quality import iso_now
-from .language_segmentation import profile_metadata
 from .corpus_segmentation import (
     _apply_boundary_adjudication_to_records,
     _boundary_audit_candidates,
@@ -28,6 +27,7 @@ from .corpus_segmentation import (
     _normalize_topology,
     _record_sizing_policy,
 )
+from .language_segmentation import profile_metadata
 from .pipelines.corpus_segmentation import SegmentationSession
 
 
