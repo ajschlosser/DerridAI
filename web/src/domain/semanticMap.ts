@@ -33,6 +33,18 @@ export interface SemanticMapGraph {
   edges: SemanticMapEdge[];
 }
 
+export interface SemanticMapTopologyNode {
+  id: string;
+  label: string;
+  kind: SemanticMapKind;
+  weight: number;
+}
+
+export interface SemanticMapTopology {
+  nodes: SemanticMapTopologyNode[];
+  edges: SemanticMapEdge[];
+}
+
 export interface MapPoint {
   x: number;
   y: number;
@@ -393,20 +405,35 @@ export function buildSemanticMap(sources: SemanticMapSource[], focusId = ""): Se
   const keptEdges = [...links.values()].filter(
     (edge) => kept.has(edge.source) && kept.has(edge.target),
   );
-  const layout = semanticLayout(
-    ranked.slice(0, MAX_NODES).map(([id, meta]) => ({ id, ...meta })),
-    keptEdges,
-  );
-  const nodes = ranked
-    .filter(([id]) => kept.has(id))
-    .map(([id, meta]) => ({
-      id,
-      ...meta,
-      ...(layout.positions.get(id) || { x: 0, y: 0 }),
-      component: layout.components.get(id) || 0,
-    }));
-  const edges = keptEdges.map((edge) => ({ ...edge, id: `${edge.source}|${edge.target}` }));
-  return { nodes, edges };
+  const topology: SemanticMapTopology = {
+    nodes: ranked.slice(0, MAX_NODES).map(([id, meta]) => ({ id, ...meta })),
+    edges: keptEdges.map((edge) => ({ ...edge, id: `${edge.source}|${edge.target}` })),
+  };
+  return layoutSemanticTopology(topology);
+}
+
+/**
+ * Apply the existing deterministic work-map layout to an already materialized
+ * topology. Persisted Work maps can therefore skip semantic relationship
+ * reconstruction without changing their visual language or interactions.
+ */
+export function layoutSemanticTopology(topology: SemanticMapTopology): SemanticMapGraph {
+  const entries: LayoutEntry[] = topology.nodes.map((node) => ({
+    id: node.id,
+    label: node.label,
+    kind: node.kind,
+    weight: node.weight,
+  }));
+  const links = topology.edges.map((edge) => ({ source: edge.source, target: edge.target }));
+  const layout = semanticLayout(entries, links);
+  return {
+    nodes: topology.nodes.map((node) => ({
+      ...node,
+      ...(layout.positions.get(node.id) || { x: 0, y: 0 }),
+      component: layout.components.get(node.id) || 0,
+    })),
+    edges: topology.edges,
+  };
 }
 
 /** Screen-pixel drag of the map background. */
