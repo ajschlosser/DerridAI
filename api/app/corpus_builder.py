@@ -10,6 +10,7 @@ stages; do not grow this file simply because older callers import from it.
 
 from __future__ import annotations
 
+import copy
 import difflib
 import hashlib
 import json
@@ -793,6 +794,11 @@ class PdfCorpusRepository:
             str, tuple[tuple[int, int], list[dict[str, Any]]]
         ] = {}
         self._review_records_cache_capacity = 4
+        # (payload digest, schema signature) pairs known to be fixed points of
+        # ``migrate_record_assertions``/``_migrate_status_vocabulary``. Migration is
+        # idempotent and every writer already migrates, so re-running it on every read
+        # of an unchanged payload was most of the cost of loading or saving a corpus.
+        self._migration_fixed_points: set[tuple[bytes, bytes]] = set()
 
     def asset_meta_path(self, asset_id: str) -> Path:
         return self.root / "assets" / f"{asset_id}.json"
@@ -1059,7 +1065,10 @@ class PdfCorpusRepository:
                 with fitz.open(pdf_path) as doc:
                     outline = [(int(page), str(title)) for _level, title, page in doc.get_toc(simple=True)]
             meta["outline"] = [{"page": page, "title": title} for page, title in outline[:400]]
-            meta["main_text_start_inference"] = infer_main_text_start(self.load_blocks(asset_id), meta.get("pages") or [], outline)
+            # Read the rows directly: load_blocks() calls get_asset(), which would re-enter this
+            # inference (the key is not persisted yet) until the recursion limit, silently failing
+            # and repeating that cost, plus its writes, on every read of such an asset.
+            meta["main_text_start_inference"] = infer_main_text_start(self._load_block_rows(asset_id), meta.get("pages") or [], outline)
             with self._lock:
                 _json_write(self.asset_meta_path(asset_id), meta)
         except Exception:  # noqa: BLE001 - a failed inference must never make an asset unreadable
@@ -1616,6 +1625,51 @@ class PdfCorpusRepository:
             return (0, 0)
         return (int(stat.st_mtime_ns), int(stat.st_size))
 
+    @staticmethod
+    def _schema_signature(schema: MetadataSchema | None) -> bytes:
+        if schema is None:
+            return b""
+        try:
+            names = "\x1f".join(sorted(str(name) for name in schema.field_names()))
+        except AttributeError:
+            names = ""
+        return hashlib.blake2b(names.encode("utf-8"), digest_size=8).digest()
+
+    @staticmethod
+    def _payload_digest(payload: str) -> bytes:
+        return hashlib.blake2b(payload.encode("utf-8"), digest_size=16).digest()
+
+    def _remember_fixed_point(self, payload: str, signature: bytes) -> None:
+        if len(self._migration_fixed_points) > 400_000:
+            self._migration_fixed_points.clear()
+        self._migration_fixed_points.add((self._payload_digest(payload), signature))
+
+    def _decode_migrated(
+        self, payload: str, schema: MetadataSchema | None, signature: bytes,
+    ) -> dict[str, Any]:
+        """Decode a stored payload, migrating only when it is not already known to be migrated."""
+        record = json.loads(payload)
+        if (self._payload_digest(payload), signature) in self._migration_fixed_points:
+            return record
+        migrated = migrate_record_assertions(_migrate_status_vocabulary(record), schema)
+        # Both the stored form and its migrated form are stable under migration (it is
+        # idempotent), so neither needs migrating again until the schema changes.
+        self._remember_fixed_point(payload, signature)
+        self._remember_fixed_point(json.dumps(migrated, ensure_ascii=False), signature)
+        return migrated
+
+    def _encode_migrated(
+        self, record: dict[str, Any], schema: MetadataSchema | None, signature: bytes,
+    ) -> tuple[dict[str, Any], str]:
+        """Migrate a record for storage unless its serialized form is already a known fixed point."""
+        payload = json.dumps(record, ensure_ascii=False)
+        if (self._payload_digest(payload), signature) in self._migration_fixed_points:
+            return record, payload
+        migrated = migrate_record_assertions(_migrate_status_vocabulary(record), schema)
+        migrated_payload = json.dumps(migrated, ensure_ascii=False)
+        self._remember_fixed_point(migrated_payload, signature)
+        return migrated, migrated_payload
+
     def save_records(self, build_id: str, records: list[dict[str, Any]]) -> None:
         """Atomically persist the record store.
 
@@ -1625,10 +1679,10 @@ class PdfCorpusRepository:
         are both active.
         """
         schema = self._record_schema(build_id)
-        records = [
-            migrate_record_assertions(_migrate_status_vocabulary(record), schema)
-            for record in records
-        ]
+        signature = self._schema_signature(schema)
+        encoded = [self._encode_migrated(record, schema, signature) for record in records]
+        records = [record for record, _payload in encoded]
+        payloads = [payload for _record, payload in encoded]
         path = self.build_records_path(build_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
@@ -1637,8 +1691,8 @@ class PdfCorpusRepository:
             tmp = Path(tmp_name)
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    for record in records:
-                        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    for payload in payloads:
+                        handle.write(payload + "\n")
                     handle.flush()
                     os.fsync(handle.fileno())
                 os.replace(tmp, path)
@@ -1656,15 +1710,45 @@ class PdfCorpusRepository:
                         (
                             str(record.get("record_id") or ""),
                             ordinal,
-                            json.dumps(record, ensure_ascii=False),
+                            payload,
                         )
-                        for ordinal, record in enumerate(records)
+                        for ordinal, (record, payload) in enumerate(zip(records, payloads))
                         if record.get("record_id")
                     ],
                 )
                 connection.commit()
             self._set_records_projection_state(build_id, dirty=False)
             self._invalidate_review_records_cache(build_id)
+
+    def _patch_review_records_cache(
+        self, build_id: str, before: tuple[int, int], record_id: str, record: dict[str, Any],
+    ) -> None:
+        """Swap one Record into the cached review snapshot instead of discarding the corpus.
+
+        Only valid when the cache still describes the file as it was immediately before this
+        write (another process may have written in between); otherwise it is dropped and the
+        next read reparses. The list is replaced, never mutated, so a reader holding the old
+        snapshot is unaffected and snapshot identity changes whenever the content does.
+        """
+        cached = self._review_records_cache.get(str(build_id))
+        if cached is None or cached[0] != before:
+            self._invalidate_review_records_cache(build_id)
+            return
+        fresh = copy.deepcopy(record)
+        if any(
+            isinstance(status, dict) and status.get("recheck")
+            for status in (fresh.get("metadata_field_status") or {}).values()
+        ):
+            _scrub_canonical_transport(fresh)
+        snapshot = list(cached[1])
+        for index, existing in enumerate(snapshot):
+            if str(existing.get("record_id")) == record_id:
+                snapshot[index] = fresh
+                break
+        else:
+            self._invalidate_review_records_cache(build_id)
+            return
+        self._review_records_cache[str(build_id)] = (self._records_snapshot_signature(build_id), snapshot)
 
     def update_record(self, build_id: str, record: dict[str, Any]) -> None:
         """Persist one validated record without rebuilding the whole JSONL file.
@@ -1680,8 +1764,10 @@ class PdfCorpusRepository:
         record_id = str(record.get("record_id") or "")
         if not record_id:
             raise ValueError("A record ID is required.")
+        payload = json.dumps(record, ensure_ascii=False)
         with self._lock:
             self._bootstrap_records_db(build_id)
+            before = self._records_snapshot_signature(build_id)
             self._set_records_projection_state(build_id, dirty=True)
             with self._records_db(build_id) as connection:
                 row = connection.execute(
@@ -1692,10 +1778,11 @@ class PdfCorpusRepository:
                     raise KeyError(record_id)
                 connection.execute(
                     "UPDATE corpus_records SET payload = ? WHERE record_id = ?",
-                    (json.dumps(record, ensure_ascii=False), record_id),
+                    (payload, record_id),
                 )
                 connection.commit()
-            self._invalidate_review_records_cache(build_id)
+            self._remember_fixed_point(payload, self._schema_signature(self._record_schema(build_id)))
+            self._patch_review_records_cache(build_id, before, record_id, record)
 
     def refresh_records_projection(self, build_id: str) -> None:
         """Rebuild the JSONL publication projection from the transactional index."""
@@ -1751,11 +1838,9 @@ class PdfCorpusRepository:
                     if row is not None:
                         found[record_id] = str(row[0])
         schema = self._record_schema(build_id)
+        signature = self._schema_signature(schema)
         decoded: dict[str, dict[str, Any]] = {
-            record_id: migrate_record_assertions(
-                _migrate_status_vocabulary(json.loads(payload)),
-                schema,
-            )
+            record_id: self._decode_migrated(payload, schema, signature)
             for record_id, payload in found.items()
         }
         return [decoded.get(record_id) for record_id in requested]
@@ -1829,13 +1914,8 @@ class PdfCorpusRepository:
                 rows = connection.execute(
                     "SELECT payload FROM corpus_records ORDER BY ordinal"
                 ).fetchall()
-                records = [
-                    migrate_record_assertions(
-                        _migrate_status_vocabulary(json.loads(payload)),
-                        schema,
-                    )
-                    for (payload,) in rows
-                ]
+                signature = self._schema_signature(schema)
+                records = [self._decode_migrated(payload, schema, signature) for (payload,) in rows]
         for record in records:
             if any(
                 isinstance(status, dict) and status.get("recheck")
@@ -1914,6 +1994,8 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
     def __init__(self, repository: PdfCorpusRepository | None = None, max_workers: int = 2) -> None:
         self.repo = repository or PdfCorpusRepository()
         self._lock = threading.RLock()
+        # Per-Record review aggregates keyed by Record object identity; see _record_review_aggregate.
+        self._aggregate_memo: dict[tuple[int, bool], tuple[dict[str, Any], dict[str, Any]]] = {}
         self._cancel: set[str] = set()
         # Resolved provider requests may contain server-owned credentials and must
         # never be serialized into build.json. Keep the current execution contract
@@ -3679,6 +3761,110 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # have been synchronized. Otherwise a record reopened by validation could
         # still be reported as accepted until the next request, which is exactly
         # the kind of stale state that makes review appear to "come back."
+        self._apply_review_aggregates(
+            build, records, validation,
+            automation_running=automation_running, pass_running=pass_running,
+        )
+        self._refresh_workflow_fields(build)
+        self.repo.save_build(build)
+        return build
+
+    def _record_review_aggregate(self, record: dict[str, Any], automation_running: bool) -> dict[str, Any]:
+        """One Record's contribution to the build-level issue summary and LLM contribution.
+
+        Pure in (record, automation_running). Cached by Record object identity: the repository's
+        review snapshot is replaced one Record at a time, so every unchanged Record keeps its
+        identity and a review click re-derives one Record instead of the whole corpus (each
+        derivation resolves assertions, which dominated the cost of a click).
+        """
+        key = (id(record), automation_running)
+        hit = self._aggregate_memo.get(key)
+        if hit is not None and hit[0] is record:
+            return hit[1]
+        issue_rows: list[dict[str, Any]] = []
+        by_field: Counter[str] = Counter()
+        by_reason: Counter[str] = Counter()
+        invalid_by_field: Counter[str] = Counter()
+        incomplete: list[str] = []
+        retryable_types = {"not_run", "llm_failed", "evidence_failed", "invalid_value", "unresolved"}
+        contribution: Counter[str] = Counter()
+        llm_elapsed_ms = 0
+        llm_family_calls = 0
+        rejected = str(record.get("review_disposition") or "") == "rejected" or bool(record.get("rejected"))
+        # Rejected records remain recoverable but are outside the publishable corpus, so their
+        # unresolved metadata must not block publication.
+        if not rejected and not (automation_running and not _metadata_enrichment_finished(record)):
+            incomplete = list(dict.fromkeys([str(value) for value in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
+            statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+            for field in incomplete:
+                by_field[field] += 1
+                status_info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
+                assertion = current_assertion_by_name(record, field)
+                if assertion is not None and assertion.value_status == "invalid":
+                    invalid_by_field[field] += 1
+                issue_type = _metadata_issue_type_for_field(record, field)
+                by_reason[issue_type] += 1
+                issue_rows.append({
+                    "record_id": record.get("record_id"), "field": field,
+                    "issue_type": issue_type, "retryable": issue_type in retryable_types,
+                    "status": status_info.get("status") or "unresolved",
+                    "reason": status_info.get("reason") or "",
+                    "method": status_info.get("method") or "",
+                    "confidence": status_info.get("confidence"),
+                    "current_value": record.get(field),
+                    "page_start": record.get("page_start"), "page_end": record.get("page_end"),
+                })
+        status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+        for field, info in status_map.items():
+            if not isinstance(info, dict):
+                continue
+            assertion = current_assertion_by_name(record, str(field))
+            if assertion is None:
+                continue
+            if assertion.authority_status in {"human_confirmed", "human_override"}:
+                contribution["human_fields"] += 1
+            elif assertion.derivation_method == "inherited":
+                contribution["inherited_fields"] += 1
+            elif assertion.derivation_method == "deterministic":
+                contribution["deterministic_fields"] += 1
+            elif assertion.derivation_method == "model":
+                if assertion.value_status == "present" and assertion.evaluation_status != "evaluation_failed":
+                    contribution["llm_fields_usable"] += 1
+                if assertion.value_status in {"unresolved", "invalid"} or assertion.evaluation_status == "evaluation_failed":
+                    contribution["llm_fields_review"] += 1
+                    if info.get("proposed_value") not in (None, "", []):
+                        contribution["llm_fields_proposed"] += 1
+        ledger = record.get("metadata_execution_ledger") if isinstance(record.get("metadata_execution_ledger"), dict) else {}
+        for family in ("discourse", "quotation", "indexing"):
+            entry = ledger.get(family) if isinstance(ledger.get(family), dict) else {}
+            state = str(entry.get("state") or "")
+            if state in {"complete", "failed"}:
+                llm_family_calls += 1
+            try:
+                llm_elapsed_ms += int(entry.get("elapsed_ms") or 0)
+            except (TypeError, ValueError):
+                pass
+            contribution[f"tasks_{state or 'unknown'}"] += 1
+        aggregate = {
+            "incomplete": incomplete, "rows": issue_rows, "by_field": by_field, "by_reason": by_reason,
+            "invalid_by_field": invalid_by_field, "contribution": contribution,
+            "llm_elapsed_ms": llm_elapsed_ms, "llm_family_calls": llm_family_calls,
+        }
+        if len(self._aggregate_memo) > 50_000:
+            self._aggregate_memo.clear()
+        self._aggregate_memo[key] = (record, aggregate)
+        return aggregate
+
+    def _apply_review_aggregates(
+        self,
+        build: dict[str, Any],
+        records: list[dict[str, Any]],
+        validation: dict[str, Any],
+        *,
+        automation_running: bool,
+        pass_running: bool,
+    ) -> None:
+        """Derive every build-level review/metadata aggregate from persisted Record state."""
         build["needs_review_count"] = sum(1 for record in records if record.get("needs_review"))
         build["accepted_count"] = sum(1 for record in records if str(record.get("review_disposition") or "") == "accepted")
         build["rejected_count"] = sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected")
@@ -3691,45 +3877,26 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         invalid_by_field: Counter[str] = Counter()
         retryable_record_ids: set[str] = set()
         human_record_ids: set[str] = set()
-        retryable_types = {"not_run", "llm_failed", "evidence_failed", "invalid_value", "unresolved"}
+        contribution: Counter[str] = Counter()
+        llm_elapsed_ms = 0
+        llm_family_calls = 0
         for record in records:
-            if str(record.get("review_disposition") or "") == "rejected" or record.get("rejected"):
-                # Rejected records remain recoverable but are outside the publishable
-                # corpus, so their unresolved metadata must not block publication.
-                continue
-            if automation_running and not _metadata_enrichment_finished(record):
-                continue
-            incomplete = list(dict.fromkeys([str(value) for value in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
-            statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-            record_issues: list[dict[str, Any]] = []
-            for field in incomplete:
-                by_field[field] += 1
-                status_info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-                assertion = current_assertion_by_name(record, field)
-                if assertion is not None and assertion.value_status == "invalid":
-                    invalid_by_field[field] += 1
-                issue_type = _metadata_issue_type_for_field(record, field)
-                by_reason[issue_type] += 1
-                retryable = issue_type in retryable_types
-                row = {
-                    "record_id": record.get("record_id"), "field": field,
-                    "issue_type": issue_type, "retryable": retryable,
-                    "status": status_info.get("status") or "unresolved",
-                    "reason": status_info.get("reason") or "",
-                    "method": status_info.get("method") or "",
-                    "confidence": status_info.get("confidence"),
-                    "current_value": record.get(field),
-                    "page_start": record.get("page_start"), "page_end": record.get("page_end"),
-                }
-                issue_rows.append(row); record_issues.append(row)
-                rid = str(record.get("record_id") or "")
-                if retryable: retryable_record_ids.add(rid)
-                else: human_record_ids.add(rid)
-            if incomplete:
+            part = self._record_review_aggregate(record, automation_running)
+            by_field.update(part["by_field"])
+            by_reason.update(part["by_reason"])
+            invalid_by_field.update(part["invalid_by_field"])
+            contribution.update(part["contribution"])
+            llm_elapsed_ms += part["llm_elapsed_ms"]
+            llm_family_calls += part["llm_family_calls"]
+            rid = str(record.get("record_id") or "")
+            for row in part["rows"]:
+                issue_rows.append(row)
+                (retryable_record_ids if row["retryable"] else human_record_ids).add(rid)
+            if part["incomplete"]:
                 issue_records.append({
                     "record_id": record.get("record_id"),
-                    "fields": incomplete,
-                    "issues": record_issues,
+                    "fields": part["incomplete"],
+                    "issues": part["rows"],
                     "page_start": record.get("page_start"),
                     "page_end": record.get("page_end"),
                 })
@@ -3749,38 +3916,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # Measure automation by useful, persisted contribution rather than merely
         # counting successful HTTP/model calls. These metrics let the UI make the
         # cost/benefit of enrichment visible to reviewers.
-        contribution: Counter[str] = Counter()
-        llm_elapsed_ms = 0
-        llm_family_calls = 0
-        for record in records:
-            status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-            for field, info in status_map.items():
-                if not isinstance(info, dict):
-                    continue
-                assertion = current_assertion_by_name(record, str(field))
-                if assertion is None:
-                    continue
-                if assertion.authority_status in {"human_confirmed", "human_override"}:
-                    contribution["human_fields"] += 1
-                elif assertion.derivation_method == "inherited":
-                    contribution["inherited_fields"] += 1
-                elif assertion.derivation_method == "deterministic":
-                    contribution["deterministic_fields"] += 1
-                elif assertion.derivation_method == "model":
-                    if assertion.value_status == "present" and assertion.evaluation_status != "evaluation_failed":
-                        contribution["llm_fields_usable"] += 1
-                    if assertion.value_status in {"unresolved", "invalid"} or assertion.evaluation_status == "evaluation_failed":
-                        contribution["llm_fields_review"] += 1
-                        if info.get("proposed_value") not in (None, "", []):
-                            contribution["llm_fields_proposed"] += 1
-            ledger = record.get("metadata_execution_ledger") if isinstance(record.get("metadata_execution_ledger"), dict) else {}
-            for family in ("discourse", "quotation", "indexing"):
-                entry = ledger.get(family) if isinstance(ledger.get(family), dict) else {}
-                state = str(entry.get("state") or "")
-                if state in {"complete", "failed"}: llm_family_calls += 1
-                try: llm_elapsed_ms += int(entry.get("elapsed_ms") or 0)
-                except (TypeError, ValueError): pass
-                contribution[f"tasks_{state or 'unknown'}"] += 1
         useful = int(contribution.get("llm_fields_usable") or 0) + int(contribution.get("llm_fields_proposed") or 0)
         build["llm_contribution"] = {
             **dict(contribution),
@@ -3828,9 +3963,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             build["progress"] = 0.90 + 0.06 * review_fraction
             build["status"] = "awaiting_review"
             build["stage"] = "review"
-        self._refresh_workflow_fields(build)
-        self.repo.save_build(build)
-        return build
 
     def _rewrite_targeted_record(
         self,
@@ -3908,8 +4040,22 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 bool(record.get("metadata_complete"))
             )
             build[field] = max(0, int(build.get(field) or 0) + int(after) - int(before))
-        self.repo.save_build(build)
         self.repo.update_record(build_id, record)
+        # Build-level aggregates (issue summary, queue counts, workflow/readiness) are derived from
+        # the cached review snapshot, which update_record just patched in place; only the changed
+        # Record is re-derived. Doing this here keeps `build` coherent for the UI without a rescan.
+        snapshot = self.repo.review_records(build_id) or []
+        build["record_count"] = len(snapshot)
+        build["metadata_total"] = len(snapshot)
+        running = str(build.get("status") or "") in {"queued", "running"}
+        stage = str(build.get("stage") or "")
+        self._apply_review_aggregates(
+            build, snapshot, build.get("validation") or {},
+            automation_running=running and stage in {"enriching", "metadata_retry"},
+            pass_running=running and stage == "metadata_enrichment_rerun",
+        )
+        self._refresh_workflow_fields(build)
+        self.repo.save_build(build)
         return build
 
     @_serialize_record_mutation

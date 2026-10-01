@@ -46,6 +46,33 @@ export function resolveWorkspace(
   return requested && isWorkspaceAvailable(requested, context) ? requested : fallback;
 }
 
+export interface CorpusReviewRouteState {
+  buildId: string;
+  queue: string;
+  recordId: string;
+}
+
+/**
+ * The address a workspace should have for the current review state. Build/queue/record are
+ * mirrored into the query only while reviewing: an explicit non-review `?workspace=` owns a URL
+ * without them (see `switchWorkspace`), so writing them back would re-add state the reviewer
+ * deliberately left and make Back/Forward step through addresses they never visited.
+ */
+export function syncedReviewQuery(
+  current: Record<string, unknown>,
+  state: CorpusReviewRouteState,
+): Record<string, unknown> {
+  const query: Record<string, unknown> = { ...current, build: state.buildId, queue: state.queue };
+  if (state.recordId) query.record = state.recordId;
+  else delete query.record;
+  const requested = parseCorpusWorkspace(current.workspace);
+  if (requested && requested !== "review") {
+    delete query.record;
+    delete query.queue;
+  }
+  return query;
+}
+
 export interface CorpusWorkflowProgressInput {
   build: CorpusBuild | null;
   hasSource: boolean;

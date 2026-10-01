@@ -59,6 +59,7 @@ import { useCorpusMetadataReview } from "../features/corpus-builder/composables/
 import { useCorpusBoundaryReview } from "../features/corpus-builder/composables/useCorpusBoundaryReview";
 import { invalidRecordSizingFields } from "../features/corpus-builder/domain/recordSizing";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
+import { syncedReviewQuery } from "../features/corpus-builder/domain/workspace";
 import {
   editableRecordMetadata,
   evidenceCandidateFieldNames,
@@ -2017,16 +2018,14 @@ watch(
   },
 );
 watch(
-  [selectedBuildId, reviewQueue, selectedRecordId],
+  [selectedBuildId, reviewQueue, selectedRecordId, () => route.query.workspace],
   () => {
     if (!selectedBuildId.value) return;
-    const query = {
-      ...route.query,
-      build: selectedBuildId.value,
+    const query = syncedReviewQuery(route.query, {
+      buildId: selectedBuildId.value,
       queue: reviewQueue.value,
-    } as Record<string, string | undefined>;
-    if (selectedRecordId.value) query.record = selectedRecordId.value;
-    else delete query.record;
+      recordId: selectedRecordId.value,
+    }) as Record<string, string | undefined>;
     const same =
       String(route.query.build || "") === String(query.build || "") &&
       String(route.query.queue || "") === String(query.queue || "") &&
