@@ -15,8 +15,8 @@ import re
 import statistics
 from typing import Any
 
+from .language_segmentation import profile_metadata
 from .language_segmentation import (
-    profile_metadata,
     split_sentences as _language_split_sentences,
 )
 
