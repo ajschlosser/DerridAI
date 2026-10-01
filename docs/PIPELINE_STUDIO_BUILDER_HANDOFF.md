@@ -1,15 +1,15 @@
 # Pipeline Studio Builder Handoff
 
 **Repository:** `ajschlosser/DerridAI`  
-**Prepared:** 2026-10-01 · **Updated:** 2026-10-01 after #370–#373 and the follow-up branch `feature/evidence-suggestion-executor`  
-**Work branches:** `feature/pipeline-studio-builder` (PR #368, merged); `feature/evidence-suggestion-executor` (this update's PR, based on `master`)  
+**Prepared:** 2026-10-01 · **Updated:** 2026-10-01 after #370–#375 (all merged)  
+**Work branches:** `feature/pipeline-studio-builder` (PR #368, merged); `feature/evidence-suggestion-executor` (PR #375, merged)  
 **Related:** [PIPELINE_MIGRATION_HANDOFF.md](PIPELINE_MIGRATION_HANDOFF.md), `AGENTS.md` (Pipeline execution and traceability)
 
 This is an implementation handoff, not a release note. PR #368 landed typed stage ports, input-binding validation, latency/complexity analysis and a from-scratch builder. It deliberately did **not** make rewired pipelines executable. This document covers what remains: a generic executor (step 1), constant inputs (step 2), calibrating the declared complexities (step 3) and smaller follow-ups (step 4). These were items 2–5 of the “what is next” list in the PR discussion (item 1 was browser review); they are numbered 1–4 here. Verify every claim against the code before relying on it.
 
 ## 0. What remains (read this first)
 
-Done in the follow-up PR: shared `rewired_inputs` warning and its Studio notice (§2.4), store-search parallel branches with declared `concurrency` (§2.0), constant inputs on tuning ports (§3), diagram edge type labels and ordering-only edges (§5), code-read complexity corrections (§4), and assessments of `evidence_suggestion` (§2.2) and `research` (§2.3) as inspect-only for changed bindings.
+Done in #375: shared `rewired_inputs` warning and its Studio notice (§2.4), store-search parallel branches with declared `concurrency` (§2.0), constant inputs on tuning ports (§3), diagram edge type labels and ordering-only edges (§5), code-read complexity corrections (§4), and assessments of `evidence_suggestion` (§2.2) and `research` (§2.3) as inspect-only for changed bindings.
 
 Still open:
 
@@ -89,6 +89,7 @@ Invariants that must survive everything below: purposes still own which strategi
 - **#370** `vector_store_search` honours bindings.
 - **#371** Pipeline Studio follow-ups: ordering edges added for a binding are released when it is reset (tracked at binding time, never guessed); a 422 from `/analyze` shows a localized “draft is incomplete” message.
 - **#372** `evidence_recovery` honours bindings.
+- **#375** Shared `rewired_inputs` warning and Studio notice, store-search parallel branches (`concurrency` capability, `PIPELINE_PARALLEL_BRANCHES`), constant inputs on tuning ports, diagram edge type labels and ordering-only edges, `validate.evidence_support` complexity correction; `evidence_suggestion` and `research` assessed as inspect-only for changed bindings.
 
 ### 2.2 `evidence_suggestion` (reviewer evidence) — assessed, not migrated
 
