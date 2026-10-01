@@ -86,6 +86,20 @@ def test_hints_go_stale_when_the_text_changes(fake_pipeline):
     assert nlp.prompt_hints(record, ["position_holder"]) == {}
 
 
+def test_structured_field_candidates_are_current_scoped_and_copied(fake_pipeline):
+    record = {"text": TEXT, "region_language": ["English"]}
+    result = nlp.annotate_record(record, SCHEMA)
+    candidates = nlp.current_field_candidates(record, {"position_holder"})
+    assert list(candidates) == ["position_holder"]
+    assert candidates["position_holder"] == result["fields"]["position_holder"]
+
+    candidates["position_holder"][0]["text"] = "mutated"
+    assert record["nlp_candidates"]["fields"]["position_holder"][0]["text"] == "Rousseau"
+
+    record["text"] = TEXT + " again"
+    assert nlp.current_field_candidates(record, {"position_holder"}) == {}
+
+
 def test_record_terms_are_exact_spans_computed_without_tagged_fields(fake_pipeline):
     record = {"text": TEXT, "region_language": ["English"]}
     result = nlp.annotate_record(record, NS(fields=[]))
