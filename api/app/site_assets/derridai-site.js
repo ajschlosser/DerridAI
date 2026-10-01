@@ -1391,18 +1391,85 @@
   // data-tour anchors because render() rebuilds the page; a step may switch view first. Steps without a target
   // (or whose target is missing or empty) fall back to a centered card.
   const TOUR_STEPS = [
-    { id: "welcome" },
-    { id: "nav", target: "nav" },
-    { id: "works", view: "works", target: "works" },
-    { id: "search", view: "search", target: "search" },
-    { id: "filters", view: "search", target: "filters" },
-    { id: "methods", view: "search", target: "methods" },
-    { id: "research", view: "research", target: "research" },
-    { id: "provider", view: "research", target: "provider" },
-    { id: "evidence", view: "research", target: "evidence" },
-    { id: "notes", view: "notes", target: "notes" },
-    { id: "controls", target: "controls" },
-    { id: "restart", target: "tutorial" },
+    {
+      id: "welcome",
+      titleKey: "site.runtime.tutorial_welcome_title",
+      bodyKey: "site.runtime.tutorial_welcome_body",
+    },
+    {
+      id: "nav",
+      target: "nav",
+      titleKey: "site.runtime.tutorial_nav_title",
+      bodyKey: "site.runtime.tutorial_nav_body",
+    },
+    {
+      id: "works",
+      view: "works",
+      target: "works",
+      titleKey: "site.runtime.tutorial_works_title",
+      bodyKey: "site.runtime.tutorial_works_body",
+    },
+    {
+      id: "search",
+      view: "search",
+      target: "search",
+      titleKey: "site.runtime.tutorial_search_title",
+      bodyKey: "site.runtime.tutorial_search_body",
+    },
+    {
+      id: "filters",
+      view: "search",
+      target: "filters",
+      titleKey: "site.runtime.tutorial_filters_title",
+      bodyKey: "site.runtime.tutorial_filters_body",
+    },
+    {
+      id: "methods",
+      view: "search",
+      target: "methods",
+      titleKey: "site.runtime.tutorial_methods_title",
+      bodyKey: "site.runtime.tutorial_methods_body",
+    },
+    {
+      id: "research",
+      view: "research",
+      target: "research",
+      titleKey: "site.runtime.tutorial_research_title",
+      bodyKey: "site.runtime.tutorial_research_body",
+    },
+    {
+      id: "provider",
+      view: "research",
+      target: "provider",
+      titleKey: "site.runtime.tutorial_provider_title",
+      bodyKey: "site.runtime.tutorial_provider_body",
+    },
+    {
+      id: "evidence",
+      view: "research",
+      target: "evidence",
+      titleKey: "site.runtime.tutorial_evidence_title",
+      bodyKey: "site.runtime.tutorial_evidence_body",
+    },
+    {
+      id: "notes",
+      view: "notes",
+      target: "notes",
+      titleKey: "site.runtime.tutorial_notes_title",
+      bodyKey: "site.runtime.tutorial_notes_body",
+    },
+    {
+      id: "controls",
+      target: "controls",
+      titleKey: "site.runtime.tutorial_controls_title",
+      bodyKey: "site.runtime.tutorial_controls_body",
+    },
+    {
+      id: "restart",
+      target: "tutorial",
+      titleKey: "site.runtime.tutorial_restart_title",
+      bodyKey: "site.runtime.tutorial_restart_body",
+    },
   ];
 
   function openTutorial() {
@@ -1523,8 +1590,8 @@
           view = step.view;
           await render();
         }
-        title.textContent = t(`site.runtime.tutorial_${step.id}_title`);
-        body.textContent = t(`site.runtime.tutorial_${step.id}_body`);
+        title.textContent = t(step.titleKey);
+        body.textContent = t(step.bodyKey);
         progress.textContent = t("site.runtime.tutorial_progress", {
           current: index + 1,
           total: TOUR_STEPS.length,
