@@ -28,6 +28,7 @@ from .language_segmentation import (
     ends_sentence_text,
     looks_like_speaker_start,
     looks_like_strong_heading,
+    profile_metadata,
     starts_quote,
 )
 
@@ -226,6 +227,10 @@ def _deterministic_boundary_candidates(
             "source": "deterministic_candidate",
             "index": i,
             "protected": _is_protected_transition(left, right, language) or "repeated_running_heading" in signals,
+            "language_profile": profile_metadata(
+                language,
+                f"{left_text}\n{right_text}",
+            ),
         })
     return candidates
 
@@ -448,6 +453,10 @@ def _normalize_topology(
         boundary_map[str(item.get("after_block_id") or "")]=item
     reviews: list[dict[str, Any]]=[]
     metrics={"size_optimized_splits":0,"long_exception_records":0,"absolute_safety_splits":0}
+    language_profile = profile_metadata(
+        language,
+        "\n".join(str(block.get("text") or "") for block in blocks[:8]),
+    )
 
     def groups() -> list[list[dict[str, Any]]]:
         out=[]; current=[]
@@ -485,6 +494,7 @@ def _normalize_topology(
             "changes":[],"source":"deterministic_topology_normalizer",
             "boundary_kind":kind,"semantic_boundary":False,
             "size_policy":dict(policy),"size_decision":info,
+            "language_profile":language_profile,
         }
         if info.get("forced"):
             idx=block_index.get(bid,-1)
