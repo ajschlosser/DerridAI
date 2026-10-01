@@ -256,7 +256,7 @@ export function createWorksWorkspace(deps: Deps) {
     return worksSnapshotBase({
       mode: "admin",
       available: state.files.length > 0,
-      works: items.map((item) => describeAdminWork(item)),
+      works: items.map((item) => describeAdminWork(item, { insights: true })),
       selected: selectedItem ? describeAdminWork(selectedItem, { insights: true }) : null,
       totalWorks: map.size,
       totalRecords,
