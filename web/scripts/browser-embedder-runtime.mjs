@@ -12,9 +12,9 @@ const EMBEDDED_ASSETS = /*__DERRIDAI_EMBEDDED_ASSETS__*/ {};
 export const EMBEDDER_INFO = Object.freeze(/*__DERRIDAI_EMBEDDER_INFO__*/ {});
 
 const VIRTUAL_MODEL_ROOT = "https://derridai.invalid/__embedded_models__/";
-const TRANSFORMERS_ASSET_KEY = "runtime/transformers.web.min.js";
-const ORT_JAVASCRIPT_ASSET_KEY = "runtime/ort.webgpu.bundle.min.mjs";
-const ORT_WASM_ASSET_KEY = "runtime/ort-wasm-simd-threaded.jsep.wasm";
+const TRANSFORMERS_ASSET_KEY = "runtime/transformers.min.js";
+const ORT_WASM_FACTORY_ASSET_KEY = "runtime/ort-wasm-simd-threaded.mjs";
+const ORT_WASM_ASSET_KEY = "runtime/ort-wasm-simd-threaded.wasm";
 const decodedAssets = new Map();
 
 let transformersModulePromise;
@@ -88,38 +88,29 @@ function decodedTextAsset(key) {
   return new TextDecoder().decode(decodeEmbeddedAsset(key));
 }
 
-function transformersModuleSpecifier() {
-  const onnxSpecifier = moduleSpecifierForSource(decodedTextAsset(ORT_JAVASCRIPT_ASSET_KEY));
-  const transformersSource = decodedTextAsset(TRANSFORMERS_ASSET_KEY);
-  const expectedImports = ["onnxruntime-web/webgpu", "onnxruntime-common"];
+function assetSpecifier(key) {
+  const asset = requireAsset(key);
+  const bytes = decodeEmbeddedAsset(key);
+  const mediaType = asset.mediaType || "application/octet-stream";
 
-  let rewritten = transformersSource;
-  const replacedImports = new Set();
-
-  for (const importSpecifier of expectedImports) {
-    for (const quote of ['"', "'"]) {
-      const quotedImport = `${quote}${importSpecifier}${quote}`;
-      const occurrences = rewritten.split(quotedImport).length - 1;
-      if (occurrences === 0) continue;
-      replacedImports.add(importSpecifier);
-      rewritten = rewritten.split(quotedImport).join(JSON.stringify(onnxSpecifier));
-    }
+  if (
+    !isNodeRuntime() &&
+    typeof Blob !== "undefined" &&
+    typeof URL.createObjectURL === "function"
+  ) {
+    return URL.createObjectURL(new Blob([bytes], { type: mediaType }));
   }
 
-  const missingImports = expectedImports.filter(
-    (importSpecifier) => !replacedImports.has(importSpecifier),
-  );
-  if (missingImports.length > 0) {
-    throw new Error(
-      `Embedded Transformers.js did not contain the expected ONNX Runtime imports: ${missingImports.join(", ")}.`,
-    );
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
   }
-
-  return moduleSpecifierForSource(rewritten);
+  return `data:${mediaType};base64,${btoa(binary)}`;
 }
 
 async function loadTransformersModule() {
-  transformersModulePromise ??= import(transformersModuleSpecifier());
+  transformersModulePromise ??= import(moduleSpecifierForSource(decodedTextAsset(TRANSFORMERS_ASSET_KEY)));
   return transformersModulePromise;
 }
 
@@ -319,8 +310,11 @@ export async function createEmbedder(options = {}) {
 
   wasm.numThreads = 1;
   wasm.proxy = false;
-  wasm.wasmBinary = decodeEmbeddedAsset(ORT_WASM_ASSET_KEY);
-  if ("wasmPaths" in wasm) wasm.wasmPaths = undefined;
+  wasm.wasmPaths = {
+    mjs: moduleSpecifierForSource(decodedTextAsset(ORT_WASM_FACTORY_ASSET_KEY)),
+    wasm: assetSpecifier(ORT_WASM_ASSET_KEY),
+  };
+  if ("wasmBinary" in wasm) wasm.wasmBinary = undefined;
 
   const extractor = await pipeline("feature-extraction", EMBEDDER_INFO.model.id, {
     revision: EMBEDDER_INFO.model.revision,
