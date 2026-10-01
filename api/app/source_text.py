@@ -647,6 +647,7 @@ class _HtmlText(HTMLParser):
         self.parts: list[str] = []
         self.title: list[str] = []
         self.metas: dict[str, str] = {}
+        self.lang = ""
         self._skip = 0
         self._in_title = False
         self._chrome_tag = ""
@@ -661,6 +662,8 @@ class _HtmlText(HTMLParser):
         if tag not in _VOID_TAGS and tag not in {"html", "head", "body", "title"} and _is_chrome(attr):
             self._chrome_tag, self._chrome_depth = tag, 1
             return
+        if tag == "html" and attr.get("lang") and not self.lang:
+            self.lang = attr["lang"].strip()
         if tag in {"script", "style", "noscript"}:
             self._skip += 1
         if tag == "title":
@@ -707,7 +710,7 @@ def html_to_text(html: str) -> tuple[str, dict[str, str]]:
     embedded = {
         "title": re.sub(r"\s+", " ", "".join(parser.title)).strip() or parser.metas.get("og:title") or parser.metas.get("citation_title") or "",
         "author": parser.metas.get("author") or parser.metas.get("citation_author") or parser.metas.get("dc.creator") or "",
-        "language": parser.metas.get("language") or parser.metas.get("dc.language") or "",
+        "language": parser.metas.get("language") or parser.metas.get("dc.language") or parser.lang or "",
         "publisher": parser.metas.get("citation_publisher") or "",
     }
     text = re.sub(r"\n{3,}", "\n\n", "".join(parser.parts))
