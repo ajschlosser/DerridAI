@@ -9,6 +9,7 @@ import {
 } from "../../scripts/browser-embedder-lib.mjs";
 
 const MODEL_REVISION = "test-revision";
+let runtimeInstance = 0;
 
 function asset(bytes: Uint8Array | Buffer | string, mediaType: string) {
   const buffer = typeof bytes === "string" ? Buffer.from(bytes) : Buffer.from(bytes);
@@ -21,7 +22,9 @@ function asset(bytes: Uint8Array | Buffer | string, mediaType: string) {
 }
 
 async function importTestRuntime() {
+  runtimeInstance += 1;
   const fakeTransformers = `
+    // synthetic runtime ${runtimeInstance}
     export const env = {
       allowLocalModels: true,
       allowRemoteModels: false,
@@ -117,11 +120,9 @@ async function importTestRuntime() {
     resolve(process.cwd(), "scripts/browser-embedder-runtime.mjs"),
     "utf8",
   );
-  const source = renderBrowserEmbedderRuntime(
-    template,
-    JSON.stringify(assets),
-    info,
-  );
+  const source =
+    renderBrowserEmbedderRuntime(template, JSON.stringify(assets), info) +
+    `\n// synthetic module ${runtimeInstance}\n`;
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
   return import(/* @vite-ignore */ moduleUrl);
 }
