@@ -81,6 +81,11 @@ export interface WorksStore {
   count: number;
 }
 
+/** Lightweight identity used when an operation needs the full corpus scope. */
+export interface WorksScopeItem {
+  work: string;
+}
+
 export type WorksSort = "title-asc" | "title-desc" | "records-desc" | "review-desc" | "year-asc";
 export type WorksViewMode = "cards" | "compact";
 
@@ -115,6 +120,8 @@ export interface WorksSnapshot {
   shared: boolean;
   error: string;
   works: WorksLibraryItem[];
+  /** Full-corpus work identities, independent of the current library filters. */
+  scopeWorks: WorksScopeItem[];
   selected: WorkDetail | null;
   query: string;
   selectedWork: string;
