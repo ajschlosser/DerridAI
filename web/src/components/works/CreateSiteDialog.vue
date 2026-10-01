@@ -225,7 +225,11 @@ onMounted(async () => {
           <legend>{{ i18n.t("site.create_provider_proxy") }}</legend>
           <p class="site-choice-help">{{ i18n.t("site.create_provider_proxy_help") }}</p>
           <label class="site-export-option">
-            <input v-model="providerProxyEnabled" type="checkbox" data-site-provider-proxy-enabled />
+            <input
+              v-model="providerProxyEnabled"
+              type="checkbox"
+              data-site-provider-proxy-enabled
+            />
             <span>
               <strong>{{ i18n.t("site.create_provider_proxy_enable") }}</strong>
               <small>{{ i18n.t("site.create_provider_proxy_enable_help") }}</small>
