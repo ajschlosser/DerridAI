@@ -410,7 +410,15 @@ class _Run:
             {
                 "block_id": row["block_id"],
                 "score": round(float(row["score"]), 4),
-                "semantic_score": round(float(row["score"]), 4),
+                "semantic_score": round(
+                    float(row.get("semantic_score", row["score"])),
+                    4,
+                ),
+                **(
+                    {"cross_encoder_score": round(float(row["cross_encoder_score"]), 4)}
+                    if isinstance(row.get("cross_encoder_score"), (int, float))
+                    else {}
+                ),
                 "mmr_score": round(float(row.get("mmr_score") or 0.0), 4),
             }
             for row in selected
