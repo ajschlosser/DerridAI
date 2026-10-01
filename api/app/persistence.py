@@ -1165,6 +1165,51 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             )
             conn.commit()
 
+    def put_semantic_map_projections(self, rows: Iterable[dict[str, Any]]) -> int:
+        """Bulk-upsert one generation in a single SQLite transaction."""
+        now = _iso_now()
+        values: list[tuple[Any, ...]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            scope_type = str(row.get("scope_type") or "").strip()
+            scope_id = str(row.get("scope_id") or "").strip()
+            build_id = str(row.get("build_id") or "").strip()
+            payload = row.get("payload")
+            if not scope_type or not scope_id or not build_id or not isinstance(payload, dict):
+                continue
+            values.append(
+                (
+                    scope_type,
+                    scope_id,
+                    build_id,
+                    str(row.get("audience") or ""),
+                    str(row.get("work") or "").strip() or None,
+                    int(row.get("generation") or 0),
+                    _json_dumps(payload),
+                    now,
+                    now,
+                )
+            )
+        if not values:
+            return 0
+        with self._lock, self._connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO semantic_map_projections
+                    (scope_type,scope_id,build_id,audience,work,generation,payload_json,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(scope_type,scope_id,build_id,audience) DO UPDATE SET
+                    work=excluded.work,
+                    generation=excluded.generation,
+                    payload_json=excluded.payload_json,
+                    updated_at=excluded.updated_at
+                """,
+                values,
+            )
+            conn.commit()
+        return len(values)
+
     def get_semantic_map_projection(
         self,
         scope_type: str,
