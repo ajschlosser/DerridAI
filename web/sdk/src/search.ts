@@ -221,10 +221,7 @@ export class SearchEngine {
     const usesPublished =
       publishedAvailable && matchesPublicationModel(descriptor, this.manifest.vector_index);
     if (!usesPublished && publishedAvailable) {
-      const expectedModel = String(this.manifest.vector_index?.model ?? "").replace(
-        /:latest$/,
-        "",
-      );
+      const expectedModel = String(this.manifest.vector_index?.model ?? "").replace(/:latest$/, "");
       const actualModel = String(descriptor.model ?? "").replace(/:latest$/, "");
       const revisionMismatches = embeddingDescriptorMismatches(
         this.manifest.vector_index,
@@ -285,9 +282,7 @@ export class SearchEngine {
               ),
             );
           }
-        } else if (
-          embeddingFingerprint(embedded.provider) !== embeddingFingerprint(descriptor)
-        ) {
+        } else if (embeddingFingerprint(embedded.provider) !== embeddingFingerprint(descriptor)) {
           return fallback(
             fallbackWarning(
               "embedding_contract_mismatch",
