@@ -172,9 +172,18 @@ const DOCUMENT_FIELD_IDENTITIES: Record<string, string> = {
 export function workMetadataPresentationRows(rows: Loose[]): WorkMetadataPresentationRow[] {
   const identities = new Map<string, string>();
   const discovered: string[] = [];
+  const prepared = (rows || []).map((row) => {
+    const record = row?.record || {};
+    const assertions = currentFieldAssertions(record);
+    return {
+      record,
+      assertions,
+      assertionByName: new Map(assertions.map((assertion) => [assertion.field_name, assertion])),
+    };
+  });
 
-  for (const row of rows || []) {
-    for (const assertion of currentFieldAssertions(row?.record)) {
+  for (const { assertions } of prepared) {
+    for (const assertion of assertions) {
       const field = String(assertion.field_name || "").trim();
       const fieldId = String(assertion.field_id || "").trim();
       if (!field || WORK_METADATA_EXCLUDED_ASSERTION_FIELDS.has(field)) continue;
@@ -191,10 +200,9 @@ export function workMetadataPresentationRows(rows: Loose[]): WorkMetadataPresent
   const fields = [...defaults, ...discovered.filter((field) => !defaults.includes(field))];
 
   return fields.map((field) => {
-    const values = (rows || []).map((row) => {
-      const record = row?.record || {};
+    const values = prepared.map(({ record, assertionByName }) => {
       if (record[field] !== undefined) return record[field];
-      const assertion = currentFieldAssertions(record).find((item) => item.field_name === field);
+      const assertion = assertionByName.get(field);
       if (!assertion || (assertion.value_status && assertion.value_status !== "present")) return null;
       return assertion.value;
     });
