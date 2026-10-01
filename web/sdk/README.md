@@ -8,6 +8,8 @@ The SDK owns publication semantics, progressive Record loading, filtering, lexic
 
 AI execution is transport-neutral. A host application injects embedding and generation capabilities as TypeScript/JavaScript objects. The SDK does not accept an API endpoint or API key and does not make direct browser-to-model-provider requests.
 
+The publication's own vectors are used only when the injected embedding model is exactly the model that embedded the publication (`matchesPublicationModel`). Any other embedding model searches a local index instead: `client.index.build()` embeds the published Records with the injected provider, stores the vectors through the optional `vectorIndex` store (IndexedDB by default, memory when unavailable) keyed by publication and exact model, and `client.index.status()` / `client.index.clear()` inspect and remove it. Until the index is complete, semantic and hybrid search return keyword results with a `local_index_required` warning.
+
 ## TypeScript / ESM
 
 Build the package from the repository root:

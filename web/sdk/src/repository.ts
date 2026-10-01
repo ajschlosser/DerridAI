@@ -150,6 +150,26 @@ export class RecordRepository {
     return { records, chunksLoaded: descriptors.length };
   }
 
+  totalRecords(): number {
+    return this.descriptors.reduce((sum, descriptor) => sum + descriptor.recordCount, 0);
+  }
+
+  /** Visit every Record chunk in publication order, yielding to the browser between chunks. */
+  async eachChunk(
+    signal: AbortSignal | undefined,
+    visit: (records: PublicationRecord[], index: number, total: number) => Promise<void>,
+  ): Promise<void> {
+    for (let index = 0; index < this.descriptors.length; index += 1) {
+      throwIfAborted(signal);
+      await visit(
+        await this.loadRecords(this.descriptors[index].id, signal),
+        index,
+        this.descriptors.length,
+      );
+      if (index + 1 < this.descriptors.length) await yieldToBrowser();
+    }
+  }
+
   async ensureVectors(filters: SearchFilters, runId: string, signal?: AbortSignal): Promise<void> {
     const descriptors = this.selectedDescriptors(filters);
     for (let index = 0; index < descriptors.length; index += 1) {
