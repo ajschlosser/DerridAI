@@ -78,9 +78,7 @@ export const corpusBuildsApi = {
       `/api/works/${encodeURIComponent(work)}/semantic-map-records`,
     ),
   workSemanticMap: (work: string) =>
-    apiRequest<WorkSemanticMapProjection>(
-      `/api/works/${encodeURIComponent(work)}/semantic-map`,
-    ),
+    apiRequest<WorkSemanticMapProjection>(`/api/works/${encodeURIComponent(work)}/semantic-map`),
   recordSemanticMap: (buildId: string, recordId: string) =>
     apiRequest<RecordSemanticMap>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/semantic-map`,
