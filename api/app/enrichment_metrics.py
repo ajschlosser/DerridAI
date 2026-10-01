@@ -181,6 +181,17 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         if isinstance(e.get("input_chars"), (int, float))
     ]
 
+    model_invocations = [
+        int(e["model_invocations"])
+        for e in calls
+        if isinstance(e.get("model_invocations"), (int, float))
+    ]
+    recovery_calls = sum(
+        int(e.get("recovery_calls") or 0)
+        for e in calls
+        if isinstance(e.get("recovery_calls"), (int, float))
+    )
+
     # 10. Learning curve: acceptance in successive groups of reviews.
     curve = []
     for start in range(0, len(reviews), LEARNING_BUCKET):
@@ -253,14 +264,17 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
             "total": round(sum(record_elapsed), 2),
         },
         "structured_model_invocations": {
-            "total": sum(
-                int(e.get("model_invocations") or 1)
-                for e in calls
+            "reported_call_events": len(model_invocations),
+            "total": sum(model_invocations),
+            "p50_per_family": _percentile(
+                [float(value) for value in model_invocations],
+                0.50,
             ),
-            "recovery_calls": sum(
-                int(e.get("recovery_calls") or 0)
-                for e in calls
+            "p95_per_family": _percentile(
+                [float(value) for value in model_invocations],
+                0.95,
             ),
+            "recovery_calls": recovery_calls,
         },
         "call_contract": {
             "requested_fields_p50": _percentile(requested_field_counts, 0.50),

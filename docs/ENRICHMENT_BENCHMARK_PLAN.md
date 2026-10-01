@@ -278,6 +278,7 @@ Default project target:
 - Tightened built-in metadata prompts so assessment reasons stay concise and cannot substitute for the metadata value itself.
 - Implemented the Phase B immutable enrichment benchmark fixture and compatibility gate; the fixture stores only hashes/identities for source text and bindings and strips provider credentials/endpoints.
 - Implemented Phase C result artifact and declared-tolerance comparison (raw values, deltas, per-gate status, no overall winner).
+- Closed the remaining useful gap from superseded PR #376: built-in metadata prompts now prevent assessment-only values, invocation telemetry includes reported-event coverage plus p50/p95 per-family physical calls, and a regression test proves the Record timing event is emitted only after durable persistence is readable.
 
 ## Non-goals for this tranche
 
