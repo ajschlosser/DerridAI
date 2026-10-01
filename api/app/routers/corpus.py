@@ -684,7 +684,7 @@ def get_pdf_corpus_document_intelligence(build_id: str, request: Request) -> dic
 
 @router.get("/api/pdf/corpus-builds/{build_id}/semantic-content-graph")
 def get_pdf_corpus_semantic_content_graph(build_id: str) -> dict[str, Any]:
-    """Current reviewer-safe semantic graph rebuilt from the latest Record revisions."""
+    """Current reviewer-safe semantic graph, materialized from the latest semantic generation."""
     try:
         return pdf_corpus_builds.semantic_content_graph(build_id)
     except KeyError as exc:
