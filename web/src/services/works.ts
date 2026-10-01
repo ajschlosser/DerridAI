@@ -84,8 +84,7 @@ export const worksService: WorksService = {
   editMetadata: (work) => runtime.openWorkMetadataEditor?.(work),
   openAnnotations: (work) => annotationsService.openWorkAnnotations(work),
   searchOverview: (work) => runtime.searchWorkOverview?.(work),
-  searchRecords: (work, needsReview = false) =>
-    runtime.searchWorkRecords?.(work, { needsReview }),
+  searchRecords: (work, needsReview = false) => runtime.searchWorkRecords?.(work, { needsReview }),
   inspectMixed: (work, field) => runtime.inspectWorksMixedField?.(work, field),
   searchInsight: (field, value) => runtime.searchWorksInsight?.(field, value),
   reviewFlagged: (work) => runtime.reviewFlaggedWork?.(work),
