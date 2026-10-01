@@ -230,6 +230,30 @@ class SQLiteRepositoryBase:
                 );
                 CREATE INDEX IF NOT EXISTS idx_record_build_provenance_work
                     ON record_build_provenance(work, updated_at DESC);
+
+                CREATE TABLE IF NOT EXISTS semantic_map_build_state (
+                    build_id TEXT PRIMARY KEY,
+                    generation INTEGER NOT NULL DEFAULT 1,
+                    dirty INTEGER NOT NULL DEFAULT 1,
+                    reason TEXT,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS semantic_map_projections (
+                    scope_type TEXT NOT NULL,
+                    scope_id TEXT NOT NULL,
+                    build_id TEXT NOT NULL,
+                    work TEXT,
+                    generation INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(scope_type, scope_id, build_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_semantic_map_projection_build
+                    ON semantic_map_projections(build_id, generation);
+                CREATE INDEX IF NOT EXISTS idx_semantic_map_projection_work
+                    ON semantic_map_projections(work, scope_type, updated_at DESC);
                 """
             )
             self._ensure_column(conn, "languages", "content_policy_json", "TEXT")
@@ -1019,6 +1043,187 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                 (work, max(1, min(int(limit), 500))),
             ).fetchall()
         return [{"record_id": str(row["record_id"]), "build_id": str(row["build_id"])} for row in rows]
+
+    def semantic_map_state(self, build_id: str) -> dict[str, Any]:
+        """Return the O(1) invalidation state for a build's derived semantic maps.
+
+        Older builds have no row until first use. Treat them as generation 1 and
+        dirty so the first semantic-map request materializes System Data once.
+        """
+        build_id = str(build_id or "").strip()
+        if not build_id:
+            raise ValueError("A build ID is required.")
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO semantic_map_build_state(build_id,generation,dirty,reason,updated_at)
+                VALUES(?,?,?,?,?)
+                ON CONFLICT(build_id) DO NOTHING
+                """,
+                (build_id, 1, 1, "initial_projection", now),
+            )
+            row = conn.execute(
+                "SELECT build_id,generation,dirty,reason,updated_at "
+                "FROM semantic_map_build_state WHERE build_id=?",
+                (build_id,),
+            ).fetchone()
+            conn.commit()
+        return {
+            "build_id": str(row["build_id"]),
+            "generation": int(row["generation"]),
+            "dirty": bool(row["dirty"]),
+            "reason": str(row["reason"] or ""),
+            "updated_at": str(row["updated_at"]),
+        }
+
+    def mark_semantic_map_dirty(self, build_id: str, *, reason: str = "changed") -> int:
+        """Advance a build's semantic generation without walking its Records."""
+        build_id = str(build_id or "").strip()
+        if not build_id:
+            return 0
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO semantic_map_build_state(build_id,generation,dirty,reason,updated_at)
+                VALUES(?,?,?,?,?)
+                ON CONFLICT(build_id) DO UPDATE SET
+                    generation=semantic_map_build_state.generation + 1,
+                    dirty=1,
+                    reason=excluded.reason,
+                    updated_at=excluded.updated_at
+                """,
+                (build_id, 1, 1, str(reason or "changed"), now),
+            )
+            row = conn.execute(
+                "SELECT generation FROM semantic_map_build_state WHERE build_id=?",
+                (build_id,),
+            ).fetchone()
+            conn.commit()
+        return int(row["generation"]) if row else 0
+
+    def mark_semantic_map_clean(self, build_id: str, generation: int) -> bool:
+        """Mark exactly the generation that was materialized as current.
+
+        If another writer invalidated the build while projection was running, the
+        generation no longer matches and the dirty bit remains set.
+        """
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE semantic_map_build_state
+                SET dirty=0, reason='', updated_at=?
+                WHERE build_id=? AND generation=?
+                """,
+                (_iso_now(), str(build_id), int(generation)),
+            )
+            conn.commit()
+        return bool(cursor.rowcount)
+
+    def put_semantic_map_projection(
+        self,
+        scope_type: str,
+        scope_id: str,
+        build_id: str,
+        generation: int,
+        payload: dict[str, Any],
+        *,
+        work: str | None = None,
+    ) -> None:
+        """Persist one rebuildable semantic-map projection in System Data."""
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO semantic_map_projections
+                    (scope_type,scope_id,build_id,work,generation,payload_json,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?)
+                ON CONFLICT(scope_type,scope_id,build_id) DO UPDATE SET
+                    work=excluded.work,
+                    generation=excluded.generation,
+                    payload_json=excluded.payload_json,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    str(scope_type),
+                    str(scope_id),
+                    str(build_id),
+                    str(work or "").strip() or None,
+                    int(generation),
+                    _json_dumps(payload),
+                    now,
+                    now,
+                ),
+            )
+            conn.commit()
+
+    def get_semantic_map_projection(
+        self,
+        scope_type: str,
+        scope_id: str,
+        build_id: str,
+    ) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT scope_type,scope_id,build_id,work,generation,payload_json,created_at,updated_at
+                FROM semantic_map_projections
+                WHERE scope_type=? AND scope_id=? AND build_id=?
+                """,
+                (str(scope_type), str(scope_id), str(build_id)),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = _json_loads(row["payload_json"], {})
+        if not isinstance(payload, dict):
+            return None
+        return {
+            "scope_type": str(row["scope_type"]),
+            "scope_id": str(row["scope_id"]),
+            "build_id": str(row["build_id"]),
+            "work": str(row["work"] or ""),
+            "generation": int(row["generation"]),
+            "payload": payload,
+            "created_at": str(row["created_at"]),
+            "updated_at": str(row["updated_at"]),
+        }
+
+    def list_semantic_map_projections_for_work(
+        self,
+        work: str,
+        *,
+        scope_type: str = "work",
+    ) -> list[dict[str, Any]]:
+        work = str(work or "").strip()
+        if not work:
+            return []
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT scope_type,scope_id,build_id,work,generation,payload_json,created_at,updated_at
+                FROM semantic_map_projections
+                WHERE work=? AND scope_type=?
+                ORDER BY updated_at DESC, build_id
+                """,
+                (work, str(scope_type)),
+            ).fetchall()
+        values: list[dict[str, Any]] = []
+        for row in rows:
+            payload = _json_loads(row["payload_json"], {})
+            if not isinstance(payload, dict):
+                continue
+            values.append({
+                "scope_type": str(row["scope_type"]),
+                "scope_id": str(row["scope_id"]),
+                "build_id": str(row["build_id"]),
+                "work": str(row["work"] or ""),
+                "generation": int(row["generation"]),
+                "payload": payload,
+                "created_at": str(row["created_at"]),
+                "updated_at": str(row["updated_at"]),
+            })
+        return values
 
     def list_languages(self) -> dict[str, dict[str, Any]]:
         with self._lock, self._connect() as conn:
