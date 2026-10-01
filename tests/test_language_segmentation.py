@@ -64,6 +64,11 @@ def test_script_fallback_is_segmentation_only_and_conservative() -> None:
     assert metadata["profile"] == "zh"
     assert metadata["language_source"] == "script_inference"
     assert len(split_sentences(chinese)) == 2
+
+    persian = profile_metadata("fa", "این یک جمله است؟ این جمله دوم است.")
+    assert persian["language"] == "fa"
+    assert persian["profile"] == "fa"
+    assert persian["script"] == "Arabic"
     # Caseless scripts are not declared to continue a sentence merely because
     # their first character lacks uppercase/lowercase morphology.
     assert not starts_mid_sentence_text("第二句。", "zh")
