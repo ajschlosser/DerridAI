@@ -156,20 +156,20 @@ The key distinction is that retrieval, NLP, source structure, exact memory, and 
    - validation/reconciliation;
    - persistence.
 3. Replace full-corpus live-ownership reads with `repo.get_record(build_id, record_id)`.
-4. Switch the default automatic evidence-recovery assignment from the heavy non-cELF relevance cascade to the direct-support-first cELF pipeline.
-5. Keep the heavier relevance cascade available as an explicit optional Pipeline Studio assignment.
+4. The first latency tranche switched automatic evidence recovery to the direct-support-first cELF pipeline. Subsequent review found that this reduced useful evidence-suggestion recall, so the current default is the corrected `evidence.recovery.cascade@2`: direct support still short-circuits, while semantic/CrossEncoder/MMR stages only build a bounded shortlist and cannot establish evidence authority.
+5. Keep `evidence.recovery.celf@1` and legacy `evidence.recovery.cascade@1` available for explicit assignment and reproducible comparisons.
 
-Expected benefit: modest but low-risk wall-clock savings, especially on large builds and evidence-heavy records, while creating a cleaner baseline for the larger model-call reductions.
+The original switch reduced the amount of computation on the evidence-recovery path, but its end-to-end latency/quality trade-off was not measured with a controlled fixed-corpus benchmark before becoming the default. Cascade v2 therefore restores richer retrieval while bounding the expensive final adjudication and preserving the other hot-path optimizations.
 
 ### Phase 1 — deterministic-first evidence
 
-1. Treat direct-support lexical retrieval plus provenance validation as the default automatic evidence path.
-2. Reuse reviewer evidence-suggestion support/provenance semantics rather than maintaining divergent evidence eligibility rules.
-3. Do not spend a generative evidence-selection call automatically when deterministic support yields no result unless an explicit build policy enables it.
-4. Keep unresolved evidence visible as unresolved; do not convert relevance into proof.
-5. Preserve evidence-pipeline identity and exact source bindings on every suggestion.
+1. Treat direct-support lexical retrieval plus provenance validation as the cheapest automatic evidence path and stop immediately when it succeeds.
+2. When direct support is absent, use semantic retrieval, CrossEncoder reranking and MMR only to locate and bound plausible passages; relevance scores are never evidence authority.
+3. Require every ranked candidate to pass direct-support validation or a closed-choice support decision before it can reach provenance.
+4. Bound the closed-choice model to the ranked shortlist (four candidates in the built-in v2 graph) and fall back to the Record's source units only when retrieval cannot produce a shortlist.
+5. Keep unresolved evidence visible as unresolved and preserve evidence-pipeline identity, trace, exact source bindings and separate score semantics on every suggestion.
 
-Expected benefit: eliminate most evidence-recovery model calls and expensive semantic/reranking work from the normal path.
+Expected benefit: retain much of the old cascade's recall while avoiding its two main defects—premature CrossEncoder termination and relevance being treated as support—and keep the final model context substantially smaller than the full Record in the normal path.
 
 ### Phase 2 — indexing without routine generation
 
@@ -282,8 +282,8 @@ The first tranche is now in progress on this branch:
 - **Implemented:** per-family live reviewer-ownership checks use `repo.get_record(build_id, record_id)` instead of reparsing/scanning the complete Record set before every family.
 - **Implemented:** per-family build checkpoints now persist the affected Record through `repo.update_record` and move build task counters incrementally, instead of loading/scanning/rewriting the entire corpus on every running/completed family transition.
 - **Implemented:** enrichment retains the reviewed-precedent identities/similarities used in the prompt but no longer runs precedent-to-current-Record evidence remapping on every Record. That embedding/pipeline work now runs lazily when a reviewer opens the precedents view, preserving evidence suggestions while removing review-only computation from the enrichment critical path.
-- **Implemented:** the built-in `evidence_recovery` assignment now points to `evidence.recovery.celf@1`; the heavier relevance cascade remains available for explicit assignment.
-- **Implemented:** automatic evidence recovery's closed-choice LLM fallback is deployment-opt-in by default (`METADATA_EVIDENCE_CASCADE_LLM_ENABLED=false`). Direct-support recovery therefore spends no additional model call in the normal configuration.
+- **Implemented in PR #366:** the built-in `evidence_recovery` assignment moved from legacy `evidence.recovery.cascade@1` to `evidence.recovery.celf@1`, and the automatic closed-choice LLM fallback became opt-in. This removed semantic/reranking/model work from the normal recovery path but also reduced useful suggestion recall.
+- **Implemented on `fix/evidence-recovery-cascade-v2`:** `evidence.recovery.cascade@2` restores semantic retrieval, CrossEncoder reranking and MMR as candidate-location stages while preventing any of them from establishing evidence. Direct support still exits early; otherwise a support gate or a closed-choice model decision over at most four ranked candidates is required before provenance. The built-in assignment now points to v2, the bounded LLM fallback is enabled by default, and both older pipelines remain available for reproducibility. A controlled fixed-corpus latency/coverage comparison is still required; no latency percentage is claimed from this change.
 - **Implemented:** enrichment metrics now expose call-latency p50, p95, max, and total, including the existing per-family slices. This is the first benchmark gate for the latency work.
 - **Implemented:** quotation enrichment is now signal-routed in Deep mode too. A quotation-family model call requires quotation punctuation/attribution language or a current Document Intelligence quotation projection; Deep mode no longer spends the quotation call on ordinary prose solely because the user selected Deep enrichment.
 - **Implemented:** automatic indexing now skips its generative family call when every indexing field already has a strong `derridai:memory` prefill (value-supported, present, confidence ≥ 0.88). The reviewed-memory assertions remain advisory/pending review, and an explicit indexing rerun always bypasses this router.
