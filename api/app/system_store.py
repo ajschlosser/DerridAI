@@ -197,6 +197,22 @@ class SystemStore:
         with self._lock:
             return self.repository.list_memory_bindings(**filters)
 
+    def put_semantic_map_projection(self, projection_key: str, **kwargs: Any) -> None:
+        with self._lock:
+            self.repository.put_semantic_map_projection(projection_key, **kwargs)
+
+    def get_semantic_map_projection(self, projection_key: str) -> dict[str, Any] | None:
+        with self._lock:
+            return self.repository.get_semantic_map_projection(projection_key)
+
+    def delete_semantic_map_projection(self, projection_key: str) -> bool:
+        with self._lock:
+            return self.repository.delete_semantic_map_projection(projection_key)
+
+    def delete_semantic_map_projections_for_scope(self, scope_kind: str, scope_id: str) -> int:
+        with self._lock:
+            return self.repository.delete_semantic_map_projections_for_scope(scope_kind, scope_id)
+
     def mark_semantic_memory_dirty(self, projection: str, **kwargs: Any) -> str:
         with self._lock:
             return self.repository.mark_semantic_memory_dirty(projection, **kwargs)
