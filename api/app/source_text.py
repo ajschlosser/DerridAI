@@ -9,6 +9,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
+from .language_segmentation import looks_like_speaker_start
 from .source_safety import check_size, safe_xml, validate_docx, validate_rtf
 
 MANIFEST_FIELDS = (
@@ -33,7 +34,6 @@ _NOT_SPEAKERS = {
 }
 _START_MARK = re.compile(r"\*\*\*\s*START OF (?:THE |THIS )?PROJECT GUTENBERG EBOOK.*?\*\*\*", re.I | re.S)
 _END_MARK = re.compile(r"\*\*\*\s*END OF (?:THE |THIS )?PROJECT GUTENBERG EBOOK.*", re.I | re.S)
-_SPEAKER_LINE = re.compile(r"^([A-Z][\w .'\-]{1,48}?):\s+\S")
 _BYLINE = re.compile(r"^by\s+([A-Z][^.\n]{2,80})$", re.I)
 
 def prepare_text(text: str) -> tuple[str, str]:
@@ -323,15 +323,21 @@ def _synthetic_page_blocks(text: str, *, extraction_method: str, confidence: flo
 
 
 def leading_speaker(paragraph: str) -> str | None:
+    """Return a source-visible speaker label without assuming a Latin script."""
     first = paragraph.strip().splitlines()[0] if paragraph.strip() else ""
-    match = _SPEAKER_LINE.match(first)
-    if not match:
+    if not looks_like_speaker_start(first):
         return None
-    name = re.sub(r"\s+", " ", match.group(1)).strip(" :-")
+    positions = [
+        position
+        for marker in (":", "：")
+        if (position := first.find(marker)) > 0
+    ]
+    if not positions:
+        return None
+    name = re.sub(r"\s+", " ", first[: min(positions)]).strip(" :-：")
     if not name or name.casefold() in _NOT_SPEAKERS or len(name) < 2:
         return None
-    letters = [ch for ch in name if ch.isalpha()]
-    if not letters:
+    if not any(ch.isalpha() for ch in name):
         return None
     return name
 
