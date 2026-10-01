@@ -1183,6 +1183,7 @@ store without treating every store as a database.
 - **Identity and access** (`auth`) contains sensitive authentication and
   authorization state such as users, roles/permissions, sessions, and login
   security data.
+- The Storage overview, Saved responses, Metadata examples, Metadata memory, Response Library and Vector Stores pages update on their own when the underlying data changes (for administrators, over the live connection); they have no Refresh buttons. The Databases and Advanced inspectors read raw tables on demand and keep **Refresh**.
 - **Saved responses** are generated research responses and their grades. They are
   operational history, not a corpus or research source; use **Response Library**
   for normal reading.

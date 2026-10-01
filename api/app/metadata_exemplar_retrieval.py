@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from . import operation_events
 from .config import settings
 from .cross_encoder import predict_scores
 from .metadata_exemplars import (
@@ -558,6 +559,7 @@ class ChromaMetadataExemplarIndex:
             # This collection is derived. Schema or embedding-contract changes
             # are safer to rebuild than to query with stale/incompatible vectors.
             self.store.client.delete_collection(name=self.collection_name)
+            operation_events.note_resource_changed("metadata_exemplars")
         except Exception as exc:
             missing = getattr(self.store, "_is_missing_collection_error", None)
             if callable(missing) and not missing(exc):
@@ -671,6 +673,8 @@ class ChromaMetadataExemplarIndex:
                 document_field="context_text",
                 id_field="metadata_exemplar_id",
             )
+        if stale or missing:
+            operation_events.note_resource_changed("metadata_exemplars")
         return {
             "desired": len(desired_ids),
             "upserted": len(missing),
@@ -697,6 +701,8 @@ class ChromaMetadataExemplarIndex:
                 document_field="context_text",
                 id_field="metadata_exemplar_id",
             )
+        if existing or desired:
+            operation_events.note_resource_changed("metadata_exemplars")
         return {
             "desired": len(desired),
             "upserted": len(desired),

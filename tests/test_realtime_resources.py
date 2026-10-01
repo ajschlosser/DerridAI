@@ -137,3 +137,20 @@ def test_pipeline_store_writes_note_their_resources(tmp_path):
 
     assert store.delete_assignment("research") is False
     assert "pipelines" in operation_events.drain().resources
+
+
+def test_vector_store_mutations_note_collections_changed():
+    from app.chroma_store import ChromaStore
+
+    class _Collection:
+        metadata: dict = {}
+
+        def modify(self, metadata):
+            self.metadata = metadata
+
+    store = ChromaStore.__new__(ChromaStore)
+    store._collection = lambda name: _Collection()  # type: ignore[method-assign]
+    store._public_store = lambda collection: {}  # type: ignore[method-assign]
+    operation_events.drain()
+    store.set_protection("x", True)
+    assert "vector_collections" in operation_events.drain().resources

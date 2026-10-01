@@ -1,6 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { VueQueryPlugin } from "@tanstack/vue-query";
+import { queryClient } from "../../src/realtime/dataQuery";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.fn();
@@ -35,7 +37,9 @@ describe("System Data workspaces", () => {
       facets: { fields: [], kinds: [], languages: [], scopes: [], schemas: [] },
     });
 
-    const wrapper = mount(SystemDataView);
+    const wrapper = mount(SystemDataView, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
 
     expect(wrapper.get("h1").text()).toBe("System Data");
@@ -74,7 +78,11 @@ describe("System Data workspaces", () => {
     });
     vi.spyOn(systemApi, "systemChromaCollections").mockResolvedValue({ collections: [] });
 
-    const wrapper = mount(SystemDataOverview);
+    queryClient.clear();
+    queryClient.setDefaultOptions({ queries: { retry: false } });
+    const wrapper = mount(SystemDataOverview, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
 
     expect(wrapper.text()).toContain("Unavailable");

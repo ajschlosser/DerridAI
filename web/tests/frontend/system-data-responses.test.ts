@@ -1,6 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { VueQueryPlugin } from "@tanstack/vue-query";
+import { queryClient } from "../../src/realtime/dataQuery";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { routerPush, routerReplace, routeQuery } = vi.hoisted(() => ({
@@ -27,6 +29,8 @@ import { useI18nStore } from "../../src/stores/i18n";
 
 describe("System Data saved responses", () => {
   beforeEach(() => {
+    queryClient.clear();
+    queryClient.setDefaultOptions({ queries: { retry: false } });
     setActivePinia(createPinia());
     useI18nStore().dictionary = {};
     vi.restoreAllMocks();
@@ -50,7 +54,9 @@ describe("System Data saved responses", () => {
   });
 
   it("sends search and pagination through the response API", async () => {
-    const wrapper = mount(SystemDataResponses);
+    const wrapper = mount(SystemDataResponses, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
 
     await wrapper.get('input[type="search"]').setValue("différance");
@@ -69,7 +75,9 @@ describe("System Data saved responses", () => {
     routeQuery.q = "difference";
     routeQuery.offset = "25";
 
-    const wrapper = mount(SystemDataResponses);
+    const wrapper = mount(SystemDataResponses, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
 
     const searchInput = wrapper.get('input[type="search"]').element as HTMLInputElement;
@@ -79,7 +87,9 @@ describe("System Data saved responses", () => {
   });
 
   it("deep-links a row into the selected Response Library response", async () => {
-    const wrapper = mount(SystemDataResponses);
+    const wrapper = mount(SystemDataResponses, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
 
     await wrapper.get(".row-actions .btn").trigger("click");
@@ -94,7 +104,9 @@ describe("System Data saved responses", () => {
     vi.mocked(runtime.openMessageModal).mockResolvedValue(false);
     const remove = vi.spyOn(systemApi, "deleteSystemResponseCacheRecord");
 
-    const wrapper = mount(SystemDataResponses);
+    const wrapper = mount(SystemDataResponses, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
     await wrapper.get(".danger-text").trigger("click");
 

@@ -28,6 +28,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from . import operation_events
+
 logger = logging.getLogger(__name__)
 
 SETTING_KEY = "data_retention"
@@ -257,6 +259,8 @@ class ResponseCacheRetention(OperationalStore):
             return 0
         for batch in _batches(keys):
             collection.delete(ids=batch)
+        if keys:
+            operation_events.note_resource_changed("response_library")
         return len(keys)
 
 

@@ -1,6 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { VueQueryPlugin } from "@tanstack/vue-query";
+import { queryClient } from "../../src/realtime/dataQuery";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { routerPush, routerReplace, routeQuery } = vi.hoisted(() => ({
@@ -20,6 +22,8 @@ import { useI18nStore } from "../../src/stores/i18n";
 
 describe("System Data metadata examples", () => {
   beforeEach(() => {
+    queryClient.clear();
+    queryClient.setDefaultOptions({ queries: { retry: false } });
     setActivePinia(createPinia());
     vi.restoreAllMocks();
     routerPush.mockReset();
@@ -62,7 +66,10 @@ describe("System Data metadata examples", () => {
   });
 
   it("renders field/value first and reveals exact provenance details", async () => {
-    const wrapper = mount(SystemDataMetadataExamples, { attachTo: document.body });
+    const wrapper = mount(SystemDataMetadataExamples, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+      attachTo: document.body,
+    });
     await flushPromises();
 
     expect(wrapper.text()).toContain("position_holder");
@@ -80,7 +87,9 @@ describe("System Data metadata examples", () => {
   });
 
   it("passes field and language filters through the System Data API", async () => {
-    const wrapper = mount(SystemDataMetadataExamples);
+    const wrapper = mount(SystemDataMetadataExamples, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
 
     const selects = wrapper.findAll(".filters select");
@@ -119,7 +128,9 @@ describe("System Data metadata examples", () => {
     routeQuery.record = "record-1";
     routeQuery.offset = "25";
 
-    const wrapper = mount(SystemDataMetadataExamples);
+    const wrapper = mount(SystemDataMetadataExamples, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
 
     expect(systemApi.systemMetadataExemplars).toHaveBeenCalledWith(
@@ -144,7 +155,9 @@ describe("System Data metadata examples", () => {
       rows: [],
       facets: { fields: [], kinds: [], languages: [], scopes: [], schemas: [] },
     });
-    const missing = mount(SystemDataMetadataExamples);
+    const missing = mount(SystemDataMetadataExamples, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
     expect(missing.text()).toContain("has not been built");
     missing.unmount();
@@ -157,7 +170,9 @@ describe("System Data metadata examples", () => {
       rows: [],
       facets: { fields: [], kinds: [], languages: [], scopes: [], schemas: [] },
     });
-    const empty = mount(SystemDataMetadataExamples);
+    const empty = mount(SystemDataMetadataExamples, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
     expect(empty.text()).toContain("no examples match");
   });

@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref, type Ref } from "vue";
 import AppIcon from "../AppIcon.vue";
 import SystemDataStoreCard from "../SystemDataStoreCard.vue";
 import {
@@ -11,22 +11,57 @@ import {
   type SystemResponseCachePage,
 } from "../../api/system";
 import { pipelinesApi } from "../../api/pipelines";
+import { useDataQuery } from "../../realtime/dataQuery";
 import { useI18nStore } from "../../stores/i18n";
 
 type Section = "overview" | "responses" | "metadata" | "pipelines" | "databases" | "advanced";
 defineEmits<{ "open-section": [section: Section] }>();
 
 const i18n = useI18nStore();
+type LoadState = "loading" | "available" | "unavailable";
+
+// Each count is one server-state read; realtime invalidation of its resource refetches it. The
+// database inventory (which files exist) does not change while the app runs: it is read once.
+const cacheQuery = useDataQuery("response_library", () => systemApi.responseCacheRecords(1, 0), {
+  detail: ["overview"],
+});
+const exemplarsQuery = useDataQuery(
+  "metadata_exemplars",
+  () => systemApi.systemMetadataExemplars({ limit: 1, offset: 0 }),
+  { detail: ["overview"] },
+);
+const chromaQuery = useDataQuery("vector_collections", () => systemApi.systemChromaCollections(), {
+  detail: ["system-collections"],
+});
+const pipelineQuery = useDataQuery("pipelines", () => pipelinesApi.catalog(), {
+  detail: ["overview"],
+});
+function stateOf(query: { isPending: Ref<boolean>; isError: Ref<boolean> }): LoadState {
+  if (query.isError.value) return "unavailable";
+  return query.isPending.value ? "loading" : "available";
+}
 const databases = ref<SystemDataDatabase[]>([]);
-const databaseState = ref<"loading" | "available" | "unavailable">("loading");
-const cache = ref<SystemResponseCachePage | null>(null);
-const cacheState = ref<"loading" | "available" | "unavailable">("loading");
-const exemplars = ref<SystemMetadataExemplarPage | null>(null);
-const exemplarState = ref<"loading" | "available" | "unavailable">("loading");
-const collections = ref<SystemChromaCollection[]>([]);
-const chromaState = ref<"loading" | "available" | "unavailable">("loading");
-const pipelineCount = ref(0);
-const pipelineState = ref<"loading" | "available" | "unavailable">("loading");
+const databaseState = ref<LoadState>("loading");
+onMounted(async () => {
+  try {
+    databases.value = (await systemApi.systemData()).databases || [];
+    databaseState.value = "available";
+  } catch {
+    databaseState.value = "unavailable";
+  }
+});
+const cache = computed<SystemResponseCachePage | null>(() => cacheQuery.data.value ?? null);
+const cacheState = computed(() => stateOf(cacheQuery));
+const exemplars = computed<SystemMetadataExemplarPage | null>(
+  () => exemplarsQuery.data.value ?? null,
+);
+const exemplarState = computed(() => stateOf(exemplarsQuery));
+const collections = computed<SystemChromaCollection[]>(
+  () => chromaQuery.data.value?.collections || [],
+);
+const chromaState = computed(() => stateOf(chromaQuery));
+const pipelineCount = computed(() => pipelineQuery.data.value?.pipelines.length || 0);
+const pipelineState = computed(() => stateOf(pipelineQuery));
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -40,68 +75,6 @@ function stateLabel(state: "loading" | "available" | "unavailable", empty = fals
 function database(name: string) {
   return databases.value.find((item) => item.name === name);
 }
-
-async function loadDatabases() {
-  databaseState.value = "loading";
-  try {
-    databases.value = (await systemApi.systemData()).databases || [];
-    databaseState.value = "available";
-  } catch {
-    databases.value = [];
-    databaseState.value = "unavailable";
-  }
-}
-async function loadCache() {
-  cacheState.value = "loading";
-  try {
-    cache.value = await systemApi.responseCacheRecords(1, 0);
-    cacheState.value = "available";
-  } catch {
-    cache.value = null;
-    cacheState.value = "unavailable";
-  }
-}
-async function loadExemplars() {
-  exemplarState.value = "loading";
-  try {
-    exemplars.value = await systemApi.systemMetadataExemplars({ limit: 1, offset: 0 });
-    exemplarState.value = "available";
-  } catch {
-    exemplars.value = null;
-    exemplarState.value = "unavailable";
-  }
-}
-async function loadChroma() {
-  chromaState.value = "loading";
-  try {
-    collections.value = (await systemApi.systemChromaCollections()).collections || [];
-    chromaState.value = "available";
-  } catch {
-    collections.value = [];
-    chromaState.value = "unavailable";
-  }
-}
-async function loadPipelines() {
-  pipelineState.value = "loading";
-  try {
-    pipelineCount.value = (await pipelinesApi.catalog()).pipelines.length;
-    pipelineState.value = "available";
-  } catch {
-    pipelineCount.value = 0;
-    pipelineState.value = "unavailable";
-  }
-}
-function refresh() {
-  void Promise.allSettled([
-    loadDatabases(),
-    loadCache(),
-    loadExemplars(),
-    loadChroma(),
-    loadPipelines(),
-  ]);
-}
-
-onMounted(refresh);
 </script>
 
 <template>
@@ -118,9 +91,6 @@ onMounted(refresh);
           }}
         </p>
       </div>
-      <button class="btn" type="button" @click="refresh">
-        <AppIcon name="refresh" /> {{ t("common.refresh", "Refresh") }}
-      </button>
     </header>
 
     <div class="store-grid">

@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../AppIcon.vue";
 import {
@@ -8,6 +8,7 @@ import {
   type SystemMetadataExemplar,
   type SystemMetadataExemplarPage,
 } from "../../api/system";
+import { useDataQuery } from "../../realtime/dataQuery";
 import { useI18nStore } from "../../stores/i18n";
 
 const i18n = useI18nStore();
@@ -21,7 +22,7 @@ const page = ref<SystemMetadataExemplarPage>({
   rows: [],
   facets: { fields: [], kinds: [], languages: [], scopes: [], schemas: [] },
 });
-const loading = ref(false);
+
 const error = ref("");
 const requestedOffset = ref(Math.max(0, Number(route.query.offset) || 0));
 const detail = ref<SystemMetadataExemplar | null>(null);
@@ -62,22 +63,40 @@ function syncRoute(offset: number, push = false) {
   else void router.replace(target);
 }
 
+// The requested page is the query key; realtime invalidation of `metadata_exemplars` refetches it.
+function pageParams(offset: number) {
+  return { ...filters.value, limit: page.value.limit, offset };
+}
+const applied = ref(pageParams(requestedOffset.value));
+const pageQuery = useDataQuery(
+  "metadata_exemplars",
+  () => systemApi.systemMetadataExemplars(applied.value),
+  {
+    detail: () => [applied.value],
+  },
+);
+const loading = computed(() => pageQuery.isFetching.value);
+watch(
+  () => pageQuery.data.value,
+  (next) => {
+    if (next) {
+      page.value = next;
+      error.value = "";
+    }
+  },
+);
+watch(
+  () => pageQuery.error.value,
+  (cause) => {
+    if (cause) error.value = cause instanceof Error ? cause.message : String(cause);
+  },
+);
 async function load(offset = 0, updateRoute = true, push = false) {
   requestedOffset.value = offset;
   if (updateRoute) syncRoute(offset, push);
-  loading.value = true;
-  error.value = "";
-  try {
-    page.value = await systemApi.systemMetadataExemplars({
-      ...filters.value,
-      limit: page.value.limit,
-      offset,
-    });
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : String(cause);
-  } finally {
-    loading.value = false;
-  }
+  const next = pageParams(offset);
+  if (JSON.stringify(next) === JSON.stringify(applied.value)) await pageQuery.refetch();
+  else applied.value = next;
 }
 function filterLabel(key: string) {
   const labels: Record<string, string> = {
@@ -125,8 +144,6 @@ watch(
     void load(offset, false);
   },
 );
-
-onMounted(() => void load(Math.max(0, Number(route.query.offset) || 0), false));
 </script>
 
 <template>
