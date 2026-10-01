@@ -77,6 +77,22 @@ def test_record_latency_reports_true_wall_clock_distribution():
     }
 
 
+def test_record_latency_reports_true_record_wall_clock_distribution():
+    rows = [
+        ev("record_run", field="__record__", record_id="r1", elapsed_ms=500),
+        ev("record_run", field="__record__", record_id="r2", elapsed_ms=1000),
+        ev("record_run", field="__record__", record_id="r3", elapsed_ms=2500),
+    ]
+    latency = compute(rows)["models"]["m"]["record_latency_ms"]
+    assert latency == {
+        "records": 3,
+        "p50": 1000.0,
+        "p95": 2350.0,
+        "max": 2500.0,
+        "total": 4000.0,
+    }
+
+
 def test_call_contract_reports_requested_fields_and_prompt_size():
     rows = [
         ev("call", field="indexing", elapsed_ms=100, ok=True, requested_field_count=4, input_chars=4000),
