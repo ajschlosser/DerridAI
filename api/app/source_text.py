@@ -335,7 +335,14 @@ def leading_speaker(paragraph: str) -> str | None:
     if not positions:
         return None
     name = re.sub(r"\s+", " ", first[: min(positions)]).strip(" :-：")
-    if not name or name.casefold() in _NOT_SPEAKERS or len(name) < 2:
+    normalized_name = name.casefold()
+    first_token = normalized_name.split()[0] if normalized_name.split() else ""
+    if (
+        not name
+        or normalized_name in _NOT_SPEAKERS
+        or first_token in _NOT_SPEAKERS
+        or len(name) < 2
+    ):
         return None
     if not any(ch.isalpha() for ch in name):
         return None
