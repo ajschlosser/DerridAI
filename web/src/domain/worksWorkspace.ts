@@ -4,7 +4,7 @@
 // overview, sync, metadata dialogs, review and remove actions). Moved verbatim from the legacy runtime; the runtime's
 // state object and helpers are passed in as dependencies.
 import { fullCitation } from "./citations";
-import { commonWorkValue, workCoverUrl } from "./workMetadata";
+import { commonWorkValue, workCoverUrl, workMetadataPresentationRows } from "./workMetadata";
 import { WORK_METADATA_LLM_FIELDS } from "./runtimeConstants";
 import type { WorksDbStatusKind, WorksIndexFreshness } from "../types/works";
 
@@ -54,7 +54,6 @@ type Helper =
   | "syncUrl"
   | "tr"
   | "uid"
-  | "uniqueWorkValues"
   | "upsertRows"
   | "workDbStatus"
   | "workIndex"
@@ -92,7 +91,6 @@ export function createWorksWorkspace(deps: Deps) {
     syncUrl,
     tr,
     uid,
-    uniqueWorkValues,
     upsertRows,
     workDbStatus,
     workIndex,
@@ -215,38 +213,19 @@ export function createWorksWorkspace(deps: Deps) {
     };
     if (!detail) return base;
 
-    const metadataFields = [
-      "source_type",
-      "document_author",
-      "container_title",
-      "journal_title",
-      "volume",
-      "issue",
-      "pages",
-      "publisher",
-      "publication_year",
-      "edition",
-      "translator",
-      "editor",
-      "publication_place",
-      "isbn",
-      "doi",
-      "document_language",
-      "original_language",
-    ];
+    const metadata = workMetadataPresentationRows(item.rows).map((item) => ({
+      field_id: item.field_id,
+      field: item.field,
+      field_label: label(item.field),
+      mixed: item.mixed,
+      value: item.mixed ? "" : String(display(item.value)),
+      unique_count: item.unique_count,
+      empty: item.empty,
+    }));
     return {
       ...base,
       citation: fullCitation(item.rows[0]?.record || { work: item.work }, { includePages: false }),
-      metadata: metadataFields.map((field) => {
-        const value = commonWorkValue(item.rows, field);
-        return {
-          field,
-          field_label: label(field),
-          mixed: Boolean(value.mixed),
-          value: value.mixed ? "" : String(display(value.value)),
-          unique_count: value.mixed ? uniqueWorkValues(item.rows, field).length : 0,
-        };
-      }),
+      metadata,
       insights: workInsightMetrics(item.rows, item.work).map((metric: Any) => ({
         id: metric.id,
         field: metric.field,
