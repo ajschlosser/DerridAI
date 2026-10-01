@@ -105,9 +105,9 @@ function clearFilters() {
         />
         <UiButton
           size="small"
-          :label="i18n.t('works.view_compact')"
-          :pressed="props.viewMode === 'compact'"
-          @click="emit('viewMode', 'compact')"
+          :label="i18n.t('works.view_list')"
+          :pressed="props.viewMode === 'list'"
+          @click="emit('viewMode', 'list')"
         />
       </div>
     </div>
