@@ -4,7 +4,7 @@ import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 import MixedValueInspect from "./MixedValueInspect.vue";
-import type { WorksItem } from "../../types/works";
+import type { WorksLibraryItem } from "../../types/works";
 import { statusTone } from "../../domain/status";
 import UiButton from "../ui/UiButton.vue";
 import UiMenu, { type UiMenuItem } from "../ui/UiMenu.vue";
@@ -12,7 +12,7 @@ import UiStatusBadge from "../ui/UiStatusBadge.vue";
 
 const props = withDefaults(
   defineProps<{
-    work: WorksItem;
+    work: WorksLibraryItem;
     selected?: boolean;
     /** Researcher libraries are read-only: no database status, no corpus operations. */
     mode?: "admin" | "researcher";
