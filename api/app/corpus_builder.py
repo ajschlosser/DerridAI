@@ -1273,6 +1273,9 @@ class PdfCorpusRepository:
             if thread_mode not in valid_thread_modes:
                 raise ValueError("Unsupported thread_mode")
             unit_policy = normalize_policy(plan.get("unit_policy"))
+            from .document_layout_regions import apply_layout_regions, normalize_regions
+
+            regions = normalize_regions(plan.get("layout_regions"), page_count)
             clean_plan = {
                 "page_layout": layout, "reading_order": order,
                 "main_text_pdf_start": main_pdf, "main_text_printed_start": main_printed,
@@ -1281,6 +1284,7 @@ class PdfCorpusRepository:
                 "thread_a_language": str(plan.get("thread_a_language") or "").strip() or None,
                 "thread_b_language": str(plan.get("thread_b_language") or "").strip() or None,
                 "unit_policy": unit_policy,
+                "layout_regions": regions,
                 "confirmed_by": "human", "updated_at": iso_now(),
             }
             pages = asset.get("pages") or []
@@ -1291,7 +1295,7 @@ class PdfCorpusRepository:
                 for key in ("logical_pages", "deterministic_region_type", "thread_ids"):
                     page.pop(key, None)
             for block in blocks:
-                for key in ("logical_page_slot", "logical_printed_page_label", "deterministic_region_type", "document_thread", "thread_language"):
+                for key in ("logical_page_slot", "logical_printed_page_label", "deterministic_region_type", "document_thread", "thread_language", "layout_region_id", "layout_region_role", "layout_flow"):
                     block.pop(key, None)
             def printed_for(pdf_page: int, slot: str | None = None) -> int | None:
                 if not (main_pdf and main_printed) or pdf_page < main_pdf:
@@ -1371,6 +1375,8 @@ class PdfCorpusRepository:
                 language = clean_plan.get("thread_a_language" if thread == "thread_a" else "thread_b_language")
                 if language:
                     block["thread_language"] = language
+            if regions:
+                apply_layout_regions(blocks, pages, regions)
             tmp = self.asset_blocks_path(asset_id).with_suffix(".blocks.jsonl.tmp")
             with tmp.open("w", encoding="utf-8") as handle:
                 for block in blocks:
@@ -3169,6 +3175,15 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         asset = self.repo.get_asset(build["asset_id"])
         all_blocks = self.repo.load_blocks(build["asset_id"])
         blocks = [block for block in all_blocks if not block.get("excluded_reason")]
+        layout = asset.get("document_layout") if isinstance(asset.get("document_layout"), dict) else {}
+        raw_regions = layout.get("layout_regions") if isinstance(layout.get("layout_regions"), list) else []
+        if raw_regions:
+            from .document_layout_regions import reading_sequence
+
+            blocks = reading_sequence(
+                blocks,
+                [str(item.get("id")) for item in raw_regions if isinstance(item, dict) and item.get("id")],
+            )
         if not blocks:
             raise ValueError("No SourceUnits were extracted from the PDF. Check OCR support and extraction warnings.")
 

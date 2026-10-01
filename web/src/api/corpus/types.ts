@@ -1,5 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
+import type { LayoutRegion } from "../../domain/documentLayoutRegions";
+
 /** How printed page numbers are found in text sources: deterministic patterns, optionally then a model, or not at all. */
 export interface PageDetectionRequest {
   mode: "auto" | "auto_llm" | "off";
@@ -83,11 +85,7 @@ export interface PdfAsset {
     speakers?: string[];
     language?: string;
     language_status?:
-      | "deterministic"
-      | "llm_proposed"
-      | "human_confirmed"
-      | "confirmed_absent"
-      | "unresolved";
+      "deterministic" | "llm_proposed" | "human_confirmed" | "confirmed_absent" | "unresolved";
     [key: string]: unknown;
   };
   document_layout?: DocumentLayoutPlan;
@@ -207,6 +205,7 @@ export interface DocumentLayoutPlan {
   thread_a_language?: string | null;
   thread_b_language?: string | null;
   unit_policy?: SourceUnitPolicy;
+  layout_regions?: LayoutRegion[];
 }
 
 export interface LlmActivity {
@@ -1062,12 +1061,7 @@ export interface CorpusRecord {
     string,
     {
       status?:
-        | "deterministic"
-        | "model_inferred"
-        | "human_confirmed"
-        | "unresolved"
-        | "invalid"
-        | string;
+        "deterministic" | "model_inferred" | "human_confirmed" | "unresolved" | "invalid" | string;
       method?: string;
       confidence?: number | null;
       reason?: string;
@@ -1339,13 +1333,7 @@ export interface HumanEvidenceSource {
 
 export type SourceProviderId = "gutenberg" | "wikisource";
 export type ContributionRole =
-  | "author"
-  | "coauthor"
-  | "translator"
-  | "editor"
-  | "contributor"
-  | "about_author"
-  | "unknown";
+  "author" | "coauthor" | "translator" | "editor" | "contributor" | "about_author" | "unknown";
 export type WorkRelationship = "original_language_edition" | "translation" | "edition" | "unknown";
 export type IdentityConfidence = "exact" | "probable" | "needs_review";
 export type CaptureStatus =
@@ -1359,12 +1347,7 @@ export type CaptureStatus =
   | "interrupted"
   | "failed";
 export type CandidateAcquisitionStatus =
-  | "pending"
-  | "fetching"
-  | "acquired"
-  | "registered"
-  | "failed"
-  | "cancelled";
+  "pending" | "fetching" | "acquired" | "registered" | "failed" | "cancelled";
 export type SourceBuildStatus = "not_built" | "building" | "built" | "failed";
 
 /** A classified provider/capture failure, as the API reports it in `detail`. */

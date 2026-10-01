@@ -819,6 +819,14 @@ Corpus Builder presents three researcher-facing phases for one durable workflow 
 
 The UI presents three phases, but the URL intentionally retains the four internal workspace values `workspace=setup|build|review|publish` plus build/Record/queue identifiers. That keeps Build and Review independently deep-linkable and preserves refresh, Back/Forward, and durable lifecycle behavior while avoiding a false sequential handoff in the interface.
 
+### Document structure and pagination
+
+For a PDF, **Document structure & pagination** is where you say how the pages are arranged before a build. Choose a page pattern: one column, facing pages, a margin column, an inset box, or a quotation band. Facing pages still map one PDF page onto two printed pages, with a reading order and a thread for each side.
+
+A margin, infobox, running header, or other text that is not the main column is a **region**: a rectangle on the page, with a role and a thread. The rectangle applies to every page unless you limit it to odd pages, even pages, a range, or the page you are looking at. Drag its edges, or select it and use the arrow keys (Shift plus an arrow key resizes it). One region covers a repeating layout. Rectangles are used because columns, margins, and boxes repeat across a book; a shape drawn around every paragraph would not. When one page wraps around a figure, limit that rectangle to that page.
+
+Text in a separate region is read after the main text, in page order, and becomes its own records, so a marginal gloss or a parallel column is not braided into the argument on every sheet. A block quotation can stay in the main text instead. Running headers marked as their own region stay out of the body. Each block keeps its page. Printed page numbers, front matter, and the bibliography are still set with the page anchors and the mapping review. A document can have at most 24 regions.
+
 ### Build monitor and Model activity
 
 The **Build** primary status is the progress surface rather than a hidden technical-details disclosure. It follows the actual current pipeline stages, including preparation/resume, document structure/review, segmentation, Record construction, Document Intelligence, metadata enrichment, and final review preparation. During segmentation it reports candidate progress; during enrichment it reports the active Record/family and settled/running/queued task counts. The overall percentage remains a coarse cross-stage indicator and is not presented as an item-count estimate or ETA.
