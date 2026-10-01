@@ -42,17 +42,16 @@ const createSiteOpen = ref(false);
 const createSiteBusy = ref(false);
 const createSiteError = ref("");
 const createSiteLanguages = ref<SiteExportOptions["languages"]>([]);
-const createSiteProviderProfiles = ref<SiteExportOptions["provider_profiles"]>([]);
+const createSiteTransformers = ref<SiteExportOptions["transformers_runtime"] | undefined>();
 
 async function openCreateSite() {
   createSiteError.value = "";
   try {
     const options = await sitesApi.exportOptions();
     createSiteLanguages.value = options.languages;
-    createSiteProviderProfiles.value = options.provider_profiles;
+    createSiteTransformers.value = options.transformers_runtime;
   } catch (cause) {
     createSiteLanguages.value = [...i18n.languages];
-    createSiteProviderProfiles.value = [];
     createSiteError.value = cause instanceof Error ? cause.message : String(cause);
   }
   createSiteOpen.value = true;
@@ -71,7 +70,7 @@ async function createSite(payload: {
   export_format: SiteExportFormat;
   record_profile: SiteRecordProfile;
   languages: string[];
-  provider_profile_ids: string[];
+  include_transformers: boolean;
 }) {
   if (!snapshot.value?.activeStore || createSiteBusy.value) return;
   createSiteBusy.value = true;
@@ -86,7 +85,7 @@ async function createSite(payload: {
         ? i18n.locale
         : payload.languages[0] || "en-US",
       languages: payload.languages,
-      provider_profile_ids: payload.provider_profile_ids,
+      include_transformers: payload.include_transformers,
       export_format: payload.export_format,
       record_profile: payload.record_profile,
     });
@@ -520,7 +519,7 @@ onBeforeUnmount(() => {
       :store-name="snapshot.activeStore"
       :initial-work="snapshot.selectedWork"
       :languages="createSiteLanguages"
-      :provider-profiles="createSiteProviderProfiles"
+      :transformers-runtime="createSiteTransformers"
       :busy="createSiteBusy"
       :error="createSiteError"
       @cancel="closeCreateSite"
