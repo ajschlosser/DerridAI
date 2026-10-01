@@ -184,6 +184,25 @@ describe("SemanticMapCanvas", () => {
     expect(surface.attributes("style")).toContain("height: 252px");
   });
 
+  it("keeps decluttered overview nodes visual but non-interactive", async () => {
+    const graph = buildSemanticMap(
+      Array.from({ length: 10 }, (_, index) => ({
+        id: `record-${index}`,
+        work: `Work ${index}`,
+        concepts: [`concept ${index} alpha`, `concept ${index} beta`],
+        topics: [`topic ${index}`],
+        persons: [`Person ${index}`],
+      })),
+    );
+    const wrapper = mount(SemanticMapCanvas, { props: { graph } });
+    await flushPromises();
+
+    const decluttered = wrapper.find(".semantic-map-node.decluttered");
+    expect(decluttered.exists()).toBe(true);
+    expect(decluttered.element.tagName).toBe("DIV");
+    expect(decluttered.attributes("aria-hidden")).toBe("true");
+  });
+
   it("changes spacing within clusters without multiplying the whole map by the old wide factor", async () => {
     const graph = buildSemanticMap(sources, "r1");
     const wrapper = mount(SemanticMapCanvas, { props: { graph } });
