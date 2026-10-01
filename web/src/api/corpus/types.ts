@@ -16,6 +16,8 @@ export type SourceUnitMode = "default" | "paragraph" | "line" | "sentence" | "ch
 
 export interface SourceUnitPolicy {
   mode: SourceUnitMode;
+  /** Documentary-language hint used for sentence/automatic orthographic segmentation. */
+  language?: string;
   /** Characters per unit; only for mode "chars". */
   chars?: number;
   /** Group this many paragraphs or sentences into one unit (1 or absent = no grouping). */
@@ -29,6 +31,14 @@ export interface SourceUnitPreview {
   median_chars: number;
   max_chars: number;
   min_chars: number;
+  language_segmentation?: {
+    language: string;
+    profile: string;
+    script: string;
+    engine: string;
+    language_source: "declared" | "script_inference" | "undetermined";
+    uses_case: boolean;
+  };
   sample: { block_id: string; page: number | null; text: string }[];
 }
 
@@ -36,6 +46,7 @@ export interface PdfAsset {
   /** The asset this one was derived from, and the unit policy that derived it. */
   derived_from_asset_id?: string;
   unit_policy?: SourceUnitPolicy;
+  unit_segmentation?: SourceUnitPreview["language_segmentation"];
   asset_id: string;
   sha256: string;
   filename: string;
