@@ -8,7 +8,11 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from ..http_auth import require_admin
-from ..site_publication import build_local_site_file, build_nginx_site_bundle, build_site_bundle
+from ..site_publication import (
+    build_local_site_file,
+    build_nginx_site_bundle,
+    build_site_bundle,
+)
 from ..system_store import system_store
 
 router = APIRouter(tags=["sites"])
