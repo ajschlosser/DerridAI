@@ -1,6 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { onBeforeUnmount, ref, watch, type Ref } from "vue";
+import { ApiError } from "../api/http";
 import { pipelinesApi } from "../api/pipelines";
+import { useI18nStore } from "../stores/i18n";
 import type { PipelineAnalysis, PipelineDefinition } from "../types/pipelines";
 
 /**
@@ -33,7 +35,16 @@ export function usePipelineAnalysis(pipeline: Ref<PipelineDefinition | null>, de
       if (mine !== generation || (cause instanceof DOMException && cause.name === "AbortError")) {
         return;
       }
-      error.value = cause instanceof Error ? cause.message : String(cause);
+      // While a stage id is retyped the draft is briefly invalid; say so rather than echo the raw 422.
+      error.value =
+        cause instanceof ApiError && cause.status === 422
+          ? useI18nStore().t(
+              "pipelines.analysis_draft_incomplete",
+              "The draft is incomplete, so it cannot be analysed yet. The last complete analysis is shown.",
+            )
+          : cause instanceof Error
+            ? cause.message
+            : String(cause);
     } finally {
       if (mine === generation) loading.value = false;
     }

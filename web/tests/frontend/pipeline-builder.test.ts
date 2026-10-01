@@ -18,6 +18,7 @@ import {
   contractStrategy,
   contractVocabulary,
 } from "../../src/components/pipelines/fixtures/pipelineCatalogContract";
+import { ApiError } from "../../src/api/http";
 import { usePipelineAnalysis } from "../../src/composables/usePipelineAnalysis";
 import { useI18nStore } from "../../src/stores/i18n";
 import type { PipelineAnalysis, PipelineDefinition } from "../../src/types/pipelines";
@@ -532,6 +533,21 @@ describe("usePipelineAnalysis", () => {
     await vi.advanceTimersByTimeAsync(120);
     expect(analyze).toHaveBeenCalledTimes(1);
     expect(analyze.mock.calls[0][0].name).toBe("Two");
+    wrapper.unmount();
+  });
+
+  it("describes an invalid draft (422) as incomplete and keeps the last analysis", async () => {
+    const { api, wrapper } = host();
+    api.refresh();
+    await vi.advanceTimersByTimeAsync(0);
+    await flushPromises();
+    const good = api.analysis.value;
+    analyze.mockRejectedValueOnce(new ApiError("Stage id is not valid", 422));
+    api.refresh();
+    await vi.advanceTimersByTimeAsync(0);
+    await flushPromises();
+    expect(api.error.value).toMatch(/incomplete/i);
+    expect(api.analysis.value).toBe(good);
     wrapper.unmount();
   });
 

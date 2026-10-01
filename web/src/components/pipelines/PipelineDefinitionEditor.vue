@@ -18,7 +18,9 @@ import {
   insertStage,
   removeBindingReferences,
   renameBindingReferences,
-  setInputBinding,
+  bindInput as applyBinding,
+  releaseOrderingEdges,
+  type OrderingEdge,
   type BindingChoice,
   type InsertMode,
 } from "../../domain/pipelineBindings";
@@ -221,11 +223,14 @@ function addFromPalette(strategyId: string, mode: InsertMode) {
   void nextTick(() => stageEditor.value?.focus());
 }
 
+// Edges this editor added only to order a producer ahead of a bound consumer.
+const orderingEdges: OrderingEdge[] = [];
+
 function bindInput(stageIndex: number, port: string, choice: BindingChoice | null) {
   const stage = props.modelValue.stages[stageIndex];
   if (!stage) return;
-  const next = setInputBinding(props.modelValue, stage.id, port, choice);
-  if (!next) {
+  const result = applyBinding(props.modelValue, stage.id, port, choice);
+  if (!result) {
     bindNotice.value = t(
       "pipelines.ports_cycle",
       "That stage runs after this one, so it cannot feed it. Choose an earlier stage.",
@@ -233,6 +238,13 @@ function bindInput(stageIndex: number, port: string, choice: BindingChoice | nul
     return;
   }
   bindNotice.value = "";
+  let next = result.pipeline;
+  if (result.added) orderingEdges.push(result.added);
+  if (choice === null) {
+    const released = releaseOrderingEdges(next, orderingEdges, stage.id);
+    next = released.pipeline;
+    orderingEdges.splice(0, orderingEdges.length, ...released.tracked);
+  }
   emit("update:modelValue", next);
 }
 
