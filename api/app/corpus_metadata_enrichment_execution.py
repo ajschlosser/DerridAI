@@ -144,6 +144,42 @@ def _field_resolved_before_indexing_model(record: dict[str, Any], field_name: st
         return is_direct_nlp_indexing_candidate(assertion)
     return _field_has_strong_memory_prefill(record, field_name)
 
+_STRUCTURED_CONTRADICTION_PREFIX = "Structured-output contradiction:"
+
+
+def _structured_output_contradiction_fields(result: dict[str, Any]) -> list[str]:
+    """Return fields whose validated assessment contradicts its metadata value."""
+    assessments = result.get("field_assessments")
+    if not isinstance(assessments, dict):
+        return []
+    return sorted(
+        str(field)
+        for field, payload in assessments.items()
+        if isinstance(payload, dict)
+        and str(payload.get("reason") or "").startswith(_STRUCTURED_CONTRADICTION_PREFIX)
+    )
+
+
+def _is_truncated_structured_output(exc: Exception) -> bool:
+    """Recognize classified truncation without depending on provider wording."""
+    return bool(getattr(exc, "truncated", False)) or (
+        "truncated before its closing brace" in str(exc).casefold()
+        or "ended before its json object was complete" in str(exc).casefold()
+        or "cut off before its json object was complete" in str(exc).casefold()
+    )
+
+
+def _recovery_token_budget(max_tokens: int) -> int:
+    """Give an exceptional truncated-output recovery enough room to finish.
+
+    Normal successful calls retain their latency-oriented family ceilings. Once
+    truncation is proven, a small incremental increase can simply reproduce the
+    same cutoff on compact local models, so the one-off recovery gets a bounded
+    4096-token floor.
+    """
+    return min(8192, max(4096, max_tokens + 2048, int(max_tokens * 2)))
+
+
 class MetadataEnrichmentExecutionMixin:
     """Mixin members declared here exist on PdfCorpusBuildManager, not on this mixin itself.
 
