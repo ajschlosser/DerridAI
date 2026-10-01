@@ -134,3 +134,4 @@ def test_html_lang_is_preserved_as_documentary_language_metadata() -> None:
 def test_ingest_speaker_detection_accepts_non_latin_labels() -> None:
     assert leading_speaker("デリダ：テクストが始まる") == "デリダ"
     assert leading_speaker("دريدا: يبدأ النص") == "دريدا"
+    assert leading_speaker("Figure 1: not a speaker") is None
