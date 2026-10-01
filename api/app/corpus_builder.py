@@ -2150,6 +2150,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 request=request,
             )
             projection_counts = project_annotations_to_records(records, analysis)
+            analysis["record_text_revision"] = int(
+                self.repo.semantic_projection_state(build_id).get("text_revision") or 0
+            )
             self.repo.save_checkpoint(build_id, "document_intelligence", analysis)
             semantic_graph = build_semantic_content_graph(
                 records, analysis, schema=schema,
