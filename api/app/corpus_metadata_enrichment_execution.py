@@ -1006,7 +1006,28 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": None,
                 }
                 stage_results.append((task_name, result, None))
-                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0), ok=True, **experiment.context(request, model=str(active_request.get("model") or ""), record_id=str(record.get("record_id") or ""), code_version=APP_VERSION, prompt_version=PROFILE_VERSION))
+                self._ledger.append(
+                    CALL,
+                    model=str(active_request.get("model") or ""),
+                    field=task_name,
+                    build_id=build_id,
+                    record_id=str(record.get("record_id") or ""),
+                    run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")),
+                    elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0),
+                    ok=True,
+                    requested_fields=requested_fields,
+                    requested_field_count=len(requested_fields),
+                    input_chars=len(prompt),
+                    max_output_tokens=max_tokens,
+                    attempts_allowed=ledger_context["attempts_allowed"],
+                    **experiment.context(
+                        request,
+                        model=str(active_request.get("model") or ""),
+                        record_id=str(record.get("record_id") or ""),
+                        code_version=APP_VERSION,
+                        prompt_version=PROFILE_VERSION,
+                    ),
+                )
                 self._record_family_effectiveness(
                     build_id, task_name, result, elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0),
                     provider_profile_id=str(ledger_context.get("provider_profile_id") or ""),
@@ -1024,7 +1045,28 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": str(exc)[:1200],
                 }
                 stage_results.append((task_name, None, exc))
-                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=int((time.monotonic() - started_clock) * 1000), ok=False, **experiment.context(request, model=str(active_request.get("model") or ""), record_id=str(record.get("record_id") or ""), code_version=APP_VERSION, prompt_version=PROFILE_VERSION))
+                self._ledger.append(
+                    CALL,
+                    model=str(active_request.get("model") or ""),
+                    field=task_name,
+                    build_id=build_id,
+                    record_id=str(record.get("record_id") or ""),
+                    run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")),
+                    elapsed_ms=int((time.monotonic() - started_clock) * 1000),
+                    ok=False,
+                    requested_fields=requested_fields,
+                    requested_field_count=len(requested_fields),
+                    input_chars=len(prompt),
+                    max_output_tokens=max_tokens,
+                    attempts_allowed=ledger_context["attempts_allowed"],
+                    **experiment.context(
+                        request,
+                        model=str(active_request.get("model") or ""),
+                        record_id=str(record.get("record_id") or ""),
+                        code_version=APP_VERSION,
+                        prompt_version=PROFILE_VERSION,
+                    ),
+                )
                 if stage_callback:
                     stage_callback(record, task_name, "failed", str(exc))
                 if build_id:
