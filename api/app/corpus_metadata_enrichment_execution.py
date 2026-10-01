@@ -1022,11 +1022,11 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             }
             stage_status[task_name] = "running"
             stage_ledger[task_name] = {**ledger_context, "state": "running", "started_at": started_at, "finished_at": None, "error": None}
-            model_invocations_before = (
-                sum(int(item.get("input_count") or 0) for item in session.counts.values())
-                if session is not None
-                else 0
-            )
+            model_call_counter: dict[str, int] = {"attempts": 0}
+            counted_request = {
+                **active_request,
+                "_structured_call_counter": model_call_counter,
+            }
             if stage_callback:
                 stage_callback(record, task_name, "running", None)
             started_clock = time.monotonic()
@@ -1040,7 +1040,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 try:
                     result = session.run(
                         self._structured_metadata_invoker(
-                            active_request,
+                            counted_request,
                             prompt,
                             response_model,
                             max_tokens,
@@ -1063,7 +1063,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     )
                     result = session.run(
                         self._structured_metadata_invoker(
-                            active_request,
+                            counted_request,
                             repair_prompt,
                             response_model,
                             recovery_max_tokens,
@@ -1105,15 +1105,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 residual_contradictions = _structured_output_contradiction_fields(result)
                 persisted_stage_results[task_name] = result
                 stage_status[task_name] = "complete"
-                model_invocations = max(
-                    0,
-                    (
-                        sum(int(item.get("input_count") or 0) for item in session.counts.values())
-                        if session is not None
-                        else 0
-                    )
-                    - model_invocations_before,
-                )
+                model_invocations = int(model_call_counter.get("attempts") or 0)
                 stage_ledger[task_name] = {
                     **ledger_context,
                     "pipeline": session.identity(),
@@ -1169,15 +1161,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 raise
             except Exception as exc:
                 stage_status[task_name] = "failed"
-                model_invocations = max(
-                    0,
-                    (
-                        sum(int(item.get("input_count") or 0) for item in session.counts.values())
-                        if session is not None
-                        else 0
-                    )
-                    - model_invocations_before,
-                )
+                model_invocations = int(model_call_counter.get("attempts") or 0)
                 stage_ledger[task_name] = {
                     **ledger_context,
                     **({"pipeline": session.identity()} if session else {}),
