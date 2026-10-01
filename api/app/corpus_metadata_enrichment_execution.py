@@ -49,7 +49,10 @@ from .corpus_reviewer_helpers import (
     _scrub_sealed_field,
 )
 from .corpus_segmentation import _apply_manifest_metadata
-from .document_intelligence import prompt_hints as document_intelligence_prompt_hints
+from .document_intelligence import (
+    current_quotations as document_intelligence_quotations,
+    prompt_hints as document_intelligence_prompt_hints,
+)
 from .enrichment_ledger import (
     AUTOFILLED,
     CALL,
@@ -545,7 +548,12 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         semantic_indexing = bool(request.get("semantic_indexing")) or enrichment_mode == "deep"
         region_type = str(record.get("region_type") or "")
         obvious_apparatus = region_type in {"bibliography", "index", "copyright", "front_matter", "back_matter"} or record.get("primary_text") is False
-        quote_signal = any(token in source_text for token in ('“', '”', '"', '«', '»', '‘', '’')) or bool(re.search(r"\b(?:quotes?|writes?|says?|according to|cites?)\b", source_text, re.I))
+        document_quotations = document_intelligence_quotations(record)
+        quote_signal = (
+            bool(document_quotations)
+            or any(token in source_text for token in ('“', '”', '"', '«', '»', '‘', '’'))
+            or bool(re.search(r"\b(?:quotes?|writes?|says?|according to|cites?)\b", source_text, re.I))
+        )
         # One task per group of the build's schema: the prompt is assembled from the schema and the answer's shape is generated from it.
         all_task_specs: dict[str, tuple[str, str, type[BaseModel], int, str]] = {}
         run_guidance = request.get("run_guidance") if isinstance(request.get("run_guidance"), dict) else {}
@@ -615,10 +623,13 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             # deterministic region/primary-text rules and is therefore always
             # scheduled unless the family is already human-owned. This catches
             # bad or unreviewed main-text page ranges while also supplying the
-            # high-value discourse_role proposal. Quotation and indexing keep their
-            # routing; any group a schema adds runs every time.
+            # high-value discourse_role proposal. Quotation is signal-routed in
+            # both Fast and Deep modes: punctuation/attribution language or a
+            # current Document Intelligence quotation is required before spending
+            # a model call. Indexing keeps its existing mode gate; any group a
+            # schema adds runs every time.
             for name, spec in all_task_specs.items():
-                if name == "quotation" and not (enrichment_mode == "deep" or quote_signal):
+                if name == "quotation" and not quote_signal:
                     continue
                 if name == "indexing" and not semantic_indexing:
                     continue
