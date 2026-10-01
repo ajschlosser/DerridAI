@@ -26,9 +26,10 @@ const props = withDefaults(
     variant: SemanticMapPlacement;
     sources?: SemanticMapSource[];
     focusId?: string;
+    cacheKey?: string;
     showClose?: boolean;
   }>(),
-  { sources: () => [], focusId: "", showClose: true },
+  { sources: () => [], focusId: "", cacheKey: "", showClose: true },
 );
 const emit = defineEmits<{ activate: [node: SemanticMapNode] }>();
 
@@ -48,7 +49,7 @@ const kindEnabled = ref<Record<SemanticMapKind, boolean>>({
   record: true,
 });
 
-const graph = computed(() => buildSemanticMap(props.sources, props.focusId));
+const graph = computed(() => buildSemanticMap(props.sources, props.focusId, props.cacheKey));
 
 const kindCounts = computed<Record<SemanticMapKind, number>>(() => {
   const counts: Record<SemanticMapKind, number> = { concept: 0, topic: 0, person: 0, record: 0 };
