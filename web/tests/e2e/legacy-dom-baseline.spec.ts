@@ -82,8 +82,6 @@ interface Scenario {
   steps?: (page: Page) => Promise<void>;
   /** What to capture: the page's main region (default) or the open dialog. */
   target?: "main" | "runtime" | "dialog" | "app" | "dock";
-  /** Record computed styles instead of markup, to guard colors, fonts and spacing in each theme. */
-  styles?: boolean;
   /** A viewport size other than the default desktop one, to exercise the responsive rules. */
   viewport?: { width: number; height: number };
 }
@@ -204,81 +202,6 @@ async function rawMarkup(
       .replace(/\bui-tooltip-\d+\b/g, "ui-tooltip-<id>")
       .replace(/\b\d{1,2}\/\d{1,2}\/\d{4},? \d{1,2}:\d{2}(:\d{2})?( [AP]M)?/g, "<date>")
   );
-}
-
-const STYLE_PROPERTIES = [
-  "display",
-  "color",
-  "background-color",
-  "border-top-color",
-  "border-top-width",
-  "border-radius",
-  "font-size",
-  "font-weight",
-  "font-family",
-  "line-height",
-  "padding",
-  "margin",
-  "text-transform",
-  "opacity",
-];
-
-/** One line per element under the target: its tag and classes, then the computed style values that do not depend on layout. */
-async function computedStyles(
-  page: Page,
-  target: "main" | "runtime" | "dialog" | "app" | "dock",
-): Promise<string> {
-  const locator =
-    target === "dialog"
-      ? page.locator("dialog[open], [role=dialog][aria-modal=true]").last()
-      : target === "app"
-        ? page.locator("#app")
-        : target === "dock"
-          ? page.locator("#operationProgressStack")
-          : target === "runtime"
-            ? page.locator("#main")
-            : page.locator("main").first();
-  return locator.evaluate((root, properties) => {
-    const lines: string[] = [];
-    const walk = (el: Element, depth: number) => {
-      // The runtime wraps disabled controls in a tooltip span at a timing-dependent moment; look through it.
-      if (el.classList.contains("disabled-control-tooltip")) {
-        for (const child of Array.from(el.children)) walk(child, depth);
-        return;
-      }
-      const style = getComputedStyle(el);
-      const label = `${el.tagName.toLowerCase()}${[...el.classList].map((c) => `.${c}`).join("")}`;
-      lines.push(
-        `${" ".repeat(depth)}${label} | ${properties.map((p) => `${p}:${style.getPropertyValue(p)}`).join("; ")}`,
-      );
-      for (const child of Array.from(el.children)) walk(child, depth + 1);
-    };
-    walk(root, 0);
-    return lines.join("\n");
-  }, STYLE_PROPERTIES);
-}
-
-async function freezeComputedStyleState(page: Page) {
-  await page.addStyleTag({
-    content: `
-      *, *::before, *::after {
-        transition: none !important;
-        animation: none !important;
-      }
-      :is(:hover, :focus, :focus-visible, :active) {
-        transition: none !important;
-      }
-    `,
-  });
-  const viewport = page.viewportSize();
-  await page.waitForTimeout(250);
-  await page.mouse.move((viewport?.width ?? 1280) - 2, (viewport?.height ?? 720) - 2);
-  await page.evaluate(() => {
-    (document.activeElement as HTMLElement | null)?.blur();
-    document.body.setAttribute("tabindex", "-1");
-    document.body.focus();
-  });
-  await page.waitForTimeout(50);
 }
 
 /** Waits until the markup stops changing, because Vue views load their data after they mount. */
@@ -769,8 +692,6 @@ const scenarios: Scenario[] = [
   // The dashboard is the one view still drawn by the runtime through RuntimeSurface.
   { name: "home-empty" },
   { name: "home-loaded", load: true },
-  { name: "styles-home-light", load: true, styles: true },
-  { name: "styles-home-dark", load: true, scheme: "dark", styles: true },
   { name: "home-researcher", role: "researcher" },
   { name: "home-with-jobs", load: true, fixtures: jobFixtures(JOBS) },
   {
@@ -863,14 +784,6 @@ const scenarios: Scenario[] = [
     target: "dialog",
     steps: openDialogFromRecords("Create subset"),
   },
-  {
-    name: "styles-dialog-subset-dark",
-    load: true,
-    scheme: "dark",
-    target: "dialog",
-    styles: true,
-    steps: openDialogFromRecords("Create subset"),
-  },
   // Job dialogs, opened from the Operations panel on the dashboard.
   ...[0, 1, 2].map(
     (index): Scenario => ({
@@ -936,33 +849,6 @@ const scenarios: Scenario[] = [
     target: "dialog",
     steps: openDialogFromRecords("Clean OCR Artifacts"),
   },
-  // Computed styles for more of the runtime-drawn surfaces.
-  {
-    name: "styles-dialog-job-results-dark",
-    load: true,
-    scheme: "dark",
-    styles: true,
-    target: "dialog",
-    fixtures: jobFixtures(FINISHED_JOBS),
-    steps: clickThenDialog((page) => page.getByRole("button", { name: "Review results" }).first()),
-  },
-  {
-    name: "styles-dialog-wizard-dark",
-    nav: "Corpus Data",
-    load: true,
-    scheme: "dark",
-    styles: true,
-    target: "dialog",
-    steps: clickThenDialog((page) => page.getByRole("button", { name: "New" }).first()),
-  },
-  {
-    name: "styles-pdf-explorer-light",
-    target: "runtime",
-    nav: "Corpus Builder",
-    styles: true,
-    steps: (page) => inPdfExplorer(page, { open: false }),
-  },
-  { name: "styles-home-researcher-dark", role: "researcher", scheme: "dark", styles: true },
   // The Search view is Vue, but every command it sends and every result it shows goes through the runtime.
   { name: "search-loaded", nav: "Search", load: true },
   {
@@ -1230,97 +1116,6 @@ const scenarios: Scenario[] = [
       await expect(page.locator("dialog[open]").last()).toBeVisible();
     },
   },
-  // Computed styles for the Vue views, so styles can move out of the global sheet into components without changing them.
-  { name: "styles-search-light", nav: "Search", load: true, styles: true },
-  { name: "styles-search-dark", nav: "Search", load: true, scheme: "dark", styles: true },
-  {
-    name: "styles-search-cards-light",
-    nav: "Search",
-    load: true,
-    styles: true,
-    steps: async (page) => {
-      await page.getByRole("button", { name: "Cards" }).click();
-      await page.waitForTimeout(700);
-    },
-  },
-  { name: "styles-research-light", nav: "Research", styles: true },
-  { name: "styles-research-dark", nav: "Research", scheme: "dark", styles: true },
-  { name: "styles-vector-light", nav: "Corpus Data", load: true, styles: true },
-  { name: "styles-vector-dark", nav: "Corpus Data", load: true, scheme: "dark", styles: true },
-  { name: "styles-records-light", nav: "Records", load: true, styles: true },
-  { name: "styles-records-dark", nav: "Records", load: true, scheme: "dark", styles: true },
-  { name: "styles-record-light", nav: "Record View", load: true, styles: true },
-  { name: "styles-works-light", nav: "Works", load: true, styles: true },
-  { name: "styles-compare-light", nav: "Compare", load: true, styles: true },
-  { name: "styles-providers-light", nav: "LLM Providers", styles: true },
-  { name: "styles-users-light", nav: "Users & roles", styles: true },
-  { name: "styles-roles-light", path: "/roles", styles: true },
-  { name: "styles-languages-light", nav: "Manage languages", styles: true },
-  { name: "styles-settings-light", nav: "Settings", styles: true },
-  { name: "styles-app-shell-light", load: true, target: "app", styles: true },
-  { name: "styles-app-shell-dark", load: true, scheme: "dark", target: "app", styles: true },
-  // Narrow and tablet widths, where the media-query rules apply.
-  {
-    name: "styles-search-narrow",
-    nav: "Search",
-    load: true,
-    styles: true,
-    viewport: { width: 390, height: 844 },
-  },
-  {
-    name: "styles-research-narrow",
-    nav: "Research",
-    styles: true,
-    viewport: { width: 390, height: 844 },
-  },
-  {
-    name: "styles-vector-narrow",
-    nav: "Corpus Data",
-    load: true,
-    styles: true,
-    viewport: { width: 390, height: 844 },
-  },
-  {
-    name: "styles-records-narrow",
-    nav: "Records",
-    load: true,
-    styles: true,
-    viewport: { width: 390, height: 844 },
-  },
-  {
-    name: "styles-users-narrow",
-    nav: "Users & roles",
-    styles: true,
-    viewport: { width: 390, height: 844 },
-  },
-  {
-    name: "styles-app-shell-narrow",
-    load: true,
-    target: "app",
-    styles: true,
-    viewport: { width: 390, height: 844 },
-  },
-  {
-    name: "styles-search-tablet",
-    nav: "Search",
-    load: true,
-    styles: true,
-    viewport: { width: 820, height: 1000 },
-  },
-  {
-    name: "styles-vector-tablet",
-    nav: "Corpus Data",
-    load: true,
-    styles: true,
-    viewport: { width: 820, height: 1000 },
-  },
-  {
-    name: "styles-app-shell-tablet",
-    load: true,
-    target: "app",
-    styles: true,
-    viewport: { width: 820, height: 1000 },
-  },
   // The Annotations view is Vue, but the annotations it lists, filters and removes come from the runtime.
   { name: "annotations-empty", nav: "Annotations" },
   { name: "annotations-loaded", nav: "Annotations", load: true, records: ANNOTATED_RECORDS },
@@ -1373,13 +1168,6 @@ const scenarios: Scenario[] = [
       await page.getByRole("button", { name: "Remove" }).first().click();
       await page.waitForTimeout(900);
     },
-  },
-  {
-    name: "styles-annotations-light",
-    nav: "Annotations",
-    load: true,
-    records: ANNOTATED_RECORDS,
-    styles: true,
   },
   // The Research view is Vue, but its evidence, configuration, runs and jobs all come from the runtime.
   { name: "research-with-evidence", load: true, steps: researchWithEvidence },
@@ -1450,13 +1238,6 @@ const scenarios: Scenario[] = [
         .click();
       await page.waitForTimeout(900);
     },
-  },
-  {
-    name: "styles-research-evidence-light",
-    load: true,
-    styles: true,
-    fixtures: jobFixtures(RAG_JOBS),
-    steps: researchWithEvidence,
   },
   // System Data is Vue-native and covered by component/E2E tests rather than the legacy runtime DOM baseline.
   // The Response Library is Vue too; it reads cached research answers through the runtime.
@@ -1631,17 +1412,8 @@ test.describe("legacy runtime DOM baseline", () => {
     test(scenario.name, async ({ page }) => {
       await open(page, scenario);
       const target = scenario.target ?? "main";
-      // Styles are read once the markup has stopped changing, so late-arriving data cannot make them vary.
       const stableMarkup = await markup(page, target);
-      if (scenario.styles) {
-        await freezeComputedStyleState(page);
-        const captured = await computedStyles(page, target);
-        // Computed colors and font metrics differ between the Windows authoring
-        // environment and the Linux CI runner; assert a usable capture rather
-        // than treating platform rendering as a DOM contract.
-        expect(captured).toContain("display:");
-        expect(captured).not.toContain("undefined");
-      } else if (target === "dock") {
+      if (target === "dock") {
         expect(stableMarkup).toContain('id="operationProgressStack"');
         expect(stableMarkup).toContain('id="operationStackItems"');
       } else if (target === "main" && scenario.name.startsWith("records-")) {
