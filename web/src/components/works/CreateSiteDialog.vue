@@ -4,11 +4,11 @@ import { computed, nextTick, onMounted, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { LanguageInfo, ProviderProfile } from "../../api/system";
 import type { SiteExportFormat } from "../../api/sites";
-import type { WorksItem } from "../../types/works";
+import type { WorksLibraryItem } from "../../types/works";
 import AppIcon from "../AppIcon.vue";
 
 const props = defineProps<{
-  works: WorksItem[];
+  works: WorksLibraryItem[];
   storeName: string;
   initialWork?: string;
   languages: LanguageInfo[];
