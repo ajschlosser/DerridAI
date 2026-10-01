@@ -40,14 +40,18 @@ type Step = { kind: "record"; id: string } | { kind: "node"; id: string; label: 
 
 const props = withDefaults(
   defineProps<{
-    buildId: string;
+    buildId?: string;
     record: { record_id: string; text?: string; record_revision?: number };
     disabled?: boolean;
     idPrefix?: string;
   }>(),
-  { disabled: false, idPrefix: "record" },
+  { buildId: "", disabled: false, idPrefix: "record" },
 );
-const emit = defineEmits<{ openRecord: [recordId: string]; refreshed: [] }>();
+const emit = defineEmits<{
+  openRecord: [recordId: string];
+  refreshed: [];
+  resolvedBuild: [buildId: string];
+}>();
 const i18n = useI18nStore();
 
 const surfacePreset = RELATION_SURFACE_PRESETS.semanticRadial;
@@ -64,6 +68,7 @@ const loading = ref(false);
 const rerunning = ref(false);
 const error = ref("");
 const includeTerms = ref(false);
+const effectiveBuildId = ref(props.buildId);
 
 const current = computed<Step | null>(() => trail.value[trail.value.length - 1] || null);
 const currentMap = computed(() =>
@@ -83,6 +88,7 @@ const inflight = new Set<string>();
 function reset() {
   generation += 1;
   inflight.clear();
+  effectiveBuildId.value = props.buildId;
   trail.value = props.record.record_id ? [{ kind: "record", id: props.record.record_id }] : [];
   maps.value = {};
   neighborhoods.value = {};
@@ -90,7 +96,7 @@ function reset() {
 }
 
 async function load(step: Step | null) {
-  if (!step || !props.buildId) return;
+  if (!step) return;
   if (step.kind === "record" ? maps.value[step.id] : neighborhoods.value[step.id]) return;
   const key = `${step.kind}:${step.id}`;
   if (inflight.has(key)) return;
@@ -100,12 +106,19 @@ async function load(step: Step | null) {
   error.value = "";
   try {
     if (step.kind === "record") {
-      const value = await corpusBuildsApi.recordSemanticMap(props.buildId, step.id);
+      const value = effectiveBuildId.value
+        ? await corpusBuildsApi.recordSemanticMap(effectiveBuildId.value, step.id)
+        : await corpusBuildsApi.publishedRecordSemanticMap(step.id);
       if (requested !== generation) return;
+      const resolved = String(value.build_id || "");
+      if (resolved && !effectiveBuildId.value) {
+        effectiveBuildId.value = resolved;
+        emit("resolvedBuild", resolved);
+      }
       maps.value = { ...maps.value, [step.id]: value };
       for (const row of value.linked_records) previews.value[row.record_id] = row.preview;
-    } else {
-      const value = await corpusBuildsApi.semanticGraphNode(props.buildId, step.id);
+    } else if (effectiveBuildId.value) {
+      const value = await corpusBuildsApi.semanticGraphNode(effectiveBuildId.value, step.id);
       if (requested !== generation) return;
       neighborhoods.value = { ...neighborhoods.value, [step.id]: value };
       for (const row of value.records) previews.value[row.record_id] = row.preview;
@@ -153,11 +166,11 @@ function jump(index: number) {
 }
 
 async function rerun() {
-  if (!props.buildId || rerunning.value) return;
+  if (!effectiveBuildId.value || rerunning.value) return;
   rerunning.value = true;
   error.value = "";
   try {
-    await corpusBuildsApi.rerunDocumentIntelligence(props.buildId);
+    await corpusBuildsApi.rerunDocumentIntelligence(effectiveBuildId.value);
     generation += 1;
     inflight.clear();
     maps.value = {};
