@@ -1,5 +1,6 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 
+import { embeddingDescriptorMismatches } from "./embeddingContract";
 import { EventBus } from "./events";
 import { isAbortError } from "./errors";
 import type { LocalVectorIndex } from "./localIndex";
@@ -214,9 +215,28 @@ export class SearchEngine {
     }
 
     const descriptor = this.embeddings.descriptor();
-    // Only the exact embedding model can use the publication's vectors; any other model needs a local index.
+    // Only the exact embedding model can use the publication's vectors; a different model/variant
+    // gets its own local index. An explicitly different revision of the publication model remains
+    // a contract mismatch rather than being silently treated as the same model.
     const usesPublished =
       publishedAvailable && matchesPublicationModel(descriptor, this.manifest.vector_index);
+    if (!usesPublished && publishedAvailable) {
+      const expectedModel = String(this.manifest.vector_index?.model ?? "").replace(/:latest$/, "");
+      const actualModel = String(descriptor.model ?? "").replace(/:latest$/, "");
+      const revisionMismatches = embeddingDescriptorMismatches(
+        this.manifest.vector_index,
+        descriptor,
+      ).filter((mismatch) => mismatch.field === "revision");
+      if (expectedModel && expectedModel === actualModel && revisionMismatches.length) {
+        return fallback(
+          fallbackWarning(
+            "embedding_contract_mismatch",
+            "The supplied embedding capability does not match the publication embedding contract; keyword results were returned.",
+            { mismatches: revisionMismatches },
+          ),
+        );
+      }
+    }
     let expectedDimension = Number(this.manifest.vector_index?.dimension || 0);
     let localVectors: Map<string, Float32Array> | undefined;
     if (!usesPublished) {
@@ -247,20 +267,35 @@ export class SearchEngine {
     try {
       const embedded = await this.embeddings.embed([query], { signal, purpose: "query" });
       vector = embedded.vectors[0] ?? [];
-      if (
-        embedded.provider &&
-        embeddingFingerprint(embedded.provider) !== embeddingFingerprint(descriptor)
-      ) {
-        return fallback(
-          fallbackWarning(
-            "embedding_contract_mismatch",
-            "The embedding result provenance does not match the configured embedding provider; keyword results were returned.",
-            {
-              expected: embeddingFingerprint(descriptor),
-              actual: embeddingFingerprint(embedded.provider),
-            },
-          ),
-        );
+      if (embedded.provider) {
+        if (usesPublished) {
+          const resultMismatches = embeddingDescriptorMismatches(
+            this.manifest.vector_index,
+            embedded.provider,
+          );
+          if (resultMismatches.length) {
+            return fallback(
+              fallbackWarning(
+                "embedding_contract_mismatch",
+                "The embedding result provenance does not match the publication embedding contract; keyword results were returned.",
+                { mismatches: resultMismatches },
+              ),
+            );
+          }
+        } else if (
+          embeddingFingerprint(embedded.provider) !== embeddingFingerprint(descriptor)
+        ) {
+          return fallback(
+            fallbackWarning(
+              "embedding_contract_mismatch",
+              "The embedding result provenance does not match the configured embedding provider; keyword results were returned.",
+              {
+                expected: embeddingFingerprint(descriptor),
+                actual: embeddingFingerprint(embedded.provider),
+              },
+            ),
+          );
+        }
       }
     } catch (error) {
       if (isAbortError(error)) throw error;
