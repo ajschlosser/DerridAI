@@ -335,6 +335,33 @@ export interface RecordSemanticLinkedRecord {
 
 export type SemanticLayerStatus = "ok" | "stale" | "missing" | "unavailable" | string;
 
+export interface SemanticProjectionMeta {
+  status: "ready" | "building" | "failed" | string;
+  generation: string;
+  source: "saved" | "generated" | "empty" | string;
+}
+
+export interface WorkSemanticMapSource {
+  id: string;
+  work: string;
+  concepts: string[];
+  topics: string[];
+  persons: string[];
+}
+
+export interface WorkSemanticMap {
+  version: number;
+  kind: "work_semantic_map" | string;
+  work: string;
+  sources: WorkSemanticMapSource[];
+  summary: {
+    records: number;
+    mapped_records: number;
+  };
+  projection?: SemanticProjectionMeta;
+  epistemic_note?: string;
+}
+
 export interface RecordSemanticMap {
   version: number;
   kind: "record_semantic_map" | string;
@@ -362,6 +389,7 @@ export interface RecordSemanticMap {
     outward_edges: number;
     linked_records: number;
   };
+  projection?: SemanticProjectionMeta;
   epistemic_note?: string;
 }
 
@@ -436,6 +464,7 @@ export interface SemanticNodeNeighborhood {
   total_edges: number;
   records: Array<{ record_id: string; preview: string }>;
   total_records: number;
+  projection?: SemanticProjectionMeta;
   epistemic_note?: string;
 }
 
