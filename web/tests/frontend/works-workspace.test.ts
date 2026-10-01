@@ -190,11 +190,11 @@ describe("works workspace commands", () => {
 
     it("stores safe view state and normalizes unknown values", () => {
       const { state, calls, workspace } = setup();
-      workspace.setWorksView({ sort: "records-desc", needsReview: true, viewMode: "compact" });
+      workspace.setWorksView({ sort: "records-desc", needsReview: true, viewMode: "list" });
       expect([state.worksSort, state.worksNeedsReview, state.worksView]).toEqual([
         "records-desc",
         true,
-        "compact",
+        "list",
       ]);
       expect(calls).toEqual(["persistPrefs", "syncUrl"]);
       workspace.setWorksView({ sort: "nonsense", viewMode: "grid", dbStatus: "", author: "X" });
@@ -220,7 +220,7 @@ describe("works workspace commands", () => {
       worksNeedsReview: true,
       worksDbStatus: "changed",
       worksAuthor: "Jacques Derrida",
-      worksView: "compact",
+      worksView: "list",
     });
     const encoded = JSON.parse(JSON.stringify(navigation.currentTableUrlState("works")));
     Object.assign(state, {
@@ -240,8 +240,10 @@ describe("works workspace commands", () => {
       worksNeedsReview: true,
       worksDbStatus: "changed",
       worksAuthor: "Jacques Derrida",
-      worksView: "compact",
+      worksView: "list",
     });
+    navigation.applyCompressedTableUrlState({ v: "compact" }, "works");
+    expect(state.worksView).toBe("list");
     // Hand-edited or stale values fall back to safe defaults rather than corrupting the view.
     navigation.applyCompressedTableUrlState({ s: "drop table", d: "weird", v: "grid" }, "works");
     expect(state).toMatchObject({ worksSort: "title-asc", worksDbStatus: "", worksView: "cards" });
