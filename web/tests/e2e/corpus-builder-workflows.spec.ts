@@ -178,16 +178,16 @@ test.describe("Corpus Builder composed workflow", () => {
     await expectWcag2AA(page, ".init-panel");
   });
 
-  test("review queue supports keyboard traversal and explicit issue filtering", async ({
+  test("review queue is one keyboard-operable filter list that includes the issue kinds", async ({
     page,
   }) => {
     await page.goto(story("corpus-builder-review-queue-tabs--metadata-queue"));
-    const issues = page.locator('[data-review-queue="issues"]');
-    await expect(issues).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator(".issue-filter select")).toHaveValue("metadata");
-    await issues.focus();
-    await issues.press("ArrowRight");
-    await expect(page.locator('[data-review-queue="accepted"]')).toBeFocused();
+    const filter = page.locator("[data-review-queue-select]");
+    await expect(filter).toHaveValue("metadata");
+    await expect(filter.locator("option")).toContainText([/All/, /Ready/, /Needs attention/]);
+    await filter.focus();
+    await filter.selectOption("accepted");
+    await expect(filter).toHaveValue("accepted");
     await expectWcag2AA(page, ".queue-controls");
   });
 

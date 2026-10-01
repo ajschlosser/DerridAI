@@ -18,10 +18,6 @@ const toolbar = {
   selectedCount: 0,
   bulkTotalCount: 177,
   bulkDisabled: false,
-  pageNumber: 1,
-  pageCount: 4,
-  hasPreviousPage: false,
-  hasNextPage: true,
   disabled: false,
 };
 

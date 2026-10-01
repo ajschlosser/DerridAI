@@ -2667,6 +2667,7 @@
   "pdf_corpus.metadata_decisions_count": "{count} decisions left",
   "pdf_corpus.metadata_decisions_count_one": "{count} decision left",
   "pdf_corpus.popout_record": "Pop out",
+  "pdf_corpus.queue_filter_label": "Show",
   "pdf_corpus.context_short": "Context",
   "pdf_corpus.cite_evidence_menu": "Cite evidence",
   "pdf_corpus.evidence_tools": "Evidence tools",

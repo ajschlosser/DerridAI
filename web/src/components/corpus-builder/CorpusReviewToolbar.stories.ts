@@ -28,10 +28,6 @@ const meta = {
     selectedCount: 2,
     bulkTotalCount: 48,
     bulkDisabled: false,
-    pageNumber: 1,
-    pageCount: 4,
-    hasPreviousPage: false,
-    hasNextPage: true,
     disabled: false,
   },
 } satisfies Meta<typeof CorpusReviewToolbar>;

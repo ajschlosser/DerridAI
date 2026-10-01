@@ -103,6 +103,7 @@ const viewLabels: Record<ReviewWorkspaceMode, string> = {
 
 <style scoped>
 .review-header {
+  container-type: inline-size;
   display: grid;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);

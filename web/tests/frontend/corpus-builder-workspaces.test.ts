@@ -463,10 +463,6 @@ describe("review header", () => {
     selectedCount: 0,
     bulkTotalCount: 20,
     bulkDisabled: false,
-    pageNumber: 1,
-    pageCount: 1,
-    hasPreviousPage: false,
-    hasNextPage: false,
   };
 
   it("moves selected-record actions into a contextual selection bar", async () => {
@@ -496,10 +492,6 @@ describe("review header", () => {
         selectedCount: 2,
         bulkTotalCount: 20,
         bulkDisabled: false,
-        pageNumber: 1,
-        pageCount: 1,
-        hasPreviousPage: false,
-        hasNextPage: false,
       } as never,
     });
 
@@ -538,10 +530,6 @@ describe("review header", () => {
         selectedCount: 0,
         bulkTotalCount: 20,
         bulkDisabled: false,
-        pageNumber: 1,
-        pageCount: 1,
-        hasPreviousPage: false,
-        hasNextPage: false,
       } as never,
       global: { stubs: { Teleport: true } },
     });
@@ -597,7 +585,7 @@ describe("review header", () => {
 describe("review queue filters", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  it("offers five primary filters and the issue kinds as a sub-filter under Needs attention", async () => {
+  it("offers five filters in one list, with the issue kinds indented under Needs attention", async () => {
     const wrapper = mount(CorpusReviewQueueTabs, {
       props: {
         modelValue: "metadata",
@@ -611,21 +599,28 @@ describe("review queue filters", () => {
         rejected: 1,
       },
     });
-    expect(wrapper.findAll(".queue-tab").map((tab) => tab.find("span").text())).toEqual([
-      "All",
-      "Ready",
-      "Needs attention",
-      "Accepted",
-      "Rejected",
-    ]);
-    // A specialised queue keeps Needs attention pressed and shows the sub-filter.
-    expect(wrapper.get('[data-review-queue="issues"]').attributes("aria-pressed")).toBe("true");
     const select = wrapper.get("select");
     expect(select.findAll("option").map((option) => option.attributes("value"))).toEqual([
+      "all",
+      "ready",
       "issues",
       "metadata",
       "topology",
+      "accepted",
+      "rejected",
     ]);
+    expect(select.findAll("option").map((option) => option.text().replace(/^\s*↳\s*/, ""))).toEqual(
+      [
+        "All · 10",
+        "Ready · 4",
+        "Needs attention · 3",
+        "Metadata decisions · 2",
+        "Topology · 1",
+        "Accepted · 2",
+        "Rejected · 1",
+      ],
+    );
+    expect((select.element as HTMLSelectElement).value).toBe("metadata");
     await select.setValue("issues");
     expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual(["issues"]);
   });

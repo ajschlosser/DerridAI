@@ -22,6 +22,10 @@ const props = defineProps<{
   searching?: boolean;
   canOpenPublish?: boolean;
   disabled?: boolean;
+  pageNumber?: number;
+  pageCount?: number;
+  hasPreviousPage?: boolean;
+  hasNextPage?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -33,6 +37,8 @@ const emit = defineEmits<{
   sourceWarning: [row: CorpusQueueRow];
   showAll: [];
   openPublish: [];
+  previousPage: [];
+  nextPage: [];
 }>();
 
 const i18n = useI18nStore();
@@ -241,10 +247,51 @@ function recordSelectionChanged(recordId: string, event: Event) {
         />
       </span>
     </div>
+    <div
+      v-if="(props.pageCount ?? 1) > 1"
+      class="pager"
+      role="group"
+      :aria-label="i18n.t('pdf_corpus.queue_paging')"
+    >
+      <UiButton
+        size="small"
+        icon-only
+        :label="i18n.t('ui.previous')"
+        :disabled="!props.hasPreviousPage"
+        @click="emit('previousPage')"
+      >
+        <template #icon-label><span aria-hidden="true">‹</span></template>
+      </UiButton>
+      <span>{{ props.pageNumber }} / {{ props.pageCount }}</span>
+      <UiButton
+        size="small"
+        icon-only
+        :label="i18n.t('ui.next')"
+        :disabled="!props.hasNextPage"
+        @click="emit('nextPage')"
+      >
+        <template #icon-label><span aria-hidden="true">›</span></template>
+      </UiButton>
+    </div>
   </nav>
 </template>
 
 <style scoped>
+/* Paging belongs to the list it pages, pinned under the rows. */
+.pager {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.5rem;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
 .record-row-snippet {
   display: -webkit-box;
   -webkit-box-orient: vertical;
