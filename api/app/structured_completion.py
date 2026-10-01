@@ -16,10 +16,11 @@ supplied by the caller and runs after syntax recovery.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Generic, Literal, TypeVar, cast
+from typing import Any, Literal, cast
 
 from .structured_json import (
     StructuredJsonMalformedError,
@@ -27,7 +28,8 @@ from .structured_json import (
     parse_json_object_result,
 )
 
-T = TypeVar("T")
+logger = logging.getLogger(__name__)
+
 StructuredFailureKind = Literal[
     "truncated",
     "malformed",
@@ -48,7 +50,7 @@ class StructuredAttemptContext:
 
 
 @dataclass(frozen=True)
-class StructuredAttemptOutcome(Generic[T]):
+class StructuredAttemptOutcome[T]:
     """Auditable result of one structured-output attempt."""
 
     context: StructuredAttemptContext
@@ -165,7 +167,7 @@ def structured_token_budget(
     return min(cap, budget)
 
 
-def complete_structured_json(
+def complete_structured_json[T](
     request_once: Callable[[StructuredAttemptContext], str],
     *,
     prompt: str,
@@ -206,7 +208,7 @@ def complete_structured_json(
             on_metric(name, amount)
         except Exception:
             # Telemetry must never alter the structured answer or retry policy.
-            pass
+            logger.debug("Structured completion metric callback failed", exc_info=True)
 
     def finish(outcome: StructuredAttemptOutcome[T]) -> None:
         if on_attempt_finish is not None:
