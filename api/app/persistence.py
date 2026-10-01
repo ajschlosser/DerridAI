@@ -243,12 +243,13 @@ class SQLiteRepositoryBase:
                     scope_type TEXT NOT NULL,
                     scope_id TEXT NOT NULL,
                     build_id TEXT NOT NULL,
+                    audience TEXT NOT NULL DEFAULT '',
                     work TEXT,
                     generation INTEGER NOT NULL,
                     payload_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    PRIMARY KEY(scope_type, scope_id, build_id)
+                    PRIMARY KEY(scope_type, scope_id, build_id, audience)
                 );
                 CREATE INDEX IF NOT EXISTS idx_semantic_map_projection_build
                     ON semantic_map_projections(build_id, generation);
@@ -1130,16 +1131,21 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         payload: dict[str, Any],
         *,
         work: str | None = None,
+        audience: str = "",
     ) -> None:
-        """Persist one rebuildable semantic-map projection in System Data."""
+        """Persist one rebuildable semantic-map projection in System Data.
+
+        Audience isolates reviewer-presented projections so blind second-opinion
+        values cannot leak through a projection built for another reviewer.
+        """
         now = _iso_now()
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO semantic_map_projections
-                    (scope_type,scope_id,build_id,work,generation,payload_json,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?)
-                ON CONFLICT(scope_type,scope_id,build_id) DO UPDATE SET
+                    (scope_type,scope_id,build_id,audience,work,generation,payload_json,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(scope_type,scope_id,build_id,audience) DO UPDATE SET
                     work=excluded.work,
                     generation=excluded.generation,
                     payload_json=excluded.payload_json,
@@ -1149,6 +1155,7 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                     str(scope_type),
                     str(scope_id),
                     str(build_id),
+                    str(audience or ""),
                     str(work or "").strip() or None,
                     int(generation),
                     _json_dumps(payload),
@@ -1163,15 +1170,17 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         scope_type: str,
         scope_id: str,
         build_id: str,
+        *,
+        audience: str = "",
     ) -> dict[str, Any] | None:
         with self._lock, self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT scope_type,scope_id,build_id,work,generation,payload_json,created_at,updated_at
+                SELECT scope_type,scope_id,build_id,audience,work,generation,payload_json,created_at,updated_at
                 FROM semantic_map_projections
-                WHERE scope_type=? AND scope_id=? AND build_id=?
+                WHERE scope_type=? AND scope_id=? AND build_id=? AND audience=?
                 """,
-                (str(scope_type), str(scope_id), str(build_id)),
+                (str(scope_type), str(scope_id), str(build_id), str(audience or "")),
             ).fetchone()
         if row is None:
             return None
@@ -1182,6 +1191,7 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             "scope_type": str(row["scope_type"]),
             "scope_id": str(row["scope_id"]),
             "build_id": str(row["build_id"]),
+            "audience": str(row["audience"] or ""),
             "work": str(row["work"] or ""),
             "generation": int(row["generation"]),
             "payload": payload,
@@ -1194,6 +1204,7 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         work: str,
         *,
         scope_type: str = "work",
+        audience: str = "",
     ) -> list[dict[str, Any]]:
         work = str(work or "").strip()
         if not work:
@@ -1201,12 +1212,12 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT scope_type,scope_id,build_id,work,generation,payload_json,created_at,updated_at
+                SELECT scope_type,scope_id,build_id,audience,work,generation,payload_json,created_at,updated_at
                 FROM semantic_map_projections
-                WHERE work=? AND scope_type=?
+                WHERE work=? AND scope_type=? AND audience=?
                 ORDER BY updated_at DESC, build_id
                 """,
-                (work, str(scope_type)),
+                (work, str(scope_type), str(audience or "")),
             ).fetchall()
         values: list[dict[str, Any]] = []
         for row in rows:
@@ -1217,6 +1228,7 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                 "scope_type": str(row["scope_type"]),
                 "scope_id": str(row["scope_id"]),
                 "build_id": str(row["build_id"]),
+                "audience": str(row["audience"] or ""),
                 "work": str(row["work"] or ""),
                 "generation": int(row["generation"]),
                 "payload": payload,
