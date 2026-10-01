@@ -8646,7 +8646,7 @@
   "works.active_filters": "Active filters",
   "works.library_pagination": "Works library pages",
   "works.bibliographic_metadata": "Bibliographic metadata",
-  "works.show_empty_metadata": "Show {count} empty fields",
+  "works.show_empty_metadata": "Show empty fields ({count})",
   "works.hide_empty_metadata": "Hide empty fields",
   "works.no_bibliographic_metadata": "No bibliographic metadata available."
 }
