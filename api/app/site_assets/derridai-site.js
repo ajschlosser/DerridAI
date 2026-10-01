@@ -1552,17 +1552,15 @@
   function browserSemanticIndexSection() {
     const index = capabilities?.localIndex;
     if (!index || index.usesPublishedVectors || index.complete) return null;
-    if (selectedEmbeddingId) return indexSection();
-    return indexSection(async () => {
-      saveLocalModel();
-      await rebuildClient();
-    });
+    // Search and Research use the already-active embedding provider. They should not rebuild the SDK client
+    // merely to start a derived index; doing so can replace the provider while the click handler is running.
+    return indexSection(null, "site.runtime.index_build_browser");
   }
 
   // The local index holds vectors computed here with the reader's embedding provider. It is derived from the
   // published Records, kept only in this browser, and can be rebuilt or cleared at any time.
   let indexMessage = "";
-  function indexSection(beforeBuild = null) {
+  function indexSection(beforeBuild = null, initialBuildLabelKey = null) {
     const index = capabilities.localIndex;
     const outcome = node("div", { class: "status", role: "status", "aria-live": "polite" });
     outcome.textContent = indexMessage;
@@ -1608,7 +1606,10 @@
         ? t("site.runtime.index_rebuild")
         : index.indexed
           ? t("site.runtime.index_resume")
-          : t(beforeBuild ? "site.runtime.index_build_browser" : "site.runtime.index_build"),
+          : t(
+              initialBuildLabelKey ||
+                (beforeBuild ? "site.runtime.index_build_browser" : "site.runtime.index_build"),
+            ),
     });
     const cancel = node("button", { type: "button", text: t("site.runtime.index_cancel") });
     cancel.hidden = true;
