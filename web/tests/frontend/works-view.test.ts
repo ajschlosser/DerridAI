@@ -256,20 +256,24 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
-  it("separates the loaded workspace from the corpus database and keeps sync with the database", async () => {
+  it("presents authoritative corpus state and derived search-index freshness compactly", async () => {
     const wrapper = await mountWorks();
     const loaded = wrapper.get("[data-works-context='loaded']");
+    expect(loaded.text()).toContain("Working corpus");
     expect(loaded.text()).toContain("1 source files · 12 records");
+
     const database = wrapper.get("[data-works-context='database']");
-    expect(database.text()).toContain("40 records");
+    expect(database.text()).toContain("Search index");
+    expect(database.text()).toContain("12 / 12 records current");
     await database
       .findAll("button")
-      .find((button) => button.text().includes("Sync workspace to database"))!
+      .find((button) => button.text().includes("Update search index"))!
       .trigger("click");
     expect(runtime.syncAllWorks).toHaveBeenCalled();
-    // The page header holds one direct action and one menu, and no sync.
+
+    // Derived-index maintenance stays contextual rather than competing with page-level actions.
     const header = wrapper.get(".ui-page-header-actions");
-    expect(header.text()).not.toMatch(/Sync/);
+    expect(header.text()).not.toMatch(/Update search index/);
     expect(header.findAll("button.ui-button")).toHaveLength(1);
     wrapper.unmount();
   });
