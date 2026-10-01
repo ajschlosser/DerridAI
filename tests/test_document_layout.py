@@ -100,7 +100,10 @@ def test_margin_region_is_a_separate_thread_and_does_not_break_the_main_text(tmp
     The left band is notes on thread B. The body stays thread A and is emitted
     first, for every page, before the margin sequence. A polygon is refused.
     """
-    from app.corpus_segmentation import _deterministic_boundary_candidates, _candidate_route
+    from app.corpus_segmentation import (
+        _candidate_route,
+        _deterministic_boundary_candidates,
+    )
     from app.document_layout_regions import reading_sequence
 
     repo = _write_layout_asset(tmp_path)
