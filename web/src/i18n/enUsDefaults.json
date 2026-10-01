@@ -5384,6 +5384,7 @@
   "works.sort_review_desc": "Most needing review",
   "works.sort_year_asc": "Year, oldest first",
   "works.view_label": "Library view",
+  "works.library_pagination": "Works library pages",
   "works.view_cards": "Cards",
   "works.view_list": "List",
   "works.list_work": "Work",
