@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from ..http_auth import require_admin
-from ..site_publication import build_local_site_file, build_nginx_site_bundle
+from ..site_publication import build_local_site_file, build_nginx_site_bundle, build_site_bundle
 from ..system_store import system_store
 
 router = APIRouter(tags=["sites"])
@@ -22,7 +22,7 @@ class SiteExportRequest(BaseModel):
     locale: str = Field(default="en-US", min_length=2, max_length=35)
     languages: list[str] = Field(default_factory=list, max_length=100)
     provider_profile_ids: list[str] = Field(default_factory=list, max_length=100)
-    export_format: Literal["local-single-file", "nginx-docker"] = "nginx-docker"
+    export_format: Literal["two-file", "local-single-file", "nginx-docker"] = "two-file"
 
 
 @router.get("/api/sites/export-options")
@@ -37,14 +37,15 @@ def site_export_options(request: Request) -> dict[str, object]:
 
 @router.post("/api/sites/export")
 def export_site(body: SiteExportRequest, request: Request) -> Response:
-    """Create a local single-file or nginx/Docker research-site export."""
+    """Create a two-file, local single-file, or nginx/Docker research-site export."""
     require_admin(request)
     try:
-        builder = (
-            build_local_site_file
-            if body.export_format == "local-single-file"
-            else build_nginx_site_bundle
-        )
+        if body.export_format == "two-file":
+            builder = build_site_bundle
+        elif body.export_format == "local-single-file":
+            builder = build_local_site_file
+        else:
+            builder = build_nginx_site_bundle
         bundle = builder(
             store_name=body.store,
             works=body.works,
