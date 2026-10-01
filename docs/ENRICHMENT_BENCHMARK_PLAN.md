@@ -167,7 +167,7 @@ The fixture:
 
 ### Phase C — benchmark-run artifact and comparison
 
-Status: **planned**.
+Status: **implemented on this branch (`enrichment_benchmark_result.py`); pending full CI**. Arms may differ only in enrichment pipeline identity; Record/schema/request/provider differences are rejected. Gates the runner has not measured (overwrites, unsupported evidence, citation binding) report `not_measured`, never `met`.
 
 Create a non-authoritative enrichment benchmark result containing:
 
@@ -277,6 +277,7 @@ Default project target:
 - Added one bounded consistency-repair turn for assessment/value contradictions such as `supported_value` with an empty metadata value.
 - Tightened built-in metadata prompts so assessment reasons stay concise and cannot substitute for the metadata value itself.
 - Implemented the Phase B immutable enrichment benchmark fixture and compatibility gate; the fixture stores only hashes/identities for source text and bindings and strips provider credentials/endpoints.
+- Implemented Phase C result artifact and declared-tolerance comparison (raw values, deltas, per-gate status, no overall winner).
 
 ## Non-goals for this tranche
 
