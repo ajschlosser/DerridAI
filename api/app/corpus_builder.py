@@ -912,7 +912,7 @@ class PdfCorpusRepository:
         origin = _json_read(self.asset_meta_path(origin_id))
         if not isinstance(origin, dict):
             raise KeyError(origin_id)
-        if not resolved.get("language"):
+        if resolved["mode"] in {"sentence", "auto"} and not resolved.get("language"):
             initial = origin.get("initial_metadata") if isinstance(origin.get("initial_metadata"), dict) else {}
             embedded = origin.get("metadata") if isinstance(origin.get("metadata"), dict) else {}
             source_language = initial.get("language") or embedded.get("language")
@@ -953,9 +953,15 @@ class PdfCorpusRepository:
                 "created_at": iso_now(),
                 "derived_from_asset_id": origin_id,
                 "unit_policy": resolved,
-                "unit_segmentation": language_segmentation_profile(
-                    str(resolved.get("language") or "") or None,
-                    "\n".join(str(block.get("text") or "") for block in blocks[:8]),
+                **(
+                    {
+                        "unit_segmentation": language_segmentation_profile(
+                            str(resolved.get("language") or "") or None,
+                            "\n".join(str(block.get("text") or "") for block in blocks[:8]),
+                        )
+                    }
+                    if resolved["mode"] in {"sentence", "auto"}
+                    else {}
                 ),
                 "pages": pages,
                 "block_count": len(derived_blocks),
