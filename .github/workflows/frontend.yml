@@ -255,7 +255,7 @@ jobs:
       - name: Frontend / GraphQL operation contract
         run: pytest -q -m contract tests/test_frontend_graphql_contract.py
 
-  frontend-build:
+  frontend-static:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     name: frontend-static
@@ -280,6 +280,24 @@ jobs:
         run: npm run test:unit
       - name: Guard legacy snapshot ownership
         run: npm run check:legacy-snapshots
+
+  frontend-build:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    name: frontend-build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
       - name: Build production app once
         run: npm run build:ci
       - name: Build Storybook once
@@ -300,7 +318,6 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
-
   frontend-legacy:
     needs: [changes, frontend-build]
     if: needs.changes.outputs.frontend == 'true'
@@ -468,6 +485,7 @@ jobs:
       - format-check
       - api-contract
       - frontend-lint
+      - frontend-static
       - frontend-build
       - frontend-legacy
       - frontend-e2e
@@ -483,7 +501,8 @@ jobs:
           CONTRACT_CHANGED: ${{ needs.changes.outputs.contract }}
           CONTRACT_RESULT: ${{ needs.api-contract.result }}
           LINT_RESULT: ${{ needs.frontend-lint.result }}
-          STATIC_RESULT: ${{ needs.frontend-build.result }}
+          STATIC_RESULT: ${{ needs.frontend-static.result }}
+          BUILD_RESULT: ${{ needs.frontend-build.result }}
           LEGACY_RESULT: ${{ needs.frontend-legacy.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           A11Y_RESULT: ${{ needs.frontend-a11y.result }}
@@ -510,7 +529,7 @@ jobs:
             exit 0
           fi
 
-          for result in "$LINT_RESULT" "$STATIC_RESULT" "$LEGACY_RESULT" "$E2E_RESULT" "$A11Y_RESULT"; do
+          for result in "$LINT_RESULT" "$STATIC_RESULT" "$BUILD_RESULT" "$LEGACY_RESULT" "$E2E_RESULT" "$A11Y_RESULT"; do
             if [ "$result" != "success" ]; then
               echo "A frontend quality gate did not succeed: $result"
               exit 1
