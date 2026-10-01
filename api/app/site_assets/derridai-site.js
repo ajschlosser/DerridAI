@@ -1260,6 +1260,7 @@
         node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_value") }), value),
       ),
       status,
+      browserSemanticIndexSection(),
     );
     return node("div", { class: "stack" }, panel, results);
   }
@@ -1545,6 +1546,18 @@
     dialog.showModal();
     query.focus();
   }
+  // Search and Research surface the same one-click browser-index action as Models. The default local
+  // profile is already pinned and compatibility-first, so readers do not need to test/download a provider
+  // separately just because the publication was embedded with another model.
+  function browserSemanticIndexSection() {
+    const index = capabilities?.localIndex;
+    if (selectedEmbeddingId || !index || index.usesPublishedVectors || index.complete) return null;
+    return indexSection(async () => {
+      saveLocalModel();
+      await rebuildClient();
+    });
+  }
+
   // The local index holds vectors computed here with the reader's embedding provider. It is derived from the
   // published Records, kept only in this browser, and can be rebuilt or cleared at any time.
   let indexMessage = "";
@@ -2051,6 +2064,7 @@
         question,
         ask,
         status,
+        browserSemanticIndexSection(),
         answer,
       ),
       node(
