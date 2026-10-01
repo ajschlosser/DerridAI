@@ -298,9 +298,7 @@ export function createAnnotationsWorkspace(deps: Deps) {
     } else {
       // reviewKey is shared with record selection and expects a file-shaped value, while
       // the workspace item intentionally stores only the stable file id.
-      const local = reviewItemFromKey(
-        reviewKey({ id: item.local_file_id }, item.local_index),
-      );
+      const local = reviewItemFromKey(reviewKey({ id: item.local_file_id }, item.local_index));
       const annotations = Array.isArray(local?.record?.annotations) ? local.record.annotations : [];
       const annotationIndex = Number(item.local_annotation_index);
       const annotation = Number.isInteger(annotationIndex) ? annotations[annotationIndex] : null;
