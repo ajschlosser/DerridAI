@@ -5,4 +5,4 @@ export { dataSources, HttpDataSource, InlineDataSource } from "./dataSource";
 export { BrowserStorage, MemoryStorage, storage } from "./storage";
 export type * from "./types";
 
-export const version = "0.1.0";
+export const version = "0.1.1";
