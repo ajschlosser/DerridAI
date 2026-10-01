@@ -279,11 +279,7 @@ export function createWorksWorkspace(deps: Deps) {
     else if (freshness.unavailableRecords === freshness.totalRecords)
       freshness.state = "unavailable";
     else if (freshness.changedRecords || freshness.absentRecords) freshness.state = "stale";
-    else if (
-      freshness.presentRecords ||
-      freshness.unknownRecords ||
-      freshness.unavailableRecords
-    )
+    else if (freshness.presentRecords || freshness.unknownRecords || freshness.unavailableRecords)
       freshness.state = "unknown";
     else freshness.state = "current";
     return freshness;
@@ -409,18 +405,13 @@ export function createWorksWorkspace(deps: Deps) {
           presentRecords: 0,
           absentRecords: 0,
           unknownRecords: 0,
-          unavailableRecords: all.reduce(
-            (sum: Any, item: Any) => sum + Number(item.count || 0),
-            0,
-          ),
+          unavailableRecords: all.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
         },
         sourceFileCount: 0,
         totalReview: 0,
         authors: [
           ...new Set<string>(
-            all
-              .map((item: Any) => String(item.document_author || "").trim())
-              .filter(Boolean),
+            all.map((item: Any) => String(item.document_author || "").trim()).filter(Boolean),
           ),
         ].sort((a, b) => a.localeCompare(b)),
         capabilities: {
