@@ -323,9 +323,13 @@ Users can clear `updates` for one record or for every loaded record. Clearing hi
 
 ## Create a static research site
 
-The administrator **Works** page includes **Create site** when a corpus database is selected. Choose any number of indexed works, give the site a title and optional description, then choose an export format. The export dialog also lets you include **all or any subset of the interface languages currently installed in DerridAI** and **all or any subset of the researcher LLM provider profiles**. At least one language is required. Provider profile endpoints and model names may be exported; API keys and other provider secrets are never embedded in a published site.
+The administrator **Works** page includes **Create site** when a corpus database is selected. Choose any number of indexed works, give the site a title and optional description, then choose an export format. **Two-file static site** is the standard and default export. The export dialog also lets you include **all or any subset of the interface languages currently installed in DerridAI** and **all or any subset of the researcher LLM provider profiles**. At least one language is required. Provider profile endpoints and model names may be exported; API keys and other provider secrets are never embedded in a published site.
 
 The generated reference site is fully internationalized from the selected DerridAI dictionaries. Its language menu contains only the languages included in that export. Publication is blocked if any selected language is missing a required static-site translation; DerridAI does not silently fall back to English for a selected language. Locale direction is applied at runtime for both left-to-right and right-to-left scripts.
+
+### Two-file static site
+
+Choose **Two-file static site** for the standard DerridAI publication. The ZIP contains exactly `index.html` and `derridai-site.js`. The JavaScript file contains the immutable publication package, progressive work chunks, the framework-neutral DerridAI browser SDK, and the reference interface. The same two files can be opened locally or served unchanged by an ordinary static HTTP/HTTPS host. No DerridAI application server is required.
 
 ### Single HTML file
 
