@@ -113,9 +113,7 @@ test("Works modern workflow covers search, actions, and Search handoffs", async 
   await expect(page.getByRole("menuitem", { name: "Edit metadata" })).toBeVisible();
   await page.keyboard.press("Escape");
 
-  await page
-    .getByRole("button", { name: /^Open \d+ records for Of Grammatology$/ })
-    .click();
+  await page.getByRole("button", { name: /^Open \d+ records for Of Grammatology$/ }).click();
   await expect(page.locator("#search-page-title")).toBeVisible();
   await expect(page.getByText("Work equals Of Grammatology")).toBeVisible();
   await expect(page.getByText("Needs review equals true")).toHaveCount(0);
@@ -126,9 +124,7 @@ test("Works modern workflow covers search, actions, and Search handoffs", async 
     .first()
     .click();
   await expect(page.locator("#works-page-title")).toBeVisible();
-  await page
-    .getByRole("button", { name: /records needing review for Of Grammatology/ })
-    .click();
+  await page.getByRole("button", { name: /records needing review for Of Grammatology/ }).click();
   await expect(page.locator("#search-page-title")).toBeVisible();
   await expect(page.getByText("Work equals Of Grammatology")).toBeVisible();
   await expect(page.getByText("Needs review equals true")).toBeVisible();
