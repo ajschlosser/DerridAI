@@ -3,7 +3,7 @@
 import { computed, nextTick, onMounted, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { LanguageInfo, ProviderProfile } from "../../api/system";
-import type { SiteExportFormat } from "../../api/sites";
+import type { SiteExportFormat, SiteRecordProfile } from "../../api/sites";
 import type { WorksItem } from "../../types/works";
 import AppIcon from "../AppIcon.vue";
 
@@ -27,6 +27,7 @@ const emit = defineEmits<{
       languages: string[];
       provider_profile_ids: string[];
       export_format: SiteExportFormat;
+      record_profile: SiteRecordProfile;
     },
   ];
 }>();
@@ -37,6 +38,7 @@ const selected = ref<string[]>(props.initialWork ? [props.initialWork] : []);
 const title = ref(props.initialWork || "");
 const description = ref("");
 const exportFormat = ref<SiteExportFormat>("two-file");
+const recordProfile = ref<SiteRecordProfile>("complete");
 const selectedLanguages = ref<string[]>(props.languages.map((item) => item.code));
 const selectedProviderProfiles = ref<string[]>(props.providerProfiles.map((item) => item.id));
 
@@ -97,6 +99,7 @@ function submit() {
     languages: [...selectedLanguages.value],
     provider_profile_ids: [...selectedProviderProfiles.value],
     export_format: exportFormat.value,
+    record_profile: recordProfile.value,
   });
 }
 
@@ -180,6 +183,36 @@ onMounted(async () => {
             <span>
               <strong>{{ i18n.t("site.create_format_nginx") }}</strong>
               <small>{{ i18n.t("site.create_format_nginx_help") }}</small>
+            </span>
+          </label>
+        </fieldset>
+
+        <fieldset class="site-export-format site-record-profile">
+          <legend>{{ i18n.t("site.create_record_profile") }}</legend>
+          <p class="site-choice-help">{{ i18n.t("site.create_record_profile_help") }}</p>
+          <label class="site-export-option">
+            <input
+              v-model="recordProfile"
+              type="radio"
+              name="site-record-profile"
+              value="complete"
+            />
+            <span>
+              <strong>{{ i18n.t("site.create_profile_complete") }}</strong>
+              <small>{{ i18n.t("site.create_profile_complete_help") }}</small>
+              <small class="site-celf-status" data-celf="complete">
+                {{ i18n.t("site.create_profile_complete_celf") }}
+              </small>
+            </span>
+          </label>
+          <label class="site-export-option">
+            <input v-model="recordProfile" type="radio" name="site-record-profile" value="reader" />
+            <span>
+              <strong>{{ i18n.t("site.create_profile_reader") }}</strong>
+              <small>{{ i18n.t("site.create_profile_reader_help") }}</small>
+              <small class="site-celf-status" data-celf="reader">
+                {{ i18n.t("site.create_profile_reader_celf") }}
+              </small>
             </span>
           </label>
         </fieldset>
@@ -479,6 +512,11 @@ onMounted(async () => {
 .site-export-option small {
   color: var(--muted);
   line-height: 1.45;
+}
+
+.site-export-option .site-celf-status {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .site-work-picker,
