@@ -11,6 +11,8 @@ test("real single-file export works from file:// without an application server",
   if (!artifactDir) throw new Error("DERRIDAI_PUBLICATION_ARTIFACT_DIR is required.");
 
   const requests: string[] = [];
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("request", (request) => {
     if (/^https?:/i.test(request.url())) requests.push(request.url());
   });
@@ -56,4 +58,5 @@ test("real single-file export works from file:// without an application server",
   // This fixture exports no provider profile, so all baseline research behavior
   // must remain local and server-independent.
   expect(requests).toEqual([]);
+  expect(pageErrors).toEqual([]);
 });
