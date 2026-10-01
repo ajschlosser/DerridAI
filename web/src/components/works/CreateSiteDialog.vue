@@ -4,6 +4,12 @@ import { computed, nextTick, onMounted, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { LanguageInfo } from "../../api/system";
 import type { SiteExportFormat, SiteRecordProfile, SiteTransformersRuntime } from "../../api/sites";
+
+export interface TransformersDownloadProgress {
+  file: string;
+  received: number;
+  total: number;
+}
 import type { WorksScopeItem } from "../../types/works";
 import AppIcon from "../AppIcon.vue";
 
@@ -13,12 +19,15 @@ const props = defineProps<{
   initialWork?: string;
   languages: LanguageInfo[];
   transformersRuntime?: SiteTransformersRuntime;
+  downloadProgress?: TransformersDownloadProgress | null;
   busy?: boolean;
   error?: string;
 }>();
 
 const emit = defineEmits<{
   cancel: [];
+  "delete-runtime": [];
+  "download-runtime": [];
   create: [
     payload: {
       title: string;
@@ -40,7 +49,6 @@ const description = ref("");
 const exportFormat = ref<SiteExportFormat>("two-file");
 const recordProfile = ref<SiteRecordProfile>("complete");
 const selectedLanguages = ref<string[]>(props.languages.map((item) => item.code));
-const includeTransformers = ref(false);
 
 const selectedCount = computed(() => selected.value.length);
 const canCreate = computed(() =>
@@ -87,7 +95,7 @@ function submit() {
     description: description.value.trim(),
     works: [...selected.value],
     languages: [...selectedLanguages.value],
-    include_transformers: includeTransformers.value && Boolean(props.transformersRuntime),
+    include_transformers: true,
     export_format: exportFormat.value,
     record_profile: recordProfile.value,
   });
@@ -249,38 +257,65 @@ onMounted(async () => {
         <fieldset class="site-choice-picker" data-site-transformers>
           <legend>{{ i18n.t("site.create_transformers") }}</legend>
           <p class="site-choice-help">{{ i18n.t("site.create_transformers_help") }}</p>
-          <label class="site-export-option">
-            <input
-              v-model="includeTransformers"
-              type="checkbox"
-              :disabled="!props.transformersRuntime"
-            />
-            <span>
-              <strong>{{ i18n.t("site.create_transformers_option") }}</strong>
-              <template v-if="props.transformersRuntime">
-                <small v-if="exportFormat === 'nginx-docker'">
-                  {{ i18n.t("site.create_transformers_help_files") }}
-                </small>
-                <small v-else>
-                  {{
-                    i18n.tf("site.create_transformers_help_inline", {
-                      size: formatMegabytes(props.transformersRuntime.inline_bytes),
+          <template v-if="props.transformersRuntime">
+            <p v-if="exportFormat === 'nginx-docker'" class="site-choice-help">
+              {{ i18n.t("site.create_transformers_help_files") }}
+            </p>
+            <p v-else class="site-choice-help">
+              {{
+                i18n.tf("site.create_transformers_help_inline", {
+                  size: formatMegabytes(props.transformersRuntime.inline_bytes),
+                })
+              }}
+            </p>
+            <p data-transformers-source>
+              {{
+                props.transformersRuntime.cached
+                  ? i18n.t("site.create_transformers_cached")
+                  : i18n.tf("site.create_transformers_download", {
+                      size: formatMegabytes(props.transformersRuntime.download_bytes),
                     })
-                  }}
-                </small>
-                <small data-transformers-source>
-                  {{
-                    props.transformersRuntime.cached
-                      ? i18n.t("site.create_transformers_cached")
-                      : i18n.tf("site.create_transformers_download", {
-                          size: formatMegabytes(props.transformersRuntime.download_bytes),
-                        })
-                  }}
-                </small>
-              </template>
-              <small v-else>{{ i18n.t("site.create_transformers_unavailable") }}</small>
-            </span>
-          </label>
+              }}
+            </p>
+            <progress
+              v-if="props.downloadProgress"
+              :value="props.downloadProgress.received"
+              :max="Math.max(props.downloadProgress.total, 1)"
+              :aria-label="i18n.t('site.create_transformers_downloading')"
+            />
+            <p v-if="props.downloadProgress" role="status">
+              {{
+                i18n.tf("site.create_transformers_progress", {
+                  file: props.downloadProgress.file || "Transformers.js",
+                  received: formatMegabytes(props.downloadProgress.received),
+                  total: formatMegabytes(props.downloadProgress.total),
+                })
+              }}
+            </p>
+            <div class="site-work-picker-toolbar">
+              <button
+                v-if="props.transformersRuntime.cached"
+                type="button"
+                class="btn small"
+                data-transformers-delete
+                :disabled="props.busy"
+                @click="emit('delete-runtime')"
+              >
+                {{ i18n.t("site.create_transformers_delete") }}
+              </button>
+              <button
+                v-else
+                type="button"
+                class="btn small"
+                data-transformers-download
+                :disabled="props.busy"
+                @click="emit('download-runtime')"
+              >
+                {{ i18n.t("site.create_transformers_redownload") }}
+              </button>
+            </div>
+          </template>
+          <p v-else>{{ i18n.t("site.create_transformers_unavailable") }}</p>
         </fieldset>
 
         <fieldset class="site-work-picker">

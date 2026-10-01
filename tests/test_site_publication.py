@@ -108,7 +108,7 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     assert publication["features"]["host_supplied_generation"] is True
     assert publication["features"]["browser_providers"] is True
     assert publication["features"]["browser_vector_index"] is True
-    assert publication["features"]["transformers_runtime"] is None
+    assert publication["features"]["transformers_runtime"] == "inline"
     assert "direct_provider_endpoints" not in publication["features"]
     assert publication["features"]["progressive_work_loading"] is True
     assert publication["vector_index"]["dimension"] == 3
@@ -128,15 +128,15 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     assert "DerridAI" in site_runtime
     assert "__DERRIDAI_HOST_CAPABILITIES__" in site_runtime
     assert "sdk.createClient" in site_runtime
-    assert "OLLAMA_ORIGINS" in site_runtime
+    assert "site.runtime.discover_models" in site_runtime
     assert "derridai.site.providers." in site_runtime
     assert "site.runtime.save_provider" in site_runtime
     assert "site.runtime.provider_local_help" in site_runtime
     # The shared browser client contains provider adapters but no provider profile, endpoint, or credential.
     assert "https://models.example" not in site_runtime
     assert "MUST-NOT-EXPORT" not in site_runtime
-    assert f"globalThis.{TRANSFORMERS_GLOBAL}=" not in site_runtime
-    assert "wasm-unsafe-eval" not in index_html
+    assert f"globalThis.{TRANSFORMERS_GLOBAL}=" in site_runtime
+    assert "wasm-unsafe-eval" in index_html
     assert bundle.record_count == 2
     assert bundle.work_count == 2
 
@@ -435,6 +435,11 @@ def test_nginx_export_contains_one_container_deployment_and_executable_scripts(
         assert archive.namelist() == [
             "index.html",
             "derridai-site.js",
+            "vendor/transformers/transformers.min.js",
+            "vendor/transformers/ort-wasm-simd-threaded.mjs",
+            "vendor/transformers/ort-wasm-simd-threaded.wasm",
+            "vendor/transformers/NOTICE.txt",
+            "vendor/transformers/LICENSE-transformers.js.txt",
             "Dockerfile",
             "nginx.conf",
             "start.sh",
@@ -559,12 +564,6 @@ def test_single_file_site_embeds_the_runtime_with_a_matching_standalone_csp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _stub_projection(monkeypatch)
-    plain = site_publication.build_local_site_file(
-        store_name="derrida-primary", works=["Glas"], title="Plain"
-    ).payload.decode("utf-8")
-    assert f"globalThis.{TRANSFORMERS_GLOBAL}=" not in plain
-    assert "wasm-unsafe-eval" not in plain
-
     bundle = site_publication.build_local_site_file(
         store_name="derrida-primary",
         works=["Glas"],
@@ -578,7 +577,7 @@ def test_single_file_site_embeds_the_runtime_with_a_matching_standalone_csp(
     assert "default-src 'none'" in html
 
 
-def test_nginx_export_serves_the_runtime_as_files_and_a_models_folder(
+def test_nginx_export_serves_the_runtime_as_files(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _stub_projection(monkeypatch)
@@ -602,46 +601,27 @@ def test_nginx_export_serves_the_runtime_as_files_and_a_models_folder(
         "vendor/transformers/ort-wasm-simd-threaded.mjs",
         "vendor/transformers/ort-wasm-simd-threaded.wasm",
         "vendor/transformers/NOTICE.txt",
-        "models/README.txt",
     } <= names
+    assert not any(name.startswith("models/") for name in names)
     assert engine == _FAKE_RUNTIME["engine"]
     assert wasm == _FAKE_RUNTIME["wasm"]
     # The deployment serves the runtime, so it is not duplicated inside the site script.
     assert f"globalThis.{TRANSFORMERS_GLOBAL}=" not in runtime_script
     manifest = _package_from_runtime(runtime_script)["manifest"]
     assert manifest["features"]["transformers_runtime"] == "files"
-    assert manifest["features"]["transformers_local_models"] == "models/"
+    assert manifest["features"]["transformers_local_models"] is None
     assert "COPY vendor /usr/share/nginx/html/vendor" in dockerfile
-    # A missing model must 404 instead of falling back to index.html.
-    assert "location /models/" in nginx and "location /vendor/" in nginx
-    assert "/usr/share/nginx/html/models:ro" in start
+    assert "location /vendor/" in nginx
+    assert "location /models/" not in nginx
+    assert "/usr/share/nginx/html/models:ro" not in start
 
 
-def test_nginx_export_without_the_runtime_has_no_vendor_or_models_files(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _stub_projection(monkeypatch)
-    bundle = site_publication.build_nginx_site_bundle(
-        store_name="derrida-primary", works=["Glas"], title="Plain"
-    )
-    with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
-        names = archive.namelist()
-        dockerfile = archive.read("Dockerfile").decode("utf-8")
-    assert not any(name.startswith(("vendor/", "models/")) for name in names)
-    assert "vendor" not in dockerfile
-    assert "@@" not in dockerfile
-
-
-def test_runtime_is_only_fetched_when_the_export_asks_for_it(
+def test_every_export_fetches_the_runtime(
     monkeypatch: pytest.MonkeyPatch, _runtime_without_network: list[int]
 ) -> None:
     _stub_projection(monkeypatch)
     site_publication.build_site_bundle(store_name="derrida-primary", works=["Glas"], title="Plain")
     site_publication.build_nginx_site_bundle(store_name="derrida-primary", works=["Glas"], title="Plain")
-    assert _runtime_without_network == []
-    site_publication.build_site_bundle(
-        store_name="derrida-primary", works=["Glas"], title="With", include_transformers=True
-    )
     assert _runtime_without_network
 
 
@@ -671,4 +651,4 @@ def test_export_requests_ignore_legacy_provider_profile_ids() -> None:
         store="derrida-primary", works=["Glas"], provider_profile_ids=["openai-main"]
     )
     assert not hasattr(request, "provider_profile_ids")
-    assert request.include_transformers is False
+    assert request.include_transformers is True

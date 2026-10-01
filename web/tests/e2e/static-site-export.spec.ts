@@ -78,19 +78,25 @@ test("single-file export preserves evidence when reader-configured providers are
   await expect(page.getByRole("dialog", { name: "Welcome" })).toBeVisible();
   await page.getByRole("button", { name: "Skip tutorial" }).click();
 
-  const addProvider = async (name: string, role: "embedding" | "generation", model: string) => {
-    await page.getByRole("button", { name: "Providers" }).click();
-    const form = page.getByRole("form", { name: "Add a provider" });
+  const addEndpoint = async (
+    name: string,
+    model: string,
+    roles: Array<"embeddings" | "answers">,
+  ) => {
+    await page.getByRole("button", { name: "Models" }).click();
+    const form = page.getByRole("form", { name: "Add an endpoint" });
     await form.getByLabel("Name", { exact: true }).fill(name);
-    await form.getByLabel("Used for").selectOption(role);
-    await form.getByLabel("Engine").selectOption("openai");
     await form.getByLabel("Endpoint URL").fill("https://models.example.test/v1");
     await form.getByLabel("Model", { exact: true }).fill(model);
-    await form.getByRole("button", { name: "Save provider" }).click();
+    if (roles.includes("embeddings")) await form.getByLabel("Use for embeddings").check();
+    else await form.getByLabel("Use for embeddings").uncheck();
+    if (roles.includes("answers")) await form.getByLabel("Use for Research answers").check();
+    else await form.getByLabel("Use for Research answers").uncheck();
+    await form.getByRole("button", { name: "Save endpoint" }).click();
   };
 
-  await addProvider("Acceptance embedder", "embedding", "bge-m3:latest");
-  await addProvider("Acceptance writer", "generation", "gpt-oss:20b");
+  await addEndpoint("Acceptance embedder", "bge-m3:latest", ["embeddings"]);
+  await addEndpoint("Acceptance writer", "gpt-oss:20b", ["answers"]);
 
   await page.getByRole("button", { name: "Research" }).click();
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");

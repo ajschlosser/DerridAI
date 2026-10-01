@@ -141,6 +141,8 @@ vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
 const siteApi = vi.hoisted(() => ({
   exportOptions: vi.fn(),
   exportSite: vi.fn(),
+  downloadTransformersRuntime: vi.fn(async () => undefined),
+  deleteTransformersRuntime: vi.fn(),
 }));
 vi.mock("../../src/api/sites", () => ({ sitesApi: siteApi }));
 vi.mock("../../src/api/corpus", () => ({
@@ -513,7 +515,7 @@ describe("WorksView", () => {
       languages: ["en-US", "fr-CA"],
       export_format: "two-file",
       record_profile: "complete",
-      include_transformers: false,
+      include_transformers: true,
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
     wrapper.unmount();
@@ -526,7 +528,6 @@ describe("WorksView", () => {
     const dialog = wrapper.get(".create-site-dialog");
     await dialog.get("[data-site-work='Glas']").setValue(true);
     await dialog.get("[data-site-language='fr-CA']").setValue(false);
-    await dialog.get("[data-site-transformers] input[type='checkbox']").setValue(true);
     await dialog.get("input[placeholder='Research collection']").setValue("English-only Glas");
     await dialog.get("form").trigger("submit");
     await flushPromises();
@@ -565,7 +566,7 @@ describe("WorksView", () => {
       languages: ["en-US", "fr-CA"],
       export_format: "nginx-docker",
       record_profile: "complete",
-      include_transformers: false,
+      include_transformers: true,
     });
     wrapper.unmount();
   });
@@ -574,8 +575,9 @@ describe("WorksView", () => {
     const wrapper = await mountWorks();
     await chooseMenuItem(wrapper, "More actions", "Create site");
     const section = wrapper.get(".create-site-dialog [data-site-transformers]");
-    expect(section.get("[data-transformers-source]").text()).toContain("not bundled with DerridAI");
+    expect(section.get("[data-transformers-source]").text()).toContain("not in the DerridAI image");
     expect(section.get("[data-transformers-source]").text()).toContain("14.2 MB");
+    expect(section.get("[data-transformers-download]").exists()).toBe(true);
     wrapper.unmount();
 
     siteApi.exportOptions.mockResolvedValue({
@@ -589,7 +591,8 @@ describe("WorksView", () => {
     });
     const cached = await mountWorks();
     await chooseMenuItem(cached, "More actions", "Create site");
-    expect(cached.get("[data-transformers-source]").text()).toContain("Already downloaded");
+    expect(cached.get("[data-transformers-source]").text()).toContain("already downloaded");
+    expect(cached.get("[data-transformers-delete]").exists()).toBe(true);
     cached.unmount();
   });
 
