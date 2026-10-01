@@ -292,7 +292,11 @@ from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
 from .rag import _citation_strings, chat_complete
-from .record_semantic_map import build_semantic_map_projections
+from .record_semantic_map import (
+    SemanticMapIndex,
+    build_semantic_map_index,
+    hydrate_semantic_map_index,
+)
 from .reviewer_context import current_reviewer
 from .run_guidance import find_guidance_matches
 from .semantic_content_graph import (
@@ -2030,6 +2034,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # locks make generation single-flight so concurrent Record/Work opens join
         # one materialization instead of repeating graph traversal.
         self._semantic_graph_cache: dict[tuple[str, str], tuple[int, dict[str, Any]]] = {}
+        self._semantic_index_cache: dict[
+            tuple[str, str], tuple[int, SemanticMapIndex, dict[str, Any]]
+        ] = {}
         self._semantic_projection_locks: dict[str, threading.RLock] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
@@ -2174,31 +2181,84 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         """Stable reviewer key for blind-review-safe derived projections."""
         return str(current_reviewer.get() or "")
 
-    def _materialize_semantic_projections(self, build_id: str) -> tuple[int, dict[str, Any]]:
-        """Materialize graph/Record/node/Work views once for the current generation.
+    @staticmethod
+    def _semantic_analysis_view(analysis: dict[str, Any]) -> dict[str, Any]:
+        """Retain only build-level layer state needed by bounded Record maps."""
+        return {
+            key: analysis.get(key)
+            for key in (
+                "status",
+                "profile",
+                "provider",
+                "model",
+                "stale",
+                "text_sha256",
+                "current_text_sha256",
+            )
+            if key in analysis
+        }
 
-        The hot read path checks only System Data state and projection rows. Whole-
-        build loading, identity resolution, term folding and relationship indexing
-        happen here only after an explicit invalidation.
+    def _hydrate_semantic_index(
+        self,
+        build_id: str,
+        generation: int,
+        audience: str,
+    ) -> tuple[SemanticMapIndex, dict[str, Any]]:
+        cache_key = (build_id, audience)
+        cached = self._semantic_index_cache.get(cache_key)
+        if cached is not None and cached[0] == generation:
+            return cached[1], cached[2]
+
+        row = system_store.get_semantic_map_projection(
+            "index", build_id, build_id, audience=audience
+        )
+        if row is None or int(row.get("generation") or 0) != generation:
+            raise KeyError(build_id)
+        payload = row.get("payload")
+        if not isinstance(payload, dict) or not isinstance(payload.get("snapshot"), dict):
+            raise KeyError(build_id)
+        index = hydrate_semantic_map_index(payload["snapshot"])
+        analysis = (
+            dict(payload.get("analysis") or {})
+            if isinstance(payload.get("analysis"), dict)
+            else {}
+        )
+        self._semantic_index_cache[cache_key] = (generation, index, analysis)
+        return index, analysis
+
+    def _materialize_semantic_projections(self, build_id: str) -> tuple[int, dict[str, Any]]:
+        """Materialize the shared graph/index substrate for the current generation.
+
+        A Record edit invalidates the build generation in O(1), but rebuilding that
+        generation does not eagerly compute every Record and node neighbourhood.
+        Those bounded projections are generated and saved only when requested.
         """
         lock = self._semantic_projection_lock(build_id)
         audience = self._semantic_projection_audience()
         with lock:
             state = system_store.semantic_map_state(build_id)
             generation = int(state["generation"])
-            existing = system_store.get_semantic_map_projection(
+            graph_row = system_store.get_semantic_map_projection(
                 "graph", build_id, build_id, audience=audience
+            )
+            index_row = system_store.get_semantic_map_projection(
+                "index", build_id, build_id, audience=audience
             )
             if (
                 not state.get("dirty")
-                and existing is not None
-                and int(existing.get("generation") or 0) == generation
+                and graph_row is not None
+                and index_row is not None
+                and int(graph_row.get("generation") or 0) == generation
+                and int(index_row.get("generation") or 0) == generation
             ):
-                graph = existing["payload"]
+                graph = graph_row["payload"]
                 self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
+                self._hydrate_semantic_index(build_id, generation, audience)
                 return generation, graph
 
-            records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
+            records = [
+                json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)
+            ]
             for row in records:
                 _present_for_reviewer(row)
             analysis = self._document_intelligence_for_records(build_id, records)
@@ -2212,68 +2272,87 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 records,
                 graph_analysis,
                 schema=schema,
-                registry=build_registry(self.repo, build_id, schema=schema, records=records),
+                registry=build_registry(
+                    self.repo,
+                    build_id,
+                    schema=schema,
+                    records=records,
+                ),
             )
-            record_maps, node_maps, work_maps = build_semantic_map_projections(
-                graph,
-                records,
-                analysis=analysis,
+            index = build_semantic_map_index(graph, records)
+            analysis_view = self._semantic_analysis_view(analysis)
+            system_store.put_semantic_map_projections(
+                [
+                    {
+                        "scope_type": "graph",
+                        "scope_id": build_id,
+                        "build_id": build_id,
+                        "generation": generation,
+                        "audience": audience,
+                        "payload": graph,
+                    },
+                    {
+                        "scope_type": "index",
+                        "scope_id": build_id,
+                        "build_id": build_id,
+                        "generation": generation,
+                        "audience": audience,
+                        "payload": {
+                            "snapshot": index.snapshot(),
+                            "analysis": analysis_view,
+                        },
+                    },
+                ]
             )
-
-            work_by_record = {
-                str(row.get("record_id") or ""): str(
-                    row.get("work") or row.get("document_title") or ""
-                ).strip()
-                for row in records
-            }
-            projection_rows: list[dict[str, Any]] = [{
-                "scope_type": "graph",
-                "scope_id": build_id,
-                "build_id": build_id,
-                "generation": generation,
-                "audience": audience,
-                "payload": graph,
-            }]
-            projection_rows.extend(
-                {
-                    "scope_type": "record",
-                    "scope_id": record_id,
-                    "build_id": build_id,
-                    "generation": generation,
-                    "audience": audience,
-                    "work": work_by_record.get(record_id) or None,
-                    "payload": payload,
-                }
-                for record_id, payload in record_maps.items()
-            )
-            projection_rows.extend(
-                {
-                    "scope_type": "node",
-                    "scope_id": node_id,
-                    "build_id": build_id,
-                    "generation": generation,
-                    "audience": audience,
-                    "payload": payload,
-                }
-                for node_id, payload in node_maps.items()
-            )
-            projection_rows.extend(
-                {
-                    "scope_type": "work",
-                    "scope_id": work,
-                    "build_id": build_id,
-                    "generation": generation,
-                    "audience": audience,
-                    "work": work,
-                    "payload": payload,
-                }
-                for work, payload in work_maps.items()
-            )
-            system_store.put_semantic_map_projections(projection_rows)
 
             self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
+            self._semantic_index_cache[(build_id, audience)] = (
+                generation,
+                index,
+                analysis_view,
+            )
             system_store.mark_semantic_map_clean(build_id, generation)
             return generation, graph
+
+    def _materialize_semantic_scope(
+        self,
+        build_id: str,
+        scope_type: str,
+        scope_id: str,
+        generation: int,
+        audience: str,
+    ) -> dict[str, Any]:
+        """Generate one bounded map from the persisted shared traversal index."""
+        index, analysis = self._hydrate_semantic_index(
+            build_id,
+            generation,
+            audience,
+        )
+        work: str | None = None
+        if scope_type == "record":
+            payload = index.record_map(scope_id, analysis)
+            record = index.record_by_id.get(scope_id) or {}
+            work = str(
+                record.get("work") or record.get("document_title") or ""
+            ).strip() or None
+        elif scope_type == "node":
+            payload = index.node_neighborhood(scope_id)
+        elif scope_type == "work":
+            payload = index.work_source(scope_id)
+            work = scope_id
+        else:
+            raise KeyError(scope_id)
+
+        system_store.put_semantic_map_projection(
+            scope_type,
+            scope_id,
+            build_id,
+            generation,
+            payload,
+            audience=audience,
+            work=work,
+        )
+        return payload
 
     def _semantic_projection(
         self,
@@ -2282,38 +2361,92 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         scope_id: str,
     ) -> dict[str, Any]:
         audience = self._semantic_projection_audience()
-        state = system_store.semantic_map_state(build_id)
-        generation = int(state["generation"])
-        row = system_store.get_semantic_map_projection(
-            scope_type, scope_id, build_id, audience=audience
-        )
-        if (
-            not state.get("dirty")
-            and row is not None
-            and int(row.get("generation") or 0) == generation
-        ):
-            return row["payload"]
+        lock = self._semantic_projection_lock(build_id)
+        with lock:
+            # At most one retry is needed if a concurrent write advances the
+            # generation while this request is materializing its bounded view.
+            for _attempt in range(2):
+                state = system_store.semantic_map_state(build_id)
+                generation = int(state["generation"])
+                row = system_store.get_semantic_map_projection(
+                    scope_type,
+                    scope_id,
+                    build_id,
+                    audience=audience,
+                )
+                if (
+                    not state.get("dirty")
+                    and row is not None
+                    and int(row.get("generation") or 0) == generation
+                ):
+                    return row["payload"]
 
-        self._materialize_semantic_projections(build_id)
-        state = system_store.semantic_map_state(build_id)
-        row = system_store.get_semantic_map_projection(
-            scope_type, scope_id, build_id, audience=audience
-        )
-        if (
-            row is not None
-            and int(row.get("generation") or 0) == int(state["generation"])
-        ):
-            return row["payload"]
-        # A concurrent write may have invalidated the just-built generation.
-        # Rebuild once against the new generation rather than returning "not available".
-        self._materialize_semantic_projections(build_id)
-        state = system_store.semantic_map_state(build_id)
-        row = system_store.get_semantic_map_projection(
-            scope_type, scope_id, build_id, audience=audience
-        )
-        if row is None or int(row.get("generation") or 0) != int(state["generation"]):
+                if state.get("dirty"):
+                    self._materialize_semantic_projections(build_id)
+                    state = system_store.semantic_map_state(build_id)
+                    generation = int(state["generation"])
+
+                if scope_type == "graph":
+                    row = system_store.get_semantic_map_projection(
+                        "graph",
+                        build_id,
+                        build_id,
+                        audience=audience,
+                    )
+                    if (
+                        row is not None
+                        and int(row.get("generation") or 0) == generation
+                    ):
+                        return row["payload"]
+                else:
+                    row = system_store.get_semantic_map_projection(
+                        scope_type,
+                        scope_id,
+                        build_id,
+                        audience=audience,
+                    )
+                    if (
+                        row is not None
+                        and int(row.get("generation") or 0) == generation
+                    ):
+                        return row["payload"]
+                    try:
+                        payload = self._materialize_semantic_scope(
+                            build_id,
+                            scope_type,
+                            scope_id,
+                            generation,
+                            audience,
+                        )
+                    except KeyError:
+                        # A clean build from older System Data may have a graph but
+                        # no persisted traversal substrate. Build that substrate once.
+                        index_row = system_store.get_semantic_map_projection(
+                            "index",
+                            build_id,
+                            build_id,
+                            audience=audience,
+                        )
+                        if (
+                            index_row is None
+                            or int(index_row.get("generation") or 0) != generation
+                        ):
+                            system_store.mark_semantic_map_dirty(
+                                build_id,
+                                reason="semantic_index_missing",
+                            )
+                            self._materialize_semantic_projections(build_id)
+                            continue
+                        raise
+
+                    after = system_store.semantic_map_state(build_id)
+                    if (
+                        not after.get("dirty")
+                        and int(after["generation"]) == generation
+                    ):
+                        return payload
+
             raise KeyError(scope_id)
-        return row["payload"]
 
     def _current_semantic_graph(
         self, build_id: str
