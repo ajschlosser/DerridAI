@@ -119,6 +119,12 @@ def _segmentation_windows(blocks: list[dict[str, Any]], token_budget: int) -> li
     return windows
 
 
+def _block_language(block: dict[str, Any], fallback: str | None = None) -> str | None:
+    """Prefer reviewer-confirmed document-thread language over document fallback."""
+    value = str(block.get("thread_language") or "").strip()
+    return value or fallback
+
+
 def _is_protected_transition(
     left: dict[str, Any],
     right: dict[str, Any],
@@ -132,6 +138,7 @@ def _is_protected_transition(
     """
     left_text = str(left.get("text") or "").strip()
     right_text = str(right.get("text") or "").strip()
+    left_language = _block_language(left, language)
     left_type = str(left.get("type") or "body").casefold()
     right_type = str(right.get("type") or "body").casefold()
     heading_types = {"heading", "title", "subtitle", "section", "chapter"}
@@ -145,7 +152,7 @@ def _is_protected_transition(
         label_text
         and len(label_text) <= 60
         and any(char.isalpha() for char in label_text)
-        and not ends_sentence_text(label_text, language)
+        and not ends_sentence_text(label_text, left_language)
     )
 
     if left_type in heading_types and right_type not in heading_types:
@@ -157,7 +164,7 @@ def _is_protected_transition(
         and starts_quote(right_text)
     ):
         return True
-    if list_marker.match(left_text) and right_text and not ends_sentence_text(left_text, language):
+    if list_marker.match(left_text) and right_text and not ends_sentence_text(left_text, left_language):
         return True
     return False
 
@@ -190,7 +197,17 @@ def _deterministic_boundary_candidates(
         score = 0.0
         left_type = str(left.get("type") or "body").casefold()
         right_type = str(right.get("type") or "body").casefold()
+        left_language = _block_language(left, language)
+        right_language = _block_language(right, language)
+        boundary_language = right_language or left_language or language
 
+        if (
+            left_language
+            and right_language
+            and left_language.casefold() != right_language.casefold()
+        ):
+            signals.append("language_context_change")
+            score += 0.40
         if right_type in heading_types:
             normalized_heading = _normalize_text(right_text).casefold()
             if normalized_heading and heading_counts.get(normalized_heading, 0) >= 3:
@@ -199,13 +216,13 @@ def _deterministic_boundary_candidates(
             else:
                 signals.append("heading_start")
                 score += 0.62
-                if looks_like_strong_heading(right_text, language):
+                if looks_like_strong_heading(right_text, right_language):
                     signals.append("strong_heading_start")
                     score += 0.36
         if left_type in heading_types and right_type not in heading_types:
             signals.append("heading_to_body")
             score += 0.20
-        if looks_like_speaker_start(right_text, language):
+        if looks_like_speaker_start(right_text, right_language):
             signals.append("speaker_label")
             score += 0.90
         if starts_quote(right_text) != starts_quote(left_text):
@@ -228,7 +245,7 @@ def _deterministic_boundary_candidates(
             "index": i,
             "protected": _is_protected_transition(left, right, language) or "repeated_running_heading" in signals,
             "language_profile": profile_metadata(
-                language,
+                boundary_language,
                 f"{left_text}\n{right_text}",
             ),
         })
@@ -341,6 +358,8 @@ def _seam_quality(
         return -10.0, True, ["protected_transition"]
     left_text = str(left.get("text") or "").strip()
     right_text = str(right.get("text") or "").strip()
+    left_language = _block_language(left, language)
+    right_language = _block_language(right, language)
     left_type = str(left.get("type") or "body").casefold()
     right_type = str(right.get("type") or "body").casefold()
     heading_types = {"heading", "title", "subtitle", "section", "chapter"}
@@ -349,13 +368,13 @@ def _seam_quality(
     if right_type in heading_types:
         score += 1.2
         signals.append("heading_start")
-    if ends_sentence_text(left_text, language):
+    if ends_sentence_text(left_text, left_language):
         score += 0.45
         signals.append("sentence_end")
     elif left_text.endswith((":","：",";","；","؛")):
         score += 0.12
         signals.append("clause_end")
-    if looks_like_speaker_start(right_text, language):
+    if looks_like_speaker_start(right_text, right_language):
         score += 0.85
         signals.append("speaker_start")
     if ends_quote(left_text) and not starts_quote(right_text):
