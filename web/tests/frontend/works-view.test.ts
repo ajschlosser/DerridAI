@@ -55,6 +55,7 @@ function adminSnapshot(overrides: Partial<WorksSnapshot> = {}): WorksSnapshot {
     shared: false,
     error: "",
     works: [item],
+    scopeWorks: [{ work: item.work }],
     selected: null,
     query: "",
     selectedWork: "",
