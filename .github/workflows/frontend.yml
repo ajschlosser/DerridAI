@@ -139,6 +139,12 @@ jobs:
                 ;;
             esac
 
+            case "$path" in
+              api/app/site_publication.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|api/app/routers/sites.py|tests/test_site_publication.py)
+                publication=true
+                ;;
+            esac
+
             # Prettier owns supported text formats across the repository, not
             # only files under web/. Keep this separate from domain ownership
             # above so e.g. api/README.md and JSON fixtures still get checked.
