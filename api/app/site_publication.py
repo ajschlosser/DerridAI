@@ -14,11 +14,11 @@ import struct
 import uuid
 import zipfile
 from collections.abc import Sequence
-from urllib.parse import urlsplit, urlunsplit
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from .corpus_publication import serialize_public_record, validate_publication_record
 from .locales.en_us import EN_US
@@ -629,9 +629,9 @@ _START_SCRIPT_TEMPLATE = """#!/bin/sh
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-IMAGE=\${DERRIDAI_SITE_IMAGE:-derridai-research-site}
-CONTAINER=\${DERRIDAI_SITE_CONTAINER:-derridai-research-site}
-PORT=\${DERRIDAI_SITE_PORT:-8080}
+IMAGE=${DERRIDAI_SITE_IMAGE:-derridai-research-site}
+CONTAINER=${DERRIDAI_SITE_CONTAINER:-derridai-research-site}
+PORT=${DERRIDAI_SITE_PORT:-8080}
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker is required but was not found on PATH." >&2
@@ -647,7 +647,7 @@ docker build --tag "$IMAGE" "$SCRIPT_DIR"
 docker run --detach \\
   --name "$CONTAINER" \\
   --restart unless-stopped \\
-__HOST_GATEWAY_ARG__  --publish "\${PORT}:80" \\
+__HOST_GATEWAY_ARG__  --publish "${PORT}:80" \\
   "$IMAGE" >/dev/null
 
 attempt=0
@@ -662,8 +662,8 @@ until docker exec "$CONTAINER" wget -q -O /dev/null http://127.0.0.1/healthz; do
   sleep 1
 done
 
-echo "DerridAI research site: http://localhost:\${PORT}"
-echo "Container: \${CONTAINER}"
+echo "DerridAI research site: http://localhost:${PORT}"
+echo "Container: ${CONTAINER}"
 """
 
 _STOP_SCRIPT = """#!/bin/sh
