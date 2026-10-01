@@ -9,7 +9,6 @@ export interface RunGuidanceEntry {
   instructions: string;
   look_for: string[];
   required?: boolean;
-  default_placeholder?: string;
 }
 
 export interface RunGuidanceField {
@@ -74,7 +73,6 @@ const entry = computed<RunGuidanceEntry>(
       instructions: "",
       look_for: [],
       required: false,
-      default_placeholder: "",
     },
 );
 
@@ -90,16 +88,11 @@ watch(selectedName, () => {
   cueDraft.value = "";
 });
 
-function defaultPlaceholder() {
-  return i18n.t("pdf_corpus.run_guidance_default_placeholder", "[not established in source]");
-}
-
 function update(field: string, patch: Partial<RunGuidanceEntry>) {
   const previous = props.modelValue[field] || {
     instructions: "",
     look_for: [],
     required: false,
-    default_placeholder: "",
   };
   emit("update:modelValue", {
     ...props.modelValue,
@@ -108,12 +101,7 @@ function update(field: string, patch: Partial<RunGuidanceEntry>) {
 }
 
 function setRequired(required: boolean) {
-  const field = selectedName.value;
-  const current = props.modelValue[field]?.default_placeholder || "";
-  update(field, {
-    required,
-    default_placeholder: required ? current || defaultPlaceholder() : current,
-  });
+  update(selectedName.value, { required });
 }
 
 function addCues(raw: string) {
@@ -202,7 +190,6 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
       instructions?: unknown;
       look_for?: unknown;
       required?: unknown;
-      default_placeholder?: unknown;
     };
     const instructions = typeof entry.instructions === "string" ? entry.instructions : "";
     const lookFor = Array.isArray(entry.look_for)
@@ -211,17 +198,11 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
           .slice(0, 40)
       : [];
     const required = entry.required === true;
-    const placeholder =
-      typeof entry.default_placeholder === "string" ? entry.default_placeholder.trim() : "";
     if (instructions.trim() || lookFor.length || required)
       imported[field] = {
         instructions,
         look_for: lookFor,
         required,
-        default_placeholder:
-          required && !placeholder
-            ? i18n.t("pdf_corpus.run_guidance_default_placeholder", "[not established in source]")
-            : placeholder,
       };
   }
   if (!Object.keys(imported).length) {
@@ -455,7 +436,7 @@ async function importGuidance(event: Event) {
               <small>{{
                 i18n.t(
                   "pdf_corpus.run_guidance_placeholder_help",
-                  "If the model cannot support a value, this marker stays visible and the field remains in review.",
+                  "If the source supports no value, DerridAI records that as a no-value suggestion and keeps the field in review. It never inserts placeholder text into the metadata field.",
                 )
               }}</small>
             </span>
@@ -471,29 +452,6 @@ async function importGuidance(event: Event) {
               <span aria-hidden="true" />
             </button>
           </div>
-          <template v-if="entry.required">
-            <label :for="`run-guidance-placeholder-${selected.name}`">
-              {{ i18n.t("pdf_corpus.run_guidance_placeholder_label", "Fallback placeholder") }}
-            </label>
-            <input
-              :id="`run-guidance-placeholder-${selected.name}`"
-              class="control"
-              maxlength="200"
-              :disabled="disabled"
-              :value="entry.default_placeholder || ''"
-              :placeholder="
-                i18n.t(
-                  'pdf_corpus.run_guidance_placeholder_hint',
-                  'For example: [not established in source]',
-                )
-              "
-              @input="
-                update(selected.name, {
-                  default_placeholder: ($event.target as HTMLInputElement).value,
-                })
-              "
-            />
-          </template>
         </div>
       </div>
       <p v-else class="rg-empty">

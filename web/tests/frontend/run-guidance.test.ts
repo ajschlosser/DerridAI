@@ -25,7 +25,6 @@ describe("Corpus run guidance", () => {
 
     expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual({
       persons: {
-        default_placeholder: "",
         instructions: "Exclude bibliography-only mentions.",
         look_for: ["Emmanuel Levinas", "Levinas", "Lévinas"],
         required: false,
@@ -33,7 +32,7 @@ describe("Corpus run guidance", () => {
     });
   });
 
-  it("removes a cue and toggles a required value with a fallback placeholder", async () => {
+  it("removes a cue and toggles required review without inventing a fallback value", async () => {
     const wrapper = mount(CorpusRunGuidance, {
       props: {
         fields: [persons],
@@ -47,7 +46,8 @@ describe("Corpus run guidance", () => {
     await wrapper.find('[role="switch"]').trigger("click");
     const last = (wrapper.emitted("update:modelValue")?.at(-1)?.[0] as any).persons;
     expect(last.required).toBe(true);
-    expect(last.default_placeholder).toBeTruthy();
+    expect(last).not.toHaveProperty("default_placeholder");
+    expect(wrapper.text()).not.toContain("[not established in source]");
   });
 
   it("filters fields by search text and shows configured state", async () => {
@@ -85,7 +85,7 @@ describe("Corpus run guidance", () => {
           version: 1,
           guidance: {
             persons: {
-              default_placeholder: "",
+              default_placeholder: "[not established in source]",
               instructions: "Check attribution.",
               look_for: ["First Name Last Name"],
               required: false,
@@ -102,7 +102,6 @@ describe("Corpus run guidance", () => {
 
     expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual({
       persons: {
-        default_placeholder: "",
         instructions: "Check attribution.",
         look_for: ["First Name Last Name"],
         required: false,
