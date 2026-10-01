@@ -41,7 +41,7 @@ def test_segmentation_contract_has_one_current_profile():
     under 100 (the budget that keeps builds fast). Update the ids when they are bumped.
     """
     assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
-    assert cb.SEGMENTATION_PROMPT_VERSION=="derridai-local-boundaries-v8"
+    assert cb.SEGMENTATION_PROMPT_VERSION=="derridai-local-boundaries-v9"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     assert profile["boundary_batch_size"]>=2
