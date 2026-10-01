@@ -91,7 +91,6 @@ def build(output_dir: Path) -> None:
         description="Generated acceptance fixture.",
         locale="en-US",
         languages=["en-US"],
-        provider_profile_ids=[],
     )
     (output_dir / "local.html").write_bytes(local.payload)
 
@@ -102,7 +101,6 @@ def build(output_dir: Path) -> None:
         description="Generated direct-provider acceptance fixture.",
         locale="en-US",
         languages=["en-US"],
-        provider_profile_ids=["acceptance-provider"],
     )
     (output_dir / "local-provider.html").write_bytes(local_provider.payload)
 
@@ -113,7 +111,6 @@ def build(output_dir: Path) -> None:
         description="Generated acceptance fixture.",
         locale="en-US",
         languages=["en-US"],
-        provider_profile_ids=[],
     )
     (output_dir / "nginx.zip").write_bytes(nginx.payload)
 
