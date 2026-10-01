@@ -477,11 +477,18 @@ def structured_chat_complete(
     timeout_seconds: float | None = None,
     on_delta: Callable[[str], None] | None = None,
     on_metric: Callable[[str, int], None] | None = None,
+    completion: Callable[..., str] | None = None,
 ) -> Any:
-    """Run one JSON-object task through the shared repair/retry contract."""
+    """Run one JSON-object task through the shared repair/retry contract.
+
+    completion is injectable for compatibility tests and specialized transports;
+    production callers normally use the module's chat_complete.
+    """
+
+    transport = completion or chat_complete
 
     def request_once(context: StructuredAttemptContext) -> str:
-        return chat_complete(
+        return transport(
             provider=provider,
             model=model,
             base_url=base_url,
