@@ -382,6 +382,29 @@ test("guided tour is dismissed with Escape, remembered, and fits a phone screen"
   await expect(page.getByRole("button", { name: "Tutorial" })).toBeFocused();
 });
 
+test("search terms are highlighted in result snippets and the opened record", async ({ page }) => {
+  await mountStaticSite(page);
+  await page.getByRole("button", { name: "Skip tutorial" }).click();
+
+  await page.locator(".search-row input").fill("Publication-Safe PASSAGE");
+  await page.locator(".search-row button").click();
+  const marks = page.locator(".result .snippet mark");
+  // Case-insensitive, whole-token and whole-phrase matches; surrounding text is left alone.
+  await expect(marks).toHaveText(["publication-safe passage"]);
+  await expect(page.locator(".result .snippet")).toHaveText("A publication-safe passage.");
+  await scan(page);
+
+  await page.getByRole("button", { name: "View record" }).click();
+  await expect(page.locator("dialog .record-text mark")).toHaveText(["publication-safe passage"]);
+  await scan(page);
+  await page.keyboard.press("Escape");
+
+  await page.locator(".search-row input").fill("pass");
+  await page.locator(".search-row button").click();
+  // Partial words are not matched by the keyword search, so they are not highlighted either.
+  await expect(page.locator(".result .snippet mark")).toHaveCount(0);
+});
+
 test("exported OpenAI profile powers vector + LLM Research with method disclosure", async ({
   page,
 }) => {

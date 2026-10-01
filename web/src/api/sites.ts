@@ -4,6 +4,9 @@ import type { LanguageInfo, ProviderProfile } from "./system";
 
 export type SiteExportFormat = "two-file" | "local-single-file" | "nginx-docker";
 
+/** How much Record metadata a site carries: `reader` omits FieldAssertions to reduce file size. */
+export type SiteRecordProfile = "complete" | "reader";
+
 export interface SiteExportRequest {
   store: string;
   works: string[];
@@ -13,6 +16,7 @@ export interface SiteExportRequest {
   languages: string[];
   provider_profile_ids: string[];
   export_format: SiteExportFormat;
+  record_profile: SiteRecordProfile;
 }
 
 export interface SiteExportOptions {
