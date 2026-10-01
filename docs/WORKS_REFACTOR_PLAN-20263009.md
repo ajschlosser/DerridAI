@@ -11,9 +11,14 @@ Work has started on the first data-model/performance tranche on \`task/works-ref
 - pre-index annotation counts once per snapshot instead of rescanning annotations for every work;
 - add a typed, first-class corpus/search-index freshness summary while preserving the distinction between known-current, merely-present, stale/absent, unknown, and unavailable records;
 - add a lightweight full-corpus work identity scope so filtering the library no longer silently narrows Create Site's available export scope;
-- centralize the existing work database status options and strengthen their TypeScript contract.
+- centralize the existing work database status options and strengthen their TypeScript contract;
+- move the Works composable behind an operation-specific typed service boundary instead of importing the general runtime facade directly;
+- replace the hidden global-file-input query with an explicit shell-level corpus file-picker command;
+- remove runtime DOM decoration from the Works rendering lifecycle and route semantic-map source discovery through a typed service;
+- replace the two large corpus/database cards with a compact `Working corpus → Search index` relationship strip, expose freshness there, rename the maintenance action to “Update search index,” and localize the new English/French terminology;
+- remove the hard-coded English empty-index label from the domain snapshot.
 
-The next implementation step is to finish the remaining snapshot/data-model work, then move the Works composable off the legacy runtime facade before beginning the larger layout/list/facet redesign.
+The next implementation step is to finish the remaining snapshot/metadata-discovery work, then replace Compact with a true List mode and expand deterministic search/faceting before the inspector and dialog decomposition passes.
 
 ## Implementation proposals
 
