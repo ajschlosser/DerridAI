@@ -18,6 +18,7 @@ English-contaminated policy is never saved but an otherwise good one is not thro
 """
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -30,6 +31,8 @@ from .content_filter import (
 from .models import OllamaTouchupOptions
 from .rag import chat_complete
 from .structured_completion import StructuredAttemptContext, complete_structured_json
+
+logger = logging.getLogger(__name__)
 
 # Each category is a kind of abusive language a researcher filter should represent.
 CATEGORY_DESCRIPTIONS: dict[str, str] = {
@@ -289,6 +292,10 @@ def generate_content_policy(
                 True,
             )
         except Exception:
+            logger.debug(
+                "Structured content-policy generation attempt failed; retrying within budget",
+                exc_info=True,
+            )
             continue
         taken = {term for terms in accepted.values() for term in terms} | set(rejected)
         candidates: dict[str, list[str]] = {}
