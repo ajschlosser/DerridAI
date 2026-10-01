@@ -515,7 +515,7 @@ onBeforeUnmount(() => {
 
     <CreateSiteDialog
       v-if="createSiteOpen && snapshot?.mode === 'admin'"
-      :works="snapshot.works"
+      :works="snapshot.scopeWorks"
       :store-name="snapshot.activeStore"
       :initial-work="snapshot.selectedWork"
       :languages="createSiteLanguages"
