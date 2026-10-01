@@ -95,7 +95,6 @@ describe("useCorpusIngestWarning", () => {
             instructions: "assess",
             look_for: ["support"],
             required: false,
-            default_placeholder: "",
           },
         });
         expect(composable.active.value).toEqual([
@@ -116,12 +115,19 @@ describe("useCorpusIngestWarning", () => {
           },
         });
         const wrapper = mount(Host);
+        // Legacy browser storage may still contain the removed placeholder
+        // property. It must not leak into a new build request.
         composable.guidance.value = {
-          stance: { instructions: "", look_for: [], required: true, default_placeholder: " n/a " },
+          stance: {
+            instructions: "",
+            look_for: [],
+            required: true,
+            default_placeholder: " n/a ",
+          },
           gone: { instructions: "stale field", look_for: [] },
-        };
+        } as any;
         expect(composable.payload()).toEqual({
-          stance: { instructions: "", look_for: [], required: true, default_placeholder: "n/a" },
+          stance: { instructions: "", look_for: [], required: true },
         });
         await nextTick();
         schema.value = { id: "schema-b", fields: [field], groups: [] };
@@ -130,9 +136,11 @@ describe("useCorpusIngestWarning", () => {
         schema.value = { id: "schema-a", fields: [field], groups: [] };
         await nextTick();
         expect(composable.guidance.value.stance.required).toBe(true);
+        expect(composable.guidance.value.stance).not.toHaveProperty("default_placeholder");
         wrapper.unmount();
         const reopened = mount(Host);
-        expect(composable.guidance.value.stance.default_placeholder).toBe(" n/a ");
+        expect(composable.guidance.value.stance.required).toBe(true);
+        expect(composable.guidance.value.stance).not.toHaveProperty("default_placeholder");
         reopened.unmount();
       });
     });
