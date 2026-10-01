@@ -126,6 +126,7 @@ async function createSite(payload: {
   languages: string[];
   include_transformers: boolean;
   include_vectors: boolean;
+  provider_proxy_upstream: string | null;
 }) {
   if (!snapshot.value?.activeStore || createSiteBusy.value) return;
   createSiteBusy.value = true;
@@ -145,6 +146,7 @@ async function createSite(payload: {
       include_vectors: payload.include_vectors,
       export_format: payload.export_format,
       record_profile: payload.record_profile,
+      provider_proxy_upstream: payload.provider_proxy_upstream,
     });
     const url = URL.createObjectURL(download.blob);
     const link = document.createElement("a");
