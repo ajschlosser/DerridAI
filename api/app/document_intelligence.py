@@ -535,6 +535,21 @@ def project_annotations_to_records(
     }
 
 
+
+def current_quotations(record: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """Current Record quotation projections, or None when unavailable/stale.
+
+    This is a routing signal only. Document Intelligence is derived advisory state,
+    not source evidence and not a metadata assertion.
+    """
+    data = record.get("document_intelligence")
+    if not isinstance(data, dict) or data.get("status") != "ok":
+        return None
+    if data.get("record_text_sha256") != _sha256(str(record.get("text") or "")):
+        return None
+    return [item for item in (data.get("quotations") or []) if isinstance(item, dict)]
+
+
 def prompt_hints(record: dict[str, Any], field_names: list[str]) -> dict[str, Any]:
     """Small candidate packet for metadata prompts; never evidence."""
     data = record.get("document_intelligence")
