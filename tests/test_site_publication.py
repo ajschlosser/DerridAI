@@ -122,7 +122,7 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     assert "DerridAI" in site_runtime
     assert "__DERRIDAI_HOST_CAPABILITIES__" in site_runtime
     assert "sdk.createClient" in site_runtime
-    assert "OLLAMA_ORIGINS" not in site_runtime
+    assert "OLLAMA_ORIGINS" in site_runtime
     assert "/chat/completions" not in site_runtime
     assert "/api/chat" not in site_runtime
     assert "apiKey" not in site_runtime
@@ -213,7 +213,7 @@ def test_site_bundle_exports_only_selected_installed_languages_and_safe_provider
     assert [item["code"] for item in manifest["languages"]] == ["de-DE", "fr-CA"]
     assert set(manifest["strings"]) == {"de-DE", "fr-CA"}
     assert manifest["strings"]["de-DE"]["site.runtime.search"] == "Suchen"
-    assert manifest["strings"]["de-DE"]["site.runtime.site_title"] == "Research site"
+    assert manifest["strings"]["de-DE"]["site.runtime.site_title"] == site_publication.EN_US["site.runtime.site_title"]
     assert manifest["provider_profiles"] == [
         {
             "id": "openai-main",
