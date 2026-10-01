@@ -1,54 +1,70 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const webRoot = resolve(import.meta.dirname, "..");
-const fixture = resolve(webRoot, "tests/fixtures/sdk-consumer");
-const temp = mkdtempSync(join(tmpdir(), "derridai-sdk-consumer-"));
+const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const fixtureRoot = join(webRoot, "tests", "fixtures", "sdk-consumer");
+const workspace = mkdtempSync(join(tmpdir(), "derridai-sdk-consumer-"));
 
-function run(command, args, options = {}) {
+function run(command, args, cwd) {
   execFileSync(command, args, {
-    cwd: webRoot,
+    cwd,
     stdio: "inherit",
-    ...options,
+    env: { ...process.env, npm_config_audit: "false", npm_config_fund: "false" },
+  });
+}
+
+function output(command, args, cwd) {
+  return execFileSync(command, args, {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, npm_config_audit: "false", npm_config_fund: "false" },
   });
 }
 
 try {
-  const packJson = execFileSync("npm", ["pack", "./sdk", "--json", "--pack-destination", temp], {
-    cwd: webRoot,
-    encoding: "utf8",
-  });
-  const packed = JSON.parse(packJson);
-  const tarball = resolve(temp, packed[0].filename);
+  const packDir = join(workspace, "pack");
+  const consumerDir = join(workspace, "consumer");
+  mkdirSync(packDir);
+  cpSync(fixtureRoot, consumerDir, { recursive: true });
 
-  run("npm", [
-    "install",
-    "--prefix",
-    fixture,
-    "--no-package-lock",
-    "--ignore-scripts",
-    "--no-audit",
-    "--no-fund",
-    "--no-save",
-    tarball,
-  ]);
+  const packed = JSON.parse(
+    output("npm", ["pack", "./sdk", "--json", "--pack-destination", packDir], webRoot),
+  );
+  if (!Array.isArray(packed) || packed.length !== 1 || !packed[0]?.filename) {
+    throw new Error("npm pack did not return exactly one SDK package.");
+  }
 
-  run(resolve(webRoot, "node_modules/.bin/tsc"), [
-    "--noEmit",
-    "-p",
-    resolve(fixture, "tsconfig.json"),
-  ]);
-  run(resolve(webRoot, "node_modules/.bin/vite"), [
-    "build",
-    fixture,
-    "--outDir",
-    resolve(temp, "dist"),
-    "--emptyOutDir",
-  ]);
+  const tarball = join(packDir, packed[0].filename);
+  const packedFiles = (packed[0].files ?? []).map((item) => String(item.path));
+  const unexpected = packedFiles.filter(
+    (path) =>
+      path !== "package.json" &&
+      path !== "README.md" &&
+      path !== "CHANGELOG.md" &&
+      !path.startsWith("dist/"),
+  );
+  if (unexpected.length) {
+    throw new Error(`Unexpected files in SDK tarball: ${unexpected.join(", ")}`);
+  }
+  if (!packedFiles.includes("dist/index.js") || !packedFiles.includes("dist/index.d.ts")) {
+    throw new Error("SDK tarball is missing its JavaScript or TypeScript declaration entry point.");
+  }
+
+  const packagePath = join(consumerDir, "package.json");
+  const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
+  packageJson.dependencies = {
+    "@derridai/sdk": `file:${tarball}`,
+  };
+  writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
+  run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], consumerDir);
+  run(join(webRoot, "node_modules", ".bin", "tsc"), ["-p", "tsconfig.json"], consumerDir);
+  run("node", ["dist-ts/index.js"], consumerDir);
+  run(join(webRoot, "node_modules", ".bin", "vite"), ["build"], consumerDir);
 } finally {
-  rmSync(resolve(fixture, "node_modules"), { recursive: true, force: true });
-  rmSync(temp, { recursive: true, force: true });
+  rmSync(workspace, { recursive: true, force: true });
 }

@@ -4,10 +4,10 @@ import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-function fixturePath(): string {
+function fixturePath(name = "local.html"): string {
   return resolve(
     process.env.DERRIDAI_PUBLICATION_FIXTURE_DIR || "../.tmp/publication-acceptance",
-    "local.html",
+    name,
   );
 }
 
@@ -58,4 +58,41 @@ test("single-file export works directly from file://", async ({ page }) => {
   await expect(evidenceRegion.getByRole("button", { name: /\[E1\] Glas/ })).toBeVisible();
 
   expect(networkRequests).toEqual([]);
+});
+
+test("single-file export preserves evidence when a direct provider is unreachable", async ({
+  page,
+}) => {
+  const html = fixturePath("local-provider.html");
+  await access(html);
+
+  const providerRequests: string[] = [];
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.route("https://models.example.test/v1/**", async (route) => {
+    providerRequests.push(route.request().url());
+    await route.abort("connectionrefused");
+  });
+
+  await page.goto(pathToFileURL(html).href);
+  await expect(page.getByRole("dialog", { name: "Welcome" })).toBeVisible();
+  await page.getByRole("button", { name: "Skip tutorial" }).click();
+  await page.getByRole("button", { name: "Research" }).click();
+
+  await page.getByLabel("Provider profile").selectOption("acceptance-provider");
+  await page.getByRole("button", { name: "Use this provider" }).click();
+  await page.getByLabel("Question").fill("What does the passage say about hospitality?");
+  await page.getByRole("button", { name: "Ask" }).click();
+
+  await expect(
+    page.getByText(
+      "The evidence packet is available below. No answer-generation capability is currently available.",
+    ),
+  ).toBeVisible();
+  const evidenceRegion = page.getByRole("region", { name: "Evidence" });
+  await expect(evidenceRegion.getByRole("button", { name: /\[E1\] Glas/ })).toBeVisible();
+
+  expect(providerRequests.some((url) => url.endsWith("/embeddings"))).toBe(true);
+  expect(providerRequests.some((url) => url.endsWith("/chat/completions"))).toBe(true);
+  expect(pageErrors).toEqual([]);
 });
