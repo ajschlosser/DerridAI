@@ -68,7 +68,7 @@ return an empty language and confidence 0. Do not translate or summarize the sou
         result = structured_chat_complete(
             provider=body.provider, model=model, base_url=body.base_url,
             api_key=body.api_key, prompt=prompt, options=body.generation,
-            max_tokens=256, attempts=2, cancelled=cancelled,
+            max_tokens=256, attempts=2, completion=chat_complete, cancelled=cancelled,
         )
         language = str(result.get("language") or "").strip().replace("_", "-").lower()
         if language and not re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})?", language):
@@ -124,6 +124,7 @@ updates=[], and use supplied PDF context. Do not invent edition/year/citation da
             api_key=body.api_key, prompt=prompt, options=body.generation,
             max_tokens=(body.generation.num_predict if body.generation and body.generation.num_predict else 8192),
             attempts=2,
+            completion=chat_complete,
             cancelled=cancelled,
         )
         record["text"] = str(record.get("text") or body.raw_text)
@@ -204,7 +205,7 @@ merely because it discusses the same concept. Return empty IDs if unsupported.""
     match = structured_chat_complete(
         provider=body.provider, model=model, base_url=body.base_url,
         api_key=body.api_key, prompt=prompt, options=body.generation,
-        max_tokens=768, attempts=2, cancelled=cancelled,
+        max_tokens=768, attempts=2, completion=chat_complete, cancelled=cancelled,
     )
     valid_keys = {str(item.get("key") or "") for item in retained_candidates}
     if str(match.get("key") or "") not in valid_keys:
@@ -665,6 +666,7 @@ DerridAI will copy them deterministically from the selected catalogue record."""
         options=request.generation,
         max_tokens=384,
         attempts=2,
+        completion=chat_complete,
         cancelled=cancelled,
     )
     try:
@@ -897,7 +899,7 @@ reconstructed, questioned, criticized, or endorsed positions."""
         provider=body.provider, model=_model_for(body.provider, body.model),
         base_url=body.base_url, api_key=body.api_key, prompt=prompt,
         options=body.generation, max_tokens=4096, attempts=2,
-        validate=_normalize_rag_grade_payload,
+        validate=_normalize_rag_grade_payload, completion=chat_complete,
         cancelled=cancelled,
     )
     cache_summary = None
