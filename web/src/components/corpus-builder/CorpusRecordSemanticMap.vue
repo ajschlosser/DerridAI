@@ -443,7 +443,9 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
       </ol>
     </nav>
 
-    <p v-if="loading" class="semantic-map-status" role="status">{{ i18n.t("ui.loading") }}</p>
+    <p v-if="loading" class="semantic-map-status" role="status">
+      {{ i18n.t("pdf_corpus.semantic_map_building", "Creating semantic map…") }}
+    </p>
     <p v-else-if="error" class="semantic-map-status error" role="alert">{{ error }}</p>
 
     <!-- Record step -------------------------------------------------------------------------------------------- -->
