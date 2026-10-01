@@ -203,3 +203,45 @@ def test_a_second_reviewer_cannot_read_a_sealed_value_through_the_record_map(tmp
     assert "Sealed Holder" in json.dumps(mine)
     with pytest.raises(KeyError):
         manager.record_semantic_map(build_id, "nope")
+
+
+def test_persisted_projection_hydrates_without_reloading_the_full_corpus(tmp_path, monkeypatch):
+    manager, repo, build_id = _manager(tmp_path)
+    repo.save_records(build_id, _records())
+
+    projections: dict[str, dict] = {}
+
+    def get_projection(key: str):
+        return projections.get(key)
+
+    def put_projection(key: str, **kwargs):
+        projections[key] = {
+            "projection_key": key,
+            "scope_kind": kwargs["scope_kind"],
+            "scope_id": kwargs["scope_id"],
+            "build_id": kwargs.get("build_id"),
+            "generation": kwargs["generation"],
+            "status": kwargs.get("status", "ready"),
+            "payload": kwargs.get("payload"),
+        }
+
+    monkeypatch.setattr(cb.system_store, "get_semantic_map_projection", get_projection)
+    monkeypatch.setattr(cb.system_store, "put_semantic_map_projection", put_projection)
+
+    first = manager.record_semantic_map(build_id, "r1")
+    assert first["record_id"] == "r1"
+    assert any(key.startswith("semantic-index:") for key in projections)
+    assert any(key.startswith("semantic-record:") for key in projections)
+
+    # A fresh manager simulates an API restart. The persisted traversal index and
+    # Record projection must make the unchanged hot read independent of load_records.
+    restarted = cb.PdfCorpusBuildManager(repo)
+    monkeypatch.setattr(
+        repo,
+        "load_records",
+        lambda _build_id: (_ for _ in ()).throw(
+            AssertionError("cached semantic-map read loaded the full corpus")
+        ),
+    )
+    second = restarted.record_semantic_map(build_id, "r1")
+    assert second == first
