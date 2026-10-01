@@ -25,6 +25,7 @@ from typing import Any
 from .language_segmentation import (
     ends_sentence_text,
     looks_like_heading_line,
+    split_sentences,
     starts_mid_sentence_text,
 )
 
@@ -54,7 +55,25 @@ def clean_boundary(
     right: dict[str, Any],
     language: str | None = None,
 ) -> bool:
-    return ends_sentence(left, language) and not starts_mid_sentence(right, language)
+    if not ends_sentence(left, language) or starts_mid_sentence(right, language):
+        return False
+    left_text = str(left.get("text") or "").rstrip()
+    right_text = str(right.get("text") or "").lstrip()
+    if (
+        left_text.endswith(".")
+        and right_text
+        and str(left.get("type") or "body") in _RUNNING_TEXT
+        and str(right.get("type") or "body") in _RUNNING_TEXT
+    ):
+        # A block-final period may be an abbreviation ("Dr.") rather than a
+        # sentence boundary. Re-run the shared lossless splitter across the seam;
+        # only accept the seam when the first sentence really ends with the
+        # complete left block.
+        probe = f"{left_text} {right_text}"
+        sentences = split_sentences(probe, language)
+        if not sentences or sentences[0].strip() != left_text:
+            return False
+    return True
 
 
 def snap_boundaries_to_sentences(
