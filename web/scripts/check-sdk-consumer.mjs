@@ -25,6 +25,14 @@ function run(command, args, cwd) {
   });
 }
 
+function output(command, args, cwd) {
+  return execFileSync(command, args, {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, npm_config_audit: "false", npm_config_fund: "false" },
+  });
+}
+
 try {
   const packDir = join(workspace, "pack");
   const consumerDir = join(workspace, "consumer");
@@ -37,10 +45,29 @@ try {
     throw new Error(`Expected one SDK tarball, found ${tarballs.length}.`);
   }
 
+  const tarball = join(packDir, tarballs[0]);
+  const packedFiles = output("tar", ["-tzf", tarball], webRoot)
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  const unexpected = packedFiles.filter(
+    (path) =>
+      path !== "package/package.json" &&
+      path !== "package/README.md" &&
+      path !== "package/CHANGELOG.md" &&
+      !path.startsWith("package/dist/"),
+  );
+  if (unexpected.length) {
+    throw new Error(`Unexpected files in SDK tarball: ${unexpected.join(", ")}`);
+  }
+  if (!packedFiles.includes("package/dist/index.js") || !packedFiles.includes("package/dist/index.d.ts")) {
+    throw new Error("SDK tarball is missing its JavaScript or TypeScript declaration entry point.");
+  }
+
   const packagePath = join(consumerDir, "package.json");
   const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
   packageJson.dependencies = {
-    "@derridai/sdk": `file:${join(packDir, tarballs[0])}`,
+    "@derridai/sdk": `file:${tarball}`,
   };
   writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
