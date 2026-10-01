@@ -178,6 +178,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements.txt
       - run: pip install ruff==0.16.8
       - run: ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 
@@ -190,6 +192,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements.txt
       - name: Install mypy (plus Strawberry, whose decorators define GraphQL type signatures)
         run: pip install mypy==2.3.1 "strawberry-graphql>=0.327,<0.328"
       - run: mypy
@@ -220,6 +224,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements.txt
       - name: Install backend test dependencies without optional reranker
         run: |
           grep -vE '^sentence-transformers' api/requirements.txt > /tmp/derridai-test-requirements.txt
@@ -238,6 +244,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements.txt
       - name: Install API contract dependencies
         run: |
           grep -vE '^sentence-transformers' api/requirements.txt > /tmp/derridai-contract-requirements.txt
@@ -247,7 +255,7 @@ jobs:
       - name: Frontend / GraphQL operation contract
         run: pytest -q -m contract tests/test_frontend_graphql_contract.py
 
-  frontend-static:
+  frontend-build:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     name: frontend-static
@@ -265,18 +273,36 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --no-audit --no-fund
       - name: Typecheck application
-        run: npm run typecheck
+        run: npm run typecheck:app
       - name: Typecheck tests and test configuration
         run: npm run typecheck:tests
       - name: Unit/component tests
         run: npm run test:unit
-      - name: Production build
+      - name: Guard legacy snapshot ownership
+        run: npm run check:legacy-snapshots
+      - name: Build production app once
         run: npm run build:ci
-      - name: Storybook build
+      - name: Build Storybook once
         run: npm run build-storybook
+      - name: Upload production build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-production-${{ github.run_id }}
+          path: web/dist
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+      - name: Upload Storybook build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-storybook-${{ github.run_id }}
+          path: web/storybook-static
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
 
   frontend-legacy:
-    needs: changes
+    needs: [changes, frontend-build]
     if: needs.changes.outputs.frontend == 'true'
     name: frontend-legacy (${{ matrix.shard }})
     runs-on: ubuntu-latest
@@ -304,13 +330,16 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      - name: Build production app
-        run: npm run build:ci
+      - name: Download production build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-production-${{ github.run_id }}
+          path: web/dist
       - name: Legacy DOM regression tests
         run: npm run test:e2e:legacy -- --shard=${{ matrix.shard }}
 
   frontend-e2e:
-    needs: changes
+    needs: [changes, frontend-build]
     if: needs.changes.outputs.frontend == 'true'
     name: frontend-e2e (${{ matrix.shard }})
     runs-on: ubuntu-latest
@@ -344,15 +373,21 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
-      - name: Build production app
-        run: npm run build:ci
-      - name: Build Storybook
-        run: npm run build-storybook
+      - name: Download production build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-production-${{ github.run_id }}
+          path: web/dist
+      - name: Download Storybook build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-storybook-${{ github.run_id }}
+          path: web/storybook-static
       - name: Composed UI and WCAG 2.2 AA tests
         run: npm run test:e2e -- --shard=${{ matrix.shard }}
 
   frontend-a11y:
-    needs: changes
+    needs: [changes, frontend-build]
     if: needs.changes.outputs.frontend == 'true'
     name: frontend-a11y
     runs-on: ubuntu-latest
@@ -376,8 +411,11 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      - name: Build Storybook
-        run: npm run build-storybook
+      - name: Download Storybook build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-storybook-${{ github.run_id }}
+          path: web/storybook-static
       - name: Corpus Builder WCAG 2.2 AA sweep
         run: npm run test:e2e:a11y
 
@@ -391,6 +429,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements.txt
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -428,7 +468,7 @@ jobs:
       - format-check
       - api-contract
       - frontend-lint
-      - frontend-static
+      - frontend-build
       - frontend-legacy
       - frontend-e2e
       - frontend-a11y
@@ -443,7 +483,7 @@ jobs:
           CONTRACT_CHANGED: ${{ needs.changes.outputs.contract }}
           CONTRACT_RESULT: ${{ needs.api-contract.result }}
           LINT_RESULT: ${{ needs.frontend-lint.result }}
-          STATIC_RESULT: ${{ needs.frontend-static.result }}
+          STATIC_RESULT: ${{ needs.frontend-build.result }}
           LEGACY_RESULT: ${{ needs.frontend-legacy.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           A11Y_RESULT: ${{ needs.frontend-a11y.result }}

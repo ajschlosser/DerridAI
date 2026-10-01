@@ -130,12 +130,12 @@ See [tests/README.md](tests/README.md) for pytest markers, test taxonomy, and fo
 | Backend tests               | compile Python, then parallel pytest excluding the focused contract test                |
 | Frontend / FastAPI contract | live FastAPI OpenAPI routes versus frontend requests                                    |
 | Frontend / GraphQL contract | frontend `.graphql` operations validated against the live Strawberry schema             |
-| Frontend static             | typecheck app/tests, unit tests, production build, Storybook build                      |
-| Legacy DOM regression       | sharded characterization suite                                                          |
-| Composed UI / app E2E       | sharded production/Storybook Playwright coverage                                        |
+| Frontend static/build       | typecheck app/tests, unit tests, snapshot guard, one production + Storybook artifact build |
+| Legacy DOM regression       | sharded runtime-owned characterization suite using the shared production artifact       |
+| Composed UI / app E2E       | sharded Playwright coverage using the shared production and Storybook artifacts          |
 | WCAG 2.2 AA sweep           | focused Playwright/axe accessibility coverage                                           |
 
-Browser jobs share the Chromium cache while avoiding concurrent writes. Composed coverage runs against built artifacts rather than development servers so CI tests what is actually shipped.
+Browser jobs share the Chromium cache while avoiding concurrent writes. The `frontend-build` producer (displayed as `frontend-static`) builds the production app and Storybook once, uploads short-lived uncompressed workflow artifacts, and the E2E/legacy/accessibility jobs download those exact outputs instead of rebuilding them. Composed coverage therefore tests one canonical shipped build while avoiding repeated Vite and Storybook compilation.
 
 ## Change rules
 
