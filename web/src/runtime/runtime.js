@@ -2450,7 +2450,18 @@ async function exportStoreJsonl({
         imported_at: new Date().toISOString(),
         imported_from_chroma: store,
       };
-      state.files.push(file);
+      // Reloading the same collection/work replaces its clean earlier copy instead of duplicating every record.
+      const previous = state.files.findIndex(
+        (item) =>
+          item.imported_from_chroma === store &&
+          item.name === name &&
+          !(item.dirty && item.dirty.size),
+      );
+      if (previous >= 0) {
+        file.id = state.files[previous].id;
+        state.files.splice(previous, 1, file);
+      } else state.files.push(file);
+      invalidateCorpusCache();
       await persistFileNow(file);
       state.activeFileId = file.id;
       persistPrefs();

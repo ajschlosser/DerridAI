@@ -26,9 +26,10 @@
   const contrastKey = `derridai.site.contrast.${publicationId}`;
   const tutorialKey = `derridai.site.tutorial.${publicationId}`;
   const providerKey = `derridai.site.provider.${publicationId}`;
+  const customProvidersKey = `derridai.site.providers.${publicationId}`;
   const availableLocales = Object.keys(publication.strings || {});
   const languageMetadata = Array.isArray(publication.languages) ? publication.languages : [];
-  const providerProfiles = Array.isArray(publication.provider_profiles)
+  const exportedProviderProfiles = Array.isArray(publication.provider_profiles)
     ? publication.provider_profiles
     : [];
   const memoryStorage = new Map();
@@ -38,10 +39,35 @@
   let theme = readLocal(themeKey) === "dark" ? "dark" : "light";
   let highContrast = readLocal(contrastKey) === "high";
   let selectedProviderId = readLocal(providerKey) || "";
+  function loadCustomProviderProfiles() {
+    try {
+      const value = JSON.parse(readLocal(customProvidersKey) || "[]");
+      return Array.isArray(value)
+        ? value.filter(
+            (profile) =>
+              profile &&
+              typeof profile === "object" &&
+              profile.id &&
+              profile.name &&
+              profile.base_url &&
+              profile.model &&
+              (profile.type === "openai" || profile.type === "ollama"),
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  let customProviderProfiles = loadCustomProviderProfiles();
+  let providerProfiles = [...exportedProviderProfiles, ...customProviderProfiles];
   if (!providerProfiles.some((profile) => profile.id === selectedProviderId)) {
     selectedProviderId = "";
   }
   const sessionApiKeys = new Map();
+  customProviderProfiles.forEach((profile) => {
+    if (profile.api_key) sessionApiKeys.set(profile.id, String(profile.api_key));
+  });
   let view = "search";
   let client = null;
   let capabilities = null;
@@ -116,7 +142,7 @@
     textarea{min-height:7rem;resize:vertical}.annotation{border-left:4px solid var(--accent);padding:.8rem 1rem;background:var(--surface)}.annotation blockquote{margin:.35rem 0;font-family:Georgia,serif}
     .research-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(18rem,24rem);gap:1rem}.answer{white-space:pre-wrap;font-family:Georgia,serif;font-size:1.04rem}
     .evidence{display:grid;gap:.6rem}.evidence button{text-align:left;height:auto}.work-button{width:100%;text-align:left;height:100%;padding:1rem}.work-title{display:block;font-size:1.1rem;font-weight:800}.count{font-size:1.6rem;font-weight:800}
-    .provider-panel{display:grid;gap:.7rem}.provider-summary{padding:.65rem;border:1px solid var(--border);border-radius:.5rem;background:var(--bg);overflow-wrap:anywhere}
+    .provider-panel{display:grid;gap:.7rem}.provider-form{display:grid;gap:.7rem;padding-top:.8rem;border-top:1px solid var(--border)}.provider-summary{padding:.65rem;border:1px solid var(--border);border-radius:.5rem;background:var(--bg);overflow-wrap:anywhere}
     .provider-command{display:block;margin-top:.5rem;overflow:auto;padding:.5rem;border:1px solid var(--border);border-radius:.4rem;background:var(--raised);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;white-space:pre}
     [data-tour]{scroll-margin:6rem 0 1rem}
     dialog.tour{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:hidden}
@@ -155,6 +181,10 @@
     } catch {
       // Opaque file origins and privacy modes may disable localStorage.
     }
+  }
+
+  function saveCustomProviderProfiles() {
+    writeLocal(customProvidersKey, JSON.stringify(customProviderProfiles));
   }
 
   function t(key, vars = {}) {
@@ -900,13 +930,6 @@
     });
     panel.append(node("h3", { id: "provider-heading", text: t("site.runtime.provider_settings") }));
 
-    if (!providerProfiles.length) {
-      panel.append(
-        node("p", { class: "muted", text: t("site.runtime.no_exported_providers") }),
-      );
-      return panel;
-    }
-
     const select = node(
       "select",
       { class: "control", "aria-label": t("site.runtime.provider_profile") },
@@ -930,6 +953,89 @@
     });
     const summary = node("div", { class: "provider-summary" });
     const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
+    const customForm = node("form", { class: "provider-form" });
+    const customName = node("input", {
+      class: "control",
+      required: true,
+      autocomplete: "organization",
+      placeholder: t("site.runtime.provider_name_placeholder"),
+      "aria-label": t("site.runtime.provider_name"),
+    });
+    const customEndpoint = node("input", {
+      class: "control",
+      required: true,
+      type: "url",
+      autocomplete: "url",
+      placeholder: t("site.runtime.provider_url_placeholder"),
+      "aria-label": t("site.runtime.provider_url"),
+    });
+    const customType = node(
+      "select",
+      { class: "control", "aria-label": t("site.runtime.provider_type") },
+      node("option", { value: "openai", text: t("site.runtime.provider_openai") }),
+      node("option", { value: "ollama", text: t("site.runtime.provider_ollama") }),
+    );
+    const customModel = node("input", {
+      class: "control",
+      required: true,
+      autocomplete: "off",
+      placeholder: t("site.runtime.provider_model_placeholder"),
+      "aria-label": t("site.runtime.provider_model"),
+    });
+    const customKey = node("input", {
+      class: "control",
+      type: "password",
+      autocomplete: "off",
+      placeholder: t("site.runtime.api_key_session"),
+      "aria-label": t("site.runtime.api_key"),
+    });
+    const addCustom = node("button", {
+      class: "primary",
+      type: "submit",
+      text: t("site.runtime.save_provider"),
+    });
+    customForm.append(
+      node("h4", { text: t("site.runtime.add_provider") }),
+      node("p", { class: "muted", text: t("site.runtime.provider_local_help") }),
+      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_name") }), customName),
+      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_url") }), customEndpoint),
+      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_type") }), customType),
+      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_model") }), customModel),
+      node("label", { class: "field" }, node("span", { text: t("site.runtime.api_key") }), customKey),
+      addCustom,
+    );
+    customForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const name = String(customName.value || "").trim();
+      const baseUrl = String(customEndpoint.value || "").trim();
+      const model = String(customModel.value || "").trim();
+      if (!name || !baseUrl || !model) return;
+      let parsed;
+      try {
+        parsed = new URL(baseUrl);
+      } catch {
+        status.className = "status error";
+        status.textContent = t("site.runtime.provider_endpoint_invalid");
+        return;
+      }
+      const id = `local-${globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Date.now()}`;
+      const profile = {
+        id,
+        name,
+        type: customType.value,
+        base_url: parsed.href.replace(/\/$/, ""),
+        model,
+        api_key: String(customKey.value || ""),
+      };
+      customProviderProfiles = [...customProviderProfiles, profile];
+      providerProfiles = [...exportedProviderProfiles, ...customProviderProfiles];
+      saveCustomProviderProfiles();
+      selectedProviderId = id;
+      writeLocal(providerKey, id);
+      status.className = "status success";
+      status.textContent = t("site.runtime.provider_saved");
+      await render();
+    });
 
     function refreshSummary() {
       const profile = profileById(select.value);
@@ -1011,6 +1117,9 @@
     });
 
     panel.append(
+      !providerProfiles.length
+        ? node("p", { class: "muted", text: t("site.runtime.no_exported_providers") })
+        : null,
       node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_profile") }), select),
       summary,
       node("label", { class: "field" }, node("span", { text: t("site.runtime.api_key") }), key),
@@ -1021,6 +1130,7 @@
       }),
       node("div", { class: "chips" }, apply, test),
       status,
+      customForm,
     );
     return panel;
   }
