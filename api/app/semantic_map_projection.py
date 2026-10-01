@@ -33,6 +33,9 @@ _SEMANTIC_RECORD_FIELDS = (
     "quoted_work",
     "nlp_candidates",
     "document_intelligence",
+    "field_assertions",
+    "metadata_field_status",
+    "metadata_evidence",
 )
 
 
