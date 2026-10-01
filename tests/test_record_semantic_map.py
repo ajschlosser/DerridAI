@@ -21,12 +21,12 @@ except ModuleNotFoundError:
 from app import corpus_builder as cb
 from app.config import APP_VERSION
 from app.nlp_annotations import text_digest
+from app.persistence import SQLiteSystemRepository
 from app.record_semantic_map import (
     build_semantic_map_projections,
     record_semantic_map,
     semantic_node_neighborhood,
 )
-from app.persistence import SQLiteSystemRepository
 from app.reviewer_context import current_reviewer
 from app.semantic_content_graph import (
     build_semantic_content_graph,
