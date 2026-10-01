@@ -8597,5 +8597,8 @@
   "site.runtime.loading_site": "Loading DerridAI research site…",
   "site.create_action_two_file": "Download two-file site",
   "site.create_format_two_file": "Two-file static site",
-  "site.create_format_two_file_help": "The standard DerridAI publication: index.html plus derridai-site.js. Open it locally or serve the same two files from any static HTTP/HTTPS host."
+  "site.create_format_two_file_help": "The standard DerridAI publication: index.html plus derridai-site.js. Open it locally or serve the same two files from any static HTTP/HTTPS host.",
+  "site.runtime.method_llm": "Language model",
+  "site.runtime.method_text": "Keyword search",
+  "site.runtime.method_vector": "Semantic search"
 }
