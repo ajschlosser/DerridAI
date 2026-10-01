@@ -5,7 +5,7 @@ import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 import MixedValueInspect from "./MixedValueInspect.vue";
 import WorksInsightCard from "./WorksInsightCard.vue";
-import type { WorksItem } from "../../types/works";
+import type { WorkDetail } from "../../types/works";
 import { statusTone } from "../../domain/status";
 import UiButton from "../ui/UiButton.vue";
 import UiMenu, { type UiMenuItem } from "../ui/UiMenu.vue";
@@ -15,7 +15,7 @@ import UiStatusBadge from "../ui/UiStatusBadge.vue";
  *  and never introduces a page-level heading. */
 const props = withDefaults(
   defineProps<{
-    work: WorksItem;
+    work: WorkDetail;
     mode?: "admin" | "researcher";
     citationLabel?: string;
     /** Show a close control (the persistent inspector); the dialog supplies its own. */
