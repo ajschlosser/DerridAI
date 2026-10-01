@@ -90,7 +90,7 @@ export interface WorksScopeItem {
 }
 
 export type WorksSort = "title-asc" | "title-desc" | "records-desc" | "review-desc" | "year-asc";
-export type WorksViewMode = "cards" | "compact";
+export type WorksViewMode = "cards" | "list";
 
 export interface WorksFilters {
   needsReview: boolean;
