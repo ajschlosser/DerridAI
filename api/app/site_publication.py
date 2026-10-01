@@ -540,6 +540,7 @@ def build_local_site_file(
     ``include_transformers`` is accepted for older callers and is always treated as true.
     """
     del include_transformers
+    nginx_config, host_gateway = _nginx_config(provider_proxy_upstream)
     core = build_site_bundle(
         store_name=store_name,
         works=works,
@@ -733,7 +734,7 @@ def _normalize_provider_proxy_upstream(value: str | None) -> tuple[str | None, b
         raise ValueError("Provider proxy upstream must not contain a query string or fragment.")
 
     path = parsed.path or "/"
-    if any(char.isspace() for char in path) or any(char in path for char in ";{}"):
+    if any(char.isspace() for char in path) or any(char in path for char in ";{}\\$"):
         raise ValueError("Provider proxy upstream path contains characters that are unsafe in nginx.")
 
     hostname = parsed.hostname
@@ -769,6 +770,8 @@ def _nginx_config(provider_proxy_upstream: str | None) -> tuple[str, bool]:
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_ssl_server_name on;
+        client_max_body_size 20m;
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 300s;
@@ -853,7 +856,6 @@ def build_nginx_site_bundle(
         transformers_delivery="files",
     )
     files = _core_site_files(core)
-    nginx_config, host_gateway = _nginx_config(provider_proxy_upstream)
     archive = io.BytesIO()
     with zipfile.ZipFile(
         archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
