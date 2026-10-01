@@ -14,6 +14,7 @@ import type {
   SemanticContentGraphView,
   SemanticGraphViewParams,
   SemanticNodeNeighborhood,
+  WorkSemanticMapProjection,
 } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
@@ -75,6 +76,10 @@ export const corpusBuildsApi = {
   workSemanticMapRecords: (work: string) =>
     apiRequest<{ records: Array<{ record_id: string; build_id: string }> }>(
       `/api/works/${encodeURIComponent(work)}/semantic-map-records`,
+    ),
+  workSemanticMap: (work: string) =>
+    apiRequest<WorkSemanticMapProjection>(
+      `/api/works/${encodeURIComponent(work)}/semantic-map`,
     ),
   recordSemanticMap: (buildId: string, recordId: string) =>
     apiRequest<RecordSemanticMap>(
