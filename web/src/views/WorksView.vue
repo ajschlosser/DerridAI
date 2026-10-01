@@ -279,8 +279,12 @@ const semanticMapRecord = computed(
     semanticMapRecords.value.find((item) => item.record_id === semanticMapRecordId.value) || null,
 );
 const semanticMapSources = ref<SemanticMapSource[]>([]);
+const semanticMapPersistedWorkSources = ref<SemanticMapSource[]>([]);
+const semanticMapGeneration = ref("");
 const semanticMapFallbackSources = computed(() =>
-  semanticMapSources.value.filter((source) => source.work === semanticMapWork.value),
+  semanticMapPersistedWorkSources.value.length
+    ? semanticMapPersistedWorkSources.value
+    : semanticMapSources.value.filter((source) => source.work === semanticMapWork.value),
 );
 
 async function openWorkSemanticMap(work: string) {
@@ -289,17 +293,23 @@ async function openWorkSemanticMap(work: string) {
   semanticMapTab.value = "graph";
   semanticMapRecords.value = [];
   semanticMapRecordId.value = "";
+  semanticMapPersistedWorkSources.value = [];
+  semanticMapGeneration.value = "";
+  // Cross-Work exploration still uses the active workspace. The selected Work,
+  // however, now comes from the persisted canonical semantic projection below.
   const allSources = semanticMapService.listSources();
   semanticMapSources.value = allSources.records;
   semanticMapDialog.value?.showModal();
   try {
-    const result = await corpusBuildsApi.workSemanticMapRecords(work);
+    const result = await corpusBuildsApi.workSemanticMap(work);
     if (semanticMapWork.value !== work) return;
+    semanticMapPersistedWorkSources.value = result.sources;
+    semanticMapGeneration.value = result.generation;
     semanticMapRecords.value = result.records;
     semanticMapRecordId.value = result.records[0]?.record_id || "";
   } catch {
-    // The canonical runtime semantic map remains available when no persisted
-    // build or record-resolution endpoint is available.
+    // Legacy/local workspaces may not yet have publication provenance. Keep the
+    // established visual map available from the active workspace in that case.
   } finally {
     semanticMapLoading.value = false;
   }
@@ -645,6 +655,7 @@ onBeforeUnmount(() => {
           <SemanticMapFrame
             variant="page"
             :sources="semanticMapFallbackSources"
+            :cache-key="semanticMapGeneration"
             :show-close="false"
           />
         </div>
