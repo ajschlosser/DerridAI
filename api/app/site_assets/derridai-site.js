@@ -40,21 +40,28 @@
   if (!availableLocales.includes(locale)) locale = availableLocales[0] || "en-US";
   let theme = readLocal(themeKey) === "dark" ? "dark" : "light";
   let highContrast = readLocal(contrastKey) === "high";
-  // Suggestions only: small ONNX models that run in the browser. The reader chooses and may type any model id.
+  // The compatibility-first browser profile is pinned so a local index can be reproduced and safely reused.
+  // Advanced readers may still choose another Transformers.js model or opt into WebGPU explicitly.
   const TRANSFORMERS_SUGGESTIONS = [
-    { id: "Xenova/all-MiniLM-L6-v2", note: "site.runtime.transformers_model_english_small" },
     {
       id: "Xenova/multilingual-e5-small",
+      revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+      dtype: "q8",
       note: "site.runtime.transformers_model_multilingual_small",
       query_prefix: "query: ",
       document_prefix: "passage: ",
     },
+    { id: "Xenova/all-MiniLM-L6-v2", note: "site.runtime.transformers_model_english_small" },
   ];
+  const DEFAULT_TRANSFORMERS_MODEL = TRANSFORMERS_SUGGESTIONS[0].id;
+  const DEFAULT_TRANSFORMERS_DEVICE = "wasm";
   const MODEL_CACHE_NAME = "transformers-cache";
 
-  function prefixesForModel(model) {
+  function settingsForModel(model) {
     const match = TRANSFORMERS_SUGGESTIONS.find((item) => item.id === model);
     return {
+      revision: match?.revision || "",
+      dtype: match?.dtype || "",
       query_prefix: match?.query_prefix || "",
       document_prefix: match?.document_prefix || "",
     };
@@ -63,22 +70,32 @@
   function loadLocalModel() {
     try {
       const raw = JSON.parse(readLocal(localModelKey) || "{}");
-      const model = String(raw.model || TRANSFORMERS_SUGGESTIONS[0].id);
-      const device = ["auto", "webgpu", "wasm"].includes(raw.device) ? raw.device : "auto";
-      const prefixes = prefixesForModel(model);
+      const model = String(raw.model || DEFAULT_TRANSFORMERS_MODEL);
+      const defaults = settingsForModel(model);
+      // Older sites stored "auto". Migrate that preference to the compatibility-first WASM path rather than
+      // probing WebGPU merely because navigator.gpu exists.
+      const device = ["webgpu", "wasm"].includes(raw.device)
+        ? raw.device
+        : DEFAULT_TRANSFORMERS_DEVICE;
       return {
         model,
         device,
-        query_prefix: raw.query_prefix == null ? prefixes.query_prefix : String(raw.query_prefix),
+        revision: raw.revision == null ? defaults.revision : String(raw.revision),
+        dtype: raw.dtype == null ? defaults.dtype : String(raw.dtype),
+        query_prefix:
+          raw.query_prefix == null ? defaults.query_prefix : String(raw.query_prefix),
         document_prefix:
-          raw.document_prefix == null ? prefixes.document_prefix : String(raw.document_prefix),
+          raw.document_prefix == null ? defaults.document_prefix : String(raw.document_prefix),
       };
     } catch {
+      const defaults = settingsForModel(DEFAULT_TRANSFORMERS_MODEL);
       return {
-        model: TRANSFORMERS_SUGGESTIONS[0].id,
-        device: "auto",
-        query_prefix: "",
-        document_prefix: "",
+        model: DEFAULT_TRANSFORMERS_MODEL,
+        device: DEFAULT_TRANSFORMERS_DEVICE,
+        revision: defaults.revision,
+        dtype: defaults.dtype,
+        query_prefix: defaults.query_prefix,
+        document_prefix: defaults.document_prefix,
       };
     }
   }
@@ -603,21 +620,28 @@
   }
 
   async function resolveDevice(preference) {
-    if (preference === "wasm") return "wasm";
+    // WASM is the predictable cross-browser path. WebGPU is opt-in because navigator.gpu alone does not prove
+    // that the packaged ONNX runtime exposes a usable WebGPU execution provider.
+    if (preference !== "webgpu") return "wasm";
     const gpu = globalThis.navigator?.gpu;
     if (!gpu) return "wasm";
     try {
       const adapter = await gpu.requestAdapter();
       if (adapter) return "webgpu";
     } catch {
-      // WebGPU can be present but blocked; WebAssembly still runs the same model.
+      // Explicit WebGPU can still be blocked by browser/driver policy; fall back to WASM.
     }
     return "wasm";
   }
 
   const transformersExtractors = new Map();
   function transformersExtractor(profile) {
-    const key = `${profile.model}|${profile.device || "auto"}`;
+    const key = [
+      profile.model,
+      profile.revision || "",
+      profile.dtype || "",
+      profile.device || DEFAULT_TRANSFORMERS_DEVICE,
+    ].join("|");
     if (!transformersExtractors.has(key)) {
       const loading = (async () => {
         const runtime = await loadTransformersRuntime();
@@ -626,6 +650,8 @@
         try {
           return await runtime.pipeline("feature-extraction", profile.model, {
             device,
+            ...(profile.revision ? { revision: profile.revision } : {}),
+            ...(profile.dtype ? { dtype: profile.dtype } : {}),
             progress_callback: (progress) => modelProgressListener?.(progress),
           });
         } catch (error) {
@@ -633,6 +659,8 @@
           activeDevice = "wasm";
           return runtime.pipeline("feature-extraction", profile.model, {
             device: "wasm",
+            ...(profile.revision ? { revision: profile.revision } : {}),
+            ...(profile.dtype ? { dtype: profile.dtype } : {}),
             progress_callback: (progress) => modelProgressListener?.(progress),
           });
         }
@@ -663,7 +691,15 @@
         id: profile.id,
         type: "transformers",
         model,
-        variant: embeddingVariant(profile),
+        revision: profile.revision || undefined,
+        variant: [
+          embeddingVariant(profile),
+          profile.dtype ? `dtype=${profile.dtype}` : "",
+          "pooling=mean",
+          "normalize=true",
+        ]
+          .filter(Boolean)
+          .join(";"),
       }),
       async embed(input, options = {}) {
         const extractor = await transformersExtractor(profile);
@@ -688,6 +724,8 @@
       id: "transformers-local",
       model: localModel.model,
       device: localModel.device,
+      revision: localModel.revision,
+      dtype: localModel.dtype,
       query_prefix: localModel.query_prefix,
       document_prefix: localModel.document_prefix,
     };
@@ -1314,9 +1352,8 @@
     const device = node(
       "select",
       { class: "control", "aria-label": t("site.runtime.local_device") },
-      node("option", { value: "auto", text: t("site.runtime.local_device_auto") }),
-      node("option", { value: "webgpu", text: t("site.runtime.local_device_webgpu") }),
       node("option", { value: "wasm", text: t("site.runtime.local_device_wasm") }),
+      node("option", { value: "webgpu", text: t("site.runtime.local_device_webgpu") }),
     );
     device.value = localModel.device;
     const deviceNote = node("div", {
@@ -1334,12 +1371,14 @@
 
     function rememberDraft() {
       const next = String(model.value || "").trim();
-      const prefixes = prefixesForModel(next);
+      const defaults = settingsForModel(next);
       localModel = {
         model: next,
         device: device.value,
-        query_prefix: prefixes.query_prefix,
-        document_prefix: prefixes.document_prefix,
+        revision: defaults.revision,
+        dtype: defaults.dtype,
+        query_prefix: defaults.query_prefix,
+        document_prefix: defaults.document_prefix,
       };
       saveLocalModel();
     }
@@ -1422,7 +1461,14 @@
       progress,
       node("div", { class: "chips" }, download, removeCache),
       status,
-      selectedEmbeddingId ? null : indexSection(),
+      selectedEmbeddingId
+        ? null
+        : indexSection(async () => {
+            // The index button is the complete happy path: persist the current browser-model draft, rebuild the
+            // SDK client with it, and let the first embedding call download/cache the model automatically.
+            rememberDraft();
+            await rebuildClient();
+          }),
     );
   }
 
@@ -1502,7 +1548,7 @@
   // The local index holds vectors computed here with the reader's embedding provider. It is derived from the
   // published Records, kept only in this browser, and can be rebuilt or cleared at any time.
   let indexMessage = "";
-  function indexSection() {
+  function indexSection(beforeBuild = null) {
     const index = capabilities.localIndex;
     const outcome = node("div", { class: "status", role: "status", "aria-live": "polite" });
     outcome.textContent = indexMessage;
@@ -1532,7 +1578,13 @@
       : t("site.runtime.index_storage_memory");
     detail.textContent = index.complete
       ? t("site.runtime.index_ready", { count: index.indexed, storage: where })
-      : t("site.runtime.index_needed", { indexed: index.indexed, total: index.total, storage: where });
+      : t("site.runtime.index_needed", {
+          published: publication.vector_index?.model || t("site.runtime.not_configured"),
+          model: index.model || localModel.model || t("site.runtime.not_configured"),
+          indexed: index.indexed,
+          total: index.total,
+          storage: where,
+        });
 
     let controller = null;
     const build = node("button", {
@@ -1560,8 +1612,25 @@
       clear.disabled = true;
       cancel.hidden = false;
       progress.hidden = false;
-      progress.max = Math.max(1, index.total);
-      progress.value = index.indexed;
+      try {
+        if (beforeBuild) {
+          await beforeBuild();
+          capabilities = await client.capabilities();
+        }
+      } catch (error) {
+        indexMessage = t("site.runtime.index_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await render();
+        return;
+      }
+      const currentIndex = capabilities.localIndex || index;
+      progress.max = Math.max(1, currentIndex.total);
+      progress.value = currentIndex.indexed;
+      detail.textContent = t("site.runtime.index_preparing", {
+        model: currentIndex.model || localModel.model || "",
+        total: currentIndex.total,
+      });
       const stopEvents = client.events.subscribe((event) => {
         if (event.type !== "index-progress") return;
         progress.max = Math.max(1, event.total);
