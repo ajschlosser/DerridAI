@@ -222,7 +222,7 @@ export class SearchEngine {
           fallbackWarning(
             "embedding_contract_mismatch",
             "The supplied embedding capability does not match the publication embedding contract; keyword results were returned.",
-            contractMismatch,
+            { ...contractMismatch },
           ),
         ],
         candidates.length,
@@ -336,6 +336,7 @@ export class SearchEngine {
       [],
       candidates.length,
       candidateSet.chunksLoaded,
+      duplicatesRemoved,
       true,
       runId,
     );
