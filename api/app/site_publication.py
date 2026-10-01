@@ -20,16 +20,14 @@ from typing import Any
 
 from .corpus_publication import serialize_public_record, validate_publication_record
 from .locales.en_us import EN_US
-from .locales.fr_ca import FR_CA
 from .services import store
+from .system_store import normalize_locale_code, system_store
 
-SITE_FORMAT = "derridai-static-site-v3"
+SITE_FORMAT = "derridai-static-site-v4"
 _ASSET_DIR = Path(__file__).with_name("site_assets")
 SITE_ASSET = _ASSET_DIR / "derridai-site.js"
 SDK_ASSET = _ASSET_DIR / "derridai-sdk.js"
 PACKAGE_GLOBAL = "__DERRIDAI_SITE_PACKAGE__"
-PUBLICATION_ASSET_NAME = "derridai-publication.js"
-SDK_ASSET_NAME = "derridai-sdk.js"
 SITE_ASSET_NAME = "derridai-site.js"
 _SAFE_SLUG = re.compile(r"[^a-z0-9]+")
 
@@ -50,12 +48,101 @@ def _slug(value: str) -> str:
     return slug[:72] or "derridai-research-site"
 
 
-def _runtime_strings() -> dict[str, dict[str, str]]:
-    prefixes = ("site.runtime.",)
-    return {
-        "en-US": {key: value for key, value in EN_US.items() if key.startswith(prefixes)},
-        "fr-CA": {key: value for key, value in FR_CA.items() if key.startswith(prefixes)},
+def _selected_languages(language_codes: Sequence[str] | None, locale: str) -> list[dict[str, str]]:
+    """Resolve an explicit export selection against installed DerridAI languages."""
+    installed = {str(item["code"]): item for item in system_store.list_languages()}
+    requested = list(language_codes or [locale])
+    selected: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for raw in requested:
+        try:
+            code = normalize_locale_code(str(raw))
+        except ValueError as exc:
+            raise ValueError(f"Invalid site language {raw!r}.") from exc
+        if code in seen:
+            continue
+        metadata = installed.get(code)
+        if metadata is None:
+            raise ValueError(f"Site language {code!r} is not installed in DerridAI.")
+        selected.append(
+            {
+                "code": code,
+                "name": str(metadata.get("name") or code),
+                "flag": str(metadata.get("flag") or "🌐"),
+            }
+        )
+        seen.add(code)
+    if not selected:
+        raise ValueError("Select at least one language for the published site.")
+    return selected
+
+
+def _runtime_strings(language_codes: Sequence[str]) -> dict[str, dict[str, str]]:
+    """Export complete selected dictionaries; never hide missing translations with fallback."""
+    required = {
+        key: str(value)
+        for key, value in EN_US.items()
+        if key.startswith("site.runtime.")
     }
+    result: dict[str, dict[str, str]] = {}
+    for code in language_codes:
+        language = system_store.get_language(code)
+        if language is None:
+            raise ValueError(f"Site language {code!r} is not installed in DerridAI.")
+        installed = {
+            key: str(value)
+            for key, value in dict(language.get("dictionary") or {}).items()
+            if key.startswith("site.runtime.")
+        }
+        if code == "en-US":
+            installed = {**required, **installed}
+        missing = sorted(set(required) - set(installed))
+        if missing:
+            preview = ", ".join(missing[:8])
+            extra = len(missing) - min(8, len(missing))
+            suffix = f" (+{extra} more)" if extra else ""
+            raise ValueError(
+                f"Site language {code!r} is missing {len(missing)} required static-site "
+                f"translations: {preview}{suffix}"
+            )
+        result[code] = {key: installed[key] for key in required}
+    return result
+
+
+def _site_provider_profiles(profile_ids: Sequence[str] | None) -> list[dict[str, Any]]:
+    """Export only explicitly selected, non-secret LLM profile descriptors."""
+    requested = list(dict.fromkeys(str(item).strip() for item in (profile_ids or []) if str(item).strip()))
+    if not requested:
+        return []
+    available = {
+        str(profile.get("id")): profile
+        for profile in system_store.researcher_profiles()
+        if str(profile.get("id") or "").strip()
+    }
+    missing = [profile_id for profile_id in requested if profile_id not in available]
+    if missing:
+        raise ValueError(
+            "Selected LLM provider profiles are no longer available: " + ", ".join(missing)
+        )
+    allowed = {
+        "id",
+        "name",
+        "type",
+        "base_url",
+        "model",
+        "model_mode",
+        "model_kind",
+        "max_concurrent_requests",
+        "num_ctx",
+        "num_predict",
+        "temperature",
+        "top_p",
+        "has_api_key",
+    }
+    return [
+        {key: value for key, value in available[profile_id].items() if key in allowed}
+        for profile_id in requested
+    ]
 
 
 def _work_summary(records: Sequence[dict[str, Any]], work: str) -> dict[str, Any]:
@@ -157,6 +244,8 @@ def build_site_bundle(
     title: str,
     description: str = "",
     locale: str = "en-US",
+    languages: Sequence[str] | None = None,
+    provider_profile_ids: Sequence[str] | None = None,
 ) -> SiteBundle:
     """Create an SDK-backed static research site from one immutable publication snapshot."""
     selected_works = list(dict.fromkeys(str(item).strip() for item in works if str(item).strip()))
@@ -237,8 +326,16 @@ def build_site_bundle(
     semantic_count = sum(1 for vector in vectors if vector)
     created_at = datetime.now(UTC).isoformat()
     publication_id = f"sitepub-{uuid.uuid4().hex}"
-    normalized_locale = locale if locale in {"en-US", "fr-CA"} else "en-US"
-    locale_dictionary = FR_CA if normalized_locale == "fr-CA" else EN_US
+    selected_languages = _selected_languages(languages, locale)
+    selected_language_codes = [item["code"] for item in selected_languages]
+    try:
+        requested_locale = normalize_locale_code(locale)
+    except ValueError:
+        requested_locale = selected_language_codes[0]
+    normalized_locale = (
+        requested_locale if requested_locale in selected_language_codes else selected_language_codes[0]
+    )
+    locale_dictionary = _runtime_strings([normalized_locale])[normalized_locale]
     title = str(title or "").strip() or locale_dictionary["site.runtime.site_title"]
     description = str(description or "").strip()
 
@@ -270,6 +367,7 @@ def build_site_bundle(
         "title": title,
         "description": description,
         "locale": normalized_locale,
+        "languages": selected_languages,
         "works": [_work_summary(public_records, work) for work in selected_works],
         "vector_index": {
             "dimension": dimension,
@@ -296,6 +394,7 @@ def build_site_bundle(
             )
             if vector_contract.get(key) not in (None, "")
         },
+        "provider_profiles": _site_provider_profiles(provider_profile_ids),
         "features": {
             "browse": True,
             "lexical_search": True,
@@ -307,14 +406,14 @@ def build_site_bundle(
             "browser_llm": False,
             "derridai_sdk": True,
             "host_supplied_generation": True,
-            "direct_provider_endpoints": False,
+            "direct_provider_endpoints": bool(provider_profile_ids),
             "progressive_work_loading": True,
         },
         "integrity": {
             "algorithm": "sha256",
             "records_and_vectors": integrity,
         },
-        "strings": _runtime_strings(),
+        "strings": _runtime_strings(selected_language_codes),
     }
     package = {"manifest": manifest, "chunks": chunks}
 
@@ -324,13 +423,11 @@ def build_site_bundle(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; connect-src 'self'; img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' file:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; connect-src 'self' http: https:; img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' file:">
   <title>{html.escape(title)}</title>
 </head>
 <body>
-  <div id="app" role="status" aria-live="polite">Loading DerridAI research site…</div>
-  <script src="./{PUBLICATION_ASSET_NAME}" defer></script>
-  <script src="./{SDK_ASSET_NAME}" defer></script>
+  <div id="app" role="status" aria-live="polite">{html.escape(locale_dictionary["site.runtime.loading_site"])}</div>
   <script src="./{SITE_ASSET_NAME}" defer></script>
 </body>
 </html>
@@ -346,13 +443,12 @@ def build_site_bundle(
     publication_source = f"globalThis.{PACKAGE_GLOBAL}={_js_json(package)};\n"
     sdk_source = SDK_ASSET.read_text(encoding="utf-8")
     runtime_source = SITE_ASSET.read_text(encoding="utf-8")
+    combined_runtime = "\n".join((publication_source, sdk_source, runtime_source))
 
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
         bundle.writestr("index.html", index_html.encode("utf-8"))
-        bundle.writestr(PUBLICATION_ASSET_NAME, publication_source.encode("utf-8"))
-        bundle.writestr(SDK_ASSET_NAME, sdk_source.encode("utf-8"))
-        bundle.writestr(SITE_ASSET_NAME, runtime_source.encode("utf-8"))
+        bundle.writestr(SITE_ASSET_NAME, combined_runtime.encode("utf-8"))
 
     return SiteBundle(
         payload=archive.getvalue(),
@@ -369,7 +465,7 @@ def _inline_script_source(source: str) -> str:
 
 
 def _core_site_files(bundle: SiteBundle) -> dict[str, bytes]:
-    """Read the four canonical publication files from a generated core bundle."""
+    """Read the two canonical publication files from a generated core bundle."""
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
         return {name: archive.read(name) for name in archive.namelist()}
 
@@ -381,11 +477,13 @@ def build_local_site_file(
     title: str,
     description: str = "",
     locale: str = "en-US",
+    languages: Sequence[str] | None = None,
+    provider_profile_ids: Sequence[str] | None = None,
 ) -> SiteBundle:
-    """Create one network-independent HTML file for direct local use.
+    """Create one self-contained HTML file for direct local use.
 
-    The publication, SDK, and reference UI are embedded inline. The document CSP
-    forbids network connections, so opening it with file:// never depends on CORS.
+    Publication data, SDK, and reference UI are embedded inline. External model
+    calls are allowed only to http(s) origins and remain subject to browser CORS.
     """
     core = build_site_bundle(
         store_name=store_name,
@@ -393,22 +491,20 @@ def build_local_site_file(
         title=title,
         description=description,
         locale=locale,
+        languages=languages,
+        provider_profile_ids=provider_profile_ids,
     )
     files = _core_site_files(core)
     index_html = files["index.html"].decode("utf-8")
-    publication_source = _inline_script_source(
-        files[PUBLICATION_ASSET_NAME].decode("utf-8")
-    )
-    sdk_source = _inline_script_source(files[SDK_ASSET_NAME].decode("utf-8"))
     runtime_source = _inline_script_source(files[SITE_ASSET_NAME].decode("utf-8"))
 
     external_csp = (
-        "default-src 'self' file: data: blob:; connect-src 'self'; "
+        "default-src 'self' file: data: blob:; connect-src 'self' http: https:; "
         "img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; "
         "script-src 'self' file:"
     )
     local_csp = (
-        "default-src 'none'; connect-src 'none'; img-src data:; "
+        "default-src 'none'; connect-src http: https:; img-src data: https:; "
         "style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
         "base-uri 'none'; form-action 'none'"
     )
@@ -417,10 +513,6 @@ def build_local_site_file(
     index_html = index_html.replace(external_csp, local_csp)
 
     replacements = {
-        f'<script src="./{PUBLICATION_ASSET_NAME}" defer></script>': (
-            f"<script>{publication_source}</script>"
-        ),
-        f'<script src="./{SDK_ASSET_NAME}" defer></script>': f"<script>{sdk_source}</script>",
         f'<script src="./{SITE_ASSET_NAME}" defer></script>': (
             f"<script>{runtime_source}</script>"
         ),
@@ -443,7 +535,7 @@ def build_local_site_file(
 _NGINX_DOCKERFILE = """# Generated by DerridAI. One static nginx container; no application server.
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY index.html derridai-publication.js derridai-sdk.js derridai-site.js /usr/share/nginx/html/
+COPY index.html derridai-site.js /usr/share/nginx/html/
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=3s --retries=3 \\
   CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1
@@ -552,9 +644,10 @@ Optional environment variables:
   DERRIDAI_SITE_IMAGE      Docker image name (default: derridai-research-site)
   DERRIDAI_SITE_CONTAINER  container name (default: derridai-research-site)
 
-The site uses the same DerridAI SDK as custom Web applications. AI execution is
-not configured by provider URLs or API keys in the browser; host applications
-may inject transport-neutral embedding/generation capabilities when needed.
+The site uses the same DerridAI SDK as custom Web applications. Safe provider
+profile descriptors selected at export time may be included for direct browser
+Research. API keys are never exported; visitors enter credentials in their own
+browser when the selected provider requires them.
 """
 
 
@@ -580,6 +673,8 @@ def build_nginx_site_bundle(
     title: str,
     description: str = "",
     locale: str = "en-US",
+    languages: Sequence[str] | None = None,
+    provider_profile_ids: Sequence[str] | None = None,
 ) -> SiteBundle:
     """Create a deployable multi-file site served by exactly one nginx container."""
     core = build_site_bundle(
@@ -588,18 +683,15 @@ def build_nginx_site_bundle(
         title=title,
         description=description,
         locale=locale,
+        languages=languages,
+        provider_profile_ids=provider_profile_ids,
     )
     files = _core_site_files(core)
     archive = io.BytesIO()
     with zipfile.ZipFile(
         archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
     ) as bundle:
-        for name in (
-            "index.html",
-            PUBLICATION_ASSET_NAME,
-            SDK_ASSET_NAME,
-            SITE_ASSET_NAME,
-        ):
+        for name in ("index.html", SITE_ASSET_NAME):
             _zip_write(bundle, name, files[name])
         _zip_write(bundle, "Dockerfile", _NGINX_DOCKERFILE)
         _zip_write(bundle, "nginx.conf", _NGINX_CONFIG)
