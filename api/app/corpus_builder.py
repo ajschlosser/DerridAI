@@ -292,7 +292,12 @@ from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
 from .rag import _citation_strings, chat_complete
-from .record_semantic_map import record_semantic_map, semantic_node_neighborhood
+from .record_semantic_map import (
+    RECORD_SEMANTIC_MAP_VERSION,
+    SemanticIndex,
+    record_semantic_map,
+    semantic_node_neighborhood,
+)
 from .run_guidance import find_guidance_matches
 from .semantic_content_graph import (
     _records_digest as _semantic_records_digest,
@@ -307,7 +312,7 @@ from .semantic_identity_registry import (
     compare_field_values,
     registry_for_record,
 )
-from .semantic_identity_store import alias_digest, build_registry, review_registry
+from .semantic_identity_store import alias_digest, alias_signature, build_registry, review_registry
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
@@ -2027,6 +2032,13 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # Derived semantic graphs keyed by build and the exact inputs that produced
         # them; bounded so large corpora do not accumulate in memory.
         self._semantic_graph_cache: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {}
+        # Record/node maps use a persisted derived traversal index. Its generation is
+        # determined from cheap file/store signatures, so an unchanged map can be
+        # served after a restart without loading or hashing the complete corpus.
+        self._semantic_projection_cache: dict[
+            str, tuple[str, SemanticIndex, dict[str, Any]]
+        ] = {}
+        self._semantic_projection_locks: dict[str, threading.RLock] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
@@ -2129,6 +2141,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._run_document_intelligence(build_id, records, manifest, request)
         self.repo.save_records(build_id, records)
         self._semantic_graph_cache.pop(build_id, None)
+        self._semantic_projection_cache.pop(build_id, None)
         graph = self.semantic_content_graph(build_id)
         return {
             "document_intelligence": self.document_intelligence(build_id),
@@ -2199,15 +2212,209 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 self._semantic_graph_cache.pop(next(iter(self._semantic_graph_cache)))
         return graph, records, analysis
 
+    def _semantic_projection_generation(self, build_id: str) -> str:
+        """Cheap identity for every input that can change a semantic-map projection."""
+        self.repo.get_build(build_id)
+        record_sig = self.repo._records_snapshot_signature(build_id)
+        alias_sig = alias_signature(self.repo, build_id)
+        try:
+            stat = self.repo.build_checkpoint_path(build_id, "document_intelligence").stat()
+            analysis_sig = (int(stat.st_mtime_ns), int(stat.st_size))
+        except OSError:
+            analysis_sig = (0, 0)
+        token = "|".join(
+            (
+                f"map:{RECORD_SEMANTIC_MAP_VERSION}",
+                f"identity:{SEMANTIC_IDENTITY_VERSION}",
+                f"records:{record_sig[0]}:{record_sig[1]}",
+                f"aliases:{alias_sig[0]}:{alias_sig[1]}",
+                f"analysis:{analysis_sig[0]}:{analysis_sig[1]}",
+            )
+        )
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()[:24]
+
+    @staticmethod
+    def _semantic_analysis_view(analysis: dict[str, Any]) -> dict[str, Any]:
+        """Only build-level layer state needed by record-map hot reads."""
+        return {
+            key: analysis.get(key)
+            for key in (
+                "status",
+                "profile",
+                "selected_provider",
+                "provider",
+                "provider_version",
+                "model",
+                "version",
+                "stale",
+                "text_sha256",
+                "current_text_sha256",
+            )
+            if key in analysis
+        }
+
+    def _semantic_index_for_generation(
+        self, build_id: str, generation: str
+    ) -> tuple[SemanticIndex, dict[str, Any]]:
+        """Hydrate or build the shared traversal index exactly once per generation."""
+        cached = self._semantic_projection_cache.get(build_id)
+        if cached is not None and cached[0] == generation:
+            return cached[1], cached[2]
+
+        projection_key = f"semantic-index:{build_id}"
+        persisted = system_store.get_semantic_map_projection(projection_key)
+        if (
+            persisted
+            and persisted.get("status") == "ready"
+            and persisted.get("generation") == generation
+            and isinstance(persisted.get("payload"), dict)
+        ):
+            payload = persisted["payload"]
+            snapshot = payload.get("index")
+            if isinstance(snapshot, dict):
+                try:
+                    index = SemanticIndex.from_snapshot(snapshot)
+                except (KeyError, TypeError, ValueError):
+                    index = None
+                if index is not None:
+                    analysis = (
+                        dict(payload.get("analysis") or {})
+                        if isinstance(payload.get("analysis"), dict)
+                        else {}
+                    )
+                    self._semantic_projection_cache[build_id] = (
+                        generation,
+                        index,
+                        analysis,
+                    )
+                    return index, analysis
+
+        # The generation changed (or no projection has ever existed). This is the
+        # one intentionally full-corpus operation: materialize the new shared index,
+        # then persist it so subsequent record/node reads are local traversals.
+        records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
+        for row in records:
+            _present_for_reviewer(row)
+        retained = self.repo.load_checkpoint(build_id, "document_intelligence", {})
+        retained = retained if isinstance(retained, dict) else {}
+        current_text, _ = document_text_for_records(records)
+        current_sha256 = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
+        analysis = {
+            **retained,
+            "stale": bool(
+                retained.get("text_sha256")
+                and retained.get("text_sha256") != current_sha256
+            ),
+            "current_text_sha256": current_sha256,
+        }
+        graph_analysis = (
+            {"profile": analysis.get("profile"), "status": "stale"}
+            if analysis.get("stale")
+            else analysis
+        )
+        schema = self._schema_for(build_id)
+        graph = build_semantic_content_graph(
+            records,
+            graph_analysis,
+            schema=schema,
+            registry=build_registry(self.repo, build_id, schema=schema, records=records),
+        )
+        index = SemanticIndex(graph, records)
+        analysis_view = self._semantic_analysis_view(analysis)
+        system_store.put_semantic_map_projection(
+            projection_key,
+            scope_kind="build",
+            scope_id=build_id,
+            build_id=build_id,
+            generation=generation,
+            status="ready",
+            payload={"index": index.snapshot(), "analysis": analysis_view},
+        )
+        self._semantic_projection_cache[build_id] = (
+            generation,
+            index,
+            analysis_view,
+        )
+        # Preserve the existing full-graph checkpoint for graph-inspection tools,
+        # but do it only while we already paid the rebuild cost.
+        self.repo.save_checkpoint(build_id, "semantic_content_graph", graph)
+        return index, analysis_view
+
+    def _semantic_index(self, build_id: str) -> tuple[str, SemanticIndex, dict[str, Any]]:
+        generation = self._semantic_projection_generation(build_id)
+        # One build lock gives single-flight generation within the API process.
+        with self._lock:
+            lock = self._semantic_projection_locks.setdefault(build_id, threading.RLock())
+        with lock:
+            index, analysis = self._semantic_index_for_generation(build_id, generation)
+        return generation, index, analysis
+
     def record_semantic_map(self, build_id: str, record_id: str) -> dict[str, Any]:
-        """Semantic map centred on one Record, with its links to other Records."""
-        graph, records, analysis = self._current_semantic_graph(build_id)
-        return record_semantic_map(graph, records, record_id, analysis=analysis)
+        """Return a persisted Record projection, generating it on first/stale access."""
+        generation = self._semantic_projection_generation(build_id)
+        projection_key = f"semantic-record:{build_id}:{record_id}"
+        persisted = system_store.get_semantic_map_projection(projection_key)
+        if (
+            persisted
+            and persisted.get("status") == "ready"
+            and persisted.get("generation") == generation
+            and isinstance(persisted.get("payload"), dict)
+        ):
+            return dict(persisted["payload"])
+
+        with self._lock:
+            lock = self._semantic_projection_locks.setdefault(build_id, threading.RLock())
+        with lock:
+            # Another request may have generated this exact Record while we waited.
+            persisted = system_store.get_semantic_map_projection(projection_key)
+            if (
+                persisted
+                and persisted.get("status") == "ready"
+                and persisted.get("generation") == generation
+                and isinstance(persisted.get("payload"), dict)
+            ):
+                return dict(persisted["payload"])
+            index, analysis = self._semantic_index_for_generation(build_id, generation)
+            payload = index.record_map(record_id, analysis)
+            system_store.put_semantic_map_projection(
+                projection_key,
+                scope_kind="record",
+                scope_id=record_id,
+                build_id=build_id,
+                generation=generation,
+                status="ready",
+                payload=payload,
+            )
+            return payload
 
     def semantic_graph_node(self, build_id: str, node_id: str) -> dict[str, Any]:
-        """One graph node's relations and Records, for walking the semantic map."""
-        graph, records, _ = self._current_semantic_graph(build_id)
-        return semantic_node_neighborhood(graph, records, node_id)
+        """Return a persisted node neighbourhood from the shared traversal index."""
+        generation = self._semantic_projection_generation(build_id)
+        node_key = hashlib.sha256(node_id.encode("utf-8")).hexdigest()[:24]
+        projection_key = f"semantic-node:{build_id}:{node_key}"
+        persisted = system_store.get_semantic_map_projection(projection_key)
+        if (
+            persisted
+            and persisted.get("status") == "ready"
+            and persisted.get("generation") == generation
+            and isinstance(persisted.get("payload"), dict)
+        ):
+            return dict(persisted["payload"])
+        with self._lock:
+            lock = self._semantic_projection_locks.setdefault(build_id, threading.RLock())
+        with lock:
+            index, _analysis = self._semantic_index_for_generation(build_id, generation)
+            payload = index.node_neighborhood(node_id)
+            system_store.put_semantic_map_projection(
+                projection_key,
+                scope_kind="node",
+                scope_id=node_id,
+                build_id=build_id,
+                generation=generation,
+                status="ready",
+                payload=payload,
+            )
+            return payload
 
     def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
         """Rebuild the semantic-content graph against the current Record revisions.
