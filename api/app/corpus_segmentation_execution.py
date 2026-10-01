@@ -61,15 +61,15 @@ class BuildSegmentationExecutionMixin:
         self,
         left: dict[str, Any],
         right: dict[str, Any],
-        manifest: dict[str, Any],
         request: dict[str, Any],
+        manifest: dict[str, Any] | None = None,
     ) -> str:
         generation = _generation_options(request)
         payload = {
             "prompt": SEGMENTATION_PROMPT_VERSION,
             "left_id": left.get("block_id"), "left_text": left.get("text"),
             "right_id": right.get("block_id"), "right_text": right.get("text"),
-            "document_context": _manifest_prompt_context(manifest),
+            "document_context": _manifest_prompt_context(manifest or {}),
             "provider": request.get("provider"), "model": request.get("model"),
             "temperature": generation.temperature, "top_p": generation.top_p,
             "top_k": generation.top_k, "seed": generation.seed,
@@ -377,7 +377,11 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         sizing_policy=_record_sizing_policy(request,profile)
         _=sizing_policy["absolute_record_chars"]
         index_by_id={str(block.get("block_id") or ""):i for i,block in enumerate(blocks)}
-        candidates=_deterministic_boundary_candidates(blocks,profile,language)
+        candidates=(
+            _deterministic_boundary_candidates(blocks,profile,language)
+            if language
+            else _deterministic_boundary_candidates(blocks,profile)
+        )
         state=self.repo.load_checkpoint(build_id,"local_boundary_state",{})
         if not isinstance(state,dict): state={}
         decisions=state.get("decisions") if isinstance(state.get("decisions"),dict) else {}
@@ -416,7 +420,9 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             i=int(candidate["index"])
             left,right=blocks[i],blocks[i+1]
             bid=str(candidate["after_block_id"])
-            fingerprint=self._boundary_cache_fingerprint(left,right,manifest,request)
+            fingerprint=self._boundary_cache_fingerprint(
+                left,right,request,manifest=manifest
+            )
             cached=decisions.get(bid)
             if isinstance(cached,dict) and cached.get("fingerprint")==fingerprint and isinstance(cached.get("pair"),dict):
                 pair=cached["pair"]
