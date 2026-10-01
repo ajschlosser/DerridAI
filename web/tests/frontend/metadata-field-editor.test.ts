@@ -207,9 +207,8 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
       },
     });
 
-    // A suggested value is rendered in its input, not as text with an Edit link.
+    // An unreviewed model value is already editable; no Edit click is needed.
     await nextTick();
-    expect(wrapper.find(".field-edit").exists()).toBe(false);
     expect(wrapper.find("textarea").exists()).toBe(true);
     expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
     expect(wrapper.find(".assertion-provenance").exists()).toBe(true);
@@ -310,34 +309,25 @@ describe("CorpusMetadataFieldEditor memory hints", () => {
     });
     expect(wrapper.find(".memory-hints").exists()).toBe(false);
   });
-});
 
-describe("CorpusMetadataFieldEditor pre-filled values", () => {
-  const base = {
-    field: "stance",
-    value: "affirm",
-    control: "enum" as const,
-    options: stanceOptions,
-  };
-
-  it("keeps a suggested or auto-filled value in its input", () => {
+  it("keeps every pre-filled value in its control, with no read-only summary or Edit link", () => {
     for (const status of [
       { status: "model_inferred", method: "llm", confidence: 0.6 },
       { status: "model_inferred", method: "llm", autofilled: true },
+      { status: "confirmed", method: "human", value_source: "human" },
     ]) {
-      const wrapper = mount(CorpusMetadataFieldEditor, { props: { ...base, status } });
+      const wrapper = mount(CorpusMetadataFieldEditor, {
+        props: {
+          field: "stance",
+          value: "affirm",
+          control: "enum",
+          options: stanceOptions,
+          status,
+        },
+      });
       expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("affirm");
       expect(wrapper.find(".field-edit").exists()).toBe(false);
       wrapper.unmount();
     }
-  });
-
-  it("still shows a human-decided value as one line with its Edit link", () => {
-    const wrapper = mount(CorpusMetadataFieldEditor, {
-      props: { ...base, status: { status: "human_confirmed", method: "human" } },
-    });
-    expect(wrapper.find("select").exists()).toBe(false);
-    expect(wrapper.find(".field-edit").exists()).toBe(true);
-    wrapper.unmount();
   });
 });
