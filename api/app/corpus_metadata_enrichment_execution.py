@@ -70,7 +70,10 @@ from .field_assertions import (
     reopen_assertion,
 )
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
-from .metadata_candidates import apply_indexing_nlp_candidates
+from .metadata_candidates import (
+    apply_indexing_nlp_candidates,
+    is_direct_nlp_indexing_candidate,
+)
 from .metadata_precedents_cache import CACHE_KEY as PRECEDENTS_CACHE_KEY
 from .metadata_precedents_cache import build_precedents_cache
 from .metadata_schema import (
@@ -138,7 +141,7 @@ def _field_resolved_before_indexing_model(record: dict[str, Any], field_name: st
     if assertion.derivation_method in {"deterministic", "inherited"}:
         return True
     if assertion.derivation_method == "derridai:nlp":
-        return assertion.evaluation_status == "value_supported"
+        return is_direct_nlp_indexing_candidate(assertion)
     return _field_has_strong_memory_prefill(record, field_name)
 
 class MetadataEnrichmentExecutionMixin:
