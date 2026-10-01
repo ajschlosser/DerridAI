@@ -19,7 +19,7 @@ from .models import (
     WorkMetadataRequest,
     WorkMetadataSeed,
 )
-from .rag import _extract_json, chat_complete
+from .rag import chat_complete, structured_chat_complete
 from .work_metadata_sources import (
     applicable_fields_for,
     canonical_source_type,
@@ -65,12 +65,11 @@ Return exactly one JSON object with:
 
 Use only a language code. If the excerpt is too short or mixed to identify reliably,
 return an empty language and confidence 0. Do not translate or summarize the source."""
-        raw = chat_complete(
+        result = structured_chat_complete(
             provider=body.provider, model=model, base_url=body.base_url,
             api_key=body.api_key, prompt=prompt, options=body.generation,
-            json_mode=True, max_tokens=256, cancelled=cancelled,
+            max_tokens=256, attempts=2, cancelled=cancelled,
         )
-        result = _extract_json(raw)
         language = str(result.get("language") or "").strip().replace("_", "-").lower()
         if language and not re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})?", language):
             raise ValueError("The language detector returned an invalid language code.")
@@ -120,14 +119,13 @@ Return exactly one JSON object. Populate only source-supported fields.
 Preserve quotation provenance and flat corpus fields. text must preserve the
 cleaned source text rather than summarize it. Set needs_review=true,
 updates=[], and use supplied PDF context. Do not invent edition/year/citation data."""
-        raw = chat_complete(
+        record = structured_chat_complete(
             provider=body.provider, model=model, base_url=body.base_url,
             api_key=body.api_key, prompt=prompt, options=body.generation,
-            json_mode=True,
             max_tokens=(body.generation.num_predict if body.generation and body.generation.num_predict else 8192),
+            attempts=2,
             cancelled=cancelled,
         )
-        record = _extract_json(raw)
         record["text"] = str(record.get("text") or body.raw_text)
         record["text_length"] = len(record["text"])
         record["needs_review"] = True
@@ -203,12 +201,11 @@ Return exactly one JSON object:
 {{"key":"candidate KEY or empty string","record_id":"matched record ID or empty string","confidence":0.0,"reason":"short explanation"}}
 Prefer exact page/citation/work/text correspondence. Do not choose a record
 merely because it discusses the same concept. Return empty IDs if unsupported."""
-    raw = chat_complete(
+    match = structured_chat_complete(
         provider=body.provider, model=model, base_url=body.base_url,
         api_key=body.api_key, prompt=prompt, options=body.generation,
-        json_mode=True, max_tokens=768, cancelled=cancelled,
+        max_tokens=768, attempts=2, cancelled=cancelled,
     )
-    match = _extract_json(raw)
     valid_keys = {str(item.get("key") or "") for item in retained_candidates}
     if str(match.get("key") or "") not in valid_keys:
         match["key"] = ""
@@ -659,18 +656,17 @@ the current edition, publisher, year, ISBN, language, or translator. Do not choo
 candidate merely because its title contains similar words. If no candidate is reliable,
 return candidate_index=-1. Confidence is 0.0 to 1.0. Do not return bibliographic values;
 DerridAI will copy them deterministically from the selected catalogue record."""
-    raw = chat_complete(
+    choice = structured_chat_complete(
         provider=request.provider,
         model=model,
         base_url=request.base_url,
         api_key=request.api_key,
         prompt=prompt,
         options=request.generation,
-        json_mode=True,
         max_tokens=384,
+        attempts=2,
         cancelled=cancelled,
     )
-    choice = _extract_json(raw)
     try:
         index = int(choice.get("candidate_index", -1))
     except Exception:
@@ -897,13 +893,13 @@ include `overall` as an object with `score` and `analysis`, plus top-level
 source-document author; never substitute a default author. Preserve source-role
 distinctions: distinguish the source author's claims from quoted, attributed,
 reconstructed, questioned, criticized, or endorsed positions."""
-    raw = chat_complete(
+    grade = structured_chat_complete(
         provider=body.provider, model=_model_for(body.provider, body.model),
         base_url=body.base_url, api_key=body.api_key, prompt=prompt,
-        options=body.generation, json_mode=True, max_tokens=4096,
+        options=body.generation, max_tokens=4096, attempts=2,
+        validate=_normalize_rag_grade_payload,
         cancelled=cancelled,
     )
-    grade = _normalize_rag_grade_payload(_extract_json(raw))
     cache_summary = None
     cache_error = None
     if body.response_record_id:
