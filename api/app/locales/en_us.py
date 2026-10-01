@@ -4355,7 +4355,7 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'record.secondary_text': 'Secondary text',
  'record.select_help': 'Select this record for bulk review, editing, or synchronization actions.',
  'record.selection_actions': 'Selected text actions',
- 'record.semantic_map_unavailable': 'No semantic relationships have been derived for this Record yet.'
+ 'record.semantic_map_unavailable': 'No semantic relationships have been derived for this Record yet.',
  'record.show_inspector': 'Show inspector',
  'record.source_documents': 'Source documents',
  'record.sparse_save_help': 'Only changed fields will be saved and added to the audit trail.',
