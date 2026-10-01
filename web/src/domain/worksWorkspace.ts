@@ -4,11 +4,20 @@
 // overview, sync, metadata dialogs, review and remove actions). Moved verbatim from the legacy runtime; the runtime's
 // state object and helpers are passed in as dependencies.
 import { fullCitation } from "./citations";
-import { commonWorkValue, workCoverUrl } from "./workMetadata";
+import { commonWorkValue, workCoverUrl, workMetadataPresentationRows } from "./workMetadata";
+import { WORK_METADATA_LLM_FIELDS } from "./runtimeConstants";
+import type { WorksDbStatusKind, WorksIndexFreshness } from "../types/works";
 
 export const WORKS_SORTS = ["title-asc", "title-desc", "records-desc", "review-desc", "year-asc"];
 /** The stable `workDbStatus()` kinds a Works filter may name. */
-export const WORKS_DB_STATUSES = ["changed", "synced", "exists", "absent", "unknown", "none"];
+export const WORKS_DB_STATUSES: WorksDbStatusKind[] = [
+  "changed",
+  "synced",
+  "exists",
+  "absent",
+  "unknown",
+  "none",
+];
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -45,7 +54,6 @@ type Helper =
   | "syncUrl"
   | "tr"
   | "uid"
-  | "uniqueWorkValues"
   | "upsertRows"
   | "workDbStatus"
   | "workIndex"
@@ -83,13 +91,61 @@ export function createWorksWorkspace(deps: Deps) {
     syncUrl,
     tr,
     uid,
-    uniqueWorkValues,
     upsertRows,
     workDbStatus,
     workIndex,
     workInsightMetrics,
     worksBiblioValue,
   } = deps;
+  const workSearchCache = new WeakMap<object, string>();
+  const librarySearchFields = [
+    ...WORK_METADATA_LLM_FIELDS,
+    "canonical_work_id",
+    "original_language",
+  ];
+
+  function normalizeLibrarySearch(value: unknown): string {
+    return String(value ?? "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase()
+      .trim();
+  }
+
+  function appendSearchValue(values: string[], value: unknown) {
+    if (Array.isArray(value)) {
+      for (const item of value) appendSearchValue(values, item);
+      return;
+    }
+    if (value === null || value === undefined || typeof value === "object") return;
+    const normalized = normalizeLibrarySearch(value);
+    if (normalized) values.push(normalized);
+  }
+
+  function adminWorkSearchText(item: Any): string {
+    if (item && typeof item === "object") {
+      const cached = workSearchCache.get(item);
+      if (cached !== undefined) return cached;
+    }
+    const values: string[] = [];
+    appendSearchValue(values, item?.work);
+    appendSearchValue(values, [...(item?.authors || [])]);
+    appendSearchValue(values, [...(item?.years || [])]);
+    for (const row of item?.rows || []) {
+      for (const field of librarySearchFields) appendSearchValue(values, row.record?.[field]);
+    }
+    const text = [...new Set(values)].join(" ");
+    if (item && typeof item === "object") workSearchCache.set(item, text);
+    return text;
+  }
+
+  function researcherWorkSearchText(item: Any): string {
+    const values: string[] = [];
+    appendSearchValue(values, item?.work);
+    for (const field of librarySearchFields) appendSearchValue(values, item?.[field]);
+    return [...new Set(values)].join(" ");
+  }
+
   function worksSortValue() {
     return WORKS_SORTS.includes(state.worksSort) ? String(state.worksSort) : "title-asc";
   }
@@ -119,72 +175,116 @@ export function createWorksWorkspace(deps: Deps) {
               : byTitle;
     return [...items].sort(compare);
   }
-  function describeAdminWork(item: Any, { insights = false } = {}) {
+  function annotationCountsByWork() {
+    const counts = new Map<string, number>();
+    for (const annotation of allAnnotations()) {
+      const work = String(annotation.work || "");
+      if (!work) continue;
+      counts.set(work, (counts.get(work) || 0) + 1);
+    }
+    return counts;
+  }
+
+  function describeAdminWork(
+    item: Any,
+    {
+      detail = false,
+      annotationCounts = null,
+    }: { detail?: boolean; annotationCounts?: Map<string, number> | null } = {},
+  ) {
     const publisher = worksBiblioValue(item.rows, "publisher");
     const translator = worksBiblioValue(item.rows, "translator");
     const year = commonWorkValue(item.rows, "publication_year");
-    const metadataFields = [
-      "source_type",
-      "document_author",
-      "container_title",
-      "journal_title",
-      "volume",
-      "issue",
-      "pages",
-      "publisher",
-      "publication_year",
-      "edition",
-      "translator",
-      "editor",
-      "publication_place",
-      "isbn",
-      "doi",
-      "document_language",
-      "original_language",
-    ];
-    return {
+    const base = {
       work: item.work,
       count: item.count,
       review: item.review,
-      annotations: allAnnotations().filter(
-        (annotation: Any) => String(annotation.work || "") === String(item.work),
-      ).length,
+      annotations: Number(annotationCounts?.get(String(item.work)) || 0),
       files: [...item.files],
       authors: [...item.authors],
       years: [...item.years].map(String),
       cover: workCoverUrl(item.rows),
-      citation: fullCitation(item.rows[0]?.record || { work: item.work }, { includePages: false }),
       year_label: year.value ? String(year.value) : [...item.years].sort().join(", "),
       subtitle: "",
       publisher,
       translator,
-      metadata: metadataFields.map((field) => {
-        const value = commonWorkValue(item.rows, field);
-        return {
-          field,
-          field_label: label(field),
-          mixed: Boolean(value.mixed),
-          value: value.mixed ? "" : String(display(value.value)),
-          unique_count: value.mixed ? uniqueWorkValues(item.rows, field).length : 0,
-        };
-      }),
       status: workDbStatus(item.rows, item.work),
-      insights: insights
-        ? workInsightMetrics(item.rows, item.work).map((metric: Any) => ({
-            id: metric.id,
-            field: metric.field,
-            title: metric.title,
-            heading: metric.heading,
-            type: metric.type === "pie" ? "pie" : "bars",
-            values: metric.values.map((value: Any) => ({
-              key: String(value.key),
-              value: Number(value.value || 0),
-              other: Boolean(value.other),
-            })),
-          }))
-        : [],
+      searchText: adminWorkSearchText(item),
+    };
+    if (!detail) return base;
+
+    const metadata = workMetadataPresentationRows(item.rows).map((item) => ({
+      field_id: item.field_id,
+      field: item.field,
+      field_label: label(item.field),
+      mixed: item.mixed,
+      value: item.mixed ? "" : String(display(item.value)),
+      unique_count: item.unique_count,
+      empty: item.empty,
+    }));
+    return {
+      ...base,
+      citation: fullCitation(item.rows[0]?.record || { work: item.work }, { includePages: false }),
+      metadata,
+      insights: workInsightMetrics(item.rows, item.work).map((metric: Any) => ({
+        id: metric.id,
+        field: metric.field,
+        title: metric.title,
+        heading: metric.heading,
+        type: metric.type === "pie" ? "pie" : "bars",
+        values: metric.values.map((value: Any) => ({
+          key: String(value.key),
+          value: Number(value.value || 0),
+          other: Boolean(value.other),
+        })),
+      })),
     };
   }
+
+  function summarizeIndexFreshness(items: Any[]): WorksIndexFreshness {
+    const freshness: WorksIndexFreshness = {
+      state: "empty",
+      totalRecords: 0,
+      currentRecords: 0,
+      changedRecords: 0,
+      presentRecords: 0,
+      absentRecords: 0,
+      unknownRecords: 0,
+      unavailableRecords: 0,
+    };
+    for (const item of items) {
+      const count = Number(item.count || 0);
+      freshness.totalRecords += count;
+      switch (item.status?.kind as WorksDbStatusKind | undefined) {
+        case "synced":
+          freshness.currentRecords += count;
+          break;
+        case "changed":
+          freshness.changedRecords += count;
+          break;
+        case "exists":
+          freshness.presentRecords += count;
+          break;
+        case "absent":
+          freshness.absentRecords += count;
+          break;
+        case "unknown":
+          freshness.unknownRecords += count;
+          break;
+        default:
+          freshness.unavailableRecords += count;
+      }
+    }
+    if (!freshness.totalRecords) freshness.state = "empty";
+    else if (freshness.unavailableRecords === freshness.totalRecords)
+      freshness.state = "unavailable";
+    else if (freshness.changedRecords || freshness.absentRecords) freshness.state = "stale";
+    else if (freshness.presentRecords || freshness.unknownRecords || freshness.unavailableRecords)
+      freshness.state = "unknown";
+    else freshness.state = "current";
+    return freshness;
+  }
+
   function worksSnapshotBase(extra: Any) {
     const stores = recordStores().map((store: Any) => ({
       name: store.name,
@@ -202,12 +302,12 @@ export function createWorksWorkspace(deps: Deps) {
         dbStatus: String(state.worksDbStatus || ""),
         author: String(state.worksAuthor || ""),
       },
-      viewMode: state.worksView === "compact" ? "compact" : "cards",
+      viewMode: ["list", "compact"].includes(String(state.worksView)) ? "list" : "cards",
       stores,
       activeStore,
       activeStoreCount: Number(activeStoreInfo?.count || 0),
       dbUnavailableReason: noDbReason,
-      storesEmptyLabel: "No corpus Chroma collections",
+      storesEmptyLabel: tr("works.no_search_indexes"),
       citationLabel: label("full_citation"),
       populateDisabledReason: "",
       syncAllDisabledReason: noDbReason || tr("works.select_collection"),
@@ -267,24 +367,53 @@ export function createWorksWorkspace(deps: Deps) {
     if (isResearcher()) {
       const stores = recordStores();
       const all = state.storeWorkStats || [];
-      const needle = query.toLocaleLowerCase();
+      const researcherAuthor = String(state.worksAuthor || "");
       const items = sortWorkItems(
         all
-          .filter((item: Any) => !query || String(item.work).toLocaleLowerCase().includes(needle))
-          .map((item: Any) => describeResearcherWork(item, { selected: false })),
+          .map((item: Any) => ({
+            ...describeResearcherWork(item, { selected: false }),
+            searchText: researcherWorkSearchText(item),
+            authors: item.document_author ? [String(item.document_author)] : [],
+          }))
+          .filter(
+            (item: Any) =>
+              (!query ||
+                String(item.searchText || item.work).includes(normalizeLibrarySearch(query))) &&
+              (!researcherAuthor || item.authors.includes(researcherAuthor)),
+          ),
       );
       const selectedStat = all.find((item: Any) => item.work === state.workOverview) || null;
       return worksSnapshotBase({
         mode: "researcher",
         available: stores.length > 0,
         works: items,
+        scopeWorks: all.map((item: Any) => ({
+          work: String(item.work || ""),
+          count: Number(item.count || 0),
+          authors: item.document_author ? [String(item.document_author)] : [],
+          year_label: String(item.publication_year || item.year || ""),
+        })),
         selected: selectedStat ? describeResearcherWork(selectedStat, { selected: true }) : null,
         totalWorks: all.length,
         visibleWorks: items.length,
         totalRecords: all.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
+        indexFreshness: {
+          state: "unavailable",
+          totalRecords: all.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
+          currentRecords: 0,
+          changedRecords: 0,
+          presentRecords: 0,
+          absentRecords: 0,
+          unknownRecords: 0,
+          unavailableRecords: all.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
+        },
         sourceFileCount: 0,
         totalReview: 0,
-        authors: [],
+        authors: [
+          ...new Set<string>(
+            all.map((item: Any) => String(item.document_author || "").trim()).filter(Boolean),
+          ),
+        ].sort((a, b) => a.localeCompare(b)),
         capabilities: {
           canManageCorpus: false,
           canSync: false,
@@ -296,8 +425,11 @@ export function createWorksWorkspace(deps: Deps) {
     const map = workIndex();
     if (state.workOverview && !map.has(state.workOverview)) state.workOverview = "";
     const selectedItem = state.workOverview ? map.get(state.workOverview) : null;
-    const needle = query.toLocaleLowerCase();
-    const described = [...map.values()].map((item) => describeAdminWork(item, { insights: true }));
+    const needle = normalizeLibrarySearch(query);
+    const annotationCounts = annotationCountsByWork();
+    const described = [...map.values()].map((item) =>
+      describeAdminWork(item, { annotationCounts }),
+    );
     const filters = {
       needsReview: Boolean(state.worksNeedsReview),
       dbStatus: String(state.worksDbStatus || ""),
@@ -306,7 +438,7 @@ export function createWorksWorkspace(deps: Deps) {
     const items = sortWorkItems(
       described.filter(
         (item: Any) =>
-          (!query || item.work.toLocaleLowerCase().includes(needle)) &&
+          (!query || String(item.searchText || item.work).includes(needle)) &&
           (!filters.needsReview || item.review > 0) &&
           (!filters.dbStatus || item.status.kind === filters.dbStatus) &&
           (!filters.author || item.authors.includes(filters.author)),
@@ -317,15 +449,24 @@ export function createWorksWorkspace(deps: Deps) {
       mode: "admin",
       available: state.files.length > 0,
       works: items,
-      selected: selectedItem ? describeAdminWork(selectedItem, { insights: true }) : null,
+      scopeWorks: described.map((item: Any) => ({
+        work: String(item.work || ""),
+        count: Number(item.count || 0),
+        authors: [...(item.authors || [])],
+        year_label: String(item.year_label || ""),
+      })),
+      selected: selectedItem
+        ? describeAdminWork(selectedItem, { detail: true, annotationCounts })
+        : null,
       totalWorks: map.size,
       visibleWorks: items.length,
       totalRecords,
+      indexFreshness: summarizeIndexFreshness(described),
       sourceFileCount: new Set(described.flatMap((item: Any) => item.files)).size,
       totalReview: described.reduce((sum: number, item: Any) => sum + item.review, 0),
-      authors: [...new Set(described.flatMap((item: Any) => item.authors as string[]))].sort(
-        (a, b) => a.localeCompare(b),
-      ),
+      authors: [
+        ...new Set<string>(described.flatMap((item: Any) => item.authors as string[])),
+      ].sort((a, b) => a.localeCompare(b)),
       populateDisabledReason: hasProfiles
         ? tr("works.no_works_to_populate")
         : tr("works.no_provider_profiles_help"),
@@ -361,7 +502,7 @@ export function createWorksWorkspace(deps: Deps) {
     if (patch.dbStatus !== undefined) state.worksDbStatus = String(patch.dbStatus || "");
     if (patch.author !== undefined) state.worksAuthor = String(patch.author || "");
     if (patch.viewMode !== undefined)
-      state.worksView = patch.viewMode === "compact" ? "compact" : "cards";
+      state.worksView = ["list", "compact"].includes(String(patch.viewMode)) ? "list" : "cards";
     persistPrefs();
     syncUrl({ replace: true });
   }

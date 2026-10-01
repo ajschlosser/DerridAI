@@ -4,7 +4,7 @@ import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 import MixedValueInspect from "./MixedValueInspect.vue";
-import type { WorksItem } from "../../types/works";
+import type { WorksLibraryItem } from "../../types/works";
 import { statusTone } from "../../domain/status";
 import UiButton from "../ui/UiButton.vue";
 import UiMenu, { type UiMenuItem } from "../ui/UiMenu.vue";
@@ -12,15 +12,14 @@ import UiStatusBadge from "../ui/UiStatusBadge.vue";
 
 const props = withDefaults(
   defineProps<{
-    work: WorksItem;
+    work: WorksLibraryItem;
     selected?: boolean;
     /** Researcher libraries are read-only: no database status, no corpus operations. */
     mode?: "admin" | "researcher";
-    compact?: boolean;
     canSync?: boolean;
     syncDisabledReason?: string;
   }>(),
-  { selected: false, mode: "admin", compact: false, canSync: false, syncDisabledReason: "" },
+  { selected: false, mode: "admin", canSync: false, syncDisabledReason: "" },
 );
 const emit = defineEmits<{
   select: [];
@@ -86,11 +85,7 @@ function onMenu(id: string) {
 </script>
 
 <template>
-  <article
-    class="works-card"
-    :class="{ selected: props.selected, compact: props.compact }"
-    :data-work="props.work.work"
-  >
+  <article class="works-card" :class="{ selected: props.selected }" :data-work="props.work.work">
     <button
       type="button"
       class="works-card-select"
@@ -111,7 +106,7 @@ function onMenu(id: string) {
       </span>
     </button>
 
-    <div v-if="admin && !props.compact" class="works-card-biblio">
+    <div v-if="admin" class="works-card-biblio">
       <span v-if="props.work.publisher.mixed">
         {{ props.work.publisher.field_label }}
         <MixedValueInspect
@@ -317,27 +312,5 @@ function onMenu(id: string) {
 }
 .works-card-actions {
   margin-inline-start: auto;
-}
-.works-card.compact {
-  grid-template-columns: minmax(12rem, 1fr) auto;
-  align-items: center;
-  padding: var(--space-2) var(--space-3);
-}
-.works-card.compact .works-card-cover {
-  display: none;
-}
-.works-card.compact .works-card-select {
-  grid-template-columns: minmax(0, 1fr);
-}
-.works-card.compact .works-card-selected {
-  grid-column: 1;
-}
-.works-card.compact .works-card-title {
-  font-size: var(--fs-md);
-}
-@media (max-width: 560px) {
-  .works-card.compact {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 </style>

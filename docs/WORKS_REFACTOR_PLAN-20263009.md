@@ -2,6 +2,32 @@
 
 This document consolidates the implementation proposals identified during review of the current Works workspace on the \`master\` branch. It covers information architecture, UX, visual design, performance, typing, metadata architecture, accessibility, responsive behavior, testing, documentation, and implementation sequencing.
 
+## Implementation status
+
+Work has started on the first data-model/performance tranche on \`task/works-refactor\`:
+
+- split collection-scale \`WorksLibraryItem\` data from selected-work \`WorkDetail\` data;
+- compute citation, full metadata, and insight graphs only for the selected admin work;
+- pre-index annotation counts once per snapshot instead of rescanning annotations for every work;
+- add a typed, first-class corpus/search-index freshness summary while preserving the distinction between known-current, merely-present, stale/absent, unknown, and unavailable records;
+- add a lightweight full-corpus work identity scope so filtering the library no longer silently narrows Create Site's available export scope;
+- centralize the existing work database status options and strengthen their TypeScript contract;
+- move the Works composable behind an operation-specific typed service boundary instead of importing the general runtime facade directly;
+- replace the hidden global-file-input query with an explicit shell-level corpus file-picker command;
+- remove runtime DOM decoration from the Works rendering lifecycle and route semantic-map source discovery through a typed service;
+- replace the two large corpus/database cards with a compact `Working corpus → Search index` relationship strip, expose freshness there, rename the maintenance action to “Update search index,” and localize the new English/French terminology;
+- remove the hard-coded English empty-index label from the domain snapshot;
+- replace Compact with a genuine semantic table-like List mode, retain Cards as the browsable mode, and keep legacy `v=compact` URLs backward-compatible by mapping them to List;
+- replace animation-frame progressive reveal with bounded client-side pagination (48 cards / 100 list rows per page);
+- expand deterministic library search across work-level bibliographic metadata with case/Unicode/diacritic normalization;
+- expose author filtering to researchers and show active filters as removable chips with a visible clear-all action;
+- remove the duplicate add-files card from the end of the library;
+- replace the Works-local inspector metadata field list with stable document identities plus schema/FieldAssertion discovery, so custom metadata can surface without being added to a Works whitelist;
+- separate field identity from localized display labels, hide empty bibliographic fields by default, and give administrators an explicit “show empty fields” diagnostic control;
+- merge the latest `master` publication/semantic-map hardening into the branch without carrying unrelated stale site-export changes.
+
+The next implementation step is to reduce the remaining `Loose`/`Any` helper-injection surface in `domain/worksWorkspace.ts`, add large-library regression/performance coverage, and continue the inspector/dialog decomposition passes.
+
 ## Implementation proposals
 
 1. **[Information architecture] Make the Works library the dominant page surface.** Reduce the amount of architecture/status UI users must pass through before reaching the actual collection.

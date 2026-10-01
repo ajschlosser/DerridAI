@@ -7,19 +7,21 @@ import { useShellStore } from "../stores/shell";
 import AppIcon from "../components/AppIcon.vue";
 import WorksOverviewCard from "../components/works/WorksOverviewCard.vue";
 import WorksLibraryCard from "../components/works/WorksLibraryCard.vue";
+import WorksLibraryList from "../components/works/WorksLibraryList.vue";
 import WorksCorpusContext from "../components/works/WorksCorpusContext.vue";
 import WorksLibraryToolbar from "../components/works/WorksLibraryToolbar.vue";
 import WorksWorkspaceHeader from "../components/works/WorksWorkspaceHeader.vue";
 import CreateSiteDialog from "../components/works/CreateSiteDialog.vue";
 import { useWorksWorkspace } from "../composables/useWorksWorkspace";
-import * as runtime from "../runtime/runtime.js";
 import UiDialog from "../components/ui/UiDialog.vue";
+import UiButton from "../components/ui/UiButton.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
 import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
-import type { WorksFilters, WorksSort, WorksViewMode } from "../types/works";
+import type { WorksDbStatusKind, WorksFilters, WorksSort, WorksViewMode } from "../types/works";
 import type { SemanticMapSource } from "../domain/semanticMap";
 import { corpusBuildsApi } from "../api/corpus";
+import { semanticMapService } from "../services/semanticMap";
 import {
   sitesApi,
   type SiteExportFormat,
@@ -34,9 +36,7 @@ const works = useWorksWorkspace();
 const { snapshot, error } = works;
 const loading = ref(true);
 const query = ref("");
-const revealed = ref(0);
 let queryTimer = 0;
-let revealToken = 0;
 const page = ref<HTMLElement | null>(null);
 const createSiteOpen = ref(false);
 const createSiteBusy = ref(false);
@@ -109,14 +109,25 @@ async function createSite(payload: {
 const fileSignature = computed(() =>
   shell.snapshot.files.map((file) => `${file.id}:${file.count}:${file.dirty}`).join("|"),
 );
-const visibleWorks = computed(() => (snapshot.value?.works || []).slice(0, revealed.value));
-const showSkeleton = computed(() =>
-  Boolean(snapshot.value?.mode === "admin" && snapshot.value.works.length && revealed.value === 0),
+const libraryPage = ref(1);
+const libraryPageSize = computed(() => (snapshot.value?.viewMode === "list" ? 100 : 48));
+const libraryPageCount = computed(() =>
+  Math.max(1, Math.ceil((snapshot.value?.works.length || 0) / libraryPageSize.value)),
 );
-const showAddCard = computed(() =>
-  Boolean(snapshot.value?.mode === "admin" && revealed.value >= (snapshot.value.works.length || 0)),
+const visibleWorks = computed(() => {
+  const items = snapshot.value?.works || [];
+  const start = (libraryPage.value - 1) * libraryPageSize.value;
+  return items.slice(start, start + libraryPageSize.value);
+});
+const showLibraryPagination = computed(() =>
+  Boolean(snapshot.value?.works.length && libraryPageCount.value > 1),
 );
-
+function setLibraryPage(pageNumber: number) {
+  libraryPage.value = Math.min(libraryPageCount.value, Math.max(1, pageNumber));
+}
+function resetLibraryPage() {
+  libraryPage.value = 1;
+}
 /** Inspector commands, bound to the selected work; the persistent pane and the dialog share them. */
 function inspectorHandlers(work: string) {
   return {
@@ -137,43 +148,16 @@ const loadingDetail = computed(() =>
   auth.isResearcher ? i18n.t("works.checking_database") : i18n.t("works.checking_database"),
 );
 
-function startReveal() {
-  const token = ++revealToken;
-  const total = snapshot.value?.works.length || 0;
-  revealed.value = 0;
-  if (!total || snapshot.value?.mode !== "admin") {
-    revealed.value = total;
-    return;
-  }
-  const step = () => {
-    if (token !== revealToken) return;
-    revealed.value = Math.min(total, (revealed.value || 0) + 12);
-    if (revealed.value < total) requestAnimationFrame(step);
-    else decorate();
-  };
-  requestAnimationFrame(step);
-}
-
-function decorate() {
-  void nextTick(() => {
-    if (page.value) runtime.decorateDisabledControls?.(page.value);
-  });
-}
-
 async function boot() {
   loading.value = !snapshot.value;
   await works.activate();
   query.value = snapshot.value?.query || "";
   loading.value = false;
-  startReveal();
-  decorate();
 }
 
 function reload() {
   works.load();
   query.value = snapshot.value?.query || "";
-  startReveal();
-  decorate();
 }
 
 function applyQuery(value: string) {
@@ -182,20 +166,22 @@ function applyQuery(value: string) {
   const delay = snapshot.value?.mode === "researcher" ? 150 : 180;
   queryTimer = window.setTimeout(() => {
     works.setQuery(value);
-    startReveal();
-    decorate();
+    resetLibraryPage();
   }, delay);
 }
 
 function selectWork(work: string) {
   works.setOverview(work);
-  decorate();
+}
+
+function openWorkRecords(work: string) {
+  if (snapshot.value?.mode === "researcher") works.browseResearcher(work);
+  else works.searchRecords(work);
 }
 
 async function closeInspector() {
   const work = snapshot.value?.selectedWork || "";
   works.setOverview("");
-  decorate();
   await nextTick();
   // The persistent inspector has no dialog to restore focus, so return it to the work it described.
   if (wide.value) {
@@ -206,13 +192,12 @@ async function closeInspector() {
 function applyView(patch: {
   sort?: WorksSort;
   needsReview?: boolean;
-  dbStatus?: string;
+  dbStatus?: WorksDbStatusKind | "";
   author?: string;
   viewMode?: WorksViewMode;
 }) {
   works.setView(patch);
-  startReveal();
-  decorate();
+  resetLibraryPage();
 }
 function applyFilters(patch: Partial<WorksFilters>) {
   applyView(patch);
@@ -248,8 +233,8 @@ async function openWorkSemanticMap(work: string) {
   semanticMapTab.value = "graph";
   semanticMapRecords.value = [];
   semanticMapRecordId.value = "";
-  const allSources = runtime.listSemanticMapSources?.();
-  semanticMapSources.value = allSources?.records || [];
+  const allSources = semanticMapService.listSources();
+  semanticMapSources.value = allSources.records;
   semanticMapDialog.value?.showModal();
   try {
     const result = await corpusBuildsApi.workSemanticMapRecords(work);
@@ -272,10 +257,13 @@ async function changeStore(name: string) {
   await works.setStore(name);
   query.value = snapshot.value?.query || "";
   loading.value = false;
-  startReveal();
-  decorate();
+  resetLibraryPage();
 }
 
+watch(
+  () => [snapshot.value?.works.length, snapshot.value?.viewMode],
+  () => setLibraryPage(libraryPage.value),
+);
 watch(fileSignature, () => {
   if (loading.value || !snapshot.value) return;
   reload();
@@ -294,7 +282,6 @@ watch(
     reload();
   },
 );
-watch(visibleWorks, decorate);
 
 onMounted(() => {
   wideQuery = window.matchMedia?.("(min-width: 1100px)") ?? null;
@@ -377,6 +364,7 @@ onBeforeUnmount(() => {
         :active-store-count="snapshot.activeStoreCount"
         :source-file-count="snapshot.sourceFileCount"
         :total-records="snapshot.totalRecords"
+        :index-freshness="snapshot.indexFreshness"
         :stores-empty-label="snapshot.storesEmptyLabel"
         :db-unavailable-reason="snapshot.dbUnavailableReason"
         :can-sync-all="snapshot.capabilities.canSyncAll"
@@ -405,44 +393,49 @@ onBeforeUnmount(() => {
         <section
           id="worksGrid"
           class="works-library"
-          :class="{ compact: snapshot.viewMode === 'compact' }"
+          :class="{ list: snapshot.viewMode === 'list' }"
           :aria-label="i18n.t('nav.works')"
         >
-          <UiLoadingState
-            v-if="showSkeleton"
-            :label="
-              i18n.tf('works.loading_cards', {
-                count: snapshot.works.length.toLocaleString(i18n.locale),
-              })
-            "
-            variant="skeleton"
-            :skeleton-count="Math.min(4, snapshot.works.length)"
-          />
-          <WorksLibraryCard
-            v-for="work in visibleWorks"
-            :key="work.work"
-            :work="work"
+          <WorksLibraryList
+            v-if="snapshot.viewMode === 'list'"
+            :works="visibleWorks"
             :mode="snapshot.mode"
-            :compact="snapshot.viewMode === 'compact'"
-            :selected="snapshot.selectedWork === work.work"
+            :selected-work="snapshot.selectedWork"
             :can-sync="snapshot.capabilities.canSync"
             :sync-disabled-reason="snapshot.dbUnavailableReason"
-            @select="selectWork(work.work)"
-            @sync="works.syncWork(work.work)"
-            @populate="works.populateWork(work.work)"
-            @edit="works.editMetadata(work.work)"
-            @review="works.reviewFlagged(work.work)"
-            @improve="works.autoImprove(work.work)"
-            @remove="works.removeWork(work.work)"
-            @records="
-              snapshot.mode === 'admin'
-                ? works.searchRecords(work.work)
-                : works.browseResearcher(work.work)
-            "
-            @flagged="works.searchRecords(work.work, true)"
-            @inspect="works.inspectMixed(work.work, $event)"
-            @semantic-map="openWorkSemanticMap(work.work)"
+            @select="selectWork"
+            @sync="works.syncWork"
+            @populate="works.populateWork"
+            @edit="works.editMetadata"
+            @review="works.reviewFlagged"
+            @improve="works.autoImprove"
+            @remove="works.removeWork"
+            @records="openWorkRecords"
+            @flagged="(work) => works.searchRecords(work, true)"
+            @semantic-map="openWorkSemanticMap"
           />
+          <template v-else>
+            <WorksLibraryCard
+              v-for="work in visibleWorks"
+              :key="work.work"
+              :work="work"
+              :mode="snapshot.mode"
+              :selected="snapshot.selectedWork === work.work"
+              :can-sync="snapshot.capabilities.canSync"
+              :sync-disabled-reason="snapshot.dbUnavailableReason"
+              @select="selectWork(work.work)"
+              @sync="works.syncWork(work.work)"
+              @populate="works.populateWork(work.work)"
+              @edit="works.editMetadata(work.work)"
+              @review="works.reviewFlagged(work.work)"
+              @improve="works.autoImprove(work.work)"
+              @remove="works.removeWork(work.work)"
+              @records="openWorkRecords(work.work)"
+              @flagged="works.searchRecords(work.work, true)"
+              @inspect="works.inspectMixed(work.work, $event)"
+              @semantic-map="openWorkSemanticMap(work.work)"
+            />
+          </template>
           <p v-if="!snapshot.works.length" class="works-empty">
             {{
               snapshot.totalWorks
@@ -452,26 +445,34 @@ onBeforeUnmount(() => {
                   : i18n.t("research.no_works")
             }}
           </p>
-          <button
-            v-if="showAddCard"
-            id="worksAddJsonl"
-            type="button"
-            class="work-add-jsonl-card"
-            :disabled="!snapshot.capabilities.canManageCorpus"
-            :data-disabled-reason="
-              snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
-            "
-            :title="
-              snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
-            "
-            @click="works.chooseJsonl()"
+          <nav
+            v-if="showLibraryPagination"
+            class="works-library-pagination"
+            :aria-label="i18n.t('works.library_pagination')"
           >
-            <span class="work-add-jsonl-icon"><AppIcon name="plus" aria-hidden="true" /></span>
+            <UiButton
+              size="small"
+              variant="ghost"
+              :label="i18n.t('ui.previous')"
+              :disabled="libraryPage <= 1"
+              @click="setLibraryPage(libraryPage - 1)"
+            />
             <span>
-              <b>{{ i18n.t("works.add_jsonl") }}</b>
-              <small>{{ i18n.t("works.add_jsonl_help") }}</small>
+              {{
+                i18n.tf("dynamic.page_of_pages", {
+                  page: libraryPage,
+                  pages: libraryPageCount,
+                })
+              }}
             </span>
-          </button>
+            <UiButton
+              size="small"
+              variant="ghost"
+              :label="i18n.t('ui.next')"
+              :disabled="libraryPage >= libraryPageCount"
+              @click="setLibraryPage(libraryPage + 1)"
+            />
+          </nav>
         </section>
 
         <aside
@@ -515,7 +516,7 @@ onBeforeUnmount(() => {
 
     <CreateSiteDialog
       v-if="createSiteOpen && snapshot?.mode === 'admin'"
-      :works="snapshot.works"
+      :works="snapshot.scopeWorks"
       :store-name="snapshot.activeStore"
       :initial-work="snapshot.selectedWork"
       :languages="createSiteLanguages"
@@ -653,15 +654,25 @@ onBeforeUnmount(() => {
   align-content: start;
   min-width: 0;
 }
-.works-library.compact {
+.works-library.list {
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2);
+  gap: 0;
 }
 .works-empty {
   grid-column: 1 / -1;
   margin: 0;
   padding: var(--space-4);
   color: var(--text-secondary);
+}
+.works-library-pagination {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  padding-block: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
 }
 .works-inspector-pane {
   position: sticky;

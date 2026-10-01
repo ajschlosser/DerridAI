@@ -2,7 +2,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
-import type { WorksFilters, WorksSort, WorksViewMode } from "../../types/works";
+import { WORKS_DB_STATUSES } from "../../domain/worksWorkspace";
+import type { WorksDbStatusKind, WorksFilters, WorksSort, WorksViewMode } from "../../types/works";
 import UiButton from "../ui/UiButton.vue";
 
 const props = defineProps<{
@@ -28,8 +29,8 @@ const admin = computed(() => props.mode === "admin");
 const filtersOpen = ref(false);
 const activeFilterCount = computed(
   () =>
-    Number(props.filters.needsReview) +
-    Number(Boolean(props.filters.dbStatus)) +
+    Number(admin.value && props.filters.needsReview) +
+    Number(admin.value && Boolean(props.filters.dbStatus)) +
     Number(Boolean(props.filters.author)),
 );
 const sorts = computed<Array<{ value: WorksSort; label: string; admin?: boolean }>>(() => [
@@ -39,7 +40,7 @@ const sorts = computed<Array<{ value: WorksSort; label: string; admin?: boolean 
   { value: "review-desc", label: i18n.t("works.sort_review_desc"), admin: true },
   { value: "year-asc", label: i18n.t("works.sort_year_asc"), admin: true },
 ]);
-const statusKinds = ["changed", "synced", "exists", "absent", "unknown", "none"];
+const statusKinds = WORKS_DB_STATUSES;
 const summary = computed(() => {
   const base = i18n.tf("works.result_summary", {
     visible: props.visibleWorks.toLocaleString(i18n.locale),
@@ -70,7 +71,7 @@ function clearFilters() {
         />
       </div>
       <UiButton
-        v-if="admin"
+        v-if="admin || props.authors.length"
         size="small"
         icon="filter"
         :label="i18n.t('works.filters')"
@@ -104,21 +105,21 @@ function clearFilters() {
         />
         <UiButton
           size="small"
-          :label="i18n.t('works.view_compact')"
-          :pressed="props.viewMode === 'compact'"
-          @click="emit('viewMode', 'compact')"
+          :label="i18n.t('works.view_list')"
+          :pressed="props.viewMode === 'list'"
+          @click="emit('viewMode', 'list')"
         />
       </div>
     </div>
 
     <div
-      v-if="admin && filtersOpen"
+      v-if="filtersOpen"
       id="works-filter-panel"
       class="works-filter-panel"
       role="group"
       :aria-label="i18n.t('works.filters')"
     >
-      <label class="works-filter-check">
+      <label v-if="admin" class="works-filter-check">
         <input
           type="checkbox"
           :checked="props.filters.needsReview"
@@ -126,12 +127,16 @@ function clearFilters() {
         />
         <span>{{ i18n.t("works.filter_needs_review") }}</span>
       </label>
-      <label class="works-toolbar-field">
+      <label v-if="admin" class="works-toolbar-field">
         <span>{{ i18n.t("works.filter_db_status") }}</span>
         <select
           class="control compact-select"
           :value="props.filters.dbStatus"
-          @change="emit('filters', { dbStatus: ($event.target as HTMLSelectElement).value })"
+          @change="
+            emit('filters', {
+              dbStatus: ($event.target as HTMLSelectElement).value as WorksDbStatusKind | '',
+            })
+          "
         >
           <option value="">{{ i18n.t("works.filter_any") }}</option>
           <option v-for="kind in statusKinds" :key="kind" :value="kind">
@@ -157,6 +162,49 @@ function clearFilters() {
         variant="ghost"
         :label="i18n.t('works.filters_clear')"
         :disabled="!activeFilterCount"
+        @click="clearFilters"
+      />
+    </div>
+
+    <div
+      v-if="activeFilterCount"
+      class="works-filter-chips"
+      :aria-label="i18n.t('works.active_filters')"
+    >
+      <button
+        v-if="admin && props.filters.needsReview"
+        type="button"
+        class="works-filter-chip"
+        @click="emit('filters', { needsReview: false })"
+      >
+        <span>{{ i18n.t("works.filter_needs_review") }}</span>
+        <span aria-hidden="true">×</span>
+        <span class="sr-only">{{ i18n.t("ui.remove") }}</span>
+      </button>
+      <button
+        v-if="admin && props.filters.dbStatus"
+        type="button"
+        class="works-filter-chip"
+        @click="emit('filters', { dbStatus: '' })"
+      >
+        <span>{{ i18n.t(`works.db_status_${props.filters.dbStatus}`) }}</span>
+        <span aria-hidden="true">×</span>
+        <span class="sr-only">{{ i18n.t("ui.remove") }}</span>
+      </button>
+      <button
+        v-if="props.filters.author"
+        type="button"
+        class="works-filter-chip"
+        @click="emit('filters', { author: '' })"
+      >
+        <span>{{ props.filters.author }}</span>
+        <span aria-hidden="true">×</span>
+        <span class="sr-only">{{ i18n.t("ui.remove") }}</span>
+      </button>
+      <UiButton
+        size="small"
+        variant="ghost"
+        :label="i18n.t('works.filters_clear')"
         @click="clearFilters"
       />
     </div>
@@ -210,6 +258,30 @@ function clearFilters() {
   min-height: var(--control-height-small);
   color: var(--text-primary);
   font-size: var(--fs-sm);
+}
+.works-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.works-filter-chip {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-height: var(--control-height-small);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-selected);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.works-filter-chip:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .works-toolbar-summary {
   margin: 0;

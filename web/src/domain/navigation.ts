@@ -233,7 +233,7 @@ export function createNavigation(deps: Deps) {
       state.worksNeedsReview = value.r === true;
       state.worksDbStatus = WORKS_DB_STATUSES.includes(value.d) ? value.d : "";
       state.worksAuthor = typeof value.a === "string" ? value.a : "";
-      state.worksView = value.v === "compact" ? "compact" : "cards";
+      state.worksView = ["list", "compact"].includes(value.v) ? "list" : "cards";
     } else if (view === "annotations") {
       if (typeof value.q === "string") state.annotationSearch = value.q;
       if (["works", "recent"].includes(value.m)) state.annotationView = value.m;

@@ -1,4 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { currentFieldAssertions } from "./fieldAssertions";
 import { WORK_METADATA_LLM_FIELDS } from "./runtimeConstants";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -102,6 +103,129 @@ export function representativeWorkMetadata(rows: Loose[]) {
   const work = rows[0]?.record?.work;
   if (work) metadata.work = work;
   return metadata;
+}
+
+export interface WorkMetadataPresentationRow {
+  field_id: string;
+  field: string;
+  value: unknown;
+  mixed: boolean;
+  unique_count: number;
+  empty: boolean;
+}
+
+const WORK_METADATA_EXCLUDED_ASSERTION_FIELDS = new Set([
+  "region_type",
+  "primary_text",
+  "discourse_role",
+  "speaker",
+  "position_holder",
+  "target",
+  "stance",
+  "proposition_status",
+  "claim_scope",
+  "semantic_function",
+  "is_direct_quote",
+  "quoted_speaker",
+  "quoted_author",
+  "quoted_work",
+  "quoted_position_holder",
+  "quoted_addressee",
+  "quoted_referent",
+  "quotation_chain",
+  "topics",
+  "concepts",
+  "persons",
+  "works_referenced",
+  "institutions_referenced",
+  "locations_referenced",
+  "events_referenced",
+  "groups_referenced",
+  "languages_referenced",
+]);
+
+const DOCUMENT_FIELD_IDENTITIES: Record<string, string> = {
+  document_title: "derridai.document.title",
+  short_title: "derridai.document.short_title",
+  original_title: "derridai.document.original_title",
+  document_author: "derridai.document.document_author",
+  translator: "derridai.document.translator",
+  publisher: "derridai.document.publisher",
+  publication_place: "derridai.document.publication_place",
+  publication_year: "derridai.document.publication_year",
+  edition: "derridai.document.edition",
+  isbn: "derridai.document.isbn",
+  document_language: "derridai.document.language",
+  original_language: "derridai.document.original_language",
+  document_is_translation: "derridai.document.document_is_translation",
+  document_type: "derridai.document.document_type",
+};
+
+/**
+ * Work-inspector metadata follows the shared work-metadata defaults for ordering,
+ * then discovers additional schema-defined assertion fields by stable identity.
+ *
+ * Built-in discourse/indexing semantics stay out of this bibliographic surface:
+ * they already have dedicated review/insight presentations. Custom assertions
+ * are not required to be added to another Works-specific whitelist to appear.
+ */
+export function workMetadataPresentationRows(rows: Loose[]): WorkMetadataPresentationRow[] {
+  const identities = new Map<string, string>();
+  const discovered: string[] = [];
+  const prepared = (rows || []).map((row) => {
+    const record = row?.record || {};
+    const assertions = currentFieldAssertions(record);
+    return {
+      record,
+      assertions,
+      assertionByName: new Map(assertions.map((assertion) => [assertion.field_name, assertion])),
+    };
+  });
+
+  for (const { assertions } of prepared) {
+    for (const assertion of assertions) {
+      const field = String(assertion.field_name || "").trim();
+      const fieldId = String(assertion.field_id || "").trim();
+      if (!field || WORK_METADATA_EXCLUDED_ASSERTION_FIELDS.has(field)) continue;
+      if (fieldId.startsWith("derridai.indexing.") || fieldId.startsWith("derridai.quotation."))
+        continue;
+      if (!identities.has(field)) identities.set(field, fieldId || `legacy.${field}`);
+      if (!discovered.includes(field)) discovered.push(field);
+    }
+  }
+
+  const defaults = WORK_METADATA_LLM_FIELDS.filter(
+    (field) => !["full_citation", "cover_url", "url"].includes(field),
+  );
+  const fields = [...defaults, ...discovered.filter((field) => !defaults.includes(field))];
+
+  return fields.map((field) => {
+    const values = prepared.map(({ record, assertionByName }) => {
+      if (record[field] !== undefined) return record[field];
+      const assertion = assertionByName.get(field);
+      if (!assertion || (assertion.value_status && assertion.value_status !== "present"))
+        return null;
+      return assertion.value;
+    });
+    const serialized = values.map((value) => JSON.stringify(value ?? null));
+    const mixed = serialized.some((value) => value !== serialized[0]);
+    const meaningful = values.filter(
+      (value) =>
+        value !== null &&
+        value !== undefined &&
+        value !== "" &&
+        (!Array.isArray(value) || value.length > 0),
+    );
+    const unique = new Set(meaningful.map((value) => JSON.stringify(value)));
+    return {
+      field_id: identities.get(field) || DOCUMENT_FIELD_IDENTITIES[field] || `legacy.${field}`,
+      field,
+      value: mixed ? null : (values[0] ?? null),
+      mixed,
+      unique_count: mixed ? unique.size : 0,
+      empty: meaningful.length === 0,
+    };
+  });
 }
 
 export function workOverviewMetadataRows(rows: Loose[]) {

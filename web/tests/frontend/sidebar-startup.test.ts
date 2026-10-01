@@ -50,6 +50,7 @@ import App from "../../src/App.vue";
 import { useAuthStore } from "../../src/stores/auth";
 import { useI18nStore } from "../../src/stores/i18n";
 import { useShellStore } from "../../src/stores/shell";
+import { requestCorpusFiles } from "../../src/services/corpusFiles";
 
 function testRouter() {
   const page = { template: "<div/>" };
@@ -163,6 +164,17 @@ describe("sidebar at sign-in", () => {
     runtime.getNavItems.mockReturnValue(NAV);
     runtime.getShellSnapshot.mockReturnValue({});
     runtime.bootstrapRuntime.mockReturnValue(new Promise(() => {})); // never finishes
+  });
+
+  it("opens the shared corpus picker through the explicit shell command", async () => {
+    const { wrapper } = await signIn();
+    const input = wrapper.get("#fileInput").element as HTMLInputElement;
+    const click = vi.spyOn(input, "click").mockImplementation(() => undefined);
+
+    requestCorpusFiles();
+
+    expect(click).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
   });
 
   it("is complete and intent-grouped before the runtime bootstrap finishes", async () => {
