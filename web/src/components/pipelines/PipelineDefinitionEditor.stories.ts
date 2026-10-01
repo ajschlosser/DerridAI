@@ -3,7 +3,12 @@ import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref } from "vue";
 import PipelineDefinitionEditor from "./PipelineDefinitionEditor.vue";
 import type { PipelineDefinition, PipelineStrategy } from "../../types/pipelines";
-import { contractStrategy } from "./fixtures/pipelineCatalogContract";
+import { analysisFixture } from "./fixtures/pipelineAnalysisFixture";
+import {
+  contractPurpose,
+  contractStrategy,
+  contractVocabulary,
+} from "./fixtures/pipelineCatalogContract";
 
 const strategies: PipelineStrategy[] = [
   "retrieve.chroma_similarity",
@@ -59,6 +64,42 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const DraftVersion: Story = {};
+
+const analyzed: PipelineDefinition = {
+  ...pipeline,
+  entry_stage_ids: ["a"],
+  stages: [
+    { id: "a", strategy: "retrieve.chroma_similarity", enabled: true, config: {}, next: ["b"] },
+    { id: "b", strategy: "validate.provenance", enabled: true, config: {}, next: ["c"] },
+    { id: "c", strategy: "pack.evidence_context", enabled: true, config: {}, next: [] },
+  ],
+};
+
+// With the server's analysis the editor shows each stage's inputs and outputs,
+// the diagram lenses, and the latency and complexity panel.
+export const WithAnalysis: Story = {
+  args: {
+    modelValue: analyzed,
+    strategies: [
+      "retrieve.chroma_similarity",
+      "validate.provenance",
+      "pack.evidence_context",
+      "rerank.cross_encoder",
+    ].map(contractStrategy),
+    purpose: contractPurpose("research"),
+    vocabulary: contractVocabulary,
+    analysis: analysisFixture(),
+  },
+  render: (args) => ({
+    components: { PipelineDefinitionEditor },
+    setup() {
+      const value = ref(JSON.parse(JSON.stringify(args.modelValue)));
+      return { args, value };
+    },
+    template:
+      '<PipelineDefinitionEditor v-model="value" :strategies="args.strategies" :purpose="args.purpose" :vocabulary="args.vocabulary" :analysis="args.analysis" style="max-width: 1180px" />',
+  }),
+};
 
 export const FrenchLengthStress: Story = {
   parameters: { locale: "fr-CA" },

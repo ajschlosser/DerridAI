@@ -2,11 +2,13 @@
 
 import { apiRequest } from "./http";
 import type {
+  PipelineAnalysis,
   PipelineAssignment,
   PipelineCatalog,
   PipelineDefinition,
   PipelineOperationalMetrics,
   PipelineRunTrace,
+  PipelineStrategyLatency,
   ResearchPipelineBenchmarkCase,
   ResearchPipelineBenchmarkCaseCreate,
   ResearchPipelineBenchmarkRequest,
@@ -28,6 +30,24 @@ export const pipelinesApi = {
       method: "POST",
       body: JSON.stringify(pipeline),
     }),
+
+  analyze: (pipeline: PipelineDefinition, signal?: AbortSignal) =>
+    apiRequest<PipelineAnalysis>("/api/system/pipelines/analyze", {
+      method: "POST",
+      body: JSON.stringify(pipeline),
+      signal,
+    }),
+
+  newDraft: (purpose: string) =>
+    apiRequest<{ pipeline: PipelineDefinition }>("/api/system/pipelines/definitions/new-draft", {
+      method: "POST",
+      body: JSON.stringify({ purpose }),
+    }),
+
+  strategyLatency: () =>
+    apiRequest<{ strategies: Record<string, PipelineStrategyLatency>; sampled_run_count: number }>(
+      "/api/system/pipelines/strategy-latency",
+    ),
 
   cloneDraft: (pipelineId: string, version: number) =>
     apiRequest<{ pipeline: PipelineDefinition }>(

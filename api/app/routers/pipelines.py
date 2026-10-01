@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from ..http_auth import request_user, require_admin
 from ..models import RAGRunRequest
 from ..pipelines.access import resolve_research_pipeline
+from ..pipelines.analysis import TraceSampler, analyze_pipeline
 from ..pipelines.benchmark import (
     BenchmarkCorpusDriftError,
     ResearchPipelineBenchmarkCase,
@@ -24,15 +25,18 @@ from ..pipelines.comparison import (
     ResearchPipelineComparisonRequest,
     compare_research_dry_runs,
 )
+from ..pipelines.latency import strategy_latency
 from ..pipelines.manager import pipeline_manager
 from ..pipelines.metrics import aggregate_pipeline_metrics
 from ..pipelines.models import PipelineAssignment, PipelineDefinition
 from ..pipelines.purposes import WORKFLOW_CATEGORIES, purpose_registry
+from ..pipelines.service import pipeline_hash
 from ..pipelines.store import pipeline_store
 from ..rag import run_rag_pipeline
 from ..services import store
 
 router = APIRouter(prefix="/api/system/pipelines", tags=["pipelines"])
+trace_sampler = TraceSampler(pipeline_store)
 
 
 def _validate_research_retrieval_request(body: RAGRunRequest, *, label: str) -> None:
@@ -182,6 +186,29 @@ def validate_pipeline_definition(
     }
 
 
+@router.post("/analyze")
+def analyze_pipeline_definition(
+    body: PipelineDefinition,
+    request: Request,
+) -> dict[str, Any]:
+    """Explain a draft or saved pipeline: input wiring, declared cost, expected latency.
+
+    Reads recent execution traces for latency; the figures are operational
+    telemetry and carry their sample sizes and basis.
+    """
+
+    require_admin(request)
+    validation = pipeline_manager.service.validate(body)
+    analysis = analyze_pipeline(
+        body,
+        pipeline_manager.service.registry,
+        resolved_hash=pipeline_hash(body),
+        sample_runs=trace_sampler.sample(),
+        pipeline_runs=trace_sampler.for_pipeline(body.pipeline_id),
+    )
+    return {"validation": validation.model_dump(mode="json"), **analysis}
+
+
 @router.post("/definitions/{pipeline_id}/{version}/clone-draft")
 def clone_pipeline_definition_draft(
     pipeline_id: str,
@@ -196,6 +223,33 @@ def clone_pipeline_definition_draft(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Pipeline definition not found.") from exc
     return {"pipeline": draft.model_dump(mode="json")}
+
+
+@router.post("/definitions/new-draft")
+def new_pipeline_definition_draft(
+    body: dict[str, Any],
+    request: Request,
+) -> dict[str, Any]:
+    """Prepare a blank, valid draft for a workflow without persisting it."""
+
+    require_admin(request)
+    purpose = str(body.get("purpose") or "")
+    try:
+        draft = pipeline_manager.prepare_blank(purpose)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Unknown workflow.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"pipeline": draft.model_dump(mode="json")}
+
+
+@router.get("/strategy-latency")
+def strategy_latency_figures(request: Request) -> dict[str, Any]:
+    """Observed per-strategy latency, throughput and scaling from recent traces."""
+
+    require_admin(request)
+    sample = trace_sampler.sample()
+    return {"strategies": strategy_latency(sample), "sampled_run_count": len(sample)}
 
 
 @router.post("/definitions")

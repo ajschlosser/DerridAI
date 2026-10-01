@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import PipelineStageConnections from "./PipelineStageConnections.vue";
+import PipelineStagePorts from "./PipelineStagePorts.vue";
 import PipelineStrategyConfigFields from "./PipelineStrategyConfigFields.vue";
 import UiButton from "../ui/UiButton.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
@@ -22,10 +23,12 @@ import {
   strategyPickerGroups,
   termLabel,
 } from "../../domain/pipelineWorkflows";
+import type { BindingChoice } from "../../domain/pipelineBindings";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   PipelinePurpose,
   PipelineStage,
+  PipelineStageWiring,
   PipelineStrategy,
   PipelineStrategyFit,
   PipelineWorkflowVocabulary,
@@ -41,6 +44,10 @@ const props = defineProps<{
   purpose?: PipelinePurpose | null;
   showAllStrategies?: boolean;
   vocabulary?: PipelineWorkflowVocabulary;
+  /** The server's resolved input/output wiring for this stage, once analyzed. */
+  wiring?: PipelineStageWiring | null;
+  wiringLoading?: boolean;
+  wiringError?: string;
 }>();
 
 const emit = defineEmits<{
@@ -62,6 +69,7 @@ const emit = defineEmits<{
     raw: string | boolean,
     rule: Record<string, unknown>,
   ];
+  bindInput: [stageIndex: number, port: string, choice: BindingChoice | null];
 }>();
 
 const i18n = useI18nStore();
@@ -326,6 +334,12 @@ defineExpose({ focus: () => heading.value?.focus() });
             </span>
           </dd>
         </div>
+        <div v-if="strategy.complexity">
+          <dt>{{ t("pipelines.strategy_cost", "Declared cost") }}</dt>
+          <dd>
+            <code>{{ strategy.complexity.time }}</code>
+          </dd>
+        </div>
         <div>
           <dt>{{ t("pipelines.strategy_computation", "Computation") }}</dt>
           <dd>{{ pipelineComputationLabel(strategyComputation(strategy), t) }}</dd>
@@ -342,6 +356,14 @@ defineExpose({ focus: () => heading.value?.focus() });
         </div>
       </dl>
     </section>
+
+    <PipelineStagePorts
+      :stage="stage"
+      :wiring="wiring ?? null"
+      :loading="wiringLoading"
+      :error="wiringError"
+      @bind="(port, choice) => emit('bindInput', stageIndex, port, choice)"
+    />
 
     <PipelineStageConnections
       :stage="stage"

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
 import { pipelinesApi } from "../../src/api/pipelines";
+import { analysisFixture } from "../../src/components/pipelines/fixtures/pipelineAnalysisFixture";
 import PipelineDefinitionNavigator from "../../src/components/pipelines/PipelineDefinitionNavigator.vue";
 import PipelineExecutionsWorkspace from "../../src/components/pipelines/PipelineExecutionsWorkspace.vue";
 import PipelineOperationsSummary from "../../src/components/pipelines/PipelineOperationsSummary.vue";
@@ -114,6 +115,10 @@ beforeEach(() => {
   setActivePinia(createPinia());
   useI18nStore().dictionary = {};
   vi.restoreAllMocks();
+  vi.spyOn(pipelinesApi, "strategyLatency").mockResolvedValue({
+    strategies: {},
+    sampled_run_count: 0,
+  });
 });
 
 describe("pipeline workflow domain helpers", () => {
@@ -634,6 +639,7 @@ describe("Pipeline Studio routes", () => {
 
   async function mountStudio(query: Record<string, string>) {
     vi.spyOn(pipelinesApi, "catalog").mockResolvedValue(structuredClone(catalog));
+    vi.spyOn(pipelinesApi, "analyze").mockResolvedValue(analysisFixture());
     vi.spyOn(pipelinesApi, "runs").mockResolvedValue({
       runs: [structuredClone(evidenceRun)],
       limit: 25,

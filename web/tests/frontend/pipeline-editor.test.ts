@@ -99,14 +99,26 @@ describe("graph-first pipeline editor", () => {
     wrapper.unmount();
   });
 
-  it("adds a unique stage, selects it and moves focus to it", async () => {
+  it("adds a unique stage from the palette, connects it, selects it and moves focus to it", async () => {
     const { wrapper, model } = mountEditor();
     await wrapper.get(".stage-navigator header button").trigger("click");
     await flushPromises();
+    // The palette offers only stages that can receive what stage a provides.
+    const dialog = document.body.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    const add = [...document.body.querySelectorAll<HTMLButtonElement>(".palette-add")].find(
+      (button) => button.textContent?.includes("Provenance sufficiency gate"),
+    );
+    expect(add).toBeDefined();
+    add!.click();
+    await flushPromises();
+
     expect(model.value.stages).toHaveLength(4);
     const created = model.value.stages[3].id;
     expect(new Set(model.value.stages.map((item) => item.id)).size).toBe(4);
+    expect(model.value.stages[0].next).toEqual(["b", created]);
     expect(inspectorTitle(wrapper)).toBe(created);
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(wrapper.get(".stage-inspector-editor h4").element);
     wrapper.unmount();
   });
