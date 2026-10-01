@@ -20,6 +20,8 @@ Invariants that must survive everything below: purposes still own which strategi
 
 ## 2. Step 1 — Generic dataflow executor (largest item)
 
+**Progress (`feature/store-search-executor`, store_search slice):** `store_search` now delivers stage outputs through `resolve_wiring` (`StoreSearchPlan.consumers`/`seeded`) instead of `next`; couplings 1, 2 and 4 are replaced by consumer-derived depth and declared embedding needs (`_NEEDS_EMBEDDINGS`/`_EMBEDDING_PRODUCERS`); coupling 3 is enforced by wiring (`_single` stays as a runtime guard). `PurposeAdapter.honours_bindings` lifts inspect-only for `vector_store_search` only. Still open: a shared `pipelines/executor.py` with handler registry, concurrency decision, flagging rewired runs in Studio/traces, and the other purposes.
+
 **Goal.** A saved version whose explicit bindings change the wiring becomes executable, so `runtime_support` stops forcing inspect-only for them.
 
 **Why it does not exist yet.** Each purpose has a code-owned adapter (`workflows.PURPOSE_ADAPTERS`) that compiles the graph into a purpose-specific plan (`compile_research_pipeline`, `compile_evidence_pipeline`, …) and runs a hard-coded sequence. Strategy implementations live inside those modules and read request context directly.
