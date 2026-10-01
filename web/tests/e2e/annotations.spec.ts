@@ -91,7 +91,11 @@ test("Annotations modern workflow opens the owning work and record", async ({ pa
   await expect(page.locator("#works-page-title")).toBeVisible();
   await expect(page.getByText("Of Grammatology").first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Annotations", exact: true }).click();
+  await page
+    .locator(".shell-sidebar")
+    .getByRole("button", { name: "Annotations", exact: true })
+    .first()
+    .click();
   await expect(page.locator("#annotations-page-title")).toBeVisible();
   const central = page.locator(".annotation-feed-item").filter({ hasText: "Central claim" });
   await central.getByRole("button", { name: "Open record" }).click();
