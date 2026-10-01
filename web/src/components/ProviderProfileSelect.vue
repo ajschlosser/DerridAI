@@ -131,13 +131,15 @@ function contextWindow(profile: ProviderProfile) {
 <style scoped>
 .provider-profile-select-component {
   container-type: inline-size;
+  color-scheme: inherit;
   display: grid;
   gap: 11px;
   padding: 14px;
-  border: 1px solid var(--line, #e2e8f0);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  background: linear-gradient(180deg, var(--card) 0%, var(--card) 100%);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-card);
 }
 .provider-picker-head {
   display: flex;
@@ -152,13 +154,13 @@ function contextWindow(profile: ProviderProfile) {
 }
 .provider-picker-head b {
   font-size: 0.8125rem;
-  color: var(--text, #17233b);
+  color: var(--text-primary);
 }
 .provider-picker-head span {
   max-width: 650px;
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: var(--muted, #64748b);
+  color: var(--text-secondary);
 }
 .provider-manage-button {
   flex: 0 0 auto;
@@ -186,7 +188,8 @@ function contextWindow(profile: ProviderProfile) {
   min-height: 42px;
   font-size: 0.8125rem;
   font-weight: 650;
-  background: var(--card);
+  background: var(--surface-card);
+  color: var(--text-primary);
 }
 .provider-summary-card {
   display: grid;
@@ -194,9 +197,9 @@ function contextWindow(profile: ProviderProfile) {
   gap: 11px;
   align-items: center;
   padding: 10px 11px;
-  border: 1px solid color-mix(in srgb, var(--accent, #355f52) 16%, var(--line, #e2e8f0));
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 16%, var(--border-subtle));
   border-radius: 10px;
-  background: var(--accent-soft, #eef6f2);
+  background: var(--surface-selected);
 }
 .provider-logo {
   width: 38px;
@@ -204,7 +207,7 @@ function contextWindow(profile: ProviderProfile) {
   border-radius: 9px;
   display: grid;
   place-items: center;
-  background: #17233b;
+  background: var(--ui-accent);
   color: var(--accent-on);
   font-size: 0.8125rem;
   font-weight: 850;
@@ -229,7 +232,7 @@ function contextWindow(profile: ProviderProfile) {
 }
 .provider-summary-copy small {
   font-size: 0.8125rem;
-  color: var(--muted, #64748b);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -237,8 +240,8 @@ function contextWindow(profile: ProviderProfile) {
 .provider-default-chip {
   padding: 2px 6px;
   border-radius: 999px;
-  background: var(--card);
-  border: 1px solid color-mix(in srgb, var(--accent, #355f52) 25%, var(--line, #e2e8f0));
+  background: var(--surface-card);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 25%, var(--border-subtle));
   font-size: 0.8125rem;
   color: var(--accent-fg);
   font-weight: 800;
@@ -256,9 +259,9 @@ function contextWindow(profile: ProviderProfile) {
   align-content: center;
   gap: 1px;
   padding: 6px 8px;
-  border: 1px solid color-mix(in srgb, var(--card) 85%, transparent);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--card) 68%, transparent);
+  background: var(--surface-raised);
   text-align: right;
 }
 .provider-stat b {
@@ -266,7 +269,7 @@ function contextWindow(profile: ProviderProfile) {
 }
 .provider-stat small {
   font-size: 0.8125rem;
-  color: var(--muted, #64748b);
+  color: var(--text-secondary);
   line-height: 1.25;
 }
 .provider-empty-state {
@@ -275,9 +278,9 @@ function contextWindow(profile: ProviderProfile) {
   gap: 10px;
   align-items: start;
   padding: 12px;
-  border: 1px dashed var(--line, #d6dee8);
+  border: 1px dashed var(--border-subtle);
   border-radius: 10px;
-  background: var(--soft, #f8fafc);
+  background: var(--surface-inset);
 }
 .provider-empty-icon {
   width: 38px;
@@ -285,8 +288,8 @@ function contextWindow(profile: ProviderProfile) {
   display: grid;
   place-items: center;
   border-radius: 9px;
-  background: var(--soft);
-  color: var(--text-2);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
   font-size: 0.8125rem;
   font-weight: 850;
 }
@@ -301,22 +304,22 @@ function contextWindow(profile: ProviderProfile) {
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: var(--muted, #64748b);
+  color: var(--text-secondary);
 }
 .provider-unavailable {
   display: grid;
   gap: 2px;
   margin: 0;
   padding: 8px 10px;
-  border: 1px solid var(--warning-line, #d9a441);
+  border: 1px solid var(--tone-warn-border);
   border-radius: 8px;
-  background: var(--warning-soft, #fff8e6);
-  color: var(--text, #17233b);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
   font-size: 0.8125rem;
   line-height: 1.4;
 }
 .provider-unavailable span {
-  color: var(--muted, #64748b);
+  color: var(--tone-warn-fg);
   overflow-wrap: anywhere;
 }
 .sr-only {

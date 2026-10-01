@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 // value changes, this fails before an unreadable colour pair ships.
 const tokens = readFileSync("src/styles/tokens.css", "utf8");
 const styles = readFileSync("src/style.css", "utf8");
+const providerProfileSelect = readFileSync("src/components/ProviderProfileSelect.vue", "utf8");
 
 function block(css: string, selector: string): string {
   const start = css.indexOf(selector);
@@ -151,5 +152,16 @@ describe("unified workbench contract", () => {
     ]) {
       expect(light).toMatch(new RegExp(`--${name}\\s*:`));
     }
+  });
+});
+
+describe("provider profile surfaces", () => {
+  it("uses semantic theme tokens instead of light-only warning and surface fallbacks", () => {
+    expect(providerProfileSelect).toContain("var(--surface-card)");
+    expect(providerProfileSelect).toContain("var(--surface-selected)");
+    expect(providerProfileSelect).toContain("var(--tone-warn-bg)");
+    expect(providerProfileSelect).toContain("var(--tone-warn-fg)");
+    expect(providerProfileSelect).not.toMatch(/--warning-(?:soft|line)/);
+    expect(providerProfileSelect).not.toMatch(/#fff8e6|#17233b|#64748b|#e2e8f0/);
   });
 });

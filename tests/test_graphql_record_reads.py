@@ -313,6 +313,50 @@ query Q($build_id: String!, $fields: [String!]) {
 """
 
 
+def test_targeted_record_reads_do_not_load_or_migrate_the_whole_corpus(build, monkeypatch):
+    """Opening/prefetching records uses indexed rows, not the queue's full-corpus snapshot."""
+    repo, build_id = build
+
+    def fail_full_read(_build_id: str):
+        raise AssertionError("targeted Record read unexpectedly loaded the full corpus")
+
+    monkeypatch.setattr(repo, "review_records", fail_full_read)
+    one = gql(RECORD_QUERY, {"build_id": build_id, "record_id": "r1"}).json()
+    assert "errors" not in one, one
+    assert one["data"]["corpus_build"]["record"]["record_id"] == "r1"
+
+    rows = gql(ROWS_QUERY, {"build_id": build_id, "ids": ["r2", "r1"]}).json()
+    assert "errors" not in rows, rows
+    assert [item["record_id"] for item in rows["data"]["corpus_build"]["rows"]] == ["r2", "r1"]
+
+
+def test_review_snapshot_cache_is_reused_and_invalidated_by_record_writes(build, monkeypatch):
+    """Paging reuses parsed records, while a durable edit makes the next page read fresh state."""
+    repo, build_id = build
+    original = repo.load_records
+    calls = 0
+
+    def counted(target_build_id: str):
+        nonlocal calls
+        calls += 1
+        return original(target_build_id)
+
+    monkeypatch.setattr(repo, "load_records", counted)
+    first = repo.review_records(build_id)
+    second = repo.review_records(build_id)
+    assert first is second
+    assert calls == 1
+
+    changed = repo.get_record(build_id, "r1")
+    changed["text"] = "Updated review text"
+    changed["text_length"] = len(changed["text"])
+    repo.update_record(build_id, changed)
+
+    refreshed = repo.review_records(build_id)
+    assert calls == 2
+    assert next(item for item in refreshed if item["record_id"] == "r1")["text"] == "Updated review text"
+
+
 def test_metadata_facets_matches_rest_observed_values(build):
     repo, build_id = build
     rest = _call("GET", f"/api/pdf/corpus-builds/{build_id}/records", params={"limit": 50}).json()

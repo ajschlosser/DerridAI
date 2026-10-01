@@ -563,6 +563,16 @@ def build_group_prompt(
     roles = allowed_discourse_roles or DISCOURSE_ROLES
     lines: list[str] = []
     definitions: list[tuple[str, dict[str, str]]] = []
+    boolean_fields = (["primary_text"] if group_key == CORE_GROUP else []) + [
+        field.name for field in fields if field.type == "boolean"
+    ]
+    if boolean_fields:
+        lines.append(
+            "- Boolean fields (" + ", ".join(boolean_fields) + ") are three-state: true, false, or null. "
+            "False is an explicit supported value, not absence. When the source supports false, return false "
+            "with outcome=\"supported_value\". Use outcome=\"no_supported_value\" only with null when "
+            "the field genuinely has no applicable value."
+        )
     if group_key == CORE_GROUP:
         lines += [
             f"- region_type MUST be one of: {json.dumps(region_types, ensure_ascii=False)}",
@@ -625,6 +635,8 @@ class MetadataResponseBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
     assessed_fields_for_validation: ClassVar[tuple[str, ...]] = ()
     evidence_fields_for_validation: ClassVar[tuple[str, ...]] = ()
+    boolean_fields_for_validation: ClassVar[frozenset[str]] = frozenset()
+    forbidden_values_for_validation: ClassVar[dict[str, frozenset[str]]] = {}
 
     @model_validator(mode="after")
     def validate_metadata_assessment_consistency(self) -> MetadataResponseBase:
@@ -632,8 +644,52 @@ class MetadataResponseBase(BaseModel):
         metadata = metadata_obj.model_dump() if isinstance(metadata_obj, BaseModel) else dict(metadata_obj or {})
         assessments_obj = getattr(self, "field_assessments", None)
         assessments = assessments_obj.model_dump() if isinstance(assessments_obj, BaseModel) else dict(assessments_obj or {})
+
         def missing(value: Any) -> bool:
             return value is None or value == "" or value == []
+
+        # POS/NER labels and another field's closed-vocabulary tokens are prompt/schema
+        # instructions, not scholarly metadata. Small models sometimes copy those tokens
+        # verbatim into an open text/list field. Reject that structural leakage here before
+        # reconciliation can turn it into a candidate value.
+        if isinstance(metadata_obj, BaseModel):
+            for field, forbidden in self.forbidden_values_for_validation.items():
+                value = getattr(metadata_obj, field, None)
+                rejected: list[str] = []
+                if isinstance(value, str) and value.strip().casefold() in forbidden:
+                    rejected = [value.strip()]
+                    setattr(metadata_obj, field, None)
+                elif isinstance(value, list):
+                    kept: list[Any] = []
+                    for item in value:
+                        if isinstance(item, str) and item.strip().casefold() in forbidden:
+                            rejected.append(item.strip())
+                        else:
+                            kept.append(item)
+                    if rejected:
+                        setattr(metadata_obj, field, kept)
+                if rejected:
+                    assessment_model = (
+                        getattr(assessments_obj, field, None)
+                        if isinstance(assessments_obj, BaseModel)
+                        else None
+                    )
+                    if assessment_model is not None:
+                        assessment_model.outcome = "uncertain"
+                        assessment_model.needs_review = True
+                        prior_reason = str(getattr(assessment_model, "reason", "") or "").strip()
+                        labels = ", ".join(repr(item) for item in rejected[:4])
+                        assessment_model.reason = (
+                            "Rejected structured-vocabulary leakage from POS/NER tags or another "
+                            f"field's closed choices: {labels}."
+                            + (f" {prior_reason}" if prior_reason else "")
+                        )[:500]
+            metadata = metadata_obj.model_dump()
+            assessments = (
+                assessments_obj.model_dump()
+                if isinstance(assessments_obj, BaseModel)
+                else dict(assessments_obj or {})
+            )
 
         for field in self.assessed_fields_for_validation:
             assessment = assessments.get(field)
@@ -644,6 +700,22 @@ class MetadataResponseBase(BaseModel):
             needs_review = bool(assessment.get("needs_review"))
 
             contradiction = ""
+            if (
+                field in self.boolean_fields_for_validation
+                and value is False
+                and outcome == "no_supported_value"
+            ):
+                # False is a substantive negative classification, not an empty value.
+                # Treat a model's common "no supported value" wording as the supported
+                # boolean answer rather than manufacturing a contradiction for review.
+                assessment_model = (
+                    getattr(assessments_obj, field, None)
+                    if isinstance(assessments_obj, BaseModel)
+                    else None
+                )
+                if assessment_model is not None:
+                    assessment_model.outcome = "supported_value"
+                outcome = "supported_value"
             if outcome == "supported_value" and missing(value):
                 contradiction = "outcome=supported_value but the metadata value is empty"
             elif outcome == "no_supported_value" and not missing(value):
@@ -762,6 +834,42 @@ def response_model_for(schema: MetadataSchema, group_key: str, *, region_types: 
     )
     response.assessed_fields_for_validation = tuple(assessed_names)
     response.evidence_fields_for_validation = tuple(sorted(evidence_names))
+    boolean_fields = {"primary_text"} if group_key == CORE_GROUP else set()
+    boolean_fields.update(field.name for field in group_fields if field.type == "boolean")
+    response.boolean_fields_for_validation = frozenset(boolean_fields)
+
+    # Open text/list values must never be populated from the schema's own control
+    # vocabulary. A strict choice is enforced by JSON Schema already; for open fields
+    # reject exact copies of POS/NER labels and other fields' closed choices.
+    machine_labels = {
+        str(tag).strip().casefold()
+        for schema_field in schema.fields
+        for tag in [*schema_field.pos_tags, *schema_field.ner_tags]
+        if str(tag).strip()
+    }
+    closed_values = {
+        str(value).strip().casefold()
+        for value in [*(region_types or REGION_TYPES), *(roles or DISCOURSE_ROLES)]
+        if str(value).strip()
+    }
+    for schema_field in schema.fields:
+        if schema_field.type == "choice" and schema_field.strict:
+            closed_values.update(
+                str(item.value).strip().casefold()
+                for item in schema_field.values
+                if str(item.value).strip()
+            )
+    forbidden: dict[str, frozenset[str]] = {}
+    for schema_field in group_fields:
+        if schema_field.type not in {"text", "list"}:
+            continue
+        own_values = {
+            str(item.value).strip().casefold()
+            for item in schema_field.values
+            if str(item.value).strip()
+        }
+        forbidden[schema_field.name] = frozenset(machine_labels | (closed_values - own_values))
+    response.forbidden_values_for_validation = forbidden
     return response
 
 
@@ -810,8 +918,10 @@ _QUOTATION_FOOTER = (
     "For every populated quoted_* or quotation_chain field, include field_evidence using only current-record block IDs, confidence 0..1, and a "
     "short reason. Use null for an unsupported scalar quotation relation and [] for an unsupported quotation_chain.\n"
     "Return one field_assessments entry for every one of {assessed_fields}, even when its metadata value is null or empty. Each assessment must "
-    "contain confidence (0..1 or null), needs_review, reason, and outcome. Use outcome=\"supported_value\", "
-    "outcome=\"no_supported_value\", or outcome=\"uncertain\" according to the source evidence.\n"
+    "contain confidence (0..1 or null), needs_review, reason, and outcome. For is_direct_quote specifically, false is an explicit "
+    "supported classification: return is_direct_quote=false with outcome=\"supported_value\" when the source supports that no direct "
+    "quotation is present; reserve outcome=\"no_supported_value\" for a null value when the field is genuinely inapplicable. Otherwise use "
+    "outcome=\"supported_value\", outcome=\"no_supported_value\", or outcome=\"uncertain\" according to the source evidence.\n"
 )
 _INDEXING_INTRO = (
     "Infer ONLY conservative semantic indexing metadata for one immutable DerridAI record.\n"
