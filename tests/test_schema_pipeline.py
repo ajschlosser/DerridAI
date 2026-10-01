@@ -22,6 +22,7 @@ from app.field_assertions import (
     current_assertion_by_name,
     project_record_assertions,
 )
+from app.nlp_annotations import text_digest
 
 
 def notes_schema():
@@ -204,6 +205,94 @@ def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path)
         schema=schema,
     )
     assert [t[0] for t in rerun] == ["indexing"]
+
+def test_enrich_record_promotes_direct_ner_candidates_before_indexing_generation(
+    tmp_path,
+    monkeypatch,
+):
+    m, bid = manager(tmp_path)
+    text = "Rousseau discusses Of Grammatology and hospitality."
+    record = {
+        "record_id": "nlp-routing",
+        "record_revision": 1,
+        "text": text,
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+        "nlp_candidates": {
+            "status": "ok",
+            "engine": "spacy",
+            "engine_version": "3.8.7",
+            "model": "en_core_web_lg",
+            "text_sha256": text_digest(text),
+            "fields": {
+                "persons": [{
+                    "start": 0,
+                    "end": 8,
+                    "text": "Rousseau",
+                    "source": "ner",
+                    "tag": "PERSON",
+                }],
+                "works_referenced": [{
+                    "start": 19,
+                    "end": 33,
+                    "text": "Of Grammatology",
+                    "source": "ner",
+                    "tag": "WORK_OF_ART",
+                }],
+                "topics": [{
+                    "start": 38,
+                    "end": 49,
+                    "text": "hospitality",
+                    "source": "pos",
+                    "tag": "NOUN",
+                }],
+            },
+        },
+    }
+    captured = {}
+
+    monkeypatch.setattr(
+        m,
+        "_editorial_memory",
+        lambda *args, **kwargs: {
+            "conventions": {},
+            "examples": {},
+            "requested_fields": sorted(kwargs.get("field_filter") or []),
+        },
+    )
+    monkeypatch.setattr(m, "_keep_precedent_retrieval", lambda *args, **kwargs: None)
+
+    def fake_execute(current, request, tasks, build_id, stage_callback):
+        captured["tasks"] = tasks
+        return []
+
+    monkeypatch.setattr(m, "_execute_metadata_tasks", fake_execute)
+    monkeypatch.setattr(
+        m,
+        "_reconcile_metadata_results",
+        lambda current, *args, **kwargs: current,
+    )
+
+    out = m._enrich_record(
+        record,
+        {},
+        {
+            "provider": "ollama",
+            "model": "test",
+            "enrichment_mode": "deep",
+            "semantic_indexing": True,
+            "_interactive_provider_override": True,
+        },
+        build_id=bid,
+    )
+
+    assert out["persons"] == ["Rousseau"]
+    assert out["works_referenced"] == ["Of Grammatology"]
+    assert current_assertion_by_name(out, "persons").derivation_method == "derridai:nlp"
+    indexing = next(task for task in captured["tasks"] if task[0] == "indexing")
+    metadata_model = indexing[2].model_fields["metadata"].annotation
+    assert set(metadata_model.model_fields) == {"topics", "concepts"}
+
 
 def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path):
     m, bid = manager(tmp_path)
