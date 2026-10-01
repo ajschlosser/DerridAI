@@ -573,17 +573,10 @@ class SemanticMapIndex:
     def work_source(self, work: str) -> dict[str, Any]:
         """Project one Work without materializing every Record/node map in the build."""
         wanted = _normalize(work)
-        sources = self.work_sources().get(wanted)
-        if sources is not None:
-            return sources
-        return {
-            "version": RECORD_SEMANTIC_MAP_VERSION,
-            "kind": "work_semantic_map_sources",
-            "work": wanted,
-            "sources": [],
-            "record_count": 0,
-            "epistemic_note": EPISTEMIC_NOTE,
-        }
+        source = self.work_sources().get(wanted)
+        if source is None:
+            raise KeyError(wanted)
+        return source
 
     def work_sources(self) -> dict[str, dict[str, Any]]:
         """Project canonical graph identities into the visual Work-map contract.
