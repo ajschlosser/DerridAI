@@ -232,4 +232,131 @@ describe("DerridAI SDK", () => {
     await client.annotations.remove(annotation.id);
     expect(await client.annotations.list()).toEqual([]);
   });
+
+  it("preserves cancellation during Record loading", async () => {
+    const client = await createClient({
+      dataSource: dataSources.inline(publicationPackage()),
+      storage: new MemoryStorage(),
+    });
+    const events: string[] = [];
+    client.events.subscribe((event) => events.push(event.type));
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      client.search({ query: "hospitality", mode: "keyword", signal: controller.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(events).toContain("operation-cancelled");
+  });
+
+  it("preserves cancellation from the embedding capability", async () => {
+    const client = await createClient({
+      dataSource: dataSources.inline(publicationPackage()),
+      storage: new MemoryStorage(),
+      embeddings: {
+        descriptor: () => ({ type: "host", model: "bge-m3:latest" }),
+        async embed() {
+          throw new DOMException("Embedding cancelled.", "AbortError");
+        },
+      },
+    });
+    const events: string[] = [];
+    client.events.subscribe((event) => events.push(event.type));
+
+    await expect(client.search({ query: "hospitality", mode: "hybrid" })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(events).toContain("operation-cancelled");
+  });
+
+  it("preserves cancellation from the generation capability", async () => {
+    const client = await createClient({
+      dataSource: dataSources.inline(publicationPackage()),
+      storage: new MemoryStorage(),
+      embeddings: {
+        descriptor: () => ({ type: "host", model: "bge-m3:latest" }),
+        async embed() {
+          return { vectors: [[1, 0]] };
+        },
+      },
+      generation: {
+        descriptor: () => ({ type: "host", model: "qwen3:8b" }),
+        async generate() {
+          throw new DOMException("Generation cancelled.", "AbortError");
+        },
+      },
+    });
+    const events: string[] = [];
+    client.events.subscribe((event) => events.push(event.type));
+
+    await expect(
+      client.research({
+        question: "What does the passage say about hospitality?",
+        retrieval: { mode: "hybrid", evidenceLimit: 1 },
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(events).toContain("operation-cancelled");
+  });
+
+  it("rejects an embedding revision mismatch before querying the provider", async () => {
+    const publication = publicationPackage();
+    const vectorIndex = publication.manifest.vector_index as typeof publication.manifest.vector_index & {
+      revision?: string;
+    };
+    vectorIndex.revision = "revision-a";
+    const embed = vi.fn(async () => ({ vectors: [[1, 0]] }));
+    const client = await createClient({
+      dataSource: dataSources.inline(publication),
+      storage: new MemoryStorage(),
+      embeddings: {
+        descriptor: () => ({
+          type: "host",
+          model: "bge-m3:latest",
+          revision: "revision-b",
+        }),
+        embed,
+      },
+    });
+
+    const response = await client.search({ query: "hospitality", mode: "hybrid" });
+
+    expect(response.modeUsed).toBe("keyword");
+    expect(response.warnings[0]).toMatchObject({
+      code: "embedding_contract_mismatch",
+      details: {
+        expectedRevision: "revision-a",
+        actualRevision: "revision-b",
+      },
+    });
+    expect(embed).not.toHaveBeenCalled();
+  });
+
+  it("deduplicates retrieval candidates by stable Record identity", async () => {
+    const publication = publicationPackage();
+    publication.chunks.push({
+      id: "work-3",
+      work: "Glas",
+      record_count: 1,
+      records_b64: base64Json([
+        record("g1", "Glas", "duplicate transport copy that must not become a second Record"),
+      ]),
+      vector_ids: [],
+      vectors_b64: "",
+    });
+    publication.manifest.works[0].record_count = 2;
+
+    const client = await createClient({
+      dataSource: dataSources.inline(publication),
+      storage: new MemoryStorage(),
+    });
+    const response = await client.search({
+      query: "hospitality",
+      mode: "keyword",
+      filters: { work: "Glas" },
+    });
+
+    expect(response.results.map((item) => item.record.record_id)).toEqual(["g1"]);
+    expect(response.diagnostics.duplicatesRemoved).toBe(1);
+  });
+
 });
