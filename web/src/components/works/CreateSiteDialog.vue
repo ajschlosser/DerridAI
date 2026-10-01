@@ -222,12 +222,7 @@ onMounted(async () => {
           <legend>{{ i18n.t("site.create_vectors") }}</legend>
           <p class="site-choice-help">{{ i18n.t("site.create_vectors_help") }}</p>
           <label class="site-export-option">
-            <input
-              v-model="includeVectors"
-              type="radio"
-              name="site-vector-profile"
-              :value="true"
-            />
+            <input v-model="includeVectors" type="radio" name="site-vector-profile" :value="true" />
             <span>
               <strong>{{ i18n.t("site.create_vectors_include") }}</strong>
               <small>{{ i18n.t("site.create_vectors_include_help") }}</small>
