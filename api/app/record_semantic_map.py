@@ -99,6 +99,8 @@ class _SemanticIndex:
         for edge in self.edges:
             self.edges_by_node[str(edge.get("source") or "")].append(edge)
             self.edges_by_node[str(edge.get("target") or "")].append(edge)
+        for adjacent in self.edges_by_node.values():
+            adjacent.sort(key=_edge_rank)
         self.term_mentions: dict[str, list[dict[str, Any]]] = {}
         self.term_state: dict[str, str] = {}
         self._fold_in_terms()
@@ -444,7 +446,7 @@ class _SemanticIndex:
         node = self.nodes.get(node_id)
         if node is None:
             raise KeyError(node_id)
-        adjacent = sorted(self.edges_by_node.get(node_id, []), key=_edge_rank)
+        adjacent = self.edges_by_node.get(node_id, [])
         neighbor_ids = list(
             dict.fromkeys(
                 str(edge["target"] if edge["source"] == node_id else edge["source"])
