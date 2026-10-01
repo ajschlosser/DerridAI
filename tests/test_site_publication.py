@@ -123,9 +123,12 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     assert "__DERRIDAI_HOST_CAPABILITIES__" in site_runtime
     assert "sdk.createClient" in site_runtime
     assert "OLLAMA_ORIGINS" in site_runtime
-    assert "/chat/completions" not in site_runtime
-    assert "/api/chat" not in site_runtime
-    assert "apiKey" not in site_runtime
+    # The shared browser client contains provider adapters, but this publication
+    # exports no provider profile, endpoint, or credential unless the publisher
+    # explicitly selects one.
+    assert publication["provider_profiles"] == []
+    assert "https://models.example" not in site_runtime
+    assert "MUST-NOT-EXPORT" not in site_runtime
     assert bundle.record_count == 2
     assert bundle.work_count == 2
 
