@@ -81,7 +81,9 @@ test("real single-file export keeps evidence when a direct provider is unreachab
 
   await page.getByLabel("Provider profile").selectOption("acceptance-provider");
   await page.getByRole("button", { name: "Use this provider" }).click();
-  await expect(page.getByText("Provider applied.")).toBeVisible();
+  await expect(
+    page.getByRole("group", { name: "Technology used for this operation" }),
+  ).toContainText("Vector search (embeddings)");
 
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");
   await page.getByRole("button", { name: "Ask" }).click();
