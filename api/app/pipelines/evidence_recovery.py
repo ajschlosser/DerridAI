@@ -634,18 +634,34 @@ def execute_recovery_pipeline(
 
 def _entry(items: list[dict[str, Any]], winner: str) -> dict[str, Any]:
     top = items[0]
+    support_note = (
+        " It also passed deterministic direct-support validation."
+        if isinstance(top.get("support_score"), (int, float))
+        else ""
+    )
     if winner == _LLM:
         reason = f"Suggested by the evidence cascade's model choice ({top.get('reason') or 'no reason given'})."
     elif winner == _RERANK:
-        reason = f"Suggested by the evidence cascade's cross-encoder rerank (top score {top['score']:.3f})."
+        reason = (
+            f"Suggested by the evidence cascade's cross-encoder rerank (top score {top['score']:.3f})."
+            + support_note
+        )
     elif winner == _MMR:
+        semantic_score = float(top.get("semantic_score", top["score"]))
+        cross_encoder_score = top.get("cross_encoder_score")
+        ranking = f"semantic score {semantic_score:.3f}"
+        if isinstance(cross_encoder_score, (int, float)):
+            ranking = f"cross-encoder score {float(cross_encoder_score):.3f}; {ranking}"
         reason = (
             "Suggested by the evidence cascade's maximum marginal relevance "
-            f"selection (top semantic score {top['score']:.3f}; "
-            f"MMR objective {top['mmr_score']:.3f})."
+            f"selection ({ranking}; MMR objective {top['mmr_score']:.3f})."
+            + support_note
         )
     elif winner == _SEMANTIC:
-        reason = f"Suggested by the evidence cascade's semantic similarity (top score {top['score']:.3f})."
+        reason = (
+            f"Suggested by the evidence cascade's semantic similarity (top score {top['score']:.3f})."
+            + support_note
+        )
     else:
         reason = f"Suggested by the evidence cascade's deterministic match ({top.get('reason') or 'direct support'})."
     return advisory_evidence_entry(items, _METHODS[winner], reason)
