@@ -23,6 +23,14 @@ from .field_assertions import (
     migrate_record_assertions,
     project_record_assertions,
 )
+from .language_segmentation import (
+    ends_quote,
+    ends_sentence_text,
+    looks_like_speaker_start,
+    looks_like_strong_heading,
+    profile_metadata,
+    starts_quote,
+)
 
 
 def _normalize_text(value: str) -> str:
@@ -111,35 +119,61 @@ def _segmentation_windows(blocks: list[dict[str, Any]], token_budget: int) -> li
     return windows
 
 
-def _is_protected_transition(left: dict[str, Any], right: dict[str, Any]) -> bool:
+def _block_language(block: dict[str, Any], fallback: str | None = None) -> str | None:
+    """Prefer reviewer-confirmed document-thread language over document fallback."""
+    value = str(block.get("thread_language") or "").strip()
+    return value or fallback
+
+
+def _is_protected_transition(
+    left: dict[str, Any],
+    right: dict[str, Any],
+    language: str | None = None,
+) -> bool:
     """Return True when splitting would likely detach attribution or syntax.
 
-    These guards are deliberately cheap and deterministic. They prevent the
-    classifier and hard-size fallback from creating common provenance errors
-    such as separating a speaker label or quotation lead-in from its speech.
+    The protection layer is Unicode-aware and deliberately conservative. It
+    prevents source-unit sizing and semantic classification from treating
+    Western capitalization or punctuation conventions as universal.
     """
     left_text = str(left.get("text") or "").strip()
     right_text = str(right.get("text") or "").strip()
+    left_language = _block_language(left, language)
     left_type = str(left.get("type") or "body").casefold()
     right_type = str(right.get("type") or "body").casefold()
     heading_types = {"heading", "title", "subtitle", "section", "chapter"}
-    speaker_label_only = re.compile(r"^\s*(?:[A-Z][A-Z .'-]{1,40}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*:\s*$")
-    quote_start = re.compile(r'^\s*[“\"]')
-    attribution_lead = re.compile(r"(?:writes?|says?|asks?|replies?|continues?|according to|as .*? puts it)\s*[:;,]?\s*$", re.I)
+    attribution_lead = re.compile(
+        r"(?:writes?|says?|asks?|replies?|continues?|according to|as .*? puts it)\s*[:;,]?\s*$",
+        re.I,
+    )
     list_marker = re.compile(r"^\s*(?:\d+[.)]|[-•*])\s+")
+    label_text = left_text[:-1].strip() if left_text.endswith((":","：")) else ""
+    speaker_label_only = bool(
+        label_text
+        and len(label_text) <= 60
+        and any(char.isalpha() for char in label_text)
+        and not ends_sentence_text(label_text, left_language)
+    )
 
     if left_type in heading_types and right_type not in heading_types:
         return True
-    if speaker_label_only.match(left_text):
+    if speaker_label_only:
         return True
-    if (left_text.endswith(":") or attribution_lead.search(left_text)) and quote_start.search(right_text):
+    if (
+        (left_text.endswith((":","：")) or attribution_lead.search(left_text))
+        and starts_quote(right_text)
+    ):
         return True
-    if list_marker.match(left_text) and right_text and not re.search(r"[.!?][”\"]?$", left_text):
+    if list_marker.match(left_text) and right_text and not ends_sentence_text(left_text, left_language):
         return True
     return False
 
 
-def _deterministic_boundary_candidates(blocks: list[dict[str, Any]], profile: dict[str, Any]) -> list[dict[str, Any]]:
+def _deterministic_boundary_candidates(
+    blocks: list[dict[str, Any]],
+    profile: dict[str, Any],
+    language: str | None = None,
+) -> list[dict[str, Any]]:
     """Generate structural candidates without turning length into evidence.
 
     0.40.9 removes the former soft-length probe. Approaching a preferred
@@ -150,10 +184,6 @@ def _deterministic_boundary_candidates(blocks: list[dict[str, Any]], profile: di
         return []
     candidates: list[dict[str, Any]] = []
     heading_types = {"heading", "title", "subtitle", "section", "chapter"}
-    speaker_re = re.compile(r"^\s*(?:[A-Z][A-Z .'-]{1,40}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*:\s+")
-    quote_start_re = re.compile(r'^\s*[“\"]')
-    quote_end_re = re.compile(r'[”\"]\s*$')
-    strong_heading_re = re.compile(r"^\s*(?:§|chapter|part|session|section|book|introduction|preface|foreword|conclusion|epilogue|notes|bibliography|works cited)\b|^\s*(?:[IVXLCDM]+|\d+)\s*[.:—-]\s+", re.I)
     heading_counts = Counter(
         _normalize_text(str(block.get("text") or "")).casefold()
         for block in blocks
@@ -167,7 +197,17 @@ def _deterministic_boundary_candidates(blocks: list[dict[str, Any]], profile: di
         score = 0.0
         left_type = str(left.get("type") or "body").casefold()
         right_type = str(right.get("type") or "body").casefold()
+        left_language = _block_language(left, language)
+        right_language = _block_language(right, language)
+        boundary_language = right_language or left_language or language
 
+        if (
+            left_language
+            and right_language
+            and left_language.casefold() != right_language.casefold()
+        ):
+            signals.append("language_context_change")
+            score += 0.40
         if right_type in heading_types:
             normalized_heading = _normalize_text(right_text).casefold()
             if normalized_heading and heading_counts.get(normalized_heading, 0) >= 3:
@@ -176,19 +216,19 @@ def _deterministic_boundary_candidates(blocks: list[dict[str, Any]], profile: di
             else:
                 signals.append("heading_start")
                 score += 0.62
-                if strong_heading_re.search(right_text):
+                if looks_like_strong_heading(right_text, right_language):
                     signals.append("strong_heading_start")
                     score += 0.36
         if left_type in heading_types and right_type not in heading_types:
             signals.append("heading_to_body")
             score += 0.20
-        if speaker_re.match(right_text):
+        if looks_like_speaker_start(right_text, right_language):
             signals.append("speaker_label")
             score += 0.90
-        if bool(quote_start_re.search(right_text)) != bool(quote_start_re.search(left_text)):
+        if starts_quote(right_text) != starts_quote(left_text):
             signals.append("quotation_frame_change")
             score += 0.34
-        if quote_end_re.search(left_text) and not quote_start_re.search(right_text):
+        if ends_quote(left_text) and not starts_quote(right_text):
             signals.append("quotation_exit")
             score += 0.28
         if re.match(r"^\s*(?:\d+[.)]|[-•*])\s+", right_text):
@@ -203,7 +243,11 @@ def _deterministic_boundary_candidates(blocks: list[dict[str, Any]], profile: di
             "signals": signals,
             "source": "deterministic_candidate",
             "index": i,
-            "protected": _is_protected_transition(left, right) or "repeated_running_heading" in signals,
+            "protected": _is_protected_transition(left, right, language) or "repeated_running_heading" in signals,
+            "language_profile": profile_metadata(
+                boundary_language,
+                f"{left_text}\n{right_text}",
+            ),
         })
     return candidates
 
@@ -304,29 +348,41 @@ def _record_sizing_policy(request: dict[str, Any], profile: dict[str, Any]) -> d
     }
 
 
-def _seam_quality(left: dict[str, Any], right: dict[str, Any]) -> tuple[float, bool, list[str]]:
+def _seam_quality(
+    left: dict[str, Any],
+    right: dict[str, Any],
+    language: str | None = None,
+) -> tuple[float, bool, list[str]]:
     """Score a local retrieval seam without pretending length is semantic evidence."""
-    if _is_protected_transition(left, right):
+    if _is_protected_transition(left, right, language):
         return -10.0, True, ["protected_transition"]
     left_text = str(left.get("text") or "").strip()
-    _ = str(right.get("text") or "").strip()
+    right_text = str(right.get("text") or "").strip()
+    left_language = _block_language(left, language)
+    right_language = _block_language(right, language)
     left_type = str(left.get("type") or "body").casefold()
     right_type = str(right.get("type") or "body").casefold()
     heading_types = {"heading", "title", "subtitle", "section", "chapter"}
     score = 0.0
     signals: list[str] = []
     if right_type in heading_types:
-        score += 1.2; signals.append("heading_start")
-    if re.search(r'[.!?][”"]?$', left_text):
-        score += 0.45; signals.append("sentence_end")
-    elif re.search(r'[:;][”"]?$', left_text):
-        score += 0.12; signals.append("clause_end")
-    if re.match(r"^\s*(?:[A-Z][A-Z .'-]{1,40}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*:\s+", str(right.get("text") or "")):
-        score += 0.85; signals.append("speaker_start")
-    if re.search(r'[”"]\s*$', left_text) and not re.match(r'^\s*[“"]', str(right.get("text") or "")):
-        score += 0.25; signals.append("quotation_exit")
+        score += 1.2
+        signals.append("heading_start")
+    if ends_sentence_text(left_text, left_language):
+        score += 0.45
+        signals.append("sentence_end")
+    elif left_text.endswith((":","：",";","；","؛")):
+        score += 0.12
+        signals.append("clause_end")
+    if looks_like_speaker_start(right_text, right_language):
+        score += 0.85
+        signals.append("speaker_start")
+    if ends_quote(left_text) and not starts_quote(right_text):
+        score += 0.25
+        signals.append("quotation_exit")
     if left_type != right_type and right_type not in {"body", "paragraph"}:
-        score += 0.18; signals.append("layout_role_change")
+        score += 0.18
+        signals.append("layout_role_change")
     # Paragraph/source-atom seams are inherently safer than arbitrary character cuts.
     score += 0.10
     return score, False, signals
@@ -335,6 +391,7 @@ def _seam_quality(left: dict[str, Any], right: dict[str, Any]) -> tuple[float, b
 def _best_record_sizing_boundary(
     span: list[dict[str, Any]],
     policy: dict[str, int],
+    language: str | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     """Find the best safe source-atom seam for soft retrieval sizing.
 
@@ -356,7 +413,7 @@ def _best_record_sizing_boundary(
         # chosen; scoring them made every split rescan the rest of the document.
         if seams and cumulative > absolute:
             break
-        quality, protected, signals = _seam_quality(left, right)
+        quality, protected, signals = _seam_quality(left, right, language)
         seams.append({
             "left": left, "right": right, "chars": cumulative,
             "quality": quality, "protected": protected, "signals": signals,
@@ -403,6 +460,7 @@ def _normalize_topology(
     blocks: list[dict[str, Any]],
     boundaries: list[dict[str, Any]],
     policy: dict[str, int],
+    language: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
     """Deterministically optimize semantic topology for retrieval-sized records."""
     block_index={str(b.get("block_id") or ""):i for i,b in enumerate(blocks)}
@@ -414,6 +472,10 @@ def _normalize_topology(
         boundary_map[str(item.get("after_block_id") or "")]=item
     reviews: list[dict[str, Any]]=[]
     metrics={"size_optimized_splits":0,"long_exception_records":0,"absolute_safety_splits":0}
+    language_profile = profile_metadata(
+        language,
+        "\n".join(str(block.get("text") or "") for block in blocks[:8]),
+    )
 
     def groups() -> list[list[dict[str, Any]]]:
         out=[]; current=[]
@@ -434,7 +496,7 @@ def _normalize_topology(
         size=sum(len(str(b.get("text") or "")) for b in span)+max(0,len(span)-1)*2
         if size <= policy["preferred_record_chars"] + policy["record_length_tolerance"]:
             continue
-        choice,info=_best_record_sizing_boundary(span,policy)
+        choice,info=_best_record_sizing_boundary(span,policy,language)
         if choice is None:
             continue
         bid=str(choice.get("block_id") or "")
@@ -451,6 +513,7 @@ def _normalize_topology(
             "changes":[],"source":"deterministic_topology_normalizer",
             "boundary_kind":kind,"semantic_boundary":False,
             "size_policy":dict(policy),"size_decision":info,
+            "language_profile":language_profile,
         }
         if info.get("forced"):
             idx=block_index.get(bid,-1)
@@ -551,33 +614,41 @@ def _topology_quality_report(records:list[dict[str,Any]], source_blocks:list[dic
     }
 
 
-def _best_safety_boundary(span: list[dict[str, Any]], hard_max: int) -> tuple[dict[str, Any] | None, bool]:
+def _best_safety_boundary(
+    span: list[dict[str, Any]],
+    hard_max: int,
+    language: str | None = None,
+) -> tuple[dict[str, Any] | None, bool]:
     """Choose the strongest safe seam near the preferred size target."""
-    target=hard_max*0.72
-    cumulative=0
-    _=max(1,sum(len(str(b.get("text") or "")) for b in span))
-    scored=[]
-    heading_types={"heading","title","subtitle","section","chapter"}
-    speaker_re=re.compile(r"^\s*(?:[A-Z][A-Z .'-]{1,40}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s*:\s+")
+    target = hard_max * 0.72
+    cumulative = 0
+    scored = []
+    heading_types = {"heading", "title", "subtitle", "section", "chapter"}
     for left, right in zip(span, span[1:]):
-        cumulative+=len(str(left.get("text") or ""))
-        distance=abs(cumulative-target)/max(target,1)
-        structural=0.0
-        if str(right.get("type") or "body").casefold() in heading_types: structural+=1.0
-        if speaker_re.match(str(right.get("text") or "")): structural+=0.8
-        if re.search(r'[.!?][”\"]?$',str(left.get("text") or "").strip()): structural+=0.25
-        if re.search(r'[”\"]\s*$',str(left.get("text") or "").strip()): structural+=0.15
-        protected=_is_protected_transition(left,right)
-        score=structural-(distance*0.55)-(3.0 if protected else 0.0)
-        scored.append((score,not protected,left))
+        cumulative += len(str(left.get("text") or ""))
+        distance = abs(cumulative - target) / max(target, 1)
+        structural = 0.0
+        if str(right.get("type") or "body").casefold() in heading_types:
+            structural += 1.0
+        right_language = _block_language(right, language)
+        left_language = _block_language(left, language)
+        if looks_like_speaker_start(str(right.get("text") or ""), right_language):
+            structural += 0.8
+        if ends_sentence_text(str(left.get("text") or "").strip(), left_language):
+            structural += 0.25
+        if ends_quote(str(left.get("text") or "").strip()):
+            structural += 0.15
+        protected = _is_protected_transition(left, right, language)
+        score = structural - (distance * 0.55) - (3.0 if protected else 0.0)
+        scored.append((score, not protected, left))
     if not scored:
         return None, False
-    safe=[item for item in scored if item[1]]
+    safe = [item for item in scored if item[1]]
     if safe:
-        return max(safe,key=lambda x:x[0])[2],False
+        return max(safe, key=lambda x: x[0])[2], False
     # Extremely unusual: every seam is protected. Force the least-bad seam and
     # surface exactly this demonstrated provenance hazard for human review.
-    return max(scored,key=lambda x:x[0])[2],True
+    return max(scored, key=lambda x: x[0])[2], True
 
 
 def _scholarly_page_range(group: list[dict[str, Any]]) -> tuple[int | str | None, int | str | None]:

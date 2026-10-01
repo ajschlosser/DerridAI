@@ -13,70 +13,93 @@ records within `hard_max_chars`, and dropped only when the joined record stays w
 it is kept where it is and reported, so a reviewer sees a record that ends mid-sentence rather than
 one that silently outgrows the size the build asked for.
 
-What this cannot know: a sentence-final full stop after an abbreviation ("Dr.") looks like a clean
-end, and text with no punctuation at all (verse, lists, OCR noise) has no sentence ends to find.
-Those are covered by the next-block-starts-lowercase test and by the size cap, not by certainty.
+What this cannot know with certainty: punctuation can be ambiguous, and text with no sentence
+punctuation at all (verse, lists, OCR noise, or languages whose written conventions do not expose
+reliable sentence marks in the source) may have no deterministic sentence end to find. The shared
+language profile therefore uses conservative continuation and abbreviation rules, and the size cap
+remains authoritative rather than manufacturing a linguistic boundary.
 """
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-# A sentence end: terminal punctuation, optionally followed by closing quotes or brackets.
-_SENTENCE_END = re.compile(r"[.!?…]+[\"'’”»)\]]*\s*$")
-# A next block that plainly continues the previous sentence.
-_CONTINUATION_START = re.compile(r"^\s*(?:[a-zà-öø-ÿ]|[,;:)\]»”’])")
+from .language_segmentation import (
+    ends_sentence_text,
+    looks_like_heading_line,
+    split_sentences,
+    starts_mid_sentence_text,
+)
+
 _RUNNING_TEXT = {"body", "paragraph", "text"}
-# A short line with no sentence punctuation anywhere is a heading, a contents entry, a title or a list line, not the
-# middle of a sentence ("Contents", "Preface", "Chapter II", "WOMEN IN THE LIFE OF BALZAC").
-_LINE_MAX_CHARS = 120
-_ANY_SENTENCE_PUNCTUATION = re.compile(r"[.!?…;:]")
-# A fragment ending on one of these is a sentence broken by layout, not a heading.
-_CONTINUATION_WORDS = {
-    "a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "into", "is", "of", "on", "or", "that", "the",
-    "to", "was", "with", "à", "au", "aux", "de", "des", "du", "en", "est", "et", "la", "le", "les", "mais", "ou",
-    "par", "pour", "que", "qui", "sur", "un", "une", "der", "die", "das", "und", "zu",
-}
 
 
-def _is_heading_line(text: str) -> bool:
-    """A short, unpunctuated line that starts like a title and does not stop on a connecting word."""
-    stripped = text.strip()
-    if not stripped or len(stripped) > _LINE_MAX_CHARS or _ANY_SENTENCE_PUNCTUATION.search(stripped):
-        return False
-    if not (stripped[0].isupper() or stripped[0].isdigit()):
-        return False
-    return stripped.split()[-1].casefold() not in _CONTINUATION_WORDS
+def _block_language(block: dict[str, Any], fallback: str | None = None) -> str | None:
+    value = str(block.get("thread_language") or "").strip()
+    return value or fallback
 
 
-def ends_sentence(block: dict[str, Any]) -> bool:
+def ends_sentence(block: dict[str, Any], language: str | None = None) -> bool:
     """True when a block can be the last block of a record."""
+    language = _block_language(block, language)
     text = str(block.get("text") or "").rstrip()
     if not text:
         return True
     if str(block.get("type") or "body") not in _RUNNING_TEXT:
-        return True  # a heading, caption or page furniture is not the middle of a sentence
-    if _is_heading_line(text):
         return True
-    return bool(_SENTENCE_END.search(text))
+    if looks_like_heading_line(text, language):
+        return True
+    return ends_sentence_text(text, language)
 
 
-def starts_mid_sentence(block: dict[str, Any]) -> bool:
+def starts_mid_sentence(block: dict[str, Any], language: str | None = None) -> bool:
+    language = _block_language(block, language)
     text = str(block.get("text") or "")
     if str(block.get("type") or "body") not in _RUNNING_TEXT:
         return False
-    return bool(_CONTINUATION_START.match(text))
+    return starts_mid_sentence_text(text, language)
 
 
-def clean_boundary(left: dict[str, Any], right: dict[str, Any]) -> bool:
-    return ends_sentence(left) and not starts_mid_sentence(right)
+def clean_boundary(
+    left: dict[str, Any],
+    right: dict[str, Any],
+    language: str | None = None,
+) -> bool:
+    left_language = _block_language(left, language)
+    right_language = _block_language(right, language)
+    if not ends_sentence(left, left_language) or starts_mid_sentence(right, right_language):
+        return False
+    left_text = str(left.get("text") or "").rstrip()
+    right_text = str(right.get("text") or "").lstrip()
+    same_language = (
+        not left_language
+        or not right_language
+        or left_language.casefold() == right_language.casefold()
+    )
+    if (
+        same_language
+        and left_text.endswith(".")
+        and right_text
+        and str(left.get("type") or "body") in _RUNNING_TEXT
+        and str(right.get("type") or "body") in _RUNNING_TEXT
+    ):
+        # A block-final period may be an abbreviation ("Dr.") rather than a
+        # sentence boundary. Re-run the shared lossless splitter across the seam;
+        # only accept the seam when the first sentence really ends with the
+        # complete left block.
+        probe = f"{left_text} {right_text}"
+        sentences = split_sentences(probe, left_language or right_language)
+        if not sentences or sentences[0].strip() != left_text:
+            return False
+    return True
 
 
 def snap_boundaries_to_sentences(
     blocks: list[dict[str, Any]],
     boundaries: list[dict[str, Any]],
     hard_max_chars: int = 12000,
+    *,
+    language: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Return boundaries that fall on sentence ends, plus a report of what changed.
 
@@ -91,7 +114,7 @@ def snap_boundaries_to_sentences(
     report: dict[str, Any] = {"moved": [], "merged": [], "unavoidable": []}
 
     def clean(i: int) -> bool:
-        return i >= last or clean_boundary(blocks[i], blocks[i + 1])
+        return i >= last or clean_boundary(blocks[i], blocks[i + 1], language)
 
     def span(start: int, end: int) -> int:
         """Characters in blocks start..end inclusive, counted as records count them (units joined by a blank line)."""

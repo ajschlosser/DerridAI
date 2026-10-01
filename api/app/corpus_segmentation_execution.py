@@ -27,6 +27,7 @@ from .corpus_segmentation import (
     _normalize_topology,
     _record_sizing_policy,
 )
+from .language_segmentation import profile_metadata
 from .pipelines.corpus_segmentation import SegmentationSession
 
 
@@ -56,12 +57,21 @@ class BuildSegmentationExecutionMixin:
         def _profile_for(self, build_id: str) -> dict[str, Any]: ...
         def _update(self, build_id: str, **changes: Any) -> dict[str, Any]: ...
 
-    def _boundary_cache_fingerprint(self, left: dict[str, Any], right: dict[str, Any], request: dict[str, Any]) -> str:
+    def _boundary_cache_fingerprint(
+        self,
+        left: dict[str, Any],
+        right: dict[str, Any],
+        request: dict[str, Any],
+        manifest: dict[str, Any] | None = None,
+    ) -> str:
         generation = _generation_options(request)
         payload = {
             "prompt": SEGMENTATION_PROMPT_VERSION,
             "left_id": left.get("block_id"), "left_text": left.get("text"),
+            "left_thread_language": left.get("thread_language"),
             "right_id": right.get("block_id"), "right_text": right.get("text"),
+            "right_thread_language": right.get("thread_language"),
+            "document_context": _manifest_prompt_context(manifest or {}),
             "provider": request.get("provider"), "model": request.get("model"),
             "temperature": generation.temperature, "top_p": generation.top_p,
             "top_k": generation.top_k, "seed": generation.seed,
@@ -107,9 +117,17 @@ class BuildSegmentationExecutionMixin:
         for c in batch:
             i=int(c["index"])
             left,right=blocks[i],blocks[i+1]
+            left_language = str(
+                left.get("thread_language") or manifest.get("language") or ""
+            ).strip()
+            right_language = str(
+                right.get("thread_language") or manifest.get("language") or ""
+            ).strip()
             items.append(
                 f"TRANSITION {left['block_id']} -> {right['block_id']}\n"
                 f"Signals: {', '.join(c.get('signals') or [])}\n"
+                f"Language context: left={left_language or 'unknown'}, "
+                f"right={right_language or 'unknown'}\n"
                 f"LEFT:\n{str(left.get('text') or '')[-3200:]}\nRIGHT:\n{str(right.get('text') or '')[:3200]}"
             )
         context = _manifest_prompt_context(manifest)
@@ -360,11 +378,20 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         binary classifier's omission/failure/low confidence also means KEEP.
         """
         profile=self._profile_for(build_id)
+        language = str(
+            manifest.get("language")
+            or manifest.get("document_language")
+            or ""
+        ).strip() or None
         threshold=float(profile.get("min_boundary_confidence") or 0.72)
         sizing_policy=_record_sizing_policy(request,profile)
         _=sizing_policy["absolute_record_chars"]
         index_by_id={str(block.get("block_id") or ""):i for i,block in enumerate(blocks)}
-        candidates=_deterministic_boundary_candidates(blocks,profile)
+        candidates=(
+            _deterministic_boundary_candidates(blocks,profile,language)
+            if language
+            else _deterministic_boundary_candidates(blocks,profile)
+        )
         state=self.repo.load_checkpoint(build_id,"local_boundary_state",{})
         if not isinstance(state,dict): state={}
         decisions=state.get("decisions") if isinstance(state.get("decisions"),dict) else {}
@@ -403,7 +430,9 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             i=int(candidate["index"])
             left,right=blocks[i],blocks[i+1]
             bid=str(candidate["after_block_id"])
-            fingerprint=self._boundary_cache_fingerprint(left,right,request)
+            fingerprint=self._boundary_cache_fingerprint(
+                left,right,request,manifest=manifest
+            )
             cached=decisions.get(bid)
             if isinstance(cached,dict) and cached.get("fingerprint")==fingerprint and isinstance(cached.get("pair"),dict):
                 pair=cached["pair"]
@@ -467,7 +496,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         # size-optimized boundaries record that they are retrieval boundaries, not
         # claims that the argument itself ends there.
         accepted, normalization_reviews, normalization_metrics = _normalize_topology(
-            blocks, accepted, sizing_policy
+            blocks, accepted, sizing_policy, language
         )
         boundary_reviews.extend(normalization_reviews)
         provisional=[item for item in accepted if item.get("boundary_kind") in {"retrieval_size_optimized","absolute_size_safety"}]
@@ -489,6 +518,10 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             "absolute_safety_boundary_count":int(normalization_metrics.get("absolute_safety_splits") or 0),
             "long_exception_record_count":int(normalization_metrics.get("long_exception_records") or 0),
             "record_sizing_policy":sizing_policy,
+            "segmentation_language_profile":profile_metadata(
+                language,
+                "\n".join(str(block.get("text") or "") for block in blocks[:8]),
+            ),
             "boundary_deterministic_split_count":deterministic_split_count,
             "boundary_deterministic_keep_count":deterministic_keep_count,
             "boundary_llm_adjudication_count":len(llm_candidates),

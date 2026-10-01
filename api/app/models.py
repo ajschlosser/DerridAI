@@ -555,8 +555,12 @@ class PdfAssetMetadataPatch(BaseModel):
 
 class PdfSourceUnitPolicy(BaseModel):
     """How finely a source is divided into evidence units."""
+
     mode: Literal["default", "paragraph", "line", "sentence", "chars"] = "default"
     chars: int | None = Field(default=None, ge=60, le=20000)
+    # Optional documentary-language hint for orthographic segmentation. The
+    # repository also falls back to source metadata and Unicode script.
+    language: str | None = Field(default=None, max_length=64)
     # "Every N paragraphs / sentences"; only meaningful for the paragraph and sentence modes.
     per: int | None = Field(default=None, ge=1, le=50)
 

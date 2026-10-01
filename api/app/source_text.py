@@ -9,6 +9,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
+from .language_segmentation import looks_like_speaker_start
 from .source_safety import check_size, safe_xml, validate_docx, validate_rtf
 
 MANIFEST_FIELDS = (
@@ -33,7 +34,6 @@ _NOT_SPEAKERS = {
 }
 _START_MARK = re.compile(r"\*\*\*\s*START OF (?:THE |THIS )?PROJECT GUTENBERG EBOOK.*?\*\*\*", re.I | re.S)
 _END_MARK = re.compile(r"\*\*\*\s*END OF (?:THE |THIS )?PROJECT GUTENBERG EBOOK.*", re.I | re.S)
-_SPEAKER_LINE = re.compile(r"^([A-Z][\w .'\-]{1,48}?):\s+\S")
 _BYLINE = re.compile(r"^by\s+([A-Z][^.\n]{2,80})$", re.I)
 
 def prepare_text(text: str) -> tuple[str, str]:
@@ -323,15 +323,28 @@ def _synthetic_page_blocks(text: str, *, extraction_method: str, confidence: flo
 
 
 def leading_speaker(paragraph: str) -> str | None:
+    """Return a source-visible speaker label without assuming a Latin script."""
     first = paragraph.strip().splitlines()[0] if paragraph.strip() else ""
-    match = _SPEAKER_LINE.match(first)
-    if not match:
+    if not looks_like_speaker_start(first):
         return None
-    name = re.sub(r"\s+", " ", match.group(1)).strip(" :-")
-    if not name or name.casefold() in _NOT_SPEAKERS or len(name) < 2:
+    positions = [
+        position
+        for marker in (":", "：")
+        if (position := first.find(marker)) > 0
+    ]
+    if not positions:
         return None
-    letters = [ch for ch in name if ch.isalpha()]
-    if not letters:
+    name = re.sub(r"\s+", " ", first[: min(positions)]).strip(" :-：")
+    normalized_name = name.casefold()
+    first_token = normalized_name.split()[0] if normalized_name.split() else ""
+    if (
+        not name
+        or normalized_name in _NOT_SPEAKERS
+        or first_token in _NOT_SPEAKERS
+        or len(name) < 2
+    ):
+        return None
+    if not any(ch.isalpha() for ch in name):
         return None
     return name
 
@@ -647,6 +660,7 @@ class _HtmlText(HTMLParser):
         self.parts: list[str] = []
         self.title: list[str] = []
         self.metas: dict[str, str] = {}
+        self.lang = ""
         self._skip = 0
         self._in_title = False
         self._chrome_tag = ""
@@ -661,6 +675,8 @@ class _HtmlText(HTMLParser):
         if tag not in _VOID_TAGS and tag not in {"html", "head", "body", "title"} and _is_chrome(attr):
             self._chrome_tag, self._chrome_depth = tag, 1
             return
+        if tag == "html" and attr.get("lang") and not self.lang:
+            self.lang = attr["lang"].strip()
         if tag in {"script", "style", "noscript"}:
             self._skip += 1
         if tag == "title":
@@ -707,7 +723,7 @@ def html_to_text(html: str) -> tuple[str, dict[str, str]]:
     embedded = {
         "title": re.sub(r"\s+", " ", "".join(parser.title)).strip() or parser.metas.get("og:title") or parser.metas.get("citation_title") or "",
         "author": parser.metas.get("author") or parser.metas.get("citation_author") or parser.metas.get("dc.creator") or "",
-        "language": parser.metas.get("language") or parser.metas.get("dc.language") or "",
+        "language": parser.metas.get("language") or parser.metas.get("dc.language") or parser.lang or "",
         "publisher": parser.metas.get("citation_publisher") or "",
     }
     text = re.sub(r"\n{3,}", "\n\n", "".join(parser.parts))

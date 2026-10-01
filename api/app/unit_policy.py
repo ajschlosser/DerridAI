@@ -15,19 +15,16 @@ import re
 import statistics
 from typing import Any
 
+from .language_segmentation import profile_metadata
+from .language_segmentation import (
+    split_sentences as _language_split_sentences,
+)
+
 MODES = ("default", "paragraph", "line", "sentence", "chars", "auto")
 MIN_CHARS, MAX_CHARS = 60, 20000
 MAX_GROUP = 50
 GROUPABLE = {"paragraph", "sentence"}
 DIVISIBLE = {"paragraph", "block_quote", "list_item", "footnote", "speech", "text"}
-_ABBREVIATIONS = {
-    "mr", "mrs", "ms", "dr", "prof", "st", "sr", "jr", "vs", "cf", "etc", "eg", "ie", "fig", "no", "vol", "pp", "p",
-    "ch", "ed", "eds", "trans", "op", "cit", "ibid", "viz", "al", "ca", "approx", "dept", "gen", "col", "rev", "hon",
-    "m", "mme", "mlle", "mm", "me", "cie", "éd", "trad", "sq", "sqq", "l", "ll", "s", "v", "n",
-}
-_TERMINATORS = ".!?…"
-_CLOSERS = "\"'”’»)]}"
-_SENTENCE_END = re.compile(rf"([{re.escape(_TERMINATORS)}]+[{re.escape(_CLOSERS)}]*)(\s+)")
 
 
 def normalize_policy(policy: dict[str, Any] | None) -> dict[str, Any]:
@@ -37,6 +34,9 @@ def normalize_policy(policy: dict[str, Any] | None) -> dict[str, Any]:
     if mode not in MODES:
         raise ValueError(f"Unknown source-unit mode {mode!r}; choose one of {', '.join(MODES)}.")
     out: dict[str, Any] = {"mode": mode}
+    language = str(raw.get("language") or "").strip()
+    if language:
+        out["language"] = language
     if mode == "auto":
         # Paragraphs that fit are kept whole; a longer one is divided into sentences. The limit is the build's long
         # record size, so the record size, not the extractor's paragraphing, decides how small records can be.
@@ -69,34 +69,14 @@ def normalize_policy(policy: dict[str, Any] | None) -> dict[str, Any]:
     return out
 
 
-def _is_abbreviation(before: str) -> bool:
-    word = re.search(r"([^\W\d_]+)\.?$", before, re.UNICODE)
-    if not word:
-        return bool(re.search(r"\d$", before)) and False
-    token = word.group(1).lower()
-    return token in _ABBREVIATIONS or (len(token) == 1 and token.isalpha())
+def split_sentences(text: str, language: str | None = None) -> list[str]:
+    """Lossless language/script-aware sentence units.
 
-
-def split_sentences(text: str) -> list[str]:
-    """Sentences of ``text`` whose concatenation is ``text`` exactly (whitespace stays attached)."""
-    pieces: list[str] = []
-    start = 0
-    for match in _SENTENCE_END.finditer(text):
-        end = match.end()
-        head = text[start:match.start(1)]
-        terminator = match.group(1)
-        rest = text[end:end + 1]
-        if terminator.startswith(".") and terminator == "." and _is_abbreviation(head):
-            continue
-        if terminator == "." and re.search(r"\d$", head) and rest.isdigit():
-            continue  # "3. 5" style numbering artifacts
-        if rest and rest.islower() and terminator == ".":
-            continue  # a period followed by a lowercase word is not a sentence end
-        pieces.append(text[start:end])
-        start = end
-    if start < len(text):
-        pieces.append(text[start:])
-    return [piece for piece in pieces if piece.strip()]
+    The optional language comes from source/document metadata when available.
+    Without it, the shared segmentation layer falls back to conservative
+    Unicode-script inference rather than assuming English punctuation rules.
+    """
+    return _language_split_sentences(text, language)
 
 
 def split_lines(text: str) -> list[str]:
@@ -122,7 +102,7 @@ def split_chars(text: str, size: int) -> list[str]:
 def divide(text: str, policy: dict[str, Any]) -> list[str]:
     mode = policy["mode"]
     if mode == "sentence":
-        sentences = split_sentences(text)
+        sentences = split_sentences(text, str(policy.get("language") or "") or None)
         per = int(policy.get("per") or 1)
         if per > 1:
             # Whitespace stays attached to each sentence, so joining a group loses nothing.
@@ -133,7 +113,11 @@ def divide(text: str, policy: dict[str, Any]) -> list[str]:
     if mode == "chars":
         return split_chars(text, int(policy["chars"]))
     if mode == "auto":
-        return split_sentences(text) if len(text) > int(policy["max_chars"]) else [text]
+        return (
+            split_sentences(text, str(policy.get("language") or "") or None)
+            if len(text) > int(policy["max_chars"])
+            else [text]
+        )
     return [text]
 
 
@@ -159,7 +143,11 @@ def apply_unit_policy(
             and str(block.get("type") or "paragraph") in DIVISIBLE
             and str(block.get("locator_kind") or "") != "time"
         )
-        parts = divide(text, resolved) if divisible else [text]
+        block_policy = resolved
+        thread_language = str(block.get("thread_language") or "").strip()
+        if thread_language and resolved["mode"] in {"sentence", "auto"}:
+            block_policy = {**resolved, "language": thread_language}
+        parts = divide(text, block_policy) if divisible else [text]
         if len(parts) <= 1:
             out.append(dict(block))
             remap[index] = [str(block.get("block_id"))]
@@ -244,6 +232,10 @@ def preview(blocks: list[dict[str, Any]], policy: dict[str, Any] | None, *, samp
         "median_chars": int(statistics.median(sizes)) if sizes else 0,
         "max_chars": max(sizes, default=0),
         "min_chars": min(sizes, default=0),
+        "language_segmentation": profile_metadata(
+            str(resolved.get("language") or "") or None,
+            "\n".join(str(block.get("text") or "") for block in included[:8]),
+        ),
         "sample": [
             {"block_id": b.get("block_id"), "page": b.get("page"), "text": str(b.get("text") or "")[:240]}
             for b in included[:sample]
