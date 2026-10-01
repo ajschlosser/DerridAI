@@ -1,11 +1,14 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 export interface WorksMetadataValue {
+  /** Stable semantic/schema identity; display/storage name may change independently. */
+  field_id: string;
   field: string;
   field_label: string;
   value: string;
   mixed: boolean;
   unique_count: number;
+  empty: boolean;
 }
 
 export interface WorksBiblioValue {
