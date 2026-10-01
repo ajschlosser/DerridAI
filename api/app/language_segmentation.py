@@ -49,7 +49,23 @@ _BASE_ABBREVIATIONS = frozenset(
 )
 
 _PROFILES: dict[str, LanguageSegmentationProfile] = {
-    "und": LanguageSegmentationProfile(code="und", script="unknown"),
+    "und": LanguageSegmentationProfile(
+        code="und",
+        script="unknown",
+        abbreviations=_BASE_ABBREVIATIONS,
+        # Unknown-language Latin text still needs a conservative guard against
+        # treating obvious connective fragments as headings. This union is
+        # deliberately small and can only prevent a split; it cannot create one.
+        continuation_words=frozenset(
+            {
+                "a", "an", "and", "as", "at", "but", "by", "for", "from", "in",
+                "into", "is", "of", "on", "or", "that", "the", "to", "was",
+                "with", "à", "au", "aux", "de", "des", "du", "en", "est", "et",
+                "la", "le", "les", "mais", "ou", "par", "pour", "que", "qui",
+                "sur", "un", "une", "der", "die", "das", "und", "zu",
+            }
+        ),
+    ),
     "en": LanguageSegmentationProfile(
         code="en",
         script="Latin",
