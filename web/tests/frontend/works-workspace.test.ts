@@ -225,6 +225,47 @@ describe("works workspace commands", () => {
     });
   });
 
+  it("lets researchers search bibliographic metadata and facet by author", () => {
+    const { state, workspace } = setup({
+      isResearcher: () => true,
+      recordStores: () => [{ name: "research-index", count: 2 }],
+      providerProfiles: () => [],
+      dbUnavailableReason: () => "",
+      describeResearcherWork: (item: Record<string, unknown>) => ({
+        work: String(item.work || ""),
+        count: Number(item.count || 0),
+        review: 0,
+        year_label: String(item.publication_year || ""),
+      }),
+    });
+    state.storeWorkStats = [
+      {
+        work: "Glas",
+        count: 1,
+        document_author: "Jacques Derrida",
+        publication_year: "1974",
+        publisher: "Galilée",
+      },
+      {
+        work: "Otherwise than Being",
+        count: 1,
+        document_author: "Emmanuel Levinas",
+        publication_year: "1974",
+        publisher: "Duquesne University Press",
+      },
+    ];
+    state.worksSearch = "galilee";
+    state.worksAuthor = "Jacques Derrida";
+
+    const snapshot = workspace.getWorksWorkspaceSnapshot() as {
+      works: Array<{ work: string }>;
+      authors: string[];
+    };
+
+    expect(snapshot.works.map((item) => item.work)).toEqual(["Glas"]);
+    expect(snapshot.authors).toEqual(["Emmanuel Levinas", "Jacques Derrida"]);
+  });
+
   it("restores Works sort, filters and view mode from the URL state", () => {
     const { state } = setup();
     const navigation = createNavigation({
