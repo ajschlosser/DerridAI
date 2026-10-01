@@ -300,10 +300,7 @@ describe("DerridAI SDK", () => {
 
   it("rejects an embedding revision mismatch before querying the provider", async () => {
     const publication = publicationPackage();
-    const vectorIndex = publication.manifest.vector_index as typeof publication.manifest.vector_index & {
-      revision?: string;
-    };
-    vectorIndex.revision = "revision-a";
+    Object.assign(publication.manifest.vector_index, { revision: "revision-a" });
     const embed = vi.fn(async () => ({ vectors: [[1, 0]] }));
     const client = await createClient({
       dataSource: dataSources.inline(publication),
@@ -358,5 +355,4 @@ describe("DerridAI SDK", () => {
     expect(response.results.map((item) => item.record.record_id)).toEqual(["g1"]);
     expect(response.diagnostics.duplicatesRemoved).toBe(1);
   });
-
 });
