@@ -773,6 +773,12 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     live_record = self.repo.get_record(
                         build_id, str(record.get("record_id") or "")
                     )
+                except KeyError:
+                    # Preserve the legacy direct-call behavior used by unit-level
+                    # enrichment and pre-persistence callers: the old load+scan
+                    # path simply produced no live row and continued. Production
+                    # scheduled enrichment persists Records before this point.
+                    live_record = None
                 except Exception as exc:
                     reason = (
                         f"Could not verify live reviewer ownership before {task_name} metadata enrichment: {exc}"
