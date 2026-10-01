@@ -883,7 +883,15 @@ class PdfCorpusRepository:
         """Counts and sample units for a source-unit policy, without saving anything."""
         from .unit_policy import preview
 
-        return preview(self.load_blocks(asset_id), policy)
+        resolved_policy = dict(policy or {})
+        if not resolved_policy.get("language"):
+            asset = self.get_asset(asset_id)
+            initial = asset.get("initial_metadata") if isinstance(asset.get("initial_metadata"), dict) else {}
+            embedded = asset.get("metadata") if isinstance(asset.get("metadata"), dict) else {}
+            source_language = initial.get("language") or embedded.get("language")
+            if source_language not in (None, ""):
+                resolved_policy["language"] = str(source_language)
+        return preview(self.load_blocks(asset_id), resolved_policy)
 
     def derive_asset_with_units(self, asset_id: str, policy: dict[str, Any] | None) -> dict[str, Any]:
         """A new source asset whose evidence units follow ``policy``.
