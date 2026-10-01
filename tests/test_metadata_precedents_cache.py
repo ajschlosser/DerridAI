@@ -143,6 +143,7 @@ def test_enrichment_keeps_references_only_and_review_reads_them_back(tmp_path, m
     assert len(refs) == 1 and refs[0]["exemplar_id"].startswith("mex-")
     stored = json.dumps(cache)
     assert PRECEDENT_EVIDENCE not in stored and "reported_position" not in stored
+    assert "candidate_source_units" not in stored
     assert cache["fields"]["speaker"] == {"mode": "none", "refs": []}
 
     result = manager.metadata_precedents(build_id, "t", "discourse_role")
@@ -187,15 +188,19 @@ def test_records_enriched_before_the_cache_search_live(tmp_path):
     assert result["items"][0]["candidate_source_units"][0]["block_id"] == "tb2"
 
 
-def test_candidates_from_blocks_no_longer_in_the_record_are_dropped(tmp_path, monkeypatch):
+def test_lazy_candidates_use_only_blocks_still_in_the_record(tmp_path, monkeypatch):
     repo, build_id, manager = _install(tmp_path, [_precedent(), _target()])
     record = _enrich(repo, build_id, manager, monkeypatch)
-    assert "tb2" in [unit["block_id"] for unit in record[CACHE_KEY]["fields"]["discourse_role"]["refs"][0]["candidate_source_units"]]
+    ref = record[CACHE_KEY]["fields"]["discourse_role"]["refs"][0]
+    assert "candidate_source_units" not in ref, "enrichment must not perform review-only remapping"
+
     record["source_block_ids"] = ["tb1"]  # re-segmented after enrichment
     repo.save_records(build_id, [repo.get_record(build_id, "p1"), record])
 
-    [item] = manager.metadata_precedents(build_id, "t", "discourse_role")["items"]
-    assert "tb2" not in [unit["block_id"] for unit in item["candidate_source_units"]]
+    result = manager.metadata_precedents(build_id, "t", "discourse_role")
+    [item] = result["items"]
+    assert all(unit["block_id"] == "tb1" for unit in item["candidate_source_units"])
+    assert result["candidate_pipeline"]["feature"] == "precedent_evidence_remap"
 
 
 def test_the_kept_retrieval_is_not_published():
