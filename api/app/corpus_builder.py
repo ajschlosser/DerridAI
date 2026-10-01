@@ -277,7 +277,7 @@ from .metadata_schema import (
 )
 from .metadata_schema_store import SchemaStore
 from .models import WorkMetadataRequest, WorkMetadataSeed
-from .nlp_annotations import annotate_record
+from .nlp_annotations import annotate_record, annotation_run_summary
 from .operation_events import note_corpus_build, note_record_metadata
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
@@ -1901,8 +1901,14 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         """Refresh all text-bound linguistic projections without changing scholarly authority."""
         schema = self._schema_for(build_id)
         language = str(manifest.get("language") or "")
-        for record in records:
+        annotation_results = [
             annotate_record(record, schema, language=language)
+            for record in records
+        ]
+        linguistic_annotations = annotation_run_summary(annotation_results)
+        build = self.repo.get_build(build_id)
+        build["linguistic_annotations"] = linguistic_annotations
+        self.repo.save_build(build)
         try:
             analysis = analyze_document(
                 records,
