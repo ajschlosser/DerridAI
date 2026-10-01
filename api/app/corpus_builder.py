@@ -655,14 +655,25 @@ def annotate_boundary_suspects(
     language: str | None = None,
 ) -> int:
     """Flag likely sentence/quotation cuts without assuming Latin lowercase rules."""
+
+    def record_language(record: dict[str, Any]) -> str | None:
+        values = record.get("region_language")
+        if isinstance(values, list):
+            cleaned = [str(value).strip() for value in values if str(value).strip()]
+            if len(cleaned) == 1:
+                return cleaned[0]
+        elif isinstance(values, str) and values.strip():
+            return values.strip()
+        return language
+
     count = 0
     for left, right in zip(records, records[1:]):
         lt = str(left.get("text") or "").rstrip()
         rt = str(right.get("text") or "").lstrip()
         if not lt or not rt:
             continue
-        incomplete_left = not ends_sentence_text(lt, language)
-        continuation_right = starts_mid_sentence_text(rt, language)
+        incomplete_left = not ends_sentence_text(lt, record_language(left))
+        continuation_right = starts_mid_sentence_text(rt, record_language(right))
         open_quote = (
             (lt.count('"') % 2 == 1)
             or (lt.count("“") > lt.count("”"))
