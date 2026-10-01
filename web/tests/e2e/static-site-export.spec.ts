@@ -87,9 +87,7 @@ test("same-origin provider paths resolve against the served publication origin",
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          choices: [
-            { message: { content: "Answer generated through the same-origin proxy." } },
-          ],
+          choices: [{ message: { content: "Answer generated through the same-origin proxy." } }],
         }),
       });
       return;
