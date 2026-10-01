@@ -17,7 +17,7 @@ except ModuleNotFoundError:
 from app import corpus_builder as cb
 from app import metadata_schema as ms
 from app.config import APP_VERSION
-from app.field_assertions import current_assertion_by_name
+from app.field_assertions import create_memory_assertion, current_assertion_by_name
 
 
 def notes_schema():
@@ -140,6 +140,65 @@ def test_deep_mode_uses_current_document_intelligence_as_a_quotation_signal(tmp_
     )
     assert [t[0] for t in tasks] == ["discourse", "quotation", "indexing"]
 
+
+def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path):
+    m, bid = manager(tmp_path)
+    schema = m._schema_for(bid)
+    record = {
+        "record_id": "r",
+        "record_revision": 1,
+        "text": "Hospitality, sovereignty, Derrida, and Glas.",
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+    }
+    values = {
+        "topics": ["hospitality"],
+        "concepts": ["sovereignty"],
+        "persons": ["Derrida"],
+        "works_referenced": ["Glas"],
+    }
+    for field, value in values.items():
+        create_memory_assertion(
+            record,
+            field,
+            value,
+            schema=schema,
+            confidence=0.9,
+            reason="Two reviewed precedents agree.",
+            evidence=[{"block_ids": ["b1"], "confidence": 0.9, "reason": "memory match"}],
+        )
+        record[field] = value
+
+    tasks, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep", "semantic_indexing": True},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        schema=schema,
+    )
+    assert [t[0] for t in tasks] == ["discourse"]
+    assert record["metadata_stage_status"]["indexing"] == "skipped"
+    assert record["metadata_execution_ledger"]["indexing"]["reason_code"] == "automatic_routing_skip"
+    assert "reviewed-memory prefills" in record["metadata_execution_ledger"]["indexing"]["error"]
+
+    rerun, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep", "semantic_indexing": True, "families": ["indexing"]},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        schema=schema,
+    )
+    assert [t[0] for t in rerun] == ["indexing"]
 
 def answer(**metadata):
     return {"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", **metadata},
