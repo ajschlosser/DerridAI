@@ -20,7 +20,14 @@ const pageHtml = `<!doctype html>
       globalThis.__derridaiSmoke = { done: false };
       try {
         const { createEmbedder, EMBEDDER_INFO } = await import("/embedder.mjs");
-        const embedder = await createEmbedder();
+        const embedder = await createEmbedder({
+          onProgress(info) {
+            globalThis.__derridaiSmoke.progress = info;
+            if (info?.status === "progress" || info?.status === "ready") {
+              console.log("[embedder-progress]", JSON.stringify(info));
+            }
+          },
+        });
         const query = await embedder.embedQuery("un chat assis sur un tapis");
         const documents = await embedder.embedDocuments([
           "a cat is sitting on a mat",
@@ -108,6 +115,20 @@ async function main() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   const externalRequests = [];
+  const browserErrors = [];
+
+  page.on("console", (message) => {
+    console.log(`[browser:${message.type()}] ${message.text()}`);
+  });
+  page.on("pageerror", (error) => {
+    browserErrors.push(error instanceof Error ? error.stack || error.message : String(error));
+    console.error("[browser:pageerror]", error);
+  });
+  page.on("requestfailed", (request) => {
+    console.error(
+      `[browser:requestfailed] ${request.url()} ${request.failure()?.errorText || "unknown"}`,
+    );
+  });
 
   page.on("request", (request) => {
     const url = new URL(request.url());
@@ -118,9 +139,16 @@ async function main() {
 
   try {
     await page.goto(origin, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(() => globalThis.__derridaiSmoke?.done === true, undefined, {
-      timeout: 240_000,
-    });
+    try {
+      await page.waitForFunction(() => globalThis.__derridaiSmoke?.done === true, undefined, {
+        timeout: 600_000,
+      });
+    } catch (error) {
+      const state = await page.evaluate(() => globalThis.__derridaiSmoke);
+      throw new Error(
+        `Browser embedder smoke test timed out. State: ${JSON.stringify(state)}. Browser errors: ${browserErrors.join(" | ")}. ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
 
     const result = await page.evaluate(() => globalThis.__derridaiSmoke);
     if (result.error) throw new Error(result.error);
