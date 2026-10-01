@@ -72,6 +72,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       contract: ${{ steps.filter.outputs.contract }}
       format: ${{ steps.filter.outputs.format }}
+      publication: ${{ steps.filter.outputs.publication }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,6 +89,7 @@ jobs:
             echo "frontend=true" >> "$GITHUB_OUTPUT"
             echo "contract=true" >> "$GITHUB_OUTPUT"
             echo "format=true" >> "$GITHUB_OUTPUT"
+            echo "publication=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -95,6 +97,7 @@ jobs:
           frontend=false
           contract=false
           format=false
+          publication=false
           while IFS= read -r path; do
             case "$path" in
               .github/workflows/frontend.yml|scripts/*)
@@ -135,12 +138,19 @@ jobs:
                 format=true
                 ;;
             esac
+
+            case "$path" in
+              api/app/site_publication.py|api/app/routers/sites.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|web/sdk/*|web/vite.sdk*.ts|web/playwright.publication.config.ts|web/tests/e2e/static-site-*.spec.ts|web/tests/fixtures/sdk-consumer/*|web/scripts/check-sdk-consumer.mjs|scripts/build_publication_acceptance_fixtures.py|scripts/check_publication_artifacts.sh|.github/workflows/frontend.yml)
+                publication=true
+                ;;
+            esac
           done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
 
           echo "backend=$backend" >> "$GITHUB_OUTPUT"
           echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
           echo "contract=$contract" >> "$GITHUB_OUTPUT"
           echo "format=$format" >> "$GITHUB_OUTPUT"
+          echo "publication=$publication" >> "$GITHUB_OUTPUT"
 
   format-check:
     needs: changes
@@ -371,6 +381,43 @@ jobs:
       - name: Corpus Builder WCAG 2.2 AA sweep
         run: npm run test:e2e:a11y
 
+  publication-artifacts:
+    needs: changes
+    if: needs.changes.outputs.publication == 'true'
+    name: publication-artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install publication acceptance dependencies
+        run: |
+          grep -vE '^sentence-transformers' api/requirements.txt > /tmp/derridai-publication-requirements.txt
+          pip install -r /tmp/derridai-publication-requirements.txt
+          cd web
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          npm run build:sdk
+      - name: Generate real publication artifacts
+        run: python scripts/build_publication_acceptance_fixtures.py .tmp/publication-acceptance
+      - name: Exercise single-file publication from file protocol
+        working-directory: web
+        env:
+          DERRIDAI_PUBLICATION_FIXTURE_DIR: ../.tmp/publication-acceptance
+        run: npx playwright test -c playwright.publication.config.ts
+      - name: Build and run generated nginx publication
+        env:
+          DERRIDAI_SITE_PORT: "18080"
+          DERRIDAI_SITE_IMAGE: derridai-publication-acceptance-${{ github.run_id }}
+          DERRIDAI_SITE_CONTAINER: derridai-publication-acceptance-${{ github.run_id }}
+        run: sh scripts/check_publication_artifacts.sh .tmp/publication-acceptance
+
   # Preserve the historical required-check name while allowing unrelated
   # backend-only changes to skip all frontend compute.
   frontend:
@@ -385,6 +432,7 @@ jobs:
       - frontend-legacy
       - frontend-e2e
       - frontend-a11y
+      - publication-artifacts
     runs-on: ubuntu-latest
     steps:
       - name: Verify frontend gates
@@ -399,6 +447,8 @@ jobs:
           LEGACY_RESULT: ${{ needs.frontend-legacy.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           A11Y_RESULT: ${{ needs.frontend-a11y.result }}
+          PUBLICATION_CHANGED: ${{ needs.changes.outputs.publication }}
+          PUBLICATION_RESULT: ${{ needs.publication-artifacts.result }}
         run: |
           if [ "$FORMAT_CHANGED" = "true" ] && [ "$FORMAT_RESULT" != "success" ]; then
             echo "The repository formatting gate did not succeed: $FORMAT_RESULT"
@@ -407,6 +457,11 @@ jobs:
 
           if [ "$CONTRACT_CHANGED" = "true" ] && [ "$CONTRACT_RESULT" != "success" ]; then
             echo "The frontend/backend API contract gate did not succeed: $CONTRACT_RESULT"
+            exit 1
+          fi
+
+          if [ "$PUBLICATION_CHANGED" = "true" ] && [ "$PUBLICATION_RESULT" != "success" ]; then
+            echo "The publication artifact acceptance gate did not succeed: $PUBLICATION_RESULT"
             exit 1
           fi
 
