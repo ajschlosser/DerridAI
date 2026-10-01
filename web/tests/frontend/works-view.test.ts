@@ -585,9 +585,7 @@ describe("WorksView", () => {
     await dialog.get("[data-site-work='Glas']").setValue(true);
     await dialog.get("input[value='nginx-docker']").setValue(true);
     await dialog.get("[data-site-provider-proxy-enabled]").setValue(true);
-    await dialog
-      .get("[data-site-provider-proxy-upstream]")
-      .setValue("http://localhost:11434/v1");
+    await dialog.get("[data-site-provider-proxy-upstream]").setValue("http://localhost:11434/v1");
     await dialog.get("input[placeholder='Research collection']").setValue("Proxied Glas");
     await dialog.get("form").trigger("submit");
     await flushPromises();
