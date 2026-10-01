@@ -608,7 +608,10 @@ onBeforeUnmount(() => {
           ×
         </button>
       </header>
-      <UiLoadingState v-if="semanticMapLoading" :label="i18n.t('ui.loading')" />
+      <UiLoadingState
+        v-if="semanticMapLoading"
+        :label="i18n.t('works.semantic_map_building', 'Creating semantic map…')"
+      />
       <template v-else>
         <div class="works-semantic-tabs" role="tablist" :aria-label="i18n.t('works.semantic_map')">
           <button
