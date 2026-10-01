@@ -25,7 +25,7 @@ from .models import (
 
 # Variables used by complexity formulas. Labels and descriptions are localized
 # through ``pipelines.complexity_variable.<id>.*``.
-COMPLEXITY_VARIABLES: tuple[str, ...] = ("n", "N", "k", "L", "q", "g", "P", "d", "S")
+COMPLEXITY_VARIABLES: tuple[str, ...] = ("n", "N", "k", "L", "q", "g", "P", "d", "S", "C")
 COST_DRIVERS: tuple[CostDriver, ...] = (
     "cpu",
     "storage",
@@ -205,9 +205,9 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
         [QUERY_IN, _tuning("fetch_k", minimum=1, maximum=1000)],
         [_in("candidates", "candidate_set")],
         # ChromaStore.lexical_search reads at most max(100·n_results, 2000) items (cap 20000), so
-        # cost is linear in N up to S and flat beyond it. Checked with
+        # cost is linear in N up to C and flat beyond it. Checked with
         # scripts/calibrate_store_search_complexity.py: exponent 1.04 for N <= 2000, 0.13 above.
-        _retrieve_scan(time="O(min(N, S)·L)", variables=("N", "S", "L")),
+        _retrieve_scan(time="O(min(N, C)·L)", variables=("N", "C", "L")),
     ),
     "retrieve.token_overlap": (
         [QUERY_IN],

@@ -3065,11 +3065,11 @@
         }
       ],
       "complexity": {
-        "time": "O(min(N, S)·L)",
+        "time": "O(min(N, C)·L)",
         "space": "O(N)",
         "variables": [
           "N",
-          "S",
+          "C",
           "L"
         ],
         "driver": "cpu",
