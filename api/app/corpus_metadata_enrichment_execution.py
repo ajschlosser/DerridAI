@@ -51,6 +51,8 @@ from .corpus_reviewer_helpers import (
 from .corpus_segmentation import _apply_manifest_metadata
 from .document_intelligence import (
     current_quotations as document_intelligence_quotations,
+)
+from .document_intelligence import (
     prompt_hints as document_intelligence_prompt_hints,
 )
 from .enrichment_ledger import (
