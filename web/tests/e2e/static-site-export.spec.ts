@@ -60,7 +60,9 @@ test("single-file export works directly from file://", async ({ page }) => {
   expect(networkRequests).toEqual([]);
 });
 
-test("same-origin provider paths resolve against the served publication origin", async ({ page }) => {
+test("same-origin provider paths resolve against the served publication origin", async ({
+  page,
+}) => {
   const html = await readFile(fixturePath("local-provider.html"), "utf-8");
   const providerRequests: string[] = [];
 
@@ -85,7 +87,9 @@ test("same-origin provider paths resolve against the served publication origin",
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          choices: [{ message: { content: "Answer generated through the same-origin proxy." } }],
+          choices: [
+            { message: { content: "Answer generated through the same-origin proxy." } },
+          ],
         }),
       });
       return;
