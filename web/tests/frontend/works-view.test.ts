@@ -26,12 +26,12 @@ function workItem(overrides: Partial<WorksItem> = {}): WorksItem {
     metadata: [
       {
         field_id: "derridai.document.document_author",
-      field: "document_author",
+        field: "document_author",
         field_label: "Document author",
         value: "Jacques Derrida",
         mixed: false,
         unique_count: 0,
-      empty: false,
+        empty: false,
       },
     ],
     status: { kind: "synced", label: "Synced" },
@@ -265,30 +265,27 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
-  it(
-    "presents authoritative corpus state and derived search-index freshness compactly",
-    async () => {
-      const wrapper = await mountWorks();
-      const loaded = wrapper.get("[data-works-context='loaded']");
-      expect(loaded.text()).toContain("Working corpus");
-      expect(loaded.text()).toContain("1 source files · 12 records");
+  it("presents authoritative corpus state and derived search-index freshness compactly", async () => {
+    const wrapper = await mountWorks();
+    const loaded = wrapper.get("[data-works-context='loaded']");
+    expect(loaded.text()).toContain("Working corpus");
+    expect(loaded.text()).toContain("1 source files · 12 records");
 
-      const database = wrapper.get("[data-works-context='database']");
-      expect(database.text()).toContain("Search index");
-      expect(database.text()).toContain("12 / 12 records current");
-      await database
-        .findAll("button")
-        .find((button) => button.text().includes("Update search index"))!
-        .trigger("click");
-      expect(runtime.syncAllWorks).toHaveBeenCalled();
+    const database = wrapper.get("[data-works-context='database']");
+    expect(database.text()).toContain("Search index");
+    expect(database.text()).toContain("12 / 12 records current");
+    await database
+      .findAll("button")
+      .find((button) => button.text().includes("Update search index"))!
+      .trigger("click");
+    expect(runtime.syncAllWorks).toHaveBeenCalled();
 
-      // Derived-index maintenance stays contextual rather than competing with page-level actions.
-      const header = wrapper.get(".ui-page-header-actions");
-      expect(header.text()).not.toMatch(/Update search index/);
-      expect(header.findAll("button.ui-button")).toHaveLength(1);
-      wrapper.unmount();
-    },
-  );
+    // Derived-index maintenance stays contextual rather than competing with page-level actions.
+    const header = wrapper.get(".ui-page-header-actions");
+    expect(header.text()).not.toMatch(/Update search index/);
+    expect(header.findAll("button.ui-button")).toHaveLength(1);
+    wrapper.unmount();
+  });
 
   it("shows stale search-index records as needing an update", async () => {
     runtime.getWorksWorkspaceSnapshot.mockReturnValue(
@@ -309,9 +306,9 @@ describe("WorksView", () => {
     expect(wrapper.get("[data-works-context='database']").text()).toContain(
       "9 / 12 records current · 3 need updating",
     );
-    expect(
-      wrapper.get("[data-index-state='stale']").classes(),
-    ).toContain("works-context-index-summary");
+    expect(wrapper.get("[data-index-state='stale']").classes()).toContain(
+      "works-context-index-summary",
+    );
     wrapper.unmount();
   });
 
@@ -350,39 +347,33 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
-  it(
-    "selects a work with the keyboard-operable card button and keeps the library in place",
-    async () => {
-      const wrapper = await mountWorks();
-      const select = wrapper.get(".works-card-select");
-      expect(select.element.tagName).toBe("BUTTON");
-      expect(select.attributes("aria-pressed")).toBe("false");
-      const scroll = vi.spyOn(window, "scrollTo");
-      await select.trigger("click");
-      expect(scroll).not.toHaveBeenCalled();
-      expect(wrapper.find("article[role], article[tabindex]").exists()).toBe(false);
-      wrapper.unmount();
-    },
-  );
+  it("selects a work with the keyboard-operable card button and keeps the library in place", async () => {
+    const wrapper = await mountWorks();
+    const select = wrapper.get(".works-card-select");
+    expect(select.element.tagName).toBe("BUTTON");
+    expect(select.attributes("aria-pressed")).toBe("false");
+    const scroll = vi.spyOn(window, "scrollTo");
+    await select.trigger("click");
+    expect(scroll).not.toHaveBeenCalled();
+    expect(wrapper.find("article[role], article[tabindex]").exists()).toBe(false);
+    wrapper.unmount();
+  });
 
-  it(
-    "places the selected work in a stable inspector beside the library, not above it",
-    async () => {
-      runtime.getWorksWorkspaceSnapshot.mockReturnValue(
-        adminSnapshot({ selected: workItem(), selectedWork: "Glas" }),
-      );
-      const wrapper = await mountWorks();
-      const layout = wrapper.get(".works-layout");
-      expect(layout.classes()).toContain("has-inspector");
-      const children = Array.from(layout.element.children).map((node) => node.className);
-      expect(children[0]).toContain("works-library");
-      expect(children[1]).toContain("works-inspector-pane");
-      expect(wrapper.get(".works-inspector-pane h2").text()).toBe("Glas");
-      await wrapper.get("button[aria-label='Close work details']").trigger("click");
-      expect(runtime.setWorksOverview).toHaveBeenCalledWith("");
-      wrapper.unmount();
-    },
-  );
+  it("places the selected work in a stable inspector beside the library, not above it", async () => {
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({ selected: workItem(), selectedWork: "Glas" }),
+    );
+    const wrapper = await mountWorks();
+    const layout = wrapper.get(".works-layout");
+    expect(layout.classes()).toContain("has-inspector");
+    const children = Array.from(layout.element.children).map((node) => node.className);
+    expect(children[0]).toContain("works-library");
+    expect(children[1]).toContain("works-inspector-pane");
+    expect(wrapper.get(".works-inspector-pane h2").text()).toBe("Glas");
+    await wrapper.get("button[aria-label='Close work details']").trigger("click");
+    expect(runtime.setWorksOverview).toHaveBeenCalledWith("");
+    wrapper.unmount();
+  });
 
   it("opens the selected work in an accessible dialog on narrow screens", async () => {
     setViewportWide(false);
@@ -424,9 +415,7 @@ describe("WorksView", () => {
     expect(runtime.setWorksView).toHaveBeenCalledWith({ sort: "records-desc" });
     await wrapper.get(".works-toolbar-views .ui-button-wrap:last-child button").trigger("click");
     expect(runtime.setWorksView).toHaveBeenCalledWith({ viewMode: "list" });
-    const filters = wrapper
-      .findAll("button")
-      .find((button) => button.text().includes("Filters"))!;
+    const filters = wrapper.findAll("button").find((button) => button.text().includes("Filters"))!;
     await filters.trigger("click");
     await wrapper.get("#works-filter-panel input[type='checkbox']").setValue(true);
     expect(runtime.setWorksView).toHaveBeenCalledWith({ needsReview: true });
@@ -458,39 +447,36 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
-  it(
-    "paginates large card libraries instead of revealing all cards by animation frame",
-    async () => {
-      const items = Array.from({ length: 50 }, (_, index) =>
-        workItem({ work: `Work ${String(index + 1).padStart(2, "0")}` }),
-      );
-      runtime.getWorksWorkspaceSnapshot.mockReturnValue(
-        adminSnapshot({
-          works: items,
-          scopeWorks: items.map((item) => ({
-            work: item.work,
-            count: item.count,
-            authors: item.authors,
-            year_label: item.year_label,
-          })),
-          totalWorks: items.length,
-          visibleWorks: items.length,
-        }),
-      );
-      const wrapper = await mountWorks();
+  it("paginates large card libraries instead of revealing all cards by animation frame", async () => {
+    const items = Array.from({ length: 50 }, (_, index) =>
+      workItem({ work: `Work ${String(index + 1).padStart(2, "0")}` }),
+    );
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({
+        works: items,
+        scopeWorks: items.map((item) => ({
+          work: item.work,
+          count: item.count,
+          authors: item.authors,
+          year_label: item.year_label,
+        })),
+        totalWorks: items.length,
+        visibleWorks: items.length,
+      }),
+    );
+    const wrapper = await mountWorks();
 
-      expect(wrapper.findAll(".works-card")).toHaveLength(48);
-      expect(wrapper.get(".works-library-pagination").text()).toContain("Page 1 / 2");
-      const next = wrapper
-        .get(".works-library-pagination")
-        .findAll("button")
-        .find((button) => button.text().includes("Next"))!;
-      await next.trigger("click");
-      expect(wrapper.findAll(".works-card")).toHaveLength(2);
-      expect(wrapper.get(".works-library-pagination").text()).toContain("Page 2 / 2");
-      wrapper.unmount();
-    },
-  );
+    expect(wrapper.findAll(".works-card")).toHaveLength(48);
+    expect(wrapper.get(".works-library-pagination").text()).toContain("Page 1 / 2");
+    const next = wrapper
+      .get(".works-library-pagination")
+      .findAll("button")
+      .find((button) => button.text().includes("Next"))!;
+    await next.trigger("click");
+    expect(wrapper.findAll(".works-card")).toHaveLength(2);
+    expect(wrapper.get(".works-library-pagination").text()).toContain("Page 2 / 2");
+    wrapper.unmount();
+  });
 
   it("renders List mode as a semantic dense table rather than compressed cards", async () => {
     runtime.getWorksWorkspaceSnapshot.mockReturnValue(adminSnapshot({ viewMode: "list" }));
