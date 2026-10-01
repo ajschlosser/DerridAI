@@ -834,6 +834,19 @@ ${evidence}`;
       }
     }
   }
+  function embeddingDescriptorMismatches(contract, descriptor) {
+    if (!contract) return [];
+    const mismatches = [];
+    const pairs = ["model", "revision"];
+    for (const field of pairs) {
+      const expected = String(contract[field] ?? "").trim();
+      const actual = String(descriptor[field] ?? "").trim();
+      if (expected && actual && expected !== actual) {
+        mismatches.push({ field, expected, actual });
+      }
+    }
+    return mismatches;
+  }
   function dedupeRecords(records) {
     const seen = /* @__PURE__ */ new Set();
     const unique = [];
@@ -989,6 +1002,23 @@ ${evidence}`;
       }
       const descriptor = this.embeddings.descriptor();
       const usesPublished = publishedAvailable && matchesPublicationModel(descriptor, this.manifest.vector_index);
+      if (!usesPublished && publishedAvailable) {
+        const expectedModel = String(this.manifest.vector_index?.model ?? "").replace(/:latest$/, "");
+        const actualModel = String(descriptor.model ?? "").replace(/:latest$/, "");
+        const revisionMismatches = embeddingDescriptorMismatches(
+          this.manifest.vector_index,
+          descriptor
+        ).filter((mismatch) => mismatch.field === "revision");
+        if (expectedModel && expectedModel === actualModel && revisionMismatches.length) {
+          return fallback(
+            fallbackWarning(
+              "embedding_contract_mismatch",
+              "The supplied embedding capability does not match the publication embedding contract; keyword results were returned.",
+              { mismatches: revisionMismatches }
+            )
+          );
+        }
+      }
       let expectedDimension = Number(this.manifest.vector_index?.dimension || 0);
       let localVectors;
       if (!usesPublished) {
@@ -1016,17 +1046,33 @@ ${evidence}`;
       try {
         const embedded = await this.embeddings.embed([query], { signal, purpose: "query" });
         vector = embedded.vectors[0] ?? [];
-        if (embedded.provider && embeddingFingerprint(embedded.provider) !== embeddingFingerprint(descriptor)) {
-          return fallback(
-            fallbackWarning(
-              "embedding_contract_mismatch",
-              "The embedding result provenance does not match the configured embedding provider; keyword results were returned.",
-              {
-                expected: embeddingFingerprint(descriptor),
-                actual: embeddingFingerprint(embedded.provider)
-              }
-            )
-          );
+        if (embedded.provider) {
+          if (usesPublished) {
+            const resultMismatches = embeddingDescriptorMismatches(
+              this.manifest.vector_index,
+              embedded.provider
+            );
+            if (resultMismatches.length) {
+              return fallback(
+                fallbackWarning(
+                  "embedding_contract_mismatch",
+                  "The embedding result provenance does not match the publication embedding contract; keyword results were returned.",
+                  { mismatches: resultMismatches }
+                )
+              );
+            }
+          } else if (embeddingFingerprint(embedded.provider) !== embeddingFingerprint(descriptor)) {
+            return fallback(
+              fallbackWarning(
+                "embedding_contract_mismatch",
+                "The embedding result provenance does not match the configured embedding provider; keyword results were returned.",
+                {
+                  expected: embeddingFingerprint(descriptor),
+                  actual: embeddingFingerprint(embedded.provider)
+                }
+              )
+            );
+          }
         }
       } catch (error) {
         if (isAbortError(error)) throw error;
