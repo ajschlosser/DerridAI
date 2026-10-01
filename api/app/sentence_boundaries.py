@@ -34,8 +34,14 @@ from .language_segmentation import (
 _RUNNING_TEXT = {"body", "paragraph", "text"}
 
 
+def _block_language(block: dict[str, Any], fallback: str | None = None) -> str | None:
+    value = str(block.get("thread_language") or "").strip()
+    return value or fallback
+
+
 def ends_sentence(block: dict[str, Any], language: str | None = None) -> bool:
     """True when a block can be the last block of a record."""
+    language = _block_language(block, language)
     text = str(block.get("text") or "").rstrip()
     if not text:
         return True
@@ -47,6 +53,7 @@ def ends_sentence(block: dict[str, Any], language: str | None = None) -> bool:
 
 
 def starts_mid_sentence(block: dict[str, Any], language: str | None = None) -> bool:
+    language = _block_language(block, language)
     text = str(block.get("text") or "")
     if str(block.get("type") or "body") not in _RUNNING_TEXT:
         return False
@@ -58,12 +65,20 @@ def clean_boundary(
     right: dict[str, Any],
     language: str | None = None,
 ) -> bool:
-    if not ends_sentence(left, language) or starts_mid_sentence(right, language):
+    left_language = _block_language(left, language)
+    right_language = _block_language(right, language)
+    if not ends_sentence(left, left_language) or starts_mid_sentence(right, right_language):
         return False
     left_text = str(left.get("text") or "").rstrip()
     right_text = str(right.get("text") or "").lstrip()
+    same_language = (
+        not left_language
+        or not right_language
+        or left_language.casefold() == right_language.casefold()
+    )
     if (
-        left_text.endswith(".")
+        same_language
+        and left_text.endswith(".")
         and right_text
         and str(left.get("type") or "body") in _RUNNING_TEXT
         and str(right.get("type") or "body") in _RUNNING_TEXT
@@ -73,7 +88,7 @@ def clean_boundary(
         # only accept the seam when the first sentence really ends with the
         # complete left block.
         probe = f"{left_text} {right_text}"
-        sentences = split_sentences(probe, language)
+        sentences = split_sentences(probe, left_language or right_language)
         if not sentences or sentences[0].strip() != left_text:
             return False
     return True
