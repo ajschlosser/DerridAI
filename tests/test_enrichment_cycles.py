@@ -399,6 +399,35 @@ def test_next_pass_reads_last_pass_inferences_without_reviewing_records(tmp_path
     assert repo.get_build(build_id)["status"] == "awaiting_review"
 
 
+def test_rerun_records_wall_clock_after_durable_merge(tmp_path: Path):
+    manager, repo, build_id = make_manager(tmp_path, [{}])
+
+    def fake_enrich(record, manifest, request, **kwargs):
+        return proposal(record, stance=("critical", 0.9))
+
+    manager._enrich_record = fake_enrich
+    manager.rerun_metadata_enrichment(
+        build_id,
+        {"families": ["discourse"], "scope": "all"},
+    )
+
+    stored = repo.get_record(build_id, "r1")
+    assert stored["stance"] == "critical"
+    events = [
+        row
+        for row in manager._ledger.events()
+        if row.get("kind") == "record_run"
+        and row.get("build_id") == build_id
+        and row.get("record_id") == "r1"
+    ]
+    assert len(events) == 1
+    event = events[0]
+    assert event["outcome"] == "enriched"
+    assert event["families"] == ["discourse"]
+    assert event["pass_number"] == 1
+    assert event["elapsed_ms"] >= 0
+
+
 def test_initial_enrichment_operation_marks_the_first_pass_complete():
     op = cb._initial_enrichment_operation("build-abc123def", [{}, {}], started_at="t0")
     assert op["kind"] == "metadata_enrichment"
