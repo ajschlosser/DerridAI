@@ -17,6 +17,7 @@ const props = withDefaults(
     evidenceBlockIds?: string[];
     zoomable?: boolean;
     maxWidth?: number;
+    showSourceBoxes?: boolean;
   }>(),
   {
     pageWidth: 0,
@@ -25,6 +26,7 @@ const props = withDefaults(
     evidenceBlockIds: () => [],
     zoomable: false,
     maxWidth: 720,
+    showSourceBoxes: true,
   },
 );
 const i18n = useI18nStore();
@@ -233,7 +235,7 @@ onBeforeUnmount(async () => {
       :style="{ maxWidth: `${props.maxWidth}px` }"
     >
       <canvas ref="canvas" :aria-label="i18n.tf('pdf_corpus.pdf_page_canvas', { page })"></canvas>
-      <div class="block-overlay" aria-hidden="true">
+      <div v-if="showSourceBoxes" class="block-overlay" aria-hidden="true">
         <span
           v-for="block in pageBlocks"
           :key="block.block_id"
@@ -242,6 +244,7 @@ onBeforeUnmount(async () => {
           :style="boxStyle(block)"
         ></span>
       </div>
+      <slot name="overlay"></slot>
     </div>
     <p class="viewer-caption">
       {{ i18n.tf("pdf_corpus.pdf_highlight_help", { page }) }}

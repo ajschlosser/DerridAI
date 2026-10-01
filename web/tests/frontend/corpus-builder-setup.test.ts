@@ -1,5 +1,16 @@
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../../src/api/corpus", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/api/corpus")>();
+  return {
+    ...actual,
+    corpusBuilderApi: {
+      ...actual.corpusBuilderApi,
+      blocks: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    },
+  };
+});
 import CorpusBuildReadiness from "../../src/components/CorpusBuildReadiness.vue";
 import CorpusExecutionSettings from "../../src/components/CorpusExecutionSettings.vue";
 import CorpusRecordSizingSettings from "../../src/components/CorpusRecordSizingSettings.vue";
@@ -309,6 +320,46 @@ describe("Corpus Builder setup and launch controls", () => {
     const plan = lastEmission(wrapper, "save")[0] as any;
     expect(plan.main_text_pdf_start).toBe(2);
     expect(plan.page_layout).toBe("single");
+  });
+
+  it("applies a margin column as one repeating region instead of a per-page drawing", async () => {
+    const asset: any = {
+      asset_id: "asset-margin",
+      sha256: "sha",
+      filename: "gloss.pdf",
+      created_at: "",
+      page_count: 12,
+      block_count: 42,
+      ocr_pages: 0,
+      warnings: [],
+      metadata: {},
+      document_layout: {
+        page_layout: "single",
+        reading_order: "left_to_right",
+        thread_mode: "continuous",
+      },
+      pages: [{ pdf_page: 1, width: 1000, height: 1400 }],
+    };
+    const wrapper = mount(DocumentStructureConfigurator, {
+      props: { asset, pdfUrl: "/gloss.pdf", blocks: [] },
+      global: { stubs: { PdfEvidenceViewer: true, PdfPageLabelEditor: true } },
+    });
+    const margin = wrapper.findAll('input[name="layout-recipe"]')[2];
+    await margin.trigger("change");
+    expect(wrapper.text()).toContain("A separate region is read after the main text");
+    await buttonByText(wrapper, "Save document structure").trigger("click");
+    const plan = lastEmission(wrapper, "save")[0] as any;
+    const roles = plan.layout_regions.map(
+      (region: { role: string; flow: string; applies_to: string }) => ({
+        role: region.role,
+        flow: region.flow,
+        applies_to: region.applies_to,
+      }),
+    );
+    expect(roles).toEqual([
+      { role: "main", flow: "with_main", applies_to: "all" },
+      { role: "margin_apparatus", flow: "separate", applies_to: "all" },
+    ]);
   });
 
   it("pages through printed labels and emits only edited mapping overrides", async () => {
