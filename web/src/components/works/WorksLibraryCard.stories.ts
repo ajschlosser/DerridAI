@@ -44,7 +44,6 @@ export const Selected: Story = { args: { selected: true } };
 export const NeedsReview: Story = {
   args: { work: { ...work, review: 12, status: { kind: "changed", label: "Pending changes" } } },
 };
-export const Compact: Story = { args: { compact: true } };
 export const LongTitleMissingCover: Story = {
   args: {
     work: {
