@@ -82,8 +82,6 @@ interface Scenario {
   steps?: (page: Page) => Promise<void>;
   /** What to capture: the page's main region (default) or the open dialog. */
   target?: "main" | "runtime" | "dialog" | "app" | "dock";
-  /** A viewport size other than the default desktop one, to exercise the responsive rules. */
-  viewport?: { width: number; height: number };
 }
 
 async function open(page: Page, scenario: Scenario) {
@@ -142,11 +140,6 @@ async function open(page: Page, scenario: Scenario) {
   }
   await page.waitForLoadState("networkidle");
   await scenario.steps?.(page);
-  // Resize last: the narrow layouts hide the sidebar the scenarios navigate with.
-  // Snapshot capture below waits for the resulting DOM to stabilize.
-  if (scenario.viewport) {
-    await page.setViewportSize(scenario.viewport);
-  }
 }
 
 /** Copy of an element's markup without the timing-dependent tooltip wrapper the runtime adds to disabled controls. */
