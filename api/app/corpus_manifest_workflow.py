@@ -181,20 +181,36 @@ class ManifestWorkflowMixin:
         if chosen != "default":
             return asset, None
         limit = _record_sizing_policy(request, CORPUS_PROFILES[profile_id])["long_record_chars"]
+        initial = asset.get("initial_metadata") if isinstance(asset.get("initial_metadata"), dict) else {}
+        embedded = asset.get("metadata") if isinstance(asset.get("metadata"), dict) else {}
+        segmentation_language = str(
+            initial.get("language") or embedded.get("language") or ""
+        ).strip() or None
         needs_division = any(
             len(str(block.get("text") or "")) > limit
             and not block.get("excluded_reason")
             and str(block.get("type") or "paragraph") in DIVISIBLE
             and str(block.get("locator_kind") or "") != "time"
-            and len(split_sentences(str(block.get("text") or ""))) > 1
+            and len(
+                split_sentences(
+                    str(block.get("text") or ""),
+                    segmentation_language,
+                )
+            ) > 1
             for block in self.repo.load_blocks(str(asset["asset_id"]))
         )
         if not needs_division:
             return asset, None
-        derived = self.repo.derive_asset_with_units(str(asset["asset_id"]), {"mode": "auto", "max_chars": limit})
+        unit_policy = {"mode": "auto", "max_chars": limit}
+        if segmentation_language:
+            unit_policy["language"] = segmentation_language
+        derived = self.repo.derive_asset_with_units(
+            str(asset["asset_id"]), unit_policy
+        )
         return derived, {
             "mode": "auto",
             "max_chars": limit,
+            "language": segmentation_language,
             "source_asset_id": asset["asset_id"],
             "source_block_count": asset["block_count"],
             "block_count": derived["block_count"],
