@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
 import { useAuthStore } from "./stores/auth";
@@ -31,6 +31,7 @@ import {
 import { SETTINGS_SECTIONS, isSettingsSectionId } from "./domain/settings";
 import { viewConfig } from "./domain/runtimeConstants";
 import * as runtime from "./runtime/runtime.js";
+import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
 
 const router = useRouter();
 const route = useRoute();
@@ -42,6 +43,7 @@ const runtimeStarted = ref(false);
 const handlingAuthExpiry = ref(false);
 const topSearch = ref("");
 const commandPalette = ref<InstanceType<typeof NavigationCommandPalette> | null>(null);
+const corpusFileInput = ref<HTMLInputElement | null>(null);
 const mobileNavDialog = ref<HTMLDialogElement | null>(null);
 const mobileNavTrigger = ref<HTMLButtonElement | null>(null);
 const narrowSidebar = useMatchMedia("(min-width: 781px) and (max-width: 900px)");
@@ -359,6 +361,10 @@ function onFiles(event: Event) {
   input.value = "";
 }
 
+function openCorpusFilePicker() {
+  if (auth.isAdmin) corpusFileInput.value?.click();
+}
+
 function navigateNative(path: string, runtimeView?: string) {
   const current = router.currentRoute.value.fullPath;
   const target = router.resolve(path).fullPath;
@@ -480,6 +486,7 @@ async function handleAuthExpired() {
 }
 
 onMounted(async () => {
+  window.addEventListener(CHOOSE_CORPUS_FILES_EVENT, openCorpusFilePicker);
   window.addEventListener("derridai-auth-expired", () => {
     void handleAuthExpired();
   });
@@ -499,6 +506,10 @@ onMounted(async () => {
   if (!auth.initialized) await auth.loadStatus();
   if (!i18n.languages.length) await i18n.initialize();
   await startRuntime();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener(CHOOSE_CORPUS_FILES_EVENT, openCorpusFilePicker);
 });
 
 watch(
@@ -593,6 +604,7 @@ watch(
             </button>
           </UiTooltip>
           <input
+            ref="corpusFileInput"
             id="fileInput"
             type="file"
             accept=".jsonl,.ndjson,.json,.zst"
