@@ -143,3 +143,63 @@ def test_ingest_speaker_detection_accepts_non_latin_labels() -> None:
     assert leading_speaker("デリダ：テクストが始まる") == "デリダ"
     assert leading_speaker("دريدا: يبدأ النص") == "دريدا"
     assert leading_speaker("Figure 1: not a speaker") is None
+
+
+def test_thread_language_overrides_document_language_for_units() -> None:
+    chinese = "第一句。第二句。第三句。"
+    blocks = [
+        {
+            "block_id": "b0",
+            "page": 1,
+            "type": "paragraph",
+            "text": chinese,
+            "thread_language": "zh",
+        }
+    ]
+    derived, _ = apply_unit_policy(
+        blocks,
+        {"mode": "sentence", "language": "en"},
+    )
+    assert [block["text"] for block in derived] == ["第一句。", "第二句。", "第三句。"]
+    assert all(block["thread_language"] == "zh" for block in derived)
+
+
+def test_thread_language_change_is_a_boundary_signal() -> None:
+    blocks = [
+        {
+            "block_id": "b0",
+            "text": "Le premier passage se termine ici.",
+            "type": "paragraph",
+            "thread_language": "fr",
+        },
+        {
+            "block_id": "b1",
+            "text": "The translation begins here.",
+            "type": "paragraph",
+            "thread_language": "en",
+        },
+    ]
+    candidates = _deterministic_boundary_candidates(blocks, {}, "fr")
+    assert candidates
+    assert "language_context_change" in candidates[0]["signals"]
+    assert candidates[0]["language_profile"]["profile"] == "en"
+
+
+def test_sentence_repair_prefers_thread_language_over_document_fallback() -> None:
+    blocks = [
+        {
+            "block_id": "b0",
+            "text": "第一句。",
+            "type": "body",
+            "page": 1,
+            "thread_language": "zh",
+        },
+        {
+            "block_id": "b1",
+            "text": "第二句。",
+            "type": "body",
+            "page": 1,
+            "thread_language": "zh",
+        },
+    ]
+    assert clean_boundary(blocks[0], blocks[1], "en")
