@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 import uuid
 from collections import Counter
 from collections.abc import Callable
@@ -29,6 +30,7 @@ from .corpus_record_quality import iso_now
 from .corpus_review_actions import _serialize_record_mutation
 from .corpus_review_state import _sync_record_metadata_state
 from .corpus_reviewer_helpers import _metadata_issue_type_for_field
+from .enrichment_ledger import RECORD_RUN
 from .enrichment_cycles import (
     CONFIDENCE_FIELDS,
     MAX_PASSES,
@@ -584,7 +586,10 @@ class EnrichmentRerunsMixin:
                 state,
             )
 
-        def candidate_for(index: int) -> tuple[dict[str, Any], dict[str, Any]]:
+        def candidate_for(
+            index: int,
+        ) -> tuple[dict[str, Any] | None, dict[str, Any], float, Exception | None]:
+            record_started = time.perf_counter()
             candidate = json.loads(json.dumps(snapshot[index]))
             reset_fields = {
                 field
@@ -606,31 +611,46 @@ class EnrichmentRerunsMixin:
                 "next_text": str(snapshot[index + 1].get("text") or "") if index + 1 < len(snapshot) else "",
             }
             request_used = {**effective_request(), "families": families, "_interactive_provider_override": True}
-            return self._enrich_record(
-                candidate,
-                manifest,
-                request_used,
-                build_id=build_id,
-                previous_text=neighbors["previous_text"],
-                next_text=neighbors["next_text"],
-                stage_callback=operation_stage_callback,
-            ), request_used
+            try:
+                enriched = self._enrich_record(
+                    candidate,
+                    manifest,
+                    request_used,
+                    build_id=build_id,
+                    previous_text=neighbors["previous_text"],
+                    next_text=neighbors["next_text"],
+                    stage_callback=operation_stage_callback,
+                )
+                return enriched, request_used, record_started, None
+            except Exception as exc:
+                return None, request_used, record_started, exc
 
         with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-enrich") as pool:
-            futures = {pool.submit(candidate_for, index): index for index in indices}
+            futures = {
+                pool.submit(candidate_for, index): (index, time.perf_counter())
+                for index in indices
+            }
             for future in as_completed(futures):
                 if self._cancelled(build_id):
                     for outstanding in futures:
                         outstanding.cancel()
                     break
-                index = futures[future]
+                index, submitted_at = futures[future]
                 record_id = str(snapshot[index].get("record_id") or "")
                 try:
-                    candidate, request_used = future.result()
+                    candidate, request_used, record_started, candidate_error = future.result()
                 except Exception as exc:
                     candidate = None
                     request_used = request
-                    failure = {"run_id": run_id, "at": iso_now(), "state": "failed", "error": str(exc)}
+                    record_started = submitted_at
+                    candidate_error = exc
+                if candidate_error is not None:
+                    failure = {
+                        "run_id": run_id,
+                        "at": iso_now(),
+                        "state": "failed",
+                        "error": str(candidate_error),
+                    }
                 # Merge into the live copy, never the snapshot: the reviewer may have
                 # edited this or any other record while the model was thinking.
                 result: dict[str, Any]
@@ -652,6 +672,24 @@ class EnrichmentRerunsMixin:
                     self.repo.save_records(build_id, live_records)
                 # The event promises that an immediate read sees the merged result.
                 note_record_metadata(build_id, record_id, "record_completed")
+                self._ledger.append(
+                    RECORD_RUN,
+                    model=str(request_used.get("model") or ""),
+                    field="__record__",
+                    build_id=build_id,
+                    record_id=record_id,
+                    run_id=run_id,
+                    elapsed_ms=max(
+                        0,
+                        int((time.perf_counter() - record_started) * 1000),
+                    ),
+                    outcome=result.get("outcome"),
+                    pass_number=pass_number,
+                    families=list(families),
+                    provider=str(request_used.get("provider") or ""),
+                    provider_profile_id=request_used.get("provider_profile_id"),
+                    max_concurrent_requests=max_workers,
+                )
                 totals["records_processed"] += 1
                 for key, name in (("added", "fields_added"), ("replaced", "fields_replaced"), ("kept", "fields_kept"), ("disputed", "fields_disputed")):
                     totals[name] += result.get(key, 0)
