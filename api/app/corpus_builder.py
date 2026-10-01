@@ -283,11 +283,7 @@ from .metadata_schema import (
 from .metadata_schema_store import SchemaStore
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record, annotation_run_summary
-from .operation_events import (
-    note_corpus_build,
-    note_record_metadata,
-    note_resource_changed,
-)
+from .operation_events import note_corpus_build, note_record_metadata, note_resource_changed
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
@@ -3462,49 +3458,88 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         self, build_id: str, metadata_task_total: int, snapshot: dict[str, Any],
         task_name: str, state: str, error_text: str | None,
     ) -> None:
-        """Atomically checkpoint one family and refresh live task telemetry."""
-        metadata_families = ("discourse", "quotation", "indexing")
+        """Checkpoint one family with Record-targeted persistence and incremental counters.
+
+        The old path reparsed and rewrote the entire corpus on every running/terminal
+        family transition. Initial counters are already derived once when enrichment is
+        scheduled, so under the manager lock each later callback can move exactly one
+        task between counter buckets while updating only the affected Record.
+        """
+        del error_text  # the snapshot's execution ledger already carries the bounded error text
         record_id = str(snapshot.get("record_id") or "")
+        if not record_id:
+            return
+
+        counter_for_state = {
+            "complete": "metadata_tasks_completed",
+            "failed": "metadata_tasks_failed",
+            "needs_review": "metadata_tasks_failed",
+            "skipped": "metadata_tasks_skipped",
+            "running": "metadata_tasks_running",
+            "queued": "metadata_tasks_queued",
+        }
         with self._lock:
-            live_records = self.repo.load_records(build_id)
-            live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == record_id), None)
-            if live_index is None:
+            try:
+                live_record = self.repo.get_record(build_id, record_id)
+            except KeyError:
                 return
+
+            row_status = (
+                live_record.get("metadata_stage_status")
+                if isinstance(live_record.get("metadata_stage_status"), dict)
+                else {}
+            )
+            prior_state = str(
+                row_status.get(task_name)
+                or ("complete" if live_record.get("metadata_complete") else "queued")
+            )
+
             copy = json.loads(json.dumps(snapshot))
-            copy["metadata_enrichment_state"] = "running" if state == "running" else str(copy.get("metadata_enrichment_state") or "running")
-            live_records[live_index] = _merge_enrichment_snapshot(live_records[live_index], copy, self._allowed_fields(build_id))
-            self.repo.save_records(build_id, live_records)
-            states: list[str] = []
-            active: list[dict[str, Any]] = []
-            for row in live_records:
-                row_status = row.get("metadata_stage_status") if isinstance(row.get("metadata_stage_status"), dict) else {}
-                ledger = row.get("metadata_execution_ledger") if isinstance(row.get("metadata_execution_ledger"), dict) else {}
-                for family in metadata_families:
-                    fallback = "complete" if row.get("metadata_complete") else "queued"
-                    family_state = str(row_status.get(family) or fallback)
-                    states.append(family_state)
-                    if family_state == "running":
-                        entry = ledger.get(family) if isinstance(ledger.get(family), dict) else {}
-                        active.append({
-                            "record_id": row.get("record_id"), "task": family,
-                            "started_at": entry.get("started_at"),
-                        })
-            completed_tasks = sum(1 for value in states if value == "complete")
-            failed_tasks = sum(1 for value in states if value in {"failed", "needs_review"})
-            skipped_tasks = sum(1 for value in states if value == "skipped")
-            running_tasks = sum(1 for value in states if value == "running")
-            queued_tasks = max(0, metadata_task_total - completed_tasks - failed_tasks - skipped_tasks - running_tasks)
-            updates = {
-                "metadata_tasks_total": metadata_task_total,
-                "metadata_tasks_completed": completed_tasks,
-                "metadata_tasks_failed": failed_tasks,
-                "metadata_tasks_skipped": skipped_tasks,
-                "metadata_tasks_running": running_tasks,
-                "metadata_tasks_queued": queued_tasks,
-                "metadata_active_tasks": active[:32],
-                "metadata_last_progress_at": iso_now() if state in {"complete", "failed", "skipped"} else self.repo.get_build(build_id).get("metadata_last_progress_at"),
-            }
+            copy["metadata_enrichment_state"] = (
+                "running"
+                if state == "running"
+                else str(copy.get("metadata_enrichment_state") or "running")
+            )
+            merged = _merge_enrichment_snapshot(
+                live_record, copy, self._allowed_fields(build_id)
+            )
+            self.repo.update_record(build_id, merged)
+
+            build = self.repo.get_build(build_id)
+            updates: dict[str, Any] = {"metadata_tasks_total": metadata_task_total}
+            prior_counter = counter_for_state.get(prior_state)
+            next_counter = counter_for_state.get(state)
+            if prior_counter != next_counter:
+                if prior_counter:
+                    updates[prior_counter] = max(0, int(build.get(prior_counter) or 0) - 1)
+                if next_counter:
+                    updates[next_counter] = int(build.get(next_counter) or 0) + 1
+
+            active = [
+                item
+                for item in (build.get("metadata_active_tasks") or [])
+                if not (
+                    str(item.get("record_id") or "") == record_id
+                    and str(item.get("task") or "") == task_name
+                )
+            ]
+            if state == "running":
+                ledger = (
+                    merged.get("metadata_execution_ledger")
+                    if isinstance(merged.get("metadata_execution_ledger"), dict)
+                    else {}
+                )
+                entry = ledger.get(task_name) if isinstance(ledger.get(task_name), dict) else {}
+                active.append({
+                    "record_id": record_id,
+                    "task": task_name,
+                    "started_at": entry.get("started_at"),
+                })
+            updates["metadata_active_tasks"] = active[:32]
+            if state in {"complete", "failed", "needs_review", "skipped"}:
+                updates["metadata_last_progress_at"] = iso_now()
             self._update(build_id, **updates)
+
 
     def _schedule_build_enrichment(
         self, build_id: str, request: dict[str, Any], manifest: dict[str, Any], records: list[dict[str, Any]],
