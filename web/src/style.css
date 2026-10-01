@@ -12926,6 +12926,7 @@ button {
 }
 .research-answer-workspace,
 .research-evidence-panel {
+  min-width: 0;
   border-radius: 13px;
   border-color: var(--line);
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.03);
@@ -13063,6 +13064,15 @@ button {
   flex-direction: column;
   overflow: hidden;
   background: var(--surface-card);
+}
+.research-evidence-index,
+.research-evidence-detail {
+  min-width: 0;
+}
+.research-evidence-panel .citation,
+.research-evidence-panel .meta,
+.research-evidence-panel code {
+  overflow-wrap: anywhere;
 }
 .research-panel-heading {
   min-height: 56px;

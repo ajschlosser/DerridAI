@@ -123,6 +123,9 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     assert "__DERRIDAI_HOST_CAPABILITIES__" in site_runtime
     assert "sdk.createClient" in site_runtime
     assert "OLLAMA_ORIGINS" in site_runtime
+    assert "derridai.site.providers." in site_runtime
+    assert "site.runtime.save_provider" in site_runtime
+    assert "site.runtime.provider_local_help" in site_runtime
     # The shared browser client contains provider adapters, but this publication
     # exports no provider profile, endpoint, or credential unless the publisher
     # explicitly selects one.
@@ -229,6 +232,7 @@ def test_site_bundle_exports_only_selected_installed_languages_and_safe_provider
     ]
     assert "MUST-NOT-EXPORT" not in site_runtime
     assert manifest["features"]["direct_provider_endpoints"] is True
+    assert "site.runtime.provider_saved" in site_runtime
 
 
 def test_site_bundle_rejects_selected_language_with_missing_runtime_translations(
