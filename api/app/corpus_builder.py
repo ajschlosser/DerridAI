@@ -2141,19 +2141,32 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             "semantic_content_graph": graph,
         }
 
-    def document_intelligence(self, build_id: str) -> dict[str, Any]:
-        """Return the retained annotation run and whether current text has made it stale."""
-        self.repo.get_build(build_id)
+    def _document_intelligence_for_records(
+        self,
+        build_id: str,
+        records: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         value = self.repo.load_checkpoint(build_id, "document_intelligence", {})
         if not isinstance(value, dict):
             return {}
-        current_text, _ = document_text_for_records(self.repo.load_records(build_id))
+        current_text, _ = document_text_for_records(records)
         current_sha256 = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
         return {
             **value,
-            "stale": bool(value.get("text_sha256") and value.get("text_sha256") != current_sha256),
+            "stale": bool(
+                value.get("text_sha256")
+                and value.get("text_sha256") != current_sha256
+            ),
             "current_text_sha256": current_sha256,
         }
+
+    def document_intelligence(self, build_id: str) -> dict[str, Any]:
+        """Return the retained annotation run and whether current text has made it stale."""
+        self.repo.get_build(build_id)
+        return self._document_intelligence_for_records(
+            build_id,
+            self.repo.load_records(build_id),
+        )
 
     def _semantic_projection_lock(self, build_id: str) -> threading.RLock:
         with self._lock:
@@ -2191,7 +2204,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
             for row in records:
                 _present_for_reviewer(row)
-            analysis = self.document_intelligence(build_id)
+            analysis = self._document_intelligence_for_records(build_id, records)
             graph_analysis = (
                 {"profile": analysis.get("profile"), "status": "stale"}
                 if analysis.get("stale")
