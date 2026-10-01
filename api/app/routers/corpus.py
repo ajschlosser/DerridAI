@@ -737,6 +737,49 @@ def get_pdf_corpus_record_semantic_map(build_id: str, record_id: str) -> dict[st
         raise HTTPException(status_code=404, detail="Corpus build or record not found") from exc
 
 
+@router.get("/api/records/{record_id}/semantic-map")
+def get_record_semantic_map(record_id: str) -> dict[str, Any]:
+    """Read or materialize the semantic map associated with a published Record.
+
+    Missing historical provenance produces a valid empty map instead of a
+    "map not available" failure. Records with provenance materialize and persist
+    their current projection on first access.
+    """
+    build_id = system_store.get_record_build_id(record_id)
+    if build_id:
+        try:
+            return pdf_corpus_builds.record_semantic_map(build_id, record_id)
+        except KeyError:
+            pass
+    return {
+        "version": 1,
+        "kind": "record_semantic_map",
+        "record_id": record_id,
+        "record_revision": 0,
+        "record_text_sha256": "",
+        "layers": {
+            "document_intelligence": {"status": "missing"},
+            "terms": {"status": "missing"},
+        },
+        "mentions": [],
+        "nodes": [],
+        "edges": [],
+        "linked_records": [],
+        "summary": {
+            "local_nodes": 0,
+            "shown_local_nodes": 0,
+            "neighbor_nodes": 0,
+            "in_record_edges": 0,
+            "outward_edges": 0,
+            "linked_records": 0,
+        },
+        "epistemic_note": (
+            "No semantic relationships have been derived for this Record yet. "
+            "The map remains a valid empty derived projection."
+        ),
+    }
+
+
 @router.get("/api/records/{record_id}/semantic-map-build")
 def get_record_semantic_map_build(record_id: str) -> dict[str, Any]:
     """Resolve the build whose Document Intelligence covers a published Record.
@@ -771,18 +814,61 @@ def get_work_semantic_map(work: str) -> dict[str, Any]:
     requests are indexed reads and do not rescan corpus Records or relationships.
     """
     rows = system_store.list_records_for_work(work, limit=500)
-    build_ids = list(dict.fromkeys(str(row.get("build_id") or "") for row in rows if row.get("build_id")))
+    records_by_build: dict[str, list[str]] = {}
+    for row in rows:
+        build_id = str(row.get("build_id") or "")
+        record_id = str(row.get("record_id") or "")
+        if build_id and record_id:
+            records_by_build.setdefault(build_id, []).append(record_id)
+
     sources: list[dict[str, Any]] = []
     generations: dict[str, int] = {}
-    for build_id in build_ids:
+    for build_id, record_ids in records_by_build.items():
+        payload: dict[str, Any] | None = None
         try:
             payload = pdf_corpus_builds.work_semantic_map(build_id, work)
-            generations[build_id] = int(system_store.semantic_map_state(build_id).get("generation") or 0)
         except KeyError:
+            # Older records may have acquired their Work association at publication
+            # even when the build-time Record lacked a work field. The Record
+            # projections are still persisted; derive the same visual source
+            # contract from their local canonical nodes.
+            pass
+        generations[build_id] = int(system_store.semantic_map_state(build_id).get("generation") or 0)
+        if payload is not None:
+            for source in payload.get("sources") or []:
+                if isinstance(source, dict) and str(source.get("id") or "") in record_ids:
+                    sources.append(source)
             continue
-        for source in payload.get("sources") or []:
-            if isinstance(source, dict):
-                sources.append(source)
+
+        for record_id in record_ids:
+            try:
+                record_map = pdf_corpus_builds.record_semantic_map(build_id, record_id)
+            except KeyError:
+                continue
+            local_nodes = [
+                node
+                for node in record_map.get("nodes") or []
+                if isinstance(node, dict) and node.get("local")
+            ]
+            sources.append({
+                "id": record_id,
+                "work": work,
+                "concepts": sorted({
+                    str(node.get("label") or "")
+                    for node in local_nodes
+                    if node.get("type") == "concept" and node.get("label")
+                }, key=str.casefold),
+                "topics": sorted({
+                    str(node.get("label") or "")
+                    for node in local_nodes
+                    if node.get("type") == "topic" and node.get("label")
+                }, key=str.casefold),
+                "persons": sorted({
+                    str(node.get("label") or "")
+                    for node in local_nodes
+                    if node.get("type") in {"person", "character"} and node.get("label")
+                }, key=str.casefold),
+            })
 
     deduped: dict[str, dict[str, Any]] = {}
     for source in sources:
@@ -790,7 +876,7 @@ def get_work_semantic_map(work: str) -> dict[str, Any]:
         key = record_id or json.dumps(source, sort_keys=True, ensure_ascii=False)
         deduped.setdefault(key, source)
     return {
-        "state": "ready",
+        "state": "ready" if deduped else "empty",
         "kind": "work_semantic_map_sources",
         "work": work,
         "sources": list(deduped.values()),
