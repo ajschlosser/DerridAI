@@ -41,15 +41,30 @@ function strings() {
     "site.runtime.method_on": "used",
     "site.runtime.method_off": "not used",
     "site.runtime.tutorial_welcome_title": "Welcome",
-    "site.runtime.tutorial_welcome_body": "Learn how to use this research site.",
+    "site.runtime.tutorial_welcome_body": "About welcome.",
+    "site.runtime.tutorial_nav_title": "Four workspaces",
+    "site.runtime.tutorial_nav_body": "About four workspaces.",
+    "site.runtime.tutorial_works_title": "Works: the published texts",
+    "site.runtime.tutorial_works_body": "About works: the published texts.",
     "site.runtime.tutorial_search_title": "Search and inspect Records",
-    "site.runtime.tutorial_search_body": "Use text, semantic, or hybrid search.",
+    "site.runtime.tutorial_search_body": "About search and inspect records.",
+    "site.runtime.tutorial_filters_title": "Search mode and filters",
+    "site.runtime.tutorial_filters_body": "About search mode and filters.",
     "site.runtime.tutorial_methods_title": "Know what the site is using",
-    "site.runtime.tutorial_methods_body": "The site always identifies text, vector, and LLM use.",
+    "site.runtime.tutorial_methods_body": "About know what the site is using.",
     "site.runtime.tutorial_research_title": "Ask Research questions",
-    "site.runtime.tutorial_research_body": "Research retrieves evidence before generation.",
-    "site.runtime.tutorial_accessibility_title": "Language and accessibility",
-    "site.runtime.tutorial_accessibility_body": "Use themes, high contrast, and keyboard controls.",
+    "site.runtime.tutorial_research_body": "About ask research questions.",
+    "site.runtime.tutorial_provider_title": "Optional language-model provider",
+    "site.runtime.tutorial_provider_body": "About optional language-model provider.",
+    "site.runtime.tutorial_evidence_title": "Evidence and citations",
+    "site.runtime.tutorial_evidence_body": "About evidence and citations.",
+    "site.runtime.tutorial_notes_title": "Your annotations",
+    "site.runtime.tutorial_notes_body": "About your annotations.",
+    "site.runtime.tutorial_controls_title": "Language and accessibility",
+    "site.runtime.tutorial_controls_body": "About language and accessibility.",
+    "site.runtime.tutorial_restart_title": "Replay this tour any time",
+    "site.runtime.tutorial_restart_body": "About replay this tour any time.",
+    "site.runtime.tutorial_hint": "Use Next and Previous, or the arrow keys.",
     "site.runtime.tutorial_progress": "Step {current} of {total}",
     "site.runtime.previous": "Previous",
     "site.runtime.next": "Next",
@@ -245,7 +260,7 @@ test("published tutorial is keyboard operable, skippable, and itself WCAG 2.2 AA
   await scan(page);
   await page.getByRole("button", { name: "Next" }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("dialog", { name: "Search and inspect Records" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Four workspaces" })).toBeVisible();
 
   for (let index = 0; index < 20; index += 1) await page.keyboard.press("Tab");
   expect(await dialog.evaluate((node) => node.contains(document.activeElement))).toBe(true);
@@ -256,6 +271,115 @@ test("published tutorial is keyboard operable, skippable, and itself WCAG 2.2 AA
   await page.getByRole("button", { name: "Tutorial" }).click();
   await expect(page.getByRole("dialog", { name: "Welcome" })).toBeVisible();
   await page.getByRole("button", { name: "Skip tutorial" }).click();
+});
+
+test("guided tour spotlights each real element, switches views, and restores the page", async ({
+  page,
+}) => {
+  // Reduced motion removes the spotlight glide so its geometry can be measured immediately.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mountStaticSite(page);
+  const dialog = page.getByRole("dialog");
+  const spot = page.locator(".tour-spot");
+  const card = page.locator(".tour-card");
+  const next = page.getByRole("button", { name: "Next" });
+
+  // Welcome has no target: a centered card over a fully dimmed page.
+  await expect(dialog).toHaveAccessibleName("Welcome");
+  await expect(spot).toBeHidden();
+  await next.click();
+
+  const overlaps = async (selector: string) => {
+    const target = await page.locator(selector).first().boundingBox();
+    const ring = await spot.boundingBox();
+    const box = await card.boundingBox();
+    expect(target && ring && box).toBeTruthy();
+    // The spotlight encloses the target, and the card never covers the highlighted element.
+    expect(ring!.x).toBeLessThanOrEqual(target!.x);
+    expect(ring!.y).toBeLessThanOrEqual(target!.y);
+    expect(ring!.x + ring!.width).toBeGreaterThanOrEqual(target!.x + target!.width - 1);
+    const disjoint =
+      box!.x + box!.width <= ring!.x ||
+      ring!.x + ring!.width <= box!.x ||
+      box!.y + box!.height <= ring!.y ||
+      ring!.y + ring!.height <= box!.y;
+    expect(disjoint).toBe(true);
+  };
+
+  await expect(dialog).toHaveAccessibleName("Four workspaces");
+  await expect(spot).toBeVisible();
+  await overlaps("nav[data-tour=nav]");
+
+  await next.click();
+  await expect(dialog).toHaveAccessibleName("Works: the published texts");
+  await overlaps("[data-tour=works]");
+
+  await next.click();
+  await expect(dialog).toHaveAccessibleName("Search and inspect Records");
+  await overlaps("[data-tour=search]");
+
+  await next.click();
+  await expect(dialog).toHaveAccessibleName("Search mode and filters");
+  await next.click();
+  await expect(dialog).toHaveAccessibleName("Know what the site is using");
+  await overlaps("[data-tour=methods]");
+
+  // Arrow keys move through the tour as well.
+  await page.keyboard.press("ArrowRight");
+  await expect(dialog).toHaveAccessibleName("Ask Research questions");
+  await page.keyboard.press("ArrowLeft");
+  await expect(dialog).toHaveAccessibleName("Know what the site is using");
+  await page.keyboard.press("ArrowRight");
+
+  for (const name of [
+    "Optional language-model provider",
+    "Evidence and citations",
+    "Your annotations",
+    "Language and accessibility",
+    "Replay this tour any time",
+  ]) {
+    await next.click();
+    await expect(dialog).toHaveAccessibleName(name);
+    await expect(spot).toBeVisible();
+  }
+  await scan(page);
+
+  await page.getByRole("button", { name: "Finish" }).click();
+  await expect(page.locator("dialog.tour")).toHaveCount(0);
+  // The tour wandered through Works, Research, and Annotations; the reader is back on Search.
+  await expect(page.getByRole("button", { name: "Search", exact: true }).first()).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(page.getByRole("heading", { name: "Search" })).toBeVisible();
+});
+
+test("guided tour is dismissed with Escape, remembered, and fits a phone screen", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 360, height: 640 });
+  await mountStaticSite(page);
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Next" }).click();
+
+  const box = await page.locator(".tour-card").boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(360);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(640);
+  const ring = await page.locator(".tour-spot").boundingBox();
+  // The docked card never covers the highlighted element, whichever side it docks on.
+  expect(ring!.y + ring!.height <= box!.y + 1 || box!.y + box!.height <= ring!.y + 1).toBe(true);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("dialog.tour")).toHaveCount(0);
+
+  // Reopened from the button, the tour returns focus to that button when it closes.
+  await page.getByRole("button", { name: "Tutorial" }).click();
+  await expect(page.getByRole("dialog")).toHaveAccessibleName("Welcome");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Tutorial" })).toBeFocused();
 });
 
 test("search terms are highlighted in result snippets and the opened record", async ({ page }) => {
