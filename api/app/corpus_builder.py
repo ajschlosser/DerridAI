@@ -60,7 +60,7 @@ from .corpus_llm_helpers import (
     StructuredOutputError,
     _context_window,
     _llm_config,
-    _parse_json_robust,
+    _parse_json_robust as _parse_json_robust,
     _provider_roles,
     _stage_limits,
     _stage_timeouts,
@@ -318,8 +318,8 @@ from .structured_completion import (
     complete_structured_json,
 )
 from .structured_json import (
-    StructuredJsonMalformedError,
-    StructuredJsonTruncatedError,
+    StructuredJsonMalformedError as StructuredJsonMalformedError,
+    StructuredJsonTruncatedError as StructuredJsonTruncatedError,
 )
 from .system_store import system_store
 from .text_noise import (
