@@ -5,7 +5,6 @@ import { useI18nStore } from "../../stores/i18n";
 import { statusTone } from "../../domain/status";
 import type { WorksLibraryItem } from "../../types/works";
 import AppIcon from "../AppIcon.vue";
-import UiButton from "../ui/UiButton.vue";
 import UiMenu, { type UiMenuItem } from "../ui/UiMenu.vue";
 import UiStatusBadge from "../ui/UiStatusBadge.vue";
 
@@ -93,7 +92,7 @@ function onMenu(work: WorksLibraryItem, id: string) {
           <th scope="col" class="numeric">{{ i18n.t("dynamic.records") }}</th>
           <th v-if="admin" scope="col" class="numeric">{{ i18n.t("works.need_review") }}</th>
           <th v-if="admin" scope="col">{{ i18n.t("works.list_index_status") }}</th>
-          <th scope="col" class="actions">
+          <th v-if="admin" scope="col" class="actions">
             <span class="sr-only">{{ i18n.t("ui.actions") }}</span>
           </th>
         </tr>
@@ -153,15 +152,8 @@ function onMenu(work: WorksLibraryItem, id: string) {
           <td v-if="admin">
             <UiStatusBadge :label="work.status.label" :tone="statusTone(work.status.kind)" />
           </td>
-          <td class="actions">
-            <UiButton
-              v-if="!admin"
-              size="small"
-              :label="i18n.t('works.open_records')"
-              @click="emit('records', work.work)"
-            />
+          <td v-if="admin" class="actions">
             <UiMenu
-              v-else
               :label="i18n.t('ui.actions')"
               :aria-label="i18n.tf('works.work_actions', { work: work.work })"
               :items="menuItems(work)"
