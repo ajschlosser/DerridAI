@@ -391,7 +391,6 @@ export function createWorksWorkspace(deps: Deps) {
     if (isResearcher()) {
       const stores = recordStores();
       const all = state.storeWorkStats || [];
-      const needle = query.toLocaleLowerCase();
       const items = sortWorkItems(
         all
           .map((item: Any) => ({
