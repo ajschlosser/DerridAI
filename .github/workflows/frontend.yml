@@ -109,9 +109,6 @@ jobs:
                 contract=true
                 format=true
                 ;;
-              web/sdk/*|web/vite.sdk*.ts|web/scripts/check-sdk-consumer.mjs|web/tests/fixtures/sdk-consumer/*|api/app/site_assets/derridai-sdk.js|web/package.json|web/package-lock.json)
-                sdk=true
-                ;;
               api/*)
                 backend=true
                 contract=true
@@ -133,6 +130,12 @@ jobs:
                 ;;
               README.md|CONTRIBUTING.md|AGENTS.md|docs/*|.prettierignore|.editorconfig)
                 format=true
+                ;;
+            esac
+
+            case "$path" in
+              web/sdk/*|web/vite.sdk*.ts|web/scripts/check-sdk-consumer.mjs|web/tests/fixtures/sdk-consumer/*|api/app/site_assets/derridai-sdk.js|web/package.json|web/package-lock.json)
+                sdk=true
                 ;;
             esac
 
