@@ -12,7 +12,12 @@ import type { CorpusRecord } from "../api/pdfCorpus";
 import type { PipelineRunTrace } from "../types/pipelines";
 import { useI18nStore } from "../stores/i18n";
 import { metadataConstraints } from "../domain/metadataConstraints";
-import { metadataFieldSpec, metadataSuggestions } from "../domain/metadataFieldRegistry";
+import {
+  metadataFieldSpec,
+  metadataSuggestions,
+  PROPOSITION_STATUS_VALUES,
+  STANCE_VALUES,
+} from "../domain/metadataFieldRegistry";
 import { assertionConflict, currentFieldAssertions } from "../domain/fieldAssertions";
 import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
 import { corpusBuilderApi, type MetadataPrecedents } from "../api/corpus";
@@ -54,6 +59,41 @@ const emit = defineEmits<{
   complete: [];
 }>();
 const i18n = useI18nStore();
+
+const MACHINE_VOCABULARY_LABELS = new Set(
+  [
+    "ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM", "PART",
+    "PRON", "PROPN", "PUNCT", "SCONJ", "SYM", "VERB", "X",
+    "CARDINAL", "DATE", "EVENT", "FAC", "GPE", "LANGUAGE", "LAW", "LOC", "MONEY",
+    "NORP", "ORDINAL", "ORG", "PERCENT", "PERSON", "PER", "PRODUCT", "QUANTITY",
+    "TIME", "WORK_OF_ART",
+  ].map((value) => value.toLocaleLowerCase()),
+);
+
+const nlpProvenance = computed(() => {
+  const data = (props.record as unknown as { nlp_candidates?: Record<string, unknown> }).nlp_candidates;
+  if (!data || typeof data !== "object") return null;
+  const status = String(data.status || "");
+  const engine = String(data.engine || "spacy");
+  const engineVersion = String(data.engine_version || "");
+  const model = String(data.model || "");
+  const language = String(data.language || "");
+  const reason = String(data.reason || "");
+  return { status, engine, engineVersion, model, language, reason };
+});
+const nlpProvenanceLabel = computed(() => {
+  const item = nlpProvenance.value;
+  if (!item) return "";
+  const parts = [
+    item.engine === "spacy" ? "spaCy" : item.engine,
+    item.engineVersion ? `v${item.engineVersion}` : "",
+    item.model,
+    item.language,
+  ].filter(Boolean);
+  if (item.status !== "ok") parts.push(item.reason || item.status);
+  return parts.join(" · ");
+});
+
 const metadataPipelineTrace = computed<PipelineRunTrace | null>(() => {
   const memory = (
     props.record as unknown as {
@@ -303,6 +343,51 @@ function spec(field: string) {
     schemaFields.value[field],
   );
 }
+function nlpOptions(field: string): string[] {
+  const data = (props.record as unknown as {
+    nlp_candidates?: {
+      status?: string;
+      fields?: Record<string, Array<{ start?: number; end?: number; text?: string }>>;
+    };
+  }).nlp_candidates;
+  if (!data || data.status !== "ok") return [];
+  const sourceText = String(props.record.text || "");
+  const candidates = data.fields?.[field] || [];
+  return candidates.flatMap((candidate) => {
+    const start = Number(candidate.start);
+    const end = Number(candidate.end);
+    const text = String(candidate.text || "").trim();
+    if (!text || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start)
+      return [];
+    // A text edit makes stored offsets stale. Never surface a candidate unless the
+    // retained exact span still binds to the current Record text.
+    return sourceText.slice(start, end) === candidate.text ? [text] : [];
+  });
+}
+function foreignClosedVocabulary(field: string): Set<string> {
+  const own = new Set((spec(field).allowedValues || []).map((value) => value.toLocaleLowerCase()));
+  const all = new Set(
+    [
+      ...props.regionTypes,
+      ...props.discourseRoles,
+      ...PROPOSITION_STATUS_VALUES,
+      ...STANCE_VALUES,
+      ...Object.values(schemaFields.value).flatMap((schemaField) =>
+        schemaField.type === "choice" && schemaField.strict
+          ? schemaField.values.map((item) => item.value)
+          : [],
+      ),
+    ].map((value) => String(value).trim().toLocaleLowerCase()),
+  );
+  for (const value of own) all.delete(value);
+  return all;
+}
+function isSafeSuggestionForField(field: string, value: string): boolean {
+  const normalized = value.trim().toLocaleLowerCase();
+  if (!normalized || MACHINE_VOCABULARY_LABELS.has(normalized)) return false;
+  if (spec(field).control !== "enum" && foreignClosedVocabulary(field).has(normalized)) return false;
+  return true;
+}
 function options(field: string) {
   const item = spec(field);
   if (item.allowedValues) return item.allowedValues;
@@ -318,21 +403,6 @@ function options(field: string) {
       if (Array.isArray(candidate)) values.push(...candidate.map(String));
       else if (typeof candidate === "string") values.push(candidate);
     }
-    const nlpTags = schemaFields.value[field]?.ner_tags || [];
-    if (
-      nlpTags.length &&
-      /\b(?:PERSON|PER|ORG|GPE|LOC|FAC|WORK_OF_ART|EVENT|PRODUCT)\b/i.test(nlpTags.join(" "))
-    ) {
-      // Keep this deterministic and dependency-free: capitalized spans are useful
-      // reviewer candidates even when an optional NLP provider is unavailable.
-      const text = String((props.record as Record<string, unknown>).text || "");
-      for (const match of text.matchAll(
-        /\b[A-ZÀ-ÖØ-Þ][\p{L}'-]*(?:\s+[A-ZÀ-ÖØ-Þ][\p{L}'-]*){0,4}\b/gu,
-      )) {
-        const candidate = match[0].trim();
-        if (candidate.length > 1) values.push(candidate);
-      }
-    }
     if (source === "speaker") {
       const deterministic = (props.record as Record<string, unknown>).deterministic_ingest;
       if (deterministic && typeof deterministic === "object") {
@@ -341,9 +411,14 @@ function options(field: string) {
       }
     }
   }
+  // Only the server's exact, field-local POS/NER spans are allowed into reviewer
+  // suggestions. The old capitalized-word regex admitted sentence-initial noise.
+  values.push(...nlpOptions(field));
   const cleaned =
     item.control === "multi-combobox" ? usableListOptions(values) : usableOptions(values);
-  return [...new Set(cleaned)].sort((a, b) => a.localeCompare(b));
+  return [...new Set(cleaned.filter((value) => isSafeSuggestionForField(field, value)))].sort(
+    (a, b) => a.localeCompare(b),
+  );
 }
 function fieldBusy(field: string) {
   return Boolean(props.busy) || Boolean(props.savingField && props.savingField !== field);
@@ -436,6 +511,10 @@ function displayValue(field: string) {
         }}</span
       >
     </header>
+    <p v-if="nlpProvenance" class="nlp-provenance">
+      <b>{{ i18n.t("pdf_corpus.linguistic_analyzer_record") }}</b>
+      <span>{{ nlpProvenanceLabel }}</span>
+    </p>
     <CorpusEnrichmentChanges
       :record="record as unknown as Record<string, unknown>"
       :busy="busy"
@@ -733,6 +812,18 @@ function displayValue(field: string) {
   border-color: var(--tone-ok-edge);
   background: var(--tone-ok-bg);
   color: var(--tone-ok-fg);
+}
+.nlp-provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: -4px 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+}
+.nlp-provenance b {
+  color: var(--text-secondary);
 }
 .enrichment-note {
   margin: 0;
