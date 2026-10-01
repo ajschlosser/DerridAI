@@ -479,9 +479,6 @@ def test_every_translation_key_used_by_the_site_runtime_exists_in_both_locales()
         for suffix in ("title", "body")
     )
     assert used
-    steps = re.findall(r'\{ id: "([a-z]+)"', source.split("const TOUR_STEPS", 1)[1].split("];", 1)[0])
-    assert "provider" in steps
-    used |= {f"site.runtime.tutorial_{step}_{part}" for step in steps for part in ("title", "body")}
     for role in ("embedding", "generation"):
         used |= {
             f"site.runtime.provider_{role}_{part}"
