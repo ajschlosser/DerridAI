@@ -129,22 +129,22 @@ def test_unresolvable_assignment_means_no_candidates_not_a_failed_panel(monkeypa
     record = {"source_block_ids": ["b2"], "source_spans": []}
     items = [{"exemplar_id": "e1", "evidence": EVIDENCE}]
     assert rank_candidates(items, record, {"b2": BLOCKS[1]}, embed=embed, session=None) == [[]]
-    cache = build_precedents_cache(["topic"], {"topic": items}, {}, record, {"b2": BLOCKS[1]}, computed_at="now")
-    assert cache["fields"]["topic"]["refs"][0]["candidate_source_units"] == []
+    cache = build_precedents_cache(["topic"], {"topic": items}, {}, computed_at="now")
+    assert "candidate_source_units" not in cache["fields"]["topic"]["refs"][0]
     assert "candidate_pipeline" not in cache and traces == []
 
 
-def test_enrichment_cache_records_one_trace_for_all_fields(traces) -> None:
-    record = {"source_block_ids": ["b1", "b2"], "source_spans": []}
+def test_enrichment_cache_does_not_run_precedent_remapping(traces) -> None:
     items = [{"exemplar_id": "e1", "evidence": EVIDENCE}]
     cache = build_precedents_cache(
-        ["topic", "position_holder"], {"topic": items, "position_holder": items}, {}, record,
-        {block["block_id"]: block for block in BLOCKS}, computed_at="now", embed=embed,
+        ["topic", "position_holder"],
+        {"topic": items, "position_holder": items},
+        {},
+        computed_at="now",
     )
-    assert len(traces) == 1 and cache["candidate_pipeline"]["trace_id"] == traces[0].run_id
-    assert traces[0].stages[0].input_count == 2, "one query per field, both in the same trace"
-    candidates = cache["fields"]["topic"]["refs"][0]["candidate_source_units"]
-    assert {item["block_id"] for item in candidates} <= {"b1", "b2"}, "only this record's source units"
+    assert traces == [], "review-only evidence remapping must stay off the enrichment hot path"
+    assert "candidate_pipeline" not in cache
+    assert "candidate_source_units" not in cache["fields"]["topic"]["refs"][0]
 
 
 @pytest.mark.parametrize(
