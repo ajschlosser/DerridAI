@@ -229,4 +229,7 @@ def test_one_call_returns_every_kept_field(tmp_path, monkeypatch):
     fields = manager.record_precedents(build_id, "t")["fields"]
     assert fields["discourse_role"]["items"][0]["value"] == "reported_position"
     assert fields["speaker"]["items"] == [] and fields["speaker"]["mode"] == "none"
-    assert fields["discourse_role"] == manager.metadata_precedents(build_id, "t", "discourse_role")
+    single = manager.metadata_precedents(build_id, "t", "discourse_role")
+    assert fields["discourse_role"]["items"] == single["items"]
+    assert fields["discourse_role"]["source"] == single["source"] == "enrichment"
+    assert fields["discourse_role"]["candidate_pipeline"]["pipeline_id"] == single["candidate_pipeline"]["pipeline_id"]
