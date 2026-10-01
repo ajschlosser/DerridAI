@@ -110,7 +110,9 @@ function assetSpecifier(key) {
 }
 
 async function loadTransformersModule() {
-  transformersModulePromise ??= import(moduleSpecifierForSource(decodedTextAsset(TRANSFORMERS_ASSET_KEY)));
+  transformersModulePromise ??= import(
+    moduleSpecifierForSource(decodedTextAsset(TRANSFORMERS_ASSET_KEY))
+  );
   return transformersModulePromise;
 }
 
