@@ -36,24 +36,24 @@ describe("research answer formatting", () => {
     const evidence = [
       {
         evidence_id: "E1",
-        inline_citation: "(Derrida 1999: 20–21)",
+        inline_citation: "(Author 1999: 20–21)",
       },
     ];
 
     expect(
       segmentResearchAnswer(
-        "A decision exceeds calculation **(Derrida **1999**: 20–21)**.",
+        "A decision exceeds calculation **(Author **1999**: 20–21)**.",
         evidence,
       ),
     ).toEqual([
       { text: "A decision exceeds calculation " },
-      { text: "(Derrida 1999: 20–21)", evidenceIndex: 0 },
+      { text: "(Author 1999: 20–21)", evidenceIndex: 0 },
       { text: "." },
     ]);
   });
 
   it("keeps unresolved evidence markers inspectable instead of losing their binding", () => {
-    const evidence = [{ evidence_id: "E7", inline_citation: "(Derrida 1997: 11)" }];
+    const evidence = [{ evidence_id: "E7", inline_citation: "(Author 1997: 11)" }];
 
     expect(segmentResearchAnswer("The claim remains provisional [E7].", evidence)).toEqual([
       { text: "The claim remains provisional " },

@@ -33,7 +33,7 @@ describe("compare domain", () => {
   it("filters library options by work or record id without requiring a giant select", () => {
     const hits = filterLibraryOptions(
       [
-        { value: "1", label: "file.jsonl · r1 · Glas", search: "derrida" },
+        { value: "1", label: "file.jsonl · r1 · Glas", search: "author" },
         { value: "2", label: "file.jsonl · r2 · Voice", search: "other" },
       ],
       "glas",

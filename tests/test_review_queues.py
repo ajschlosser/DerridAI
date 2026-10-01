@@ -69,10 +69,10 @@ def ready_record(rid: str, bid: str) -> dict:
 
 def test_one_current_profile_is_registered():
     """Pin profile and prompt ids, and that a single profile is registered."""
-    assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
+    assert cb.PROFILE_VERSION == "scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v15"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
-    assert PdfCorpusBuildCreate(asset_id="a").profile_id == "derrida-scholarly-v12"
+    assert PdfCorpusBuildCreate(asset_id="a").profile_id == "scholarly-v12"
 
 
 def test_false_primary_text_is_complete_and_human_decision_survives_manifest(tmp_path: Path):
@@ -109,11 +109,11 @@ def test_metadata_decision_is_durable_and_moves_record_out_of_metadata_queue(tmp
     status "human_confirmed", and the queue totals (metadata 0, ready 1).
     """
     record = ready_record("r1", "b1")
-    record.update({"position_holder":"Derrida","metadata_review_fields":["position_holder"],"metadata_complete":False})
+    record.update({"position_holder":"Author","metadata_review_fields":["position_holder"],"metadata_complete":False})
     record["metadata_field_status"]["position_holder"]={"status":"unresolved","method":"llm","confidence":.61}
     repo, build = install_repo(tmp_path, [record])
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
-    result = manager.metadata_decision(build["build_id"], "r1", "position_holder", "Derrida", expected_revision=1)
+    result = manager.metadata_decision(build["build_id"], "r1", "position_holder", "Author", expected_revision=1)
     assert result["record"]["review_state"] == "ready"
     assert result["record"]["can_accept"] is True
     # The scan-backed queue totals are not part of the (latency-sensitive) decision response.
@@ -221,7 +221,7 @@ def test_authoritative_rewrite_reopens_impossibly_accepted_record_with_metadata_
     event. Why: state must never claim a record is publishable when it is not.
     """
     record=ready_record("r1","b1")
-    record.update({"review_disposition":"accepted","accepted":True,"position_holder":"Derrida","metadata_review_fields":["position_holder"]})
+    record.update({"review_disposition":"accepted","accepted":True,"position_holder":"Author","metadata_review_fields":["position_holder"]})
     record["metadata_field_status"]["position_holder"]={"status":"unresolved","method":"llm","confidence":.5}
     repo, build=install_repo(tmp_path,[record])
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)

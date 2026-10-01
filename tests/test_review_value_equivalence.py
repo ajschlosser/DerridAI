@@ -46,7 +46,7 @@ def install(tmp_path: Path, field: str, value, text="J. P. Dingus says so."):
     repo.asset_blocks_path("a").write_text(json.dumps({"block_id": "b1", "page": 1, "bbox": [0, 0, 1, 1], "type": "paragraph", "text": text, "extraction_method": "native", "confidence": 1.0}) + "\n", encoding="utf-8")
     build = repo.create_build({"asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 1,
                                "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": APP_VERSION,
-                               "provider": "ollama", "model": "qwen", "request": {"enrichment_mode": "fast"}, "manifest": {"title": "Book", "document_author": "Derrida"}})
+                               "provider": "ollama", "model": "qwen", "request": {"enrichment_mode": "fast"}, "manifest": {"title": "Book", "document_author": "Author"}})
     build["status"] = "review"; build["stage"] = "review"; build["record_count"] = 1; repo.save_build(build)
     record = {"record_id": "r1", "record_revision": 1, "text": text, "text_length": len(text), "language": "en", "source_block_ids": ["b1"],
               "source_spans": [{"block_id": "b1", "page": 1}], "pdf_pages": [1], "metadata_field_status": {}, "review_disposition": "pending",

@@ -254,7 +254,7 @@ describe("Corpus Builder focus review interactions", () => {
           ...stubs,
           CorpusMetadataResolutionPanel: {
             template:
-              "<button data-save-all @click=\"$emit('resolveMany',{ speaker: 'Jacques Derrida', target: 'hospitality' })\">Save all</button>",
+              "<button data-save-all @click=\"$emit('resolveMany',{ speaker: 'Jane Author', target: 'hospitality' })\">Save all</button>",
           },
         },
       },
@@ -263,7 +263,7 @@ describe("Corpus Builder focus review interactions", () => {
     await wrapper.get("[data-save-all]").trigger("click");
 
     expect(lastEmission(wrapper, "resolveMetadataMany")).toEqual([
-      { speaker: "Jacques Derrida", target: "hospitality" },
+      { speaker: "Jane Author", target: "hospitality" },
     ]);
     wrapper.unmount();
   });

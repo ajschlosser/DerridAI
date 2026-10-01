@@ -10,10 +10,10 @@ describe("dashboard latest annotation", () => {
       { state: {}, openAnnotationsWorkspaceRecord } as Record<string, unknown>,
       { get: (target, name: string) => target[name] ?? vi.fn() },
     );
-    createDashboardRenderer(deps as never).openSharedAnnotationRecord("derrida", "rec-7");
+    createDashboardRenderer(deps as never).openSharedAnnotationRecord("author", "rec-7");
     expect(openAnnotationsWorkspaceRecord).toHaveBeenCalledWith({
       server: true,
-      source: "derrida",
+      source: "author",
       record_id: "rec-7",
     });
   });

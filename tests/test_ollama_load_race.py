@@ -107,9 +107,9 @@ def test_regenerating_the_analysis_fills_only_what_is_empty(tmp_path, monkeypatc
     monkeypatch.setattr(m.repo, "get_asset", lambda asset_id: {"asset_id": asset_id})
     monkeypatch.setattr(m.repo, "load_blocks", lambda asset_id: [])
     monkeypatch.setattr(m, "_interactive_llm_request", lambda build_id, override=None: {"auto_enrich_work_metadata": False})
-    monkeypatch.setattr(m, "_document_manifest", lambda *a, **k: {"title": "Model title", "document_author": "Jacques Derrida", "publisher": "Routledge"})
+    monkeypatch.setattr(m, "_document_manifest", lambda *a, **k: {"title": "Model title", "document_author": "Jane Author", "publisher": "Routledge"})
     saved = {}
     monkeypatch.setattr(m, "patch_manifest", lambda bid, changes, expected_revision=None: saved.update(changes) or m.repo.get_build(bid))
     out = m.regenerate_manifest(build["build_id"], {})
-    assert saved == {"document_author": "Jacques Derrida", "publisher": "Routledge"}  # the typed title is left alone
+    assert saved == {"document_author": "Jane Author", "publisher": "Routledge"}  # the typed title is left alone
     assert out["filled"] == ["document_author", "publisher"]

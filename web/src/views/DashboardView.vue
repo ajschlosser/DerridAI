@@ -507,10 +507,6 @@ onBeforeUnmount(() => {
             <p class="dashboard-hero-tagline">
               {{ i18n.t("dashboard.tagline") }}
             </p>
-            <blockquote>
-              {{ i18n.t("dashboard.quote") }}
-            </blockquote>
-            <small>— Jacques Derrida</small>
             <div class="dashboard-hero-actions">
               <button class="btn dark" id="dashStartSearch" @click="goNav('global')">
                 <AppIcon name="search" />{{ i18n.t("dashboard.start_searching") }}

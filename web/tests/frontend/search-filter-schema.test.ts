@@ -59,11 +59,9 @@ describe("search filter schema", () => {
   });
 
   it("stores a user-chosen schema for a corpus and otherwise uses the associated or default schema", () => {
-    expect(chosenFilterSchemaId({ store: "derrida-primary", associatedId: "notes" })).toBe("notes");
-    saveFilterSchemaOverride("derrida-primary", "custom");
-    expect(chosenFilterSchemaId({ store: "derrida-primary", associatedId: "notes" })).toBe(
-      "custom",
-    );
+    expect(chosenFilterSchemaId({ store: "primary-corpus", associatedId: "notes" })).toBe("notes");
+    saveFilterSchemaOverride("primary-corpus", "custom");
+    expect(chosenFilterSchemaId({ store: "primary-corpus", associatedId: "notes" })).toBe("custom");
     expect(defaultFilterSchemaId()).toBe("default");
   });
 });

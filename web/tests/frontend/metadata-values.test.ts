@@ -21,7 +21,7 @@ describe("metadata values that are not answers", () => {
     "the narrator of this passage",
   ])("treats %j as a placeholder", (value) => expect(isPlaceholderValue(value)).toBe(true));
   it.each([
-    "Jacques Derrida",
+    "Jane Author",
     "cities of refuge",
     "Anonymous",
     "The Author of Waverley",
@@ -31,31 +31,31 @@ describe("metadata values that are not answers", () => {
   it("never offers a placeholder as an option", () => {
     expect(
       usableOptions([
-        "Derrida",
+        "Author",
         "null",
         "the author of the current record",
         " Levinas ",
-        "Derrida",
+        "Author",
         4,
       ]),
-    ).toEqual(["Derrida", "Levinas"]);
+    ).toEqual(["Author", "Levinas"]);
     expect(
-      metadataSuggestions({ speaker: "null", persons: ["Derrida", "N/A", "the author"] }, [
+      metadataSuggestions({ speaker: "null", persons: ["Author", "N/A", "the author"] }, [
         "speaker",
         "persons",
       ]),
-    ).toEqual(["Derrida"]);
+    ).toEqual(["Author"]);
   });
   it("drops runtime JSON and source-block fragments from autocomplete", () => {
     expect(
       usableOptions([
-        "Jacques Derrida",
+        "Jane Author",
         '"reason": "The quote describes a tension."',
         '["p00014-b0002"]',
         "p00014-b0002",
         '{"needs_review":true}',
       ]),
-    ).toEqual(["Jacques Derrida"]);
+    ).toEqual(["Jane Author"]);
     expect(
       usableListOptions([
         "hospitality, cosmopolitanism",

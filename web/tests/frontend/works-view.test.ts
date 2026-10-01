@@ -15,12 +15,12 @@ function workItem(overrides: Partial<WorksItem> = {}): WorksItem {
     review: 2,
     annotations: 1,
     files: ["glas.jsonl"],
-    authors: ["Jacques Derrida"],
+    authors: ["Jane Author"],
     years: ["1974"],
     cover: "",
-    citation: "Derrida, Jacques. Glas.",
+    citation: "Author, Jane. Glas.",
     year_label: "1974",
-    subtitle: "Jacques Derrida · 1974",
+    subtitle: "Jane Author · 1974",
     publisher: biblio({ value: "Galilée" }),
     translator: biblio({ field_label: "Translator" }),
     metadata: [
@@ -28,7 +28,7 @@ function workItem(overrides: Partial<WorksItem> = {}): WorksItem {
         field_id: "derridai.document.document_author",
         field: "document_author",
         field_label: "Document author",
-        value: "Jacques Derrida",
+        value: "Jane Author",
         mixed: false,
         unique_count: 0,
         empty: false,
@@ -68,8 +68,8 @@ function adminSnapshot(overrides: Partial<WorksSnapshot> = {}): WorksSnapshot {
     selected: null,
     query: "",
     selectedWork: "",
-    stores: [{ name: "derrida-primary", count: 40 }],
-    activeStore: "derrida-primary",
+    stores: [{ name: "primary-corpus", count: 40 }],
+    activeStore: "primary-corpus",
     activeStoreCount: 40,
     indexFreshness: {
       state: "current",
@@ -86,7 +86,7 @@ function adminSnapshot(overrides: Partial<WorksSnapshot> = {}): WorksSnapshot {
     totalRecords: 12,
     sourceFileCount: 1,
     totalReview: 2,
-    authors: ["Jacques Derrida"],
+    authors: ["Jane Author"],
     sort: "title-asc",
     filters: { needsReview: false, dbStatus: "", author: "" },
     viewMode: "cards",
@@ -427,7 +427,7 @@ describe("WorksView", () => {
         filters: {
           needsReview: true,
           dbStatus: "changed",
-          author: "Jacques Derrida",
+          author: "Jane Author",
         },
       }),
     );
@@ -437,11 +437,11 @@ describe("WorksView", () => {
       expect.arrayContaining([
         "Only works needing review×Remove",
         "Pending changes×Remove",
-        "Jacques Derrida×Remove",
+        "Jane Author×Remove",
       ]),
     );
 
-    await chips.find((chip) => chip.text().includes("Jacques Derrida"))!.trigger("click");
+    await chips.find((chip) => chip.text().includes("Jane Author"))!.trigger("click");
     expect(runtime.setWorksView).toHaveBeenCalledWith({ author: "" });
     wrapper.unmount();
   });
@@ -507,7 +507,7 @@ describe("WorksView", () => {
     await flushPromises();
 
     expect(siteApi.exportSite).toHaveBeenCalledWith({
-      store: "derrida-primary",
+      store: "primary-corpus",
       works: ["Glas"],
       title: "Glas research site",
       description: "",
@@ -534,7 +534,7 @@ describe("WorksView", () => {
     await flushPromises();
 
     expect(siteApi.exportSite).toHaveBeenCalledWith({
-      store: "derrida-primary",
+      store: "primary-corpus",
       works: ["Glas"],
       title: "English-only Glas",
       description: "",
@@ -560,7 +560,7 @@ describe("WorksView", () => {
     await flushPromises();
 
     expect(siteApi.exportSite).toHaveBeenCalledWith({
-      store: "derrida-primary",
+      store: "primary-corpus",
       works: ["Glas"],
       title: "Hosted Glas",
       description: "",

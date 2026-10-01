@@ -13,12 +13,12 @@ function workItem(overrides: Partial<WorksItem> = {}): WorksItem {
     review: 2,
     annotations: 1,
     files: ["glas.jsonl"],
-    authors: ["Jacques Derrida"],
+    authors: ["Jane Author"],
     years: ["1974"],
     cover: "",
-    citation: "Derrida, Jacques. Glas.",
+    citation: "Author, Jane. Glas.",
     year_label: "1974",
-    subtitle: "Jacques Derrida · 1974",
+    subtitle: "Jane Author · 1974",
     publisher: { field_label: "Publisher", value: "Galilée", mixed: false, unique_count: 0 },
     translator: { field_label: "Translator", value: "", mixed: false, unique_count: 0 },
     metadata: [
@@ -26,7 +26,7 @@ function workItem(overrides: Partial<WorksItem> = {}): WorksItem {
         field_id: "derridai.document.document_author",
         field: "document_author",
         field_label: "Document author",
-        value: "Jacques Derrida",
+        value: "Jane Author",
         mixed: false,
         unique_count: 0,
         empty: false,
@@ -77,7 +77,7 @@ describe("WorksOverviewCard", () => {
               field_id: "derridai.document.document_author",
               field: "document_author",
               field_label: "Document author",
-              value: "Jacques Derrida",
+              value: "Jane Author",
               mixed: false,
               unique_count: 0,
               empty: false,
@@ -97,7 +97,7 @@ describe("WorksOverviewCard", () => {
       },
     });
 
-    expect(wrapper.get(".works-inspector-metadata").text()).toContain("Jacques Derrida");
+    expect(wrapper.get(".works-inspector-metadata").text()).toContain("Jane Author");
     expect(wrapper.get(".works-inspector-metadata").text()).not.toContain("Publisher");
     const toggle = wrapper
       .findAll("button")

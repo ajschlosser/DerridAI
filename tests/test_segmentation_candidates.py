@@ -40,7 +40,7 @@ def test_segmentation_contract_has_one_current_profile():
     boundary batches hold at least 2 candidates, and that LLM calls per 100 atoms stay
     under 100 (the budget that keeps builds fast). Update the ids when they are bumped.
     """
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
+    assert cb.PROFILE_VERSION=="scholarly-v12"
     assert cb.SEGMENTATION_PROMPT_VERSION=="derridai-local-boundaries-v9"
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
@@ -76,11 +76,11 @@ def test_heading_start_is_deterministic_split_and_heading_body_is_protected():
 
 
 def test_attribution_lead_to_quote_is_protected():
-    """"Derrida writes:" followed by a quotation must never be split.
+    """"Author writes:" followed by a quotation must never be split.
 
     Why: separating an attribution from its quote would misattribute the proposition.
     """
-    left={"block_id":"a","type":"paragraph","text":"Derrida writes:"}
+    left={"block_id":"a","type":"paragraph","text":"Author writes:"}
     right={"block_id":"b","type":"paragraph","text":"“The proposition begins here.”"}
     assert cb._is_protected_transition(left,right) is True
 

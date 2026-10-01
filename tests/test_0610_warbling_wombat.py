@@ -60,14 +60,14 @@ def test_text_load_runs_deterministic_metadata_immediately(tmp_path: Path):
     repo = cb.PdfCorpusRepository(tmp_path)
     source = (
         b"Title: Of Hospitality\n"
-        b"Author: Jacques Derrida\n\n"
+        b"Author: Jane Author\n\n"
         b"The law of hospitality remains unconditional.\n"
     )
     asset = repo.save_asset(source, filename="hospitality.txt")
     assert asset["media_kind"] == "text"
     assert asset["deterministic_checked_at"]
     assert asset["initial_metadata"]["title"] == "Of Hospitality"
-    assert asset["initial_metadata"]["document_author"] == "Jacques Derrida"
+    assert asset["initial_metadata"]["document_author"] == "Jane Author"
     assert asset["source_quality"]["valid_for_enrichment"] is True
     assert asset["block_count"] >= 1
 
@@ -75,26 +75,26 @@ def test_text_load_runs_deterministic_metadata_immediately(tmp_path: Path):
 def test_word_rtf_and_html_metadata(tmp_path: Path):
     repo = cb.PdfCorpusRepository(tmp_path)
     docx = repo.save_asset(
-        minimal_docx("Of Hospitality", "Jacques Derrida", ["The threshold is not a simple door."]),
+        minimal_docx("Of Hospitality", "Jane Author", ["The threshold is not a simple door."]),
         filename="hospitality.docx",
     )
-    assert docx["initial_metadata"]["document_author"] == "Jacques Derrida"
+    assert docx["initial_metadata"]["document_author"] == "Jane Author"
     assert docx["initial_metadata"]["title"] == "Of Hospitality"
     assert docx["media_kind"] == "docx"
 
-    rtf = rb"{\rtf1\ansi{\title Of Hospitality}{\author Jacques Derrida}\par The law of hospitality remains unconditional.}"
+    rtf = rb"{\rtf1\ansi{\title Of Hospitality}{\author Jane Author}\par The law of hospitality remains unconditional.}"
     rich = repo.save_asset(rtf, filename="hospitality.rtf")
     assert rich["media_kind"] == "rtf"
-    assert rich["initial_metadata"]["document_author"] == "Jacques Derrida"
+    assert rich["initial_metadata"]["document_author"] == "Jane Author"
 
     html = (
         b"<html><head><title>Of Hospitality</title>"
-        b'<meta name="author" content="Jacques Derrida"></head>'
+        b'<meta name="author" content="Jane Author"></head>'
         b"<body><p>The threshold remains open.</p></body></html>"
     )
     page = repo.save_asset(html, filename="hospitality.html", content_type="text/html")
     assert page["media_kind"] == "html"
-    assert page["initial_metadata"]["document_author"] == "Jacques Derrida"
+    assert page["initial_metadata"]["document_author"] == "Jane Author"
     assert page["initial_metadata"]["title"] == "Of Hospitality"
 
 
@@ -154,7 +154,7 @@ def test_high_confidence_ingest_metadata_overrides_blank_manifest_fields():
         {"title": None, "document_author": "Catalog Guess"},
         {"deterministic_checked_at": "t", "initial_metadata": {
             "title": "Of Hospitality",
-            "document_author": "Jacques Derrida",
+            "document_author": "Jane Author",
             "field_provenance": {
                 "title": {"method": "labeled_line", "confidence": 0.9},
                 "document_author": {"method": "labeled_line", "confidence": 0.9},
@@ -162,7 +162,7 @@ def test_high_confidence_ingest_metadata_overrides_blank_manifest_fields():
         }},
     )
     assert result["title"] == "Of Hospitality"
-    assert result["document_author"] == "Jacques Derrida"
+    assert result["document_author"] == "Jane Author"
 
 
 def test_gutenberg_search_and_import(monkeypatch, tmp_path: Path):

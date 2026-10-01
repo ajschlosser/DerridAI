@@ -10,7 +10,7 @@ const meta: Meta<typeof ResearchPipelineBar> = {
       {
         id: "rag-1",
         status: "running",
-        prompt: "How does Derrida distinguish responsibility from duty?",
+        prompt: "How does Author distinguish responsibility from duty?",
         stage_detail: "Reranking evidence",
         model: "qwen3",
       },
@@ -24,7 +24,7 @@ const meta: Meta<typeof ResearchPipelineBar> = {
       {
         id: "rag-3",
         status: "running",
-        prompt: "Trace Derrida's use of the gift",
+        prompt: "Trace Author's use of the gift",
         stage_detail: "Generating answer",
         model: "gpt-oss",
       },

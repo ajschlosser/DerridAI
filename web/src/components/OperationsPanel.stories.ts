@@ -49,8 +49,7 @@ const mixed = [
     icon: "pdf",
     label: "PDF corpus build",
     status: "running",
-    subtitle:
-      "Derrida_ Jacques - On Cosmopolitanism and Forgiveness.pdf · Metadata: 54/180 settled",
+    subtitle: "Author_ Jane - On Cosmopolitanism and Forgiveness.pdf · Metadata: 54/180 settled",
     finishedAt: null,
     result: null,
     total: 307,
@@ -67,7 +66,7 @@ const mixed = [
     icon: "database",
     label: "Chroma upsert",
     status: "queued",
-    subtitle: "derrida-primary · 0/400 committed",
+    subtitle: "primary-corpus · 0/400 committed",
     startedAt: null,
     finishedAt: null,
     result: null,
@@ -188,7 +187,7 @@ export const LongNames: Story = {
         finishedAt: null,
         result: null,
         subtitle:
-          "Jacques_Derrida_-_Of_Grammatology_Corrected_Edition_Johns_Hopkins_University_Press_1997_scan_with_ocr_layer.pdf · Metadata: 54/180 settled",
+          "Jacques_Author_-_Of_Grammatology_Corrected_Edition_Johns_Hopkins_University_Press_1997_scan_with_ocr_layer.pdf · Metadata: 54/180 settled",
         total: 100,
         completed: 45,
         progressLabel: "45% overall",
@@ -196,7 +195,7 @@ export const LongNames: Story = {
           {
             name: "Source PDF",
             value:
-              "Jacques_Derrida_-_Of_Grammatology_Corrected_Edition_Johns_Hopkins_University_Press_1997_scan_with_ocr_layer.pdf",
+              "Jacques_Author_-_Of_Grammatology_Corrected_Edition_Johns_Hopkins_University_Press_1997_scan_with_ocr_layer.pdf",
           },
         ],
       }),

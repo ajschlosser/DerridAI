@@ -129,7 +129,7 @@ def test_automatic_unit_policy_uses_language_profile() -> None:
 
 def test_abbreviation_sensitive_boundary_is_not_treated_as_a_sentence_end() -> None:
     left = {"block_id": "b0", "text": "Dr.", "type": "body"}
-    right = {"block_id": "b1", "text": "Derrida continues the sentence.", "type": "body"}
+    right = {"block_id": "b1", "text": "Author continues the sentence.", "type": "body"}
     assert not clean_boundary(left, right, "en")
 
 

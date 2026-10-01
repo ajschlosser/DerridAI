@@ -7,14 +7,14 @@ import { VueQueryPlugin } from "@tanstack/vue-query";
 import { queryClient } from "../../src/realtime/dataQuery";
 
 const records = {
-  a: { record_id: "r-a", work: "Glas", document_author: "Derrida", text: "left" },
-  b: { record_id: "r-b", work: "Glas", document_author: "Derrida", text: "right" },
+  a: { record_id: "r-a", work: "Glas", document_author: "Author", text: "left" },
+  b: { record_id: "r-b", work: "Glas", document_author: "Author", text: "right" },
 };
 const runtime = vi.hoisted(() => ({
   persistPrefs: vi.fn(),
   getCompareLibrary: vi.fn(() => [
-    { value: "f::0", label: "tab.jsonl · r-a · Glas", search: "derrida" },
-    { value: "f::1", label: "tab.jsonl · r-b · Glas", search: "derrida" },
+    { value: "f::0", label: "tab.jsonl · r-a · Glas", search: "author" },
+    { value: "f::1", label: "tab.jsonl · r-b · Glas", search: "author" },
   ]),
   getCompareRecord: vi.fn((key: string) =>
     key === "f::0"

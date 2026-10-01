@@ -133,7 +133,7 @@ describe("useCorpusReviewRecords", () => {
     const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));
     corpusReviewReads.records.mockResolvedValue([record("r1")]);
-    corpusReviewReads.metadataFacets.mockResolvedValue({ speaker: ["Derrida"] });
+    corpusReviewReads.metadataFacets.mockResolvedValue({ speaker: ["Author"] });
 
     await state.reviewRecords.refreshRecords(true);
 
@@ -229,7 +229,7 @@ describe("useCorpusReviewRecords", () => {
 
     corpusReviewReads.records.mockResolvedValueOnce([
       record("r1", 1, {
-        speaker: "Derrida",
+        speaker: "Author",
         metadata_evidence: { speaker: { block_ids: ["b1"] } },
       }),
     ]);
@@ -237,7 +237,7 @@ describe("useCorpusReviewRecords", () => {
 
     expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
     expect(state.selectedRecord.value?.record_revision).toBe(1);
-    expect(state.selectedRecord.value?.speaker).toBe("Derrida");
+    expect(state.selectedRecord.value?.speaker).toBe("Author");
     expect(state.selectedRecord.value?.metadata_evidence?.speaker?.block_ids).toEqual(["b1"]);
   });
 
@@ -282,7 +282,7 @@ describe("useCorpusReviewRecords", () => {
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1", 1)]));
     corpusReviewReads.records
       .mockResolvedValueOnce([record("r1", 1, { speaker: null })])
-      .mockResolvedValueOnce([record("r1", 1, { speaker: "Jacques Derrida" })]);
+      .mockResolvedValueOnce([record("r1", 1, { speaker: "Jane Author" })]);
 
     await state.reviewRecords.refreshRecords(true);
     expect(state.selectedRecord.value?.speaker).toBeNull();
@@ -290,7 +290,7 @@ describe("useCorpusReviewRecords", () => {
     await state.reviewRecords.refreshRecords(true, "r1");
 
     expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
-    expect(state.selectedRecord.value?.speaker).toBe("Jacques Derrida");
+    expect(state.selectedRecord.value?.speaker).toBe("Jane Author");
   });
 
   it("invalidates read projections before a mutation-triggered queue reset", async () => {

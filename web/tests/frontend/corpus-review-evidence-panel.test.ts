@@ -28,7 +28,7 @@ const blocks: SourceBlock[] = [
     page: 12,
     bbox: [],
     type: "paragraph",
-    text: "Derrida writes that...",
+    text: "Author writes that...",
     extraction_method: "pdf_text",
     confidence: 0.99,
   },
@@ -94,15 +94,15 @@ describe("Corpus Builder review evidence panel", () => {
   });
 
   it("names the chosen field and counts its evidence", () => {
-    const wrapper = mountPanel({ record: { ...record, speaker: "Jacques Derrida" } });
+    const wrapper = mountPanel({ record: { ...record, speaker: "Jane Author" } });
     const head = wrapper.get(".assign-head");
-    expect(head.text()).toContain("Jacques Derrida");
+    expect(head.text()).toContain("Jane Author");
     expect(head.get('[role="status"]').text()).toBe("1 span");
   });
 
   it("offers the next field that has a value but no evidence, and closes with Done", async () => {
     const wrapper = mountPanel({
-      record: { ...record, speaker: "Jacques Derrida", position_holder: "Levinas" },
+      record: { ...record, speaker: "Jane Author", position_holder: "Levinas" },
     });
     const buttons = wrapper.findAll(".assign-actions button");
     await buttons[0].trigger("click");
@@ -188,7 +188,7 @@ describe("Corpus Builder review evidence panel", () => {
       items: [
         {
           record_id: "record-9",
-          value: "Derrida",
+          value: "Author",
           evidence_bound: true,
           evidence: "Another record's words.",
           candidate_source_units: [

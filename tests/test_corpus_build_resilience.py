@@ -44,7 +44,7 @@ def _blocks(count: int = 30):
             "page": 1 + (i // 10),
             "printed_page_label": str(1 + (i // 10)),
             "type": "paragraph",
-            "text": f"Source paragraph {i}. Derrida develops one continuous argument here.",
+            "text": f"Source paragraph {i}. Author develops one continuous argument here.",
             "bbox": [10.0, 10.0 + i, 500.0, 20.0 + i],
             "extraction_method": "native",
             "confidence": 1.0,
@@ -252,7 +252,7 @@ def test_enrichment_failure_returns_reviewable_record_not_exception(monkeypatch,
     }
     result = manager._enrich_record(
         record,
-        {"title": "Test", "document_author": "Jacques Derrida", "publication_year": 1999},
+        {"title": "Test", "document_author": "Jane Author", "publication_year": 1999},
         {"provider": "ollama", "model": "test"},
         build_id=build["build_id"],
     )

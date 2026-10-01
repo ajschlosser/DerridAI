@@ -7,7 +7,7 @@ import {
   type EmbeddingProvider,
   type GenerationProvider,
   type PublicationRecord,
-} from "@derridai/sdk";
+} from "@derridai/publication-runtime";
 
 function base64Bytes(bytes: Uint8Array): string {
   let binary = "";
@@ -38,10 +38,10 @@ const record: PublicationRecord = {
     },
   ],
   work: "Glas",
-  citation: "Derrida, Jacques. Glas.",
+  citation: "Author, Jane. Glas.",
   text: "Hospitality exceeds conditional exchange.",
-  speaker: "Derrida",
-  position_holder: "Derrida",
+  speaker: "Author",
+  position_holder: "Author",
   stance: "argues",
 };
 
@@ -49,7 +49,7 @@ const publication = {
   manifest: {
     format: "derridai-static-site-v4",
     publication_id: "consumer-publication",
-    title: "SDK consumer fixture",
+    title: "Publication Runtime consumer fixture",
     locale: "en-US",
     works: [{ work: "Glas", record_count: 1 }],
     vector_index: {
@@ -108,7 +108,7 @@ const client = await createClient({
 
 const search = await client.search({ query: "hospitality", mode: "hybrid" });
 if (search.results[0]?.record.record_id !== "consumer-r1") {
-  throw new Error("Installed SDK failed its external-consumer search smoke test.");
+  throw new Error("Installed Publication Runtime failed its external-consumer search smoke test.");
 }
 
 const research = await client.research({
@@ -119,9 +119,11 @@ if (
   !research.answer?.includes("[E1]") ||
   research.evidencePacket.evidence[0]?.recordId !== "consumer-r1"
 ) {
-  throw new Error("Installed SDK failed its external-consumer Research smoke test.");
+  throw new Error(
+    "Installed Publication Runtime failed its external-consumer Research smoke test.",
+  );
 }
 
 if (typeof document !== "undefined") {
-  document.querySelector("#app")?.replaceChildren("DerridAI SDK consumer OK");
+  document.querySelector("#app")?.replaceChildren("DerridAI Publication Runtime consumer OK");
 }

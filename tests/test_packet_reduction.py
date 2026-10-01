@@ -111,7 +111,7 @@ def test_nested_rag_record_compaction_does_not_delete_unrelated_updates_key():
 
 def test_upsert_without_history_preserves_existing_history_server_side():
     """Upserting a record with no history leaves the stored history and count unchanged."""
-    old = [{"field_name": "speaker", "new_value": "Derrida"}]
+    old = [{"field_name": "speaker", "new_value": "Author"}]
     collection = FakeCollection({
         "r1": {
             "record_id": "r1",
@@ -120,7 +120,7 @@ def test_upsert_without_history_preserves_existing_history_server_side():
         }
     })
     store = FakeStore(collection)
-    store.upsert_many("test", [{"record_id": "r1", "text": "new text", "speaker": "Derrida"}])
+    store.upsert_many("test", [{"record_id": "r1", "text": "new text", "speaker": "Author"}])
     metadata = collection.last_upsert["metadatas"][0]
     assert decoded_updates(metadata) == old
     assert metadata["_updates_count"] == 1
@@ -128,7 +128,7 @@ def test_upsert_without_history_preserves_existing_history_server_side():
 
 def test_upsert_appends_only_audit_delta_server_side():
     """Sending only the new audit entries appends them to the stored history (count 1 -> 2)."""
-    old = [{"field_name": "speaker", "new_value": "Derrida"}]
+    old = [{"field_name": "speaker", "new_value": "Author"}]
     delta = [{"field_name": "stance", "new_value": "questions"}]
     collection = FakeCollection({
         "r1": {

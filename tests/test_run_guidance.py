@@ -140,7 +140,7 @@ def test_schema_nlp_hints_are_validated_and_included_in_group_prompt():
         ],
     )
 
-    prompt = ms.build_group_prompt(schema, "discourse", base_context="Text: Derrida cites Levinas.")
+    prompt = ms.build_group_prompt(schema, "discourse", base_context="Text: Author cites Levinas.")
 
     assert "POS tags" in prompt
     assert "PERSON" in prompt

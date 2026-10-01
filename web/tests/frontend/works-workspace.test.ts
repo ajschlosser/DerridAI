@@ -93,7 +93,7 @@ describe("works workspace commands", () => {
         count,
         review,
         files: [`${name}.jsonl`],
-        authors: ["Jacques Derrida"],
+        authors: ["Jane Author"],
         years: year ? [year] : [],
         rows: [
           {
@@ -172,7 +172,7 @@ describe("works workspace commands", () => {
 
     it("searches deterministic bibliographic metadata with case and diacritic normalization", () => {
       const byAuthor = snapshotSetup({
-        worksSearch: "JACQUES DERRIDA",
+        worksSearch: "JANE AUTHOR",
       }).workspace.getWorksWorkspaceSnapshot();
       expect(titles(byAuthor)).toEqual(["Aporias", "Glas", "Of Grammatology"]);
 
@@ -247,7 +247,7 @@ describe("works workspace commands", () => {
       {
         work: "Glas",
         count: 1,
-        document_author: "Jacques Derrida",
+        document_author: "Jane Author",
         publication_year: "1974",
         publisher: "Galilée",
       },
@@ -260,7 +260,7 @@ describe("works workspace commands", () => {
       },
     ];
     state.worksSearch = "galilee";
-    state.worksAuthor = "Jacques Derrida";
+    state.worksAuthor = "Jane Author";
 
     const snapshot = workspace.getWorksWorkspaceSnapshot() as {
       works: Array<{ work: string }>;
@@ -268,7 +268,7 @@ describe("works workspace commands", () => {
     };
 
     expect(snapshot.works.map((item) => item.work)).toEqual(["Glas"]);
-    expect(snapshot.authors).toEqual(["Emmanuel Levinas", "Jacques Derrida"]);
+    expect(snapshot.authors).toEqual(["Emmanuel Levinas", "Jane Author"]);
   });
 
   it("restores Works sort, filters and view mode from the URL state", () => {
@@ -284,7 +284,7 @@ describe("works workspace commands", () => {
       worksSort: "review-desc",
       worksNeedsReview: true,
       worksDbStatus: "changed",
-      worksAuthor: "Jacques Derrida",
+      worksAuthor: "Jane Author",
       worksView: "list",
     });
     const encoded = JSON.parse(JSON.stringify(navigation.currentTableUrlState("works")));
@@ -304,7 +304,7 @@ describe("works workspace commands", () => {
       worksSort: "review-desc",
       worksNeedsReview: true,
       worksDbStatus: "changed",
-      worksAuthor: "Jacques Derrida",
+      worksAuthor: "Jane Author",
       worksView: "list",
     });
     navigation.applyCompressedTableUrlState({ v: "compact" }, "works");

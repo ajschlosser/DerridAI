@@ -40,7 +40,7 @@ def install(tmp_path:Path):
     ]
     with repo.asset_blocks_path('a').open('w',encoding='utf-8') as h:
         for b in blocks:h.write(json.dumps(b)+'\n')
-    build=repo.create_build({'asset_id':'a','source_sha256':'x','source_filename':'x.pdf','source_page_count':2,'source_block_count':4,'schema_version':cb.SCHEMA_VERSION,'profile_id':cb.PROFILE_VERSION,'profile_version':11,'app_version':APP_VERSION,'provider':'ollama','model':'test','request':{'provider':'ollama','model':'test'},'manifest':{'title':'Book','document_author':'Derrida'}})
+    build=repo.create_build({'asset_id':'a','source_sha256':'x','source_filename':'x.pdf','source_page_count':2,'source_block_count':4,'schema_version':cb.SCHEMA_VERSION,'profile_id':cb.PROFILE_VERSION,'profile_version':11,'app_version':APP_VERSION,'provider':'ollama','model':'test','request':{'provider':'ollama','model':'test'},'manifest':{'title':'Book','document_author':'Author'}})
     build.update(status='running',stage='enriching',record_count=2);repo.save_build(build)
     rows=[
         {'record_id':'r1','record_revision':1,'text':'A complete opening sentence.\n\nA thought that continues','text_length':54,'source_block_ids':['b1','b2'],'source_spans':[{'block_id':'b1','page':1},{'block_id':'b2','page':1}],'metadata_field_status':{},'metadata_stage_status':{},'review_disposition':'pending','accepted':False,'rejected':False,'boundary_quality_issues':[{'code':'boundary_suspect','edge':'end','reason':'Possible sentence/quotation continuation across this record boundary.'}],'needs_review':True,'review_reason':'Possible sentence/quotation continuation across this record boundary.'},

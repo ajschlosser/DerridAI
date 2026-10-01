@@ -76,7 +76,7 @@ def test_publication_keeps_document_level_manifest_metadata(tmp_path:Path):
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     build=_install_publishable(repo)
-    manifest={"title":"Of Grammatology","document_author":"Jacques Derrida"}
+    manifest={"title":"Of Grammatology","document_author":"Jane Author"}
     build["manifest"]=manifest
     repo.save_build(build)
     records=repo.load_records(build["build_id"])
@@ -88,7 +88,7 @@ def test_publication_keeps_document_level_manifest_metadata(tmp_path:Path):
     row = next(iter_jsonl_zst(path, rehydrate_evidence=False))
     assert row["work"]=="Of Grammatology"
     assert row["document_title"]=="Of Grammatology"
-    assert row["document_author"]=="Jacques Derrida"
+    assert row["document_author"]=="Jane Author"
 
 def test_review_status_progress_tracks_complete_pipeline(tmp_path:Path):
     """Records still pending review put the build in "awaiting_review" at 90-100% progress."""
@@ -116,7 +116,7 @@ def test_review_queue_filter_and_bulk_disposition_are_consistent(tmp_path:Path):
     build=_install_publishable(repo)
     records=[
         {"record_id":"r1","record_revision":1,"text":"Édouard Glissant","text_length":15,"source_asset_id":"pdf-test","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1}],"region_type":"main_text","primary_text":True,"discourse_role":"analysis","metadata_field_status":{"region_type":{"status":"deterministic"},"primary_text":{"status":"deterministic"},"discourse_role":{"status":"deterministic"}},"accepted":False,"rejected":False,"review_disposition":"pending","needs_review":False},
-        {"record_id":"r2","record_revision":1,"text":"Jacques Derrida","text_length":15,"source_asset_id":"pdf-test","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1}],"region_type":"main_text","primary_text":True,"discourse_role":"analysis","metadata_field_status":{"region_type":{"status":"deterministic"},"primary_text":{"status":"deterministic"},"discourse_role":{"status":"deterministic"}},"accepted":True,"rejected":False,"review_disposition":"accepted","needs_review":False},
+        {"record_id":"r2","record_revision":1,"text":"Jane Author","text_length":15,"source_asset_id":"pdf-test","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1}],"region_type":"main_text","primary_text":True,"discourse_role":"analysis","metadata_field_status":{"region_type":{"status":"deterministic"},"primary_text":{"status":"deterministic"},"discourse_role":{"status":"deterministic"}},"accepted":True,"rejected":False,"review_disposition":"accepted","needs_review":False},
     ]
     repo.save_records(build["build_id"],records)
     page=repo.page_records(build["build_id"],disposition="pending")

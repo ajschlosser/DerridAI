@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import ResearchSettingsDrawer from "./ResearchSettingsDrawer.vue";
 
 const baseConfig = {
-  source_collection: "derrida_primary",
+  source_collection: "primary_corpus",
   locales: ["en", "fr"],
   search_types: ["mmr", "similarity"],
   k: 64,

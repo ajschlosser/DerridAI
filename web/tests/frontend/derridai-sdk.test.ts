@@ -46,7 +46,7 @@ function record(
       },
     ],
     work,
-    citation: `Jacques Derrida, ${work}`,
+    citation: `Jane Author, ${work}`,
     text,
     ...extra,
   };
@@ -55,7 +55,7 @@ function record(
 function publicationPackage() {
   const glas = [
     record("g1", "Glas", "hospitality gift responsibility", {
-      speaker: "Derrida",
+      speaker: "Author",
       position_holder: "Hegel",
       stance: "questions",
       discourse_role: "analysis",
@@ -108,7 +108,7 @@ function publicationPackage() {
   };
 }
 
-describe("DerridAI SDK", () => {
+describe("DerridAI Publication Runtime", () => {
   it("searches publication records without a DerridAI server", async () => {
     const client = await createClient({
       dataSource: dataSources.inline(publicationPackage()),
@@ -161,7 +161,7 @@ describe("DerridAI SDK", () => {
     expect(response.answer).toContain("[E1]");
     expect(response.evidencePacket.evidence[0]).toMatchObject({
       recordId: "g1",
-      speaker: "Derrida",
+      speaker: "Author",
       positionHolder: "Hegel",
       stance: "questions",
       discourseRole: "analysis",

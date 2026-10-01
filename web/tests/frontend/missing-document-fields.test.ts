@@ -31,8 +31,8 @@ describe("required document fields detection missed", () => {
   it("sends only trimmed, non-empty values for missing fields", () => {
     const missing = [{ name: "document_author", requiredFor: ["evidence" as const] }];
     expect(
-      suppliedDocumentMetadata(missing, { document_author: " Jacques Derrida ", title: "stale" }),
-    ).toEqual({ document_author: "Jacques Derrida" });
+      suppliedDocumentMetadata(missing, { document_author: " Jane Author ", title: "stale" }),
+    ).toEqual({ document_author: "Jane Author" });
     expect(suppliedDocumentMetadata(missing, { document_author: "  " })).toEqual({});
   });
 
@@ -50,7 +50,7 @@ describe("required document fields detection missed", () => {
           wrapper.setProps({ modelValue: value }),
       },
     });
-    await wrapper.find("input").setValue("Jacques Derrida");
-    expect(wrapper.props("modelValue")).toEqual({ document_author: "Jacques Derrida" });
+    await wrapper.find("input").setValue("Jane Author");
+    expect(wrapper.props("modelValue")).toEqual({ document_author: "Jane Author" });
   });
 });

@@ -6,18 +6,18 @@ const meta = {
   title: "Works/CreateSiteDialog",
   component: CreateSiteDialog,
   args: {
-    storeName: "derrida-primary",
+    storeName: "primary-corpus",
     works: [
       {
         work: "Glas",
         count: 128,
-        authors: ["Jacques Derrida"],
+        authors: ["Jane Author"],
         year_label: "1974",
       },
       {
         work: "Of Grammatology",
         count: 214,
-        authors: ["Jacques Derrida"],
+        authors: ["Jane Author"],
         year_label: "1967",
       },
     ],

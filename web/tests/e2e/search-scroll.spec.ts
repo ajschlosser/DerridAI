@@ -6,13 +6,13 @@ const APP = `http://127.0.0.1:${process.env.APP_PORT || "5199"}`;
 
 function records(count: number) {
   return Array.from({ length: count }, (_, index) => ({
-    record_id: `derrida-grammatology-${String(index + 1).padStart(5, "0")}`,
+    record_id: `author-grammatology-${String(index + 1).padStart(5, "0")}`,
     work: "Of Grammatology",
-    document_author: "Jacques Derrida",
+    document_author: "Jane Author",
     page_start: index + 1,
     page_end: index + 1,
     text: `Passage ${index + 1}. The sign and divinity have the same place and time of birth.`,
-    speaker: "Derrida",
+    speaker: "Author",
     needs_review: false,
   }));
 }

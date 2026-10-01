@@ -38,7 +38,7 @@ function record(id: string, work: string, text: string): PublicationRecord {
     source_document_id: "source-1",
     source_spans: [{ source_document_id: "source-1", printed_page: 1 }],
     work,
-    citation: `Jacques Derrida, ${work}`,
+    citation: `Jane Author, ${work}`,
     text,
   };
 }

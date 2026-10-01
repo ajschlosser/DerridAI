@@ -27,7 +27,7 @@ export const Admin: Story = {};
 export const Researcher: Story = {
   args: {
     isAdmin: false,
-    activeStore: "Derrida — Of Grammatology",
+    activeStore: "Author — Of Grammatology",
     dbRecords: 1204,
     selectedEvidenceCount: 6,
   },

@@ -41,7 +41,7 @@ def install(tmp_path:Path):
     ]
     with repo.asset_blocks_path('a').open('w',encoding='utf-8') as h:
         for b in blocks:h.write(json.dumps(b)+'\n')
-    build=repo.create_build({'asset_id':'a','source_sha256':'x','source_filename':'x.pdf','source_page_count':2,'source_block_count':3,'schema_version':cb.SCHEMA_VERSION,'profile_id':cb.PROFILE_VERSION,'profile_version':11,'app_version':APP_VERSION,'provider':'ollama','model':'test','request':{},'manifest':{'title':'Book','document_author':'Derrida'}})
+    build=repo.create_build({'asset_id':'a','source_sha256':'x','source_filename':'x.pdf','source_page_count':2,'source_block_count':3,'schema_version':cb.SCHEMA_VERSION,'profile_id':cb.PROFILE_VERSION,'profile_version':11,'app_version':APP_VERSION,'provider':'ollama','model':'test','request':{},'manifest':{'title':'Book','document_author':'Author'}})
     build.update(status='running',stage='enriching',record_count=3);repo.save_build(build)
     rows=[]
     for i,(bid,txt) in enumerate([('b1','Previous ending.'),('b2','Misplaced beginning. Proper current text.'),('b3','Next beginning.')],1):

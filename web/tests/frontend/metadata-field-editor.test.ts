@@ -180,7 +180,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
       props: {
         field: "speaker",
-        value: "Jacques Derrida",
+        value: "Jane Author",
         control: "text",
         status: {
           status: "model_inferred",
@@ -201,7 +201,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     await edit!.trigger("click");
     await nextTick();
     expect(wrapper.find("textarea").exists()).toBe(true);
-    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jane Author");
     expect(wrapper.find(".assertion-provenance").exists()).toBe(true);
     wrapper.unmount();
   });
@@ -253,18 +253,18 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
       props: {
         field: "speaker",
-        value: { value: "Jacques Derrida", reason: "model proposal" },
+        value: { value: "Jane Author", reason: "model proposal" },
         control: "text",
         status: { status: "model_inferred", method: "llm" },
       },
     });
 
-    expect(wrapper.text()).toContain("Jacques Derrida");
+    expect(wrapper.text()).toContain("Jane Author");
     expect(wrapper.text()).not.toContain("[object Object]");
     const edit = wrapper.findAll("button").find((button) => button.text().includes("Edit"));
     await edit!.trigger("click");
     await nextTick();
-    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jane Author");
     wrapper.unmount();
   });
 });

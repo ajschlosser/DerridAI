@@ -28,7 +28,7 @@ const blocks: SourceBlock[] = [
     page: 12,
     bbox: [],
     type: "paragraph",
-    text: "Derrida writes that the position must be distinguished from the position he attributes.",
+    text: "Author writes that the position must be distinguished from the position he attributes.",
     extraction_method: "pdf_text",
     confidence: 0.99,
   },

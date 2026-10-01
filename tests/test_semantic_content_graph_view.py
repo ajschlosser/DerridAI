@@ -91,10 +91,10 @@ def test_view_preserves_edge_authority_and_relation_kind_from_projection():
     record = {
         "record_id": "r1",
         "record_revision": 1,
-        "text": "Derrida reads Husserl.",
+        "text": "Author reads Husserl.",
         "persons": ["Husserl"],
         "concepts": ["presence"],
-        "position_holder": "Derrida",
+        "position_holder": "Author",
         "target": "Husserl",
         "stance": "critiques",
         "metadata_field_status": {
@@ -104,8 +104,8 @@ def test_view_preserves_edge_authority_and_relation_kind_from_projection():
         },
     }
     graph = build_semantic_content_graph([record], {"profile": "scholarly"})
-    derrida = next(n for n in graph["nodes"] if n["label"] == "Derrida")
-    view = semantic_content_graph_view(graph, focus=derrida["id"])
+    author = next(n for n in graph["nodes"] if n["label"] == "Author")
+    view = semantic_content_graph_view(graph, focus=author["id"])
     relation = next(r for r in view["focus"]["relations"] if r["predicate"] == "critiques")
     assert relation["relation_kind"] == "semantic"
     assert relation["authority_status"] == "human_confirmed"

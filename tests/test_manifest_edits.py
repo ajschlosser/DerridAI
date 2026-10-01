@@ -31,7 +31,7 @@ def make(tmp_path: Path, *, status: str = "awaiting_review", stage: str = "revie
     build = repo.create_build({
         "asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 2,
         "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": APP_VERSION,
-        "provider": "ollama", "model": "m", "request": {}, "manifest": {"title": "Book", "document_author": "Derrida"},
+        "provider": "ollama", "model": "m", "request": {}, "manifest": {"title": "Book", "document_author": "Author"},
     })
     build.update(manifest_revision=1)
     repo.save_build(build)

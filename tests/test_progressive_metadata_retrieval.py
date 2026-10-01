@@ -35,7 +35,7 @@ class ArrayLike:
 
 
 def test_retrieval_query_filters_function_words_without_erasing_short_queries():
-    assert _retrieval_query_text("the position of Derrida", "en") == "position Derrida"
+    assert _retrieval_query_text("the position of Author", "en") == "position Author"
     assert _retrieval_query_text("the", "en") == "the"
 
 
@@ -187,7 +187,7 @@ def test_retrieval_embeds_query_once_across_multiple_fields_and_syncs_scope():
     index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
     canonical = [
         {
-            **exemplar("mex-speaker", "speaker", "Derrida", "Derrida replies to the interviewer."),
+            **exemplar("mex-speaker", "speaker", "Author", "Author replies to the interviewer."),
             "record_id": "r-speaker",
         },
         exemplar(
@@ -206,7 +206,7 @@ def test_retrieval_embeds_query_once_across_multiple_fields_and_syncs_scope():
 
     result = index.retrieve(
         scope_id="build-1",
-        query_text="Derrida discusses Levinas and responsibility.",
+        query_text="Author discusses Levinas and responsibility.",
         exemplars=canonical,
         fields=["speaker", "position_holder"],
         schema_id="schema",
@@ -219,7 +219,7 @@ def test_retrieval_embeds_query_once_across_multiple_fields_and_syncs_scope():
     assert "stale" not in store.collection.rows
     assert "other-scope" in store.collection.rows
     assert set(result["examples"]) == {"speaker", "position_holder"}
-    assert result["examples"]["speaker"][0]["value"] == "Derrida"
+    assert result["examples"]["speaker"][0]["value"] == "Author"
     assert {
         item["value"] for item in result["examples"]["position_holder"]
     } == {"Levinas", "Kant"}
@@ -237,13 +237,13 @@ def test_retrieval_packet_budget_is_global_not_per_field():
     store = FakeStore()
     index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
     canonical = [
-        exemplar("mex-speaker", "speaker", "Derrida", "Derrida speaks."),
+        exemplar("mex-speaker", "speaker", "Author", "Author speaks."),
         exemplar("mex-holder", "position_holder", "Levinas", "Levinas is named."),
     ]
 
     result = index.retrieve(
         scope_id="build-1",
-        query_text="Derrida and Levinas",
+        query_text="Author and Levinas",
         exemplars=canonical,
         fields=["speaker", "position_holder"],
         schema_id="schema",
@@ -322,8 +322,8 @@ def test_cross_encoder_failure_falls_back_with_visible_telemetry(monkeypatch):
     index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
     result = index.retrieve(
         scope_id="build-1",
-        query_text="Derrida",
-        exemplars=[exemplar("mex-one", "speaker", "Derrida", "Derrida speaks.")],
+        query_text="Author",
+        exemplars=[exemplar("mex-one", "speaker", "Author", "Author speaks.")],
         fields=["speaker"],
         schema_id="schema",
         schema_version="v1",
@@ -331,7 +331,7 @@ def test_cross_encoder_failure_falls_back_with_visible_telemetry(monkeypatch):
     )
 
     assert result["ok"] is True
-    assert result["examples"]["speaker"][0]["value"] == "Derrida"
+    assert result["examples"]["speaker"][0]["value"] == "Author"
     assert result["telemetry"]["reranking"]["mode"] == "hybrid"
     assert result["telemetry"]["reranking"]["fallback_reason"] == "inference_timeout"
 
@@ -348,11 +348,11 @@ def test_backend_failure_disables_repeated_semantic_attempts_but_returns_fallbac
         BrokenStore(),
         collection_name="test_metadata_exemplars",
     )
-    canonical = [exemplar("mex-one", "speaker", "Derrida", "Derrida speaks.")]
+    canonical = [exemplar("mex-one", "speaker", "Author", "Author speaks.")]
 
     first = index.retrieve(
         scope_id="build-1",
-        query_text="Derrida",
+        query_text="Author",
         exemplars=canonical,
         fields=["speaker"],
         schema_id="schema",
@@ -360,7 +360,7 @@ def test_backend_failure_disables_repeated_semantic_attempts_but_returns_fallbac
     )
     second = index.retrieve(
         scope_id="build-1",
-        query_text="Derrida",
+        query_text="Author",
         exemplars=canonical,
         fields=["speaker"],
         schema_id="schema",
@@ -369,9 +369,9 @@ def test_backend_failure_disables_repeated_semantic_attempts_but_returns_fallbac
 
     assert first["ok"] is False
     assert second["ok"] is False
-    assert first["examples"]["speaker"][0]["value"] == "Derrida"
+    assert first["examples"]["speaker"][0]["value"] == "Author"
     assert first["telemetry"]["fallback_mode"] == "lexical"
-    assert second["examples"]["speaker"][0]["value"] == "Derrida"
+    assert second["examples"]["speaker"][0]["value"] == "Author"
     assert "vector backend unavailable" in second["telemetry"]["fallback_reason"]
 
 
@@ -390,8 +390,8 @@ def test_backend_failure_can_decline_lexical_fallback_explicitly():
     )
     result = index.retrieve(
         scope_id="build-1",
-        query_text="Derrida",
-        exemplars=[exemplar("mex-one", "speaker", "Derrida", "Derrida speaks.")],
+        query_text="Author",
+        exemplars=[exemplar("mex-one", "speaker", "Author", "Author speaks.")],
         fields=["speaker"],
         schema_id="schema",
         schema_version="v1",
@@ -417,7 +417,7 @@ def test_selective_sync_does_not_delete_omitted_record_keys():
     index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
     desired = [
         {
-            **exemplar("mex-speaker", "speaker", "Derrida", "Derrida speaks."),
+            **exemplar("mex-speaker", "speaker", "Author", "Author speaks."),
             "record_id": "r-speaker",
         }
     ]
@@ -439,7 +439,7 @@ def test_rebuild_scope_can_remove_all_stale_rows_deterministically():
         "context_text": "obsolete",
     }
     index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
-    desired = [exemplar("mex-new", "stance", "critical", "Derrida criticizes the formulation.")]
+    desired = [exemplar("mex-new", "stance", "critical", "Author criticizes the formulation.")]
 
     stats = index.rebuild_scope("build-1", desired)
 
@@ -597,7 +597,7 @@ def test_exemplar_collection_creation_failure_is_not_rewritten_as_missing_collec
 
 
 def _generic(exemplar_id, value, *, kind="positive", reviewed=None):
-    """A precedent for an arbitrary schema field; nothing here is Derrida-specific."""
+    """A precedent for an arbitrary schema field; nothing here is Author-specific."""
     item = exemplar(exemplar_id, "mood", value, f"Evidence for {exemplar_id}.")
     item["kind"] = kind
     if kind == "correction":
@@ -664,13 +664,13 @@ def test_retrieval_honors_pipeline_computational_settings():
     store = FakeStore()
     index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
     canonical = [
-        exemplar("mex-one", "speaker", "Derrida", "Derrida speaks."),
+        exemplar("mex-one", "speaker", "Author", "Author speaks."),
         exemplar("mex-two", "speaker", "Levinas", "Levinas responds."),
     ]
 
     result = index.retrieve(
         scope_id="build-1",
-        query_text="Derrida responds",
+        query_text="Author responds",
         exemplars=canonical,
         fields=["speaker"],
         schema_id="schema",

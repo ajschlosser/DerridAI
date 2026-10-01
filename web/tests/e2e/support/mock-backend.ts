@@ -28,14 +28,14 @@ const RESEARCHER_CAPABILITIES = [
 export const STORE_RECORDS = [
   {
     _chroma_id: "r1",
-    record_id: "derrida-cosmopoli-00011",
+    record_id: "author-cosmopoli-00011",
     work: "On Cosmopolitanism and Forgiveness",
-    document_author: "Jacques Derrida",
+    document_author: "Jane Author",
     page_start: 5,
     page_end: 5,
     text: "I regret not having been present at the inauguration of this solemn meeting, but permit me, by way of saluting those here present, to evoke at least a vague outline of this new charter of hospitality.",
-    speaker: "Derrida",
-    position_holder: "Derrida",
+    speaker: "Author",
+    position_holder: "Author",
     discourse_role: "assertion",
     stance: "affirm",
     topics: ["hospitality", "cities of refuge"],
@@ -43,18 +43,18 @@ export const STORE_RECORDS = [
   },
   {
     _chroma_id: "r2",
-    record_id: "derrida-cosmopoli-00012",
+    record_id: "author-cosmopoli-00012",
     work: "On Cosmopolitanism and Forgiveness",
-    document_author: "Jacques Derrida",
+    document_author: "Jane Author",
     page_start: 6,
     page_end: 6,
     text: "What then would such a concept be?",
   },
   {
     _chroma_id: "r3",
-    record_id: "derrida-cosmopoli-00013",
+    record_id: "author-cosmopoli-00013",
     work: "On Cosmopolitanism and Forgiveness",
-    document_author: "Jacques Derrida",
+    document_author: "Jane Author",
     page_start: 6,
     page_end: 8,
     text: "How might it be adapted to the pressing urgencies which summon and overwhelm us?",
@@ -79,8 +79,8 @@ const GRADE = {
 export const FAQ_RECORDS = [
   {
     record_id: "faq-1",
-    question: "How does Derrida distinguish responsibility from programmable rule-following?",
-    text: "Responsibility begins where a decision cannot be reduced to a rule or program (Derrida 1999: 20–21).\n\nA responsible decision must still answer to inherited norms while passing through an irreducible ordeal of undecidability (Derrida 1999: 24).",
+    question: "How does Author distinguish responsibility from programmable rule-following?",
+    text: "Responsibility begins where a decision cannot be reduced to a rule or program (Author 1999: 20–21).\n\nA responsible decision must still answer to inherited norms while passing through an irreducible ordeal of undecidability (Author 1999: 24).",
     provider: "Ollama",
     model: "qwen3:14b",
     created_at: "2026-09-01T12:00:00Z",
@@ -89,30 +89,30 @@ export const FAQ_RECORDS = [
     evidence: [
       {
         evidence_id: "E1",
-        inline_citation: "(Derrida 1999: 20–21)",
-        full_citation: "Derrida, Jacques. The Gift of Death.",
-        collection: "derrida-en",
+        inline_citation: "(Author 1999: 20–21)",
+        full_citation: "Author, Jane. The Gift of Death.",
+        collection: "author-en",
         rerank_score: 0.931,
         record: {
           record_id: "gift-020",
           work: "The Gift of Death",
           page_start: 20,
           page_end: 21,
-          speaker: "Derrida",
+          speaker: "Author",
           text: "The responsible decision is not a calculable one.",
         },
       },
       {
         evidence_id: "E2",
-        inline_citation: "(Derrida 1999: 24)",
-        full_citation: "Derrida, Jacques. The Gift of Death.",
-        collection: "derrida-en",
+        inline_citation: "(Author 1999: 24)",
+        full_citation: "Author, Jane. The Gift of Death.",
+        collection: "author-en",
         rerank_score: 0.902,
         record: {
           record_id: "gift-024",
           work: "The Gift of Death",
           page_start: 24,
-          speaker: "Derrida",
+          speaker: "Author",
           text: "Undecidability is the ordeal through which a decision passes.",
         },
       },
@@ -123,7 +123,7 @@ export const FAQ_RECORDS = [
   {
     record_id: "faq-2",
     question: "What is the difference between conditional and unconditional hospitality?",
-    text: "Unconditional hospitality exceeds the law; conditional hospitality is what makes welcome possible (Derrida 2000: 77).",
+    text: "Unconditional hospitality exceeds the law; conditional hospitality is what makes welcome possible (Author 2000: 77).",
     provider: "Ollama",
     model: "qwen3:14b",
     created_at: "2026-09-02T09:30:00Z",
@@ -133,7 +133,7 @@ export const FAQ_RECORDS = [
   },
   {
     record_id: "faq-3",
-    question: "Why does Derrida return to the figure of the city of refuge?",
+    question: "Why does Author return to the figure of the city of refuge?",
     text: "The city of refuge stages the tension between sovereignty and welcome.",
     provider: "OpenAI-compatible",
     model: "gpt-oss:20b",
@@ -169,7 +169,7 @@ export const CORPUS_RECORDS = Array.from({ length: 60 }, (_, i) => {
   const body = Array.from({ length: 9 }, (_, k) => PROSE[(i + k) % PROSE.length]).join(" ");
   const unresolved = state === "metadata" ? ["target", "stance", "proposition_status"] : [];
   return {
-    record_id: `derrida-jacques-on-cosmopoli-${String(n).padStart(5, "0")}`,
+    record_id: `author-jacques-on-cosmopoli-${String(n).padStart(5, "0")}`,
     text: body,
     text_length: body.length,
     page_start: 5 + Math.floor(i / 3),
@@ -207,14 +207,14 @@ export const CORPUS_RECORDS = Array.from({ length: 60 }, (_, i) => {
     topology_index: i,
     topology_count: 60,
     pdf_pages: [5 + Math.floor(i / 3)],
-    speaker: "Derrida",
+    speaker: "Author",
     discourse_role: "analysis",
   };
 });
 const CORPUS_BUILD = {
   build_id: CORPUS_BUILD_ID,
   asset_id: "asset-1",
-  source_filename: "derrida-on-cosmopolitanism.pdf",
+  source_filename: "author-on-cosmopolitanism.pdf",
   source_sha256: "0".repeat(64),
   status: "awaiting_review",
   stage: "review",
@@ -224,7 +224,7 @@ const CORPUS_BUILD = {
   needs_review_count: 30,
   accepted_count: 8,
   rejected_count: 8,
-  profile_id: "derrida-v11",
+  profile_id: "author-v11",
   provider: "ollama",
   model: "qwen3:14b",
   review_queue_counts: {
@@ -238,7 +238,7 @@ const CORPUS_BUILD = {
     rejected: 8,
     pending: 44,
   },
-  manifest: { title: "On Cosmopolitanism and Forgiveness", document_author: "Jacques Derrida" },
+  manifest: { title: "On Cosmopolitanism and Forgiveness", document_author: "Jane Author" },
   manifest_confirmed_at: "2026-09-18T12:05:00Z",
   validation: { valid: true, source_valid: true, metadata_valid: false, coverage: 1 },
   metadata_issue_summary: {
@@ -363,14 +363,14 @@ function defaults(url: URL, method: string, role: Role): unknown {
     return {
       stores: [
         {
-          name: "derrida_primary",
+          name: "primary_corpus",
           kind: "records",
           count: STORE_RECORDS.length,
           embedding_model: "bge-m3:latest",
         },
       ],
     };
-  if (path === "/api/stores/derrida_primary/records")
+  if (path === "/api/stores/primary_corpus/records")
     return { count: STORE_RECORDS.length, records: STORE_RECORDS };
   if (path === "/api/annotations") return { annotations: [] };
   if (path === "/api/system/data-retention")
@@ -412,14 +412,14 @@ function defaults(url: URL, method: string, role: Role): unknown {
   if (path === "/api/response-cache/records")
     return { records: [], count: 0, total: 0, limit: 50, offset: 0, exists: true };
   if (path === "/api/pdf/corpus-profiles")
-    return { items: [{ id: "derrida-v11", name: "DerridAI corpus profile", version: 11 }] };
+    return { items: [{ id: "author-v11", name: "DerridAI corpus profile", version: 11 }] };
   if (path === "/api/pdf/assets")
     return {
       items: [
         {
           asset_id: "asset-1",
           sha256: "0".repeat(64),
-          filename: "derrida-on-cosmopolitanism.pdf",
+          filename: "author-on-cosmopolitanism.pdf",
           created_at: "2026-09-18T11:00:00Z",
           page_count: 120,
           block_count: 1400,
@@ -474,12 +474,12 @@ function defaults(url: URL, method: string, role: Role): unknown {
       items: [
         {
           wikidata_qid: "Q130631",
-          label: "Jacques Derrida",
+          label: "Jane Author",
           description: "French philosopher (1930–2004)",
-          aliases: ["Jackie Derrida"],
+          aliases: ["Jackie Author"],
           birth_year: 1930,
           death_year: 2004,
-          wikisource_sitelinks: { fr: "Jacques Derrida" },
+          wikisource_sitelinks: { fr: "Jane Author" },
         },
       ],
     };

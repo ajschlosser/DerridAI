@@ -70,7 +70,7 @@ RECORD = {
     "field_assertions": {
         "speaker": [{
             "assertion_id": "as-speaker", "record_id": "rec-gql-1", "field_id": "speaker",
-            "field_name": "speaker", "value": "Derrida", "derivation_method": "model",
+            "field_name": "speaker", "value": "Author", "derivation_method": "model",
             "evaluation_status": "value_supported", "authority_status": "human_confirmed",
             "value_status": "present", "confidence": 0.93, "reason": "Signed preface.",
             "record_revision": 2,
@@ -152,7 +152,7 @@ def test_record_graph_matches_rest_and_keeps_speaker_distinct_from_position_hold
         node["field_assertion"]["field_name"]: node["field_assertion"]
         for node in graph["nodes"] if node["field_assertion"]
     }
-    assert assertions["speaker"]["value"] == "Derrida"
+    assert assertions["speaker"]["value"] == "Author"
     assert assertions["position_holder"]["value"] == "Rousseau"
     assert assertions["speaker"]["authority_status"] == "human_confirmed"
     assert assertions["position_holder"]["authority_status"] == "unreviewed"

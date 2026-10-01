@@ -13,7 +13,7 @@ function record(over: Record<string, unknown> = {}) {
     text: "A passage.",
     stance: "affirm",
     discourse_role: "assertion",
-    speaker: "Jacques Derrida",
+    speaker: "Jane Author",
     metadata_review_fields: ["stance", "discourse_role", "speaker"],
     metadata_incomplete_fields: [],
     metadata_field_status: { stance: pending, discourse_role: pending, speaker: pending },
@@ -177,7 +177,7 @@ describe("a field's decision controls", () => {
 
   it("closes an optional edit on Cancel without saving", async () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
-      props: { field: "speaker", value: "Jacques Derrida", control: "text", status: {} },
+      props: { field: "speaker", value: "Jane Author", control: "text", status: {} },
     });
     await wrapper.get(".field-edit").trigger("click");
     expect(wrapper.find("textarea").exists()).toBe(true);

@@ -28,7 +28,7 @@ def test_collection_name_contract_is_validated_in_api_schema():
     """Reject invalid collection names at the schema layer and apply safe defaults.
 
     What: "x" (too short), "192.168.1.1" (IP-shaped) and "bad name" (space) must raise
-    ValidationError; a valid name such as "derrida-primary" is accepted.
+    ValidationError; a valid name such as "primary-corpus" is accepted.
     Why the defaults matter: retrieval_mode="hybrid" and distance_metric="cosine" are
     the documented defaults, and changing them silently would change search behavior
     for every newly created collection.
@@ -41,7 +41,7 @@ def test_collection_name_contract_is_validated_in_api_schema():
         StoreCreate(name="192.168.1.1")
     with pytest.raises(ValidationError):
         StoreCreate(name="bad name")
-    model = StoreCreate(name="derrida-primary")
+    model = StoreCreate(name="primary-corpus")
     assert model.retrieval_mode == "hybrid"
     assert model.distance_metric == "cosine"
 

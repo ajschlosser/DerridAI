@@ -13,7 +13,7 @@
   }
 
   if (!sdk?.createClient || !sdk?.dataSources?.inline) {
-    root.textContent = "The DerridAI SDK could not be loaded.";
+    root.textContent = "The DerridAI Publication Runtime could not be loaded.";
     return;
   }
 
@@ -1093,7 +1093,7 @@
     dialog.querySelector("mark")?.scrollIntoView({ block: "center" });
   }
 
-  // Search-term highlighting mirrors the SDK's lexical matching: whole tokens of the query (case-folded for the
+  // Search-term highlighting mirrors the Publication Runtime's lexical matching: whole tokens of the query (case-folded for the
   // site locale), plus the whole query as a phrase. Text is only ever set as text nodes, never as HTML.
   const TERM_PATTERN = /[\p{L}\p{N}’'_-]+/gu;
 
@@ -1527,7 +1527,7 @@
         ? null
         : indexSection(async () => {
             // The index button is the complete happy path: persist the current browser-model draft, rebuild the
-            // SDK client with it, and let the first embedding call download/cache the model automatically.
+            // Publication Runtime client with it, and let the first embedding call download/cache the model automatically.
             rememberDraft();
             await rebuildClient();
           }),
@@ -1613,7 +1613,7 @@
   function browserSemanticIndexSection() {
     const index = capabilities?.localIndex;
     if (!index || index.usesPublishedVectors) return null;
-    // Search and Research use the already-active embedding provider. They should not rebuild the SDK client
+    // Search and Research use the already-active embedding provider. They should not rebuild the Publication Runtime client
     // merely to start a derived index; doing so can replace the provider while the click handler is running.
     // Keep the completed state visible so readers can see which local index semantic search is using.
     return indexSection(null, "site.runtime.index_build_browser");

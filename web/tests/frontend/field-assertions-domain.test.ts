@@ -30,7 +30,7 @@ const record = {
         record_revision: 2,
         field_id: "derridai.speaker",
         field_name: "speaker",
-        value: "Derrida",
+        value: "Author",
         derivation_method: "model",
         evaluation_status: "value_supported",
         authority_status: "human_confirmed",
@@ -66,7 +66,7 @@ describe("canonical FieldAssertion presentation", () => {
 
   it("surfaces distinct retained values as disagreement rather than overwriting history", () => {
     const conflict = assertionConflict(record, "speaker");
-    expect(conflict?.current?.value).toBe("Derrida");
+    expect(conflict?.current?.value).toBe("Author");
     expect(conflict?.alternatives.map((item) => item.value)).toEqual(["Levinas"]);
     expect(conflict?.disputed).toBe(false);
   });
@@ -79,7 +79,7 @@ describe("canonical FieldAssertion presentation", () => {
 
   it("does not treat identical historical values as a semantic conflict", () => {
     const same = structuredClone(record);
-    same.field_assertions["derridai.speaker"][0].value = "Derrida";
+    same.field_assertions["derridai.speaker"][0].value = "Author";
     expect(assertionConflict(same, "speaker")?.alternatives).toEqual([]);
   });
 });

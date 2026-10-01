@@ -1196,7 +1196,7 @@ const activeCorpusProfile = computed(
     corpusProfiles.value.find(
       (profile) => String(profile.id || "") === String(currentBuild.value?.profile_id || ""),
     ) ||
-    corpusProfiles.value.find((profile) => String(profile.id || "") === "derrida-scholarly-v12") ||
+    corpusProfiles.value.find((profile) => String(profile.id || "") === "scholarly-v12") ||
     null,
 );
 const regionTypes = computed(() =>

@@ -37,7 +37,7 @@ def install_asset(repo:cb.PdfCorpusRepository):
     cb._json_write(repo.asset_meta_path(asset["asset_id"]),asset)
     repo.asset_blocks_path(asset["asset_id"]).write_text(json.dumps({
         "block_id":"b1","page":9,"bbox":[0,0,100,100],"type":"paragraph",
-        "text":"Derrida explicitly affirms this proposition.","extraction_method":"native","confidence":1.0,
+        "text":"Author explicitly affirms this proposition.","extraction_method":"native","confidence":1.0,
         "deterministic_region_type":"main_text",
     })+"\n",encoding="utf-8")
     return asset
@@ -58,7 +58,7 @@ def make_build(repo:cb.PdfCorpusRepository):
 
 def test_profile_and_prompt_version_ids_are_pinned():
     """Pin the profile, metadata prompt, and document-manifest prompt version ids."""
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
+    assert cb.PROFILE_VERSION=="scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v15"
     assert cb.DOCUMENT_PROMPT_VERSION=="derridai-document-manifest-v3"
 
@@ -160,7 +160,7 @@ def test_confident_stance_alias_is_normalized_and_auto_populated(tmp_path:Path,m
     _asset,build=make_build(repo)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     record={
-        "record_id":"r2","record_revision":1,"text":"Derrida explicitly affirms this proposition.",
+        "record_id":"r2","record_revision":1,"text":"Author explicitly affirms this proposition.",
         "text_length":43,"pdf_pages":[9],"source_asset_id":"asset-testy-titmouse",
         "source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":9,"confidence":1.0}],
         "region_type":"main_text","primary_text":True,

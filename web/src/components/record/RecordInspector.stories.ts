@@ -5,14 +5,14 @@ const snapshot = {
   mode: "workspace" as const,
   record_id: "adieu-00042",
   record: {
-    document_author: "Jacques Derrida",
+    document_author: "Jane Author",
     edition: "Stanford University Press",
     year: 1999,
     page_start: 20,
     page_end: 21,
     document_language: "en",
     original_language: "fr",
-    speaker: "Derrida",
+    speaker: "Author",
     position_holder: "Levinas",
     stance: "qualified endorsement",
     target: "Heidegger",
@@ -27,9 +27,9 @@ const snapshot = {
   pdf_links: [{ pdf_file: "adieu.pdf", pdf_page: 33 }],
   history: [],
   history_count: 5,
-  inline_citation: "(Derrida 1999: 20-21)",
+  inline_citation: "(Author 1999: 20-21)",
   full_citation:
-    "Derrida, Jacques. Adieu to Emmanuel Levinas. Stanford University Press, 1999, pp. 20–21.",
+    "Author, Jane. Adieu to Emmanuel Levinas. Stanford University Press, 1999, pp. 20–21.",
   capabilities: {
     edit: true,
     annotate: true,

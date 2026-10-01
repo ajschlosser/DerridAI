@@ -9,8 +9,8 @@ import {
 
 describe("citations", () => {
   it("formats author names", () => {
-    expect(mlaAuthorName("Jacques Derrida")).toBe("Derrida, Jacques");
-    expect(mlaAuthorName("Derrida, Jacques")).toBe("Derrida, Jacques");
+    expect(mlaAuthorName("Jane Author")).toBe("Author, Jane");
+    expect(mlaAuthorName("Author, Jane")).toBe("Author, Jane");
     expect(mlaAuthorName("Plato")).toBe("Plato");
     expect(mlaAuthorName("")).toBe("");
   });
@@ -23,13 +23,13 @@ describe("citations", () => {
   it("builds inline citations", () => {
     expect(
       inlineCitation({
-        document_author: "Jacques Derrida",
+        document_author: "Jane Author",
         year: 1997,
         page_start: 5,
         page_end: 8,
       }),
-    ).toBe("(Derrida 1997: 5-8)");
-    expect(inlineCitation({ document_author: "Derrida, Jacques" })).toBe("(Derrida)");
+    ).toBe("(Author 1997: 5-8)");
+    expect(inlineCitation({ document_author: "Author, Jane" })).toBe("(Author)");
     expect(inlineCitation({ page_start: 3 })).toBe("(3)");
     expect(inlineCitation({ record_id: "r1" })).toBe("r1");
     expect(inlineCitation(null)).toBe("Record");
@@ -37,14 +37,14 @@ describe("citations", () => {
   it("builds full citations", () => {
     expect(
       fullCitation({
-        document_author: "Jacques Derrida",
+        document_author: "Jane Author",
         work: "Of Grammatology",
         translator: "G. Spivak",
         publisher: "JHU Press",
         year: 1976,
         page_start: 5,
       }),
-    ).toBe("Derrida, Jacques. Of Grammatology. Translated by G. Spivak, JHU Press, 1976, p. 5.");
+    ).toBe("Author, Jane. Of Grammatology. Translated by G. Spivak, JHU Press, 1976, p. 5.");
     expect(fullCitation({ work: "X", page_start: 2 }, { includePages: false })).toBe("X.");
     expect(fullCitation({ record_id: "r9" })).toBe("r9");
   });

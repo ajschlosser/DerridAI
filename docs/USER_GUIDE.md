@@ -298,7 +298,7 @@ Select a work with its card; the card is a button, so it works from the keyboard
 
 **Create subset** in the local-file rail makes a new local JSONL file from the records that match a filter. The source file is not changed, and each copied record keeps its record ID and audit history. The source can be the active file, all loaded files, or one file; the match count updates as you edit the filter.
 
-A filter is a list of conditions (field, comparison, value) joined by AND or OR, where AND binds before OR. A group is evaluated as one condition, like parentheses, and matches when any or all of its conditions match. **Case-sensitive** is off by default, so `derrida` also matches `Derrida`; turn it on to require the same capitals. It applies to the equals, contains, list and regular-expression comparisons. The new file records the filter, whether matching was case-sensitive, and which file it came from.
+A filter is a list of conditions (field, comparison, value) joined by AND or OR, where AND binds before OR. A group is evaluated as one condition, like parentheses, and matches when any or all of its conditions match. **Case-sensitive** is off by default, so `author` also matches `Author`; turn it on to require the same capitals. It applies to the equals, contains, list and regular-expression comparisons. The new file records the filter, whether matching was case-sensitive, and which file it came from.
 
 Saved filter profiles are kept in this browser. **Save current…** names the filter (saving under an existing name updates that profile). **Export all profiles** saves them as one JSON file; **Import profiles** reads such a file, replaces profiles with the same name, and adds the rest. A profile with a condition that cannot be read is skipped whole rather than imported with the condition dropped, and the notification says how many were added, replaced or skipped.
 
@@ -346,11 +346,11 @@ The dialog states the cELF status of each choice, and the published manifest rec
 
 ### Two-file static site
 
-Choose **Two-file static site** for the standard DerridAI publication. The ZIP contains exactly `index.html` and `derridai-site.js`. The JavaScript file contains the immutable publication package, progressive work chunks, the framework-neutral DerridAI browser SDK, and the reference interface. The same two files can be opened locally or served unchanged by an ordinary static HTTP/HTTPS host. No DerridAI application server is required.
+Choose **Two-file static site** for the standard DerridAI publication. The ZIP contains exactly `index.html` and `derridai-site.js`. The JavaScript file contains the immutable publication package, progressive work chunks, the framework-neutral DerridAI browser Publication Runtime, and the reference interface. The same two files can be opened locally or served unchanged by an ordinary static HTTP/HTTPS host. No DerridAI application server is required.
 
 ### Single HTML file
 
-Choose **Single HTML file** for direct local use. DerridAI downloads one `.html` file containing the immutable publication package, the DerridAI SDK, and the reference interface. Open the file directly from disk in a modern browser.
+Choose **Single HTML file** for direct local use. DerridAI downloads one `.html` file containing the immutable publication package, the DerridAI Publication Runtime, and the reference interface. Open the file directly from disk in a modern browser.
 
 The document remains self-contained for corpus browsing and research logic. Its Content Security Policy permits direct `http:` and `https:` connections so a visitor's OpenAI-compatible endpoint can be reached, and it allows WebAssembly so Transformers.js can run. Keyword search, Record browsing, filtering, local annotations, citations, and evidence retrieval remain local. Semantic query embedding runs in the browser. Research answers call an OpenAI-compatible endpoint only when the visitor saves one in the **Models** workspace. An API token stays in memory for the current tab unless the visitor chooses to store it on that device. Normal browser CORS and mixed-content rules still apply to those external calls; a page opened from `file://` has an opaque origin, so serving the site over HTTP (for example with the nginx bundle) is the most predictable way to reach an endpoint.
 
@@ -368,7 +368,7 @@ Choose **nginx Docker bundle** when the site will be served over HTTP. The ZIP c
 
 The ZIP also contains `vendor/transformers/` (the runtime and its notices). The embedding model is not in the image: a visitor's browser downloads it once into Cache Storage.
 
-The Dockerfile uses a single `nginx:1.27-alpine` image and copies only the Web assets: `index.html`, `derridai-site.js`, and `vendor/`. The JavaScript file contains the publication package, the reusable DerridAI browser SDK, and the reference interface. There is no DerridAI API container, Node runtime, Python runtime, reverse proxy to the application, or Docker Compose dependency.
+The Dockerfile uses a single `nginx:1.27-alpine` image and copies only the Web assets: `index.html`, `derridai-site.js`, and `vendor/`. The JavaScript file contains the publication package, the reusable DerridAI browser Publication Runtime, and the reference interface. There is no DerridAI API container, Node runtime, Python runtime, reverse proxy to the application, or Docker Compose dependency.
 
 After extracting the ZIP:
 
@@ -412,17 +412,17 @@ In the reference site, search-term highlighting is a **Keyword-mode only** affor
 
 ### Publication architecture
 
-Both export formats use the same immutable publication snapshot. Authoritative published Records remain structurally separate from vectors. Records and vectors are grouped by work and decoded only when an SDK operation needs them, and the SDK yields to the browser between substantial chunks so large publications do not have to be materialized synchronously at startup.
+Both export formats use the same immutable publication snapshot. Authoritative published Records remain structurally separate from vectors. Records and vectors are grouped by work and decoded only when an Publication Runtime operation needs them, and the Publication Runtime yields to the browser between substantial chunks so large publications do not have to be materialized synchronously at startup.
 
-The **DerridAI SDK** owns publication access, Record loading, metadata filtering, lexical/semantic/hybrid retrieval, embedding-contract validation, MMR diversification, evidence-packet construction, deterministic citation formatting, local annotations, progress events, cancellation, and Research orchestration. The SDK does not render the site DOM and does not depend on Vue, React, Pinia, Vue Router, or the DerridAI application server.
+The **DerridAI Publication Runtime** owns publication access, Record loading, metadata filtering, lexical/semantic/hybrid retrieval, embedding-contract validation, MMR diversification, evidence-packet construction, deterministic citation formatting, local annotations, progress events, cancellation, and Research orchestration. The Publication Runtime does not render the site DOM and does not depend on Vue, React, Pinia, Vue Router, or the DerridAI application server.
 
-AI execution inside the SDK remains transport-neutral. A custom host application may inject embedding and generation capabilities as JavaScript objects, and an optional `vectorIndex` store for locally computed vectors (IndexedDB by default). The generated reference site additionally runs Transformers.js in the browser and can call an OpenAI-compatible endpoint the visitor names, without changing the SDK contract. `client.index.status()`, `client.index.build()`, and `client.index.clear()` manage the local index.
+AI execution inside the Publication Runtime remains transport-neutral. A custom host application may inject embedding and generation capabilities as JavaScript objects, and an optional `vectorIndex` store for locally computed vectors (IndexedDB by default). The generated reference site additionally runs Transformers.js in the browser and can call an OpenAI-compatible endpoint the visitor names, without changing the Publication Runtime contract. `client.index.status()`, `client.index.build()`, and `client.index.clear()` manage the local index.
 
 Without a usable embedding capability (none configured, or a model that needs a local index that has not been built), the reference site continues to provide keyword search and metadata filtering and labels the fallback. Without a generation capability, **Research still performs retrieval and returns the auditable evidence packet**; it simply does not synthesize an answer.
 
 ### Bring your own Web application
 
-The generated reference interface is optional presentation. A custom site can load the publication and SDK, omit `derridai-site.js`, and render SDK results however it wants:
+The generated reference interface is optional presentation. A custom site can load the publication and Publication Runtime, omit `derridai-site.js`, and render Publication Runtime results however it wants:
 
 ```html
 <script src="/research/derridai-publication.js"></script>
@@ -442,7 +442,7 @@ The generated reference interface is optional presentation. A custom site can lo
 </script>
 ```
 
-TypeScript applications can also consume the SDK as an ESM package. From the DerridAI repository, `cd web && npm run build:sdk:package` emits ESM JavaScript and TypeScript declarations to `web/sdk/dist`; `npm run pack:sdk` creates an installable `@derridai/sdk` tarball. The public contract is the same one used by the reference published site.
+TypeScript applications can also consume the Publication Runtime as an ESM package. From the DerridAI repository, `cd web && npm run build:sdk:package` emits ESM JavaScript and TypeScript declarations to `web/sdk/dist`; `npm run pack:sdk` creates an installable `@derridai/publication-runtime` tarball. The public contract is the same one used by the reference published site.
 
 Annotations remain local to the browser unless the host supplies another storage implementation. Creating a later site export creates a new immutable publication snapshot; it does not mutate an earlier downloaded site.
 

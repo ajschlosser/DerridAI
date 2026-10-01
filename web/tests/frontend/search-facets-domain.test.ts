@@ -15,7 +15,7 @@ const recordDbStatus = (_f: unknown, i: number) => ({ kind: i % 2 ? "synced" : "
 const uid = () => "uid";
 const state = {
   searchFacetFilters: { work: ["Of Grammatology"], topics: ["a"] } as Record<string, string[]>,
-  dbSearchWhere: { speaker: "Derrida", empty: " " },
+  dbSearchWhere: { speaker: "Author", empty: " " },
 };
 const dbSearchWhere = () =>
   Object.fromEntries(
@@ -51,17 +51,17 @@ const file = { id: "f", name: "a.jsonl" };
 const records = [
   {
     work: "Of Grammatology",
-    document_author: "Derrida",
+    document_author: "Author",
     topics: ["a", "b"],
     needs_review: true,
-    speaker: "Derrida",
+    speaker: "Author",
     year: 1967,
     page_start: 3,
     text: "hello world",
   },
   {
     work: "Glas",
-    document_author: "Derrida",
+    document_author: "Author",
     topics: "a;c",
     needs_review: false,
     year: 1974,

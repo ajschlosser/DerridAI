@@ -5,7 +5,7 @@ const records = [
   {
     record_id: "cache-1",
     question: "What is responsibility after deconstruction?",
-    text: "Derrida treats responsibility as irreducible to the application of a rule because a responsible decision must answer to singularity while remaining exposed to the undecidable.",
+    text: "Author treats responsibility as irreducible to the application of a rule because a responsible decision must answer to singularity while remaining exposed to the undecidable.",
     provider: "Ollama",
     model: "qwen3:14b",
     created_at: "2026-09-14T18:30:00Z",
@@ -51,7 +51,7 @@ export const LongScholarlyQuestions: Story = {
       {
         record_id: "cache-long",
         question:
-          "How does Derrida distinguish the unconditional structure of hospitality from the conditional laws that make hospitality politically and juridically practicable, and what follows from this distinction for sovereignty?",
+          "How does Author distinguish the unconditional structure of hospitality from the conditional laws that make hospitality politically and juridically practicable, and what follows from this distinction for sovereignty?",
         text: "The distinction does not permit a simple choice between ideality and law. Instead, each side remains exposed to the other, producing an aporetic demand on institutions and decisions.",
         provider: "Ollama",
         model: "qwen3:14b",

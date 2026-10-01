@@ -24,12 +24,12 @@ const files: RecordsFileTab[] = [
   },
   {
     id: "chroma-1",
-    name: "derrida-primary.jsonl",
+    name: "primary-corpus.jsonl",
     count: 12840,
     dirty: 0,
     active: false,
     origin: "chroma",
-    origin_detail: "derrida-primary",
+    origin_detail: "primary-corpus",
   },
 ];
 

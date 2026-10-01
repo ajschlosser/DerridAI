@@ -61,18 +61,18 @@ def nodes_by_type(graph, kind):
 # --- reviewed alias sets ---------------------------------------------------------------------
 
 def test_alias_sets_are_audited_and_never_share_a_surface(tmp_path):
-    repo, build, _ = install(tmp_path, "speaker", "J. Derrida")
+    repo, build, _ = install(tmp_path, "speaker", "J. Author")
     bid = build["build_id"]
-    first = create_alias_set(repo, bid, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida", " j.  derrida ", ""], reviewer="rev-1")
-    assert first["aliases"] == ["J. Derrida"] and first["reviewer"] == "rev-1"
+    first = create_alias_set(repo, bid, kind="person", canonical_label="Jane Author", aliases=["J. Author", " j.  author ", ""], reviewer="rev-1")
+    assert first["aliases"] == ["J. Author"] and first["reviewer"] == "rev-1"
     with pytest.raises(AliasConflict):
-        create_alias_set(repo, bid, kind="person", canonical_label="J. Derrida", aliases=[])
+        create_alias_set(repo, bid, kind="person", canonical_label="J. Author", aliases=[])
     # Similar-looking names may belong to different people; that is a reviewer's call.
     create_alias_set(repo, bid, kind="person", canonical_label="J. P. Dingus", aliases=[])
     create_alias_set(repo, bid, kind="person", canonical_label="JP Dingus", aliases=[])
     # The same surface in another kind is another identity.
-    create_alias_set(repo, bid, kind="concept", canonical_label="Derrida", aliases=[])
-    replaced = create_alias_set(repo, bid, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida", "Derrida, Jacques"], replaces=first["alias_set_id"])
+    create_alias_set(repo, bid, kind="concept", canonical_label="Author", aliases=[])
+    replaced = create_alias_set(repo, bid, kind="person", canonical_label="Jane Author", aliases=["J. Author", "Author, Jane"], replaces=first["alias_set_id"])
     old = next(item for item in list_alias_sets(repo, bid, include_retired=True) if item["alias_set_id"] == first["alias_set_id"])
     assert old["retired_at"] and old["replaced_by"] == replaced["alias_set_id"]
     assert len(list_alias_sets(repo, bid)) == 4
@@ -85,12 +85,12 @@ def test_alias_sets_are_audited_and_never_share_a_surface(tmp_path):
 
 
 def test_reviewed_alias_turns_an_unresolved_review_into_an_acceptance(tmp_path):
-    repo, build, manager = install(tmp_path, "speaker", "J. Derrida")
+    repo, build, manager = install(tmp_path, "speaker", "J. Author")
     bid = build["build_id"]
     listed = manager.semantic_aliases(bid)
     assert any(item["kind"] == "person" and "speaker" in item["fields"] for item in listed["kinds"])
-    manager.save_semantic_alias(bid, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida"])
-    manager.patch_metadata(bid, "r1", {"speaker": "Jacques Derrida"}, expected_revision=1)
+    manager.save_semantic_alias(bid, kind="person", canonical_label="Jane Author", aliases=["J. Author"])
+    manager.patch_metadata(bid, "r1", {"speaker": "Jane Author"}, expected_revision=1)
     rows = review_rows(manager)
     assert [row["kind"] for row in rows] == [ACCEPTED]
     assert rows[0]["equivalence_reasons"] == ["shared_semantic_identity"] and rows[0]["semantic_identity_id"]
@@ -98,8 +98,8 @@ def test_reviewed_alias_turns_an_unresolved_review_into_an_acceptance(tmp_path):
 
 
 def test_without_the_alias_the_same_edit_is_neutral(tmp_path):
-    repo, build, manager = install(tmp_path, "speaker", "J. Derrida")
-    manager.patch_metadata(build["build_id"], "r1", {"speaker": "Jacques Derrida"}, expected_revision=1)
+    repo, build, manager = install(tmp_path, "speaker", "J. Author")
+    manager.patch_metadata(build["build_id"], "r1", {"speaker": "Jane Author"}, expected_revision=1)
     assert [row["kind"] for row in review_rows(manager)] == [UNRESOLVED]
 
 
@@ -180,17 +180,17 @@ def test_surface_clusters_merge_but_booknlp_characters_with_one_name_do_not():
 
 
 def test_person_metadata_attaches_to_the_document_entity_by_identity():
-    doc = analysis("booknlp", [{"cluster_id": "7", "canonical": "Jacques Derrida", "aliases": ["J. Derrida", "Derrida"], "entity_type": "PERSON"}])
-    graph = build_semantic_content_graph([reviewed("r1", persons=["J Derrida"])], doc, schema=default_schema())
+    doc = analysis("booknlp", [{"cluster_id": "7", "canonical": "Jane Author", "aliases": ["J. Author", "Author"], "entity_type": "PERSON"}])
+    graph = build_semantic_content_graph([reviewed("r1", persons=["J Author"])], doc, schema=default_schema())
     [person] = nodes_by_type(graph, "person")
-    assert person["cluster_ids"] == ["7"] and "J Derrida" in person["surface_forms"]
-    assert person["label"] == "J Derrida"  # the reviewed value outranks the provider's label
+    assert person["cluster_ids"] == ["7"] and "J Author" in person["surface_forms"]
+    assert person["label"] == "J Author"  # the reviewed value outranks the provider's label
 
 
 def test_identities_are_scoped_by_kind_in_the_graph():
     registry = SemanticIdentityRegistry()
-    register_reviewed_alias(registry, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida"], mode="entity_name")
-    graph = build_semantic_content_graph([unreviewed("r1", concepts=["J. Derrida"]), unreviewed("r2", persons=["J. Derrida"])],
+    register_reviewed_alias(registry, kind="person", canonical_label="Jane Author", aliases=["J. Author"], mode="entity_name")
+    graph = build_semantic_content_graph([unreviewed("r1", concepts=["J. Author"]), unreviewed("r2", persons=["J. Author"])],
                                          schema=default_schema(), registry=registry)
     assert len(nodes_by_type(graph, "concept")) == 1 and len(nodes_by_type(graph, "person")) == 1
 
@@ -308,9 +308,9 @@ def second_build(repo, build):
 
 
 def test_import_copies_identities_with_provenance_and_reports_clashes(tmp_path):
-    repo, build, manager = install(tmp_path, "speaker", "J. Derrida")
+    repo, build, manager = install(tmp_path, "speaker", "J. Author")
     here, source = build["build_id"], second_build(repo, build)
-    derrida = create_alias_set(repo, source, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida"], reviewer="rev-a")
+    author = create_alias_set(repo, source, kind="person", canonical_label="Jane Author", aliases=["J. Author"], reviewer="rev-a")
     levinas = create_alias_set(repo, source, kind="person", canonical_label="Emmanuel Levinas", aliases=["E. Levinas"])
     create_alias_set(repo, here, kind="person", canonical_label="E. Levinas", aliases=[])  # already an identity here
 
@@ -319,34 +319,34 @@ def test_import_copies_identities_with_provenance_and_reports_clashes(tmp_path):
 
     result = manager.import_semantic_aliases(here, source)
     [copied] = result["imported"]
-    assert copied["canonical_label"] == "Jacques Derrida" and copied["alias_set_id"] != derrida["alias_set_id"]
-    assert copied["imported_from"]["build_id"] == source and copied["imported_from"]["alias_set_id"] == derrida["alias_set_id"]
+    assert copied["canonical_label"] == "Jane Author" and copied["alias_set_id"] != author["alias_set_id"]
+    assert copied["imported_from"]["build_id"] == source and copied["imported_from"]["alias_set_id"] == author["alias_set_id"]
     assert copied["imported_from"]["reviewer"] == "rev-a"
     [clash] = result["skipped"]
     assert clash["alias_set_id"] == levinas["alias_set_id"] and clash["reason"] == "conflict" and "E. Levinas" in clash["detail"]
 
     # A copy, not a link: the source can change without changing this corpus.
-    retire_alias_set(repo, source, derrida["alias_set_id"])
-    assert any(item["canonical_label"] == "Jacques Derrida" for item in list_alias_sets(repo, here))
+    retire_alias_set(repo, source, author["alias_set_id"])
+    assert any(item["canonical_label"] == "Jane Author" for item in list_alias_sets(repo, here))
     # The imported identity is used by this build's review.
-    manager.patch_metadata(here, "r1", {"speaker": "Jacques Derrida"}, expected_revision=1)
+    manager.patch_metadata(here, "r1", {"speaker": "Jane Author"}, expected_revision=1)
     assert [row["kind"] for row in review_rows(manager)] == [ACCEPTED]
 
 
 def test_import_is_selective_and_never_duplicates_an_import(tmp_path):
     repo, build, manager = install(tmp_path, "speaker", "x")
     here, source = build["build_id"], second_build(repo, build)
-    derrida = create_alias_set(repo, source, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida"])
+    author = create_alias_set(repo, source, kind="person", canonical_label="Jane Author", aliases=["J. Author"])
     create_alias_set(repo, source, kind="concept", canonical_label="différance", aliases=["differance"])
-    first = manager.import_semantic_aliases(here, source, [derrida["alias_set_id"]])
-    assert [item["canonical_label"] for item in first["imported"]] == ["Jacques Derrida"]
+    first = manager.import_semantic_aliases(here, source, [author["alias_set_id"]])
+    assert [item["canonical_label"] for item in first["imported"]] == ["Jane Author"]
     # Editing the import keeps its provenance, so importing again skips it.
-    edited = create_alias_set(repo, here, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida", "Derrida"],
+    edited = create_alias_set(repo, here, kind="person", canonical_label="Jane Author", aliases=["J. Author", "Author"],
                               replaces=first["imported"][0]["alias_set_id"])
-    assert edited["imported_from"]["alias_set_id"] == derrida["alias_set_id"]
+    assert edited["imported_from"]["alias_set_id"] == author["alias_set_id"]
     again = manager.import_semantic_aliases(here, source)
     assert [item["canonical_label"] for item in again["imported"]] == ["différance"]
-    assert [(item["canonical_label"], item["reason"]) for item in again["skipped"]] == [("Jacques Derrida", "already_imported")]
+    assert [(item["canonical_label"], item["reason"]) for item in again["skipped"]] == [("Jane Author", "already_imported")]
     with pytest.raises(KeyError):
         manager.import_semantic_aliases(here, source, ["alias-missing"])
     with pytest.raises(ValueError):

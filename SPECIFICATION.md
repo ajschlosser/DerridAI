@@ -89,7 +89,7 @@ The **Capta-Enriched Lexical Format** (**cELF**, pronounced "self") defines a no
 - [7. Human review and authority](#7-human-review-and-authority)
 - [8. Local execution and reproducibility](#8-local-execution-and-reproducibility)
 - [9. Interoperability and conformance](#9-interoperability-and-conformance)
-- [10. Applicability beyond Derrida](#10-applicability-beyond-derrida)
+- [10. Applicability beyond philosophy](#10-applicability-beyond-philosophy)
 - [Conclusion](#conclusion)
 - [References](#references)
 
@@ -740,7 +740,7 @@ An external mapping MUST NOT become the authoritative source of Record identity,
 
 `cELF native model -> interoperability adapter -> external representation.`
 
-> **Why this separation exists.** A provenance standard can represent that one entity was derived from another. It does not necessarily know that the first entity is a passage from a particular edition, that Derrida is speaking while representing Levinas’s position, that a model inferred the position holder, or that a researcher later confirmed the inference. External standards provide reusable infrastructure; cELF supplies the research-specific semantics.
+> **Why this separation exists.** A provenance standard can represent that one entity was derived from another. It does not necessarily know that the first entity is a passage from a particular edition, that an author is speaking while representing another philosopher’s position, that a model inferred the position holder, or that a researcher later confirmed the inference. External standards provide reusable infrastructure; cELF supplies the research-specific semantics.
 
 #### Three interoperability layers
 
@@ -1083,7 +1083,7 @@ PROV does not replace cELF concepts such as speaker, quoted speaker, position ho
 
 cELF’s contribution is not a new generic provenance vocabulary or generic archive format. It specifies the scholarly information chain that more general standards can carry.
 
-A generic provenance graph might state that Entity A was derived from Entity B and that Activity C used A to generate Entity D. A cELF representation can additionally establish that B is a specific SourceDocument; A is revision 3 of a Record representing pages 97–98; the document author is Derrida; the current speaker is Derrida; the represented position is attributed to Levinas; the attribution was first model-inferred and later human-confirmed; the Record entered a ResearchRun through researcher-selected evidence rather than vector search; EvidenceRef E7 identified the exact supplied passage; GenerationRun G9 used the EvidencePacket; GeneratedClaim C12 was produced; SupportBinding SB8 states that E7 supports C12; and a deterministic citation resolver generated the scholarly citation from bibliographic and page metadata.
+A generic provenance graph might state that Entity A was derived from Entity B and that Activity C used A to generate Entity D. A cELF representation can additionally establish that B is a specific SourceDocument; A is revision 3 of a Record representing pages 97–98; the document author is the author of the work; the current speaker is that same author; the represented position is attributed to Levinas; the attribution was first model-inferred and later human-confirmed; the Record entered a ResearchRun through researcher-selected evidence rather than vector search; EvidenceRef E7 identified the exact supplied passage; GenerationRun G9 used the EvidencePacket; GeneratedClaim C12 was produced; SupportBinding SB8 states that E7 supports C12; and a deterministic citation resolver generated the scholarly citation from bibliographic and page metadata.
 
 > **Interoperability design principle.** Use established standards for the general problems they already solve; preserve cELF for the scholarly and AI-research semantics that remain domain-specific. Interoperability SHOULD preserve traceability, packaging SHOULD preserve reproducibility, local export SHOULD remain possible, and any loss of meaning MUST be explicit rather than silent.
 
@@ -1525,7 +1525,7 @@ _Non-normative explanatory paper_
 
 The **Capta-Enriched Lexical Format (cELF, pronounced “self”)** defines a portable information model for AI-assisted documentary research. It preserves source identity, record revision, attribution, evidence, uncertainty, assertion provenance, and research-run provenance as documents move through extraction, enrichment, retrieval, generation, review, and publication. DerridAI is the originating reference implementation.
 
-DerridAI began as a local research environment for a corpus of Jacques Derrida’s works. That corpus puts pressure on ordinary retrieval pipelines because interpretation often depends on quotation boundaries, reported positions, shifts in speaker, edition and translation, pagination, and rhetorical stance. The implementation has therefore been useful for testing whether the distinctions defined by cELF remain recoverable in a working system.
+DerridAI began as a local research environment for corpora of philosophical works whose interpretation depends on exact attribution. That corpus puts pressure on ordinary retrieval pipelines because interpretation often depends on quotation boundaries, reported positions, shifts in speaker, edition and translation, pagination, and rhetorical stance. The implementation has therefore been useful for testing whether the distinctions defined by cELF remain recoverable in a working system.
 
 > **Figure - cELF source-to-claim traceability.** `SourceDocument -> SourceSpan -> Record -> RecordRevision -> FieldAssertion -> Evidence Acquisition -> EvidenceRef -> EvidencePacket -> GenerationRun -> GeneratedClaim -> SupportBinding`.
 
@@ -1640,9 +1640,9 @@ cELF defines mappings to W3C PROV and RO-Crate so that provenance and research p
 
 Conformance is assessed by profile and requirement identifier. DerridAI’s status as the originating reference implementation does not confer automatic conformance on every release. The implementation should be tested against the same requirements available to any other cELF implementation.
 
-## 10. Applicability beyond Derrida
+## 10. Applicability beyond philosophy
 
-cELF does not define a Derrida-specific ontology. A historian can define fields for testimony, provenance, and archival roles. A legal research system can distinguish holdings, party arguments, quoted authority, and later commentary. A literary project can model narrator, character voice, editor, translator, and critical apparatus.
+cELF does not define a discipline-specific ontology. A historian can define fields for testimony, provenance, and archival roles. A legal research system can distinguish holdings, party arguments, quoted authority, and later commentary. A literary project can model narrator, character voice, editor, translator, and critical apparatus.
 
 The shared requirement is structural: field identity, derivation, evaluation, authority, uncertainty, evidence, revision, and source location remain recoverable. Each project can define the domain vocabulary it needs on top of that common model.
 

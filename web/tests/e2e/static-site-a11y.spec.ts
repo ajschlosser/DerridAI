@@ -167,7 +167,7 @@ async function mountStaticSite(page: Page) {
     source_document_id: "source-1",
     source_spans: [{ source_document_id: "source-1", source_unit_id: "unit-r1" }],
     work: "Glas",
-    citation: "Derrida, Jacques. Glas.",
+    citation: "Author, Jane. Glas.",
     text: "A publication-safe passage.",
   };
   const packageValue = {
@@ -180,7 +180,7 @@ async function mountStaticSite(page: Page) {
       description: "Static site accessibility fixture.",
       locale: "en-US",
       languages: [{ code: "en-US", name: "English", flag: "🇺🇸" }],
-      works: [{ work: "Glas", record_count: 1, authors: ["Jacques Derrida"] }],
+      works: [{ work: "Glas", record_count: 1, authors: ["Jane Author"] }],
       vector_index: { dimension: null },
       source_collection: { filter_fields: ["work", "speaker"] },
       provider_profiles: [],
@@ -461,10 +461,10 @@ async function mountProviderSite(page: Page, extraFeatures: Record<string, unkno
       source_document_id: "source-1",
       source_spans: [{ source_document_id: "source-1", source_unit_id: "unit-r1" }],
       work: "Glas",
-      citation: "Derrida, Jacques. Glas.",
+      citation: "Author, Jane. Glas.",
       text: "Hospitality exceeds the economy of conditional exchange.",
-      speaker: "Derrida",
-      position_holder: "Derrida",
+      speaker: "Author",
+      position_holder: "Author",
       stance: "argues",
     },
     {
@@ -472,7 +472,7 @@ async function mountProviderSite(page: Page, extraFeatures: Record<string, unkno
       source_document_id: "source-1",
       source_spans: [{ source_document_id: "source-1", source_unit_id: "unit-r2" }],
       work: "Glas",
-      citation: "Derrida, Jacques. Glas.",
+      citation: "Author, Jane. Glas.",
       text: "Mourning keeps the other within.",
     },
   ];
@@ -487,7 +487,7 @@ async function mountProviderSite(page: Page, extraFeatures: Record<string, unkno
       title: "Provider fixture",
       locale: "en-US",
       languages: [{ code: "en-US", name: "English", flag: "🇺🇸" }],
-      works: [{ work: "Glas", record_count: 2, authors: ["Jacques Derrida"] }],
+      works: [{ work: "Glas", record_count: 2, authors: ["Jane Author"] }],
       vector_index: {
         dimension: 2,
         model: "bge-m3:latest",

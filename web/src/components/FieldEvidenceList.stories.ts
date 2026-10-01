@@ -9,7 +9,7 @@ const evidence = {
   stance: {
     block_ids: ["p00031-b0007"],
     confidence: 0.82,
-    reason: "Derrida marks a qualification of the reported position.",
+    reason: "Author marks a qualification of the reported position.",
   },
 };
 const meta = {

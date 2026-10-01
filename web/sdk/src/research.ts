@@ -54,7 +54,7 @@ ${item.text}`,
     )
     .join("\n\n");
 
-  return `Answer the research question using only the supplied evidence. Preserve attribution: distinguish the passage speaker, quoted speaker, position holder, stance, target, and discourse role. Do not attribute a quoted or analyzed position to Derrida unless the evidence supports that attribution. Cite evidence IDs such as [E1]. If the evidence is insufficient, say so rather than inventing support.
+  return `Answer the research question using only the supplied evidence. Preserve attribution: distinguish the passage speaker, quoted speaker, position holder, stance, target, and discourse role. Do not attribute a quoted or analyzed position to the document author unless the evidence supports that attribution. Cite evidence IDs such as [E1]. If the evidence is insufficient, say so rather than inventing support.
 
 Question: ${question}
 

@@ -33,16 +33,16 @@ def test_profile_and_default_record_sizing():
     """The profile and API defaults agree on record sizing.
 
     Preferred 1750, tolerance 200, "long" 3500, absolute limit 6000, profile id
-    derrida-scholarly-v12. Update these numbers deliberately when policy changes.
+    scholarly-v12. Update these numbers deliberately when policy changes.
     """
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
+    assert cb.PROFILE_VERSION=="scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     assert profile["preferred_record_chars"]==1750
     assert profile["record_length_tolerance"]==200
     assert profile["long_record_chars"]==3500
     assert profile["absolute_record_chars"]==6000
     body=PdfCorpusBuildCreate(asset_id="asset")
-    assert body.profile_id=="derrida-scholarly-v12"
+    assert body.profile_id=="scholarly-v12"
     assert body.record_sizing.preferred_record_chars==1750
     assert body.record_sizing.absolute_record_chars==6000
 
@@ -73,11 +73,11 @@ def test_normalizer_targets_preferred_range_without_removing_semantic_boundary()
 def test_coherent_exception_is_allowed_when_no_good_target_seam():
     """Do not cut an attributed quotation just to hit a size target.
 
-    The only possible seam separates "Derrida writes:" from its quote, so the unit stays
+    The only possible seam separates "Author writes:" from its quote, so the unit stays
     whole (below the long limit): no boundaries, no reviews, no forced safety splits.
     """
     blocks=[
-        block(0,1700,text="Derrida writes:"),
+        block(0,1700,text="Author writes:"),
         block(1,1450,text="“"+(("The quoted thought remains attached to its attribution. "*40)[:1448])+"”"),
     ]
     # The only target seam is attribution-protected, so the unit may remain a

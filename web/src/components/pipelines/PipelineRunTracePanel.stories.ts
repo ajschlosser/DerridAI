@@ -37,7 +37,7 @@ const trace: PipelineRunTrace = {
       input_count: 1,
       output_count: 64,
       parameters: { fetch_k: 500 },
-      collection: "derrida_primary",
+      collection: "primary_corpus",
       score_summary: { distance_metric_normalized: true },
     },
     {

@@ -16,7 +16,7 @@ Copilot, Claude, Cursor/Grok, and ChatGPT/Codex may work on this repository conc
 
 ## What this project is
 
-DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts (Derrida in particular). Corpus Builder accepts multiple source-media kinds (including PDF, text/RTF/DOCX, images, audio, URLs, and Project Gutenberg), preserves source/extractor provenance, and turns source spans into reviewable scholarly records. Canonical corpus/review state remains authoritative; Chroma collections, embeddings, caches, and semantic-memory indexes are derived/rebuildable projections used by Search, Research, and metadata enrichment. It is a research tool: correctness, provenance, and auditability matter more than cleverness.
+DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts. Corpus Builder accepts multiple source-media kinds (including PDF, text/RTF/DOCX, images, audio, URLs, and Project Gutenberg), preserves source/extractor provenance, and turns source spans into reviewable scholarly records. Canonical corpus/review state remains authoritative; Chroma collections, embeddings, caches, and semantic-memory indexes are derived/rebuildable projections used by Search, Research, and metadata enrichment. It is a research tool: correctness, provenance, and auditability matter more than cleverness.
 
 ## Layout
 
@@ -63,9 +63,9 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - **Accessibility:** keyboard operability, visible focus, semantic status communication, a 12px minimum type size, and WCAG 2.2 AA in light and dark. Colours, type sizes and status styles come from tokens (`web/src/styles/tokens.css`, see `docs/DESIGN_TOKENS.md`); do not add literal hex colours to component styles, which a Vitest ratchet enforces. Add or update Storybook stories for new components; the a11y addon and axe tests are gates.
 - **Surfaces:** floating panels use the solid/raised/overlay/glass surface tokens; overlays must be opaque and glass at least 90% opaque. No text may bleed through popovers.
 - **Scholarly provenance is the core requirement.** The chain is source → passage → speaker → position holder → stance → proposition → exact evidence → citation → claim. Preserve it.
-  - Never flatten `speaker`, `quoted_speaker`, and `position_holder` into "Derrida says". A passage Derrida wrote often states another philosopher's position, and editors' or translators' text is not Derrida's.
+  - Never flatten `speaker`, `quoted_speaker`, and `position_holder` into "the author says". A passage an author wrote often states another philosopher's position, and editors' or translators' text is not the author's.
   - Never invent evidence, quotations, or citations. Citations and page numbers come from record IDs and metadata through deterministic code, not from the LLM.
-  - Treat wrong attribution, fabricated quotes, wrong work or page, dropped negation, and editorial text taken as Derrida's as high-severity failures, not minor quality issues.
+  - Treat wrong attribution, fabricated quotes, wrong work or page, dropped negation, and editorial text taken as the author's as high-severity failures, not minor quality issues.
   - Preserve edition, translation, and page information. Keep the corpus authoritative; vector stores are derived data.
 - **Provenance and LLM output:**
   - Keep deterministic and LLM values both, with confidence, reason, and whether the field was actually checked.
@@ -77,7 +77,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
   - Unresolved or uncertain results (segmentation, metadata, attribution, thin evidence) stay visible and marked for review. Never manufacture certainty, and never silently swallow errors that can affect correctness.
   - Segmentation must conserve text: no text lost, invented, duplicated, or reordered.
   - Preprocessing is conservative. Do not strip stopwords or aggressively normalize; negations and qualifiers (_not, without, if, only_) can carry the proposition.
-  - Bump the contract or prompt version identifiers (for example `derrida-scholarly-v12`, `derridai-record-metadata-v9`) when their semantics change.
+  - Bump the contract or prompt version identifiers (for example `scholarly-v12`, `derridai-record-metadata-v9`) when their semantics change.
 - **Source ingestion and media fidelity:**
   - Treat uploaded/remote source content as inert data. Never execute embedded document content, macros, scripts, fields, external relationships, or active objects.
   - Enforce bounded bytes, decompression/expansion, image pixels, audio duration, probe/transcription time, nesting/depth, and supported-format/codec limits before expensive processing.

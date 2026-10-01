@@ -142,12 +142,12 @@ def test_learn_from_review_counts_only_reviewer_decisions():
 def test_learn_from_pass_uses_unreviewed_inferences_and_defers_to_reviewers():
     """A later pass can learn from the last one before any reviewer has judged those fields."""
     rows = [
-        {"record_id": "rec-a", "discourse_role": "analysis", "speaker": "Derrida",
+        {"record_id": "rec-a", "discourse_role": "analysis", "speaker": "Author",
          "metadata_field_status": {
              "discourse_role": {"status": "model_inferred", "confidence": 0.9},
              "speaker": {"status": "model_inferred", "confidence": 0.88},
          }},
-        {"record_id": "rec-b", "discourse_role": "analysis", "speaker": "Derrida",
+        {"record_id": "rec-b", "discourse_role": "analysis", "speaker": "Author",
          "metadata_field_status": {
              "discourse_role": {"status": "model_inferred", "confidence": 0.8},
              "speaker": {"status": "model_inferred", "confidence": 0.91},
@@ -165,7 +165,7 @@ def test_learn_from_pass_uses_unreviewed_inferences_and_defers_to_reviewers():
     assert "stance" not in learned["prior_pass"]["inferred_conventions"]
     assert learned["prior_pass"]["inferred_conventions"]["discourse_role"]["value"] == "analysis"
     assert learned["prior_pass"]["inferred_conventions"]["discourse_role"]["records"] == 2
-    assert learned["prior_pass"]["inferred_conventions"]["speaker"]["value"] == "Derrida"
+    assert learned["prior_pass"]["inferred_conventions"]["speaker"]["value"] == "Author"
     assert learned["prior_pass"]["disputed_fields"]["region_type"] == 1
     assert "commentary" != learned["prior_pass"]["inferred_conventions"]["discourse_role"]["value"]
     blocked = rows + [{
@@ -179,7 +179,7 @@ def test_global_store_promotes_only_generalizable_conventions_seen_in_several_bu
     """Names stay local; a role convention needs two builds with two confirmations each."""
     store = ec.GlobalLearningStore(tmp_path / "g.json")
     role = {"value": "analysis", "confirmed_records": 3}
-    store.observe("b1", {"discourse_role": role, "speaker": {"value": "Derrida", "confirmed_records": 9}})
+    store.observe("b1", {"discourse_role": role, "speaker": {"value": "Author", "confirmed_records": 9}})
     assert store.conventions() == {}
     store.observe("b2", {"discourse_role": {"value": "analysis", "confirmed_records": 2}})
     promoted = store.conventions()
@@ -264,7 +264,7 @@ def test_protected_and_agreement_feedback_is_retained_without_reopening(tmp_path
     manager, repo, build_id = make_manager(tmp_path, [{
         "review_disposition": "accepted",
         "accepted": True,
-        "speaker": "Jacques Derrida",
+        "speaker": "Jane Author",
         "stance": "critical",
         "metadata_field_status": {
             "speaker": {"status": "human_confirmed"},
@@ -277,7 +277,7 @@ def test_protected_and_agreement_feedback_is_retained_without_reopening(tmp_path
     manager.rerun_metadata_enrichment(build_id, {"families": ["discourse"], "scope": "all", "model": "test-model"})
     current = repo.load_records(build_id)[0]
     events = current["metadata_enrichment_history"][-1]["informational"]
-    assert current["speaker"] == "Jacques Derrida"
+    assert current["speaker"] == "Jane Author"
     assert current["review_disposition"] == "accepted"
     assert not current.get("needs_review")
     assert {event["kind"] for event in events} == {"protected_suggestion", "agreement"}

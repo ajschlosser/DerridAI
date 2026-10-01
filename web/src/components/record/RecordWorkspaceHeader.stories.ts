@@ -5,7 +5,7 @@ const meta = {
   component: RecordWorkspaceHeader,
   args: {
     work: "Adieu to Emmanuel Levinas",
-    author: "Jacques Derrida",
+    author: "Jane Author",
     year: 1999,
     pages: "pp. 20–21",
     recordId: "adieu-00042",
@@ -40,7 +40,7 @@ export const ReadOnlyResearcher: Story = {
 
 export const LongWorkTitle: Story = {
   args: {
-    work: "The Beast and the Sovereign, Volume II: Seminar of Jacques Derrida, 2002–2003 — Session on Robinson Crusoe, sovereignty, and the living",
+    work: "The Beast and the Sovereign, Volume II: Seminar of Jane Author, 2002–2003 — Session on Robinson Crusoe, sovereignty, and the living",
     pages: "pp. 247–263",
   },
 };

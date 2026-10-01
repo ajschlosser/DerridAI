@@ -5,7 +5,7 @@ import CorpusEnrichmentChanges from "../../src/components/CorpusEnrichmentChange
 
 const record = (over: Record<string, unknown> = {}) => ({
   needs_review: true,
-  speaker: "Jacques Derrida",
+  speaker: "Jane Author",
   stance: "critique",
   target: "hospitality",
   metadata_field_status: {
@@ -115,7 +115,7 @@ describe("changes made by enrichment", () => {
               {
                 kind: "protected_suggestion",
                 field: "speaker",
-                authoritative_value: "Jacques Derrida",
+                authoritative_value: "Jane Author",
                 proposed_value: "Another author",
                 model: "qwen3.5:4b",
                 pass: 3,

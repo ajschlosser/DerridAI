@@ -13,21 +13,21 @@ type Story = StoryObj<typeof RecordsSubsetDialog>;
 const records = [
   {
     record_id: "glas-1",
-    document_author: "Jacques Derrida",
+    document_author: "Jane Author",
     work: "Glas",
     language: "fr",
     topics: ["Hegel", "mourning"],
   },
   {
     record_id: "glas-2",
-    document_author: "Jacques Derrida",
+    document_author: "Jane Author",
     work: "Glas",
     language: "fr",
     topics: ["Genet"],
   },
   {
     record_id: "margins-1",
-    document_author: "Jacques Derrida",
+    document_author: "Jane Author",
     work: "Margins of Philosophy",
     language: "en",
     topics: ["différance"],
@@ -42,9 +42,9 @@ const records = [
 ];
 const props = {
   sources: [
-    { id: "active", name: "derrida-primary.jsonl", count: 4 },
+    { id: "active", name: "primary-corpus.jsonl", count: 4 },
     { id: "all", name: "", count: 4 },
-    { id: "f1", name: "derrida-primary.jsonl", count: 4 },
+    { id: "f1", name: "primary-corpus.jsonl", count: 4 },
   ],
   fields: [
     { key: "document_author", label: "Document author" },
@@ -52,7 +52,7 @@ const props = {
     { key: "topics", label: "Topics" },
     { key: "work", label: "Work" },
   ],
-  defaultName: "derrida-primary-subset.jsonl",
+  defaultName: "primary-corpus-subset.jsonl",
   recordsFor: () => records,
 };
 

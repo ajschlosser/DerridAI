@@ -217,7 +217,7 @@ function hasMeaningfulValue(value: unknown): boolean {
 
 /**
  * Evidence review follows schema policy and canonical assertions instead of a
- * closed list of Derrida-specific field names.
+ * closed list of Author-specific field names.
  */
 export function evidenceCandidateFieldNames(
   record: LooseRecord,

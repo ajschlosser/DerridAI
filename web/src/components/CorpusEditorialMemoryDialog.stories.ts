@@ -9,7 +9,7 @@ const memory = {
         value: "reported_position",
         similarity: 0.72,
         excerpt:
-          "Derrida introduces a proposition attributed to Heidegger before turning to his own analysis.",
+          "Author introduces a proposition attributed to Heidegger before turning to his own analysis.",
       },
     ],
   },

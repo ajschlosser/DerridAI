@@ -17,7 +17,7 @@ const blocks: SourceBlock[] = [
     page: 12,
     bbox: [],
     type: "paragraph",
-    text: "Derrida writes that a cited position must remain distinguishable from the position attributed to another speaker.",
+    text: "Author writes that a cited position must remain distinguishable from the position attributed to another speaker.",
     extraction_method: "pdf_text",
     confidence: 0.99,
   },

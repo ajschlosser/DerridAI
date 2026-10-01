@@ -44,9 +44,9 @@ exports[`search facets > counts and builds facets for workspace rows and databas
     "values": [
       {
         "count": 1,
-        "label": "Derrida",
+        "label": "Author",
         "selected": false,
-        "value": "Derrida",
+        "value": "Author",
       },
     ],
   },
@@ -56,9 +56,9 @@ exports[`search facets > counts and builds facets for workspace rows and databas
     "values": [
       {
         "count": 1,
-        "label": "Derrida",
+        "label": "Author",
         "selected": false,
-        "value": "Derrida",
+        "value": "Author",
       },
     ],
   },
@@ -115,9 +115,9 @@ exports[`search facets > counts and builds facets for workspace rows and databas
     "values": [
       {
         "count": 1,
-        "label": "Derrida",
+        "label": "Author",
         "selected": false,
-        "value": "Derrida",
+        "value": "Author",
       },
     ],
   },
@@ -127,9 +127,9 @@ exports[`search facets > counts and builds facets for workspace rows and databas
     "values": [
       {
         "count": 1,
-        "label": "Derrida",
+        "label": "Author",
         "selected": false,
-        "value": "Derrida",
+        "value": "Author",
       },
     ],
   },
@@ -160,14 +160,14 @@ exports[`search facets > counts and builds facets for workspace rows and databas
     "y",
   ],
   "document_author": [
-    "Derrida",
+    "Author",
   ],
   "needs_review": [
     "false",
     "true",
   ],
   "speaker": [
-    "Derrida",
+    "Author",
     "S1",
     "S2",
   ],
@@ -206,7 +206,7 @@ exports[`search facets > describes filters and matches list filters 2`] = `
     "id": "db:speaker",
     "op": "eq",
     "op_label": "equals",
-    "value": "Derrida",
+    "value": "Author",
   },
 ]
 `;
@@ -239,11 +239,11 @@ exports[`search facets > reads and displays facet values 1`] = `
       "synced",
     ],
     [
-      "Derrida",
+      "Author",
     ],
     [],
     [
-      "Derrida",
+      "Author",
     ],
     [],
     [],
@@ -265,7 +265,7 @@ exports[`search facets > reads and displays facet values 1`] = `
       "synced",
     ],
     [
-      "Derrida",
+      "Author",
     ],
     [],
     [],

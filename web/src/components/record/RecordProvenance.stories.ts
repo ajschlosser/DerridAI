@@ -5,7 +5,7 @@ const meta = {
   component: RecordProvenance,
   args: {
     record: {
-      speaker: "Derrida",
+      speaker: "Author",
       position_holder: "Levinas",
       stance: "qualified endorsement",
       target: "Heidegger",

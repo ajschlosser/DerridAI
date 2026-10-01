@@ -79,7 +79,7 @@ def progressive_row(*, kind="positive", rejected=""):
             "assertion_status": "human_override",
             "assertion_method": "human_review_of_llm_proposal",
             "reviewed_at": "2026-09-24T00:00:00Z",
-            "schema_id": "derrida",
+            "schema_id": "author",
             "schema_version": "v1",
             "language": "en",
             "region_type": "main_text",
@@ -147,7 +147,7 @@ def test_inspector_exposes_correction_as_negative_precedent():
                 FakeCollection(
                     "derridai_metadata_exemplars",
                     "metadata_exemplars",
-                    [progressive_row(kind="correction", rejected='"Derrida"')],
+                    [progressive_row(kind="correction", rejected='"Author"')],
                 )
             ]
         ),
@@ -158,7 +158,7 @@ def test_inspector_exposes_correction_as_negative_precedent():
 
     assert item["kind"] == "correction"
     assert item["value"] == "Levinas"
-    assert item["rejected_value"] == "Derrida"
+    assert item["rejected_value"] == "Author"
     assert item["authority"] == "human_override"
     assert item["review_method"] == "human_review_of_llm_proposal"
 

@@ -12,7 +12,7 @@ function record(
     record_id: recordId,
     text: "A representative record for queue presentation.",
     text_length: 47,
-    inline_citation: "Derrida, p. 12",
+    inline_citation: "Author, p. 12",
     source_block_ids: ["block-1"],
     source_spans: [],
     review_state: reviewState,

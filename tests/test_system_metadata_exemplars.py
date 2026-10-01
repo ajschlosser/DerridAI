@@ -19,7 +19,7 @@ class FakeCollection:
         self.rows = [
             {
                 "id": "mex-1",
-                "document": "Derrida introduces Levinas's position and then questions it.",
+                "document": "Author introduces Levinas's position and then questions it.",
                 "metadata": {
                     "scope_id": "build-1",
                     "record_id": "r1",
@@ -29,7 +29,7 @@ class FakeCollection:
                     "field_value_json": '"Levinas"',
                     "kind": "positive",
                     "assertion_status": "human_confirmed",
-                    "schema_id": "derrida",
+                    "schema_id": "author",
                     "schema_version": "v7",
                     "language": "en",
                     "region_type": "main_text",
@@ -39,17 +39,17 @@ class FakeCollection:
             },
             {
                 "id": "mex-2",
-                "document": "A quotation is explicitly attributed to Derrida.",
+                "document": "A quotation is explicitly attributed to Author.",
                 "metadata": {
                     "scope_id": "build-2",
                     "record_id": "r2",
                     "record_revision": 2,
                     "source_document_id": "doc-2",
                     "field_name": "quoted_speaker",
-                    "field_value_json": '["Derrida"]',
+                    "field_value_json": '["Author"]',
                     "kind": "correction",
                     "assertion_status": "human_override",
-                    "schema_id": "derrida",
+                    "schema_id": "author",
                     "schema_version": "v7",
                     "language": "fr",
                     "region_type": "quotation",
@@ -110,13 +110,13 @@ def test_exemplar_inspector_returns_semantic_rows_and_facets():
         "field_value": "Levinas",
         "kind": "positive",
         "assertion_status": "human_confirmed",
-        "schema_id": "derrida",
+        "schema_id": "author",
         "schema_version": "v7",
         "language": "en",
         "region_type": "main_text",
         "evidence_hash": "abc123",
         "evidence_block_ids": ["b2"],
-        "context_text": "Derrida introduces Levinas's position and then questions it.",
+        "context_text": "Author introduces Levinas's position and then questions it.",
     }
 
 
@@ -128,7 +128,7 @@ def test_exemplar_inspector_filters_without_exposing_vector_details():
     assert payload["count"] == 1
     row = payload["rows"][0]
     assert row["kind"] == "correction"
-    assert row["field_value"] == ["Derrida"]
+    assert row["field_value"] == ["Author"]
     assert "embedding" not in row
     assert "_chroma_id" not in row
     assert "distance" not in row

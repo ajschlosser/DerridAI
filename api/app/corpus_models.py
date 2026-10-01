@@ -38,7 +38,7 @@ DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v3"
 
 
 
-PROFILE_VERSION = "derrida-scholarly-v12"
+PROFILE_VERSION = "scholarly-v12"
 
 
 
@@ -316,7 +316,7 @@ class IndexMetadataResponseModel(BaseModel):
 CORPUS_PROFILES: dict[str, dict[str, Any]] = {
     PROFILE_VERSION: {
         "id": PROFILE_VERSION,
-        "name": "Derrida scholarly corpus v12",
+        "name": "Scholarly corpus v12",
         "version": 12,
         "description": "Testy Titmouse: reviewer-owned document structure outranks semantic inference, closed-vocabulary LLM output is normalized with raw provenance retained, and field-level LLM participation remains auditable.",
         "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],

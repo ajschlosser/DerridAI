@@ -24,11 +24,11 @@ from pydantic import ValidationError
 
 
 def test_model_confidence_and_human_confirmation_preserve_derivation() -> None:
-    record = {"record_id": "r1", "record_revision": 1, "speaker": "Derrida"}
+    record = {"record_id": "r1", "record_revision": 1, "speaker": "Author"}
     assertion = create_model_assertion(
         record,
         "speaker",
-        "Derrida",
+        "Author",
         confidence=0.82,
         model="test-model",
         evidence=[{"block_id": "b1"}],
@@ -108,7 +108,7 @@ def test_evaluated_unknown_confidence_is_serialized_as_null() -> None:
         record_id="r3",
         field_id="legacy.speaker",
         field_name="speaker",
-        value="Derrida",
+        value="Author",
         derivation_method="model",
         evaluation_status="value_supported",
         confidence=None,
@@ -123,7 +123,7 @@ def test_invalid_states_are_rejected() -> None:
             record_id="r4",
             field_id="legacy.speaker",
             field_name="speaker",
-            value="Derrida",
+            value="Author",
             derivation_method="model",
             evaluation_status="not_evaluated",
             confidence=0.5,
@@ -133,7 +133,7 @@ def test_invalid_states_are_rejected() -> None:
             record_id="r5",
             field_id="legacy.speaker",
             field_name="speaker",
-            value="Derrida",
+            value="Author",
             derivation_method="model",
             evaluation_status="evaluation_failed",
             value_status="confirmed_absent",
@@ -215,7 +215,7 @@ def test_reset_fields_for_evaluation_preserves_durable_history() -> None:
 def test_worker_reset_discards_ephemeral_field_history() -> None:
     record = {"record_id": "r10", "record_revision": 1}
     create_model_assertion(record, "stance", "critical", confidence=0.8)
-    create_model_assertion(record, "speaker", "Derrida", confidence=0.9)
+    create_model_assertion(record, "speaker", "Author", confidence=0.9)
     project_record_assertions(record)
 
     reset_fields_for_evaluation(
@@ -235,7 +235,7 @@ def test_replacing_evidence_supersedes_without_changing_authority() -> None:
     model = create_model_assertion(
         record,
         "speaker",
-        "Derrida",
+        "Author",
         confidence=0.9,
         evidence=[{"block_ids": ["b1"]}],
     )
@@ -317,7 +317,7 @@ def test_accept_unreviewed_suggestions_accepts_model_values_but_keeps_human_and_
     record = {"record_id": "r1", "record_revision": 1}
     low = create_model_assertion(record, "stance", "describe", outcome="uncertain", confidence=0.4)
     record["field_assertions"][low.field_id][-1]["value_status"] = "unresolved"
-    human = create_model_assertion(record, "speaker", "Derrida", confidence=0.9)
+    human = create_model_assertion(record, "speaker", "Author", confidence=0.9)
     confirm_assertion(record, human, actor="reviewer")
     create_model_assertion(record, "discourse_role", "not-a-role", outcome="evaluation_failed")
     unselected = create_model_assertion(record, "claim_scope", "local", confidence=0.5, select=False)

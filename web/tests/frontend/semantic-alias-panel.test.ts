@@ -5,16 +5,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { corpusBuildsApi, type SemanticAliasSet } from "../../src/api/corpus";
 import CorpusSemanticAliasPanel from "../../src/components/corpus-builder/CorpusSemanticAliasPanel.vue";
 
-const derrida: SemanticAliasSet = {
+const author: SemanticAliasSet = {
   alias_set_id: "alias-1",
   kind: "person",
-  canonical_label: "Jacques Derrida",
-  aliases: ["J. Derrida"],
+  canonical_label: "Jane Author",
+  aliases: ["J. Author"],
   created_at: "2026-09-12T10:00:00Z",
 };
 const kinds = [{ kind: "person", mode: "entity_name", fields: ["speaker", "persons"] }];
 
-async function open(items: SemanticAliasSet[] = [derrida]) {
+async function open(items: SemanticAliasSet[] = [author]) {
   const list = vi.spyOn(corpusBuildsApi, "semanticAliases").mockResolvedValue({ items, kinds });
   const wrapper = mount(CorpusSemanticAliasPanel, {
     props: { buildId: "b1" },
@@ -34,8 +34,8 @@ describe("Reviewed identities panel", () => {
     const { wrapper, list } = await open();
     expect(list).toHaveBeenCalledWith("b1");
     expect(wrapper.find(".kind-group h4").text()).toBe("person");
-    expect(wrapper.text()).toContain("Jacques Derrida");
-    expect(wrapper.text()).toContain("J. Derrida");
+    expect(wrapper.text()).toContain("Jane Author");
+    expect(wrapper.text()).toContain("J. Author");
     expect(wrapper.find("select").text()).toContain("person (used by speaker, persons)");
     wrapper.unmount();
   });
@@ -44,28 +44,28 @@ describe("Reviewed identities panel", () => {
     const { wrapper, list } = await open([]);
     const save = vi
       .spyOn(corpusBuildsApi, "saveSemanticAlias")
-      .mockResolvedValue({ ...derrida, alias_set_id: "alias-2" });
-    await wrapper.find("input[type=text]").setValue(" Jacques Derrida ");
-    await wrapper.find("textarea").setValue("J. Derrida\n\n Derrida, Jacques ");
+      .mockResolvedValue({ ...author, alias_set_id: "alias-2" });
+    await wrapper.find("input[type=text]").setValue(" Jane Author ");
+    await wrapper.find("textarea").setValue("J. Author\n\n Author, Jane ");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
     expect(save).toHaveBeenCalledWith("b1", {
       kind: "person",
-      canonical_label: "Jacques Derrida",
-      aliases: ["J. Derrida", "Derrida, Jacques"],
+      canonical_label: "Jane Author",
+      aliases: ["J. Author", "Author, Jane"],
       reason: "",
       replaces: null,
     });
     expect(list).toHaveBeenCalledTimes(2);
     expect(wrapper.emitted("changed")).toHaveLength(1);
-    expect(wrapper.find("[role=status]").text()).toContain("Saved “Jacques Derrida”");
+    expect(wrapper.find("[role=status]").text()).toContain("Saved “Jane Author”");
     wrapper.unmount();
   });
 
   it("editing replaces the set, and a conflict is shown without losing the draft", async () => {
     const { wrapper } = await open();
     vi.spyOn(corpusBuildsApi, "saveSemanticAlias").mockRejectedValue(
-      new Error("Already part of another reviewed identity of this kind: J. Derrida"),
+      new Error("Already part of another reviewed identity of this kind: J. Author"),
     );
     await wrapper.findAll(".alias-actions button")[0].trigger("click");
     expect((wrapper.find("select").element as HTMLSelectElement).disabled).toBe(true);
@@ -75,8 +75,8 @@ describe("Reviewed identities panel", () => {
       "b1",
       expect.objectContaining({ replaces: "alias-1" }),
     );
-    expect(wrapper.find("form [role=alert]").text()).toContain("J. Derrida");
-    expect((wrapper.find("textarea").element as HTMLTextAreaElement).value).toBe("J. Derrida");
+    expect(wrapper.find("form [role=alert]").text()).toContain("J. Author");
+    expect((wrapper.find("textarea").element as HTMLTextAreaElement).value).toBe("J. Author");
     wrapper.unmount();
   });
 
@@ -84,7 +84,7 @@ describe("Reviewed identities panel", () => {
     const { wrapper } = await open();
     const retire = vi
       .spyOn(corpusBuildsApi, "retireSemanticAlias")
-      .mockResolvedValue({ ...derrida, retired_at: "2026-09-30T00:00:00Z" });
+      .mockResolvedValue({ ...author, retired_at: "2026-09-30T00:00:00Z" });
     await wrapper.findAll(".alias-actions button")[1].trigger("click");
     expect(retire).not.toHaveBeenCalled();
     expect(wrapper.find(".alias-actions [role=alert]").text()).toContain(
@@ -103,18 +103,18 @@ describe("Reviewed identities panel", () => {
       items: [{ build_id: "b2", title: "Of Grammatology", alias_sets: 2, kinds: ["person"] }],
     });
     const levinas = {
-      ...derrida,
+      ...author,
       alias_set_id: "alias-9",
       canonical_label: "Emmanuel Levinas",
       aliases: [],
     };
     vi.spyOn(corpusBuildsApi, "semanticAliases").mockImplementation(async (buildId: string) =>
       buildId === "b2"
-        ? { items: [derrida, levinas], kinds }
+        ? { items: [author, levinas], kinds }
         : {
             items: [
               {
-                ...derrida,
+                ...author,
                 alias_set_id: "alias-new",
                 imported_from: {
                   build_id: "b2",
@@ -127,7 +127,7 @@ describe("Reviewed identities panel", () => {
           },
     );
     const run = vi.spyOn(corpusBuildsApi, "importSemanticAliases").mockResolvedValue({
-      imported: [{ ...derrida, alias_set_id: "alias-new" }],
+      imported: [{ ...author, alias_set_id: "alias-new" }],
       skipped: [
         {
           build_id: "b2",

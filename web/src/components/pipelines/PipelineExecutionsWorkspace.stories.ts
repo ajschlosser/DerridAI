@@ -31,7 +31,7 @@ const runs: PipelineRunTrace[] = [
         input_count: 1,
         output_count: 64,
         parameters: {},
-        collection: "derrida_primary",
+        collection: "primary_corpus",
       },
     ],
   },

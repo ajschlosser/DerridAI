@@ -25,18 +25,18 @@ def _record(record_id: str = "r1") -> dict[str, Any]:
             {"source_document_id": "source-1", "source_unit_id": f"u-{record_id}", "printed_page": "12"}
         ],
         "work": "Glas",
-        "document_author": "Jacques Derrida",
+        "document_author": "Jane Author",
         "edition": "Galilée, 1974",
         "translator": "John P. Leavey",
-        "citation": "Derrida, Jacques. Glas.",
+        "citation": "Author, Jane. Glas.",
         "page_start": 12,
-        "speaker": "Derrida",
+        "speaker": "Author",
         "quoted_speaker": "Hegel",
         "position_holder": "Hegel",
         "topics": ["sublation", "family"],
         "semantic_function": "objection",
         "is_direct_quote": True,
-        "quotation_chain": ["Derrida", "Hegel"],
+        "quotation_chain": ["Author", "Hegel"],
         "extraction_quality": 0.91,
         "text": "A publication-safe passage.",
     }
@@ -57,7 +57,7 @@ def _site_records(monkeypatch: pytest.MonkeyPatch, **options: Any) -> tuple[dict
         },
     )
     bundle = site_publication.build_site_bundle(
-        store_name="derrida", works=["Glas"], title="Site", **options
+        store_name="author", works=["Glas"], title="Site", **options
     )
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
         runtime = archive.read("derridai-site.js").decode("utf-8")

@@ -13,7 +13,7 @@ const build = {
   record_count: 11,
   needs_review_count: 1,
   accepted_count: 0,
-  profile_id: "derrida-scholarly-v12",
+  profile_id: "scholarly-v12",
   metadata_enrichment_total: 11,
   metadata_concurrency: 3,
   metadata_tasks_total: 33,
@@ -24,12 +24,12 @@ const build = {
   metadata_last_progress_at: new Date().toISOString(),
   metadata_active_tasks: [
     {
-      record_id: "derrida-cosmopoli-00001",
+      record_id: "author-cosmopoli-00001",
       task: "quotation",
       started_at: new Date().toISOString(),
     },
     {
-      record_id: "derrida-cosmopoli-00002",
+      record_id: "author-cosmopoli-00002",
       task: "discourse",
       started_at: new Date().toISOString(),
     },
@@ -67,7 +67,7 @@ export const FrenchLengthStress: Story = {
   args: {
     build: {
       ...build,
-      source_filename: "Jacques Derrida — Cosmopolites de tous les pays, encore un effort !.pdf",
+      source_filename: "Jane Author — Cosmopolites de tous les pays, encore un effort !.pdf",
     },
   },
 };

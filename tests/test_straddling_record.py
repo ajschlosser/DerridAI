@@ -68,10 +68,10 @@ def test_record_construction_creates_assertions_not_only_status_tokens():
         [{
             "block_id": "b1",
             "page": 1,
-            "text": "Derrida: Hospitality remains conditional.",
+            "text": "Author: Hospitality remains conditional.",
             "type": "paragraph",
             "deterministic_region_type": "main_text",
-            "speaker": "Derrida",
+            "speaker": "Author",
             "printed_page_label": "1",
             "extraction_method": "native",
             "confidence": 0.99,

@@ -7,7 +7,7 @@ const item = (id: string, version: number): ResearchPipelineBenchmarkCase => ({
   case_id: id,
   version,
   prompt: "What is the trace?",
-  source_collection: "derrida_primary",
+  source_collection: "primary_corpus",
   corpus_snapshot: { fingerprint: "a".repeat(64), collections: [], limitations: [] },
   created_at: "2026-09-29T20:00:00Z",
 });

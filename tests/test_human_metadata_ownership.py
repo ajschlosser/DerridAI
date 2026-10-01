@@ -44,7 +44,7 @@ def install(tmp_path:Path, records:list[dict], *, status='running', stage='enric
     with repo.asset_blocks_path('a').open('w',encoding='utf-8') as h:
         for i,r in enumerate(records,1):
             h.write(json.dumps({'block_id':f'b{i}','page':1,'bbox':[0,0,1,1],'type':'paragraph','text':r.get('text','text'),'extraction_method':'native','confidence':1.0})+'\n')
-    build=repo.create_build({'asset_id':'a','source_sha256':'x','source_filename':'x.pdf','source_page_count':1,'source_block_count':len(records),'schema_version':cb.SCHEMA_VERSION,'profile_id':cb.PROFILE_VERSION,'profile_version':11,'app_version':APP_VERSION,'provider':'ollama','model':'test','request':{'enrichment_mode':'fast'},'manifest':{'title':'Book','document_author':'Derrida'}})
+    build=repo.create_build({'asset_id':'a','source_sha256':'x','source_filename':'x.pdf','source_page_count':1,'source_block_count':len(records),'schema_version':cb.SCHEMA_VERSION,'profile_id':cb.PROFILE_VERSION,'profile_version':11,'app_version':APP_VERSION,'provider':'ollama','model':'test','request':{'enrichment_mode':'fast'},'manifest':{'title':'Book','document_author':'Author'}})
     build['status']=status; build['stage']=stage; build['record_count']=len(records); repo.save_build(build)
     for i,r in enumerate(records,1):
         r.setdefault('record_id',f'r{i}');r.setdefault('record_revision',1);r.setdefault('text','text');r.setdefault('text_length',len(r['text']));r.setdefault('source_block_ids',[f'b{i}']);r.setdefault('source_spans',[{'block_id':f'b{i}','page':1}]);r.setdefault('pdf_pages',[1]);r.setdefault('metadata_field_status',{});r.setdefault('review_disposition','pending');r.setdefault('accepted',False);r.setdefault('rejected',False);r.setdefault('metadata_stage_status',{'discourse':'queued','quotation':'queued','indexing':'queued'});r.setdefault('metadata_enrichment_state','queued')
@@ -58,10 +58,10 @@ def test_human_metadata_edit_is_allowed_during_enrichment_and_establishes_field_
     Checks: the value is stored, status becomes "human_confirmed", and the field is added
     to human_touched_fields so workers will not replace it.
     """
-    repo,build=install(tmp_path,[{'text':'Derrida writes about hospitality.'}])
+    repo,build=install(tmp_path,[{'text':'Author writes about hospitality.'}])
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    updated=manager.patch_metadata(build['build_id'],'r1',{'speaker':'Derrida'},expected_revision=1)
-    assert updated['speaker']=='Derrida'
+    updated=manager.patch_metadata(build['build_id'],'r1',{'speaker':'Author'},expected_revision=1)
+    assert updated['speaker']=='Author'
     assert updated['metadata_field_status']['speaker']['status']=='human_confirmed'
     assert 'speaker' in updated['human_touched_fields']
 
@@ -74,10 +74,10 @@ def test_bulk_metadata_patch_supports_selection_and_all_records(tmp_path:Path):
     """
     repo,build=install(tmp_path,[{'text':'one'},{'text':'two'},{'text':'three'}])
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    result=manager.bulk_patch_metadata(build['build_id'],{'document_author':'Jacques Derrida'},record_ids=['r1','r3'])
+    result=manager.bulk_patch_metadata(build['build_id'],{'document_author':'Jane Author'},record_ids=['r1','r3'])
     assert result['changed']==2
     rows=repo.load_records(build['build_id'])
-    assert rows[0]['document_author']=='Jacques Derrida'
+    assert rows[0]['document_author']=='Jane Author'
     assert 'document_author' not in rows[1]
     assert rows[2]['metadata_field_status']['document_author']['status']=='human_override'
     result=manager.bulk_patch_metadata(build['build_id'],{'language':'en'},apply_to_all=True)
@@ -145,16 +145,16 @@ def test_worker_merge_uses_canonical_human_authority_not_legacy_status():
 def test_editorial_context_only_generalizes_repeated_human_choices(tmp_path:Path):
     """A convention needs at least two matching human confirmations.
 
-    Records confirmed as Derrida, Derrida, Levinas produce a speaker convention of
-    "Derrida" supported by 2 records; the single Levinas choice is not generalized.
+    Records confirmed as Author, Author, Levinas produce a speaker convention of
+    "Author" supported by 2 records; the single Levinas choice is not generalized.
     """
     rows=[]
-    for i,value in enumerate(['Derrida','Derrida','Levinas'],1):
+    for i,value in enumerate(['Author','Author','Levinas'],1):
         rows.append({'record_id':f'r{i}','text':str(i),'speaker':value,'metadata_field_status':{'speaker':{'status':'human_confirmed'}}})
     repo,build=install(tmp_path,rows,status='awaiting_review',stage='review')
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     context=manager._editorial_context(build['build_id'])
-    assert context['speaker']['value']=='Derrida'
+    assert context['speaker']['value']=='Author'
     assert context['speaker']['confirmed_records']==2
 
 

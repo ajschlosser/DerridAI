@@ -73,7 +73,7 @@ export const LlmProposalsReadyForConfirmation: Story = {
       region_type: "main_text",
       primary_text: true,
       discourse_role: "analysis",
-      position_holder: "Jacques Derrida",
+      position_holder: "Jane Author",
       metadata_field_status: {
         region_type: {
           status: "model_inferred",
@@ -97,7 +97,7 @@ export const LlmProposalsReadyForConfirmation: Story = {
           status: "model_inferred",
           method: "llm",
           confidence: 0.88,
-          reason: "The proposition is attributed to Derrida.",
+          reason: "The proposition is attributed to Author.",
         },
       },
     },
@@ -130,7 +130,7 @@ export const InheritedAndOverriddenBibliography: Story = {
       ...record,
       work: "On Cosmopolitanism and Forgiveness",
       document_title: "On Cosmopolitanism and Forgiveness",
-      document_author: "Jacques Derrida",
+      document_author: "Jane Author",
       translator: "Mark Dooley and Michael Hughes",
       publisher: "Routledge",
       publication_year: 2001,
@@ -158,7 +158,7 @@ export const FrenchLengthStress: Story = {
       ...record,
       document_title:
         "Cosmopolites de tous les pays, encore un effort ! — édition critique annotée",
-      document_author: "Jacques Derrida",
+      document_author: "Jane Author",
       translator: "Traduction, révision et appareil critique particulièrement détaillés",
       metadata_incomplete_fields: [],
       metadata_review_fields: [],

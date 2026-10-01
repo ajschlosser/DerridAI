@@ -60,7 +60,7 @@ The next implementation step is to reduce the remaining `Loose`/`Any` helper-inj
 
 15. **[Search] Do not turn library search into semantic/RAG retrieval.** This surface is for navigation within a known collection; predictable deterministic matching is preferable.
 
-16. **[Filters] Replace the mostly hidden filter drawer state with visible filter chips once filters are applied.** For example: \`Jacques Derrida ×\`, \`Needs review ×\`, \`Index: changed ×\`.
+16. **[Filters] Replace the mostly hidden filter drawer state with visible filter chips once filters are applied.** For example: \`Jane Author ×\`, \`Needs review ×\`, \`Index: changed ×\`.
 
 17. **[Filters] Add a visible “Clear all” affordance alongside active filter chips.**
 
@@ -186,7 +186,7 @@ The next implementation step is to reduce the remaining `Loose`/`Any` helper-inj
 
 78. **[Toolbar] Hide or simplify controls that have only one possible value.** For example, a corpus-index selector with exactly one available index need not consume the same attention as a genuine multi-index choice.
 
-79. **[Toolbar] Use counts in facets where useful.** \`Needs review (12)\`, \`Jacques Derrida (18)\`, etc. help users predict filter results before applying them.
+79. **[Toolbar] Use counts in facets where useful.** \`Needs review (12)\`, \`Jane Author (18)\`, etc. help users predict filter results before applying them.
 
 80. **[Search] Normalize case/Unicode/diacritics predictably.** Library lookup should behave sensibly across multilingual titles and names.
 

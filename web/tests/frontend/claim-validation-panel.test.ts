@@ -57,14 +57,14 @@ describe("ClaimValidationPanel", () => {
           similarity: 0.87,
           validated_by: "ann",
           advisory: true,
-          support: [{ record_id: "r9", semantic: { speaker: { value: "Derrida" } } }],
+          support: [{ record_id: "r9", semantic: { speaker: { value: "Author" } } }],
         },
       ],
     });
     const wrapper = mountPanel();
     await flushPromises();
     expect(wrapper.text()).toContain("Presence is always deferred.");
-    expect(wrapper.text()).toContain("speaker: Derrida");
+    expect(wrapper.text()).toContain("speaker: Author");
     expect(wrapper.text()).toContain("ann");
   });
 });

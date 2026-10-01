@@ -5,8 +5,8 @@ Two optional channels feed a new Research answer, each chosen by the researcher:
 
 * **Prior responses** ("Use prior responses as guidance"). SQLite ``response_memory``
   is authoritative. A derived Chroma projection embeds each eligible response's
-  *question*, so "What did Derrida say about hospitality?" can find a prior answer to
-  "How does the notion of hospitality influence Derrida?". Only responses graded at or
+  *question*, so "What did Author say about hospitality?" can find a prior answer to
+  "How does the notion of hospitality influence Author?". Only responses graded at or
   above ``settings.research_memory_min_grade`` are eligible; ungraded answers never
   steer. Self-graded answers stay eligible but are labelled as such.
 * **Prior claim provenance** ("Use prior claim provenance as guidance"). Only

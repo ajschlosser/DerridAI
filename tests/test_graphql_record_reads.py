@@ -66,7 +66,7 @@ def gql(query: str, variables: dict | None = None, *, cookie: str | None = "admi
 
 
 LONG_TEXT = (
-    "Il n'y a pas de hors-texte. " * 40
+    "Le texte précède le commentaire. " * 40
     + "The trace is not a presence but is rather the simulacrum of a presence."
 )
 
@@ -86,7 +86,7 @@ def _record(record_id: str, **overrides) -> dict:
         "review_disposition": "pending",
         "discourse_role": "main_text",
         "region_type": "main_text",
-        "speaker": "Derrida",
+        "speaker": "Author",
         "topics": ["writing", "supplement", "trace"],
         "concepts": ["différance", "arche-writing"],
         "field_assertions": {},

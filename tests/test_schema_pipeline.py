@@ -153,14 +153,14 @@ def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path)
     record = {
         "record_id": "r",
         "record_revision": 1,
-        "text": "Hospitality, sovereignty, Derrida, and Glas.",
+        "text": "Hospitality, sovereignty, Author, and Glas.",
         "source_block_ids": ["b1"],
         "metadata_field_status": {},
     }
     values = {
         "topics": ["hospitality"],
         "concepts": ["sovereignty"],
-        "persons": ["Derrida"],
+        "persons": ["Author"],
         "works_referenced": ["Glas"],
     }
     for field, value in values.items():
@@ -183,7 +183,7 @@ def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path)
         "prior_pass": {
             "inferred_conventions": {
                 "persons": {
-                    "value": ["Derrida"],
+                    "value": ["Author"],
                     "records": 3,
                     "mean_confidence": 0.9,
                     "marker": "PERSON_PRIOR_MARKER",
@@ -410,12 +410,12 @@ def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path
     record = {
         "record_id": "partial-memory",
         "record_revision": 1,
-        "text": "Derrida discusses Glas, hospitality, and sovereignty.",
+        "text": "Author discusses Glas, hospitality, and sovereignty.",
         "source_block_ids": ["b1"],
         "metadata_field_status": {},
     }
     for field, value in {
-        "persons": ["Derrida"],
+        "persons": ["Author"],
         "works_referenced": ["Glas"],
     }.items():
         create_memory_assertion(
@@ -436,7 +436,7 @@ def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path
         "prior_pass": {
             "inferred_conventions": {
                 "persons": {
-                    "value": ["Derrida"],
+                    "value": ["Author"],
                     "records": 3,
                     "mean_confidence": 0.9,
                     "marker": "PERSON_PRIOR_MARKER",
@@ -822,11 +822,11 @@ def test_evidence_mode_defaults_to_with_value_and_rejects_unknown_values(monkeyp
 def test_a_field_the_schema_leaves_out_cannot_be_set_by_the_model_or_a_person(tmp_path):
     m, bid = manager(tmp_path, notes_schema())
     record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
-    out = m._reconcile_metadata_results(record, m._profile_for(bid), ["b1"], [("discourse", answer(mood="calm", speaker="Derrida"), None)], False, request={"model": "q"}, build_id=bid, schema=m._schema_for(bid))
+    out = m._reconcile_metadata_results(record, m._profile_for(bid), ["b1"], [("discourse", answer(mood="calm", speaker="Author"), None)], False, request={"model": "q"}, build_id=bid, schema=m._schema_for(bid))
     assert "speaker" not in out
     m.repo.save_records(bid, [{"record_id": "r", "text": "t", "metadata_field_status": {}}])
     with pytest.raises(ValueError, match="speaker"):
-        m.patch_metadata(bid, "r", {"speaker": "Derrida"})
+        m.patch_metadata(bid, "r", {"speaker": "Author"})
     saved = m.patch_metadata(bid, "r", {"mood": "angry", "year_mentioned": 1795, "ideas": ["hospitality"]})
     assert (saved["mood"], saved["year_mentioned"], saved["ideas"]) == ("angry", 1795, ["hospitality"])
     with pytest.raises(ValueError, match="Invalid"):

@@ -1,7 +1,7 @@
 {
-  "name": "@derridai/sdk",
+  "name": "@derridai/publication-runtime",
   "version": "0.1.1",
-  "description": "Framework-neutral, provenance-preserving browser research SDK for DerridAI publications.",
+  "description": "Framework-neutral, provenance-preserving browser research runtime for DerridAI publications.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

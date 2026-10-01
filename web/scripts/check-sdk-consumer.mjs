@@ -35,7 +35,7 @@ try {
     output("npm", ["pack", "./sdk", "--json", "--pack-destination", packDir], webRoot),
   );
   if (!Array.isArray(packed) || packed.length !== 1 || !packed[0]?.filename) {
-    throw new Error("npm pack did not return exactly one SDK package.");
+    throw new Error("npm pack did not return exactly one Publication Runtime package.");
   }
 
   const tarball = join(packDir, packed[0].filename);
@@ -48,16 +48,18 @@ try {
       !path.startsWith("dist/"),
   );
   if (unexpected.length) {
-    throw new Error(`Unexpected files in SDK tarball: ${unexpected.join(", ")}`);
+    throw new Error(`Unexpected files in Publication Runtime tarball: ${unexpected.join(", ")}`);
   }
   if (!packedFiles.includes("dist/index.js") || !packedFiles.includes("dist/index.d.ts")) {
-    throw new Error("SDK tarball is missing its JavaScript or TypeScript declaration entry point.");
+    throw new Error(
+      "Publication Runtime tarball is missing its JavaScript or TypeScript declaration entry point.",
+    );
   }
 
   const packagePath = join(consumerDir, "package.json");
   const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
   packageJson.dependencies = {
-    "@derridai/sdk": `file:${tarball}`,
+    "@derridai/publication-runtime": `file:${tarball}`,
   };
   writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
 

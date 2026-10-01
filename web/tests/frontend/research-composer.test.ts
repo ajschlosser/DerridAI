@@ -7,7 +7,7 @@ import { useI18nStore } from "../../src/stores/i18n";
 const baseProps = {
   prompt: "",
   instructions: "",
-  sourceCollection: "derrida_primary",
+  sourceCollection: "primary_corpus",
   providerProfileId: "phi4",
   responseLanguage: "auto",
   preset: "balanced",
@@ -17,7 +17,7 @@ const baseProps = {
     context: ["quoted_author"],
     record: [],
   },
-  stores: [{ name: "derrida_primary", count: 12 }],
+  stores: [{ name: "primary_corpus", count: 12 }],
   profiles: [{ id: "phi4", name: "Phi-4", type: "ollama" as const, model: "phi4:14b" }],
   history: [],
   canRun: true,

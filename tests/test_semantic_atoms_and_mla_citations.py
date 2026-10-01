@@ -42,7 +42,7 @@ def test_mla_supports_books_journal_articles_and_chapters():
     Why: citations are produced deterministically from metadata, so a missing
     volume/issue/editor here would produce a wrong scholarly citation.
     """
-    book = _mla_citation({"source_type":"book","document_author":"Jacques Derrida","document_title":"Archive Fever","publisher":"University of Chicago Press","publication_year":1996})
+    book = _mla_citation({"source_type":"book","document_author":"Jane Author","document_title":"Archive Fever","publisher":"University of Chicago Press","publication_year":1996})
     article = _mla_citation({"source_type":"journal_article","document_author":"Jane Doe","document_title":"An Article","journal_title":"Critical Inquiry","volume":"15","issue":"4","publication_year":1989,"pages":"812-873","doi":"10.1234/example"})
     chapter = _mla_citation({"source_type":"book_chapter","document_author":"Jane Doe","document_title":"A Chapter","container_title":"Collected Essays","editor":"John Smith","publisher":"Example Press","publication_year":2026,"pages":"10-25"})
     assert "Archive Fever" in book and "University of Chicago Press" in book

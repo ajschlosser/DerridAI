@@ -9,11 +9,11 @@ from app.corpus_publication import serialize_public_record
 
 def test_document_text_offsets_and_projection_are_bound_to_record_text():
     records = [
-        {"record_id": "r1", "record_revision": 1, "text": "Derrida cites Levinas."},
+        {"record_id": "r1", "record_revision": 1, "text": "Author cites Levinas."},
         {"record_id": "r2", "record_revision": 1, "text": "He then qualifies the claim."},
     ]
     text, spans = di.document_text_for_records(records)
-    assert text == "Derrida cites Levinas.\n\nHe then qualifies the claim."
+    assert text == "Author cites Levinas.\n\nHe then qualifies the claim."
     assert spans[0]["start"] == 0 and spans[0]["end"] == len(records[0]["text"])
     assert spans[1]["start"] == spans[0]["end"] + 2
 
@@ -53,7 +53,7 @@ def test_document_text_offsets_and_projection_are_bound_to_record_text():
 
 
 def test_document_intelligence_hints_are_advisory_and_go_stale_after_text_edit():
-    record = {"record_id": "r1", "text": "Derrida quotes Levinas."}
+    record = {"record_id": "r1", "text": "Author quotes Levinas."}
     digest = hashlib.sha256(record["text"].encode("utf-8")).hexdigest()
     record["document_intelligence"] = {
         "status": "ok",
@@ -144,7 +144,7 @@ def test_document_intelligence_stays_out_of_canonical_publication_records():
 def test_explicit_booknlp_request_without_worker_is_unavailable_not_spacy(monkeypatch):
     monkeypatch.delenv("DOCUMENT_NLP_BASE_URL", raising=False)
     monkeypatch.setattr(di, "_spacy_document_annotations", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("spaCy ran")))
-    records = [{"record_id": "r1", "text": "Derrida wrote this."}]
+    records = [{"record_id": "r1", "text": "Author wrote this."}]
     analysis = di.analyze_document(
         records, source_document_id="doc", language="English",
         request={"document_nlp_provider": "booknlp"},
@@ -174,7 +174,7 @@ def test_booknlp_requests_route_each_language_to_its_own_worker(monkeypatch):
     monkeypatch.setattr(di, "_spacy_document_annotations", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("spaCy ran")))
     monkeypatch.setenv("DOCUMENT_NLP_BASE_URL", "http://document-nlp:8090")
     monkeypatch.setenv("DOCUMENT_NLP_BASE_URL_FR", "http://document-nlp-fr:8090")
-    records = [{"record_id": "r1", "text": "Derrida wrote this."}]
+    records = [{"record_id": "r1", "text": "Author wrote this."}]
 
     booknlp = {"document_nlp_provider": "booknlp"}
     english = di.analyze_document(records, source_document_id="doc", language="English", request=booknlp)

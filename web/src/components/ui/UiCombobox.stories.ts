@@ -4,9 +4,9 @@ const meta = {
   title: "UI/Combobox",
   component: UiCombobox,
   args: {
-    modelValue: "Jacques Derrida",
+    modelValue: "Jane Author",
     label: "Speaker",
-    options: ["Jacques Derrida", "Emmanuel Levinas", "Immanuel Kant", "Martin Heidegger"],
+    options: ["Jane Author", "Emmanuel Levinas", "Immanuel Kant", "Martin Heidegger"],
     allowCustom: true,
   },
 } satisfies Meta<typeof UiCombobox>;

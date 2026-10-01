@@ -3,13 +3,13 @@ import RecordEditSheet from "./RecordEditSheet.vue";
 
 const record = {
   work: "Adieu to Emmanuel Levinas",
-  document_author: "Jacques Derrida",
+  document_author: "Jane Author",
   publication_year: 1999,
   publisher: "Stanford University Press",
   translator: "Pascale-Anne Brault and Michael Naas",
   page_start: 20,
   page_end: 21,
-  speaker: "Derrida",
+  speaker: "Author",
   position_holder: "Levinas",
   stance: "qualified endorsement",
   discourse_role: "analysis",

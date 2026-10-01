@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { radialLayout, segmentText } from "../../src/features/corpus-builder/domain/semanticMap";
 
-const text = "Derrida reads Levinas on hospitality.";
+const text = "Author reads Levinas on hospitality.";
 const span = (surface: string, layer: string) => {
   const start = text.indexOf(surface);
   return { start, end: start + surface.length, layer };
@@ -10,11 +10,11 @@ const span = (surface: string, layer: string) => {
 
 describe("segmentText", () => {
   it("conserves the text and marks only shown layers", () => {
-    const spans = [span("Derrida", "ner"), span("Levinas", "entity"), span("hospitality", "pos")];
+    const spans = [span("Author", "ner"), span("Levinas", "entity"), span("hospitality", "pos")];
     const segments = segmentText(text, spans, new Set(["ner", "pos"]));
     expect(segments.map((segment) => segment.text).join("")).toBe(text);
     expect(segments.filter((segment) => segment.mention).map((segment) => segment.text)).toEqual([
-      "Derrida",
+      "Author",
       "hospitality",
     ]);
   });

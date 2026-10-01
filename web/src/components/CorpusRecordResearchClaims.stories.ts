@@ -16,7 +16,7 @@ const meta: Meta<typeof CorpusRecordResearchClaims> = {
           relation: "supports",
           record_revision: 4,
           validated_by: "ann",
-          citation: { inline: "(Derrida, Of Hospitality, 25)" },
+          citation: { inline: "(Author, Of Hospitality, 25)" },
           binding_status: "current",
         },
         {

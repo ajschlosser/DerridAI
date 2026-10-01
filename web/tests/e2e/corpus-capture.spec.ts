@@ -27,11 +27,11 @@ test("Sources opens Corpus Capture with provider-backed options", async ({ page 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   const authorSearch = dialog.locator(".author-resolver input[type=search]");
-  await authorSearch.fill("Derrida");
+  await authorSearch.fill("Author");
   await dialog.locator(".ar-search button[type=submit]").click();
 
   const person = dialog.locator('[data-qid="Q130631"]');
-  await expect(person).toContainText("Jacques Derrida");
+  await expect(person).toContainText("Jane Author");
   await person.locator('input[type="radio"]').check();
   await dialog.locator('[data-action="next"]').click();
 

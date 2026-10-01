@@ -22,8 +22,8 @@ def _evidence(**record):
     return {
         "evidence_id": "E0",
         "record": record,
-        "inline_citation": "Derrida 1967: 12",
-        "full_citation": "Derrida, Jacques. Of Grammatology. 1967.",
+        "inline_citation": "Author 1967: 12",
+        "full_citation": "Author, Jane. Of Grammatology. 1967.",
     }
 
 
@@ -31,7 +31,7 @@ def test_evidence_sufficiency_accepts_provenance_complete_record():
     evidence = [_evidence(
         record_id="of-grammatology-12",
         work="Of Grammatology",
-        document_author="Jacques Derrida",
+        document_author="Jane Author",
         text="There is no exact text without a source.",
     )]
     assert evidence_sufficiency_issues(evidence) == []
@@ -59,7 +59,7 @@ def test_evidence_marker_parser_matches_all_rendered_citation_forms():
 def test_partition_excludes_only_provenance_incomplete_records():
     complete = {"record": {
         "record_id": "r1", "work": "Of Grammatology",
-        "document_author": "Jacques Derrida", "text": "Il n'y a pas de hors-texte.",
+        "document_author": "Jane Author", "text": "Le texte précède le commentaire.",
     }}
     authorless = {"record": {"record_id": "r2", "work": "Anonymous gloss", "text": "Unattributed."}}
     kept, excluded = partition_sufficient_records([authorless, complete])

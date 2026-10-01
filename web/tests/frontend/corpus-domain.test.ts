@@ -25,7 +25,7 @@ const build = (overrides: Partial<CorpusBuild> = {}): CorpusBuild => ({
   record_count: 3,
   accepted_count: 0,
   needs_review_count: 1,
-  profile_id: "derrida-scholarly-v12",
+  profile_id: "scholarly-v12",
   ...overrides,
 });
 

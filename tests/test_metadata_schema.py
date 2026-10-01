@@ -94,7 +94,7 @@ def test_group_prompt_and_response_contract_can_be_scoped_to_unresolved_fields()
             "metadata": {
                 "topics": ["hospitality"],
                 "concepts": ["sovereignty"],
-                "persons": ["Derrida"],
+                "persons": ["Author"],
             },
             "field_assessments": {
                 "topics": {
@@ -140,7 +140,7 @@ def test_response_consistency_degrades_assessment_value_contradictions_to_review
     missing_value["field_assessments"]["speaker"] = {
         "confidence": 0.95,
         "needs_review": False,
-        "reason": "The speaker is clearly Derrida.",
+        "reason": "The speaker is clearly Author.",
         "outcome": "supported_value",
     }
     accepted = model.model_validate(missing_value)
@@ -149,7 +149,7 @@ def test_response_consistency_degrades_assessment_value_contradictions_to_review
     assert "contradiction" in accepted.field_assessments.speaker.reason.lower()
 
     contradictory_value = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
-    contradictory_value["metadata"]["speaker"] = "Jacques Derrida"
+    contradictory_value["metadata"]["speaker"] = "Jane Author"
     contradictory_value["field_assessments"]["speaker"] = {
         "confidence": 0.95,
         "needs_review": False,
@@ -157,7 +157,7 @@ def test_response_consistency_degrades_assessment_value_contradictions_to_review
         "outcome": "no_supported_value",
     }
     accepted = model.model_validate(contradictory_value)
-    assert accepted.metadata.speaker == "Jacques Derrida"
+    assert accepted.metadata.speaker == "Jane Author"
     assert accepted.field_assessments.speaker.outcome == "uncertain"
     assert accepted.field_assessments.speaker.needs_review is True
     assert "no_supported_value" in accepted.field_assessments.speaker.reason
@@ -174,7 +174,7 @@ def test_response_consistency_degrades_assessment_value_contradictions_to_review
     assert accepted.field_assessments.speaker.needs_review is True
 
     missing_evidence = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
-    missing_evidence["metadata"]["speaker"] = "Jacques Derrida"
+    missing_evidence["metadata"]["speaker"] = "Jane Author"
     missing_evidence["field_assessments"]["speaker"] = {
         "confidence": 0.95,
         "needs_review": False,
@@ -185,7 +185,7 @@ def test_response_consistency_degrades_assessment_value_contradictions_to_review
     # sufficiency is reconciled against current-record block IDs afterward, where
     # this field becomes evidence_failed/reviewable instead of failing the whole call.
     accepted = model.model_validate(missing_evidence)
-    assert accepted.metadata.speaker == "Jacques Derrida"
+    assert accepted.metadata.speaker == "Jane Author"
 
 
 def test_the_built_in_schema_describes_the_same_fields_as_the_code_does_today():
@@ -395,7 +395,7 @@ def test_the_output_shape_is_generated_and_matches_the_hand_written_models():
             "is_direct_quote": True,
             "quoted_speaker": "Emmanuel Levinas",
             **{name: None for name in scalar_quotation_fields if name != "quoted_speaker"},
-            "quotation_chain": ["Derrida", "Levinas"],
+            "quotation_chain": ["Author", "Levinas"],
         },
         "field_assessments": {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "supported_value" if name in {"is_direct_quote", "quoted_speaker", "quotation_chain"} else "no_supported_value"} for name in quotation_fields},
     })
@@ -787,7 +787,7 @@ def test_open_fields_reject_pos_ner_and_foreign_closed_vocabulary_leakage():
     response = ms.response_model_for(schema, "quotation")
     quotation_fields = [field.name for field in schema.fields_in("quotation")]
     metadata = {name: None for name in quotation_fields if name != "quotation_chain"}
-    metadata["quotation_chain"] = ["PROPN", "assertion", "Jacques Derrida"]
+    metadata["quotation_chain"] = ["PROPN", "assertion", "Jane Author"]
     assessments = {
         field.name: {
             "confidence": 0.8,
@@ -805,7 +805,7 @@ def test_open_fields_reject_pos_ner_and_foreign_closed_vocabulary_leakage():
         "review_reason": "",
     }
     parsed = response.model_validate(payload)
-    assert parsed.metadata.quotation_chain == ["Jacques Derrida"]
+    assert parsed.metadata.quotation_chain == ["Jane Author"]
     assert parsed.field_assessments.quotation_chain.outcome == "uncertain"
     assert parsed.field_assessments.quotation_chain.needs_review is True
     assert "structured-vocabulary leakage" in parsed.field_assessments.quotation_chain.reason

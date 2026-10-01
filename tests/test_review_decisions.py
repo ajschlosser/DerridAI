@@ -222,11 +222,11 @@ def test_human_value_change_invalidates_evidence_for_previous_assertion(tmp_path
     updated = manager.patch_metadata(
         build["build_id"],
         "r1",
-        {"position_holder": "Derrida"},
+        {"position_holder": "Author"},
         expected_revision=1,
     )
 
-    assert updated["position_holder"] == "Derrida"
+    assert updated["position_holder"] == "Author"
     assert "position_holder" not in (updated.get("metadata_evidence") or {})
 
 

@@ -50,7 +50,7 @@ const currentValues = computed(
         .map((v) => v.toLocaleLowerCase()),
     ),
 );
-// Suggested values are matched case-insensitively so "Derrida" and "derrida" are one suggestion.
+// Suggested values are matched case-insensitively so "Author" and "author" are one suggestion.
 const recommendedSet = computed(
   () => new Set(props.recommended.map((v) => String(v).trim().toLocaleLowerCase()).filter(Boolean)),
 );

@@ -14,15 +14,15 @@ const record = {
   review_reason: "Boundary requires human review.",
   review_disposition: "pending" as const,
   record_revision: 2,
-  speaker: "Jacques Derrida",
-  position_holder: "Jacques Derrida",
+  speaker: "Jane Author",
+  position_holder: "Jane Author",
   stance: "qualified assertion",
   discourse_role: "analysis",
   proposition_status: "asserted",
   topics: ["hospitality", "cosmopolitanism"],
   concepts: ["unconditional hospitality"],
   metadata_guidance_matches: {
-    persons: [{ term: "Jacques Derrida", occurrences: 1 }],
+    persons: [{ term: "Jane Author", occurrences: 1 }],
     concepts: [{ term: "hospitality", occurrences: 2 }],
   },
   metadata_evidence: {
@@ -186,7 +186,7 @@ export const LongMetadata: Story = {
       text_length: 1504,
       quoted_author: ["Emmanuel Levinas", "Immanuel Kant"],
       works_referenced: ["Totality and Infinity", "Perpetual Peace"],
-      persons: ["Levinas", "Kant", "Derrida"],
+      persons: ["Levinas", "Kant", "Author"],
     },
   },
 };
@@ -220,7 +220,7 @@ export const HumanCorrectedSourceIssue: Story = {
           reason: "Confirmed during review.",
         },
       },
-      document_author: "Jacques Derrida",
+      document_author: "Jane Author",
     },
   },
 };

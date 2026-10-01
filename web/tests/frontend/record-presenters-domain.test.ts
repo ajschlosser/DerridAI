@@ -25,7 +25,7 @@ const presenters = createRecordPresenters({
     { work: "W", annotation: { note: "n" }, record: { record_id: "r" }, file: { name: "f" } },
   ],
   compareSearchIndex: () => [
-    { key: "a", label: "Alpha rec", search: "alpha rec derrida", record: { text: "x" } },
+    { key: "a", label: "Alpha rec", search: "alpha rec author", record: { text: "x" } },
     { key: "b", label: "Beta", search: "beta glas", record: {} },
   ],
 } as never) as Record<string, (...args: unknown[]) => unknown>;

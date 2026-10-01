@@ -10,12 +10,12 @@ const meta: Meta<typeof ResearchClaimReviewPanel> = {
     evidence: [
       {
         evidence_id: "E1",
-        inline_citation: "(Derrida, 25)",
+        inline_citation: "(Author, 25)",
         record: { record_id: "r1", record_revision: 2 },
       },
       {
         evidence_id: "E2",
-        inline_citation: "(Derrida, 77)",
+        inline_citation: "(Author, 77)",
         record: { record_id: "r2", record_revision: 1 },
       },
     ],
@@ -41,7 +41,7 @@ const meta: Meta<typeof ResearchClaimReviewPanel> = {
           record_revision: 2,
           relation: "supports",
           validation_status: "unvalidated",
-          citation: { inline: "(Derrida, 25)", evidence_marker: "E1" },
+          citation: { inline: "(Author, 25)", evidence_marker: "E1" },
         },
         {
           support_binding_id: "s2",
@@ -50,7 +50,7 @@ const meta: Meta<typeof ResearchClaimReviewPanel> = {
           record_revision: 1,
           relation: "supports",
           validation_status: "validated",
-          citation: { inline: "(Derrida, 77)", evidence_marker: "E2" },
+          citation: { inline: "(Author, 77)", evidence_marker: "E2" },
         },
       ],
     },

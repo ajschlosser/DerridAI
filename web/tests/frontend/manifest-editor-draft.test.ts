@@ -6,7 +6,7 @@ import DocumentManifestEditor from "../../src/components/DocumentManifestEditor.
 // must survive that, or a reader's edits vanish while they type.
 const manifest = (over: Record<string, unknown> = {}) => ({
   title: "On Cosmopolitanism",
-  document_author: "Jacques Derrida",
+  document_author: "Jane Author",
   main_text_start_page: 53,
   ...over,
 });

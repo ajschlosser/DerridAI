@@ -2,7 +2,7 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import RecordSemanticAnnotatedText from "./RecordSemanticAnnotatedText.vue";
 
-const text = "Heidegger questions the metaphysics of presence, and Derrida reads the trace.";
+const text = "Heidegger questions the metaphysics of presence, and Author reads the trace.";
 const at = (surface: string) => ({
   start: text.indexOf(surface),
   end: text.indexOf(surface) + surface.length,
@@ -18,7 +18,7 @@ const meta = {
     mentions: [
       { ...at("Heidegger"), layer: "entity", tag: "PERSON", node_id: "person:heidegger" },
       { ...at("presence"), layer: "pos", tag: "NOUN" },
-      { ...at("Derrida"), layer: "ner", tag: "PERSON", node_id: "person:derrida" },
+      { ...at("Author"), layer: "ner", tag: "PERSON", node_id: "person:author" },
     ],
   },
 } satisfies Meta<typeof RecordSemanticAnnotatedText>;

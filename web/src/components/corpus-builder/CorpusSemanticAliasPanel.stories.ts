@@ -6,10 +6,10 @@ import CorpusSemanticAliasPanel from "./CorpusSemanticAliasPanel.vue";
 const aliases: SemanticAliasList = {
   items: [
     {
-      alias_set_id: "alias-derrida",
+      alias_set_id: "alias-author",
       kind: "person",
-      canonical_label: "Jacques Derrida",
-      aliases: ["J. Derrida", "Derrida, Jacques"],
+      canonical_label: "Jane Author",
+      aliases: ["J. Author", "Author, Jane"],
       reason: "Signed preface and title page.",
       reviewer: "reviewer-1",
       created_at: "2026-09-12T10:00:00Z",

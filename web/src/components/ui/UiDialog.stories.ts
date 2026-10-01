@@ -13,7 +13,7 @@ const meta = {
   render: (args) => ({
     components: { UiDialog, UiButton },
     setup: () => ({ args }),
-    template: `<UiDialog v-bind="args"><div style="display:grid;gap:12px"><label>Title <input class="control" value="On Cosmopolitanism and Forgiveness"></label><label>Author <input class="control" value="Jacques Derrida"></label></div><template #footer><span>2 unsaved changes</span><div style="display:flex;gap:8px"><UiButton label="Reset"/><UiButton variant="primary" label="Save changes"/></div></template></UiDialog>`,
+    template: `<UiDialog v-bind="args"><div style="display:grid;gap:12px"><label>Title <input class="control" value="On Cosmopolitanism and Forgiveness"></label><label>Author <input class="control" value="Jane Author"></label></div><template #footer><span>2 unsaved changes</span><div style="display:flex;gap:8px"><UiButton label="Reset"/><UiButton variant="primary" label="Save changes"/></div></template></UiDialog>`,
   }),
 } satisfies Meta<typeof UiDialog>;
 export default meta;

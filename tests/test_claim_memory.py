@@ -47,7 +47,7 @@ def claim(monkeypatch):
         "record_id": "r1",
         "record_revision": 1,
         "relation": "supports",
-        "citation": {"inline": "(Derrida, 1)"},
+        "citation": {"inline": "(Author, 1)"},
         "validation_status": "unvalidated",
     })
     return fake, payload
@@ -59,7 +59,7 @@ def test_validating_a_claim_projects_it_with_the_reviewers_identity(claim):
         "record_id": "r1", "record_revision": 1, "source_document_id": "d1",
         "field_assertions": {"speaker": [{
             "assertion_id": "a1", "field_id": "speaker", "field_name": "speaker", "record_id": "r1",
-            "value": "Derrida", "derivation_method": "model", "evaluation_status": "value_supported",
+            "value": "Author", "derivation_method": "model", "evaluation_status": "value_supported",
             "authority_status": "human_confirmed", "value_status": "present", "record_revision": 1,
         }]},
         "current_field_assertions": {"speaker": "a1"},
@@ -151,13 +151,13 @@ def test_similar_hits_are_rejoined_to_authority_and_stale_rows_dropped():
 
     class Index:
         def similar(self, text, **kw):
-            return [{"claim_id": "live", "similarity": 0.9, "metadata": {"support_json": '[{"record_id": "r9", "semantic": {"speaker": {"value": "Derrida"}}}]'}},
+            return [{"claim_id": "live", "similarity": 0.9, "metadata": {"support_json": '[{"record_id": "r9", "semantic": {"speaker": {"value": "Author"}}}]'}},
                     {"claim_id": "dead", "similarity": 0.8, "metadata": {}}]
 
     out = claim_memory.similar_validated_claims(Index(), Store(), {"claim_id": "c0", "claim_text": "Z"}, owner="ann")
     assert [i["claim_id"] for i in out["items"]] == ["live"]
     assert out["items"][0]["advisory"] is True
-    assert out["items"][0]["support"][0]["semantic"]["speaker"]["value"] == "Derrida"
+    assert out["items"][0]["support"][0]["semantic"]["speaker"]["value"] == "Author"
 
 
 def test_record_review_lists_only_validated_claims_and_flags_stale_support():
@@ -165,7 +165,7 @@ def test_record_review_lists_only_validated_claims_and_flags_stale_support():
         def list_claim_support_bindings_for_record(self, record_id, owner=None, limit=200):
             return [
                 {"claim_id": "ok", "record_id": record_id, "record_revision": 3, "relation": "supports",
-                 "citation": {"inline": "(Derrida, 12)"}},
+                 "citation": {"inline": "(Author, 12)"}},
                 {"claim_id": "old", "record_id": record_id, "record_revision": 1, "relation": "supports"},
                 {"claim_id": "draft", "record_id": record_id, "record_revision": 3, "relation": "supports"},
             ]
@@ -176,4 +176,4 @@ def test_record_review_lists_only_validated_claims_and_flags_stale_support():
 
     items = claim_memory.validated_claims_citing(Store(), {"record_id": "r1", "record_revision": 3})
     assert {item["claim_id"]: item["binding_status"] for item in items} == {"ok": "current", "old": "stale"}
-    assert items[0]["citation"] == {"inline": "(Derrida, 12)"}
+    assert items[0]["citation"] == {"inline": "(Author, 12)"}

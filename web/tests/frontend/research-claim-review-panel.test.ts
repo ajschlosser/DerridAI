@@ -29,7 +29,7 @@ function supportedProvenance(): ResearchClaimProvenance {
         record_revision: 2,
         relation: "supports",
         validation_status: "unvalidated",
-        citation: { inline: "(Derrida, 25)", evidence_marker: "E1" },
+        citation: { inline: "(Author, 25)", evidence_marker: "E1" },
       },
     ],
   };

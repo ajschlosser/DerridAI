@@ -10,7 +10,7 @@ describe("Corpus Builder editable metadata packet", () => {
     const record = {
       record_id: "r1",
       text: "source text",
-      speaker: "Derrida",
+      speaker: "Author",
       custom_field: "custom",
       build_id: "b1",
       metadata_field_status: { speaker: { status: "human_confirmed" } },
@@ -39,7 +39,7 @@ describe("Corpus Builder editable metadata packet", () => {
     } as any;
 
     expect(editableRecordMetadata(record, schema)).toEqual({
-      speaker: "Derrida",
+      speaker: "Author",
       custom_field: "custom",
     });
   });
@@ -95,7 +95,7 @@ describe("Corpus Builder editable metadata packet", () => {
 
   it("keeps operational revision and runtime fields out of scholarly review", () => {
     const record = {
-      speaker: "Derrida",
+      speaker: "Author",
       text_revision_history: [{ at: "2026-09-25T00:00:00Z", source: "human" }],
       metadata_execution_ledger: { quotation: { status: "complete" } },
       field_assertions: {
@@ -115,7 +115,7 @@ describe("Corpus Builder editable metadata packet", () => {
       current_field_assertions: { "legacy.utility": "utility-a1" },
     };
 
-    expect(editableRecordMetadata(record)).toEqual({ speaker: "Derrida" });
+    expect(editableRecordMetadata(record)).toEqual({ speaker: "Author" });
   });
 
   it("honors schema review visibility without relying on field names", () => {

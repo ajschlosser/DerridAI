@@ -523,7 +523,7 @@ def test_realtime_summaries_never_carry_error_text_or_research_questions():
         "failed": {"id": "failed", "type": "rag", "status": "failed", "stage_detail": "HTTP 500 · upstream said: secret body"},
         "grading": {
             "id": "grading", "type": "llm_tool", "tool": "rag_grade", "status": "running",
-            "stage_detail": "Grading 1 of 3 · What does Derrida mean by the supplement?",
+            "stage_detail": "Grading 1 of 3 · What does Author mean by the supplement?",
         },
         "live": {"id": "live", "type": "rag", "status": "running", "stage_detail": "Reranking 12 candidates"},
     }

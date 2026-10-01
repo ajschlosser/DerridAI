@@ -19,7 +19,7 @@ def _result() -> dict:
         },
         "provider": "ollama",
         "model": "qwen3",
-        "collections": ["derrida_primary"],
+        "collections": ["primary_corpus"],
         "warnings": [
             "Cross-encoder fallback (model_unavailable); used lexical/vector fallback."
         ],
@@ -98,7 +98,7 @@ def test_research_trace_records_cross_encoder_attempt_and_explicit_fallback() ->
     result = _result()
     request = RAGRunRequest(
         prompt="What is différance?",
-        source_collection="derrida_primary",
+        source_collection="primary_corpus",
         pipeline_id="research.balanced",
         pipeline_version=1,
         reranker="cross_encoder",
@@ -127,7 +127,7 @@ def test_research_trace_does_not_invent_per_route_retrieval_timings() -> None:
     result = _result()
     request = RAGRunRequest(
         prompt="What is différance?",
-        source_collection="derrida_primary",
+        source_collection="primary_corpus",
         pipeline_id="research.balanced",
         pipeline_version=1,
     )
@@ -162,7 +162,7 @@ def test_research_trace_records_post_rerank_source_diversity() -> None:
     result = _result()
     request = RAGRunRequest(
         prompt="What is différance?",
-        source_collection="derrida_primary",
+        source_collection="primary_corpus",
         pipeline_id="research.balanced",
         pipeline_version=1,
     )
@@ -213,7 +213,7 @@ def test_research_trace_stage_ids_are_bound_to_resolved_definition() -> None:
 
     request = RAGRunRequest(
         prompt="What is différance?",
-        source_collection="derrida_primary",
+        source_collection="primary_corpus",
         pipeline_id=pipeline.pipeline_id,
         pipeline_version=pipeline.version,
         reranker="cross_encoder",
@@ -244,7 +244,7 @@ def _research_trace(retrieval_extra: dict):
     result["retrieval"] = {**result["retrieval"], **retrieval_extra}
     request = RAGRunRequest(
         prompt="What is différance?",
-        source_collection="derrida_primary",
+        source_collection="primary_corpus",
         pipeline_id="research.balanced",
         pipeline_version=1,
     )

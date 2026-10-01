@@ -4,9 +4,9 @@ import type { CaptureCandidate, CorpusCapture } from "../../api/corpus";
 import CaptureCompletion from "./CaptureCompletion.vue";
 
 const capture: CorpusCapture = {
-  capture_id: "capture-derrida",
+  capture_id: "capture-author",
   author: {
-    canonical_name: "Jacques Derrida",
+    canonical_name: "Jane Author",
     wikidata_qid: "Q130631",
     birth_year: 1930,
     death_year: 2004,
@@ -54,7 +54,7 @@ function candidate(
     provider: "wikisource",
     provider_item_id: id,
     title,
-    document_author: "Jacques Derrida",
+    document_author: "Jane Author",
     contribution_role: "author",
     document_languages: ["fr"],
     original_language: "fr",

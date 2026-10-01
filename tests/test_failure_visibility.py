@@ -157,7 +157,7 @@ def test_keyword_search_does_not_hide_storage_failure(monkeypatch):
     store = object.__new__(cs.ChromaStore)
     monkeypatch.setattr(store, "_collection", lambda _name: BrokenSearchCollection())
     with pytest.raises(RuntimeError, match="storage read failed"):
-        store.keyword_search("db", "Derrida", 5)
+        store.keyword_search("db", "Author", 5)
 
 
 class FailingQueueStore:

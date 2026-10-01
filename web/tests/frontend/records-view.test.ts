@@ -73,8 +73,8 @@ function baseSnapshot() {
     flagged: 0,
     selection_count: 0,
     page_selected: false,
-    stores: [{ name: "derrida-primary", count: 10 }],
-    active_store: "derrida-primary",
+    stores: [{ name: "primary-corpus", count: 10 }],
+    active_store: "primary-corpus",
     has_database: true,
     db_unavailable_reason: "",
     capabilities: {
@@ -106,7 +106,7 @@ const runtime = vi.hoisted(() => ({
     { key: "work", label: "Work" },
   ]),
   subsetSourceRecords: vi.fn(() => [
-    { record_id: "r-1", document_author: "Jacques Derrida", work: "Glas" },
+    { record_id: "r-1", document_author: "Jane Author", work: "Glas" },
     { record_id: "r-2", document_author: "Paul de Man", work: "Allegories" },
   ]),
   defaultSubsetName: vi.fn(() => "tab-subset.jsonl"),
@@ -413,7 +413,13 @@ describe("RecordsView", () => {
     await flushPromises();
     const subset = document.body.querySelector<HTMLElement>("[role=dialog]")!;
     expect(subset.textContent).toContain("Create JSONL subset");
-    // The default condition (document author equals Jacques Derrida) matches one of two records.
+    // The default condition starts empty; typing "Jane Author" matches one of the two records.
+    const valueInput = subset.querySelector<HTMLInputElement>(
+      ".subset-condition input[aria-label*='alue']",
+    )!;
+    valueInput.value = "Jane Author";
+    valueInput.dispatchEvent(new Event("input"));
+    await flushPromises();
     expect(subset.querySelector("[role=status]")?.textContent).toContain(
       "1 of 2 source records match",
     );
@@ -431,7 +437,7 @@ describe("RecordsView", () => {
           {
             type: "rule",
             join: "AND",
-            rule: { field: "document_author", operator: "equals", value: "Jacques Derrida" },
+            rule: { field: "document_author", operator: "equals", value: "Jane Author" },
           },
         ],
       }),

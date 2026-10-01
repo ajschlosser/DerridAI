@@ -20,7 +20,7 @@ def test_sparse_preserves_required_confidence_null():
     assertion = {
         'assertion_id':'a1','record_id':'r1','field_id':'f1','field_name':'speaker',
         'derivation_method':'model','evaluation_status':'value_supported',
-        'authority_status':'unreviewed','value_status':'present','value':'Derrida',
+        'authority_status':'unreviewed','value_status':'present','value':'Author',
         'confidence':None,'actor':None,'evidence':[],'legacy_metadata':{},
     }
     out=sparse_json(assertion)
@@ -43,18 +43,18 @@ def test_compact_deduplicates_evidence_and_keeps_flat_projection():
     record={
         'record_id':'r1','source_document_id':'doc1','text':'abc',
         'source_spans':[{'source_document_id':'doc1','source_unit_id':'b1'}],
-        'speaker':'Derrida','concepts':[],
+        'speaker':'Author','concepts':[],
         'field_assertions':{
             'derridai.speaker':[
                 {
                     'assertion_id':'a1','record_id':'r1','field_id':'derridai.speaker','field_name':'speaker',
-                    'value':'Derrida','derivation_method':'model','evaluation_status':'value_supported',
+                    'value':'Author','derivation_method':'model','evaluation_status':'value_supported',
                     'authority_status':'unreviewed','value_status':'present','confidence':0.82,
                     'evidence':evidence,
                 },
                 {
                     'assertion_id':'a2','record_id':'r1','field_id':'derridai.speaker','field_name':'speaker',
-                    'value':'Derrida','derivation_method':'model','evaluation_status':'value_supported',
+                    'value':'Author','derivation_method':'model','evaluation_status':'value_supported',
                     'authority_status':'human_confirmed','value_status':'present','confidence':0.82,
                     'evidence':evidence,'supersedes_assertion_id':'a1','actor':None,
                 },
@@ -66,7 +66,7 @@ def test_compact_deduplicates_evidence_and_keeps_flat_projection():
     out=compact_public_record(record,serialize_record=identity)
     # A consumer that never learns the FieldAssertion model (an external tool,
     # a human opening the exported JSONL) must still see the scholarly value.
-    assert out['speaker']=='Derrida'
+    assert out['speaker']=='Author'
     a1,a2=out['field_assertions']['derridai.speaker']
     assert a1['evidence']==evidence
     assert 'evidence' not in a2

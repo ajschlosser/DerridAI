@@ -112,7 +112,7 @@ export const scenarios: Scenario[] = [
     id: "faq-records",
     path: "/faq",
     fixtures: { "/api/response-cache/records": faqPage },
-    ready: (p) => p.getByText(/How does Derrida distinguish/).first(),
+    ready: (p) => p.getByText(/How does Author distinguish/).first(),
   },
   {
     id: "faq-archive-dialog",

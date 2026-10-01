@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import VectorCollectionHero from "./VectorCollectionHero.vue";
 const collection = {
-  name: "derrida-primary",
+  name: "primary-corpus",
   count: 12840,
-  description: "Primary multilingual Derrida research corpus",
+  description: "Primary multilingual Author research corpus",
   embedding_provider: "ollama",
   embedding_model: "bge-m3:latest",
   embedding_dimension: 1024,

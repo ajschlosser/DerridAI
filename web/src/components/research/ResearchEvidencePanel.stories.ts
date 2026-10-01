@@ -18,8 +18,8 @@ export const SelectedEvidence: Story = {
         work: "Adieu to Emmanuel Levinas",
         page_start: 6,
         page_end: 7,
-        inline_citation: "(Derrida 1999: 6-7)",
-        speaker: "Derrida",
+        inline_citation: "(Author 1999: 6-7)",
+        speaker: "Author",
         position_holder: "Levinas",
         stance: "analysis",
         discourse_role: "engagement",
@@ -43,14 +43,14 @@ export const AnswerEvidence: Story = {
     resultEvidence: [
       {
         evidence_id: "E0",
-        inline_citation: "(Derrida 1999: 6-7)",
+        inline_citation: "(Author 1999: 6-7)",
         rerank_score: 0.92,
         record: {
           record_id: "adieu-0018",
           work: "Adieu to Emmanuel Levinas",
           page_start: 6,
           page_end: 7,
-          speaker: "Derrida",
+          speaker: "Author",
           position_holder: "Levinas",
           stance: "analysis",
           discourse_role: "engagement",
@@ -60,7 +60,7 @@ export const AnswerEvidence: Story = {
       },
       {
         evidence_id: "E1",
-        inline_citation: "(Derrida 1999: 3-4)",
+        inline_citation: "(Author 1999: 3-4)",
         record: {
           record_id: "adieu-0012",
           work: "Adieu to Emmanuel Levinas",
@@ -78,16 +78,16 @@ export const DenseAnswerEvidence: Story = {
     activeIndex: 0,
     resultEvidence: Array.from({ length: 6 }, (_, index) => ({
       evidence_id: `E${index + 1}`,
-      inline_citation: `(Derrida 1999: ${20 + index})`,
-      full_citation: "Derrida, Jacques. Adieu to Emmanuel Levinas.",
-      collection: "derrida_primary",
+      inline_citation: `(Author 1999: ${20 + index})`,
+      full_citation: "Author, Jane. Adieu to Emmanuel Levinas.",
+      collection: "primary_corpus",
       rerank_score: 0.94 - index * 0.03,
       record: {
         record_id: `adieu-00${index + 20}`,
         work: index % 2 ? "Adieu to Emmanuel Levinas" : "The Gift of Death",
         page_start: 20 + index,
-        speaker: "Derrida",
-        position_holder: index % 2 ? "Levinas" : "Derrida",
+        speaker: "Author",
+        position_holder: index % 2 ? "Levinas" : "Author",
         stance: "analysis",
         discourse_role: "engagement",
         text:

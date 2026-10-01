@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import ResearchEvidencePanel from "../../src/components/research/ResearchEvidencePanel.vue";
 
 const evidence = [
-  { evidence_id: "E1", collection: "derrida_primary", record: { record_id: "rec-1", work: "W" } },
+  { evidence_id: "E1", collection: "primary_corpus", record: { record_id: "rec-1", work: "W" } },
 ];
 
 describe("ResearchEvidencePanel links", () => {
@@ -37,8 +37,8 @@ describe("ResearchEvidencePanel links", () => {
         resultEvidence: [
           {
             evidence_id: "E1",
-            full_citation: "Derrida, Jacques. Test Work.",
-            collection: "derrida_primary",
+            full_citation: "Author, Jane. Test Work.",
+            collection: "primary_corpus",
             record: { record_id: "rec-1", work: "Test Work", text: longText },
           },
         ],
@@ -60,8 +60,8 @@ describe("ResearchEvidencePanel links", () => {
         resultEvidence: [
           {
             evidence_id: "E1",
-            full_citation: "Derrida, Jacques. Test Work.",
-            collection: "derrida_primary",
+            full_citation: "Author, Jane. Test Work.",
+            collection: "primary_corpus",
             rerank_score: 0.91,
             record: { record_id: "rec-1", work: "Test Work", text: "Evidence text." },
           },
@@ -72,6 +72,6 @@ describe("ResearchEvidencePanel links", () => {
     const disclosures = wrapper.findAll(".research-evidence-disclosure");
     expect(disclosures).toHaveLength(1);
     expect(disclosures[0].attributes("open")).toBeUndefined();
-    expect(disclosures[0].text()).toContain("Derrida, Jacques. Test Work.");
+    expect(disclosures[0].text()).toContain("Author, Jane. Test Work.");
   });
 });

@@ -7,10 +7,10 @@ const meta: Meta<typeof ResearchComposer> = {
   parameters: { layout: "padded" },
   args: {
     prompt:
-      "How does Derrida distinguish responsibility for the mortal other from Heideggerian being-toward-death?",
+      "How does Author distinguish responsibility for the mortal other from Heideggerian being-toward-death?",
     instructions:
-      "Distinguish Derrida's own claims from positions attributed to Levinas and Heidegger.",
-    sourceCollection: "derrida_primary",
+      "Distinguish Author's own claims from positions attributed to Levinas and Heidegger.",
+    sourceCollection: "primary_corpus",
     providerProfileId: "phi4",
     responseLanguage: "auto",
     preset: "balanced",
@@ -22,7 +22,7 @@ const meta: Meta<typeof ResearchComposer> = {
     },
     stores: [
       {
-        name: "derrida_primary",
+        name: "primary_corpus",
         count: 12844,
         collection_role: "primary",
         embedding_model: "bge-m3:latest",

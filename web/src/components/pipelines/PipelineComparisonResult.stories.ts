@@ -35,7 +35,7 @@ function side(name: string, version: number, ids: string[]): ResearchPipelineCom
       record_id: id,
       rank: index + 1,
       work: "Of Grammatology",
-      citation: "Derrida 1976: 65",
+      citation: "Author 1976: 65",
       retrieval_hits: [],
     })),
   };

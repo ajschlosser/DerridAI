@@ -3,8 +3,8 @@ import CorpusReviewRecordPane from "./CorpusReviewRecordPane.vue";
 
 const record = {
   record_id: "rec_0184",
-  inline_citation: "(Derrida 1967, p. 12)",
-  text: "Il n’y a pas de hors-texte.",
+  inline_citation: "(Author 1967, p. 12)",
+  text: "Le texte précède le commentaire.",
   text_length: 27,
   text_review_status: "unreviewed",
   review_reason: "Quotation attribution needs review.",
@@ -34,5 +34,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Reading: Story = {};
-export const Editing: Story = { args: { editing: true, textDraft: "Il n’y a pas de hors-texte." } };
+export const Editing: Story = {
+  args: { editing: true, textDraft: "Le texte précède le commentaire." },
+};
 export const NothingSelected: Story = { args: { record: null } };

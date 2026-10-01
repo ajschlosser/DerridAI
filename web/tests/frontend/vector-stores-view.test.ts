@@ -134,7 +134,7 @@ describe("VectorStoresView", () => {
   });
 
   it("browses records through the GraphQL projection instead of full REST Records", async () => {
-    chromaApi.collections.mockResolvedValue([{ name: "derrida", count: 2, status: "ready" }]);
+    chromaApi.collections.mockResolvedValue([{ name: "author", count: 2, status: "ready" }]);
     vectorBrowseReads.browse.mockResolvedValue({
       works: [{ work: "Of Grammatology", count: 2 }],
       page: null,
@@ -168,7 +168,7 @@ describe("VectorStoresView", () => {
     await flushPromises();
 
     expect(vectorBrowseReads.browse).toHaveBeenLastCalledWith(
-      "derrida",
+      "author",
       expect.objectContaining({ includeRecords: true, offset: 0, limit: 50 }),
     );
     expect(wrapper.get(".store-table").text()).toContain("There is nothing outside the text…");

@@ -429,7 +429,7 @@ exports[`corpus analytics > counts and ranks 5`] = `
     },
     "index": 3,
     "record": {
-      "document_author": "J. Derrida",
+      "document_author": "J. Author",
       "needs_review": false,
       "record_id": "r3",
       "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -531,7 +531,7 @@ exports[`corpus analytics > counts and ranks 5`] = `
     },
     "index": 9,
     "record": {
-      "document_author": "J. Derrida",
+      "document_author": "J. Author",
       "needs_review": false,
       "record_id": "r9",
       "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -834,7 +834,7 @@ exports[`corpus analytics > indexes works 1`] = `
       {
         "authors": {
           "__set": [
-            "J. Derrida",
+            "J. Author",
           ],
         },
         "count": 7,
@@ -853,7 +853,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 1,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r1",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -873,7 +873,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 13,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r13",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -893,7 +893,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 25,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r25",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -912,7 +912,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 37,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r37",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -932,7 +932,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 9,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r49",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -979,7 +979,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 21,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r61",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1026,7 +1026,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 33,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r73",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1256,7 +1256,7 @@ exports[`corpus analytics > indexes works 1`] = `
       {
         "authors": {
           "__set": [
-            "J. Derrida",
+            "J. Author",
           ],
         },
         "count": 7,
@@ -1275,7 +1275,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 3,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r3",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1318,7 +1318,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 15,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r15",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1360,7 +1360,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 27,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r27",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1403,7 +1403,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 39,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r39",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1446,7 +1446,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 11,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r51",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1462,7 +1462,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 23,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r63",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1478,7 +1478,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 35,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r75",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1798,7 +1798,7 @@ exports[`corpus analytics > indexes works 1`] = `
       {
         "authors": {
           "__set": [
-            "J. Derrida",
+            "J. Author",
           ],
         },
         "count": 7,
@@ -1817,7 +1817,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 5,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r5",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1836,7 +1836,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 17,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r17",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1856,7 +1856,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 29,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r29",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1876,7 +1876,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 1,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r41",
               "text": "xxxxxxxxxxxxxxxxx",
@@ -1896,7 +1896,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 13,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r53",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1916,7 +1916,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 25,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r65",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -1935,7 +1935,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 37,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r77",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2197,7 +2197,7 @@ exports[`corpus analytics > indexes works 1`] = `
       {
         "authors": {
           "__set": [
-            "J. Derrida",
+            "J. Author",
           ],
         },
         "count": 7,
@@ -2216,7 +2216,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 7,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r7",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2244,7 +2244,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 19,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r19",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2264,7 +2264,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 31,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r31",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2284,7 +2284,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 3,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r43",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2331,7 +2331,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 15,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r55",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2377,7 +2377,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 27,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r67",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2424,7 +2424,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 39,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r79",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2640,7 +2640,7 @@ exports[`corpus analytics > indexes works 1`] = `
       {
         "authors": {
           "__set": [
-            "J. Derrida",
+            "J. Author",
           ],
         },
         "count": 6,
@@ -2659,7 +2659,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 9,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r9",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2702,7 +2702,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 21,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r21",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2745,7 +2745,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 33,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r33",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2788,7 +2788,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 5,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r45",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2803,7 +2803,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 17,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r57",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -2819,7 +2819,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 29,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r69",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -3074,7 +3074,7 @@ exports[`corpus analytics > indexes works 1`] = `
       {
         "authors": {
           "__set": [
-            "J. Derrida",
+            "J. Author",
           ],
         },
         "count": 6,
@@ -3093,7 +3093,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 11,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r11",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -3113,7 +3113,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 23,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r23",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -3133,7 +3133,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 35,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r35",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -3160,7 +3160,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 7,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r47",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -3188,7 +3188,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 19,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r59",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
@@ -3208,7 +3208,7 @@ exports[`corpus analytics > indexes works 1`] = `
             },
             "index": 31,
             "record": {
-              "document_author": "J. Derrida",
+              "document_author": "J. Author",
               "needs_review": false,
               "record_id": "r71",
               "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",

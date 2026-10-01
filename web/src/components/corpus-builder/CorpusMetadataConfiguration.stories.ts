@@ -49,8 +49,8 @@ export const CustomSchema: Story = {
     chosenSchema: schemaChoices[1],
     runGuidance: {
       speaker: {
-        instructions: "Distinguish Derrida's voice from quoted or attributed positions.",
-        look_for: ["Derrida", "Levinas", "Heidegger"],
+        instructions: "Distinguish Author's voice from quoted or attributed positions.",
+        look_for: ["Author", "Levinas", "Heidegger"],
       },
     },
   },

@@ -65,18 +65,18 @@ class BuildIntelligence:
             ],
             "entity_clusters": [
                 {
-                    "cluster_id": "person:derrida",
-                    "canonical": "Jacques Derrida",
-                    "aliases": ["Derrida"],
+                    "cluster_id": "person:author",
+                    "canonical": "Jane Author",
+                    "aliases": ["Author"],
                     "entity_type": "PERSON",
                 }
             ],
             "entities": [
                 {
-                    "cluster_id": "person:derrida",
+                    "cluster_id": "person:author",
                     "start_char": 0,
                     "end_char": 15,
-                    "text": "Jacques Derrida",
+                    "text": "Jane Author",
                     "mention_type": "named",
                     "entity_type": "PERSON",
                 }
@@ -104,7 +104,7 @@ class CaptureLinks:
                     "discovery_method": "catalog",
                     "discovered_at": "2026-09-28T00:00:00+00:00",
                     "acquired_at": "2026-09-28T00:01:00+00:00",
-                    "author_name": "Jacques Derrida",
+                    "author_name": "Jane Author",
                 }
             ]
         }
@@ -159,7 +159,7 @@ def source_repo(tmp_path, monkeypatch):
             "provider": "gutenberg",
             "provider_item_id": "123",
             "title": "Of Hospitality",
-            "document_author": "Jacques Derrida",
+            "document_author": "Jane Author",
         },
     )
     links = CaptureLinks(asset["asset_id"])
@@ -261,7 +261,7 @@ def test_source_detail_rest_and_graphql_share_the_same_document_read(source_repo
             "discovery_method": "catalog",
             "discovered_at": "2026-09-28T00:00:00+00:00",
             "acquired_at": "2026-09-28T00:01:00+00:00",
-            "author_name": "Jacques Derrida",
+            "author_name": "Jane Author",
         }
     ]
 
@@ -351,7 +351,7 @@ def test_build_document_intelligence_graphql_matches_rest_read(build_intelligenc
     assert value["profile"] == rest.json()["profile"] == "scholarly"
     assert value["provider"] == rest.json()["provider"] == "spacy"
     assert value["stale"] is False
-    assert value["entity_clusters"][0]["canonical"] == "Jacques Derrida"
+    assert value["entity_clusters"][0]["canonical"] == "Jane Author"
     assert value["record_spans"][0]["source_unit_ids"] == ["b1"]
 
 

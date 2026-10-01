@@ -6,8 +6,8 @@ import RecordsSubsetDialog from "../../src/components/records/RecordsSubsetDialo
 import { loadSubsetProfiles } from "../../src/domain/subsetProfiles";
 
 const records = [
-  { record_id: "r1", document_author: "Jacques Derrida", work: "Glas" },
-  { record_id: "r2", document_author: "jacques derrida", work: "Margins" },
+  { record_id: "r1", document_author: "Jane Author", work: "Glas" },
+  { record_id: "r2", document_author: "jane author", work: "Margins" },
   { record_id: "r3", document_author: "Paul de Man", work: "Allegories" },
 ];
 function mountDialog() {
@@ -26,6 +26,15 @@ function mountDialog() {
   (wrapper.vm as unknown as { open: () => void }).open();
   return wrapper;
 }
+// The default condition starts with an empty value; type one the way a reviewer would.
+async function typeValue(root: ParentNode, value: string) {
+  const input = root.querySelector<HTMLInputElement>(
+    ".subset-condition input[aria-label*='alue']",
+  )!;
+  input.value = value;
+  input.dispatchEvent(new Event("input"));
+  await flushPromises();
+}
 const dialog = () => document.body.querySelector<HTMLElement>("[role=dialog]")!;
 const status = () => dialog().querySelector("[role=status]")!.textContent!.trim();
 const button = (text: string) =>
@@ -42,6 +51,7 @@ describe("RecordsSubsetDialog", () => {
   it("counts matches live and explains case-sensitive matching", async () => {
     const wrapper = mountDialog();
     await flushPromises();
+    await typeValue(dialog(), "Jane Author");
     expect(status()).toBe("2 of 3 source records match");
     const checkbox = dialog().querySelector<HTMLInputElement>("input[type=checkbox]")!;
     expect(
@@ -76,14 +86,14 @@ describe("RecordsSubsetDialog", () => {
     const nameInput = [...dialog().querySelectorAll<HTMLInputElement>("input")].find((input) =>
       input.closest("label")?.textContent?.includes("Profile name"),
     )!;
-    nameInput.value = "Derrida only";
+    nameInput.value = "Author only";
     nameInput.dispatchEvent(new Event("input"));
     await flushPromises();
     button("Save profile").click();
     await flushPromises();
     expect(loadSubsetProfiles()).toMatchObject([
       {
-        name: "Derrida only",
+        name: "Author only",
         caseSensitive: false,
         expression: [{ rule: { field: "document_author" } }],
       },

@@ -130,7 +130,7 @@ class _LexicalOnlyStore:
                 "record": {
                     "record_id": "r1",
                     "work": "Of Grammatology",
-                    "document_author": "Jacques Derrida",
+                    "document_author": "Jane Author",
                     "year": 1976,
                     "page_start": 65,
                     "text": "The trace is not a presence.",

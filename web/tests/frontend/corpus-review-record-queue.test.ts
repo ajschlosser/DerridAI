@@ -10,7 +10,7 @@ function record(overrides: Partial<CorpusRecord> = {}): CorpusRecord {
     record_id: "record-1",
     text: "A record under review.",
     text_length: 22,
-    inline_citation: "Derrida, p. 12",
+    inline_citation: "Author, p. 12",
     source_block_ids: ["block-1"],
     source_spans: [],
     review_state: "ready",
@@ -50,12 +50,12 @@ describe("Corpus Builder review record queue", () => {
 
   it("leads each row with the short sequence number but keeps the full ID for assistive technology", () => {
     const wrapper = mountQueue({
-      rows: [row({ record_id: "derrida-jacques-on-cosmopolitanism-00012" })],
+      rows: [row({ record_id: "author-jacques-on-cosmopolitanism-00012" })],
     });
     const head = wrapper.get(".record-row-head b");
     expect(head.get("[aria-hidden='true']").text()).toBe("#12");
-    expect(head.get(".sr-only").text()).toBe("derrida-jacques-on-cosmopolitanism-00012");
-    expect(head.attributes("title")).toBe("derrida-jacques-on-cosmopolitanism-00012");
+    expect(head.get(".sr-only").text()).toBe("author-jacques-on-cosmopolitanism-00012");
+    expect(head.attributes("title")).toBe("author-jacques-on-cosmopolitanism-00012");
   });
 
   it("pages the list from a footer that appears only when there is more than one page", async () => {

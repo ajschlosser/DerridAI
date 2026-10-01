@@ -10,7 +10,7 @@ from app import document_prefill as dp  # noqa: E402
 
 TITLE_PAGE = """OF GRAMMATOLOGY
 
-Jacques Derrida
+Jane Author
 
 Translated by Gayatri Chakravorty Spivak
 

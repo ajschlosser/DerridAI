@@ -12,11 +12,11 @@ def test_scholarly_graph_projects_existing_attribution_with_authority_and_eviden
     record = {
         "record_id": "r1",
         "record_revision": 2,
-        "text": "Heidegger questions presence while discussing Derrida.",
+        "text": "Heidegger questions presence while discussing Author.",
         "position_holder": "Martin Heidegger",
         "target": "presence",
         "stance": "questions",
-        "persons": ["Martin Heidegger", "Jacques Derrida"],
+        "persons": ["Martin Heidegger", "Jane Author"],
         "concepts": ["presence"],
         "metadata_field_status": {
             "position_holder": {"status": "human_confirmed", "method": "llm"},
@@ -45,8 +45,8 @@ def test_cooccurrence_is_observational_not_a_claimed_relationship():
     record = {
         "record_id": "r1",
         "record_revision": 1,
-        "text": "Derrida, Levinas, hospitality.",
-        "persons": ["Jacques Derrida", "Emmanuel Levinas"],
+        "text": "Author, Levinas, hospitality.",
+        "persons": ["Jane Author", "Emmanuel Levinas"],
         "concepts": ["hospitality"],
     }
     graph = build_semantic_content_graph([record], {"profile": "scholarly"})
@@ -147,8 +147,8 @@ def test_target_reuses_existing_person_entity_before_falling_back_to_concept():
         "entity_clusters": [
             {
                 "cluster_id": "d",
-                "canonical": "Jacques Derrida",
-                "aliases": ["Derrida"],
+                "canonical": "Jane Author",
+                "aliases": ["Author"],
                 "entity_type": "PERSON",
             }
         ],
@@ -158,15 +158,15 @@ def test_target_reuses_existing_person_entity_before_falling_back_to_concept():
     record = {
         "record_id": "r1",
         "record_revision": 1,
-        "text": "Heidegger addresses Derrida.",
+        "text": "Heidegger addresses Author.",
         "position_holder": "Martin Heidegger",
-        "target": "Derrida",
+        "target": "Author",
     }
     graph = build_semantic_content_graph([record], analysis)
     edge = _edge(graph, "addresses")
     target = next(node for node in graph["nodes"] if node["id"] == edge["target"])
     assert target["type"] == "person"
-    assert target["label"] == "Jacques Derrida"
+    assert target["label"] == "Jane Author"
 
 
 def test_document_mentions_are_not_double_counted_when_metadata_reuses_entity():

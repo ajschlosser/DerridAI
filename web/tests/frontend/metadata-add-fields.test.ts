@@ -6,7 +6,7 @@ import CorpusMetadataResolutionPanel from "../../src/components/CorpusMetadataRe
 const record = (over: Record<string, unknown> = {}) => ({
   record_id: "r1",
   text: "t",
-  speaker: "Jacques Derrida",
+  speaker: "Jane Author",
   metadata_field_status: { speaker: { status: "human_confirmed" } },
   metadata_incomplete_fields: [],
   metadata_review_fields: [],

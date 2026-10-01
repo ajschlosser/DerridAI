@@ -35,7 +35,7 @@ def make_build(tmp_path:Path, rows:list[dict]|None=None):
         'source_block_count':len(rows or []),'schema_version':cb.SCHEMA_VERSION,'profile_id':cb.PROFILE_VERSION,
         'profile_version':11,'app_version':APP_VERSION,'provider':'ollama','model':'old-model',
         'request':{'provider':'ollama','model':'old-model','provider_profile_id':'old','enrichment_mode':'fast'},
-        'manifest':{'title':'Book','document_author':'Jacques Derrida'},
+        'manifest':{'title':'Book','document_author':'Jane Author'},
     })
     build['status']='running';build['stage']='enriching';repo.save_build(build)
     if rows is not None:
@@ -78,8 +78,8 @@ def test_editorial_memory_retrieves_only_human_confirmed_examples(tmp_path:Path)
     Why: LLM guesses must not train future LLM calls (no self-reinforcing errors).
     """
     rows=[
-        {'record_id':'r1','text':'Derrida reports Heidegger argues that sovereignty precedes law.','discourse_role':'reported_position','metadata_field_status':{'discourse_role':{'status':'human_confirmed'}}},
-        {'record_id':'r2','text':'Here Derrida reports another proposition held by Heidegger concerning sovereignty.','discourse_role':'reported_position','metadata_field_status':{'discourse_role':{'status':'human_override'}}},
+        {'record_id':'r1','text':'Author reports Heidegger argues that sovereignty precedes law.','discourse_role':'reported_position','metadata_field_status':{'discourse_role':{'status':'human_confirmed'}}},
+        {'record_id':'r2','text':'Here Author reports another proposition held by Heidegger concerning sovereignty.','discourse_role':'reported_position','metadata_field_status':{'discourse_role':{'status':'human_override'}}},
         {'record_id':'r3','text':'The model guessed analysis here.','discourse_role':'analysis','metadata_field_status':{'discourse_role':{'status':'model_inferred'}}},
         {'record_id':'r4','text':'Heidegger is presented as holding a proposition concerning sovereignty and law.','metadata_field_status':{}},
     ]
@@ -99,7 +99,7 @@ def test_editorial_memory_field_filter_limits_precedents_to_scheduled_fields(tmp
     rows=[
         {
             'record_id':'r1',
-            'text':'Derrida reports Heidegger on sovereignty.',
+            'text':'Author reports Heidegger on sovereignty.',
             'discourse_role':'reported_position',
             'position_holder':'Heidegger',
             'metadata_field_status':{

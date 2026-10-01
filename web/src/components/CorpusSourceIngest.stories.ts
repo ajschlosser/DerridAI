@@ -16,8 +16,8 @@ const asset = {
   deterministic_checked_at: "2026-09-23T08:00:01Z",
   initial_metadata: {
     title: "Of Hospitality",
-    document_author: "Jacques Derrida",
-    speaker: "Jacques Derrida",
+    document_author: "Jane Author",
+    speaker: "Jane Author",
   },
 } as PdfAsset;
 

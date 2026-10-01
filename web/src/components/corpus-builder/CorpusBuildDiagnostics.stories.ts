@@ -9,7 +9,7 @@ const build: any = {
   stage: "review",
   progress: 1,
   metadata_schema_version: "1.4.0",
-  segmentation_prompt_version: "derrida-scholarly-v12",
+  segmentation_prompt_version: "scholarly-v12",
   build_events: [
     { at: "2026-09-25T18:01:00Z", stage: "preparing", status: "running", progress: 0 },
   ],

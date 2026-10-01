@@ -15,7 +15,7 @@ function candidate(id: string, overrides: Partial<CaptureCandidate> = {}): Captu
     provider: "wikisource",
     provider_item_id: id,
     title: "De la grammatologie",
-    document_author: "Jacques Derrida",
+    document_author: "Jane Author",
     contribution_role: "author",
     document_languages: ["fr"],
     original_language: "fr",

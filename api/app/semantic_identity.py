@@ -60,7 +60,7 @@ class EquivalenceProfile(BaseModel):
     """How a field decides that two differently written values are the same value.
 
     ``identity_kind`` scopes identities (``person``, ``concept``, ...) so that a person
-    called Derrida never collapses with a concept labelled Derrida.  Fields that declare
+    called Author never collapses with a concept labelled Author.  Fields that declare
     the same kind share identities; a field that declares none is scoped to itself.
     """
 

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import CorpusJsonlPreviewDialog from "./CorpusJsonlPreviewDialog.vue";
 const jsonl =
-  '{"record_id":"derrida-test-00012","text":"A reviewed passage.","region_type":"main_text","primary_text":true,"discourse_role":"analysis"}';
+  '{"record_id":"author-test-00012","text":"A reviewed passage.","region_type":"main_text","primary_text":true,"discourse_role":"analysis"}';
 const meta = {
   title: "Corpus Builder/Review/JSONL Preview",
   component: CorpusJsonlPreviewDialog,

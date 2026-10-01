@@ -118,7 +118,7 @@ function setup(requestedBuildId = "", documentMetadata: Record<string, string> =
     canRetryMetadata,
     metadataIssueCount,
     requestedBuildId: () => requestedBuildId,
-    runGuidancePayload: () => ({ speaker: "Derrida" }),
+    runGuidancePayload: () => ({ speaker: "Author" }),
     documentMetadataPayload: () => documentMetadata,
     applyBuildRequest,
     setMessage,
@@ -188,7 +188,7 @@ describe("Corpus Builder lifecycle controller", () => {
       asset_id: "asset-1",
       auto_enrich_work_metadata: true,
       schema_id: "schema-1",
-      run_guidance: { speaker: "Derrida" },
+      run_guidance: { speaker: "Author" },
       provider_profile_id: "local",
     });
     expect(state.selectedBuildId.value).toBe("build-new");
@@ -202,12 +202,12 @@ describe("Corpus Builder lifecycle controller", () => {
   it("sends reviewer-supplied document fields only when there are any", async () => {
     corpusBuilderApi.createBuild.mockResolvedValue(build("build-new"));
     corpusBuilderApi.listBuilds.mockResolvedValue({ items: [build("build-new")], total: 1 });
-    const state = setup("", { document_author: "Jacques Derrida" });
+    const state = setup("", { document_author: "Jane Author" });
 
     await state.controller.startBuild();
 
     expect(corpusBuilderApi.createBuild).toHaveBeenCalledWith(
-      expect.objectContaining({ document_metadata: { document_author: "Jacques Derrida" } }),
+      expect.objectContaining({ document_metadata: { document_author: "Jane Author" } }),
     );
     state.controller.stopPolling();
   });

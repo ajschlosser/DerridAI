@@ -4,7 +4,7 @@ import type { RecordSemanticMap, SemanticNodeNeighborhood } from "../../api/corp
 import CorpusRecordSemanticMap from "./CorpusRecordSemanticMap.vue";
 
 const text =
-  "Heidegger questions the metaphysics of presence, and Derrida reads the trace against Levinas.";
+  "Heidegger questions the metaphysics of presence, and Author reads the trace against Levinas.";
 const span = (surface: string) => ({
   start: text.indexOf(surface),
   end: text.indexOf(surface) + surface.length,
@@ -21,7 +21,7 @@ const node = (id: string, label: string, type: string, local = true, records = 2
 const recordMap: RecordSemanticMap = {
   version: 1,
   kind: "record_semantic_map",
-  record_id: "derrida-grammatology-0142",
+  record_id: "author-grammatology-0142",
   record_revision: 3,
   record_text_sha256: "story",
   layers: {
@@ -50,7 +50,7 @@ const recordMap: RecordSemanticMap = {
       tag: "NOUN",
       node_id: "concept:presence",
     },
-    { ...span("Derrida"), text: "Derrida", layer: "ner", tag: "PERSON", node_id: "person:derrida" },
+    { ...span("Author"), text: "Author", layer: "ner", tag: "PERSON", node_id: "person:author" },
     { ...span("trace"), text: "trace", layer: "pos", tag: "NOUN", node_id: "concept:trace" },
     {
       ...span("Levinas"),
@@ -63,7 +63,7 @@ const recordMap: RecordSemanticMap = {
   nodes: [
     node("person:heidegger", "Martin Heidegger", "person", true, 14),
     node("concept:presence", "presence", "concept", true, 22),
-    node("person:derrida", "Jacques Derrida", "person", true, 40),
+    node("person:author", "Jane Author", "person", true, 40),
     node("concept:trace", "trace", "concept", true, 9),
     node("person:levinas", "Emmanuel Levinas", "person", true, 6),
     node("term:metaphysics", "metaphysics", "term", true, 11),
@@ -78,16 +78,16 @@ const recordMap: RecordSemanticMap = {
       predicate: "questions",
       relation_kind: "semantic",
       authority_status: "human_confirmed",
-      record_ids: ["derrida-grammatology-0142"],
+      record_ids: ["author-grammatology-0142"],
       in_record: true,
     },
     {
       id: "rel:co",
       source: "concept:trace",
-      target: "person:derrida",
+      target: "person:author",
       predicate: "co_occurs",
       relation_kind: "observational",
-      record_ids: ["derrida-grammatology-0142"],
+      record_ids: ["author-grammatology-0142"],
       in_record: true,
     },
     {
@@ -96,7 +96,7 @@ const recordMap: RecordSemanticMap = {
       target: "work:being-and-time",
       predicate: "quoted_work",
       relation_kind: "semantic",
-      record_ids: ["derrida-grammatology-0098"],
+      record_ids: ["author-grammatology-0098"],
       in_record: false,
     },
     {
@@ -105,13 +105,13 @@ const recordMap: RecordSemanticMap = {
       target: "concept:logocentrism",
       predicate: "co_occurs",
       relation_kind: "observational",
-      record_ids: ["derrida-grammatology-0151"],
+      record_ids: ["author-grammatology-0151"],
       in_record: false,
     },
   ],
   linked_records: [
     {
-      record_id: "derrida-grammatology-0151",
+      record_id: "author-grammatology-0151",
       preview: "The privilege of presence as consciousness is the matrix of logocentrism…",
       score: 3.214,
       shared_node_count: 3,
@@ -123,7 +123,7 @@ const recordMap: RecordSemanticMap = {
       shared_relation_ids: [],
     },
     {
-      record_id: "derrida-grammatology-0098",
+      record_id: "author-grammatology-0098",
       preview: "In Being and Time the question of the meaning of Being is posed anew…",
       score: 1.91,
       shared_node_count: 1,
@@ -157,8 +157,8 @@ const neighborhood: SemanticNodeNeighborhood = {
   edges: recordMap.edges.filter((edge) => edge.source === "person:heidegger"),
   total_edges: 2,
   records: [
-    { record_id: "derrida-grammatology-0142", preview: text },
-    { record_id: "derrida-grammatology-0098", preview: "In Being and Time the question…" },
+    { record_id: "author-grammatology-0142", preview: text },
+    { record_id: "author-grammatology-0098", preview: "In Being and Time the question…" },
   ],
   total_records: 14,
 };
@@ -185,7 +185,7 @@ const meta = {
   component: CorpusRecordSemanticMap,
   args: {
     buildId: "build-story",
-    record: { record_id: "derrida-grammatology-0142", text, record_revision: 3 },
+    record: { record_id: "author-grammatology-0142", text, record_revision: 3 },
     disabled: false,
   },
   decorators: [

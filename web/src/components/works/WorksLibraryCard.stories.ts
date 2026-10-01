@@ -9,10 +9,10 @@ const work: WorksItem = {
   review: 4,
   annotations: 2,
   files: ["adieu.jsonl"],
-  authors: ["Jacques Derrida"],
+  authors: ["Jane Author"],
   years: ["1999"],
   cover: "",
-  citation: "Derrida, Jacques. Adieu to Emmanuel Levinas. Stanford University Press, 1999.",
+  citation: "Author, Jane. Adieu to Emmanuel Levinas. Stanford University Press, 1999.",
   year_label: "1999",
   subtitle: "",
   publisher: {
@@ -62,5 +62,5 @@ export const DatabaseUnavailable: Story = {
   },
 };
 export const Researcher: Story = {
-  args: { mode: "researcher", work: { ...work, subtitle: "Jacques Derrida · 1999" } },
+  args: { mode: "researcher", work: { ...work, subtitle: "Jane Author · 1999" } },
 };

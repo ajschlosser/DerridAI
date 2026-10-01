@@ -64,7 +64,7 @@ def _install_minimal_build(repo:cb.PdfCorpusRepository):
     """Create a one-page, one-block asset and a build for it (reused by other test files)."""
     asset={"asset_id":"asset-elephant","sha256":"sha","filename":"elephant.pdf","page_count":1,"block_count":1,"ocr_pages":0,"warnings":[],"metadata":{},"pages":[]}
     cb._json_write(repo.asset_meta_path(asset["asset_id"]),asset)
-    repo.asset_blocks_path(asset["asset_id"]).write_text(json.dumps({"block_id":"b1","page":1,"bbox":[0,0,100,100],"type":"paragraph","text":"Derrida discusses hospitality.","extraction_method":"native","confidence":1.0})+'\n',encoding='utf-8')
+    repo.asset_blocks_path(asset["asset_id"]).write_text(json.dumps({"block_id":"b1","page":1,"bbox":[0,0,100,100],"type":"paragraph","text":"Author discusses hospitality.","extraction_method":"native","confidence":1.0})+'\n',encoding='utf-8')
     return repo.create_build({"asset_id":asset["asset_id"],"source_sha256":"sha","source_filename":"elephant.pdf","source_page_count":1,"source_block_count":1,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"provider":"ollama","model":"test-model","request":{},"manifest":{}})
 
 
@@ -90,7 +90,7 @@ def test_metadata_stage_checkpoint_updates_only_target_record_and_counters(tmp_p
     record = {
         "record_id": "r1",
         "record_revision": 1,
-        "text": "Derrida discusses hospitality.",
+        "text": "Author discusses hospitality.",
         "text_length": 30,
         "source_asset_id": "asset-elephant",
         "source_block_ids": ["b1"],
@@ -177,7 +177,7 @@ def test_metadata_families_checkpoint_independently_and_record_execution_ledger(
     repo=cb.PdfCorpusRepository(tmp_path/'repo')
     build=_install_minimal_build(repo)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    record={"record_id":"r1","record_revision":1,"text":"Derrida discusses hospitality.","text_length":30,"source_asset_id":"asset-elephant","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}]}
+    record={"record_id":"r1","record_revision":1,"text":"Author discusses hospitality.","text_length":30,"source_asset_id":"asset-elephant","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}]}
     events=[]
     monkeypatch.setattr(manager,'_chat_json',lambda _request,prompt,*,response_model,max_tokens,schema_name,build_id='',**_kwargs:_metadata_result(schema_name))
     manager._enrich_record(record,{}, {"provider":"ollama","model":"test-model","stage_timeouts":{"discourse":90},"families":["discourse","quotation","indexing"]},build_id=build['build_id'],stage_callback=lambda snapshot,task,state,error:events.append((task,state,dict(snapshot.get('metadata_stage_status') or {}))))
@@ -199,7 +199,7 @@ def test_metadata_resume_reuses_completed_family_checkpoint(tmp_path,monkeypatch
     repo=cb.PdfCorpusRepository(tmp_path/'repo')
     build=_install_minimal_build(repo)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    record={"record_id":"r1","record_revision":1,"text":"Derrida discusses hospitality.","text_length":30,"source_asset_id":"asset-elephant","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}],"metadata_stage_results":{"discourse":_metadata_result('derridai_record_discourse')},"metadata_stage_status":{"discourse":"complete"}}
+    record={"record_id":"r1","record_revision":1,"text":"Author discusses hospitality.","text_length":30,"source_asset_id":"asset-elephant","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}],"metadata_stage_results":{"discourse":_metadata_result('derridai_record_discourse')},"metadata_stage_status":{"discourse":"complete"}}
     called=[]
     def fake(_request,prompt,*,response_model,max_tokens,schema_name,build_id='', **_kwargs):
         called.append(schema_name)

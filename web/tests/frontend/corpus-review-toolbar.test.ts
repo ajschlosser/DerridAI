@@ -111,11 +111,11 @@ describe("Corpus Builder review toolbar", () => {
     const editor = wrapper.findComponent(CorpusBulkMetadataEditor);
 
     editor.vm.$emit("apply", {
-      changes: { speaker: "Derrida" },
+      changes: { speaker: "Author" },
       applyToAll: false,
     });
     expect(wrapper.emitted("bulkApply")?.at(-1)).toEqual([
-      { changes: { speaker: "Derrida" }, applyToAll: false },
+      { changes: { speaker: "Author" }, applyToAll: false },
     ]);
 
     editor.vm.$emit("close");

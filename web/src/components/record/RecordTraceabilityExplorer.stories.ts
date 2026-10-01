@@ -18,7 +18,7 @@ const graph = {
       object_type: "SourceDocument",
       object_id: "d1",
       label: "Of Grammatology",
-      summary: "Jacques Derrida",
+      summary: "Jane Author",
       materialization: "materialized",
     },
     {

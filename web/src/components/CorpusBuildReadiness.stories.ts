@@ -68,7 +68,7 @@ export const FrenchLengthStress: Story = {
   parameters: { locale: "fr-CA" },
   args: {
     sourceFilename:
-      "Jacques Derrida — Cosmopolites de tous les pays, encore un effort ! — édition critique et annotée.pdf",
+      "Jane Author — Cosmopolites de tous les pays, encore un effort ! — édition critique et annotée.pdf",
     schemaLabel:
       "Schéma de métadonnées pour l’analyse discursive, l’attribution et l’indexation sémantique",
     providerLabel: "Fournisseur local de recherche",

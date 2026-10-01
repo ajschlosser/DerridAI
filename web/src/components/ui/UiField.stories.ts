@@ -7,7 +7,7 @@ const meta = {
     components: { UiField },
     setup: () => ({ args }),
     template:
-      '<UiField v-bind="args"><input class="control" :aria-invalid="Boolean(args.error)" value="Jacques Derrida" /></UiField>',
+      '<UiField v-bind="args"><input class="control" :aria-invalid="Boolean(args.error)" value="Jane Author" /></UiField>',
   }),
   args: { label: "Document author", hint: "Inherited by records unless explicitly overridden." },
 } satisfies Meta<typeof UiField>;

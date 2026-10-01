@@ -40,7 +40,7 @@ def test_structured_output_cannot_return_assessments_without_metadata():
     with pytest.raises(ValidationError):
         cb.DiscourseMetadataResponseModel.model_validate({"field_assessments": {"speaker": {"confidence": 0.95}}})
     with pytest.raises(ValidationError):
-        cb.DiscourseMetadataResponseModel.model_validate({"metadata": {"speaker": "Derrida"}})
+        cb.DiscourseMetadataResponseModel.model_validate({"metadata": {"speaker": "Author"}})
     with pytest.raises(ValidationError):
         cb.DiscourseMetadataResponseModel.model_validate({"metadata": NULL_DISCOURSE})
     parsed = cb.DiscourseMetadataResponseModel.model_validate({"metadata": NULL_DISCOURSE, "field_assessments": {}})
@@ -56,7 +56,7 @@ def test_confident_llm_value_is_auto_resolved_and_low_confidence_is_populated_fo
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     build = _install_minimal_build(repo)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
-    record = {"record_id": "r1", "record_revision": 1, "text": "Derrida discusses hospitality.", "text_length": 30,
+    record = {"record_id": "r1", "record_revision": 1, "text": "Author discusses hospitality.", "text_length": 30,
               "source_asset_id": "asset-elephant", "source_block_ids": ["b1"],
               "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}]}
 
@@ -65,7 +65,7 @@ def test_confident_llm_value_is_auto_resolved_and_low_confidence_is_populated_fo
             evidence = {"block_ids": ["b1"], "confidence": 0.95, "reason": "explicit"}
             return {
                 "metadata": {**NULL_DISCOURSE, "region_type": "main_text", "primary_text": True,
-                             "discourse_role": "analysis", "speaker": "Jacques Derrida", "stance": "describe"},
+                             "discourse_role": "analysis", "speaker": "Jane Author", "stance": "describe"},
                 "field_evidence": {name: evidence for name in ("region_type", "primary_text", "discourse_role", "speaker", "stance")},
                 "field_assessments": {
                     "speaker": {"confidence": 0.95, "needs_review": False, "reason": "explicit", "outcome": "supported_value"},
@@ -78,7 +78,7 @@ def test_confident_llm_value_is_auto_resolved_and_low_confidence_is_populated_fo
     monkeypatch.setattr(manager, "_chat_json", fake)
     manager._enrich_record(record, {}, {"provider": "ollama", "model": "test-model"}, build_id=build["build_id"])
 
-    assert record["speaker"] == "Jacques Derrida"
+    assert record["speaker"] == "Jane Author"
     assert record["metadata_field_status"]["speaker"]["verification_status"] == "auto_resolved"
     assert record["stance"] == "describe"
     assert record["metadata_field_status"]["stance"]["proposed_value"] == "describe"
@@ -90,7 +90,7 @@ def test_confident_llm_value_is_auto_resolved_and_low_confidence_is_populated_fo
 
 def _record():
     """Minimal one-block record used by the enrichment tests."""
-    return {"record_id": "r1", "record_revision": 1, "text": "Derrida discusses hospitality.", "text_length": 30,
+    return {"record_id": "r1", "record_revision": 1, "text": "Author discusses hospitality.", "text_length": 30,
             "source_asset_id": "asset-elephant", "source_block_ids": ["b1"],
             "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}]}
 
@@ -143,7 +143,7 @@ def test_explicit_confident_supported_absence_can_auto_resolve_an_optional_field
 
 def test_middle_confidence_populates_but_does_not_bypass_calibrated_autofill(tmp_path: Path, monkeypatch):
     reply = _discourse_reply(
-        region_type="main_text", primary_text=True, discourse_role="analysis", speaker="Jacques Derrida",
+        region_type="main_text", primary_text=True, discourse_role="analysis", speaker="Jane Author",
     )
     reply["field_assessments"]["speaker"] = {
         "confidence": 0.80, "needs_review": False, "reason": "plausible", "outcome": "supported_value",
@@ -151,7 +151,7 @@ def test_middle_confidence_populates_but_does_not_bypass_calibrated_autofill(tmp
     reply["field_evidence"]["speaker"] = {"block_ids": ["b1"], "confidence": 0.80, "reason": "speaker cue"}
     record = _enrich(tmp_path, monkeypatch, _record(), reply)
     status = record["metadata_field_status"]["speaker"]
-    assert record["speaker"] == "Jacques Derrida"
+    assert record["speaker"] == "Jane Author"
     assert status["auto_populated"] is True
     assert status["autofilled"] is False
     assert status["verification_status"] == "pending_review"
@@ -162,7 +162,7 @@ def test_middle_confidence_populates_but_does_not_bypass_calibrated_autofill(tmp
 def test_null_confidence_populates_value_but_keeps_it_in_review(tmp_path: Path, monkeypatch):
     """An explicit confidence=null must not hide a valid model proposal."""
     reply = _discourse_reply(
-        region_type="main_text", primary_text=True, discourse_role="analysis", speaker="Jacques Derrida",
+        region_type="main_text", primary_text=True, discourse_role="analysis", speaker="Jane Author",
     )
     reply["field_assessments"]["speaker"] = {
         "confidence": None, "needs_review": True, "reason": "Attribution is plausible but not certain.", "outcome": "supported_value",
@@ -171,7 +171,7 @@ def test_null_confidence_populates_value_but_keeps_it_in_review(tmp_path: Path, 
     record = _enrich(tmp_path, monkeypatch, _record(), reply)
 
     status = record["metadata_field_status"]["speaker"]
-    assert record["speaker"] == "Jacques Derrida"
+    assert record["speaker"] == "Jane Author"
     assert status["status"] == "unresolved"
     assert status["reason_code"] in {"ambiguous", "confidence_missing"}
     assert status["auto_populated"] is True
@@ -199,7 +199,7 @@ def test_canonical_source_unit_ids_feed_evidence_prompt_and_deterministic_fallba
         region_type="main_text",
         primary_text=True,
         discourse_role="analysis",
-        speaker="Derrida",
+        speaker="Author",
     )
     reply["field_evidence"] = {}
     reply["field_assessments"]["speaker"] = {
@@ -223,7 +223,7 @@ def test_canonical_source_unit_ids_feed_evidence_prompt_and_deterministic_fallba
         build_id=build["build_id"],
     )
 
-    assert any("[b1] Derrida discusses hospitality." in prompt for prompt in prompts)
+    assert any("[b1] Author discusses hospitality." in prompt for prompt in prompts)
     evidence = record["metadata_evidence"]["speaker"]
     assert evidence["block_ids"] == ["b1"]
     assert evidence["method"] == "deterministic-lexical-v1"

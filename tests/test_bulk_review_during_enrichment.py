@@ -33,7 +33,7 @@ def install(tmp_path:Path):
     with repo.asset_blocks_path('a').open('w',encoding='utf-8') as h:
         for i in range(1,3):
             h.write(json.dumps({'block_id':f'b{i}','page':i,'bbox':[0,0,1,1],'type':'paragraph','text':f'text {i}','extraction_method':'native','confidence':1.0})+'\n')
-    build=repo.create_build({'asset_id':'a','source_sha256':'x','source_filename':'x.pdf','source_page_count':2,'source_block_count':2,'schema_version':cb.SCHEMA_VERSION,'profile_id':cb.PROFILE_VERSION,'profile_version':11,'app_version':APP_VERSION,'provider':'ollama','model':'test','request':{'enrichment_mode':'fast'},'manifest':{'title':'Book','document_author':'Derrida'}})
+    build=repo.create_build({'asset_id':'a','source_sha256':'x','source_filename':'x.pdf','source_page_count':2,'source_block_count':2,'schema_version':cb.SCHEMA_VERSION,'profile_id':cb.PROFILE_VERSION,'profile_version':11,'app_version':APP_VERSION,'provider':'ollama','model':'test','request':{'enrichment_mode':'fast'},'manifest':{'title':'Book','document_author':'Author'}})
     build['status']='running';build['stage']='enriching';build['record_count']=2;repo.save_build(build)
     rows=[]
     for i in range(1,3):

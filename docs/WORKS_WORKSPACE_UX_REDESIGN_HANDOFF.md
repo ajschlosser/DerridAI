@@ -91,7 +91,7 @@ The page should become four visually and conceptually distinct layers:
 
 ┌───────────────────────────────┬──────────────────────────────────────┐
 │ Loaded workspace              │ Corpus database                      │
-│ 4 source files · 3,218 records│ derrida_primary · 3,102 records      │
+│ 4 source files · 3,218 records│ primary_corpus · 3,102 records      │
 │ Browser-loaded corpus         │ Derived searchable/indexed state     │
 │                               │ [Change database] [Sync changes]      │
 └───────────────────────────────┴──────────────────────────────────────┘
@@ -318,7 +318,7 @@ Recommended card structure:
 
 ```text
 [cover]  Glas                              [Needs review: 12]
-         Jacques Derrida · 1974
+         Jane Author · 1974
          Galilée
 
          418 records
@@ -331,7 +331,7 @@ or, if selecting a work opens the inspector:
 
 ```text
 [cover]  Glas
-         Jacques Derrida · 1974
+         Jane Author · 1974
          418 records · 12 need review      [⋯]
 ```
 

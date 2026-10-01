@@ -30,7 +30,7 @@ describe("records file origin", () => {
     expect(
       recordsFileOriginDetail({ derived_from: { type: "work_separation", work: "Glas" } }),
     ).toBe("Glas");
-    expect(recordsFileOrigin({ imported_from_chroma: "derrida-primary" })).toBe("chroma");
+    expect(recordsFileOrigin({ imported_from_chroma: "primary-corpus" })).toBe("chroma");
   });
 
   it("does not invent an origin when provenance fields are missing after restore", () => {

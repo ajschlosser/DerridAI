@@ -285,7 +285,7 @@ function open() {
       rule: newRule({
         field: preferredField("document_author"),
         operator: "equals",
-        value: "Jacques Derrida",
+        value: "",
       }),
     },
   ];

@@ -42,6 +42,6 @@ export const FrenchLengthStress: Story = {
   args: {
     title: "Interprétation de la structure documentaire",
     summary:
-      "Jacques Derrida — Cosmopolites de tous les pays, encore un effort ! — édition critique.pdf · PDF · 437 pages",
+      "Jane Author — Cosmopolites de tous les pays, encore un effort ! — édition critique.pdf · PDF · 437 pages",
   },
 };

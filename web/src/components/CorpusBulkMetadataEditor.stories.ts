@@ -10,7 +10,7 @@ const meta: Meta<typeof CorpusBulkMetadataEditor> = {
     regionTypes: ["front_matter", "main_text", "notes", "back_matter"],
     discourseRoles: ["assertion", "analysis", "quotation", "paratext"],
     knownValues: {
-      speaker: ["Derrida", "Simon Critchley"],
+      speaker: ["Author", "Simon Critchley"],
       topics: ["hospitality", "forgiveness", "cosmopolitanism"],
     },
   },

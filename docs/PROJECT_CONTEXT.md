@@ -12,7 +12,7 @@ Each capability carries a status. This table is maintained against current `mast
 
 ## Mission
 
-DerridAI is a local-first, evidence-grounded scholarly research environment, corpus manager, RAG system, and RAG/LLM evaluation framework, initially built around the works of Jacques Derrida. It is not a "chat with PDFs" tool. Its goal is AI-assisted philosophical research that is auditable from a generated claim back to exact source evidence.
+DerridAI is a local-first, evidence-grounded scholarly research environment, corpus manager, RAG system, and RAG/LLM evaluation framework, initially built for philosophical corpora. It is not a "chat with PDFs" tool. Its goal is AI-assisted philosophical research that is auditable from a generated claim back to exact source evidence.
 
 Success is scholarly reliability, auditability, provenance, reproducibility, and local control. A fluent answer with a wrong attribution or a fabricated citation is a failed answer.
 
@@ -24,14 +24,14 @@ SOURCE → PASSAGE → SPEAKER → POSITION HOLDER → STANCE → PROPOSITION �
 
 Ordinary RAG keeps `chunk → similarity → answer`. DerridAI keeps the bibliographic and intellectual structure in between.
 
-Derrida is a demanding test case because a passage he wrote often states someone else's position: he quotes, describes, reconstructs, questions, or criticizes other philosophers, and editors' and translators' text sits beside his own. These are different facts and must not be flattened:
+Author is a demanding test case because a passage he wrote often states someone else's position: he quotes, describes, reconstructs, questions, or criticizes other philosophers, and editors' and translators' text sits beside his own. These are different facts and must not be flattened:
 
 ```text
-document_author = Derrida, speaker = Derrida, position_holder = Kant
-speaker = Derrida, quoted_speaker = Heidegger, stance = critical
+document_author = Author, speaker = Author, position_holder = Kant
+speaker = Author, quoted_speaker = Heidegger, stance = critical
 ```
 
-Neither of those means "Derrida believes X."
+Neither of those means "Author believes X."
 
 ## Principles
 
@@ -98,7 +98,7 @@ The retrieval unit should be a scholar-useful discourse unit. Canonical-work rou
 | Relational validation (does the passage really attribute X to Y?)                   | Intended    |                                                                                                                                                                       |
 | Claim graph (`claim → position holder → stance → evidence → source span → edition`) | Partial     | Claim/support objects and provenance memory exist; the full normalized scholarly relation graph and validators remain a longer-term direction                         |
 
-Severe errors are not averaged into a quality score: assigning another philosopher's view to Derrida, fabricating a quotation, binding a claim to the wrong source or page, claiming support where the passage says the opposite, dropping negation, or treating editors' text as Derrida's.
+Severe errors are not averaged into a quality score: assigning another philosopher's view to the document author, fabricating a quotation, binding a claim to the wrong source or page, claiming support where the passage says the opposite, dropping negation, or treating editors' text as Author's.
 
 ## Evaluation and reproducibility
 
@@ -122,7 +122,7 @@ Severe errors are not averaged into a quality score: assigning another philosoph
 
 ## Failure modes to watch for
 
-Records that are far too small or large; every region becoming unresolved; truncated LLM JSON; page-offset errors between PDF and printed pages; applying page/PDF semantics to non-paged media; unsafe or unbounded source parsing; editorial material attributed to Derrida; neighboring-record context contaminating speaker attribution; quoted philosophers treated as Derrida; lost negation; over-aggressive cleaning; stale evidence/support bindings silently rebound to newer text; unreviewed model output promoted as memory; wrong work inference; hallucinated bibliographies; embedding dimension mismatch; provider settings not reaching the model; hidden background resource use; oversized payloads; duplicated frontend state; grades not saved; self-grading without a warning; a vector projection treated as canonical data.
+Records that are far too small or large; every region becoming unresolved; truncated LLM JSON; page-offset errors between PDF and printed pages; applying page/PDF semantics to non-paged media; unsafe or unbounded source parsing; editorial material attributed to the document author; neighboring-record context contaminating speaker attribution; quoted philosophers treated as the document author; lost negation; over-aggressive cleaning; stale evidence/support bindings silently rebound to newer text; unreviewed model output promoted as memory; wrong work inference; hallucinated bibliographies; embedding dimension mismatch; provider settings not reaching the model; hidden background resource use; oversized payloads; duplicated frontend state; grades not saved; self-grading without a warning; a vector projection treated as canonical data.
 
 ## Checklists
 

@@ -37,7 +37,7 @@ def _manager(tmp_path, record, monkeypatch, remembered: list):
 def _disputed_record():
     record = rec("r1", "b1")
     record["metadata_disputes"] = [
-        {"field": "position_holder", "values": ["Levinas", "Derrida"]},
+        {"field": "position_holder", "values": ["Levinas", "Author"]},
         {"field": "discourse_role", "values": ["analysis", "exposition"]},
     ]
     return record
@@ -104,13 +104,13 @@ def test_fields_owed_a_second_opinion_are_deferred_not_decided(tmp_path, monkeyp
     monkeypatch.setattr(manager, "_log_second_opinion", lambda *args, **kwargs: True)
 
     result = manager.apply_metadata_decisions(
-        build["build_id"], "r1", {"position_holder": "Derrida", "discourse_role": "exposition"}, expected_revision=1
+        build["build_id"], "r1", {"position_holder": "Author", "discourse_role": "exposition"}, expected_revision=1
     )
 
     assert result["changed_fields"] == ["discourse_role"]
     assert result["deferred_fields"] == ["position_holder"]
     saved = repo.get_record(build["build_id"], "r1")
-    assert saved.get("position_holder") != "Derrida"
+    assert saved.get("position_holder") != "Author"
     open_disputes = [d for d in saved["metadata_disputes"] if not d.get("resolved_at")]
     assert [d["field"] for d in open_disputes] == ["position_holder"]
     assert [item["field"] for item in remembered] == ["discourse_role"]

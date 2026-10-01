@@ -8,10 +8,10 @@ const meta = {
   args: {
     mode: "admin",
     stores: [
-      { name: "derrida_primary", count: 3102 },
-      { name: "derrida_secondary", count: 880 },
+      { name: "primary_corpus", count: 3102 },
+      { name: "author_secondary", count: 880 },
     ],
-    activeStore: "derrida_primary",
+    activeStore: "primary_corpus",
     activeStoreCount: 3102,
     sourceFileCount: 4,
     totalRecords: 3218,

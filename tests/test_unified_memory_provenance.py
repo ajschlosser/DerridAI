@@ -197,13 +197,13 @@ def test_claim_support_persistence_uses_raw_markers_before_citation_rendering(
     monkeypatch.setattr(memory_module, "system_store", store)
 
     result = {
-        "answer": "The passage resists a simple hierarchy (Derrida 1967: 12).",
+        "answer": "The passage resists a simple hierarchy (Author 1967: 12).",
         "raw_answer": "The passage resists a simple hierarchy [[E0]].",
         "evidence": [
             {
                 "evidence_id": "E0",
-                "inline_citation": "Derrida 1967: 12",
-                "full_citation": "Derrida, Jacques. Of Grammatology. 1967.",
+                "inline_citation": "Author 1967: 12",
+                "full_citation": "Author, Jane. Of Grammatology. 1967.",
                 "record": {
                     "record_id": "r1",
                     "record_revision": 3,

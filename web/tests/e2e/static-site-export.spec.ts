@@ -37,7 +37,7 @@ test("single-file export works directly from file://", async ({ page }) => {
   await page.getByRole("button", { name: "View record" }).click();
   const recordDialog = page.getByRole("dialog", { name: "Glas" });
   await expect(recordDialog).toBeVisible();
-  await expect(recordDialog).toContainText("Derrida, Jacques. Glas.");
+  await expect(recordDialog).toContainText("Author, Jane. Glas.");
   await recordDialog.getByLabel("Note").fill("Acceptance annotation");
   await recordDialog.getByLabel("Tags").fill("publication, acceptance");
   await recordDialog.getByRole("button", { name: "Save annotation" }).click();

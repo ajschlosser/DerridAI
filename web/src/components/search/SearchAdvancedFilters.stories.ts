@@ -40,7 +40,7 @@ const meta = {
       ["eq", "search.op_eq", "is"],
       ["contains", "search.op_contains", "contains"],
     ],
-    suggestions: ["Derrida", "Levinas"],
+    suggestions: ["Author", "Levinas"],
   },
 } satisfies Meta<typeof SearchAdvancedFilters>;
 export default meta;

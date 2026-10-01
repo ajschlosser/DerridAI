@@ -28,7 +28,7 @@ function row(overrides: Record<string, unknown> = {}) {
   return {
     record_id: "r1",
     record_revision: 1,
-    speaker: "Derrida",
+    speaker: "Author",
     metadata_evidence: {},
     ...overrides,
   } as any;
@@ -210,13 +210,13 @@ describe("Corpus Builder metadata review", () => {
   it("saves a value and its selected-text evidence in one optimistic request", async () => {
     const state = setup();
     corpusBuilderApi.metadataDecision.mockResolvedValue({
-      record: row({ speaker: "Derrida", record_revision: 2 }),
+      record: row({ speaker: "Author", record_revision: 2 }),
       build: { build_id: "b1" },
     });
 
-    await state.review.resolveMetadataField("speaker", "Derrida", "block-9");
+    await state.review.resolveMetadataField("speaker", "Author", "block-9");
 
-    expect(state.selectedRecord.value?.speaker).toBe("Derrida");
+    expect(state.selectedRecord.value?.speaker).toBe("Author");
     expect(state.selectedRecord.value?.metadata_evidence?.speaker?.block_ids).toEqual(["block-9"]);
     expect(state.queued).toHaveLength(1);
     await state.queued[0](false);
@@ -224,7 +224,7 @@ describe("Corpus Builder metadata review", () => {
       "b1",
       "r1",
       "speaker",
-      "Derrida",
+      "Author",
       1,
       false,
       ["block-9"],
@@ -253,7 +253,7 @@ describe("Corpus Builder metadata review", () => {
     const state = setup();
 
     await state.review.resolveMetadataField("target", "Kant");
-    await state.review.resolveMetadataField("speaker", "Jacques Derrida");
+    await state.review.resolveMetadataField("speaker", "Jane Author");
 
     expect(state.review.metadataSavingField.value).toBe("");
     expect(state.review.metadataSavedField.value).toBe("speaker");
@@ -393,7 +393,7 @@ describe("Corpus Builder metadata review", () => {
   it("persists Save all suggestions through the batch decision endpoint", async () => {
     const state = setup();
     corpusBuilderApi.metadataDecisionBatch.mockResolvedValue({
-      record: row({ speaker: "Jacques Derrida", target: "hospitality", record_revision: 2 }),
+      record: row({ speaker: "Jane Author", target: "hospitality", record_revision: 2 }),
       build: { build_id: "b1" },
       changed_fields: ["speaker", "target"],
     });
@@ -411,7 +411,7 @@ describe("Corpus Builder metadata review", () => {
     });
 
     await state.review.resolveMetadataSuggestions({
-      speaker: "Jacques Derrida",
+      speaker: "Jane Author",
       target: "hospitality",
     });
 
@@ -428,7 +428,7 @@ describe("Corpus Builder metadata review", () => {
     expect(corpusBuilderApi.metadataDecisionBatch).toHaveBeenCalledWith(
       "b1",
       "r1",
-      { speaker: "Jacques Derrida", target: "hospitality" },
+      { speaker: "Jane Author", target: "hospitality" },
       1,
     );
     expect(state.review.metadataSavingField.value).toBe("");

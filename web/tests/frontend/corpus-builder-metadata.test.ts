@@ -117,7 +117,7 @@ describe("Corpus Builder metadata resolution", () => {
     const wrapper = mountPanel(
       record({
         work: "On Cosmopolitanism and Forgiveness",
-        document_author: "Jacques Derrida",
+        document_author: "Jane Author",
         region_type: "main_text",
         metadata_field_status: {
           work: { status: "inherited", method: "document_manifest", confidence: 1 },

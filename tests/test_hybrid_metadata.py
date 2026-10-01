@@ -46,9 +46,9 @@ def test_profile_requires_region_type_primary_text_and_discourse_role():
     list main_text and analysis as allowed values. (Name says v8 for history; the ids now
     checked are the current ones.)
     """
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
+    assert cb.PROFILE_VERSION=="scholarly-v12"
     assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v15"
-    assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v12"
+    assert PdfCorpusBuildCreate(asset_id="a").profile_id=="scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     assert profile["required_metadata_fields"]==["region_type","primary_text","discourse_role"]
     assert "main_text" in profile["region_types"]
@@ -66,12 +66,12 @@ def test_hybrid_metadata_uses_constrained_llm_and_tracks_field_provenance(tmp_pa
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     _asset,build=make_build(repo,1)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    record={"record_id":"r1","record_revision":1,"text":"Derrida analyzes hospitality.","text_length":30,"source_asset_id":"asset-aardvark","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}]}
+    record={"record_id":"r1","record_revision":1,"text":"Author analyzes hospitality.","text_length":30,"source_asset_id":"asset-aardvark","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}]}
     def fake_chat(_request,prompt,*,response_model,max_tokens,schema_name,build_id="", **_kwargs):
         if schema_name=="derridai_record_discourse":
             assert "region_type MUST be one of" in prompt
             assert "primary_text MUST be true or false" in prompt
-            return {"metadata":{"region_type":"main_text","primary_text":True,"discourse_role":"analysis","speaker":"Jacques Derrida"},"field_evidence":{"region_type":{"block_ids":["b1"],"confidence":.98,"reason":"Substantive essay body."},"primary_text":{"block_ids":["b1"],"confidence":.99,"reason":"Substantive argument."},"discourse_role":{"block_ids":["b1"],"confidence":.94,"reason":"Analytical exposition."},"speaker":{"block_ids":["b1"],"confidence":.95,"reason":"Document voice."}},"review_reason":""}
+            return {"metadata":{"region_type":"main_text","primary_text":True,"discourse_role":"analysis","speaker":"Jane Author"},"field_evidence":{"region_type":{"block_ids":["b1"],"confidence":.98,"reason":"Substantive essay body."},"primary_text":{"block_ids":["b1"],"confidence":.99,"reason":"Substantive argument."},"discourse_role":{"block_ids":["b1"],"confidence":.94,"reason":"Analytical exposition."},"speaker":{"block_ids":["b1"],"confidence":.95,"reason":"Document voice."}},"review_reason":""}
         if schema_name=="derridai_record_quotation":
             return {"metadata":{},"field_evidence":{},"review_reason":""}
         return {"metadata":{"topics":["hospitality"]},"review_reason":""}
@@ -153,7 +153,7 @@ def test_page_records_exposes_deterministic_and_llm_candidates_as_metadata_value
         "record_id":"r1","record_revision":1,"text":"Passage.","text_length":8,
         "source_asset_id":"asset-aardvark","source_block_ids":["b1"],
         "source_spans":[{"block_id":"b1","page":1}],
-        "document_author":"Jacques Derrida",
+        "document_author":"Jane Author",
         "deterministic_ingest":{"speakers":["Hélène Cixous"]},
         "metadata_field_status":{
             "position_holder":{"status":"unresolved","proposed_value":"Édouard Glissant"},

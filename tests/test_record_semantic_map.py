@@ -151,7 +151,7 @@ def test_stale_term_and_document_layers_are_reported_not_projected():
 
 
 def test_document_intelligence_mentions_resolve_to_their_cluster_nodes():
-    text = "Levinas speaks. Derrida answers."
+    text = "Levinas speaks. Author answers."
     records = [{"record_id": "r1", "record_revision": 1, "text": text}]
     analysis = {
         "status": "ok",

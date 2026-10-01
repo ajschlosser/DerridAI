@@ -144,7 +144,7 @@ def _assertion(assertion_id, value, *, supersedes=None):
 def test_graph_shows_only_current_assertions_by_default():
     record = {
         "record_id": "r1", "source_document_id": "d1", "record_revision": 1,
-        "field_assertions": {"f": [_assertion("a1", "Derrida"), _assertion("a2", "Rousseau", supersedes="a1")]},
+        "field_assertions": {"f": [_assertion("a1", "Author"), _assertion("a2", "Rousseau", supersedes="a1")]},
         "current_field_assertions": {"f": "a2"},
     }
     graph = build_record_graph(record)

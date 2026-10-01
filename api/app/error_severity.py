@@ -1,7 +1,7 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 """How wrong was a value a person changed?
 
-A correction from "Derrida" to "Derrida, J." and one from "Derrida" to "Husserl" are both
+A correction from "Author" to "Author, J." and one from "Author" to "Husserl" are both
 corrections, but only the second is the model being wrong. Grading them keeps a model that is
 merely untidy from looking as bad as one that is mistaken.
 

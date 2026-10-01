@@ -123,9 +123,9 @@ def test_manifest_metadata_can_be_overridden_at_record_scope_without_future_over
     changing the manifest author does not replace it.
     """
     record = {"metadata_field_status": {}, "pdf_pages": [10]}
-    manifest = {"title": "Document title", "document_author": "Jacques Derrida", "main_text_start_page": 5, "main_text_end_page": 20}
+    manifest = {"title": "Document title", "document_author": "Jane Author", "main_text_start_page": 5, "main_text_end_page": 20}
     cb._apply_manifest_metadata(record, manifest)
-    assert record["document_author"] == "Jacques Derrida"
+    assert record["document_author"] == "Jane Author"
     assert record["metadata_field_status"]["document_author"]["status"] == "inherited"
     record["document_author"] = "Different record author"
     record["metadata_field_status"]["document_author"] = {"status": "human_override", "method": "human_record_override"}
@@ -139,7 +139,7 @@ def test_fast_and_deep_enrichment_skip_unsignaled_quotation(tmp_path: Path, monk
     Fast: only discourse runs when quotation and semantic-indexing signals are absent.
     Deep: discourse and indexing run, while unsignaled quotation remains skipped.
     """
-    repo, build = install_review_build(tmp_path, {"text": "Derrida discusses hospitality without a direct citation."})
+    repo, build = install_review_build(tmp_path, {"text": "Author discusses hospitality without a direct citation."})
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     called: list[str] = []
     def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id="", **_kwargs):
@@ -150,13 +150,13 @@ def test_fast_and_deep_enrichment_skip_unsignaled_quotation(tmp_path: Path, monk
             return {"metadata": {}, "field_evidence": {}, "review_reason": ""}
         return {"metadata": {"topics": ["hospitality"]}, "review_reason": ""}
     monkeypatch.setattr(manager, "_chat_json", fake)
-    fast = {"record_id": "fast", "text": "Derrida discusses hospitality without citation.", "source_block_ids": ["b1"], "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}]}
+    fast = {"record_id": "fast", "text": "Author discusses hospitality without citation.", "source_block_ids": ["b1"], "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}]}
     manager._enrich_record(fast, {}, {"provider": "ollama", "model": "test", "enrichment_mode": "fast", "semantic_indexing": False}, build_id=build["build_id"])
     assert called == ["derridai_record_discourse"]
     assert fast["metadata_stage_status"]["quotation"] == "skipped"
     assert fast["metadata_stage_status"]["indexing"] == "skipped"
     called.clear()
-    deep = {"record_id": "deep", "text": "Derrida discusses hospitality.", "source_block_ids": ["b1"], "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}]}
+    deep = {"record_id": "deep", "text": "Author discusses hospitality.", "source_block_ids": ["b1"], "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}]}
     manager._enrich_record(deep, {}, {"provider": "ollama", "model": "test", "enrichment_mode": "deep"}, build_id=build["build_id"])
     assert called == ["derridai_record_discourse", "derridai_record_indexing"]
     assert deep["metadata_stage_status"]["quotation"] == "skipped"
@@ -179,7 +179,7 @@ def test_selective_metadata_rerun_preserves_human_values_and_other_family_state(
     discourse is called; quotation and indexing stay "complete".
     """
     record = {
-        "text": "Derrida discusses hospitality.",
+        "text": "Author discusses hospitality.",
         "speaker": "Human reviewer",
         "metadata_field_status": {"speaker": {"status": "human_confirmed", "method": "human"}},
         "metadata_stage_status": {"discourse": "complete", "quotation": "complete", "indexing": "complete"},

@@ -155,9 +155,9 @@ def test_split_request_needs_exactly_one_split_point():
 
 def test_metadata_decision_can_save_value_and_evidence_in_one_call(tmp_path):
     repo, bid, manager = _manager(tmp_path)
-    result = manager.metadata_decision(bid, "r2", "speaker", "Derrida", 1, False, ["b2"])
+    result = manager.metadata_decision(bid, "r2", "speaker", "Author", 1, False, ["b2"])
     record = result["record"]
-    assert record["speaker"] == "Derrida"
+    assert record["speaker"] == "Author"
     assert record["metadata_evidence"]["speaker"]["block_ids"] == ["b2"]
     assert record["metadata_evidence"]["speaker"]["reviewed_by"] == "human"
 
@@ -165,7 +165,7 @@ def test_metadata_decision_can_save_value_and_evidence_in_one_call(tmp_path):
 def test_evidence_outside_the_record_is_refused_before_anything_is_saved(tmp_path):
     repo, bid, manager = _manager(tmp_path)
     with pytest.raises(ValueError, match="belong to the selected record"):
-        manager.metadata_decision(bid, "r2", "speaker", "Derrida", 1, False, ["b1"])
+        manager.metadata_decision(bid, "r2", "speaker", "Author", 1, False, ["b1"])
     row = repo.load_records(bid)[1]
     assert row.get("speaker") in (None, "") and row["record_revision"] == 1
 
@@ -178,7 +178,7 @@ def test_operational_record_keys_never_become_metadata_assertions(tmp_path):
         "source_spans": [{"source_document_id": "d", "block_id": "b"}],
         "boundary_evidence": {"after_block_id": "b1"}, "lineage": {"operation": "split"},
         "nlp_candidates": {"status": "ok"}, "text_review_source": "human_split", "unit_policy": "sentence",
-        "speaker": "Derrida",
+        "speaker": "Author",
     }
     migrate_record_assertions(row)
     names = {a["field_name"] for bucket in row["field_assertions"].values() for a in bucket}

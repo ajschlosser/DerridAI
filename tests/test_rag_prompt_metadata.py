@@ -6,9 +6,9 @@ def _record():
     return {
         "record_id": "r1",
         "work": "Of Grammatology",
-        "document_author": "Jacques Derrida",
+        "document_author": "Jane Author",
         "text": "The trace is neither simply present nor absent.",
-        "speaker": "Jacques Derrida",
+        "speaker": "Jane Author",
         "stance": "qualify",
         "field_assertions": {
             "field-conceptual-tension": [
@@ -54,7 +54,7 @@ def test_research_prompt_metadata_defaults_preserve_existing_prompt_contract():
         total_char_limit=120000,
         prompt_metadata=body.prompt_metadata,
     )
-    assert 'speaker="Jacques Derrida"' in context
+    assert 'speaker="Jane Author"' in context
     assert 'stance="qualify"' in context
     assert "conceptual_tension=" not in context
 

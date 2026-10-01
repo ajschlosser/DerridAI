@@ -13,7 +13,7 @@ const base: any = {
   record_count: 63,
   accepted_count: 63,
   rejected_count: 0,
-  profile_id: "derrida-scholarly-v9",
+  profile_id: "scholarly-v9",
   metadata_completed: 58,
   metadata_total: 63,
   validation: { valid: true, source_valid: true, metadata_valid: true, coverage: 1 },

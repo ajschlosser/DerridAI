@@ -265,7 +265,7 @@ def build_site_bundle(
     include_vectors: bool = True,
     transformers_delivery: str = "inline",
 ) -> SiteBundle:
-    """Create an SDK-backed static research site from one immutable publication snapshot.
+    """Create a Publication Runtime-backed static research site from one immutable publication snapshot.
 
     ``record_profile`` chooses how much Record metadata is packaged: ``complete`` keeps every public field,
     including FieldAssertions; ``reader`` keeps every metadata value but omits the FieldAssertion layer
@@ -482,7 +482,7 @@ def build_site_bundle(
         raise RuntimeError("The DerridAI static-site reference UI is missing.")
     if not SDK_ASSET.exists():
         raise RuntimeError(
-            "The DerridAI SDK distribution is missing. Run `cd web && npm run build:sdk`."
+            "The DerridAI Publication Runtime distribution is missing. Run `cd web && npm run build:sdk`."
         )
 
     publication_source = f"globalThis.{PACKAGE_GLOBAL}={_js_json(package)};\n"
@@ -534,7 +534,7 @@ def build_local_site_file(
 ) -> SiteBundle:
     """Create one self-contained HTML file for direct local use.
 
-    Publication data, SDK, reference UI, and Transformers.js are embedded inline. External model
+    Publication data, Publication Runtime, reference UI, and Transformers.js are embedded inline. External model
     calls are allowed only to http(s) origins and remain subject to browser CORS.
     ``include_transformers`` is accepted for older callers and is always treated as true.
     """
@@ -700,7 +700,7 @@ Optional environment variables:
   DERRIDAI_SITE_IMAGE      Docker image name (default: derridai-research-site)
   DERRIDAI_SITE_CONTAINER  container name (default: derridai-research-site)
 
-The site uses the same DerridAI SDK as custom Web applications. No endpoint,
+The site uses the same DerridAI Publication Runtime as custom Web applications. No endpoint,
 model name, or API token is exported. Transformers.js is included so a visitor
 can run an embedding model in the browser. The model itself is downloaded once
 by that library and kept in the browser cache. A visitor may also save a named

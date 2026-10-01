@@ -25,15 +25,15 @@ export const EnumSuggestion: Story = {
 export const FreeTextAutocomplete: Story = {
   args: {
     field: "position_holder",
-    value: "Jacques Derrida",
+    value: "Jane Author",
     control: "combobox",
     allowCustom: true,
-    options: ["Jacques Derrida", "Immanuel Kant", "Emmanuel Levinas"],
+    options: ["Jane Author", "Immanuel Kant", "Emmanuel Levinas"],
     status: {
       status: "model_inferred",
       method: "llm",
       confidence: 0.82,
-      reason: "The passage presents Derrida as the holder of the stated position.",
+      reason: "The passage presents Author as the holder of the stated position.",
     },
   },
 };
@@ -123,16 +123,16 @@ export const AutoPopulatedPropositionStatus: Story = {
 export const NarrowOpenCombobox: Story = {
   args: {
     field: "position_holder",
-    value: "Jacques Derrida",
+    value: "Jane Author",
     control: "combobox",
     allowCustom: true,
-    options: ["Jacques Derrida", "Emmanuel Levinas", "Immanuel Kant"],
+    options: ["Jane Author", "Emmanuel Levinas", "Immanuel Kant"],
     status: {
       status: "unresolved",
       method: "llm",
       confidence: 0.88,
       auto_populated: true,
-      proposed_value: "Jacques Derrida",
+      proposed_value: "Jane Author",
     },
     open: true,
   },

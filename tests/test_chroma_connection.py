@@ -61,7 +61,7 @@ def test_connection_identity_never_includes_a_token():
         mode="http",
         url="http://chroma:8000",
         tenant="lab",
-        database="derrida",
+        database="author",
     )
     public = public_http_config({"url": "http://chroma:8000", "token": "secret-token"})
     assert public["token_configured"] is True

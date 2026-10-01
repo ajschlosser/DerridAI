@@ -8,14 +8,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 
 from app import unit_policy as up  # noqa: E402
 
-TEXT = "Dr. Derrida wrote Of Grammatology in 1967. It was not, however, the first. Was it? Yes! See p. 32 and fig. 3.5 for details."
+TEXT = "Dr. Author wrote Of Grammatology in 1967. It was not, however, the first. Was it? Yes! See p. 32 and fig. 3.5 for details."
 
 
 def test_sentences_respect_abbreviations_and_conserve_text():
     parts = up.split_sentences(TEXT)
     assert len(parts) == 5
     assert "".join(parts) == TEXT
-    assert parts[0].startswith("Dr. Derrida") and parts[0].strip().endswith("1967.")
+    assert parts[0].startswith("Dr. Author") and parts[0].strip().endswith("1967.")
 
 
 def test_lines_and_windows_conserve_text():

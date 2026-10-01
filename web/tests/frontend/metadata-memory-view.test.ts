@@ -95,14 +95,14 @@ describe("Metadata memory page", () => {
           kind: "correction",
           field: "position_holder",
           value: "Levinas",
-          rejected_value: "Derrida",
+          rejected_value: "Author",
           authority: "human_override",
           review_method: "human_review_of_llm_proposal",
           record_id: "r1",
           record_revision: 4,
           build_id: "build-1",
           source_document_id: "asset-1",
-          schema_id: "derrida",
+          schema_id: "author",
           schema_version: "v1",
           language: "en",
           region_type: "main_text",
@@ -153,7 +153,7 @@ describe("Metadata memory page", () => {
     expect(wrapper.get("#metadata-memory-title").text()).toBe("Metadata memory");
     expect(wrapper.text()).toContain("position_holder");
     expect(wrapper.text()).toContain("Levinas");
-    expect(wrapper.text()).toContain("Derrida");
+    expect(wrapper.text()).toContain("Author");
     expect(wrapper.text()).toContain("Correction / negative precedent");
     expect(wrapper.text()).toContain("For Levinas, responsibility precedes freedom.");
     expect(wrapper.text()).toContain("r1 · r4");

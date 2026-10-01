@@ -6,7 +6,7 @@ const meta: Meta<typeof DocumentManifestEditor> = {
   args: {
     manifest: {
       title: "Rogues",
-      document_author: "Jacques Derrida",
+      document_author: "Jane Author",
       translator: "Pascale-Anne Brault and Michael Naas",
       publication_year: 2005,
       language: "English",

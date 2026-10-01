@@ -26,9 +26,9 @@ def _record(record_id: str = "r1", work: str = "Glas") -> dict:
             }
         ],
         "work": work,
-        "document_author": "Jacques Derrida",
-        "citation": "Derrida, Jacques. Glas.",
-        "speaker": "Derrida",
+        "document_author": "Jane Author",
+        "citation": "Author, Jane. Glas.",
+        "speaker": "Author",
         "position_holder": "Hegel",
         "text": "A publication-safe passage.",
     }
@@ -80,9 +80,9 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     )
 
     bundle = site_publication.build_site_bundle(
-        store_name="derrida-primary",
+        store_name="primary-corpus",
         works=["Glas", "Rogues"],
-        title="Derrida research site",
+        title="Author research site",
         description="A static scholarly research site.",
     )
 
@@ -101,7 +101,7 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     chunks = package["chunks"]
 
     assert publication["format"] == "derridai-static-site-v5"
-    assert publication["corpus_id"] == "derrida-primary"
+    assert publication["corpus_id"] == "primary-corpus"
     assert [work["work"] for work in publication["works"]] == ["Glas", "Rogues"]
     assert publication["features"]["browser_llm"] is False
     assert publication["features"]["derridai_sdk"] is True
@@ -163,9 +163,9 @@ def test_site_bundle_can_omit_vectors_and_preserve_source_embedding_contract(
     )
 
     bundle = site_publication.build_site_bundle(
-        store_name="derrida-primary",
+        store_name="primary-corpus",
         works=["Glas"],
-        title="Browser-indexed Derrida",
+        title="Browser-indexed Author",
         include_vectors=False,
     )
 
@@ -231,7 +231,7 @@ def test_site_bundle_exports_only_selected_installed_languages_and_no_provider_p
         },
     )
     bundle = site_publication.build_site_bundle(
-        store_name="derrida-primary",
+        store_name="primary-corpus",
         works=["Glas"],
         title="Multilingual site",
         locale="de-DE",
@@ -288,7 +288,7 @@ def test_site_bundle_rejects_selected_language_with_missing_runtime_translations
 
     with pytest.raises(ValueError, match="missing .* required static-site translations"):
         site_publication.build_site_bundle(
-            store_name="derrida-primary",
+            store_name="primary-corpus",
             works=["Glas"],
             title="Incomplete translation",
             locale="de-DE",
@@ -329,13 +329,13 @@ def test_site_bundle_blocks_when_a_selected_work_is_not_indexed(
         site_publication.store,
         "export_site_projection",
         lambda _store_name, _works: {
-            "store": {"name": "derrida-primary"},
+            "store": {"name": "primary-corpus"},
             "records": [{"record": _record(work="Glas"), "embedding": None}],
         },
     )
     with pytest.raises(ValueError, match="Missing: Rogues"):
         site_publication.build_site_bundle(
-            store_name="derrida-primary",
+            store_name="primary-corpus",
             works=["Glas", "Rogues"],
             title="Partial export",
         )
@@ -350,13 +350,13 @@ def test_site_bundle_blocks_records_that_are_not_publication_valid(
         site_publication.store,
         "export_site_projection",
         lambda _store_name, _works: {
-            "store": {"name": "derrida-primary"},
+            "store": {"name": "primary-corpus"},
             "records": [{"record": invalid, "embedding": None}],
         },
     )
     with pytest.raises(ValueError, match="publication-valid"):
         site_publication.build_site_bundle(
-            store_name="derrida-primary",
+            store_name="primary-corpus",
             works=["Glas"],
             title="Invalid",
         )
@@ -396,7 +396,7 @@ class _ProjectionStore:
 
     def _public_store(self, _collection):
         return {
-            "name": "derrida-primary",
+            "name": "primary-corpus",
             "embedding_provider": "ollama",
             "embedding_model": "bge-m3:latest",
             "embedding_dimension": 2,
@@ -407,7 +407,7 @@ class _ProjectionStore:
 def test_vector_projection_exports_only_selected_works_with_existing_embeddings() -> None:
     projection = ChromaStore.export_site_projection(
         _ProjectionStore(),  # type: ignore[arg-type]
-        "derrida-primary",
+        "primary-corpus",
         ["Glas"],
     )
     assert projection["store"]["embedding_dimension"] == 2
@@ -437,13 +437,13 @@ def test_local_single_file_export_is_self_contained_and_allows_selected_model_en
     )
 
     bundle = site_publication.build_local_site_file(
-        store_name="derrida-primary",
+        store_name="primary-corpus",
         works=["Glas"],
-        title="Local Derrida",
+        title="Local Author",
     )
 
     html = bundle.payload.decode("utf-8")
-    assert bundle.filename == "local-derrida.html"
+    assert bundle.filename == "local-author.html"
     assert "<script src=" not in html
     assert "globalThis.__DERRIDAI_SITE_PACKAGE__=" in html
     assert "createClient" in html
@@ -472,12 +472,12 @@ def test_nginx_export_contains_one_container_deployment_and_executable_scripts(
     )
 
     bundle = site_publication.build_nginx_site_bundle(
-        store_name="derrida-primary",
+        store_name="primary-corpus",
         works=["Glas"],
-        title="Served Derrida",
+        title="Served Author",
     )
 
-    assert bundle.filename == "served-derrida-nginx.zip"
+    assert bundle.filename == "served-author-nginx.zip"
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
         assert archive.namelist() == [
             "index.html",
@@ -582,7 +582,7 @@ def test_two_file_site_embeds_the_transformers_runtime_only_when_requested(
 ) -> None:
     _stub_projection(monkeypatch)
     bundle = site_publication.build_site_bundle(
-        store_name="derrida-primary",
+        store_name="primary-corpus",
         works=["Glas"],
         title="With runtime",
         include_transformers=True,
@@ -612,7 +612,7 @@ def test_single_file_site_embeds_the_runtime_with_a_matching_standalone_csp(
 ) -> None:
     _stub_projection(monkeypatch)
     bundle = site_publication.build_local_site_file(
-        store_name="derrida-primary",
+        store_name="primary-corpus",
         works=["Glas"],
         title="With runtime",
         include_transformers=True,
@@ -629,7 +629,7 @@ def test_nginx_export_serves_the_runtime_as_files(
 ) -> None:
     _stub_projection(monkeypatch)
     bundle = site_publication.build_nginx_site_bundle(
-        store_name="derrida-primary",
+        store_name="primary-corpus",
         works=["Glas"],
         title="Served",
         include_transformers=True,
@@ -667,8 +667,8 @@ def test_every_export_fetches_the_runtime(
     monkeypatch: pytest.MonkeyPatch, _runtime_without_network: list[int]
 ) -> None:
     _stub_projection(monkeypatch)
-    site_publication.build_site_bundle(store_name="derrida-primary", works=["Glas"], title="Plain")
-    site_publication.build_nginx_site_bundle(store_name="derrida-primary", works=["Glas"], title="Plain")
+    site_publication.build_site_bundle(store_name="primary-corpus", works=["Glas"], title="Plain")
+    site_publication.build_nginx_site_bundle(store_name="primary-corpus", works=["Glas"], title="Plain")
     assert _runtime_without_network
 
 
@@ -687,7 +687,7 @@ def test_export_fails_before_corpus_work_when_the_runtime_cannot_be_downloaded(
     monkeypatch.setattr(site_publication.store, "export_site_projection", projection_must_not_run)
     with pytest.raises(RuntimeUnavailableError):
         site_publication.build_site_bundle(
-            store_name="derrida-primary", works=["Glas"], title="X", include_transformers=True
+            store_name="primary-corpus", works=["Glas"], title="X", include_transformers=True
         )
 
 
@@ -695,7 +695,7 @@ def test_export_requests_ignore_legacy_provider_profile_ids() -> None:
     from app.routers.sites import SiteExportRequest
 
     request = SiteExportRequest(
-        store="derrida-primary", works=["Glas"], provider_profile_ids=["openai-main"]
+        store="primary-corpus", works=["Glas"], provider_profile_ids=["openai-main"]
     )
     assert not hasattr(request, "provider_profile_ids")
     assert request.include_transformers is True

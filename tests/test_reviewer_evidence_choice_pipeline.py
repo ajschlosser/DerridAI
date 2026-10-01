@@ -30,9 +30,9 @@ from app.pipelines.service import PipelineService, pipeline_hash
 BUILT_IN = ("corpus.reviewer_evidence_choice.current", 1)
 REQUEST = {"provider": "ollama", "model": "primary-model"}
 WITH_REVIEW = {**REQUEST, "_review_provider": {"provider": "ollama", "model": "review-model"}}
-VALUE = "Jacques Derrida"
+VALUE = "Jane Author"
 BLOCKS = [
-    {"block_id": "b1", "text": "Jacques Derrida wrote this preface."},
+    {"block_id": "b1", "text": "Jane Author wrote this preface."},
     {"block_id": "b2", "text": "An unrelated passage about grammar."},
 ]
 CHOICE = '{"block_ids": ["b1", "invented"], "reason": "names the author"}'

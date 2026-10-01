@@ -118,10 +118,10 @@ describe("per-view workspace state", () => {
       () => vector.activeStore,
       (name) => seen.push(name),
     );
-    state.activeStore = "derrida_primary";
+    state.activeStore = "primary_corpus";
     await nextTick();
-    expect(seen).toEqual(["derrida_primary"]);
-    expect(vector.activeStore).toBe("derrida_primary");
+    expect(seen).toEqual(["primary_corpus"]);
+    expect(vector.activeStore).toBe("primary_corpus");
     // Writing through the store reaches the runtime, too.
     search.globalSearch = "trace";
     expect(state.globalSearch).toBe("trace");

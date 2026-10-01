@@ -43,9 +43,9 @@ def _pipeline_resolver(feature: str):
 def repo(tmp_path: Path) -> SQLiteSystemRepository:
     repository = SQLiteSystemRepository(tmp_path / "system.sqlite3")
     rows = {
-        "good": ("What did Derrida say about hospitality?", 8.0),
-        "weak": ("What did Derrida say about the gift?", 4.0),
-        "ungraded": ("Derrida on hospitality and the stranger", None),
+        "good": ("What did Author say about hospitality?", 8.0),
+        "weak": ("What did Author say about the gift?", 4.0),
+        "ungraded": ("Author on hospitality and the stranger", None),
     }
     for response_id, (question, score) in rows.items():
         repository.put_response_memory(
@@ -86,7 +86,7 @@ def test_semantic_hits_are_rejoined_and_ineligible_rows_dropped(repo):
         ]
     )
     out = rm.select_prior_responses(
-        "How does the notion of hospitality influence Derrida?",
+        "How does the notion of hospitality influence Author?",
         owner="ann",
         system_store=repo,
         index_factory=lambda: index,
@@ -108,7 +108,7 @@ def test_unavailable_embeddings_fall_back_to_lexical_matching_visibly(repo):
         raise RuntimeError("embedding service offline")
 
     out = rm.select_prior_responses(
-        "Derrida and hospitality", owner="ann", system_store=repo, index_factory=broken
+        "Author and hospitality", owner="ann", system_store=repo, index_factory=broken
     )
     assert out["mode"] == "lexical_fallback"
     assert "embedding service offline" in out["warnings"][0]
@@ -139,7 +139,7 @@ class ClaimStore:
         return {"claim_id": claim_id, "claim_text": "Hospitality is unconditional.", "validation_status": "validated"}
 
     def list_claim_support_bindings(self, claim_id, owner=None):
-        cite = {"inline": "(Derrida, Of Hospitality, 25)"}
+        cite = {"inline": "(Author, Of Hospitality, 25)"}
         return [
             {"claim_id": claim_id, "record_id": "r-now", "record_revision": 2, "relation": "supports", "citation": cite},
             {"claim_id": claim_id, "record_id": "r-old", "record_revision": 1, "relation": "supports", "citation": cite},
@@ -162,7 +162,7 @@ def test_validated_claim_support_is_checked_against_current_evidence():
         "r-away": ("not_in_current_evidence", None),
     }
     text = rm.render_claims(out["items"])
-    assert "(Derrida, Of Hospitality, 25) - cited Record is in current EVIDENCE as [E1]" in text
+    assert "(Author, Of Hospitality, 25) - cited Record is in current EVIDENCE as [E1]" in text
     assert "cannot be cited in this answer" in text
 
 
@@ -191,7 +191,7 @@ def test_memory_guidance_records_what_steered_the_run(repo):
 
 
 def test_response_cache_vectors_distinguish_different_text():
-    first = ChromaStore._response_cache_embedding("Derrida on hospitality")
+    first = ChromaStore._response_cache_embedding("Author on hospitality")
     second = ChromaStore._response_cache_embedding("Levinas on the face")
     assert first != second
 
@@ -277,7 +277,7 @@ def test_memory_pipeline_can_decline_lexical_fallback(repo):
         raise RuntimeError("embedding service offline")
 
     out = rm.select_prior_responses(
-        "Derrida and hospitality",
+        "Author and hospitality",
         owner="ann",
         system_store=repo,
         index_factory=broken,

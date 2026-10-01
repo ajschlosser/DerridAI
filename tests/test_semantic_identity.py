@@ -54,7 +54,7 @@ def phrase(left, right, **kw):
 
 @pytest.mark.parametrize("left,right", [("J. P. Dingus", "J.P. Dingus"), ("J.P. Dingus", "JP Dingus"),
                                         ("J. P. Dingus", "JP Dingus"), ("Dingus, J. P.", "J. P. Dingus"),
-                                        ("Jacques  Derrida", "jacques derrida")])
+                                        ("Jane  Author", "jane author")])
 def test_entity_name_variants_are_equivalent(left, right):
     result = compare_values(left, right, profile=NAME)
     assert result.relation == "equivalent"
@@ -68,7 +68,7 @@ def test_possible_but_unestablished_names_are_unknown(left, right):
 
 
 def test_unrelated_names_are_different_and_suffixes_are_not_inversions():
-    assert compare_values("Derrida", "Levinas", profile=NAME).relation == "different"
+    assert compare_values("Author", "Levinas", profile=NAME).relation == "different"
     assert compare_values("Dingus, Jr.", "Jr. Dingus", profile=NAME).relation != "equivalent"
 
 
@@ -103,16 +103,16 @@ def test_default_lemmatizer_can_be_installed_for_the_process():
 
 
 def test_lists_need_one_to_one_equivalence_and_respect_ordering():
-    assert compare_values(["J.P. Dingus", "Derrida"], ["Derrida", "JP Dingus"], profile=NAME).relation == "equivalent"
-    assert compare_values(["Derrida", "Levinas"], ["Derrida"], profile=NAME).relation == "different"
+    assert compare_values(["J.P. Dingus", "Author"], ["Author", "JP Dingus"], profile=NAME).relation == "equivalent"
+    assert compare_values(["Author", "Levinas"], ["Author"], profile=NAME).relation == "different"
     # Partial overlap is not equivalence.
-    assert compare_values(["Derrida", "Levinas"], ["Derrida", "Husserl"], profile=NAME).relation == "different"
-    # "J. Derrida" might be "Derrida", but nothing establishes it.
-    assert compare_values(["Derrida", "Levinas"], ["Levinas", "J. Derrida"], profile=NAME).relation == "unknown"
+    assert compare_values(["Author", "Levinas"], ["Author", "Husserl"], profile=NAME).relation == "different"
+    # "J. Author" might be "Author", but nothing establishes it.
+    assert compare_values(["Author", "Levinas"], ["Levinas", "J. Author"], profile=NAME).relation == "unknown"
     ordered = EquivalenceProfile(mode="text", collection_semantics="ordered")
     assert compare_values(["a", "b"], ["b", "a"], profile=ordered).relation == "different"
     assert compare_values(["a", "b"], ["b", "a"], profile=TEXT).relation == "equivalent"
-    assert compare_values("Derrida", ["derrida"], profile=TEXT).relation == "equivalent"
+    assert compare_values("Author", ["author"], profile=TEXT).relation == "equivalent"
 
 
 def test_exact_and_controlled_profiles():
@@ -129,8 +129,8 @@ def test_exact_and_controlled_profiles():
 
 def test_reviewed_aliases_outrank_normalization_both_ways():
     registry = SemanticIdentityRegistry()
-    register_reviewed_alias(registry, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida", "Derrida, Jacques"], mode="entity_name")
-    same = compare_values("J. Derrida", "Jacques Derrida", profile=NAME, registry=registry)
+    register_reviewed_alias(registry, kind="person", canonical_label="Jane Author", aliases=["J. Author", "Author, Jane"], mode="entity_name")
+    same = compare_values("J. Author", "Jane Author", profile=NAME, registry=registry)
     assert same.relation == "equivalent" and same.reason_codes == ["shared_semantic_identity"]
     # Two reviewed people whose names normalize alike are never merged by punctuation rules.
     registry = SemanticIdentityRegistry()
@@ -144,29 +144,29 @@ def test_reviewed_aliases_outrank_normalization_both_ways():
 
 def test_identities_are_scoped_by_kind():
     registry = SemanticIdentityRegistry()
-    register_reviewed_alias(registry, kind="person", canonical_label="Jacques Derrida", aliases=["Derrida"], mode="entity_name")
+    register_reviewed_alias(registry, kind="person", canonical_label="Jane Author", aliases=["Author"], mode="entity_name")
     concept = EquivalenceProfile(mode="text", identity_kind="concept")
-    assert compare_values("Derrida", "Jacques Derrida", profile=concept, registry=registry).relation == "different"
+    assert compare_values("Author", "Jane Author", profile=concept, registry=registry).relation == "different"
 
 
 def test_document_intelligence_resolves_ambiguity_but_never_overrides_a_difference():
     registry = SemanticIdentityRegistry()
     project_document_intelligence(registry, {"provider": "booknlp", "model": "big", "entity_clusters": [
-        {"cluster_id": "c1", "canonical": "Jacques Derrida", "aliases": ["Derrida", "he", "Jacques Derrida"], "entity_type": "PERSON"},
+        {"cluster_id": "c1", "canonical": "Jane Author", "aliases": ["Author", "he", "Jane Author"], "entity_type": "PERSON"},
     ]})
-    resolved = compare_values("Derrida", "Jacques Derrida", profile=NAME, registry=registry)
+    resolved = compare_values("Author", "Jane Author", profile=NAME, registry=registry)
     assert resolved.relation == "equivalent"
     assert "document_intelligence_alias" in resolved.reason_codes
     # A pronoun in a coreference cluster is still not the person's name.
-    assert compare_values("he", "Jacques Derrida", profile=NAME, registry=registry).relation == "different"
-    ref = registry.resolve(value="Derrida", kind="person", mode="entity_name")
+    assert compare_values("he", "Jane Author", profile=NAME, registry=registry).relation == "different"
+    ref = registry.resolve(value="Author", kind="person", mode="entity_name")
     assert ref is not None and ref.source_ids == ["booknlp:big:c1"]
 
 
 def test_record_projection_bound_to_other_text_is_ignored():
-    record = {"text": "Derrida wrote.", "document_intelligence": {
+    record = {"text": "Author wrote.", "document_intelligence": {
         "record_text_sha256": "stale", "provider": "spacy",
-        "entities": [{"entity_id": "c1", "label": "Jacques Derrida", "text": "Derrida", "entity_type": "PERSON"}]}}
+        "entities": [{"entity_id": "c1", "label": "Jane Author", "text": "Author", "entity_type": "PERSON"}]}}
     assert len(registry_for_record(record)) == 0
     record["document_intelligence"].pop("record_text_sha256")
     assert len(registry_for_record(record)) == 1
@@ -194,8 +194,8 @@ def test_canonical_value_key_prefers_identity_and_is_none_when_unsafe():
     none = lambda text, language: None  # noqa: E731
     assert canonical_value_key("pushing the boundaries", profile=PHRASE, language="en", lemmatizer=none) is None
     registry = SemanticIdentityRegistry()
-    ref = register_reviewed_alias(registry, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida"], mode="entity_name")
-    assert canonical_value_key("J. Derrida", profile=NAME, registry=registry) == ref.identity_id
+    ref = register_reviewed_alias(registry, kind="person", canonical_label="Jane Author", aliases=["J. Author"], mode="entity_name")
+    assert canonical_value_key("J. Author", profile=NAME, registry=registry) == ref.identity_id
 
 
 def test_schema_resolves_policy_by_stable_semantics_and_round_trips():

@@ -112,7 +112,7 @@ export const FrenchLengthStress: Story = {
     build: {
       ...build,
       source_filename:
-        "Jacques Derrida — Cosmopolites de tous les pays, encore un effort ! — édition critique.pdf",
+        "Jane Author — Cosmopolites de tous les pays, encore un effort ! — édition critique.pdf",
       warnings: [
         "Certaines métadonnées nécessitent encore une vérification humaine avant la publication.",
       ],

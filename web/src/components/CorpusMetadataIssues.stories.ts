@@ -14,7 +14,7 @@ const build: any = {
   needs_review_count: 0,
   accepted_count: 63,
   rejected_count: 0,
-  profile_id: "derrida-scholarly-v9",
+  profile_id: "scholarly-v9",
   provider: "ollama",
   model: "Qwen3.8-27B",
   metadata_completed: 58,

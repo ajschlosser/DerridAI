@@ -83,7 +83,7 @@ test("bulk edit reads like Edit document metadata and applies a value it was giv
   const dialog = page.getByRole("dialog", { name: /bulk edit record metadata/i });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("button", { name: /apply changes/i })).toBeDisabled();
-  await dialog.getByLabel(/^speaker/i).fill("Jacques Derrida");
+  await dialog.getByLabel(/^speaker/i).fill("Jane Author");
   await expect(dialog.getByText(/1 field\(s\) will change/i)).toBeVisible();
   await expect(dialog.getByRole("button", { name: /apply changes/i })).toBeDisabled(); // nothing is selected yet
   await dialog.getByRole("radio", { name: /apply to every record/i }).check();
@@ -176,7 +176,7 @@ for (const scheme of ["light", "dark"] as const) {
           disputes: [{ field: "target", existing: "cities of refuge", proposed: "hospitality" }],
         },
       ],
-      speaker: "Jacques Derrida",
+      speaker: "Jane Author",
     };
     await page.emulateMedia({ colorScheme: scheme });
     await open(page, [record, ...CORPUS_RECORDS.slice(0, 4)]);

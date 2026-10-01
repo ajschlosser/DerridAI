@@ -41,7 +41,7 @@ MAX_TERMS = 60
 # text; they only end a run, so a term is always an exact contiguous span.
 TERM_POS_TAGS = ("PROPN", "NOUN")
 # The large pipelines recognise philosophers' names markedly better than the small
-# ones (measured on a Rousseau/Hobbes/Derrida sample); override per language with
+# ones (measured on a Rousseau/Hobbes/Author sample); override per language with
 # SPACY_MODEL_EN / _FR / _DE, for example to a smaller model on constrained hosts.
 DEFAULT_MODELS = {
     "en": "en_core_web_lg",

@@ -4,7 +4,7 @@ import ResponseFaqSelectionBar from "./ResponseFaqSelectionBar.vue";
 const record = {
   record_id: "cache-1",
   question:
-    "How does Derrida distinguish unconditional hospitality from the conditional laws of hospitality?",
+    "How does Author distinguish unconditional hospitality from the conditional laws of hospitality?",
   provider: "Ollama",
   model: "qwen3:14b",
   created_at: "2026-09-14T18:30:00Z",
@@ -23,7 +23,7 @@ export const LongQuestion: Story = {
     record: {
       ...record,
       question:
-        "How does Derrida distinguish the unconditional structure of hospitality from the conditional laws that make hospitality politically and juridically practicable, and what follows from that distinction for the sovereignty of the host?",
+        "How does Author distinguish the unconditional structure of hospitality from the conditional laws that make hospitality politically and juridically practicable, and what follows from that distinction for the sovereignty of the host?",
     },
     evidenceCount: 14,
     grade: null,

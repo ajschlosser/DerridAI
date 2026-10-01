@@ -66,7 +66,7 @@ def _install_build_with_old_vocabulary(tmp_path: Path) -> tuple[cb.PdfCorpusRepo
             "provider": "ollama",
             "model": "test",
             "request": {"enrichment_mode": "fast"},
-            "manifest": {"title": "Book", "document_author": "Derrida"},
+            "manifest": {"title": "Book", "document_author": "Author"},
         }
     )
     build_id = build["build_id"]

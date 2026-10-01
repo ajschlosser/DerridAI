@@ -31,7 +31,7 @@ export const RunningWithDraft: Story = {
     },
     draft: {
       jobId: "run-1",
-      text: "Derrida treats mortality not simply as an ontological property of Dasein but as a relation to the other that",
+      text: "Author treats mortality not simply as an ontological property of Dasein but as a relation to the other that",
       gap: false,
       final: false,
     },
@@ -53,7 +53,7 @@ export const Completed: Story = {
       elapsed_seconds: 18.74,
       evidence: [{ evidence_id: "E0" }, { evidence_id: "E1" }],
       answer:
-        "Derrida treats mortality not simply as an ontological property of Dasein but as a relation to the other that intensifies responsibility. The ethical demand appears through the other's exposure to death and therefore cannot be reduced to a self-relation of anticipation.\n\nThe contrast matters because Derrida does not simply replace Heidegger with Levinas. He tracks the tension between singular mortality, substitution, and responsibility while preserving the difficulty of assigning these positions without remainder.\n\n**Works Cited**\n\n1. Derrida, Jacques. Adieu to Emmanuel Levinas.",
+        "Author treats mortality not simply as an ontological property of Dasein but as a relation to the other that intensifies responsibility. The ethical demand appears through the other's exposure to death and therefore cannot be reduced to a self-relation of anticipation.\n\nThe contrast matters because Author does not simply replace Heidegger with Levinas. He tracks the tension between singular mortality, substitution, and responsibility while preserving the difficulty of assigning these positions without remainder.\n\n**Works Cited**\n\n1. Author, Jane. Adieu to Emmanuel Levinas.",
     },
   },
 };
@@ -72,11 +72,11 @@ export const FormattingStress: Story = {
       provider: "ollama",
       model: "qwen3:14b",
       evidence: [
-        { evidence_id: "E1", inline_citation: "(Derrida 1995: 24)" },
-        { evidence_id: "E2", inline_citation: "(Derrida 1999: 20–21)" },
+        { evidence_id: "E1", inline_citation: "(Author 1995: 24)" },
+        { evidence_id: "E2", inline_citation: "(Author 1999: 20–21)" },
       ],
       answer:
-        "**Responsibility does not begin with the mechanical application of a rule. It requires a decision where calculation reaches its limit.**\n\n**A decision worthy of the name** must pass through undecidability **(Derrida **1995**: 24)** while still answering to inherited norms.\n\n### Consequences\n\n1. Citation typography remains part of the reading line (Derrida 1999: 20–21).\n2. Local **emphasis remains local** instead of changing an entire paragraph.\n\n**Works Cited**\n\n1. Derrida, Jacques. The Gift of Death.",
+        "**Responsibility does not begin with the mechanical application of a rule. It requires a decision where calculation reaches its limit.**\n\n**A decision worthy of the name** must pass through undecidability **(Author **1995**: 24)** while still answering to inherited norms.\n\n### Consequences\n\n1. Citation typography remains part of the reading line (Author 1999: 20–21).\n2. Local **emphasis remains local** instead of changing an entire paragraph.\n\n**Works Cited**\n\n1. Author, Jane. The Gift of Death.",
     },
   },
 };

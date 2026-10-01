@@ -2,7 +2,7 @@
 """Reviewed alias sets and the per-build semantic identity registry.
 
 A reviewed alias set is a reviewer's explicit statement that several surfaces name one
-identity of a kind ("Jacques Derrida", "J. Derrida", "Derrida, Jacques" are one person).
+identity of a kind ("Jane Author", "J. Author", "Author, Jane" are one person).
 It is canonical reviewer state for a build, kept beside its records: never inferred from
 model output, never created from Document Intelligence clusters, and never rewritten.
 Changing a set retires it and records a new one, so the history stays auditable.

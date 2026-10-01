@@ -74,7 +74,7 @@ function corpus() {
           record_id: `r${n}`,
           work: works[n % works.length],
           year: n % 5 === 0 ? undefined : 1960 + (n % 50),
-          document_author: n % 2 ? "J. Derrida" : "Other, A.",
+          document_author: n % 2 ? "J. Author" : "Other, A.",
           needs_review: n % 4 === 0,
           text: "x".repeat((n * 37) % 500),
           topics: n % 3 ? ["a", "b;c", " a "] : "d|e",

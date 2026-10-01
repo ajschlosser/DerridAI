@@ -11,7 +11,7 @@ const meta = {
     sort: "title-asc",
     filters: { needsReview: false, dbStatus: "", author: "" },
     viewMode: "cards",
-    authors: ["Jacques Derrida", "Emmanuel Levinas"],
+    authors: ["Jane Author", "Emmanuel Levinas"],
     totalWorks: 64,
     visibleWorks: 64,
     totalReview: 7,

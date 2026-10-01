@@ -19,13 +19,13 @@ from app.metadata_exemplars import (
 
 def blocks() -> dict[str, dict]:
     return {
-        "b1": {"block_id": "b1", "page": 7, "text": "Derrida introduces the question of responsibility."},
+        "b1": {"block_id": "b1", "page": 7, "text": "Author introduces the question of responsibility."},
         "b2": {
             "block_id": "b2",
             "page": 7,
             "text": "For Levinas, responsibility precedes the freedom of the subject.",
         },
-        "b3": {"block_id": "b3", "page": 8, "text": "Derrida then complicates this formulation."},
+        "b3": {"block_id": "b3", "page": 8, "text": "Author then complicates this formulation."},
     }
 
 
@@ -41,12 +41,12 @@ def reviewed_record(**overrides):
             {"block_id": "b3", "page": 8},
         ],
         "text": (
-            "Derrida introduces the question of responsibility. "
+            "Author introduces the question of responsibility. "
             "For Levinas, responsibility precedes the freedom of the subject. "
-            "Derrida then complicates this formulation."
+            "Author then complicates this formulation."
         ),
         "position_holder": "Levinas",
-        "speaker": "Derrida",
+        "speaker": "Author",
         "discourse_role": "reported_position",
         "metadata_field_status": {
             "position_holder": {
@@ -71,7 +71,7 @@ def test_build_metadata_exemplar_binds_field_to_exact_source_evidence():
         reviewed_record(),
         "position_holder",
         blocks(),
-        schema_id="derrida",
+        schema_id="author",
         schema_version="v7",
     )
 
@@ -119,7 +119,7 @@ def test_unreviewed_or_stale_evidence_does_not_become_an_exemplar():
         }
     )
     human_correction_with_old_model_evidence = reviewed_record(
-        position_holder="Derrida",
+        position_holder="Author",
         metadata_field_status={
             "position_holder": {"status": "human_confirmed", "method": "human"}
         },
@@ -147,7 +147,7 @@ def test_unreviewed_or_stale_evidence_does_not_become_an_exemplar():
 
 def test_explicit_human_evidence_allows_a_direct_human_value():
     record = reviewed_record(
-        position_holder="Derrida",
+        position_holder="Author",
         metadata_field_status={
             "position_holder": {"status": "human_confirmed", "method": "human"}
         },
@@ -163,7 +163,7 @@ def test_explicit_human_evidence_allows_a_direct_human_value():
     exemplar = build_metadata_exemplar(record, "position_holder", blocks())
 
     assert exemplar is not None
-    assert exemplar["field_value"] == "Derrida"
+    assert exemplar["field_value"] == "Author"
     assert exemplar["evidence_text"] == blocks()["b3"]["text"]
     assert exemplar["reviewed_at"] == "2026-09-23T10:00:00Z"
 
@@ -204,7 +204,7 @@ def test_confirmed_absence_requires_human_bound_evidence_and_renders_as_absence(
 
 def test_correction_exemplar_keeps_rejected_value_as_negative_only():
     record = reviewed_record(
-        position_holder="Derrida",
+        position_holder="Author",
         metadata_field_status={
             "position_holder": {"status": "human_confirmed", "method": "human"}
         },
@@ -218,7 +218,7 @@ def test_correction_exemplar_keeps_rejected_value_as_negative_only():
             {
                 "field": "position_holder",
                 "rejected_value": "Levinas",
-                "chosen_value": "Derrida",
+                "chosen_value": "Author",
                 "model": "small-model",
                 "at": "2026-09-23T10:00:00Z",
             }
@@ -230,10 +230,10 @@ def test_correction_exemplar_keeps_rejected_value_as_negative_only():
     assert len(corrections) == 1
     correction = corrections[0]
     assert correction["kind"] == "correction"
-    assert correction["field_value"] == "Derrida"
+    assert correction["field_value"] == "Author"
     assert correction["rejected_value"] == "Levinas"
     rendered = prompt_example(correction, similarity=0.83)
-    assert rendered["value"] == "Derrida"
+    assert rendered["value"] == "Author"
     assert rendered["rejected_value"] == "Levinas"
     assert rendered["evidence"] == blocks()["b3"]["text"]
     assert rendered["similarity"] == 0.83
@@ -266,7 +266,7 @@ def test_editorial_memory_prefers_bound_evidence_over_whole_record_excerpt():
             assert build_id == "build-1"
             return {
                 "asset_id": "asset-1",
-                "schema_id": "derrida",
+                "schema_id": "author",
                 "schema_version": "v7",
             }
 
@@ -303,7 +303,7 @@ def test_editorial_memory_prefers_bound_evidence_over_whole_record_excerpt():
 def test_prompt_example_budget_caps_each_field_and_total_packet():
     examples = {
         "speaker": [
-            {"record_id": f"s{index}", "value": "Derrida", "excerpt": "x" * 120}
+            {"record_id": f"s{index}", "value": "Author", "excerpt": "x" * 120}
             for index in range(6)
         ],
         "position_holder": [
@@ -349,7 +349,7 @@ def test_prompt_example_budget_honors_configured_field_limit():
 
 def test_prompt_example_budget_round_robins_across_fields():
     examples = {
-        "speaker": [{"record_id": "s", "value": "Derrida", "excerpt": "x" * 40}],
+        "speaker": [{"record_id": "s", "value": "Author", "excerpt": "x" * 40}],
         "position_holder": [{"record_id": "p", "value": "Levinas", "excerpt": "y" * 40}],
         "stance": [{"record_id": "t", "value": "critical", "excerpt": "z" * 40}],
     }
@@ -380,7 +380,7 @@ def test_editorial_memory_semantic_retrieval_uses_bound_canonical_exemplars():
             return {
                 "asset_id": "asset-1",
                 "schema": {
-                    "id": "derrida",
+                    "id": "author",
                     "schema_version": "v7",
                     "fields": [
                         {
@@ -413,7 +413,7 @@ def test_editorial_memory_semantic_retrieval_uses_bound_canonical_exemplars():
         def retrieve(self, **kwargs):
             self.calls.append(kwargs)
             assert kwargs["scope_id"] == "build-1"
-            assert kwargs["schema_id"] == "derrida"
+            assert kwargs["schema_id"] == "author"
             assert kwargs["schema_version"] == "v7"
             assert kwargs["language"] == "en"
             assert kwargs["exclude_record_id"] == "r2"
@@ -504,7 +504,7 @@ def test_editorial_memory_can_disable_progressive_retrieval_for_ablation():
         def get_build(self, build_id):
             return {
                 "asset_id": "asset-1",
-                "schema_id": "derrida",
+                "schema_id": "author",
                 "schema_version": "v7",
             }
 
@@ -573,7 +573,7 @@ def test_editorial_memory_semantic_index_can_serve_evidence_bound_quotation_fiel
         def get_build(self, build_id):
             return {
                 "asset_id": "asset-1",
-                "schema_id": "derrida",
+                "schema_id": "author",
                 "metadata_schema_version": "1.0.0",
             }
 
@@ -641,7 +641,7 @@ def test_metadata_prompts_receive_only_examples_for_their_family(monkeypatch):
 
     record = {
         "record_id": "r-current",
-        "text": 'Derrida writes "responsibility precedes freedom."',
+        "text": 'Author writes "responsibility precedes freedom."',
         "source_block_ids": ["b1"],
         "metadata_field_status": {},
     }
@@ -649,7 +649,7 @@ def test_metadata_prompts_receive_only_examples_for_their_family(monkeypatch):
         "speaker": [
             {
                 "record_id": "r-speaker",
-                "value": "Derrida",
+                "value": "Author",
                 "excerpt": "SPEAKER_ONLY_PROGRESSIVE_MARKER",
             }
         ],
@@ -724,7 +724,7 @@ def test_editorial_memory_applies_group_retrieval_policy_to_locked_core_fields()
             return {
                 "asset_id": "asset-1",
                 "schema": {
-                    "id": "derrida",
+                    "id": "author",
                     "schema_version": "v7",
                     "groups": [
                         {
@@ -787,7 +787,7 @@ def test_editorial_memory_disabled_field_does_not_leak_through_lexical_fallback(
             return {
                 "asset_id": "asset-1",
                 "schema": {
-                    "id": "derrida",
+                    "id": "author",
                     "schema_version": "v7",
                     "fields": [
                         {
@@ -835,7 +835,7 @@ def test_editorial_memory_excludes_corrections_when_field_policy_disables_them()
     from app.corpus_editorial_memory import EditorialMemoryMixin
 
     reviewed = reviewed_record(
-        position_holder="Derrida",
+        position_holder="Author",
         metadata_field_status={
             "position_holder": {"status": "human_confirmed", "method": "human"}
         },
@@ -850,7 +850,7 @@ def test_editorial_memory_excludes_corrections_when_field_policy_disables_them()
             {
                 "field": "position_holder",
                 "rejected_value": "Levinas",
-                "chosen_value": "Derrida",
+                "chosen_value": "Author",
                 "model": "small-model",
                 "at": "2026-09-23T10:00:00Z",
             }
@@ -859,7 +859,7 @@ def test_editorial_memory_excludes_corrections_when_field_policy_disables_them()
     current = {
         "record_id": "r2",
         "record_revision": 1,
-        "text": "Derrida discusses responsibility.",
+        "text": "Author discusses responsibility.",
         "language": "en",
         "metadata_field_status": {},
     }
@@ -872,7 +872,7 @@ def test_editorial_memory_excludes_corrections_when_field_policy_disables_them()
             return {
                 "asset_id": "asset-1",
                 "schema": {
-                    "id": "derrida",
+                    "id": "author",
                     "schema_version": "v7",
                     "fields": [
                         {
@@ -955,7 +955,7 @@ def test_editorial_memory_honors_confirmed_absence_retrieval_policy():
             return {
                 "asset_id": "asset-1",
                 "schema": {
-                    "id": "derrida",
+                    "id": "author",
                     "schema_version": "v7",
                     "fields": [
                         {
@@ -1020,7 +1020,7 @@ def test_editorial_memory_zero_precedent_limit_disables_field_examples():
             return {
                 "asset_id": "asset-1",
                 "schema": {
-                    "id": "derrida",
+                    "id": "author",
                     "schema_version": "v7",
                     "fields": [
                         {

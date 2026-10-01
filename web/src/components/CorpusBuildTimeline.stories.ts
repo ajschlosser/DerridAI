@@ -13,7 +13,7 @@ const build: any = {
   record_count: 63,
   needs_review_count: 0,
   accepted_count: 63,
-  profile_id: "derrida-scholarly-v8",
+  profile_id: "scholarly-v8",
   build_events: [
     { at: "2026-09-17T18:00:00Z", stage: "structure", status: "running", progress: 0.05 },
     { at: "2026-09-17T18:02:00Z", stage: "segmenting", status: "running", progress: 0.18 },

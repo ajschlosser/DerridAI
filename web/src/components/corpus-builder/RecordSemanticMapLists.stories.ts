@@ -13,7 +13,7 @@ const map = {
   ],
   linked_records: [
     {
-      record_id: "derrida-grammatology-0150",
+      record_id: "author-grammatology-0150",
       preview: "Presence again, read against Heidegger.",
       score: 1.4,
       shared_node_count: 2,
@@ -34,7 +34,7 @@ const neighborhood = {
       predicate: "questions",
       relation_kind: "semantic",
       authority_status: "human_confirmed",
-      record_ids: ["derrida-grammatology-0142"],
+      record_ids: ["author-grammatology-0142"],
     },
     {
       id: "rel:2",
@@ -43,13 +43,13 @@ const neighborhood = {
       predicate: "co_occurs_with",
       relation_kind: "observational",
       authority_status: "unreviewed",
-      record_ids: ["derrida-grammatology-0150"],
+      record_ids: ["author-grammatology-0150"],
     },
   ],
   total_edges: 2,
   records: [
-    { record_id: "derrida-grammatology-0142", preview: "Heidegger questions presence." },
-    { record_id: "derrida-grammatology-0150", preview: "Presence again." },
+    { record_id: "author-grammatology-0142", preview: "Heidegger questions presence." },
+    { record_id: "author-grammatology-0150", preview: "Presence again." },
   ],
   total_records: 2,
 } as unknown as SemanticNodeNeighborhood;
@@ -57,7 +57,7 @@ const neighborhood = {
 const meta = {
   title: "Corpus Builder/Review/Semantic Map Lists",
   component: RecordSemanticMapLists,
-  args: { map, neighborhood: null, recordId: "derrida-grammatology-0142", idPrefix: "story" },
+  args: { map, neighborhood: null, recordId: "author-grammatology-0142", idPrefix: "story" },
 } satisfies Meta<typeof RecordSemanticMapLists>;
 
 export default meta;

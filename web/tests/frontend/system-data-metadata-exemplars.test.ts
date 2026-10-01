@@ -40,7 +40,7 @@ describe("System Data metadata examples", () => {
         kinds: ["positive"],
         languages: ["en"],
         scopes: ["build-1"],
-        schemas: ["derrida"],
+        schemas: ["author"],
       },
       rows: [
         {
@@ -53,7 +53,7 @@ describe("System Data metadata examples", () => {
           field_value: "Levinas",
           kind: "positive",
           assertion_status: "human_confirmed",
-          schema_id: "derrida",
+          schema_id: "author",
           schema_version: "v7",
           language: "en",
           region_type: "main_text",
@@ -124,7 +124,7 @@ describe("System Data metadata examples", () => {
     routeQuery.field = "position_holder";
     routeQuery.language = "en";
     routeQuery.build = "build-1";
-    routeQuery.schema = "derrida";
+    routeQuery.schema = "author";
     routeQuery.record = "record-1";
     routeQuery.offset = "25";
 
@@ -138,7 +138,7 @@ describe("System Data metadata examples", () => {
         field: "position_holder",
         language: "en",
         scope_id: "build-1",
-        schema_id: "derrida",
+        schema_id: "author",
         record_id: "record-1",
         offset: 25,
       }),

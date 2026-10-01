@@ -157,7 +157,7 @@ def test_nlp_candidates_do_not_overwrite_present_memory_or_human_values():
     app.field_assertions.create_memory_assertion(
         record,
         "persons",
-        ["Derrida"],
+        ["Author"],
         schema=schema,
         confidence=0.9,
         reason="Reviewed precedents agree.",
@@ -175,7 +175,7 @@ def test_nlp_candidates_do_not_overwrite_present_memory_or_human_values():
     summary = app.metadata_candidates.apply_indexing_nlp_candidates(record, schema)
 
     assert summary["resolved_fields"] == []
-    assert record["persons"] == ["Derrida"]
+    assert record["persons"] == ["Author"]
     assert record["works_referenced"] == ["Glas"]
     assert app.field_assertions.current_assertion_by_name(record, "persons").derivation_method == "derridai:memory"
     assert app.field_assertions.current_assertion_by_name(record, "works_referenced").authority_status == "human_confirmed"
