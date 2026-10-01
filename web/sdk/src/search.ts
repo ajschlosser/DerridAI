@@ -117,6 +117,22 @@ function fallbackWarning(
   return { code, message, details };
 }
 
+
+function deduplicateRecords(records: PublicationRecord[]): {
+  records: PublicationRecord[];
+  duplicatesRemoved: number;
+} {
+  const seen = new Set<string>();
+  const unique: PublicationRecord[] = [];
+  for (const record of records) {
+    const id = String(record.record_id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    unique.push(record);
+  }
+  return { records: unique, duplicatesRemoved: records.length - unique.length };
+}
+
 export class SearchEngine {
   constructor(
     private readonly manifest: PublicationManifest,
@@ -135,7 +151,10 @@ export class SearchEngine {
     this.events.emit({ type: "search-start", runId, query });
 
     const candidateSet = await this.repository.candidates(filters, this.locale, runId, signal);
-    const lexical = lexicalScores(query, candidateSet.records, this.locale);
+    const deduplicated = deduplicateRecords(candidateSet.records);
+    const candidates = deduplicated.records;
+    const duplicatesRemoved = deduplicated.duplicatesRemoved;
+    const lexical = lexicalScores(query, candidates, this.locale);
     const semanticAvailable = Boolean(
       this.manifest.features?.semantic_search && this.manifest.vector_index?.dimension,
     );
@@ -146,8 +165,9 @@ export class SearchEngine {
         modeRequested,
         "keyword",
         [],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
+        duplicatesRemoved,
         semanticAvailable,
         runId,
       );
@@ -164,8 +184,9 @@ export class SearchEngine {
             "This publication has no compatible semantic vectors; keyword results were returned.",
           ),
         ],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
+        duplicatesRemoved,
         false,
         runId,
       );
@@ -182,8 +203,9 @@ export class SearchEngine {
             "No embedding capability was supplied; keyword results were returned.",
           ),
         ],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
+        duplicatesRemoved,
         true,
         runId,
       );
@@ -203,8 +225,9 @@ export class SearchEngine {
             contractMismatch,
           ),
         ],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
+        duplicatesRemoved,
         true,
         runId,
       );
@@ -229,8 +252,9 @@ export class SearchEngine {
               : "Embedding generation failed; keyword results were returned.",
           ),
         ],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
+        duplicatesRemoved,
         true,
         runId,
       );
@@ -249,15 +273,16 @@ export class SearchEngine {
             { expected: expectedDimension, actual: vector.length },
           ),
         ],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
+        duplicatesRemoved,
         true,
         runId,
       );
     }
 
     await this.repository.ensureVectors(filters, runId, signal);
-    const semantic = candidateSet.records
+    const semantic = candidates
       .map((record) => {
         const semanticScore = cosine(vector, this.repository.vector(String(record.record_id)));
         return {
@@ -275,8 +300,9 @@ export class SearchEngine {
         modeRequested,
         "semantic",
         [],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
+        duplicatesRemoved,
         true,
         runId,
       );
@@ -290,7 +316,7 @@ export class SearchEngine {
       lexical.map((item) => [String(item.record.record_id), item.lexicalScore ?? 0]),
     );
 
-    const merged: ScoredRecord[] = candidateSet.records.map((record) => {
+    const merged: ScoredRecord[] = candidates.map((record) => {
       const id = String(record.record_id);
       const lexicalScore = lexicalById.get(id) ?? 0;
       const semanticScore = semanticById.get(id);
@@ -308,7 +334,7 @@ export class SearchEngine {
       modeRequested,
       "hybrid",
       [],
-      candidateSet.records.length,
+      candidates.length,
       candidateSet.chunksLoaded,
       true,
       runId,
@@ -360,6 +386,7 @@ export class SearchEngine {
     warnings: SearchWarning[],
     candidateCount: number,
     chunksLoaded: number,
+    duplicatesRemoved: number,
     semanticAvailable: boolean,
     runId: string,
   ): SearchResponse {
@@ -379,6 +406,7 @@ export class SearchEngine {
       diagnostics: {
         candidateCount,
         chunksLoaded,
+        duplicatesRemoved,
         semanticAvailable,
       },
     };
