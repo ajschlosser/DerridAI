@@ -2,17 +2,8 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 
 import { createHash } from "node:crypto";
-import {
-  createReadStream,
-  createWriteStream,
-  existsSync,
-} from "node:fs";
-import {
-  mkdir,
-  readFile,
-  rename,
-  rm,
-} from "node:fs/promises";
+import { createReadStream, createWriteStream, existsSync } from "node:fs";
+import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { once } from "node:events";
@@ -21,10 +12,7 @@ import {
   EMBEDDER_INFO_MARKER,
   jsonForModule,
 } from "./browser-embedder-lib.mjs";
-import {
-  browserEmbedderManifest,
-  modelFileUrl,
-} from "./browser-embedder-manifest.mjs";
+import { browserEmbedderManifest, modelFileUrl } from "./browser-embedder-manifest.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(scriptDir, "..");
@@ -74,14 +62,10 @@ async function sha256File(path) {
 
 function verifyMetadata(asset, actual, label) {
   if (asset.size !== undefined && actual.size !== asset.size) {
-    throw new Error(
-      `${label} size mismatch: expected ${asset.size}, got ${actual.size}.`,
-    );
+    throw new Error(`${label} size mismatch: expected ${asset.size}, got ${actual.size}.`);
   }
   if (asset.sha256 && actual.sha256 !== asset.sha256) {
-    throw new Error(
-      `${label} SHA-256 mismatch: expected ${asset.sha256}, got ${actual.sha256}.`,
-    );
+    throw new Error(`${label} SHA-256 mismatch: expected ${asset.sha256}, got ${actual.sha256}.`);
   }
 }
 
@@ -250,10 +234,7 @@ async function writeArtifact(template, downloaded, info, outputPath) {
   }
 
   const beforeAssets = template.slice(0, assetMarkerIndex);
-  const between = template.slice(
-    assetMarkerIndex + ASSET_TABLE_MARKER.length,
-    infoMarkerIndex,
-  );
+  const between = template.slice(assetMarkerIndex + ASSET_TABLE_MARKER.length, infoMarkerIndex);
   const afterInfo = template.slice(infoMarkerIndex + EMBEDDER_INFO_MARKER.length);
 
   await mkdir(dirname(outputPath), { recursive: true });
@@ -293,10 +274,7 @@ async function main() {
     console.log(`${(result.size / (1024 * 1024)).toFixed(2)} MiB`);
   }
 
-  const template = await readFile(
-    resolve(scriptDir, "browser-embedder-runtime.mjs"),
-    "utf8",
-  );
+  const template = await readFile(resolve(scriptDir, "browser-embedder-runtime.mjs"), "utf8");
   const info = buildInfo(downloaded);
   await writeArtifact(template, downloaded, info, options.output);
 

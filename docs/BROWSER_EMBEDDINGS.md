@@ -54,10 +54,7 @@ The generated `EMBEDDER_INFO` object records the model revision, model/runtime f
 Serve or otherwise import the generated module as an ES module:
 
 ```js
-import {
-  EMBEDDER_INFO,
-  load,
-} from "./derridai-multilingual-embedder.mjs";
+import { EMBEDDER_INFO, load } from "./derridai-multilingual-embedder.mjs";
 
 const embedder = await load();
 
@@ -76,10 +73,10 @@ console.log(documents.length); // 2
 The lower-level method is available when the caller already owns task-specific prefixing:
 
 ```js
-const vectors = await embedder.embed(
-  ["query: trace", "passage: la trace"],
-  { mode: "raw", batchSize: 8 },
-);
+const vectors = await embedder.embed(["query: trace", "passage: la trace"], {
+  mode: "raw",
+  batchSize: 8,
+});
 ```
 
 `embedQuery()` and `embedDocuments()` are preferred for retrieval because they make the E5 query/document distinction explicit.

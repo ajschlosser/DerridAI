@@ -118,11 +118,9 @@ async function main() {
 
   try {
     await page.goto(origin, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(
-      () => globalThis.__derridaiSmoke?.done === true,
-      undefined,
-      { timeout: 240_000 },
-    );
+    await page.waitForFunction(() => globalThis.__derridaiSmoke?.done === true, undefined, {
+      timeout: 240_000,
+    });
 
     const result = await page.evaluate(() => globalThis.__derridaiSmoke);
     if (result.error) throw new Error(result.error);
@@ -133,17 +131,13 @@ async function main() {
       throw new Error(`Unexpected document dimensions: ${JSON.stringify(result)}`);
     }
     if (!(result.relatedScore > result.unrelatedScore)) {
-      throw new Error(
-        `Cross-language retrieval smoke check failed: ${JSON.stringify(result)}`,
-      );
+      throw new Error(`Cross-language retrieval smoke check failed: ${JSON.stringify(result)}`);
     }
     if (result.runtimeNetworkRequired !== false) {
       throw new Error("Generated embedder does not declare an offline runtime.");
     }
     if (externalRequests.length) {
-      throw new Error(
-        `Generated embedder made external requests: ${externalRequests.join(", ")}`,
-      );
+      throw new Error(`Generated embedder made external requests: ${externalRequests.join(", ")}`);
     }
 
     console.log(JSON.stringify(result, null, 2));

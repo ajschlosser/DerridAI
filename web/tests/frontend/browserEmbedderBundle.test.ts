@@ -82,10 +82,7 @@ async function importTestRuntime() {
       new Uint8Array([0, 97, 115, 109]),
       "application/wasm",
     ),
-    "model/config.json": asset(
-      JSON.stringify({ model_type: "bert" }),
-      "application/json",
-    ),
+    "model/config.json": asset(JSON.stringify({ model_type: "bert" }), "application/json"),
   };
 
   const info = {
@@ -128,9 +125,11 @@ async function importTestRuntime() {
 }
 
 afterEach(() => {
-  delete (globalThis as typeof globalThis & {
-    __derridaiBrowserEmbedderTestState?: unknown;
-  }).__derridaiBrowserEmbedderTestState;
+  delete (
+    globalThis as typeof globalThis & {
+      __derridaiBrowserEmbedderTestState?: unknown;
+    }
+  ).__derridaiBrowserEmbedderTestState;
 });
 
 describe("self-contained browser embedder runtime", () => {
@@ -238,12 +237,8 @@ describe("self-contained browser embedder runtime", () => {
     ).__derridaiBrowserEmbedderTestState;
     expect(state.calls[0].texts).toEqual(["  déjà vu  "]);
 
-    await expect(
-      embedder.embed(["test"], { mode: "unsupported" }),
-    ).rejects.toThrow(/mode/);
-    await expect(
-      embedder.embed(["test"], { batchSize: 0 }),
-    ).rejects.toThrow(/batchSize/);
+    await expect(embedder.embed(["test"], { mode: "unsupported" })).rejects.toThrow(/mode/);
+    await expect(embedder.embed(["test"], { batchSize: 0 })).rejects.toThrow(/batchSize/);
 
     await embedder.dispose();
     await expect(embedder.embedQuery("test")).rejects.toThrow(/disposed/);

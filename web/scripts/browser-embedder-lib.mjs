@@ -23,11 +23,7 @@ function replaceExactlyOnce(source, marker, replacement) {
 
 export function renderBrowserEmbedderRuntime(template, assetTableSource, info) {
   const withAssets = replaceExactlyOnce(template, ASSET_TABLE_MARKER, assetTableSource);
-  return replaceExactlyOnce(
-    withAssets,
-    EMBEDDER_INFO_MARKER,
-    jsonForModule(info),
-  );
+  return replaceExactlyOnce(withAssets, EMBEDDER_INFO_MARKER, jsonForModule(info));
 }
 
 export function toBase64Chunks(bytes, chunkBytes = 786432) {

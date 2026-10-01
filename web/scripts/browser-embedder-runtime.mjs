@@ -278,8 +278,7 @@ export async function createEmbedder(options = {}) {
     revision: EMBEDDER_INFO.model.revision,
     dtype: EMBEDDER_INFO.model.dtype,
     device: EMBEDDER_INFO.model.device,
-    progress_callback:
-      typeof options.onProgress === "function" ? options.onProgress : undefined,
+    progress_callback: typeof options.onProgress === "function" ? options.onProgress : undefined,
   });
 
   return new BrowserTextEmbedder(extractor);
