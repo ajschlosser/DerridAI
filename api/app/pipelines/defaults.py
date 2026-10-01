@@ -626,7 +626,6 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
                 "strategy": "validate.evidence_support",
                 "config": {"min_score": 0.5},
                 "next": ["provenance"],
-                "on_empty": "semantic",
             },
             {
                 "id": "semantic",
