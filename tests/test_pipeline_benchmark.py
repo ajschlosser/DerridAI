@@ -54,6 +54,7 @@ def _case(store: _BenchmarkStore | None = None):
             search_types=["similarity", "lexical"],
             k=32,
             fetch_k=200,
+            automatic_sizing=True,
             rerank_top_n=20,
             reranker="cross_encoder",
             cross_encoder_model="cross-encoder/test-model",
@@ -147,6 +148,7 @@ def test_benchmark_case_freezes_corpus_identity_and_request_controls() -> None:
     assert case.corpus_snapshot.collections[0].source_snapshot_hash == "source-hash"
     assert case.corpus_snapshot.collections[0].embedding_revision == "rev-7"
     assert case.k == 32
+    assert case.automatic_sizing is True
     assert case.cross_encoder_model == "cross-encoder/test-model"
 
     serialized = case.model_dump_json()
@@ -159,6 +161,7 @@ def test_benchmark_case_freezes_corpus_identity_and_request_controls() -> None:
     )
     assert request.prompt == "What is the trace?"
     assert request.k == 32
+    assert request.automatic_sizing is True
     assert request.query_decomposition is False
     assert request.auto_grade is False
     assert request.use_prior_response_memory is False

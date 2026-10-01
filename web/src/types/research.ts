@@ -189,6 +189,7 @@ export type ResearchConfig = {
   search_types: string[];
   k: number;
   fetch_k: number;
+  automatic_sizing: boolean;
   lambda_mult: number;
   rrf_k: number;
   rerank_top_n: number;

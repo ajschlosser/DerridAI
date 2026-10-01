@@ -171,10 +171,14 @@ def build_research_trace(
                 output_count=raw_count if semantic_executed else 0,
                 collection=collection_label,
                 parameters={
-                    "k": retrieval.get("k"),
+                    "k": retrieval.get("effective_k", retrieval.get("k")),
+                    "requested_k": retrieval.get("k"),
                     "fetch_k": retrieval.get(
                         "semantic_fetch_k",
                         retrieval.get("fetch_k"),
+                    ),
+                    "automatic_sizing": bool(
+                        (retrieval.get("automatic_sizing") or {}).get("enabled")
                     ),
                     **scope_parameter,
                 },
@@ -210,10 +214,14 @@ def build_research_trace(
                 output_count=raw_count if lexical_executed else 0,
                 collection=collection_label,
                 parameters={
-                    "k": retrieval.get("k"),
+                    "k": retrieval.get("effective_k", retrieval.get("k")),
+                    "requested_k": retrieval.get("k"),
                     "fetch_k": retrieval.get(
                         "lexical_fetch_k",
                         retrieval.get("fetch_k"),
+                    ),
+                    "automatic_sizing": bool(
+                        (retrieval.get("automatic_sizing") or {}).get("enabled")
                     ),
                     **scope_parameter,
                 },

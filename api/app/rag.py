@@ -24,6 +24,11 @@ from .pipelines.research import (
 )
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .research_memory import ResponseMemoryIndex, memory_guidance
+from .research_sizing import (
+    automatic_collection_sizing,
+    collapse_adjacent_candidates,
+    expand_context_neighbors,
+)
 from .retrieval_selection import (
     cosine_similarity,
     distance_to_relevance,
@@ -608,6 +613,7 @@ def _context_string(
     record_char_limit: int,
     total_char_limit: int,
     prompt_metadata: RAGPromptMetadataPolicy | None = None,
+    skip_overflow: bool = False,
 ) -> tuple[str, dict[str, str], list[EvidenceItem]]:
     blocks: list[str] = []
     works: dict[str, str] = {}
@@ -655,6 +661,12 @@ def _context_string(
 
         projected = total_chars + len(block) + (2 if blocks else 0)
         if blocks and projected > total_char_limit:
+            if skip_overflow:
+                # Auto-sizing packs all ranking anchors before neighbors. When
+                # one item cannot fit, keep looking rather than letting a single
+                # large Record prevent later compact evidence from using the
+                # remaining budget.
+                continue
             break
 
         total_chars = projected
@@ -670,6 +682,11 @@ def _context_string(
             "inline_citation": inline,
             "full_citation": full,
             "text_truncated": text_truncated,
+            "selection_role": item.get("selection_role"),
+            "neighbor_of": item.get("neighbor_of"),
+            "neighbor_distance": item.get("neighbor_distance"),
+            "neighbor_reason": item.get("neighbor_reason"),
+            "automatic_region_size": item.get("automatic_region_size"),
         })
         blocks.append(block)
 
@@ -862,7 +879,7 @@ def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[
             str(record.get("topics") or ""),
             str(record.get("concepts") or ""),
             str(record.get("persons") or ""),
-            str(record.get("text") or ""),
+            str(item.get("_rerank_text") or record.get("text") or ""),
         ])
         tokens = _tokenize(text)
         overlap = len(q & tokens) / max(1, len(q))
@@ -899,7 +916,14 @@ def _cross_encoder_rerank(
 
     scores, telemetry = predict_scores(
         [
-            (query, str(item["record"].get("text") or ""))
+            (
+                query,
+                str(
+                    item.get("_rerank_text")
+                    or item["record"].get("text")
+                    or ""
+                ),
+            )
             for item in docs
         ],
         model_name=model_name,
@@ -1241,9 +1265,55 @@ def run_rag_pipeline(
             "No selected language collection matches the requested locale scope."
         )
 
-    retrieve_k = max(1, int(request.k))
-    semantic_fetch_k = max(retrieve_k, runtime_settings.semantic_fetch_k)
-    lexical_fetch_k = max(retrieve_k, runtime_settings.lexical_fetch_k)
+    requested_retrieve_k = max(1, int(request.k))
+    semantic_fetch_k = max(requested_retrieve_k, runtime_settings.semantic_fetch_k)
+    lexical_fetch_k = max(requested_retrieve_k, runtime_settings.lexical_fetch_k)
+    effective_retrieve_k = requested_retrieve_k
+    automatic_sizing_detail: dict[str, Any] = {
+        "enabled": bool(request.automatic_sizing),
+        "collections": [],
+    }
+    if request.automatic_sizing and collections:
+        sizing_started = time.perf_counter()
+        for collection in collections:
+            try:
+                stats = store.record_size_stats(collection["name"])
+                sizing = automatic_collection_sizing(
+                    count=max(0, int(collection.get("count") or 0)),
+                    median_record_chars=stats.get("median_record_chars"),
+                    requested_k=requested_retrieve_k,
+                    semantic_fetch_k=runtime_settings.semantic_fetch_k,
+                    lexical_fetch_k=runtime_settings.lexical_fetch_k,
+                    mmr_limit=runtime_settings.retrieval_mmr_limit,
+                )
+                sizing["sample_count"] = int(stats.get("sample_count") or 0)
+            except Exception as exc:
+                sizing = automatic_collection_sizing(
+                    count=max(0, int(collection.get("count") or 0)),
+                    median_record_chars=None,
+                    requested_k=requested_retrieve_k,
+                    semantic_fetch_k=runtime_settings.semantic_fetch_k,
+                    lexical_fetch_k=runtime_settings.lexical_fetch_k,
+                    mmr_limit=runtime_settings.retrieval_mmr_limit,
+                )
+                sizing["sample_count"] = 0
+                sizing["fallback_reason"] = type(exc).__name__
+            collection["_rag_automatic_sizing"] = sizing
+            automatic_sizing_detail["collections"].append({
+                "collection": collection["name"],
+                "route": collection.get("_rag_route"),
+                **sizing,
+            })
+            effective_retrieve_k = max(effective_retrieve_k, int(sizing["k"]))
+            semantic_fetch_k = max(semantic_fetch_k, int(sizing["semantic_fetch_k"]))
+            lexical_fetch_k = max(lexical_fetch_k, int(sizing["lexical_fetch_k"]))
+        stages.append({
+            "name": "automatic_sizing",
+            "seconds": time.perf_counter() - sizing_started,
+            "detail": automatic_sizing_detail,
+        })
+        query_metadata["limit_retrieval"] = effective_retrieve_k
+
     raw_results: list[dict[str, Any]] = []
     total_units = len(collections) * max(1, len(effective_search_types))
     unit = 0
@@ -1252,6 +1322,21 @@ def run_rag_pipeline(
         update("retrieval", 1, 1, f"Retrieval skipped · {len(selected_candidates)} selected evidence records")
 
     for collection in collections:
+        sizing = (
+            collection.get("_rag_automatic_sizing")
+            if request.automatic_sizing
+            else None
+        )
+        collection_retrieve_k = int((sizing or {}).get("k") or requested_retrieve_k)
+        collection_semantic_fetch_k = int(
+            (sizing or {}).get("semantic_fetch_k") or semantic_fetch_k
+        )
+        collection_lexical_fetch_k = int(
+            (sizing or {}).get("lexical_fetch_k") or lexical_fetch_k
+        )
+        collection_mmr_limit = int(
+            (sizing or {}).get("mmr_limit") or runtime_settings.retrieval_mmr_limit
+        )
         check_cancel()
         locale_codes = set(collection.get("_rag_locales") or collection.get("language_codes") or [])
         query = (
@@ -1267,7 +1352,7 @@ def run_rag_pipeline(
                     store.semantic_candidates(
                         collection["name"],
                         query,
-                        min(semantic_fetch_k, max(1, collection["count"])),
+                        min(collection_semantic_fetch_k, max(1, collection["count"])),
                     ),
                     collection,
                     locale_codes,
@@ -1292,7 +1377,10 @@ def run_rag_pipeline(
                 total_units,
                 f"Similarity · {collection['name']} · {collection.get('_rag_route', '')}",
             )
-            for rank, candidate in enumerate(semantic_candidates[:retrieve_k], start=1):
+            for rank, candidate in enumerate(
+                semantic_candidates[:collection_retrieve_k],
+                start=1,
+            ):
                 row = dict(candidate)
                 row["search_type"] = "similarity"
                 row["search_rank"] = rank
@@ -1310,12 +1398,15 @@ def run_rag_pipeline(
                 store.lexical_search(
                     collection["name"],
                     query,
-                    min(lexical_fetch_k, max(1, collection["count"])),
+                    min(collection_lexical_fetch_k, max(1, collection["count"])),
                 ),
                 collection,
                 locale_codes,
             )
-            for rank, candidate in enumerate(lexical_candidates[:retrieve_k], start=1):
+            for rank, candidate in enumerate(
+                lexical_candidates[:collection_retrieve_k],
+                start=1,
+            ):
                 row = dict(candidate)
                 row["collection"] = collection["name"]
                 row["search_type"] = "lexical"
@@ -1332,7 +1423,7 @@ def run_rag_pipeline(
             )
             mmr = _mmr_select(
                 semantic_candidates,
-                k=min(retrieve_k, runtime_settings.retrieval_mmr_limit),
+                k=min(collection_retrieve_k, collection_mmr_limit),
                 lambda_mult=runtime_settings.retrieval_mmr_lambda,
             )
             for rank, candidate in enumerate(mmr, start=1):
@@ -1400,8 +1491,26 @@ def run_rag_pipeline(
         ),
         reverse=True,
     )
+    fused_deduplicated_count = len(deduped)
+    ranking_candidates = deduped
+    region_collapse_detail: dict[str, Any] = {
+        "enabled": bool(request.automatic_sizing and not request.skip_retrieval),
+        "input_count": len(deduped),
+        "output_count": len(deduped),
+        "collapsed_records": 0,
+    }
+    if request.automatic_sizing and not request.skip_retrieval:
+        collapse_started = time.perf_counter()
+        ranking_candidates, collapse_counts = collapse_adjacent_candidates(deduped)
+        region_collapse_detail.update(collapse_counts)
+        stages.append({
+            "name": "automatic_region_collapse",
+            "seconds": time.perf_counter() - collapse_started,
+            "detail": region_collapse_detail,
+        })
+
     pre_rerank_diagnostics = (
-        _candidate_diagnostics(deduped) if stop_after_context else []
+        _candidate_diagnostics(ranking_candidates) if stop_after_context else []
     )
     update("deduplicate", 1, 1, f"{len(deduped)} unique records after rank fusion")
     stages.append({
@@ -1451,16 +1560,23 @@ def run_rag_pipeline(
         + query_metadata["prompt_query_fr"]
     ).strip()
     requested_top_n = (
-        len(deduped)
+        len(ranking_candidates)
         if request.skip_retrieval
         else runtime_settings.rerank_top_n
     )
-    selected_pool = [item for item in deduped if item.get("selected_evidence")]
-    retrieved_pool = [item for item in deduped if not item.get("selected_evidence")]
+    selected_pool = [
+        item for item in ranking_candidates if item.get("selected_evidence")
+    ]
+    retrieved_pool = [
+        item for item in ranking_candidates if not item.get("selected_evidence")
+    ]
     effective_top_n = (
-        len(deduped)
+        len(ranking_candidates)
         if request.skip_retrieval
-        else min(max(requested_top_n, len(selected_pool)), max(1, len(deduped)))
+        else min(
+            max(requested_top_n, len(selected_pool)),
+            max(1, len(ranking_candidates)),
+        )
     )
     remaining_slots = max(0, effective_top_n - len(selected_pool))
     post_diversity = pipeline_plan.post_rerank_diversity
@@ -1479,7 +1595,7 @@ def run_rag_pipeline(
     cross_encoder_calls = 0
 
     if request.skip_retrieval:
-        reranked = selected_pool or deduped
+        reranked = selected_pool or ranking_candidates
         for item in reranked:
             item["rerank_score"] = item.get("rerank_score", 1.0)
         reranked_retrieved: list[dict[str, Any]] = []
@@ -1690,8 +1806,34 @@ def run_rag_pipeline(
     post_selection_diagnostics = (
         _candidate_diagnostics(reranked) if stop_after_context else []
     )
+    context_candidates = list(reranked)
+    context_expansion_detail: dict[str, Any] = {
+        "enabled": bool(request.automatic_sizing),
+        "anchor_count": len(reranked),
+        "neighbor_count": 0,
+    }
+    if request.automatic_sizing:
+        expansion_started = time.perf_counter()
+        context_candidates, expansion_counts = expand_context_neighbors(
+            reranked,
+            load_document_records=store.document_records,
+            total_char_limit=runtime_settings.evidence_total_char_limit,
+        )
+        context_expansion_detail.update(expansion_counts)
+        stages.append({
+            "name": "automatic_context_expansion",
+            "seconds": time.perf_counter() - expansion_started,
+            "detail": context_expansion_detail,
+        })
+
     stage_start = time.perf_counter()
-    reranked, insufficient_records = partition_sufficient_records(reranked)
+    context_candidates, insufficient_records = partition_sufficient_records(
+        context_candidates
+    )
+    if not request.automatic_sizing:
+        # Preserve the historical manual-mode meaning of reranked_count: only
+        # provenance-sufficient Records that can enter the evidence packet.
+        reranked = context_candidates
     if insufficient_records:
         warnings.append(
             "Excluded provenance-incomplete records from evidence: "
@@ -1701,10 +1843,11 @@ def run_rag_pipeline(
             )
         )
     retrieval_context, works, evidence = _context_string(
-        reranked,
+        context_candidates,
         record_char_limit=runtime_settings.evidence_record_char_limit,
         total_char_limit=runtime_settings.evidence_total_char_limit,
         prompt_metadata=request.prompt_metadata,
+        skip_overflow=request.automatic_sizing,
     )
     sufficiency_issues = evidence_sufficiency_issues(evidence)
     stages.append({
@@ -1741,14 +1884,21 @@ def run_rag_pipeline(
         "raw_count": len(raw_results),
         # Items in the searched collections (counts only), for scaling fits.
         "scope_size": sum(max(0, int(item.get("count") or 0)) for item in collections),
-        "deduplicated_count": len(deduped),
+        "deduplicated_count": fused_deduplicated_count,
+        "ranking_region_count": len(ranking_candidates),
         "reranked_count": len(reranked),
+        "evidence_count": len(evidence),
         "search_types": list(effective_search_types),
         "requested_search_types": list(request.search_types),
         "available_search_types": sorted(available_search_types),
         "post_rerank_diversity": pipeline_plan.post_rerank_diversity,
         "k": request.k,
+        "effective_k": effective_retrieve_k,
         "fetch_k": max(semantic_fetch_k, lexical_fetch_k),
+        "requested_fetch_k": request.fetch_k,
+        "automatic_sizing": automatic_sizing_detail,
+        "automatic_region_collapse": region_collapse_detail,
+        "automatic_context_expansion": context_expansion_detail,
         "semantic_fetch_k": semantic_fetch_k,
         "lexical_fetch_k": lexical_fetch_k,
         "lambda_mult": runtime_settings.retrieval_mmr_lambda,

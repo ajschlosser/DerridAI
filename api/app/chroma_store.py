@@ -363,6 +363,12 @@ def _notes_collection_change(*extra_resources: str):
         @functools.wraps(method)
         def wrapper(self, *args, **kwargs):
             result = method(self, *args, **kwargs)
+            # Record-size samples are derived operational state. Any collection
+            # mutation can invalidate a median without changing the item count,
+            # so clear the tiny cache rather than risking stale auto-sizing.
+            size_cache = getattr(self, "_record_size_cache", None)
+            if isinstance(size_cache, dict):
+                size_cache.clear()
             operation_events.note_resource_changed("vector_collections")
             for resource in extra_resources:
                 operation_events.note_resource_changed(resource)
@@ -418,6 +424,7 @@ class ChromaStore:
             "database": str(settings.chroma_database or DEFAULT_DATABASE),
         }
         self.embeddings = Embeddings()
+        self._record_size_cache: dict[tuple[str, int, int], dict[str, int]] = {}
 
     def default_embedding_spec(self) -> tuple[str, str | None]:
         """Resolve the server-owned default used when a collection omits a contract."""
@@ -2835,6 +2842,81 @@ class ChromaStore:
             "deleted": len(ids),
             "mirrored_deletes": mirrored,
         }
+
+    def record_size_stats(
+        self,
+        store: str,
+        *,
+        sample_size: int = 256,
+    ) -> dict[str, int]:
+        """Return a bounded robust Record-size sample for Research auto-sizing.
+
+        This intentionally reads only document text, never embeddings or complete
+        metadata. Results are cached until any vector-collection mutation.
+        """
+
+        col = self._collection(store)
+        count = int(col.count())
+        if count <= 0:
+            return {"count": 0, "sample_count": 0, "median_record_chars": 0}
+
+        bounded_sample = min(count, max(1, int(sample_size)))
+        key = (str(store), count, bounded_sample)
+        cached = self._record_size_cache.get(key)
+        if cached is not None:
+            return dict(cached)
+
+        payload = col.get(limit=bounded_sample, include=["documents"])
+        lengths = sorted(
+            len(" ".join(str(document or "").split()))
+            for document in (payload.get("documents") or [])
+            if str(document or "").strip()
+        )
+        if not lengths:
+            stats = {
+                "count": count,
+                "sample_count": 0,
+                "median_record_chars": 0,
+            }
+        else:
+            midpoint = len(lengths) // 2
+            if len(lengths) % 2:
+                median = lengths[midpoint]
+            else:
+                median = int(round((lengths[midpoint - 1] + lengths[midpoint]) / 2))
+            stats = {
+                "count": count,
+                "sample_count": len(lengths),
+                "median_record_chars": median,
+            }
+        self._record_size_cache[key] = stats
+        return dict(stats)
+
+    def document_records(
+        self,
+        store: str,
+        source_document_id: str,
+    ) -> list[dict[str, Any]]:
+        """Load same-document Records for deterministic local context expansion."""
+
+        source_id = str(source_document_id or "").strip()
+        if not source_id:
+            return []
+        col = self._collection(store)
+        for field in ("source_document_id", "source_asset_id"):
+            try:
+                payload = col.get(
+                    where={field: source_id},
+                    include=["documents", "metadatas"],
+                )
+            except Exception as exc:
+                if not self._is_query_capability_error(exc):
+                    raise
+                continue
+            records = self._decode_result(payload, include_updates=False)
+            if records:
+                return records
+        return []
 
     def semantic_candidates(
         self,
