@@ -30,6 +30,8 @@ _TRUNCATION_REASONS = {
     "token_limit",
     "output_limit",
     "context_length",
+    "max_length",
+    "max_new_tokens",
 }
 
 
@@ -72,8 +74,8 @@ def finish_reason_is_truncated(reason: str | None) -> bool:
 
 def _strip_wrappers(text: str) -> str:
     value = str(text or "").strip()
-    value = re.sub(r"^\x60\x60\x60(?:json)?\s*", "", value, flags=re.I)
-    value = re.sub(r"\s*\x60\x60\x60$", "", value)
+    value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.I)
+    value = re.sub(r"\s*```$", "", value)
     return value.strip()
 
 
