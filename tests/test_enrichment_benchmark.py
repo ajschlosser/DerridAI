@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from app.enrichment_benchmark import (
     assert_enrichment_fixture_compatible,
     build_enrichment_benchmark_fixture,
