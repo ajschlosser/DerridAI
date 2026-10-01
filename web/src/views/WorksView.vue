@@ -152,13 +152,11 @@ async function boot() {
   await works.activate();
   query.value = snapshot.value?.query || "";
   loading.value = false;
-
 }
 
 function reload() {
   works.load();
   query.value = snapshot.value?.query || "";
-
 }
 
 function applyQuery(value: string) {
@@ -193,7 +191,7 @@ function applyView(patch: {
   viewMode?: WorksViewMode;
 }) {
   works.setView(patch);
-
+  resetLibraryPage();
 }
 function applyFilters(patch: Partial<WorksFilters>) {
   applyView(patch);
@@ -256,6 +254,10 @@ async function changeStore(name: string) {
   resetLibraryPage();
 }
 
+watch(
+  () => [snapshot.value?.works.length, snapshot.value?.viewMode],
+  () => setLibraryPage(libraryPage.value),
+);
 watch(fileSignature, () => {
   if (loading.value || !snapshot.value) return;
   reload();
