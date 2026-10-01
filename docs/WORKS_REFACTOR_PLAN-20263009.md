@@ -2,6 +2,19 @@
 
 This document consolidates the implementation proposals identified during review of the current Works workspace on the \`master\` branch. It covers information architecture, UX, visual design, performance, typing, metadata architecture, accessibility, responsive behavior, testing, documentation, and implementation sequencing.
 
+## Implementation status
+
+Work has started on the first data-model/performance tranche on \`task/works-refactor\`:
+
+- split collection-scale \`WorksLibraryItem\` data from selected-work \`WorkDetail\` data;
+- compute citation, full metadata, and insight graphs only for the selected admin work;
+- pre-index annotation counts once per snapshot instead of rescanning annotations for every work;
+- add a typed, first-class corpus/search-index freshness summary while preserving the distinction between known-current, merely-present, stale/absent, unknown, and unavailable records;
+- add a lightweight full-corpus work identity scope so filtering the library no longer silently narrows Create Site's available export scope;
+- centralize the existing work database status options and strengthen their TypeScript contract.
+
+The next implementation step is to finish the remaining snapshot/data-model work, then move the Works composable off the legacy runtime facade before beginning the larger layout/list/facet redesign.
+
 ## Implementation proposals
 
 1. **[Information architecture] Make the Works library the dominant page surface.** Reduce the amount of architecture/status UI users must pass through before reaching the actual collection.
