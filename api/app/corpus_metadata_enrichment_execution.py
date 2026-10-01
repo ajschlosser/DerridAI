@@ -623,6 +623,30 @@ class MetadataEnrichmentExecutionMixin:
                 and assertion.authority_status in {"human_confirmed", "human_override"}
             )
         )
+        def pass_learning_for(group_fields: list[str]) -> dict[str, Any]:
+            """Keep field-keyed pass memory aligned with this model contract."""
+            wanted = set(group_fields)
+            scoped = json.loads(json.dumps(prompt_pass_learning))
+            for key in ("field_stats", "rejected_examples"):
+                values = scoped.get(key)
+                if isinstance(values, dict):
+                    scoped[key] = {
+                        field: payload
+                        for field, payload in values.items()
+                        if field in wanted
+                    }
+            prior = scoped.get("prior_pass")
+            if isinstance(prior, dict):
+                for key in ("inferred_conventions", "disputed_fields"):
+                    values = prior.get(key)
+                    if isinstance(values, dict):
+                        prior[key] = {
+                            field: payload
+                            for field, payload in values.items()
+                            if field in wanted
+                        }
+            return scoped
+
         def base_context_for(group_fields: list[str]) -> str:
             # Each LLM family receives only precedent/convention context for fields
             # it can actually return. This preserves the global exemplar budget
@@ -644,13 +668,14 @@ class MetadataEnrichmentExecutionMixin:
                 for field in human_locked_fields
                 if field in group_fields
             }
+            relevant_pass_learning = pass_learning_for(group_fields)
             return f"""Document manifest: {json.dumps(manifest, ensure_ascii=False)}
 When document_author is present in the manifest, use it as source-document authorship context. Do not substitute a default author when it is absent, and do not infer that document_author is the speaker or position holder without evidence in this record.
 Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(relevant_conventions, ensure_ascii=False)}
 Relevant human-confirmed examples for fields in THIS metadata family (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps(relevant_examples, ensure_ascii=False)}
 If a retrieved example has kind="correction", its value is the human-supported classification and rejected_value is a known prior model mistake. Treat rejected_value as a negative precedent only; never copy or prefer it because it appears in the example.
 If an example has a "match" object, the reviewed values of the listed fields on that example's record equal this record's reviewed values; examples without it were not compared on those fields and are analogous by text only.
-How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps(prompt_pass_learning, ensure_ascii=False)}
+How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps(relevant_pass_learning, ensure_ascii=False)}
 Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps(relevant_human_fields, ensure_ascii=False)}
 Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
 {_nlp_hint_line(record, group_fields)}Current source block IDs: {source_id_json}
