@@ -1623,16 +1623,19 @@ def _nlp_hint_line(record: dict[str, Any], group_fields: list[str]) -> str:
     hints = prompt_hints(record, group_fields)
     if hints:
         lines.append(
-            "Record-local linguistic candidates found by the installed statistical tagger in THIS text "
-            "(exact surface forms). They are hints only: a name appearing here is not thereby the speaker, "
-            "quoted speaker or position holder, and you must still justify each value from the text: "
+            "LINGUISTIC ATTENTION CUES (NOT METADATA VALUES): exact surface forms found by the installed "
+            "statistical tagger in THIS text. These are spans worth inspecting, not possible answers. "
+            "Do not copy a cue list into metadata. A name appearing here is not thereby the speaker, "
+            "quoted speaker or position holder; every returned value must be independently justified "
+            "from the source text: "
             f"{json.dumps(hints, ensure_ascii=False)}"
         )
     document_hints = document_intelligence_prompt_hints(record, group_fields)
     if document_hints:
         lines.append(
-            "Whole-document linguistic candidates projected onto THIS record. These may include model-derived "
-            "coreference or quotation-speaker suggestions; they are advisory, not evidence or proposition ownership. "
-            f"Use them only when THIS record supports the same reading: {json.dumps(document_hints, ensure_ascii=False)}"
+            "WHOLE-DOCUMENT ATTENTION CUES (NOT METADATA VALUES) projected onto THIS record. These may include "
+            "model-derived coreference or quotation-speaker suggestions; they are advisory, not evidence or proposition "
+            "ownership, and must not be copied into metadata as a list. Use a cue only when THIS record independently "
+            f"supports the same reading: {json.dumps(document_hints, ensure_ascii=False)}"
         )
     return "\n".join(lines) + ("\n" if lines else "")
