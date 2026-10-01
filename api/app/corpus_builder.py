@@ -2601,6 +2601,11 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     self._increment_metric(build_id, name, amount)
 
             def attempt_started(context: StructuredAttemptContext) -> None:
+                structured_counter = request.get("_structured_call_counter")
+                if isinstance(structured_counter, dict):
+                    structured_counter["attempts"] = (
+                        int(structured_counter.get("attempts") or 0) + 1
+                    )
                 if build_id and self._cancelled(build_id):
                     raise InterruptedError("Corpus build cancelled")
                 if build_id:
