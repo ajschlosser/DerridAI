@@ -30,12 +30,27 @@ export interface WorksInsight {
   values: WorksInsightValue[];
 }
 
+export type WorksDbStatusKind =
+  | "changed"
+  | "synced"
+  | "exists"
+  | "absent"
+  | "unknown"
+  | "none";
+
 export interface WorksStatus {
-  kind: string;
+  /** Empty for researcher/library records that do not expose corpus-index state. */
+  kind: WorksDbStatusKind | "";
   label: string;
 }
 
-export interface WorksItem {
+/**
+ * Cheap, collection-scale representation used by the Works library.
+ *
+ * Keep selected-work-only metadata, citations and insight graphs out of this
+ * shape so filtering/sorting a large library does not rebuild expensive detail.
+ */
+export interface WorksLibraryItem {
   work: string;
   count: number;
   review: number;
@@ -44,15 +59,22 @@ export interface WorksItem {
   authors: string[];
   years: string[];
   cover: string;
-  citation: string;
   year_label: string;
   subtitle: string;
   publisher: WorksBiblioValue;
   translator: WorksBiblioValue;
-  metadata: WorksMetadataValue[];
   status: WorksStatus;
+}
+
+/** Full inspector payload for the currently selected work. */
+export interface WorkDetail extends WorksLibraryItem {
+  citation: string;
+  metadata: WorksMetadataValue[];
   insights: WorksInsight[];
 }
+
+/** Backward-compatible alias for stories/tests that construct full work detail fixtures. */
+export type WorksItem = WorkDetail;
 
 export interface WorksStore {
   name: string;
@@ -64,9 +86,27 @@ export type WorksViewMode = "cards" | "compact";
 
 export interface WorksFilters {
   needsReview: boolean;
-  /** A stable `workDbStatus()` kind (changed, synced, exists, absent, unknown, none), or "" for any. */
-  dbStatus: string;
+  /** A stable work database status kind, or "" for any. */
+  dbStatus: WorksDbStatusKind | "";
   author: string;
+}
+
+export type WorksIndexFreshnessState = "unavailable" | "empty" | "current" | "stale" | "unknown";
+
+/**
+ * Corpus-wide summary of how authoritative records relate to the selected
+ * derived search index. "exists" is tracked separately from "synced" because
+ * presence alone does not prove that the indexed representation is current.
+ */
+export interface WorksIndexFreshness {
+  state: WorksIndexFreshnessState;
+  totalRecords: number;
+  currentRecords: number;
+  changedRecords: number;
+  presentRecords: number;
+  absentRecords: number;
+  unknownRecords: number;
+  unavailableRecords: number;
 }
 
 export interface WorksSnapshot {
@@ -74,13 +114,14 @@ export interface WorksSnapshot {
   available: boolean;
   shared: boolean;
   error: string;
-  works: WorksItem[];
-  selected: WorksItem | null;
+  works: WorksLibraryItem[];
+  selected: WorkDetail | null;
   query: string;
   selectedWork: string;
   stores: WorksStore[];
   activeStore: string;
   activeStoreCount: number;
+  indexFreshness: WorksIndexFreshness;
   /** Every work in the corpus or database, regardless of search, filter or sort. */
   totalWorks: number;
   /** Works that match the current search and filters (the length of `works`). */
