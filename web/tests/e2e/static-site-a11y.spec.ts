@@ -249,9 +249,10 @@ test("published tutorial is keyboard operable, skippable, and itself WCAG 2.2 AA
 
   await page.getByRole("button", { name: "Skip tutorial" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  expect(
-    await page.evaluate(() => localStorage.getItem("derridai.site.tutorial.sitepub-a11y")),
-  ).toBe("skipped");
+  await expect(page.getByRole("button", { name: "Tutorial" })).toBeVisible();
+  await page.getByRole("button", { name: "Tutorial" }).click();
+  await expect(page.getByRole("dialog", { name: "Welcome" })).toBeVisible();
+  await page.getByRole("button", { name: "Skip tutorial" }).click();
 });
 
 test("exported OpenAI profile powers vector + LLM Research with method disclosure", async ({
