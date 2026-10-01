@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 from app import metadata_schema as ms
 from app.corpus_metadata import (
     ATTRIBUTION_EVIDENCE_FIELDS,
@@ -21,6 +20,7 @@ from app.metadata_schema_profiles import (
     fiction_schema,
     nonfiction_schema,
 )
+from pydantic import ValidationError
 
 LEGACY = json.loads((Path(__file__).parent / "fixtures" / "legacy_prompts.json").read_text(encoding="utf-8"))
 CONTEXT = "<<CONTEXT>>\n"
