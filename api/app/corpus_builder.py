@@ -299,6 +299,7 @@ from .semantic_content_graph import (
     semantic_content_graph_view,
 )
 from .semantic_map_projection import (
+    SEMANTIC_PROJECTION_VERSION,
     semantic_map_source,
     semantic_record_digest,
     semantic_records_digest,
