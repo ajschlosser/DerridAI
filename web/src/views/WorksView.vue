@@ -279,8 +279,11 @@ const semanticMapRecord = computed(
     semanticMapRecords.value.find((item) => item.record_id === semanticMapRecordId.value) || null,
 );
 const semanticMapSources = ref<SemanticMapSource[]>([]);
+const semanticMapWorkSources = ref<SemanticMapSource[]>([]);
 const semanticMapFallbackSources = computed(() =>
-  semanticMapSources.value.filter((source) => source.work === semanticMapWork.value),
+  semanticMapWorkSources.value.length
+    ? semanticMapWorkSources.value
+    : semanticMapSources.value.filter((source) => source.work === semanticMapWork.value),
 );
 
 async function openWorkSemanticMap(work: string) {
@@ -289,19 +292,31 @@ async function openWorkSemanticMap(work: string) {
   semanticMapTab.value = "graph";
   semanticMapRecords.value = [];
   semanticMapRecordId.value = "";
+  semanticMapWorkSources.value = [];
+
+  // Keep the existing visual map available as an immediate local fallback, but
+  // prefer the persisted canonical projection. The server materializes it once
+  // after invalidation and subsequent opens are indexed System Data reads.
   const allSources = semanticMapService.listSources();
   semanticMapSources.value = allSources.records;
   semanticMapDialog.value?.showModal();
+
   try {
-    const result = await corpusBuildsApi.workSemanticMapRecords(work);
+    const [projectionResult, recordsResult] = await Promise.allSettled([
+      corpusBuildsApi.workSemanticMap(work),
+      corpusBuildsApi.workSemanticMapRecords(work),
+    ]);
     if (semanticMapWork.value !== work) return;
-    semanticMapRecords.value = result.records;
-    semanticMapRecordId.value = result.records[0]?.record_id || "";
-  } catch {
-    // The canonical runtime semantic map remains available when no persisted
-    // build or record-resolution endpoint is available.
+
+    if (projectionResult.status === "fulfilled") {
+      semanticMapWorkSources.value = projectionResult.value.sources as SemanticMapSource[];
+    }
+    if (recordsResult.status === "fulfilled") {
+      semanticMapRecords.value = recordsResult.value.records;
+      semanticMapRecordId.value = recordsResult.value.records[0]?.record_id || "";
+    }
   } finally {
-    semanticMapLoading.value = false;
+    if (semanticMapWork.value === work) semanticMapLoading.value = false;
   }
 }
 function closeWorkSemanticMap() {
@@ -598,7 +613,10 @@ onBeforeUnmount(() => {
           ×
         </button>
       </header>
-      <UiLoadingState v-if="semanticMapLoading" :label="i18n.t('ui.loading')" />
+      <UiLoadingState
+        v-if="semanticMapLoading"
+        :label="i18n.t('works.semantic_map_calculating', 'Calculating semantic map…')"
+      />
       <template v-else>
         <div class="works-semantic-tabs" role="tablist" :aria-label="i18n.t('works.semantic_map')">
           <button
