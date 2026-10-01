@@ -63,7 +63,7 @@ export const worksService: WorksService = {
   async activate() {
     runtime.state.view = "works";
     await runtime.ensureCorpusWorkspaceLoaded?.();
-    return this.prepare();
+    return runtime.prepareWorksWorkspace?.() as Promise<WorksPrepareResult | undefined>;
   },
 
   setQuery: (value) => runtime.setWorksSearch?.(value),
