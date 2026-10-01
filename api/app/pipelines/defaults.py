@@ -591,6 +591,95 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
         ],
     ),
     _pipeline(
+        pipeline_id="evidence.recovery.cascade",
+        version=2,
+        name="Evidence recovery — support-validated relevance cascade",
+        purpose="evidence_recovery",
+        status="active",
+        entry_stage_ids=["query"],
+        derived_from="evidence.recovery.cascade@1",
+        notes=(
+            "Direct support still wins immediately. Otherwise semantic retrieval and "
+            "CrossEncoder reranking locate likely passages, MMR bounds and diversifies "
+            "that candidate set, and candidates may reach selection only after direct-"
+            "support validation or a closed-choice model decision over the bounded "
+            "shortlist. CrossEncoder/MMR scores are ranking signals, never evidence "
+            "authority. If semantic retrieval is unavailable, the closed-choice model "
+            "may fall back to the Record's source units. Every result remains advisory "
+            "and pending review."
+        ),
+        stages=[
+            {
+                "id": "query",
+                "strategy": "query.evidence_field",
+                "next": ["lexical"],
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.lexical_bm25",
+                "config": {"min_score": 0.5},
+                "next": ["lexical_support"],
+                "on_empty": "semantic",
+            },
+            {
+                "id": "lexical_support",
+                "strategy": "validate.evidence_support",
+                "config": {"min_score": 0.5},
+                "next": ["provenance"],
+                "on_empty": "semantic",
+            },
+            {
+                "id": "semantic",
+                "strategy": "retrieve.source_cosine",
+                "config": {"fetch_k": 8},
+                "next": ["rerank"],
+                "on_empty": "llm_choice",
+                "on_unavailable": "llm_choice",
+                "on_error": "llm_choice",
+            },
+            {
+                "id": "rerank",
+                "strategy": "rerank.cross_encoder",
+                "config": {"min_score": 0, "top_k": 8},
+                "next": ["mmr"],
+                "on_empty": "mmr",
+                "on_unavailable": "mmr",
+                "on_timeout": "mmr",
+                "on_error": "mmr",
+            },
+            {
+                "id": "mmr",
+                "strategy": "select.mmr",
+                "config": {"lambda_mult": 0.72, "limit": 4, "min_relevance": 0.2},
+                "next": ["candidate_support"],
+                "on_empty": "llm_choice",
+            },
+            {
+                "id": "candidate_support",
+                "strategy": "validate.evidence_support",
+                "config": {"min_score": 0.5},
+                "next": ["provenance"],
+                "on_empty": "llm_choice",
+            },
+            {
+                "id": "llm_choice",
+                "strategy": "llm.closed_choice_evidence",
+                "config": {"candidate_scope": "input_or_all", "candidate_limit": 4},
+                "next": ["provenance"],
+            },
+            {
+                "id": "provenance",
+                "strategy": "validate.provenance",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+                "config": {"limit": 2},
+            },
+        ],
+    ),
+    _pipeline(
         pipeline_id="store_search.similarity",
         version=1,
         name="Store search — semantic similarity",
@@ -1105,8 +1194,8 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     ),
     PipelineAssignment(
         feature="evidence_recovery",
-        pipeline_id="evidence.recovery.celf",
-        pipeline_version=1,
+        pipeline_id="evidence.recovery.cascade",
+        pipeline_version=2,
         source="built_in",
         override_allowed=True,
     ),
