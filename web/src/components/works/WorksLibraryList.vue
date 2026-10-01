@@ -93,7 +93,9 @@ function onMenu(work: WorksLibraryItem, id: string) {
           <th scope="col" class="numeric">{{ i18n.t("dynamic.records") }}</th>
           <th v-if="admin" scope="col" class="numeric">{{ i18n.t("works.need_review") }}</th>
           <th v-if="admin" scope="col">{{ i18n.t("works.list_index_status") }}</th>
-          <th scope="col" class="actions"><span class="sr-only">{{ i18n.t("ui.actions") }}</span></th>
+          <th scope="col" class="actions">
+            <span class="sr-only">{{ i18n.t("ui.actions") }}</span>
+          </th>
         </tr>
       </thead>
       <tbody>
