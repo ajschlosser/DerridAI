@@ -44,9 +44,7 @@ function targetSizeForZoom(zoom: number) {
 }
 
 function isDecluttered(node: SemanticMapNode, zoom: number) {
-  return (
-    zoom < 0.58 && node.weight <= 1 && node.kind !== "record" && node.id !== props.selectedId
-  );
+  return zoom < 0.58 && node.weight <= 1 && node.kind !== "record" && node.id !== props.selectedId;
 }
 
 function densityAdjusted(source: readonly SemanticMapNode[]): SemanticMapNode[] {
@@ -297,7 +295,7 @@ defineExpose({ zoomBy, fitView, resetView, centerNode });
   opacity: 0.14;
 }
 .semantic-map-node {
-  width: var(--semantic-map-target-size, 28px);
+  width: var(--semantic-map-target-size, 24px);
   height: var(--semantic-map-target-size, 28px);
   max-width: none;
   min-height: 0;
