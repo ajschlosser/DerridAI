@@ -1,6 +1,8 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 
+import { embeddingDescriptorMismatches } from "./embeddingContract";
 import { EventBus } from "./events";
+import { isAbortError } from "./errors";
 import { RecordRepository } from "./repository";
 import type {
   EmbeddingProvider,
@@ -18,6 +20,25 @@ interface ScoredRecord {
   score: number;
   lexicalScore?: number;
   semanticScore?: number;
+}
+
+function dedupeRecords(records: PublicationRecord[]): {
+  records: PublicationRecord[];
+  duplicatesRemoved: number;
+} {
+  const seen = new Set<string>();
+  const unique: PublicationRecord[] = [];
+  let duplicatesRemoved = 0;
+  for (const record of records) {
+    const id = String(record.record_id);
+    if (seen.has(id)) {
+      duplicatesRemoved += 1;
+      continue;
+    }
+    seen.add(id);
+    unique.push(record);
+  }
+  return { records: unique, duplicatesRemoved };
 }
 
 function tokens(value: unknown, locale: string): string[] {
@@ -133,7 +154,9 @@ export class SearchEngine {
     this.events.emit({ type: "search-start", runId, query });
 
     const candidateSet = await this.repository.candidates(filters, this.locale, runId, signal);
-    const lexical = lexicalScores(query, candidateSet.records, this.locale);
+    const deduped = dedupeRecords(candidateSet.records);
+    const candidates = deduped.records;
+    const lexical = lexicalScores(query, candidates, this.locale);
     const semanticAvailable = Boolean(
       this.manifest.features?.semantic_search && this.manifest.vector_index?.dimension,
     );
@@ -144,9 +167,10 @@ export class SearchEngine {
         modeRequested,
         "keyword",
         [],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
         semanticAvailable,
+        deduped.duplicatesRemoved,
         runId,
       );
     }
@@ -162,9 +186,10 @@ export class SearchEngine {
             "This publication has no compatible semantic vectors; keyword results were returned.",
           ),
         ],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
         false,
+        deduped.duplicatesRemoved,
         runId,
       );
     }
@@ -180,17 +205,20 @@ export class SearchEngine {
             "No embedding capability was supplied; keyword results were returned.",
           ),
         ],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
         true,
+        deduped.duplicatesRemoved,
         runId,
       );
     }
 
-    const expectedModel = String(this.manifest.vector_index?.model ?? "");
     const descriptor = this.embeddings.descriptor();
-    const actualModel = String(descriptor.model ?? "");
-    if (expectedModel && actualModel && expectedModel !== actualModel) {
+    const descriptorMismatches = embeddingDescriptorMismatches(
+      this.manifest.vector_index,
+      descriptor,
+    );
+    if (descriptorMismatches.length) {
       return this.finish(
         lexical.slice(0, limit),
         modeRequested,
@@ -198,13 +226,14 @@ export class SearchEngine {
         [
           fallbackWarning(
             "embedding_contract_mismatch",
-            "The supplied embedding capability does not match the publication embedding model; keyword results were returned.",
-            { expectedModel, actualModel },
+            "The supplied embedding capability does not match the publication embedding contract; keyword results were returned.",
+            { mismatches: descriptorMismatches },
           ),
         ],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
         true,
+        deduped.duplicatesRemoved,
         runId,
       );
     }
@@ -214,7 +243,33 @@ export class SearchEngine {
     try {
       const embedded = await this.embeddings.embed([query], { signal });
       vector = embedded.vectors[0] ?? [];
+      if (embedded.provider) {
+        const resultMismatches = embeddingDescriptorMismatches(
+          this.manifest.vector_index,
+          embedded.provider,
+        );
+        if (resultMismatches.length) {
+          return this.finish(
+            lexical.slice(0, limit),
+            modeRequested,
+            "keyword",
+            [
+              fallbackWarning(
+                "embedding_contract_mismatch",
+                "The embedding result provenance does not match the publication embedding contract; keyword results were returned.",
+                { mismatches: resultMismatches },
+              ),
+            ],
+            candidates.length,
+            candidateSet.chunksLoaded,
+            true,
+            deduped.duplicatesRemoved,
+            runId,
+          );
+        }
+      }
     } catch (error) {
+      if (isAbortError(error)) throw error;
       return this.finish(
         lexical.slice(0, limit),
         modeRequested,
@@ -227,9 +282,10 @@ export class SearchEngine {
               : "Embedding generation failed; keyword results were returned.",
           ),
         ],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
         true,
+        deduped.duplicatesRemoved,
         runId,
       );
     }
@@ -247,15 +303,16 @@ export class SearchEngine {
             { expected: expectedDimension, actual: vector.length },
           ),
         ],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
         true,
+        deduped.duplicatesRemoved,
         runId,
       );
     }
 
     await this.repository.ensureVectors(filters, runId, signal);
-    const semantic = candidateSet.records
+    const semantic = candidates
       .map((record) => {
         const semanticScore = cosine(vector, this.repository.vector(String(record.record_id)));
         return {
@@ -273,9 +330,10 @@ export class SearchEngine {
         modeRequested,
         "semantic",
         [],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
         true,
+        deduped.duplicatesRemoved,
         runId,
       );
     }
@@ -288,7 +346,7 @@ export class SearchEngine {
       lexical.map((item) => [String(item.record.record_id), item.lexicalScore ?? 0]),
     );
 
-    const merged: ScoredRecord[] = candidateSet.records.map((record) => {
+    const merged: ScoredRecord[] = candidates.map((record) => {
       const id = String(record.record_id);
       const lexicalScore = lexicalById.get(id) ?? 0;
       const semanticScore = semanticById.get(id);
@@ -359,6 +417,7 @@ export class SearchEngine {
     candidateCount: number,
     chunksLoaded: number,
     semanticAvailable: boolean,
+    duplicatesRemoved: number,
     runId: string,
   ): SearchResponse {
     const results = items.map((item, index) => ({
@@ -378,6 +437,7 @@ export class SearchEngine {
         candidateCount,
         chunksLoaded,
         semanticAvailable,
+        duplicatesRemoved,
       },
     };
   }
