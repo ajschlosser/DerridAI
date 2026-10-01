@@ -130,19 +130,13 @@ function sourceAssets() {
   const { runtime, model } = browserEmbedderManifest;
   return [
     {
-      assetKey: runtime.transformers.assetKey,
-      url: runtime.transformers.url,
-      mediaType: runtime.transformers.mediaType,
+      ...runtime.transformers,
     },
     {
-      assetKey: runtime.onnxJavaScript.assetKey,
-      url: runtime.onnxJavaScript.url,
-      mediaType: runtime.onnxJavaScript.mediaType,
+      ...runtime.onnxWasmFactory,
     },
     {
-      assetKey: runtime.onnxWasm.assetKey,
-      url: runtime.onnxWasm.url,
-      mediaType: runtime.onnxWasm.mediaType,
+      ...runtime.onnxWasm,
     },
     ...model.files.map((file) => ({
       ...file,
@@ -171,12 +165,12 @@ function buildInfo(downloaded) {
         license: runtime.transformers.license,
         projectUrl: runtime.transformers.projectUrl,
       },
-      onnxJavaScript: {
-        version: runtime.onnxJavaScript.version,
-        sha256: byKey.get(runtime.onnxJavaScript.assetKey).sha256,
-        size: byKey.get(runtime.onnxJavaScript.assetKey).size,
-        license: runtime.onnxJavaScript.license,
-        projectUrl: runtime.onnxJavaScript.projectUrl,
+      onnxWasmFactory: {
+        version: runtime.onnxWasmFactory.version,
+        sha256: byKey.get(runtime.onnxWasmFactory.assetKey).sha256,
+        size: byKey.get(runtime.onnxWasmFactory.assetKey).size,
+        license: runtime.onnxWasmFactory.license,
+        projectUrl: runtime.onnxWasmFactory.projectUrl,
       },
       onnxWasm: {
         version: runtime.onnxWasm.version,
