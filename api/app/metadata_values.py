@@ -17,7 +17,7 @@ from typing import Any
 _NOTHING = {
     "null", "none", "nil", "undefined", "nan", "n/a", "na", "n.a.", "n.a", "unknown", "unspecified", "unnamed", "untitled",
     "not specified", "not stated", "not applicable", "not available", "not provided", "not given", "not mentioned",
-    "not identified", "not identifiable", "no value", "no author", "no speaker", "tbd", "todo", "empty", "blank", "-", "--", "—", "–", "?", "??",
+    "not identified", "not identifiable", "not established in source", "no value", "no author", "no speaker", "tbd", "todo", "empty", "blank", "-", "--", "—", "–", "?", "??",
 }
 _ROLES = (
     r"author|speaker|writer|narrator|person|record|text|passage|document|book|work|source|party|individual|figure|reader|interlocutor|"
