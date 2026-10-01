@@ -264,10 +264,9 @@ from .field_assertions import (
     migrate_record_assertions,
     project_record_assertions,
 )
+from .language_segmentation import ends_sentence_text, starts_mid_sentence_text
 from .language_segmentation import (
-    ends_sentence_text,
     profile_metadata as language_segmentation_profile,
-    starts_mid_sentence_text,
 )
 from .main_text_start import infer_main_text_start
 from .memory_prefill import prefill_records
