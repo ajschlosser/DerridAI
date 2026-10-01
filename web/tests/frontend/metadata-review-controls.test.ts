@@ -72,8 +72,9 @@ describe("field editor decision controls", () => {
         status: { status: "model_inferred", method: "llm", autofilled: true },
       },
     });
-    expect(wrapper.get(".auto-star").text()).toBe("★");
-    expect(wrapper.get(".field-head").text()).toContain("Auto-filled");
+    // The value sits in its input; the auto-resolved notice is the proposal line.
+    expect(wrapper.find("select").exists()).toBe(true);
+    expect(wrapper.get(".proposal").text()).toContain("auto-resolved");
   });
 
   it("cites the reviewer's own knowledge from the one confirm button", async () => {
@@ -103,9 +104,8 @@ describe("field editor decision controls", () => {
         control: "text",
         memoryExamples: 3,
         status: {
-          status: "confirmed",
+          status: "model_inferred",
           method: "llm",
-          autofilled: true,
           llm_value: "trace",
           llm_confidence: 0.8,
         },

@@ -697,7 +697,7 @@ async function fixValidationIssue(issue: {
   await nextTick();
   const target = document.querySelector<HTMLElement>(`[data-field="${CSS.escape(field)}"]`);
   target?.scrollIntoView({ block: "center" });
-  target?.querySelector<HTMLElement>("select, textarea, input")?.focus({ preventScroll: true });
+  target?.querySelector<HTMLElement>(".field-edit")?.click();
 }
 /** Go on to the next finding, or back to Publication readiness when none is left. */
 async function fixNextIssue() {
