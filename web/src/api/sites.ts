@@ -20,6 +20,8 @@ export interface SiteExportRequest {
   include_transformers: boolean;
   /** Copy the current collection vectors into the publication; otherwise browsers build their own index. */
   include_vectors: boolean;
+  /** nginx/Docker only: same-origin /provider/ bridge target. Empty/null disables the proxy. */
+  provider_proxy_upstream?: string | null;
 }
 
 export interface TransformersDownloadEvent {
