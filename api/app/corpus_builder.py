@@ -292,7 +292,7 @@ from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
 from .rag import _citation_strings, chat_complete
-from .record_semantic_map import record_semantic_map, semantic_node_neighborhood
+from .record_semantic_map import build_semantic_map_projections
 from .run_guidance import find_guidance_matches
 from .semantic_content_graph import (
     _records_digest as _semantic_records_digest,
@@ -1739,6 +1739,9 @@ class PdfCorpusRepository:
                 connection.commit()
             self._set_records_projection_state(build_id, dirty=False)
             self._invalidate_review_records_cache(build_id)
+        # Semantic maps are System Data. Invalidate by generation in O(1);
+        # rebuilding is deferred until a map is actually requested.
+        system_store.mark_semantic_map_dirty(build_id, reason="records_saved")
 
     def _patch_review_records_cache(
         self, build_id: str, before: tuple[int, int], record_id: str, record: dict[str, Any],
@@ -1805,6 +1808,7 @@ class PdfCorpusRepository:
             self._patch_review_records_cache(build_id, before, record_id, record)
         # Committed single-record write (not a per-batch build write): readers may hold stale text.
         note_resource_changed("corpus_records")
+        system_store.mark_semantic_map_dirty(build_id, reason=f"record_updated:{record_id}")
 
     def refresh_records_projection(self, build_id: str) -> None:
         """Rebuild the JSONL publication projection from the transactional index."""
@@ -2024,9 +2028,11 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # in memory so a reviewer can hot-swap profiles for subsequently scheduled
         # metadata work while the public build manifest remains secret-free.
         self._runtime_requests: dict[str, dict[str, Any]] = {}
-        # Derived semantic graphs keyed by build and the exact inputs that produced
-        # them; bounded so large corpora do not accumulate in memory.
-        self._semantic_graph_cache: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {}
+        # Semantic projections are persisted as rebuildable System Data. Per-build
+        # locks make generation single-flight so concurrent Record/Work opens join
+        # one materialization instead of repeating graph traversal.
+        self._semantic_graph_cache: dict[str, tuple[int, dict[str, Any]]] = {}
+        self._semantic_projection_locks: dict[str, threading.RLock] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
@@ -2149,87 +2155,152 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             "current_text_sha256": current_sha256,
         }
 
+    def _semantic_projection_lock(self, build_id: str) -> threading.RLock:
+        with self._lock:
+            return self._semantic_projection_locks.setdefault(str(build_id), threading.RLock())
+
+    def _materialize_semantic_projections(self, build_id: str) -> tuple[int, dict[str, Any]]:
+        """Materialize graph/Record/node/Work views once for the current generation.
+
+        The hot read path checks only System Data state and projection rows. Whole-
+        build loading, identity resolution, term folding and relationship indexing
+        happen here only after an explicit invalidation.
+        """
+        lock = self._semantic_projection_lock(build_id)
+        with lock:
+            state = system_store.semantic_map_state(build_id)
+            generation = int(state["generation"])
+            existing = system_store.get_semantic_map_projection("graph", build_id, build_id)
+            if (
+                not state.get("dirty")
+                and existing is not None
+                and int(existing.get("generation") or 0) == generation
+            ):
+                graph = existing["payload"]
+                self._semantic_graph_cache[build_id] = (generation, graph)
+                return generation, graph
+
+            records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
+            for row in records:
+                _present_for_reviewer(row)
+            analysis = self.document_intelligence(build_id)
+            graph_analysis = (
+                {"profile": analysis.get("profile"), "status": "stale"}
+                if analysis.get("stale")
+                else analysis
+            )
+            schema = self._schema_for(build_id)
+            graph = build_semantic_content_graph(
+                records,
+                graph_analysis,
+                schema=schema,
+                registry=build_registry(self.repo, build_id, schema=schema, records=records),
+            )
+            record_maps, node_maps, work_maps = build_semantic_map_projections(
+                graph,
+                records,
+                analysis=analysis,
+            )
+
+            system_store.put_semantic_map_projection(
+                "graph", build_id, build_id, generation, graph
+            )
+            for record_id, payload in record_maps.items():
+                record = next(
+                    (row for row in records if str(row.get("record_id") or "") == record_id),
+                    {},
+                )
+                work = str(record.get("work") or record.get("document_title") or "").strip()
+                system_store.put_semantic_map_projection(
+                    "record",
+                    record_id,
+                    build_id,
+                    generation,
+                    payload,
+                    work=work or None,
+                )
+            for node_id, payload in node_maps.items():
+                system_store.put_semantic_map_projection(
+                    "node", node_id, build_id, generation, payload
+                )
+            for work, payload in work_maps.items():
+                system_store.put_semantic_map_projection(
+                    "work", work, build_id, generation, payload, work=work
+                )
+
+            self._semantic_graph_cache[build_id] = (generation, graph)
+            system_store.mark_semantic_map_clean(build_id, generation)
+            return generation, graph
+
+    def _semantic_projection(
+        self,
+        build_id: str,
+        scope_type: str,
+        scope_id: str,
+    ) -> dict[str, Any]:
+        state = system_store.semantic_map_state(build_id)
+        generation = int(state["generation"])
+        row = system_store.get_semantic_map_projection(scope_type, scope_id, build_id)
+        if (
+            not state.get("dirty")
+            and row is not None
+            and int(row.get("generation") or 0) == generation
+        ):
+            return row["payload"]
+
+        self._materialize_semantic_projections(build_id)
+        state = system_store.semantic_map_state(build_id)
+        row = system_store.get_semantic_map_projection(scope_type, scope_id, build_id)
+        if (
+            row is not None
+            and int(row.get("generation") or 0) == int(state["generation"])
+        ):
+            return row["payload"]
+        # A concurrent write may have invalidated the just-built generation.
+        # Rebuild once against the new generation rather than returning "not available".
+        self._materialize_semantic_projections(build_id)
+        state = system_store.semantic_map_state(build_id)
+        row = system_store.get_semantic_map_projection(scope_type, scope_id, build_id)
+        if row is None or int(row.get("generation") or 0) != int(state["generation"]):
+            raise KeyError(scope_id)
+        return row["payload"]
+
     def _current_semantic_graph(
         self, build_id: str
     ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
-        """Return the current graph, reviewer-presented Records, and annotation run.
+        """Compatibility helper for callers that still need graph + source inputs.
 
-        The derived graph may use the bounded in-process cache, but this helper does
-        not persist checkpoints or mutate the build. Record- and node-centred
-        exploration therefore remains read-only.
+        New map reads do not use this method: they read persisted projections.
         """
+        graph = self._semantic_projection(build_id, "graph", build_id)
         records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
         for row in records:
             _present_for_reviewer(row)
-        analysis = self.document_intelligence(build_id)
-        graph_analysis = (
-            {"profile": analysis.get("profile"), "status": "stale"}
-            if analysis.get("stale")
-            else analysis
-        )
-        key = (
-            _semantic_records_digest(records),
-            analysis.get("text_sha256"),
-            analysis.get("provider"),
-            analysis.get("provider_version"),
-            analysis.get("version"),
-            len(analysis.get("entities") or []),
-            len(analysis.get("entity_clusters") or []),
-            len(analysis.get("characters") or []),
-            bool(analysis.get("stale")),
-            str(analysis.get("profile") or ""),
-            alias_digest(self.repo, build_id),
-            SEMANTIC_IDENTITY_VERSION,
-        )
-        cached = self._semantic_graph_cache.get(build_id)
-        if cached is not None and cached[0] == key:
-            return cached[1], records, analysis
-        schema = self._schema_for(build_id)
-        graph = build_semantic_content_graph(
-            records,
-            graph_analysis,
-            schema=schema,
-            # Reviewer-presented records: a value sealed for blind review names no identity.
-            registry=build_registry(self.repo, build_id, schema=schema, records=records),
-        )
-        with self._lock:
-            self._semantic_graph_cache.pop(build_id, None)
-            self._semantic_graph_cache[build_id] = (key, graph)
-            while len(self._semantic_graph_cache) > 4:
-                self._semantic_graph_cache.pop(next(iter(self._semantic_graph_cache)))
-        return graph, records, analysis
+        return graph, records, self.document_intelligence(build_id)
 
     def record_semantic_map(self, build_id: str, record_id: str) -> dict[str, Any]:
-        """Semantic map centred on one Record, with its links to other Records."""
-        graph, records, analysis = self._current_semantic_graph(build_id)
-        return record_semantic_map(graph, records, record_id, analysis=analysis)
+        """Persisted bounded semantic map centred on one Record."""
+        self.repo.get_build(build_id)
+        return self._semantic_projection(build_id, "record", record_id)
 
     def semantic_graph_node(self, build_id: str, node_id: str) -> dict[str, Any]:
-        """One graph node's relations and Records, for walking the semantic map."""
-        graph, records, _ = self._current_semantic_graph(build_id)
-        return semantic_node_neighborhood(graph, records, node_id)
+        """Persisted node neighbourhood from the current semantic generation."""
+        self.repo.get_build(build_id)
+        return self._semantic_projection(build_id, "node", node_id)
+
+    def work_semantic_map(self, build_id: str, work: str) -> dict[str, Any]:
+        """Visual Work-map sources projected from the canonical semantic graph."""
+        self.repo.get_build(build_id)
+        return self._semantic_projection(build_id, "work", work)
 
     def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
-        """Rebuild the semantic-content graph against the current Record revisions.
-
-        Rebuilding on read keeps structural edits and human metadata corrections from
-        leaving a stale visualization. The graph remains a derived projection.
-        """
-        graph, _, _ = self._current_semantic_graph(build_id)
-        self.repo.save_checkpoint(build_id, "semantic_content_graph", graph)
-        build = self.repo.get_build(build_id)
-        build["semantic_content_graph"] = graph.get("summary") or {}
-        self.repo.save_build(build)
-        return graph
+        """Return the current persisted semantic graph without rebuilding on read."""
+        self.repo.get_build(build_id)
+        return self._semantic_projection(build_id, "graph", build_id)
 
     def semantic_content_graph_view(self, build_id: str, **params: Any) -> dict[str, Any]:
-        """Bounded, filterable slice of the current graph for interactive display.
-
-        View requests must not rewrite the durable graph checkpoint or build
-        manifest; the graph cache is the read projection and the full endpoint
-        owns persistence.
-        """
-        graph, _, _ = self._current_semantic_graph(build_id)
+        """Bounded, filterable slice of the persisted current graph."""
+        graph = self._semantic_projection(build_id, "graph", build_id)
         return semantic_content_graph_view(graph, **params)
 
     def _project_metadata_exemplars(
