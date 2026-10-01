@@ -4,7 +4,7 @@ from app.metadata_values import clean, is_placeholder
 
 
 @pytest.mark.parametrize("value", [
-    "null", "None", " N/A ", "unknown", "Not specified", "-", "", "  ", "undefined",
+    "null", "None", " N/A ", "unknown", "Not specified", "[not established in source]", "-", "", "  ", "undefined",
     "The author of the current record", "the author", "This author", "the current author", "The speaker", "the narrator of this passage",
     "Unknown author", "author unknown", "an unnamed speaker", "The text", "the person", "The author of the text", "the reader",
 ])

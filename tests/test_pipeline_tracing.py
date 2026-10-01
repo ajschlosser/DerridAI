@@ -237,3 +237,37 @@ def test_research_trace_stage_ids_are_bound_to_resolved_definition() -> None:
     assert rename["rerank_fallback"] in traced_ids
     assert "response_memory" not in traced_ids
     assert "claim_memory" not in traced_ids
+
+
+def _research_trace(retrieval_extra: dict):
+    result = _result()
+    result["retrieval"] = {**result["retrieval"], **retrieval_extra}
+    request = RAGRunRequest(
+        prompt="What is différance?",
+        source_collection="derrida_primary",
+        pipeline_id="research.balanced",
+        pipeline_version=1,
+    )
+    return build_research_trace(
+        run_id="rag-scope",
+        owner=None,
+        request=request,
+        result=result,
+        started_at="2026-09-28T20:00:00+00:00",
+        finished_at="2026-09-28T20:00:04+00:00",
+    )
+
+
+def test_research_retrievers_record_scope_size_as_a_count() -> None:
+    trace = _research_trace({"scope_size": 1200})
+    by_strategy = {stage.strategy_id: stage for stage in trace.stages}
+    assert by_strategy["retrieve.chroma_similarity"].parameters["scope_size"] == 1200
+    assert by_strategy["retrieve.lexical_bm25"].parameters["scope_size"] == 1200
+    assert "scope_size" not in by_strategy["fusion.rrf"].parameters
+
+
+def test_research_retrievers_omit_unknown_or_empty_scope_size() -> None:
+    for extra in ({}, {"scope_size": 0}, {"scope_size": True}):
+        trace = _research_trace(extra)
+        for stage in trace.stages:
+            assert "scope_size" not in (stage.parameters or {})

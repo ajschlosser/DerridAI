@@ -33,7 +33,6 @@ const emit = defineEmits<{
   close: [];
   select: [record: ResponseFaqRecord];
   search: [value: string];
-  refresh: [];
   page: [delta: number];
 }>();
 const i18n = useI18nStore();
@@ -110,14 +109,6 @@ function choose(record: ResponseFaqRecord) {
           />
           <span v-if="loading" class="spinner" aria-hidden="true"></span>
         </label>
-        <button
-          type="button"
-          class="response-archive-refresh"
-          :disabled="loading"
-          @click="emit('refresh')"
-        >
-          <AppIcon name="refresh" />{{ i18n.t("ui.refresh") }}
-        </button>
       </div>
 
       <div class="response-archive-index-head">
@@ -265,23 +256,6 @@ function choose(record: ResponseFaqRecord) {
   width: 14px;
   height: 14px;
 }
-.response-archive-refresh {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--card);
-  padding: 0 11px;
-  color: var(--text-2);
-  font-weight: 750;
-  cursor: pointer;
-}
-.response-archive-refresh svg {
-  width: 15px;
-  height: 15px;
-}
 .response-archive-index-head {
   display: flex;
   align-items: flex-end;
@@ -411,9 +385,6 @@ function choose(record: ResponseFaqRecord) {
   .response-archive-toolbar {
     grid-template-columns: 1fr;
     padding-inline: 11px;
-  }
-  .response-archive-refresh {
-    justify-content: center;
   }
   .response-archive-index-head {
     align-items: flex-start;

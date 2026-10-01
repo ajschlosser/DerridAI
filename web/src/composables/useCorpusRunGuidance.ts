@@ -43,8 +43,6 @@ function loadGuidance(schemaId: string): Record<string, RunGuidanceEntry> {
         ? raw.look_for.filter((term): term is string => typeof term === "string")
         : [],
       required: raw.required === true,
-      default_placeholder:
-        typeof raw.default_placeholder === "string" ? raw.default_placeholder : "",
     };
   }
   return result;
@@ -115,7 +113,6 @@ export function useCorpusRunGuidance(
           .filter(Boolean)
           .slice(0, 40),
         required,
-        default_placeholder: required ? (value.default_placeholder || "").trim() : "",
       };
       if (entry.instructions || entry.look_for.length || required) result[field] = entry;
     }

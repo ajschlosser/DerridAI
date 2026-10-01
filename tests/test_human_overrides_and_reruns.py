@@ -133,11 +133,11 @@ def test_manifest_metadata_can_be_overridden_at_record_scope_without_future_over
     assert record["document_author"] == "Different record author"
 
 
-def test_fast_enrichment_skips_unsignaled_quotation_and_indexing_but_deep_runs_all(tmp_path: Path, monkeypatch):
-    """Fast mode only runs discourse when there is no quotation signal; deep runs everything.
+def test_fast_and_deep_enrichment_skip_unsignaled_quotation(tmp_path: Path, monkeypatch):
+    """Quotation is signal-routed in both modes; Deep still enables indexing.
 
-    Fast: only the discourse family is called; quotation and indexing become "skipped".
-    Deep: all three families are called, in order.
+    Fast: only discourse runs when quotation and semantic-indexing signals are absent.
+    Deep: discourse and indexing run, while unsignaled quotation remains skipped.
     """
     repo, build = install_review_build(tmp_path, {"text": "Derrida discusses hospitality without a direct citation."})
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
@@ -158,7 +158,8 @@ def test_fast_enrichment_skips_unsignaled_quotation_and_indexing_but_deep_runs_a
     called.clear()
     deep = {"record_id": "deep", "text": "Derrida discusses hospitality.", "source_block_ids": ["b1"], "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}]}
     manager._enrich_record(deep, {}, {"provider": "ollama", "model": "test", "enrichment_mode": "deep"}, build_id=build["build_id"])
-    assert called == ["derridai_record_discourse", "derridai_record_quotation", "derridai_record_indexing"]
+    assert called == ["derridai_record_discourse", "derridai_record_indexing"]
+    assert deep["metadata_stage_status"]["quotation"] == "skipped"
 
 
 def test_source_problem_is_not_mislabeled_as_topology():

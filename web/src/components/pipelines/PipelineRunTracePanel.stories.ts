@@ -94,3 +94,9 @@ export const CompactMobile: Story = {
     viewport: { defaultViewport: "mobile1" },
   },
 };
+
+export const RewiredInputs: Story = {
+  args: {
+    trace: { ...trace, warnings: ["rewired_inputs: provenance.candidates, select.candidates"] },
+  },
+};

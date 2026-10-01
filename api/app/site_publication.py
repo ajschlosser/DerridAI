@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import base64
+import gzip
 import hashlib
 import html
 import io
@@ -27,14 +28,20 @@ from .site_record_profile import (
     celf_conformance,
     normalize_site_record_profile,
 )
+from .site_runtime_cache import ensure_runtime, notice_text
 from .system_store import normalize_locale_code, system_store
 
-SITE_FORMAT = "derridai-static-site-v4"
+SITE_FORMAT = "derridai-static-site-v5"
 _ASSET_DIR = Path(__file__).with_name("site_assets")
 SITE_ASSET = _ASSET_DIR / "derridai-site.js"
 SDK_ASSET = _ASSET_DIR / "derridai-sdk.js"
 PACKAGE_GLOBAL = "__DERRIDAI_SITE_PACKAGE__"
 SITE_ASSET_NAME = "derridai-site.js"
+TRANSFORMERS_GLOBAL = "__DERRIDAI_TRANSFORMERS_RUNTIME__"
+# Published paths of the Transformers.js runtime when a deployment serves it as separate files.
+TRANSFORMERS_FILES_BASE = "vendor/transformers/"
+_TRANSFORMERS_WASM_FACTORY = "ort-wasm-simd-threaded.mjs"
+_TRANSFORMERS_WASM = "ort-wasm-simd-threaded.wasm"
 _SAFE_SLUG = re.compile(r"[^a-z0-9]+")
 
 
@@ -48,6 +55,7 @@ class SiteBundle:
     record_count: int
     work_count: int
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE
+    include_vectors: bool = True
 
 
 def _slug(value: str) -> str:
@@ -114,42 +122,6 @@ def _runtime_strings(language_codes: Sequence[str]) -> dict[str, dict[str, str]]
             )
         result[code] = {key: installed[key] for key in required}
     return result
-
-
-def _site_provider_profiles(profile_ids: Sequence[str] | None) -> list[dict[str, Any]]:
-    """Export only explicitly selected, non-secret LLM profile descriptors."""
-    requested = list(dict.fromkeys(str(item).strip() for item in (profile_ids or []) if str(item).strip()))
-    if not requested:
-        return []
-    available = {
-        str(profile.get("id")): profile
-        for profile in system_store.researcher_profiles()
-        if str(profile.get("id") or "").strip()
-    }
-    missing = [profile_id for profile_id in requested if profile_id not in available]
-    if missing:
-        raise ValueError(
-            "Selected LLM provider profiles are no longer available: " + ", ".join(missing)
-        )
-    allowed = {
-        "id",
-        "name",
-        "type",
-        "base_url",
-        "model",
-        "model_mode",
-        "model_kind",
-        "max_concurrent_requests",
-        "num_ctx",
-        "num_predict",
-        "temperature",
-        "top_p",
-        "has_api_key",
-    }
-    return [
-        {key: value for key, value in available[profile_id].items() if key in allowed}
-        for profile_id in requested
-    ]
 
 
 def _work_summary(records: Sequence[dict[str, Any]], work: str) -> dict[str, Any]:
@@ -244,6 +216,42 @@ def _chunk_publication(
     return chunks
 
 
+def _site_csp(*, standalone: bool = False) -> str:
+    """Content-Security-Policy for a generated site.
+
+    Model calls stay limited to http(s) origins. Every site includes Transformers.js, so WebAssembly
+    compilation and blob: module/binary URLs are always allowed. ``standalone`` is the single-file form,
+    which has no sibling files to allow.
+    """
+    if standalone:
+        return (
+            "default-src 'none'; connect-src http: https: blob: data:; img-src data: https:; "
+            "style-src 'unsafe-inline'; script-src 'unsafe-inline' 'wasm-unsafe-eval' blob:; "
+            "base-uri 'none'; form-action 'none'; worker-src blob:"
+        )
+    return (
+        "default-src 'self' file: data: blob:; connect-src 'self' http: https: blob: data:; "
+        "img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' file: 'wasm-unsafe-eval' blob:"
+    )
+
+
+def _transformers_inline_source() -> str:
+    """Script that exposes the runtime to the site as base64 strings; the browser inflates the WASM."""
+    files = ensure_runtime()
+
+    def encode(data: bytes) -> str:
+        return base64.b64encode(data).decode("ascii")
+
+    payload = {
+        "engine_b64": encode(files["engine"]),
+        "wasm_factory_b64": encode(files["wasm_factory"]),
+        "wasm_gzip_b64": encode(gzip.compress(files["wasm"], compresslevel=9, mtime=0)),
+        "notice": notice_text() + "\n" + files["license"].decode("utf-8"),
+    }
+    return f"globalThis.{TRANSFORMERS_GLOBAL}={_js_json(payload)};\n"
+
+
 def build_site_bundle(
     *,
     store_name: str,
@@ -252,16 +260,25 @@ def build_site_bundle(
     description: str = "",
     locale: str = "en-US",
     languages: Sequence[str] | None = None,
-    provider_profile_ids: Sequence[str] | None = None,
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
+    include_transformers: bool = True,
+    include_vectors: bool = True,
+    transformers_delivery: str = "inline",
 ) -> SiteBundle:
     """Create an SDK-backed static research site from one immutable publication snapshot.
 
     ``record_profile`` chooses how much Record metadata is packaged: ``complete`` keeps every public field,
     including FieldAssertions; ``reader`` keeps every metadata value but omits the FieldAssertion layer
-    (see ``site_record_profile``).
+    (see ``site_record_profile``). Every site includes Transformers.js. ``inline`` embeds it in the site
+    script (two-file and single-file sites); ``files`` leaves it to the deployment to serve as separate
+    files (nginx/Docker). ``include_transformers`` is accepted for older callers and is always treated as true.
     """
+    del include_transformers
+    if transformers_delivery not in {"inline", "files"}:
+        raise ValueError("Unknown Transformers.js delivery mode.")
     record_profile = normalize_site_record_profile(record_profile)
+    # Fetch (or verify the cached copy of) the runtime before any corpus work, so a failure is immediate.
+    ensure_runtime()
     selected_works = list(dict.fromkeys(str(item).strip() for item in works if str(item).strip()))
     if not selected_works:
         raise ValueError("Select at least one work.")
@@ -313,7 +330,7 @@ def build_site_bundle(
         ids.add(record_id)
         full_records.append(public_record)
 
-        vector = item.get("embedding")
+        vector = item.get("embedding") if include_vectors else None
         if vector is None:
             vectors.append(None)
             continue
@@ -419,19 +436,22 @@ def build_site_bundle(
             )
             if vector_contract.get(key) not in (None, "")
         },
-        "provider_profiles": _site_provider_profiles(provider_profile_ids),
         "features": {
             "browse": True,
             "lexical_search": True,
             "semantic_search": semantic_count > 0,
             "semantic_record_count": semantic_count,
+            "publication_vectors_included": semantic_count > 0,
             "local_annotations": True,
             "research": True,
             "shared_state": False,
             "browser_llm": False,
             "derridai_sdk": True,
             "host_supplied_generation": True,
-            "direct_provider_endpoints": bool(provider_profile_ids),
+            "browser_providers": True,
+            "browser_vector_index": True,
+            "transformers_runtime": transformers_delivery,
+            "transformers_local_models": None,
             "progressive_work_loading": True,
         },
         "integrity": {
@@ -448,7 +468,7 @@ def build_site_bundle(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; connect-src 'self' http: https:; img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' file:">
+  <meta http-equiv="Content-Security-Policy" content="{_site_csp()}">
   <title>{html.escape(title)}</title>
 </head>
 <body>
@@ -468,7 +488,10 @@ def build_site_bundle(
     publication_source = f"globalThis.{PACKAGE_GLOBAL}={_js_json(package)};\n"
     sdk_source = SDK_ASSET.read_text(encoding="utf-8")
     runtime_source = SITE_ASSET.read_text(encoding="utf-8")
-    combined_runtime = "\n".join((publication_source, sdk_source, runtime_source))
+    parts = [publication_source]
+    if transformers_delivery == "inline":
+        parts.append(_transformers_inline_source())
+    combined_runtime = "\n".join((*parts, sdk_source, runtime_source))
 
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
@@ -482,6 +505,7 @@ def build_site_bundle(
         record_count=len(public_records),
         work_count=len(selected_works),
         record_profile=record_profile,
+        include_vectors=include_vectors,
     )
 
 
@@ -504,14 +528,17 @@ def build_local_site_file(
     description: str = "",
     locale: str = "en-US",
     languages: Sequence[str] | None = None,
-    provider_profile_ids: Sequence[str] | None = None,
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
+    include_transformers: bool = True,
+    include_vectors: bool = True,
 ) -> SiteBundle:
     """Create one self-contained HTML file for direct local use.
 
-    Publication data, SDK, and reference UI are embedded inline. External model
+    Publication data, SDK, reference UI, and Transformers.js are embedded inline. External model
     calls are allowed only to http(s) origins and remain subject to browser CORS.
+    ``include_transformers`` is accepted for older callers and is always treated as true.
     """
+    del include_transformers
     core = build_site_bundle(
         store_name=store_name,
         works=works,
@@ -519,23 +546,15 @@ def build_local_site_file(
         description=description,
         locale=locale,
         languages=languages,
-        provider_profile_ids=provider_profile_ids,
         record_profile=record_profile,
+        include_vectors=include_vectors,
     )
     files = _core_site_files(core)
     index_html = files["index.html"].decode("utf-8")
     runtime_source = _inline_script_source(files[SITE_ASSET_NAME].decode("utf-8"))
 
-    external_csp = (
-        "default-src 'self' file: data: blob:; connect-src 'self' http: https:; "
-        "img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; "
-        "script-src 'self' file:"
-    )
-    local_csp = (
-        "default-src 'none'; connect-src http: https:; img-src data: https:; "
-        "style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
-        "base-uri 'none'; form-action 'none'"
-    )
+    external_csp = _site_csp()
+    local_csp = _site_csp(standalone=True)
     if external_csp not in index_html:
         raise RuntimeError("The static-site CSP template changed unexpectedly.")
     index_html = index_html.replace(external_csp, local_csp)
@@ -558,6 +577,7 @@ def build_local_site_file(
         record_count=core.record_count,
         work_count=core.work_count,
         record_profile=core.record_profile,
+        include_vectors=core.include_vectors,
     )
 
 
@@ -565,6 +585,7 @@ _NGINX_DOCKERFILE = """# Generated by DerridAI. One static nginx container; no a
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY index.html derridai-site.js /usr/share/nginx/html/
+COPY vendor /usr/share/nginx/html/vendor
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=3s --retries=3 \\
   CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1
@@ -586,6 +607,12 @@ _NGINX_CONFIG = """server {
     location = /index.html {
         add_header Cache-Control "no-cache";
         try_files $uri =404;
+    }
+
+    # Runtime files must 404 rather than fall back to index.html.
+    location /vendor/ {
+        try_files $uri =404;
+        add_header X-Content-Type-Options "nosniff" always;
     }
 
     location / {
@@ -673,10 +700,11 @@ Optional environment variables:
   DERRIDAI_SITE_IMAGE      Docker image name (default: derridai-research-site)
   DERRIDAI_SITE_CONTAINER  container name (default: derridai-research-site)
 
-The site uses the same DerridAI SDK as custom Web applications. Safe provider
-profile descriptors selected at export time may be included for direct browser
-Research. API keys are never exported; visitors enter credentials in their own
-browser when the selected provider requires them.
+The site uses the same DerridAI SDK as custom Web applications. No endpoint,
+model name, or API token is exported. Transformers.js is included so a visitor
+can run an embedding model in the browser. The model itself is downloaded once
+by that library and kept in the browser cache. A visitor may also save a named
+OpenAI-compatible endpoint; its token stays in that browser.
 """
 
 
@@ -703,10 +731,16 @@ def build_nginx_site_bundle(
     description: str = "",
     locale: str = "en-US",
     languages: Sequence[str] | None = None,
-    provider_profile_ids: Sequence[str] | None = None,
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
+    include_transformers: bool = True,
+    include_vectors: bool = True,
 ) -> SiteBundle:
-    """Create a deployable multi-file site served by exactly one nginx container."""
+    """Create a deployable multi-file site served by exactly one nginx container.
+
+    Transformers.js is always copied under vendor/. ``include_transformers`` is accepted for older
+    callers and is always treated as true.
+    """
+    del include_transformers
     core = build_site_bundle(
         store_name=store_name,
         works=works,
@@ -714,8 +748,9 @@ def build_nginx_site_bundle(
         description=description,
         locale=locale,
         languages=languages,
-        provider_profile_ids=provider_profile_ids,
         record_profile=record_profile,
+        include_vectors=include_vectors,
+        transformers_delivery="files",
     )
     files = _core_site_files(core)
     archive = io.BytesIO()
@@ -724,6 +759,14 @@ def build_nginx_site_bundle(
     ) as bundle:
         for name in ("index.html", SITE_ASSET_NAME):
             _zip_write(bundle, name, files[name])
+        runtime = ensure_runtime()
+        _zip_write(bundle, f"{TRANSFORMERS_FILES_BASE}transformers.min.js", runtime["engine"])
+        _zip_write(
+            bundle, f"{TRANSFORMERS_FILES_BASE}{_TRANSFORMERS_WASM_FACTORY}", runtime["wasm_factory"]
+        )
+        _zip_write(bundle, f"{TRANSFORMERS_FILES_BASE}{_TRANSFORMERS_WASM}", runtime["wasm"])
+        _zip_write(bundle, f"{TRANSFORMERS_FILES_BASE}NOTICE.txt", notice_text())
+        _zip_write(bundle, f"{TRANSFORMERS_FILES_BASE}LICENSE-transformers.js.txt", runtime["license"])
         _zip_write(bundle, "Dockerfile", _NGINX_DOCKERFILE)
         _zip_write(bundle, "nginx.conf", _NGINX_CONFIG)
         _zip_write(bundle, "start.sh", _START_SCRIPT, executable=True)
@@ -738,4 +781,5 @@ def build_nginx_site_bundle(
         record_count=core.record_count,
         work_count=core.work_count,
         record_profile=core.record_profile,
+        include_vectors=core.include_vectors,
     )

@@ -10,6 +10,7 @@ from app.models import SearchRequest
 from app.pipelines import manager as manager_module
 from app.pipelines import store as pipeline_store_module
 from app.pipelines.defaults import built_in_assignment, built_in_pipeline
+from app.pipelines.models import InputBinding
 from app.pipelines.service import PipelineService, pipeline_hash
 from app.pipelines.store_search import (
     MODE_PIPELINES,
@@ -36,6 +37,69 @@ def _search(monkeypatch, *, user=ADMIN, embeddings=None, **body):
     # The researcher text policy gate is covered elsewhere; these tests are about pipelines.
     monkeypatch.setattr(stores_router, "enforce_researcher_text", lambda _payload: None)
     return stores_router.search("db", SearchRequest(**{"n_results": 3, **body}), None)
+
+
+def _result_ids(result) -> list[str]:
+    return [row["id"] for row in result["results"]]
+
+
+@pytest.mark.parametrize(
+    ("mode", "query", "options", "expected_ids"),
+    [
+        pytest.param("similarity", "", {}, ["r5", "r4", "r2"], id="similarity-empty-query"),
+        pytest.param("mmr", "writing", {}, ["r3", "r4", "r5"], id="mmr-defaults"),
+        pytest.param("hybrid", "", {}, ["r1", "r2", "r3"], id="hybrid-empty-query"),
+        pytest.param(
+            "hybrid",
+            "stranger",
+            {"embed_error": True},
+            ["r5", "r1", "r2"],
+            id="hybrid-without-embeddings",
+        ),
+        pytest.param("hybrid", "!!!", {}, ["r5", "r4", "r2"], id="hybrid-no-lexical-tokens"),
+        pytest.param("lexical", "", {}, ["r1", "r2", "r3"], id="lexical-empty-query"),
+        pytest.param("lexical", "!!!", {}, [], id="lexical-no-tokens"),
+        pytest.param("keyword", "STRANGER", {}, ["r1", "r2", "r5"], id="keyword-case-folding"),
+        pytest.param(
+            "filter",
+            "",
+            {"where": {"work": "Of Hospitality"}},
+            ["r1", "r5"],
+            id="filter-only",
+        ),
+        pytest.param(
+            "filter",
+            "",
+            {"where": {"work": {"$contains": "hospitality"}}},
+            ["r1", "r5"],
+            id="contains-filter",
+        ),
+    ],
+)
+def test_store_search_edge_cases_are_current_pipeline_invariants(
+    monkeypatch,
+    mode,
+    query,
+    options,
+    expected_ids,
+) -> None:
+    """Keep useful migration edge cases without freezing the old route implementation."""
+
+    options = dict(options)
+    embed_error = options.pop("embed_error", False)
+    embeddings = (
+        FakeEmbeddings(error=ValueError("no embedding function"))
+        if embed_error
+        else None
+    )
+    result = _search(
+        monkeypatch,
+        query=query,
+        mode=mode,
+        embeddings=embeddings,
+        **options,
+    )
+    assert _result_ids(result) == expected_ids
 
 
 def _variant(mode, pipeline_id, stages):
@@ -85,6 +149,7 @@ def test_trace_keeps_identity_and_score_types_without_query_or_filter_values(mon
     assert stages["dense"].collection == "db"
     assert (stages["dense"].provider, stages["dense"].model) == ("local", "fake-embedder")
     assert stages["dense"].parameters["filter_fields"] == ["work"]
+    assert stages["dense"].parameters["scope_size"] == stages["lexical"].parameters["scope_size"] > 0
     assert stages["dense"].score_summary["score_type"] == "distance"
     assert stages["lexical"].score_summary["score_type"] == "lexical_score"
     assert stages["fuse"].score_summary["score_type"] == "hybrid_score"
@@ -175,12 +240,12 @@ def test_named_pipeline_must_be_a_store_search_pipeline(monkeypatch, traces) -> 
             "may only follow semantic similarity",
         ),
         (
-            "similarity",
+            "mmr",
             lambda stages: [
-                stage.model_copy(update={"next": ["select", "select"]}) if stage.id == "dense" else stage
+                stage.model_copy(update={"next": ["mmr", "select"]}) if stage.id == "dense" else stage
                 for stage in stages
             ],
-            "Only the query stage may fan out",
+            "feeds nothing else",
         ),
         ("lexical", _with_config("lexical", {"min_score": 0.5}), "does not apply min_score"),
     ],
@@ -188,3 +253,113 @@ def test_named_pipeline_must_be_a_store_search_pipeline(monkeypatch, traces) -> 
 def test_unsupported_graphs_are_rejected(mode, stages, match) -> None:
     with pytest.raises(ValueError, match=match):
         compile_store_search_pipeline(_variant(mode, "store_search.bad", stages))
+
+
+def _rebound_hybrid(pipeline_id="store_search.rebound"):
+    """Hybrid search whose final selection is bound to the dense leg, bypassing fusion."""
+
+    def stages(source):
+        binding = InputBinding(source="stage", stage="dense", output="candidates")
+        return [
+            stage.model_copy(update={"inputs": {"candidates": [binding]}}) if stage.id == "select" else stage
+            for stage in source
+        ]
+
+    return _variant("hybrid", pipeline_id, stages)
+
+
+def test_explicit_input_binding_changes_what_a_stage_receives(monkeypatch) -> None:
+    from app.pipelines.store_search import StoreSearchRequest, execute_store_search
+
+    pipeline = _rebound_hybrid()
+    plan = compile_store_search_pipeline(pipeline)
+    assert "select" in plan.consumers["dense"]
+    assert "select" not in plan.consumers.get("fuse", [])
+
+    store = fake_store(embeddings=FakeEmbeddings())
+    request = StoreSearchRequest(store="db", query="stranger", n_results=3, where=None, fetch_k=12, lambda_mult=0.5)
+    rebound = execute_store_search(plan, store=store, request=request, resolved_hash=pipeline_hash(pipeline))
+    similarity = built_in_pipeline(*MODE_PIPELINES["similarity"])
+    baseline = execute_store_search(
+        compile_store_search_pipeline(similarity),
+        store=store,
+        request=request,
+        resolved_hash=pipeline_hash(similarity),
+    )
+    assert [row["id"] for row in rebound.results] == [row["id"] for row in baseline.results]
+    assert not any("hybrid_score" in row for row in rebound.results)
+    assert rebound.trace.warnings == ["rewired_inputs: select.candidates"]
+    assert baseline.trace.warnings == []
+
+
+def test_rebound_store_search_pipeline_is_reported_executable() -> None:
+    from app.pipelines.workflows import runtime_support
+
+    support = runtime_support(_rebound_hybrid())
+    assert support["supported"] is True
+
+
+# --- Parallel branches ---------------------------------------------------------------------
+
+
+def _run(mode, *, parallel, store=None):
+    from app.pipelines.store_search import StoreSearchRequest, execute_store_search
+
+    pipeline = built_in_pipeline(*MODE_PIPELINES[mode])
+    request = StoreSearchRequest(store="db", query="stranger", n_results=3, where=None, fetch_k=12, lambda_mult=0.5)
+    return execute_store_search(
+        compile_store_search_pipeline(pipeline),
+        store=store or fake_store(embeddings=FakeEmbeddings()),
+        request=request,
+        resolved_hash=pipeline_hash(pipeline),
+        parallel=parallel,
+    )
+
+
+@pytest.mark.parametrize("mode", sorted(MODE_PIPELINES))
+def test_parallel_execution_matches_sequential_results_and_stage_order(mode) -> None:
+    sequential, overlapped = _run(mode, parallel=False), _run(mode, parallel=True)
+    assert overlapped.results == sequential.results
+    shape = lambda run: [(s.stage_id, s.status, s.input_count, s.output_count) for s in run.trace.stages]  # noqa: E731
+    assert shape(overlapped) == shape(sequential)
+    assert [s.stage_id for s in overlapped.trace.stages] == [s.stage_id for s in sequential.trace.stages]
+
+
+def test_hybrid_legs_really_overlap_and_the_trace_says_so() -> None:
+    import threading
+
+    store = fake_store(embeddings=FakeEmbeddings())
+    meeting = threading.Barrier(2, timeout=5)  # both legs must be inside at once, or the wait breaks
+
+    def rendezvous(original):
+        def wrapped(*args, **kwargs):
+            meeting.wait()
+            return original(*args, **kwargs)
+
+        return wrapped
+
+    store.search = rendezvous(store.search)
+    store.lexical_search = rendezvous(store.lexical_search)
+    run = _run("hybrid", parallel=True, store=store)
+    assert "branches_overlapped" in run.trace.warnings
+    assert _run("hybrid", parallel=False).trace.warnings == []
+
+
+def test_failed_leg_behaves_the_same_with_and_without_overlap() -> None:
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("index unavailable")
+
+    for parallel in (False, True):
+        store = fake_store(embeddings=FakeEmbeddings())
+        store.lexical_search = broken
+        with pytest.raises(RuntimeError, match="index unavailable"):
+            _run("hybrid", parallel=parallel, store=store)
+
+
+def test_undeclared_strategies_are_exclusive() -> None:
+    from app.pipelines.contracts import strategy_concurrency
+
+    assert strategy_concurrency("fusion.rrf") == "exclusive"
+    assert strategy_concurrency("not.registered") == "exclusive"
+    assert strategy_concurrency("retrieve.lexical_bm25") == "safe"
+    assert strategy_concurrency("retrieve.chroma_similarity") == "provider_limited"

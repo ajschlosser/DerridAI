@@ -30,6 +30,7 @@ from .protocol import (
     ProtocolError,
     parse_client_message,
 )
+from .resources import follows_any_resource
 from .subscriptions import authorize_topic
 
 logger = logging.getLogger("derridai.realtime")
@@ -205,7 +206,11 @@ async def run_realtime_session(websocket: WebSocket, event_broker: EventBroker) 
         return
     session = RealtimeSession(websocket, user, event_broker)
     subscriber = session.subscriber
-    if not subscriber.is_admin and not ({"rag.jobs.own", "rag.run"} & subscriber.capabilities):
+    if (
+        not subscriber.is_admin
+        and not ({"rag.jobs.own", "rag.run"} & subscriber.capabilities)
+        and not follows_any_resource(subscriber)
+    ):
         # No topic is available to this role.
         await websocket.close(code=CLOSE_FORBIDDEN, reason="no realtime topics available")
         return

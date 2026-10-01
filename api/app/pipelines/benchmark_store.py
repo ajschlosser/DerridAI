@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from .. import operation_events
 from .benchmark import (
     ResearchPipelineBenchmarkCase,
     ResearchPipelineBenchmarkRun,
@@ -43,6 +44,7 @@ class PipelineBenchmarkStore:
                     ),
                 )
                 conn.commit()
+                operation_events.note_resource_changed("pipeline_benchmarks")
             except sqlite3.IntegrityError as exc:
                 raise ValueError(
                     f"Benchmark case {case.case_id}@{case.version} already exists; "
@@ -140,6 +142,7 @@ class PipelineBenchmarkStore:
                 ),
             )
             conn.commit()
+        operation_events.note_resource_changed("pipeline_benchmarks")
         return run
 
     def get(self, benchmark_run_id: str) -> ResearchPipelineBenchmarkRun | None:
@@ -235,6 +238,7 @@ class PipelineBenchmarkStore:
             conn.execute("DELETE FROM pipeline_benchmark_runs")
             conn.execute("DELETE FROM pipeline_benchmark_cases")
             conn.commit()
+        operation_events.note_resource_changed("pipeline_benchmarks")
         return {
             "pipeline_benchmark_runs": run_count,
             "pipeline_benchmark_cases": case_count,

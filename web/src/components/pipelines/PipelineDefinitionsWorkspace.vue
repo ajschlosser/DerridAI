@@ -1,20 +1,25 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { ref } from "vue";
 import PipelineDefinitionNavigator from "./PipelineDefinitionNavigator.vue";
 import PipelineDefinitionDetail from "./PipelineDefinitionDetail.vue";
+import PipelineNewDialog from "./PipelineNewDialog.vue";
 import PipelineVersionEditorPanel from "./PipelineVersionEditorPanel.vue";
+import UiButton from "../ui/UiButton.vue";
 import type { PipelineDefinitionFilters } from "../../features/pipelines/composables/usePipelineStudioNavigation";
 import { useI18nStore } from "../../stores/i18n";
 import type {
+  PipelineAnalysis,
   PipelineAssignment,
   PipelineDefinition,
   PipelinePurpose,
   PipelineStrategy,
+  PipelineStrategyLatency,
   PipelineValidationResponse,
   PipelineWorkflowVocabulary,
 } from "../../types/pipelines";
 
-defineProps<{
+const props = defineProps<{
   pipelines: PipelineDefinition[];
   strategies: PipelineStrategy[];
   assignments: PipelineAssignment[];
@@ -30,10 +35,16 @@ defineProps<{
   canAssign: boolean;
   assigning: boolean;
   cloning: boolean;
+  /** True while a blank draft is being prepared. */
+  creating?: boolean;
   draft: PipelineDefinition | null;
   draftPurpose: PipelinePurpose | null;
   validation: PipelineValidationResponse | null;
   saving: boolean;
+  analysis?: PipelineAnalysis | null;
+  analysisLoading?: boolean;
+  analysisError?: string;
+  strategyLatency?: Record<string, PipelineStrategyLatency> | null;
 }>();
 
 const emit = defineEmits<{
@@ -42,6 +53,7 @@ const emit = defineEmits<{
   "update:filters": [filters: PipelineDefinitionFilters];
   "update:draft": [draft: PipelineDefinition];
   clone: [];
+  create: [purposeId: string];
   assign: [];
   resetAssignment: [];
   cancel: [];
@@ -51,6 +63,12 @@ const emit = defineEmits<{
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
+const newOpen = ref(false);
+
+function create(purposeId: string) {
+  newOpen.value = false;
+  emit("create", purposeId);
+}
 </script>
 
 <template>
@@ -60,6 +78,24 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
     role="tabpanel"
     aria-labelledby="pipeline-tab-pipelines"
   >
+    <div class="pipeline-definitions-actions">
+      <UiButton
+        variant="primary"
+        icon="plus"
+        :label="t('pipelines.new_pipeline', 'New pipeline')"
+        :disabled="creating || Boolean(draft)"
+        :disabled-reason="
+          draft
+            ? t(
+                'pipelines.new_pipeline_while_editing',
+                'Finish or cancel the version you are editing first.',
+              )
+            : ''
+        "
+        @click="newOpen = true"
+      />
+    </div>
+
     <section
       class="pipeline-definitions-workspace"
       :aria-label="t('pipelines.definitions', 'Pipeline definitions')"
@@ -102,10 +138,24 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
       :vocabulary="vocabulary"
       :validation="validation"
       :saving="saving"
+      :analysis="analysis"
+      :analysis-loading="analysisLoading"
+      :analysis-error="analysisError"
+      :strategy-latency="strategyLatency"
       @update:model-value="emit('update:draft', $event)"
       @cancel="emit('cancel')"
       @validate="emit('validate')"
       @save="emit('save')"
+    />
+
+    <PipelineNewDialog
+      v-if="newOpen"
+      :purposes="purposes"
+      :vocabulary="vocabulary"
+      :initial="props.selectedPurpose?.purpose_id"
+      :busy="creating"
+      @close="newOpen = false"
+      @create="create"
     />
   </div>
 </template>
@@ -114,6 +164,10 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
 .pipeline-definitions {
   display: grid;
   gap: var(--space-4);
+}
+.pipeline-definitions-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 .pipeline-definitions-workspace {
   display: grid;

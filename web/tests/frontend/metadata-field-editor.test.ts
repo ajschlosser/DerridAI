@@ -15,6 +15,12 @@ const stanceOptions = [
   "describe",
 ];
 
+/** A pending field with a proposal shows it read-only; the control is behind Edit. */
+async function openControl(wrapper: ReturnType<typeof mount>) {
+  await wrapper.get(".proposal-edit").trigger("click");
+  await nextTick();
+}
+
 describe("CorpusMetadataFieldEditor auto-population", () => {
   it("selects a confident stance proposal when the record value arrives progressively", async () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
@@ -41,6 +47,8 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
       },
     });
     await nextTick();
+    expect(wrapper.get(".proposal-value").text()).toBe("affirm");
+    await openControl(wrapper);
     expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("affirm");
     wrapper.unmount();
   });
@@ -65,6 +73,8 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
       },
     });
     await nextTick();
+    expect(wrapper.get(".proposal-value").text()).toBe("affirm");
+    await openControl(wrapper);
     expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("affirm");
     wrapper.unmount();
   });
@@ -89,6 +99,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         },
       },
     });
+    await openControl(wrapper);
     expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("main_text");
     wrapper.unmount();
   });
@@ -166,6 +177,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         status: { status: "model_inferred", method: "llm", confidence: 0.72, auto_populated: true },
       },
     });
+    await openControl(wrapper);
     const input = wrapper.get("textarea");
     await input.setValue("cities of refuge, hospitality");
     await input.trigger("change");
@@ -239,6 +251,8 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     });
 
     await nextTick();
+    expect(wrapper.get(".proposal-value").text()).toBe("Emmanuel Levinas");
+    await openControl(wrapper);
     expect((wrapper.get("textarea[role=combobox]").element as HTMLTextAreaElement).value).toBe(
       "Emmanuel Levinas",
     );

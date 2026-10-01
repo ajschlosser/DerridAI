@@ -42,17 +42,17 @@ const createSiteOpen = ref(false);
 const createSiteBusy = ref(false);
 const createSiteError = ref("");
 const createSiteLanguages = ref<SiteExportOptions["languages"]>([]);
-const createSiteProviderProfiles = ref<SiteExportOptions["provider_profiles"]>([]);
+const createSiteTransformers = ref<SiteExportOptions["transformers_runtime"] | undefined>();
+const createSiteProgress = ref<{ file: string; received: number; total: number } | null>(null);
 
 async function openCreateSite() {
   createSiteError.value = "";
   try {
     const options = await sitesApi.exportOptions();
     createSiteLanguages.value = options.languages;
-    createSiteProviderProfiles.value = options.provider_profiles;
+    createSiteTransformers.value = options.transformers_runtime;
   } catch (cause) {
     createSiteLanguages.value = [...i18n.languages];
-    createSiteProviderProfiles.value = [];
     createSiteError.value = cause instanceof Error ? cause.message : String(cause);
   }
   createSiteOpen.value = true;
@@ -64,6 +64,59 @@ function closeCreateSite() {
   createSiteError.value = "";
 }
 
+async function refreshTransformersRuntime() {
+  const options = await sitesApi.exportOptions();
+  createSiteTransformers.value = options.transformers_runtime;
+}
+
+async function runTransformersDownload() {
+  createSiteProgress.value = {
+    file: "Transformers.js",
+    received: 0,
+    total: createSiteTransformers.value?.download_bytes || 1,
+  };
+  try {
+    await sitesApi.downloadTransformersRuntime((event) => {
+      if (event.status === "error") return;
+      createSiteProgress.value = {
+        file: event.file || "Transformers.js",
+        received: Number(event.received_total || event.received || 0),
+        total: Number(event.total || createSiteTransformers.value?.download_bytes || 1),
+      };
+    });
+    await refreshTransformersRuntime();
+  } finally {
+    createSiteProgress.value = null;
+  }
+}
+
+async function downloadTransformersRuntime() {
+  if (createSiteBusy.value || createSiteTransformers.value?.cached) return;
+  createSiteBusy.value = true;
+  createSiteError.value = "";
+  try {
+    await runTransformersDownload();
+  } catch (cause) {
+    createSiteError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    createSiteBusy.value = false;
+  }
+}
+
+async function deleteTransformersRuntime() {
+  if (createSiteBusy.value) return;
+  createSiteBusy.value = true;
+  createSiteError.value = "";
+  try {
+    const result = await sitesApi.deleteTransformersRuntime();
+    createSiteTransformers.value = result.transformers_runtime;
+  } catch (cause) {
+    createSiteError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    createSiteBusy.value = false;
+  }
+}
+
 async function createSite(payload: {
   title: string;
   description: string;
@@ -71,12 +124,14 @@ async function createSite(payload: {
   export_format: SiteExportFormat;
   record_profile: SiteRecordProfile;
   languages: string[];
-  provider_profile_ids: string[];
+  include_transformers: boolean;
+  include_vectors: boolean;
 }) {
   if (!snapshot.value?.activeStore || createSiteBusy.value) return;
   createSiteBusy.value = true;
   createSiteError.value = "";
   try {
+    if (!createSiteTransformers.value?.cached) await runTransformersDownload();
     const download = await sitesApi.exportSite({
       store: snapshot.value.activeStore,
       works: payload.works,
@@ -86,7 +141,8 @@ async function createSite(payload: {
         ? i18n.locale
         : payload.languages[0] || "en-US",
       languages: payload.languages,
-      provider_profile_ids: payload.provider_profile_ids,
+      include_transformers: payload.include_transformers,
+      include_vectors: payload.include_vectors,
       export_format: payload.export_format,
       record_profile: payload.record_profile,
     });
@@ -223,8 +279,11 @@ const semanticMapRecord = computed(
     semanticMapRecords.value.find((item) => item.record_id === semanticMapRecordId.value) || null,
 );
 const semanticMapSources = ref<SemanticMapSource[]>([]);
+const semanticMapWorkSources = ref<SemanticMapSource[]>([]);
 const semanticMapFallbackSources = computed(() =>
-  semanticMapSources.value.filter((source) => source.work === semanticMapWork.value),
+  semanticMapWorkSources.value.length
+    ? semanticMapWorkSources.value
+    : semanticMapSources.value.filter((source) => source.work === semanticMapWork.value),
 );
 
 async function openWorkSemanticMap(work: string) {
@@ -233,19 +292,35 @@ async function openWorkSemanticMap(work: string) {
   semanticMapTab.value = "graph";
   semanticMapRecords.value = [];
   semanticMapRecordId.value = "";
+  semanticMapWorkSources.value = [];
+
+  // Keep the existing visual map available as an immediate local fallback, but
+  // prefer the persisted canonical projection. The server materializes it once
+  // after invalidation and subsequent opens are indexed System Data reads.
   const allSources = semanticMapService.listSources();
   semanticMapSources.value = allSources.records;
   semanticMapDialog.value?.showModal();
+
   try {
-    const result = await corpusBuildsApi.workSemanticMapRecords(work);
+    const projectionRequest =
+      typeof corpusBuildsApi.workSemanticMap === "function"
+        ? corpusBuildsApi.workSemanticMap(work)
+        : Promise.reject(new Error("Work semantic map endpoint unavailable"));
+    const [projectionResult, recordsResult] = await Promise.allSettled([
+      projectionRequest,
+      corpusBuildsApi.workSemanticMapRecords(work),
+    ]);
     if (semanticMapWork.value !== work) return;
-    semanticMapRecords.value = result.records;
-    semanticMapRecordId.value = result.records[0]?.record_id || "";
-  } catch {
-    // The canonical runtime semantic map remains available when no persisted
-    // build or record-resolution endpoint is available.
+
+    if (projectionResult.status === "fulfilled") {
+      semanticMapWorkSources.value = projectionResult.value.sources as SemanticMapSource[];
+    }
+    if (recordsResult.status === "fulfilled") {
+      semanticMapRecords.value = recordsResult.value.records;
+      semanticMapRecordId.value = recordsResult.value.records[0]?.record_id || "";
+    }
   } finally {
-    semanticMapLoading.value = false;
+    if (semanticMapWork.value === work) semanticMapLoading.value = false;
   }
 }
 function closeWorkSemanticMap() {
@@ -520,11 +595,14 @@ onBeforeUnmount(() => {
       :store-name="snapshot.activeStore"
       :initial-work="snapshot.selectedWork"
       :languages="createSiteLanguages"
-      :provider-profiles="createSiteProviderProfiles"
+      :transformers-runtime="createSiteTransformers"
+      :download-progress="createSiteProgress"
       :busy="createSiteBusy"
       :error="createSiteError"
       @cancel="closeCreateSite"
       @create="createSite"
+      @delete-runtime="deleteTransformersRuntime"
+      @download-runtime="downloadTransformersRuntime"
     />
 
     <dialog
@@ -539,7 +617,10 @@ onBeforeUnmount(() => {
           ×
         </button>
       </header>
-      <UiLoadingState v-if="semanticMapLoading" :label="i18n.t('ui.loading')" />
+      <UiLoadingState
+        v-if="semanticMapLoading"
+        :label="i18n.t('works.semantic_map_calculating', 'Calculating semantic map…')"
+      />
       <template v-else>
         <div class="works-semantic-tabs" role="tablist" :aria-label="i18n.t('works.semantic_map')">
           <button

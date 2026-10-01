@@ -1,5 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
+import type { LayoutRegion } from "../../domain/documentLayoutRegions";
+
 /** How printed page numbers are found in text sources: deterministic patterns, optionally then a model, or not at all. */
 export interface PageDetectionRequest {
   mode: "auto" | "auto_llm" | "off";
@@ -207,6 +209,7 @@ export interface DocumentLayoutPlan {
   thread_a_language?: string | null;
   thread_b_language?: string | null;
   unit_policy?: SourceUnitPolicy;
+  layout_regions?: LayoutRegion[];
 }
 
 export interface LlmActivity {
@@ -331,6 +334,23 @@ export interface RecordSemanticLinkedRecord {
 }
 
 export type SemanticLayerStatus = "ok" | "stale" | "missing" | "unavailable" | string;
+
+export interface WorkSemanticMapSource {
+  id: string;
+  work: string;
+  concepts: string[];
+  topics: string[];
+  persons: string[];
+}
+
+export interface WorkSemanticMapProjection {
+  state: "ready" | "building" | "stale_building" | "empty" | "failed" | string;
+  kind: "work_semantic_map_sources" | string;
+  work: string;
+  sources: WorkSemanticMapSource[];
+  record_count: number;
+  build_generations: Record<string, number>;
+}
 
 export interface RecordSemanticMap {
   version: number;

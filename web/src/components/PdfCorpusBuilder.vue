@@ -1870,8 +1870,17 @@ function reviewShortcut(event: KeyboardEvent) {
     focusFirstMetadataBlocker();
   }
 }
-/** Every field is decided from the panel: hand the keyboard to the record decision, so Enter accepts. */
-function handleMetadataComplete() {
+/**
+ * Metadata-queue review is a conveyor: once the current Record has no metadata
+ * decisions left, move forward immediately from the optimistic local state.
+ * Other review queues keep the existing "Accept & next" handoff because a
+ * finished metadata panel does not imply that the Record itself was accepted.
+ */
+async function handleMetadataComplete() {
+  if (reviewQueue.value === "metadata" && selectedRecord.value && !selectedMetadataBlocked.value) {
+    await focusQueueMove(1);
+    return;
+  }
   void nextTick(() => decisionDock.value?.focusAccept());
 }
 watch(selectedProviderId, (profileId) => {
@@ -2153,6 +2162,7 @@ defineExpose({
               ? i18n.t('pdf_corpus.start_concurrent_build')
               : i18n.t('pdf_corpus.start_new_build')
           "
+          variant="ghost"
           :disabled="busy !== ''"
           @click="startNewBuildSetup"
         />
@@ -2180,6 +2190,7 @@ defineExpose({
       :sections="setupSections"
       :expanded="configurationSection"
       :disabled-sections="selectedAsset ? [] : ['structure']"
+      :existing-build-name="currentBuild ? selectedAsset?.filename || currentBuild.build_id : ''"
       @toggle="toggleSetupSection"
     >
       <template #source>
@@ -2488,6 +2499,7 @@ defineExpose({
           :ready="readyCount"
           :issues="issueCount"
           :remaining="pendingCount"
+          :review-total="Number(currentBuild?.record_count || 0)"
           :workspace-mode="reviewWorkspaceMode"
           :has-selected-record="Boolean(selectedRecord)"
           :focus-disabled="!selectedRecord"
@@ -2508,10 +2520,6 @@ defineExpose({
           :selected-count="selectedReviewCount"
           :bulk-total-count="Number(currentBuild?.record_count || recordTotal)"
           :bulk-disabled="busy !== '' || reviewLocked"
-          :page-number="pageNumber"
-          :page-count="pageCount"
-          :has-previous-page="recordOffset > 0"
-          :has-next-page="recordOffset + pageSize < recordTotal"
           :disabled="busy !== ''"
           @focus="openFocusView"
           @workspace="setReviewWorkspaceMode"
@@ -2519,8 +2527,6 @@ defineExpose({
           @bulk-action="runBulkAction"
           @bulk-apply="applyBulkMetadata"
           @bulk-close="bulkMetadataOpen = false"
-          @previous-page="previousPage"
-          @next-page="nextPage"
         >
           <template #run-status>
             <CorpusReviewRunStatus
@@ -2559,6 +2565,12 @@ defineExpose({
           :searching="Boolean(recordQuery.trim())"
           :can-open-publish="hasRecordTopology"
           :disabled="busy !== ''"
+          :page-number="pageNumber"
+          :page-count="pageCount"
+          :has-previous-page="recordOffset > 0"
+          :has-next-page="recordOffset + pageSize < recordTotal"
+          @previous-page="previousPage"
+          @next-page="nextPage"
           @root-change="setRecordListElement"
           @collapse="reviewQueueCollapsed = true"
           @toggle-visible="toggleVisibleSelection"
@@ -3103,6 +3115,7 @@ defineExpose({
         @resolve-metadata-many="resolveMetadataSuggestions"
         @confirm-no-metadata-value="resolveMetadataNoValue"
         @metadata-dirty="handleMetadataDirty"
+        @metadata-complete="handleMetadataComplete"
         @llm-touchup="openLlmTouchup"
         @accept="toggleAccept"
         @reject="rejectRecord"

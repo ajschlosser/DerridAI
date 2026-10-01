@@ -23,7 +23,7 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -47,8 +47,11 @@ from ..evidence_suggestions import (
     validate_llm_choice,
 )
 from .models import PipelineDefinition, PipelineRunTrace, PipelineStageDefinition
+from .purposes import purpose_registry
+from .registry import strategy_registry
 from .service import pipeline_hash
 from .trace_safety import trace_stage
+from .wiring import resolve_wiring, rewired_warnings
 
 RECOVERY_FEATURE = "evidence_recovery"
 RECOVERY_PURPOSE = "evidence_recovery"
@@ -106,6 +109,9 @@ class RecoveryPlan:
     entry_stage_id: str
     celf_compliant: bool
     compliance_reason: str
+    # Stages whose candidate input an explicit binding takes from named producers
+    # instead of from whatever the cascade last produced.
+    bound_sources: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def selection_limit(self) -> int:
@@ -171,7 +177,13 @@ def compile_recovery_pipeline(pipeline: PipelineDefinition) -> RecoveryPlan:
             "Semantic and cross-encoder stages need the field-aware query stage as the entry stage."
         )
 
-    feeders = [stage for stage in stages.values() if provenance.id in stage.edge_targets()]
+    bound_sources = _bound_sources(pipeline, stages)
+    if select.id in bound_sources and bound_sources[select.id] != [provenance.id]:
+        raise ValueError("Only the provenance gate may feed top-K selection, including through input bindings.")
+    if provenance.id in bound_sources:
+        feeders = [stages[source] for source in bound_sources[provenance.id]]
+    else:
+        feeders = [stage for stage in stages.values() if provenance.id in stage.edge_targets()]
     loose = sorted(stage.id for stage in feeders if stage.strategy not in {_SUPPORT, _LLM})
     weak = sorted(
         stage.id
@@ -203,7 +215,33 @@ def compile_recovery_pipeline(pipeline: PipelineDefinition) -> RecoveryPlan:
         entry_stage_id=pipeline.entry_stage_ids[0],
         celf_compliant=compliant,
         compliance_reason=reason,
+        bound_sources=bound_sources,
     )
+
+
+def _bound_sources(pipeline: PipelineDefinition, stages: dict[str, PipelineStageDefinition]) -> dict[str, list[str]]:
+    """Explicit candidate-input bindings the cascade honours, resolved by the shared wiring.
+
+    Routing stays on ``next``/fallback edges; a binding only changes which producer's
+    output a stage receives. Bindings on secondary ports are not honoured and are rejected.
+    """
+
+    wiring = resolve_wiring(pipeline, strategy_registry, purpose_registry.get(pipeline.purpose))
+    errors = [issue for issue in wiring["issues"] if issue.level == "error"]
+    if errors:
+        raise ValueError("Evidence-recovery wiring is invalid: " + "; ".join(issue.message for issue in errors))
+    bound: dict[str, list[str]] = {}
+    for stage_id in stages:
+        for index, row in enumerate(wiring["stages"].get(stage_id, {}).get("inputs", [])):
+            if not row["explicit"]:
+                continue
+            if index > 0:
+                raise ValueError(
+                    f"Evidence recovery does not honour an explicit binding on input {row['port']!r} of {stage_id!r}."
+                )
+            if row["data_type"] == "candidate_set":
+                bound[stage_id] = [s["stage"] for s in row["sources"] if s["kind"] == "stage"]
+    return bound
 
 
 @dataclass
@@ -372,7 +410,15 @@ class _Run:
             {
                 "block_id": row["block_id"],
                 "score": round(float(row["score"]), 4),
-                "semantic_score": round(float(row["score"]), 4),
+                "semantic_score": round(
+                    float(row.get("semantic_score", row["score"])),
+                    4,
+                ),
+                **(
+                    {"cross_encoder_score": round(float(row["cross_encoder_score"]), 4)}
+                    if isinstance(row.get("cross_encoder_score"), (int, float))
+                    else {}
+                ),
                 "mmr_score": round(float(row.get("mmr_score") or 0.0), 4),
             }
             for row in selected
@@ -395,10 +441,35 @@ class _Run:
         reason = None if kept else f"No candidate reached direct-support score {min_score:.2f}."
         return _Outcome("completed", kept, reason, {"parameters": {"min_score": min_score, "validator": METHOD}})
 
-    def _llm(self, config: dict[str, Any], _rows: list[dict[str, Any]]) -> _Outcome:
+    def _llm(self, config: dict[str, Any], rows: list[dict[str, Any]]) -> _Outcome:
         role = str(config.get("provider_role", CLOSED_CHOICE_DEFAULT_ROLE))
         attempts = min(4, max(1, int(config.get("attempts", CLOSED_CHOICE_DEFAULT_ATTEMPTS))))
+        candidate_scope = str(config.get("candidate_scope") or "all")
+        candidate_limit = max(1, int(config.get("candidate_limit", self.plan.selection_limit)))
+        if candidate_scope not in {"all", "input_or_all"}:
+            return _Outcome(
+                "failed",
+                [],
+                f"Unknown closed-choice candidate_scope {candidate_scope!r}.",
+                {"parameters": {"candidate_scope": candidate_scope}},
+            )
+
+        candidate_blocks = self.blocks
+        if candidate_scope == "input_or_all" and rows:
+            by_id = {str(block.get("block_id") or ""): block for block in self.blocks}
+            ranked_ids = [
+                str(row.get("block_id") or "")
+                for row in rows[:candidate_limit]
+                if str(row.get("block_id") or "")
+            ]
+            candidate_blocks = [by_id[block_id] for block_id in ranked_ids if block_id in by_id]
+
         parameters: dict[str, Any] = {"provider_role": role, "attempts": attempts}
+        if "candidate_scope" in config or "candidate_limit" in config:
+            parameters["candidate_scope"] = candidate_scope
+            parameters["candidate_count"] = len(candidate_blocks)
+            if candidate_scope == "input_or_all":
+                parameters["candidate_limit"] = candidate_limit
         if self.escalated:
             parameters["escalated"] = True
         if self.llm_choice is None:
@@ -406,8 +477,41 @@ class _Run:
         if role not in CLOSED_CHOICE_ROLES:
             return _Outcome("failed", [], f"Unknown provider role {role!r}.", {"parameters": parameters})
         try:
-            choice = self.llm_choice(llm_prompt(self.field, self.value, self.blocks), role, attempts, self.escalated)
-            picks = validate_llm_choice(choice.answer, self.blocks, self.value, limit=self.plan.selection_limit)
+            choice = self.llm_choice(
+                llm_prompt(self.field, self.value, candidate_blocks),
+                role,
+                attempts,
+                self.escalated,
+            )
+            picks = validate_llm_choice(
+                choice.answer,
+                candidate_blocks,
+                self.value,
+                limit=self.plan.selection_limit,
+            )
+            if rows:
+                upstream = {
+                    str(row.get("block_id") or ""): row
+                    for row in rows
+                    if str(row.get("block_id") or "")
+                }
+                ranking_keys = (
+                    "semantic_score",
+                    "cross_encoder_score",
+                    "mmr_score",
+                    "support_score",
+                )
+                picks = [
+                    {
+                        **pick,
+                        **{
+                            key: upstream[str(pick.get("block_id") or "")][key]
+                            for key in ranking_keys
+                            if key in upstream.get(str(pick.get("block_id") or ""), {})
+                        },
+                    }
+                    for pick in picks
+                ]
         except LookupError as exc:
             return _Outcome("unavailable", [], str(exc)[:300], {"parameters": parameters})
         except Exception as exc:  # noqa: BLE001 - the graph's fallback edges decide what follows
@@ -481,6 +585,8 @@ def execute_recovery_pipeline(
     rows: list[dict[str, Any]] = []
     selected: list[dict[str, Any]] = []
     winner: str | None = None
+    outputs: dict[str, list[dict[str, Any]]] = {}
+    produced_order: list[str] = []
     stage_id: str | None = plan.entry_stage_id
     for _ in range(len(plan.stages)):  # acyclic: each stage runs at most once
         if stage_id is None:
@@ -489,6 +595,11 @@ def execute_recovery_pipeline(
         begun = time.perf_counter()
         # Stages that read the record's source units report those; the rest
         # report the candidate set they were handed.
+        if stage.id in plan.bound_sources:
+            # The most recent bound producer that actually produced; none means nothing to pass on.
+            wanted = set(plan.bound_sources[stage.id])
+            latest = next((sid for sid in reversed(produced_order) if sid in wanted), None)
+            rows = outputs[latest] if latest else []
         input_count = len(blocks) if stage.strategy in {_LEXICAL, _SEMANTIC, _LLM} else len(rows)
         outcome = run.run(stage, rows)
         # Only a model that was asked and gave no valid answer makes the next stage an
@@ -500,6 +611,8 @@ def execute_recovery_pipeline(
             if stage.strategy in _METHODS:
                 winner = stage.strategy
             rows = outcome.rows
+            outputs[stage.id] = outcome.rows
+            produced_order.append(stage.id)
             if stage.strategy == _SELECT:
                 selected = outcome.rows
         elif outcome.status == "completed":
@@ -536,6 +649,7 @@ def execute_recovery_pipeline(
         started_at=started_at,
         finished_at=finished_at,
         total_elapsed_ms=max(0, int((finished_at - started_at).total_seconds() * 1000)),
+        warnings=rewired_warnings(plan.pipeline),
         stages=traces,
     )
     return selected, (winner if selected else None), trace
@@ -543,18 +657,34 @@ def execute_recovery_pipeline(
 
 def _entry(items: list[dict[str, Any]], winner: str) -> dict[str, Any]:
     top = items[0]
+    support_note = (
+        " It also passed deterministic direct-support validation."
+        if isinstance(top.get("support_score"), (int, float))
+        else ""
+    )
     if winner == _LLM:
         reason = f"Suggested by the evidence cascade's model choice ({top.get('reason') or 'no reason given'})."
     elif winner == _RERANK:
-        reason = f"Suggested by the evidence cascade's cross-encoder rerank (top score {top['score']:.3f})."
+        reason = (
+            f"Suggested by the evidence cascade's cross-encoder rerank (top score {top['score']:.3f})."
+            + support_note
+        )
     elif winner == _MMR:
+        semantic_score = float(top.get("semantic_score", top["score"]))
+        cross_encoder_score = top.get("cross_encoder_score")
+        ranking = f"semantic score {semantic_score:.3f}"
+        if isinstance(cross_encoder_score, (int, float)):
+            ranking = f"cross-encoder score {float(cross_encoder_score):.3f}; {ranking}"
         reason = (
             "Suggested by the evidence cascade's maximum marginal relevance "
-            f"selection (top semantic score {top['score']:.3f}; "
-            f"MMR objective {top['mmr_score']:.3f})."
+            f"selection ({ranking}; MMR objective {top['mmr_score']:.3f})."
+            + support_note
         )
     elif winner == _SEMANTIC:
-        reason = f"Suggested by the evidence cascade's semantic similarity (top score {top['score']:.3f})."
+        reason = (
+            f"Suggested by the evidence cascade's semantic similarity (top score {top['score']:.3f})."
+            + support_note
+        )
     else:
         reason = f"Suggested by the evidence cascade's deterministic match ({top.get('reason') or 'direct support'})."
     return advisory_evidence_entry(items, _METHODS[winner], reason)

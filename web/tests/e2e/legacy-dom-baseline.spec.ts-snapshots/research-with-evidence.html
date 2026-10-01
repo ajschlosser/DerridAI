@@ -308,6 +308,13 @@
 <fieldset class="research-settings-card">
 <legend>Candidate pool</legend>
 <p>Control how broadly DerridAI searches before fusion and reranking.</p>
+<label class="research-toggle-setting automatic-sizing-toggle">
+<input type="checkbox">
+<span>
+<b>Automatic sizing</b>
+<small>Adapt candidate depth to median Record size, collapse short adjacent hits before reranking, and add same-document neighbors to short selected passages. k and fetch_k remain bounded baselines; reranking and the total evidence budget stay capped.</small>
+</span>
+</label>
 <div class="research-settings-grid compact">
 <label>
 <span>

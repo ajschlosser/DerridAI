@@ -150,6 +150,74 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     return { buildId, recordId, expectedRevision };
   }
 
+  /**
+   * Apply a review decision as locally authoritative before persistence finishes.
+   *
+   * Canonical FieldAssertions still come from the server. The temporary
+   * `optimistic_review` marker only tells the review UI not to let that older
+   * canonical projection keep a just-decided field open while its serialized
+   * mutation is in flight.
+   */
+  function applyOptimisticMetadataDecision(
+    values: Record<string, unknown>,
+    confirmedAbsentFields: ReadonlySet<string> = new Set(),
+    extraChanges: Record<string, unknown> = {},
+  ) {
+    const record = options.selectedRecord.value;
+    if (!record) return null;
+    const decidedFields = new Set(Object.keys(values));
+    const fieldStatus = { ...(record.metadata_field_status || {}) } as Record<
+      string,
+      Record<string, unknown>
+    >;
+    for (const [field, value] of Object.entries(values)) {
+      const absent = confirmedAbsentFields.has(field);
+      fieldStatus[field] = {
+        ...(fieldStatus[field] || {}),
+        status: absent ? "confirmed_absent" : "human_confirmed",
+        method: "human",
+        derivation_method: "human",
+        authority_status: "human_confirmed",
+        evaluation_status: absent ? "no_supported_value" : "value_supported",
+        value_status: absent ? "confirmed_absent" : "present",
+        value_source: "human",
+        verification_status: "reviewed",
+        proposed_value: absent ? null : value,
+        suggested_absence: false,
+        optimistic_review: true,
+      };
+    }
+    const withoutDecided = (fields: string[] | undefined) =>
+      (fields || []).filter((field) => !decidedFields.has(String(field)));
+    const incompleteFields = withoutDecided(record.metadata_incomplete_fields);
+    const reviewFields = withoutDecided(record.metadata_review_fields);
+    const metadataComplete = incompleteFields.length === 0 && reviewFields.length === 0;
+    const issueCodes = (record.review_issue_codes || []).filter(
+      (code) => !(metadataComplete && code === "metadata"),
+    );
+    let reviewState = record.review_state;
+    if (metadataComplete && reviewState === "metadata") {
+      reviewState = issueCodes.includes("source")
+        ? "source"
+        : issueCodes.includes("topology")
+          ? "topology"
+          : "ready";
+    }
+    return applyOptimisticMetadata({
+      ...extraChanges,
+      ...values,
+      metadata_field_status: fieldStatus,
+      metadata_incomplete_fields: incompleteFields,
+      metadata_review_fields: reviewFields,
+      acceptance_blocking_fields: withoutDecided(record.acceptance_blocking_fields),
+      metadata_complete: metadataComplete,
+      metadata_needs_attention: !metadataComplete,
+      metadata_attention_reasons: metadataComplete ? [] : record.metadata_attention_reasons || [],
+      review_issue_codes: issueCodes,
+      review_state: reviewState,
+    });
+  }
+
   async function saveMetadata() {
     if (!options.currentBuild.value || !options.selectedRecord.value) return;
     const viewport = options.captureReviewViewport();
@@ -319,36 +387,25 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     const viewport = options.captureReviewViewport();
     metadataSavingField.value = field;
     metadataSavedField.value = "";
-    const context = applyOptimisticMetadata({
-      [field]: value,
-      // Spans cited from other records show as the field's evidence at once, like the record's own spans.
-      ...(externalIds?.length
+    const evidenceChanged = Boolean(externalIds?.length || evidenceIds);
+    const context = applyOptimisticMetadataDecision(
+      { [field]: value },
+      new Set(),
+      evidenceChanged
         ? {
             metadata_evidence: {
               ...(options.selectedRecord.value.metadata_evidence || {}),
               [field]: {
                 ...(existingEvidence || {}),
-                external_block_ids: externalIds,
+                ...(externalIds?.length ? { external_block_ids: externalIds } : {}),
+                ...(evidenceIds ? { block_ids: evidenceIds } : {}),
                 confidence: existingEvidence?.confidence ?? 1,
                 reason: existingEvidence?.reason || options.t("pdf_corpus.human_evidence_reason"),
               },
             },
           }
-        : {}),
-      ...(evidenceIds
-        ? {
-            metadata_evidence: {
-              ...(options.selectedRecord.value.metadata_evidence || {}),
-              [field]: {
-                ...(existingEvidence || {}),
-                block_ids: evidenceIds,
-                confidence: existingEvidence?.confidence ?? 1,
-                reason: existingEvidence?.reason || options.t("pdf_corpus.human_evidence_reason"),
-              },
-            },
-          }
-        : {}),
-    });
+        : {},
+    );
     if (!context) {
       metadataSavingField.value = "";
       return;
@@ -404,7 +461,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     const viewport = options.captureReviewViewport();
     metadataSavingField.value = "__batch__";
     metadataSavedField.value = "";
-    const context = applyOptimisticMetadata(changes);
+    const context = applyOptimisticMetadataDecision(changes);
     if (!context) {
       metadataSavingField.value = "";
       return;
@@ -439,7 +496,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     const viewport = options.captureReviewViewport();
     metadataSavingField.value = field;
     metadataSavedField.value = "";
-    const context = applyOptimisticMetadata({ [field]: null });
+    const context = applyOptimisticMetadataDecision({ [field]: null }, new Set([field]));
     if (!context) {
       metadataSavingField.value = "";
       return;

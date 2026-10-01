@@ -26,49 +26,176 @@
   const themeKey = `derridai.site.theme.${publicationId}`;
   const contrastKey = `derridai.site.contrast.${publicationId}`;
   const tutorialKey = `derridai.site.tutorial.${publicationId}`;
-  const providerKey = `derridai.site.provider.${publicationId}`;
-  const customProvidersKey = `derridai.site.providers.${publicationId}`;
+  const legacyProviderKey = `derridai.site.provider.${publicationId}`;
+  const embeddingSelectionKey = `derridai.site.provider.embedding.${publicationId}`;
+  const generationSelectionKey = `derridai.site.provider.generation.${publicationId}`;
+  const providersKey = `derridai.site.providers.${publicationId}`;
+  const localModelKey = `derridai.site.local-model.${publicationId}`;
+  const endpointsKey = `derridai.site.endpoints.${publicationId}`;
   const availableLocales = Object.keys(publication.strings || {});
   const languageMetadata = Array.isArray(publication.languages) ? publication.languages : [];
-  const exportedProviderProfiles = Array.isArray(publication.provider_profiles)
-    ? publication.provider_profiles
-    : [];
   const memoryStorage = new Map();
 
   let locale = readLocal(localeKey) || publication.locale || availableLocales[0] || "en-US";
   if (!availableLocales.includes(locale)) locale = availableLocales[0] || "en-US";
   let theme = readLocal(themeKey) === "dark" ? "dark" : "light";
   let highContrast = readLocal(contrastKey) === "high";
-  let selectedProviderId = readLocal(providerKey) || "";
-  function loadCustomProviderProfiles() {
+  // Prefer a browser-compatible form of the model that produced the source collection. The publication keeps
+  // the original model identity even when vectors are omitted, so the browser can make the same first choice.
+  // Known runtime aliases encode vector-changing details explicitly; unknown Hugging Face IDs are tried as-is.
+  const TRANSFORMERS_SUGGESTIONS = [
+    {
+      id: "Xenova/bge-m3",
+      aliases: ["bge-m3", "bge-m3:latest", "BAAI/bge-m3", "Xenova/bge-m3"],
+      dtype: "q8",
+      pooling: "cls",
+      normalize: true,
+      note: "site.runtime.transformers_model_bge_m3",
+    },
+    {
+      id: "Xenova/multilingual-e5-small",
+      revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+      dtype: "q8",
+      pooling: "mean",
+      normalize: true,
+      note: "site.runtime.transformers_model_multilingual_small",
+      query_prefix: "query: ",
+      document_prefix: "passage: ",
+    },
+    {
+      id: "Xenova/all-MiniLM-L6-v2",
+      pooling: "mean",
+      normalize: true,
+      note: "site.runtime.transformers_model_english_small",
+    },
+  ];
+  const FALLBACK_TRANSFORMERS_MODEL = "Xenova/multilingual-e5-small";
+  const DEFAULT_TRANSFORMERS_DEVICE = "wasm";
+  const MODEL_CACHE_NAME = "transformers-cache";
+
+  function sourceEmbeddingModel() {
+    return String(
+      publication.vector_index?.model || publication.source_collection?.embedding_model || "",
+    ).trim();
+  }
+
+  function suggestedProfileForModel(model) {
+    const normalized = String(model || "").trim().toLocaleLowerCase();
+    return TRANSFORMERS_SUGGESTIONS.find(
+      (item) =>
+        item.id.toLocaleLowerCase() === normalized ||
+        (item.aliases || []).some((alias) => alias.toLocaleLowerCase() === normalized),
+    );
+  }
+
+  function publicationBrowserProfile() {
+    const published = sourceEmbeddingModel();
+    const known = suggestedProfileForModel(published);
+    if (known) return known;
+    // A namespaced model id is already in the form Transformers.js expects. Try it before falling back.
+    if (published.includes("/") && !published.includes(":")) {
+      return { id: published, pooling: "mean", normalize: true };
+    }
+    return suggestedProfileForModel(FALLBACK_TRANSFORMERS_MODEL);
+  }
+
+  const DEFAULT_TRANSFORMERS_MODEL =
+    publicationBrowserProfile()?.id || FALLBACK_TRANSFORMERS_MODEL;
+
+  function settingsForModel(model) {
+    const match = suggestedProfileForModel(model);
+    return {
+      revision: match?.revision || "",
+      dtype: match?.dtype || "",
+      pooling: match?.pooling || "mean",
+      normalize: match?.normalize !== false,
+      query_prefix: match?.query_prefix || "",
+      document_prefix: match?.document_prefix || "",
+    };
+  }
+
+  function loadLocalModel() {
     try {
-      const value = JSON.parse(readLocal(customProvidersKey) || "[]");
-      return Array.isArray(value)
-        ? value.filter(
-            (profile) =>
-              profile &&
-              typeof profile === "object" &&
-              profile.id &&
-              profile.name &&
-              profile.base_url &&
-              profile.model &&
-              (profile.type === "openai" || profile.type === "ollama"),
-          )
-        : [];
+      const raw = JSON.parse(readLocal(localModelKey) || "{}");
+      const model = String(raw.model || DEFAULT_TRANSFORMERS_MODEL);
+      const defaults = settingsForModel(model);
+      // Older sites stored "auto". Migrate that preference to the compatibility-first WASM path rather than
+      // probing WebGPU merely because navigator.gpu exists.
+      const device = ["webgpu", "wasm"].includes(raw.device)
+        ? raw.device
+        : DEFAULT_TRANSFORMERS_DEVICE;
+      return {
+        model,
+        device,
+        revision: raw.revision == null ? defaults.revision : String(raw.revision),
+        dtype: raw.dtype == null ? defaults.dtype : String(raw.dtype),
+        pooling: raw.pooling == null ? defaults.pooling : String(raw.pooling),
+        normalize: raw.normalize == null ? defaults.normalize : Boolean(raw.normalize),
+        query_prefix:
+          raw.query_prefix == null ? defaults.query_prefix : String(raw.query_prefix),
+        document_prefix:
+          raw.document_prefix == null ? defaults.document_prefix : String(raw.document_prefix),
+      };
+    } catch {
+      const defaults = settingsForModel(DEFAULT_TRANSFORMERS_MODEL);
+      return {
+        model: DEFAULT_TRANSFORMERS_MODEL,
+        device: DEFAULT_TRANSFORMERS_DEVICE,
+        revision: defaults.revision,
+        dtype: defaults.dtype,
+        pooling: defaults.pooling,
+        normalize: defaults.normalize,
+        query_prefix: defaults.query_prefix,
+        document_prefix: defaults.document_prefix,
+      };
+    }
+  }
+
+  // Named OpenAI-compatible endpoints live only in this browser. Older provider profiles that used the
+  // OpenAI engine are read once so a saved endpoint is not lost.
+  function normalizeEndpoint(raw) {
+    if (!raw || typeof raw !== "object" || !raw.id || !raw.name || !raw.base_url) return null;
+    const engine = raw.engine || raw.type || "openai";
+    if (engine !== "openai") return null;
+    return {
+      id: String(raw.id),
+      name: String(raw.name),
+      base_url: String(raw.base_url),
+      model: String(raw.model || ""),
+      remember_key: Boolean(raw.remember_key ?? raw.api_key),
+      api_key: String(raw.api_key || ""),
+    };
+  }
+
+  function loadEndpoints() {
+    try {
+      const saved = JSON.parse(readLocal(endpointsKey) || "null");
+      if (Array.isArray(saved)) return saved.map(normalizeEndpoint).filter(Boolean);
+    } catch {
+      // Fall through to the older provider list.
+    }
+    try {
+      const legacy = JSON.parse(readLocal(providersKey) || "[]");
+      return Array.isArray(legacy) ? legacy.map(normalizeEndpoint).filter(Boolean) : [];
     } catch {
       return [];
     }
   }
 
-  let customProviderProfiles = loadCustomProviderProfiles();
-  let providerProfiles = [...exportedProviderProfiles, ...customProviderProfiles];
-  if (!providerProfiles.some((profile) => profile.id === selectedProviderId)) {
-    selectedProviderId = "";
-  }
+  let localModel = loadLocalModel();
+  let endpoints = loadEndpoints();
   const sessionApiKeys = new Map();
-  customProviderProfiles.forEach((profile) => {
-    if (profile.api_key) sessionApiKeys.set(profile.id, String(profile.api_key));
+  endpoints.forEach((endpoint) => {
+    if (endpoint.remember_key && endpoint.api_key) sessionApiKeys.set(endpoint.id, endpoint.api_key);
   });
+  let selectedEmbeddingId = readLocal(embeddingSelectionKey) || "";
+  if (selectedEmbeddingId && !endpoints.some((endpoint) => endpoint.id === selectedEmbeddingId)) {
+    selectedEmbeddingId = "";
+  }
+  let selectedGenerationId = readLocal(generationSelectionKey) || readLocal(legacyProviderKey) || "";
+  if (selectedGenerationId && !endpoints.some((endpoint) => endpoint.id === selectedGenerationId)) {
+    selectedGenerationId = "";
+  }
   let view = "search";
   let client = null;
   let capabilities = null;
@@ -163,6 +290,7 @@
     .tour-hint{padding-block:0;font-size:.875rem}
     .tutorial-progress{font-weight:800;color:var(--muted);font-size:.875rem}.tutorial-copy{margin:0;font-size:1.02rem}
     .footer{margin-top:3rem;border-top:1px solid var(--border);padding:1.2rem 0 2.5rem;color:var(--muted);font-size:.875rem}
+    [hidden]{display:none!important}progress{width:100%;height:1rem;accent-color:var(--accent)}
     .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
     @media(max-width:760px){.research-layout{grid-template-columns:1fr}.search-row{grid-template-columns:1fr}.top{position:static}.top-inner,.main{width:min(100% - 1rem,1180px)}.main{scroll-margin-top:1rem}.header-controls{width:100%}}
     @media(forced-colors:active){.tour-spot{outline:4px solid Highlight}mark{background:Mark;color:MarkText;forced-color-adjust:none}button,.control,.panel,.card,.method-badge,.toggle{forced-color-adjust:auto}.method-badge[data-active="true"]{outline:2px solid CanvasText}}
@@ -186,8 +314,23 @@
     }
   }
 
-  function saveCustomProviderProfiles() {
-    writeLocal(customProvidersKey, JSON.stringify(customProviderProfiles));
+  function saveLocalModel() {
+    writeLocal(localModelKey, JSON.stringify(localModel));
+  }
+
+  function saveEndpoints() {
+    // A token is written to this browser only when the reader chose to store it for that endpoint.
+    writeLocal(
+      endpointsKey,
+      JSON.stringify(
+        endpoints.map((endpoint) => ({
+          ...endpoint,
+          api_key: endpoint.remember_key ? sessionApiKeys.get(endpoint.id) || "" : "",
+        })),
+      ),
+    );
+    writeLocal(embeddingSelectionKey, selectedEmbeddingId);
+    writeLocal(generationSelectionKey, selectedGenerationId);
   }
 
   function t(key, vars = {}) {
@@ -288,6 +431,12 @@
     if (warning.code === "embedding_provider_unavailable") {
       return t("site.runtime.sdk_embedding_unavailable");
     }
+    if (warning.code === "local_index_required") {
+      return t("site.runtime.local_index_required", {
+        indexed: warning.details?.indexed ?? 0,
+        total: warning.details?.total ?? 0,
+      });
+    }
     if (warning.code === "embedding_contract_mismatch") {
       return t("site.runtime.sdk_embedding_contract_mismatch");
     }
@@ -299,10 +448,6 @@
 
   function warningText(warnings) {
     return (warnings || []).map(localizedWarning).filter(Boolean).join(" ");
-  }
-
-  function profileById(id) {
-    return providerProfiles.find((profile) => String(profile.id) === String(id)) || null;
   }
 
   function providerError(message, code, status = 0) {
@@ -354,9 +499,9 @@
     return raw;
   }
 
-  function providerHeaders(profile, apiKey) {
+  function providerHeaders(_profile, apiKey) {
     const headers = { "Content-Type": "application/json" };
-    if (profile?.type === "openai" && apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
     return headers;
   }
 
@@ -410,40 +555,238 @@
     }
   }
 
+  function embeddingVariant(profile) {
+    return [
+      profile.query_prefix ? `query-prefix=${profile.query_prefix}` : "",
+      profile.document_prefix ? `document-prefix=${profile.document_prefix}` : "",
+    ]
+      .filter(Boolean)
+      .join(";");
+  }
+
+  function prefixed(profile, input, purpose) {
+    const prefix = purpose === "query" ? profile.query_prefix : profile.document_prefix;
+    return prefix ? input.map((text) => `${prefix}${text}`) : input;
+  }
+
+  function embeddingFailure() {
+    return providerError(t("site.runtime.embedding_failed"), "embedding_failed");
+  }
+
   function directEmbeddingProvider(profile, apiKey) {
-    if (!profile) return undefined;
-    const embeddingModel = String(publication.vector_index?.model || "").trim();
-    if (!embeddingModel) return undefined;
+    const model = String(profile.model || "").trim();
+    if (!model) return undefined;
     return {
       descriptor: () => ({
         id: profile.id,
-        type: profile.type,
-        model: embeddingModel,
+        type: "openai",
+        model,
+        variant: embeddingVariant(profile),
       }),
       async embed(input, options = {}) {
         const base = providerBase(profile);
-        if (profile.type === "ollama") {
-          const body = await providerJson(`${base}/api/embed`, {
-            method: "POST",
-            headers: providerHeaders(profile, apiKey),
-            body: JSON.stringify({ model: embeddingModel, input }),
-            signal: options.signal,
-          });
-          const vectors = Array.isArray(body.embeddings) ? body.embeddings : [];
-          return { vectors, provider: this.descriptor() };
-        }
+        const texts = prefixed(profile, input, options.purpose);
         const body = await providerJson(`${base}/embeddings`, {
           method: "POST",
           headers: providerHeaders(profile, apiKey),
-          body: JSON.stringify({ model: embeddingModel, input }),
+          body: JSON.stringify({ model, input: texts }),
           signal: options.signal,
         });
         const vectors = Array.isArray(body.data)
-          ? body.data.map((item) => item?.embedding).filter(Array.isArray)
+          ? [...body.data]
+              .sort((a, b) => Number(a?.index ?? 0) - Number(b?.index ?? 0))
+              .map((item) => item?.embedding)
           : [];
+        if (vectors.length !== texts.length || !vectors.every(Array.isArray)) {
+          throw embeddingFailure();
+        }
         return { vectors, provider: this.descriptor() };
       },
     };
+  }
+
+  function base64Bytes(value) {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  async function gunzip(bytes) {
+    if (typeof DecompressionStream !== "function") {
+      throw providerError(t("site.runtime.transformers_unsupported_browser"), "unsupported");
+    }
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  function blobUrl(bytes, type) {
+    return URL.createObjectURL(new Blob([bytes], { type }));
+  }
+
+  // Transformers.js ships with every site, either embedded in the site script ("inline") or served next to
+  // it ("files"). The library downloads a chosen model once and keeps it in the browser Cache Storage.
+  let transformersRuntime = null;
+  let modelProgressListener = null;
+  let activeDevice = "";
+  function loadTransformersRuntime() {
+    if (transformersRuntime) return transformersRuntime;
+    transformersRuntime = (async () => {
+      const delivery = publication.features?.transformers_runtime || "inline";
+      let engineUrl;
+      let wasmPaths;
+      if (delivery === "files") {
+        const base = new URL("./vendor/transformers/", location.href).href;
+        engineUrl = `${base}transformers.min.js`;
+        wasmPaths = {
+          mjs: `${base}ort-wasm-simd-threaded.mjs`,
+          wasm: `${base}ort-wasm-simd-threaded.wasm`,
+        };
+      } else {
+        const bundle = globalThis.__DERRIDAI_TRANSFORMERS_RUNTIME__;
+        if (!bundle) {
+          throw providerError(t("site.runtime.transformers_not_included"), "runtime_missing");
+        }
+        engineUrl = blobUrl(base64Bytes(bundle.engine_b64), "text/javascript");
+        wasmPaths = {
+          mjs: blobUrl(base64Bytes(bundle.wasm_factory_b64), "text/javascript"),
+          wasm: blobUrl(await gunzip(base64Bytes(bundle.wasm_gzip_b64)), "application/wasm"),
+        };
+      }
+      const runtime = await import(engineUrl);
+      runtime.env.allowRemoteModels = true;
+      runtime.env.allowLocalModels = false;
+      runtime.env.useBrowserCache = true;
+      if (runtime.env.backends?.onnx?.wasm) {
+        runtime.env.backends.onnx.wasm.wasmPaths = wasmPaths;
+        // Single-threaded WebAssembly needs no SharedArrayBuffer or cross-origin isolation headers.
+        runtime.env.backends.onnx.wasm.numThreads = 1;
+      }
+      return runtime;
+    })();
+    transformersRuntime.catch(() => {
+      transformersRuntime = null;
+    });
+    return transformersRuntime;
+  }
+
+  async function resolveDevice(preference) {
+    // WASM is the predictable cross-browser path. WebGPU is opt-in because navigator.gpu alone does not prove
+    // that the packaged ONNX runtime exposes a usable WebGPU execution provider.
+    if (preference !== "webgpu") return "wasm";
+    const gpu = globalThis.navigator?.gpu;
+    if (!gpu) return "wasm";
+    try {
+      const adapter = await gpu.requestAdapter();
+      if (adapter) return "webgpu";
+    } catch {
+      // Explicit WebGPU can still be blocked by browser/driver policy; fall back to WASM.
+    }
+    return "wasm";
+  }
+
+  const transformersExtractors = new Map();
+  function transformersExtractor(profile) {
+    const key = [
+      profile.model,
+      profile.revision || "",
+      profile.dtype || "",
+      profile.device || DEFAULT_TRANSFORMERS_DEVICE,
+    ].join("|");
+    if (!transformersExtractors.has(key)) {
+      const loading = (async () => {
+        const runtime = await loadTransformersRuntime();
+        const device = await resolveDevice(profile.device || "auto");
+        activeDevice = device;
+        try {
+          return await runtime.pipeline("feature-extraction", profile.model, {
+            device,
+            ...(profile.revision ? { revision: profile.revision } : {}),
+            ...(profile.dtype ? { dtype: profile.dtype } : {}),
+            progress_callback: (progress) => modelProgressListener?.(progress),
+          });
+        } catch (error) {
+          if (device === "wasm") throw error;
+          activeDevice = "wasm";
+          return runtime.pipeline("feature-extraction", profile.model, {
+            device: "wasm",
+            ...(profile.revision ? { revision: profile.revision } : {}),
+            ...(profile.dtype ? { dtype: profile.dtype } : {}),
+            progress_callback: (progress) => modelProgressListener?.(progress),
+          });
+        }
+      })();
+      loading.catch(() => transformersExtractors.delete(key));
+      transformersExtractors.set(key, loading);
+    }
+    return transformersExtractors.get(key);
+  }
+
+  async function deleteModelCache() {
+    transformersExtractors.clear();
+    activeDevice = "";
+    if (typeof caches === "undefined") return;
+    const names = await caches.keys();
+    await Promise.all(
+      names
+        .filter((name) => name === MODEL_CACHE_NAME || name.toLowerCase().includes("transformers"))
+        .map((name) => caches.delete(name)),
+    );
+  }
+
+  function transformersEmbeddingProvider(profile) {
+    const model = String(profile.model || "").trim();
+    if (!model) return undefined;
+    return {
+      descriptor: () => ({
+        id: profile.id,
+        type: "transformers",
+        model,
+        revision: profile.revision || undefined,
+        variant: [
+          embeddingVariant(profile),
+          profile.dtype ? `dtype=${profile.dtype}` : "",
+          `pooling=${profile.pooling || "mean"}`,
+          `normalize=${profile.normalize !== false}`,
+        ]
+          .filter(Boolean)
+          .join(";"),
+      }),
+      async embed(input, options = {}) {
+        const extractor = await transformersExtractor(profile);
+        const texts = prefixed(profile, input, options.purpose);
+        const vectors = [];
+        for (let start = 0; start < texts.length; start += 8) {
+          if (options.signal?.aborted) throw new DOMException("Operation aborted.", "AbortError");
+          const tensor = await extractor(texts.slice(start, start + 8), {
+            pooling: profile.pooling || "mean",
+            normalize: profile.normalize !== false,
+          });
+          vectors.push(...tensor.tolist());
+        }
+        if (vectors.length !== texts.length) throw embeddingFailure();
+        return { vectors, provider: this.descriptor() };
+      },
+    };
+  }
+
+  function localEmbeddingProfile() {
+    return {
+      id: "transformers-local",
+      model: localModel.model,
+      device: localModel.device,
+      revision: localModel.revision,
+      dtype: localModel.dtype,
+      pooling: localModel.pooling,
+      normalize: localModel.normalize,
+      query_prefix: localModel.query_prefix,
+      document_prefix: localModel.document_prefix,
+    };
+  }
+
+  function embeddingProviderFor(profile, apiKey) {
+    if (!profile) return transformersEmbeddingProvider(localEmbeddingProfile());
+    return directEmbeddingProvider(profile, apiKey);
   }
 
   function directGenerationProvider(profile, apiKey) {
@@ -451,26 +794,9 @@
     const model = String(profile.model || "").trim();
     if (!model) return undefined;
     return {
-      descriptor: () => ({ id: profile.id, type: profile.type, model }),
+      descriptor: () => ({ id: profile.id, type: "openai", model }),
       async generate(request, options = {}) {
         const base = providerBase(profile);
-        if (profile.type === "ollama") {
-          const body = await providerJson(`${base}/api/chat`, {
-            method: "POST",
-            headers: providerHeaders(profile, apiKey),
-            body: JSON.stringify({
-              model,
-              stream: false,
-              messages: [{ role: "user", content: request.prompt }],
-              options: { temperature: Number(profile.temperature ?? 0) },
-            }),
-            signal: options.signal,
-          });
-          return {
-            text: String(body.message?.content || body.response || ""),
-            provider: this.descriptor(),
-          };
-        }
         const body = await providerJson(`${base}/chat/completions`, {
           method: "POST",
           headers: providerHeaders(profile, apiKey),
@@ -489,7 +815,10 @@
     };
   }
 
-  async function testProvider(profile, apiKey) {
+  const EMBEDDING_NAME_HINT = /embed|bge|e5|minilm|gte|nomic|mxbai|arctic|snowflake|sentence/i;
+
+  // Lists what an OpenAI-compatible endpoint reports. The reader chooses which model to use.
+  async function discoverModels(profile, apiKey) {
     let base;
     try {
       base = providerBase(profile);
@@ -498,27 +827,36 @@
         ok: false,
         code: error?.code || "invalid_endpoint",
         message: error instanceof Error ? error.message : String(error),
+        models: [],
       };
     }
-    const endpoint = profile.type === "ollama" ? `${base}/api/tags` : `${base}/models`;
+    const endpoint = `${base}/models`;
     try {
       const body = await providerJson(endpoint, {
         method: "GET",
-        headers: profile.type === "openai" && apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
         cache: "no-store",
       });
-      const names = profile.type === "ollama"
-        ? (body.models || []).flatMap((item) => [item?.name, item?.model]).filter(Boolean)
-        : (body.data || []).map((item) => item?.id).filter(Boolean);
-      const required = String(profile.model || "");
-      if (required && names.length && !names.includes(required)) {
-        return {
-          ok: false,
-          code: "model_not_found",
-          message: t("site.runtime.provider_model_missing", { model: required }),
-        };
+      const models = (body.data || [])
+        .map((item) => ({
+          name: String(item?.id || ""),
+          detail: [item?.owned_by].filter(Boolean).join(" · "),
+        }))
+        .filter((item) => item.name);
+      const unique = [];
+      const seen = new Set();
+      for (const model of models.sort((a, b) => a.name.localeCompare(b.name))) {
+        if (seen.has(model.name)) continue;
+        seen.add(model.name);
+        unique.push(model);
       }
-      return { ok: true, code: "ready", message: t("site.runtime.provider_ready") };
+      const wantsEmbedding = profile.role === "embedding";
+      unique.sort(
+        (a, b) =>
+          Number(EMBEDDING_NAME_HINT.test(b.name) === wantsEmbedding) -
+          Number(EMBEDDING_NAME_HINT.test(a.name) === wantsEmbedding),
+      );
+      return { ok: true, code: "ready", message: t("site.runtime.provider_ready"), models: unique };
     } catch (error) {
       if (error?.code === "network" && (await noCorsReachabilityProbe(endpoint))) {
         const origin =
@@ -527,12 +865,33 @@
           ok: false,
           code: "cors_blocked",
           message: t("site.runtime.provider_cors_blocked", { origin }),
-          remediation:
-            profile.type === "ollama" && location.origin !== "null"
-              ? `OLLAMA_ORIGINS="${location.origin}" ollama serve`
-              : "",
+          models: [],
         };
       }
+      return {
+        ok: false,
+        code: error?.code || "provider_error",
+        message: t("site.runtime.provider_test_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+        models: [],
+      };
+    }
+  }
+
+  // Loads the model (downloading it the first time) and embeds a probe string.
+  async function testTransformers(profile) {
+    try {
+      const provider = transformersEmbeddingProvider(profile);
+      const result = await provider.embed([t("site.runtime.transformers_probe")], {
+        purpose: "query",
+      });
+      return {
+        ok: true,
+        code: "ready",
+        message: t("site.runtime.transformers_ready", { dimension: result.vectors[0].length }),
+      };
+    } catch (error) {
       return {
         ok: false,
         code: error?.code || "provider_error",
@@ -545,13 +904,14 @@
 
   async function rebuildClient() {
     const host = globalThis.__DERRIDAI_HOST_CAPABILITIES__ || {};
-    const profile = profileById(selectedProviderId);
-    const apiKey = sessionApiKeys.get(selectedProviderId) || "";
-    const embeddings = profile
-      ? directEmbeddingProvider(profile, apiKey)
-      : host.embeddings;
-    const generation = profile
-      ? directGenerationProvider(profile, apiKey)
+    const embeddingProfile = endpoints.find((endpoint) => endpoint.id === selectedEmbeddingId);
+    const generationProfile = endpoints.find((endpoint) => endpoint.id === selectedGenerationId);
+    const embeddings = embeddingProviderFor(
+      embeddingProfile,
+      embeddingProfile ? sessionApiKeys.get(embeddingProfile.id) || "" : "",
+    );
+    const generation = generationProfile
+      ? directGenerationProvider(generationProfile, sessionApiKeys.get(generationProfile.id) || "")
       : host.generation;
     client = await sdk.createClient({
       dataSource: sdk.dataSources.inline(publicationPackage),
@@ -561,6 +921,12 @@
       locale,
     });
     capabilities = await client.capabilities();
+  }
+
+  // Semantic and hybrid search need vectors in the same space as the query: the publication's own, or a
+  // local index built with the reader's embedding provider.
+  function semanticReady() {
+    return Boolean(capabilities?.provider.embeddings && capabilities.localIndex?.complete);
   }
 
   function methodBadge(labelKey, active) {
@@ -840,7 +1206,10 @@
         disabled: !capabilities.provider.embeddings,
       }),
     );
-    mode.value = capabilities.provider.embeddings ? "hybrid" : "keyword";
+    mode.value =
+      capabilities.publicationVectors?.available || capabilities.localIndex?.complete
+        ? "semantic"
+        : "keyword";
     const methods = methodStrip({
       text: mode.value !== "semantic",
       vector: mode.value !== "keyword",
@@ -891,6 +1260,9 @@
       const stopProgress = progressListener(status);
       try {
         const searchedQuery = query.value;
+        // Highlighting is a lexical affordance. Semantic and hybrid ranking may return relevant Records that
+        // do not contain the query terms, so only explicit Keyword mode receives a highlight query.
+        const highlightQuery = mode.value === "keyword" ? searchedQuery : "";
         const filters = {};
         if (work.value) filters.work = work.value;
         if (field.value && value.value) filters[field.value] = value.value;
@@ -916,7 +1288,7 @@
         if (!response.results.length) {
           results.append(node("div", { class: "empty", text: t("site.runtime.no_results") }));
         } else {
-          results.append(...response.results.map((item) => resultCard(item, searchedQuery)));
+          results.append(...response.results.map((item) => resultCard(item, highlightQuery)));
         }
       } catch (error) {
         status.className = "status error";
@@ -947,6 +1319,7 @@
         node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_value") }), value),
       ),
       status,
+      browserSemanticIndexSection(),
     );
     return node("div", { class: "stack" }, panel, results);
   }
@@ -982,144 +1355,599 @@
     );
   }
 
-  function providerPanel() {
-    const panel = node("section", {
-      class: "panel provider-panel",
-      "data-tour": "provider",
-      "aria-labelledby": "provider-heading",
-    });
-    panel.append(node("h3", { id: "provider-heading", text: t("site.runtime.provider_settings") }));
+  function endpointById(id) {
+    return endpoints.find((endpoint) => endpoint.id === id) || null;
+  }
 
-    const select = node(
-      "select",
-      { class: "control", "aria-label": t("site.runtime.provider_profile") },
-      node("option", { value: "", text: t("site.runtime.provider_none") }),
-      ...providerProfiles.map((profile) =>
-        node("option", {
-          value: profile.id,
-          text: `${profile.name || profile.id} · ${profile.type === "openai" ? t("site.runtime.provider_openai") : t("site.runtime.provider_ollama")}`,
-        }),
+  async function applyModelSelection(status) {
+    saveLocalModel();
+    saveEndpoints();
+    status.className = "status";
+    status.textContent = t("site.runtime.provider_applying");
+    try {
+      await rebuildClient();
+      await render();
+    } catch (error) {
+      status.className = "status error";
+      status.textContent = t("site.runtime.provider_apply_failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  function watchModelProgress(status) {
+    modelProgressListener = (info) => {
+      if (info?.status === "progress" && info.file) {
+        status.className = "status";
+        status.textContent = t("site.runtime.model_download", {
+          file: String(info.file).split("/").pop(),
+          percent: Math.round(Number(info.progress) || 0),
+        });
+      }
+    };
+  }
+
+  function localModelSection() {
+    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
+    const progress = node("progress", {
+      value: 0,
+      max: 100,
+      hidden: true,
+      "aria-label": t("site.runtime.model_download_label"),
+    });
+    const model = node("input", {
+      class: "control",
+      value: localModel.model,
+      list: "local-model-options",
+      autocomplete: "off",
+      "aria-label": t("site.runtime.local_model"),
+    });
+    const options = node(
+      "datalist",
+      { id: "local-model-options" },
+      ...TRANSFORMERS_SUGGESTIONS.map((item) =>
+        node("option", { value: item.id, label: t(item.note) }),
       ),
     );
-    select.value = selectedProviderId;
+    const device = node(
+      "select",
+      { class: "control", "aria-label": t("site.runtime.local_device") },
+      node("option", { value: "wasm", text: t("site.runtime.local_device_wasm") }),
+      node("option", { value: "webgpu", text: t("site.runtime.local_device_webgpu") }),
+    );
+    device.value = localModel.device;
+    const deviceNote = node("div", {
+      class: "meta",
+      text: activeDevice
+        ? t("site.runtime.local_device_active", {
+            device: t(
+              activeDevice === "webgpu"
+                ? "site.runtime.local_device_webgpu"
+                : "site.runtime.local_device_wasm",
+            ),
+          })
+        : t("site.runtime.local_model_help"),
+    });
+
+    function rememberDraft() {
+      const next = String(model.value || "").trim();
+      const defaults = settingsForModel(next);
+      localModel = {
+        model: next,
+        device: device.value,
+        revision: defaults.revision,
+        dtype: defaults.dtype,
+        pooling: defaults.pooling,
+        normalize: defaults.normalize,
+        query_prefix: defaults.query_prefix,
+        document_prefix: defaults.document_prefix,
+      };
+      saveLocalModel();
+    }
+    model.addEventListener("change", rememberDraft);
+    device.addEventListener("change", rememberDraft);
+
+    const download = node("button", {
+      class: "primary",
+      type: "button",
+      text: t("site.runtime.download_model"),
+      on: {
+        click: async () => {
+          rememberDraft();
+          if (!localModel.model) {
+            status.className = "status warning";
+            status.textContent = t("site.runtime.provider_model_required");
+            return;
+          }
+          download.disabled = true;
+          progress.hidden = false;
+          progress.value = 0;
+          status.className = "status";
+          status.textContent = t("site.runtime.model_download_start", { model: localModel.model });
+          watchModelProgress(status);
+          modelProgressListener = (info) => {
+            if (info?.status === "progress") {
+              const percent = Math.round(Number(info.progress) || 0);
+              progress.value = percent;
+              progress.hidden = false;
+              status.textContent = t("site.runtime.model_download", {
+                file: String(info.file || localModel.model).split("/").pop(),
+                percent,
+              });
+            }
+          };
+          try {
+            const result = await testTransformers(localEmbeddingProfile());
+            status.className = result.ok ? "status success" : "status error";
+            status.textContent = result.message;
+            if (result.ok && activeDevice) {
+              deviceNote.textContent = t("site.runtime.local_device_active", {
+                device: t(
+                  activeDevice === "webgpu"
+                    ? "site.runtime.local_device_webgpu"
+                    : "site.runtime.local_device_wasm",
+                ),
+              });
+            }
+          } finally {
+            modelProgressListener = null;
+            progress.hidden = true;
+            download.disabled = false;
+          }
+        },
+      },
+    });
+    const removeCache = node("button", {
+      type: "button",
+      class: "danger",
+      text: t("site.runtime.delete_model_cache"),
+      on: {
+        click: async () => {
+          if (!window.confirm(t("site.runtime.delete_model_cache_confirm"))) return;
+          await deleteModelCache();
+          status.className = "status";
+          status.textContent = t("site.runtime.model_cache_cleared");
+          deviceNote.textContent = t("site.runtime.local_model_help");
+        },
+      },
+    });
+
+    return node(
+      "section",
+      { class: "card stack", "aria-labelledby": "local-model-heading" },
+      node("h3", { id: "local-model-heading", text: t("site.runtime.local_model_heading") }),
+      node("p", { class: "muted", text: t("site.runtime.local_model_help") }),
+      node("label", { class: "field" }, node("span", { text: t("site.runtime.local_model") }), model, options),
+      node("label", { class: "field" }, node("span", { text: t("site.runtime.local_device") }), device),
+      deviceNote,
+      progress,
+      node("div", { class: "chips" }, download, removeCache),
+      status,
+      selectedEmbeddingId
+        ? null
+        : indexSection(async () => {
+            // The index button is the complete happy path: persist the current browser-model draft, rebuild the
+            // SDK client with it, and let the first embedding call download/cache the model automatically.
+            rememberDraft();
+            await rebuildClient();
+          }),
+    );
+  }
+
+  function openModelList(models, current, onChoose) {
+    const dialog = node("dialog", { "aria-labelledby": "model-list-title" });
+    const query = node("input", {
+      class: "control",
+      type: "search",
+      autocomplete: "off",
+      "aria-label": t("site.runtime.filter_models"),
+    });
+    const count = node("p", { class: "meta", role: "status", "aria-live": "polite" });
+    const list = node("ul", { class: "stack", style: "list-style:none;margin:0;padding:0" });
+
+    function paint() {
+      const needle = String(query.value || "").trim().toLocaleLowerCase();
+      const shown = models.filter((item) => item.name.toLocaleLowerCase().includes(needle));
+      count.textContent = t("site.runtime.models_match", { count: shown.length });
+      list.replaceChildren(
+        ...(shown.length
+          ? shown.map((item) =>
+              node(
+                "li",
+                {},
+                node(
+                  "button",
+                  {
+                    type: "button",
+                    "aria-current": item.name === current ? "true" : null,
+                    on: {
+                      click: () => {
+                        onChoose(item.name);
+                        dialog.close();
+                      },
+                    },
+                  },
+                  node("strong", { text: item.name }),
+                  item.detail ? node("small", { class: "muted", text: item.detail }) : null,
+                  node("span", {
+                    text:
+                      item.name === current
+                        ? t("site.runtime.model_in_use")
+                        : t("site.runtime.use_model"),
+                  }),
+                ),
+              ),
+            )
+          : [node("p", { text: t("site.runtime.no_models_match") })]),
+      );
+    }
+    query.addEventListener("input", paint);
+    paint();
+    dialog.append(
+      node(
+        "div",
+        { class: "dialog-head" },
+        node("h2", { id: "model-list-title", text: t("site.runtime.models_dialog_title") }),
+        node("button", {
+          type: "button",
+          text: t("site.runtime.close"),
+          on: { click: () => dialog.close() },
+        }),
+      ),
+      node(
+        "div",
+        { class: "dialog-body stack" },
+        node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_models") }), query),
+        count,
+        list,
+      ),
+    );
+    dialog.addEventListener("close", () => dialog.remove());
+    document.body.append(dialog);
+    dialog.showModal();
+    query.focus();
+  }
+  // Search and Research surface the same one-click browser-index action as Models. The default local
+  // profile is already pinned and compatibility-first, so readers do not need to test/download a provider
+  // separately just because the publication was embedded with another model.
+  function browserSemanticIndexSection() {
+    const index = capabilities?.localIndex;
+    if (!index || index.usesPublishedVectors) return null;
+    // Search and Research use the already-active embedding provider. They should not rebuild the SDK client
+    // merely to start a derived index; doing so can replace the provider while the click handler is running.
+    // Keep the completed state visible so readers can see which local index semantic search is using.
+    return indexSection(null, "site.runtime.index_build_browser");
+  }
+
+  // The local index holds vectors computed here with the reader's embedding provider. It is derived from the
+  // published Records, kept only in this browser, and can be rebuilt or cleared at any time.
+  let indexMessage = "";
+  function indexSection(beforeBuild = null, initialBuildLabelKey = null) {
+    const index = capabilities.localIndex;
+    const outcome = node("div", { class: "status", role: "status", "aria-live": "polite" });
+    outcome.textContent = indexMessage;
+    indexMessage = "";
+    const box = node("div", { class: "provider-summary stack", "data-index": index ? "ready" : "none" });
+    const heading = node("strong", { text: t("site.runtime.index_heading") });
+    const detail = node("div", { class: "meta", role: "status", "aria-live": "polite" });
+    const progress = node("progress", {
+      value: 0,
+      max: 1,
+      hidden: true,
+      "aria-label": t("site.runtime.index_progress_label"),
+    });
+    progress.hidden = true;
+    const actions = node("div", { class: "chips" });
+    box.append(heading, detail, progress, actions, outcome);
+    if (!index) {
+      detail.textContent = t("site.runtime.index_no_provider");
+      return box;
+    }
+    if (index.usesPublishedVectors) {
+      detail.textContent = t("site.runtime.index_published", { model: index.model || "" });
+      return box;
+    }
+    const where = index.persistent
+      ? t("site.runtime.index_storage_indexeddb")
+      : t("site.runtime.index_storage_memory");
+    detail.textContent = index.complete
+      ? t("site.runtime.index_ready", { count: index.indexed, storage: where })
+      : t(
+          capabilities.publicationVectors?.available
+            ? "site.runtime.index_needed"
+            : "site.runtime.index_needed_no_published",
+          {
+            published: sourceEmbeddingModel() || t("site.runtime.not_configured"),
+            model: index.model || localModel.model || t("site.runtime.not_configured"),
+            indexed: index.indexed,
+            total: index.total,
+            storage: where,
+          },
+        );
+
+    let controller = null;
+    const build = node("button", {
+      class: index.complete ? "" : "primary",
+      type: "button",
+      text: index.complete
+        ? t("site.runtime.index_rebuild")
+        : index.indexed
+          ? t("site.runtime.index_resume")
+          : t(
+              initialBuildLabelKey ||
+                (beforeBuild ? "site.runtime.index_build_browser" : "site.runtime.index_build"),
+            ),
+    });
+    const cancel = node("button", { type: "button", text: t("site.runtime.index_cancel") });
+    cancel.hidden = true;
+    const clear = node("button", {
+      class: "danger",
+      type: "button",
+      text: t("site.runtime.index_clear"),
+      disabled: !index.indexed,
+    });
+    actions.append(build, cancel, clear);
+
+    build.addEventListener("click", async () => {
+      controller = new AbortController();
+      build.disabled = true;
+      clear.disabled = true;
+      cancel.hidden = false;
+      progress.hidden = false;
+      try {
+        if (beforeBuild) {
+          await beforeBuild();
+          capabilities = await client.capabilities();
+        }
+      } catch (error) {
+        indexMessage = t("site.runtime.index_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await render();
+        return;
+      }
+      const currentIndex = capabilities.localIndex || index;
+      progress.max = Math.max(1, currentIndex.total);
+      progress.value = currentIndex.indexed;
+      detail.textContent = t("site.runtime.index_preparing", {
+        model: currentIndex.model || localModel.model || "",
+        total: currentIndex.total,
+      });
+      const stopEvents = client.events.subscribe((event) => {
+        if (event.type !== "index-progress") return;
+        progress.max = Math.max(1, event.total);
+        progress.value = event.indexed;
+        detail.textContent = t("site.runtime.index_progress", {
+          indexed: event.indexed,
+          total: event.total,
+        });
+      });
+      modelProgressListener = (info) => {
+        if (info?.status === "progress" && info.file) {
+          detail.textContent = t("site.runtime.model_download", {
+            file: String(info.file).split("/").pop(),
+            percent: Math.round(Number(info.progress) || 0),
+          });
+        }
+      };
+      let message = "";
+      try {
+        await client.index.build({ signal: controller.signal });
+        message = t("site.runtime.index_done");
+      } catch (error) {
+        message =
+          error?.name === "AbortError"
+            ? t("site.runtime.index_cancelled")
+            : t("site.runtime.index_failed", {
+                error: error instanceof Error ? error.message : String(error),
+              });
+      } finally {
+        stopEvents();
+        modelProgressListener = null;
+        controller = null;
+      }
+      capabilities = await client.capabilities();
+      indexMessage = message;
+      await render();
+    });
+    cancel.addEventListener("click", () => controller?.abort());
+    clear.addEventListener("click", async () => {
+      if (!window.confirm(t("site.runtime.index_clear_confirm"))) return;
+      await client.index.clear();
+      capabilities = await client.capabilities();
+      await render();
+    });
+    return box;
+  }
+
+  function endpointForm() {
+    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
+    const name = node("input", {
+      class: "control",
+      required: true,
+      autocomplete: "off",
+      placeholder: t("site.runtime.endpoint_name_placeholder"),
+    });
+    const endpoint = node("input", {
+      class: "control",
+      type: "url",
+      required: true,
+      autocomplete: "url",
+      placeholder: t("site.runtime.provider_url_placeholder"),
+    });
     const key = node("input", {
       class: "control",
       type: "password",
       autocomplete: "off",
-      value: sessionApiKeys.get(selectedProviderId) || "",
-      placeholder: t("site.runtime.api_key_session"),
-      "aria-label": t("site.runtime.api_key"),
-      "aria-describedby": "provider-key-help",
+      placeholder: t("site.runtime.api_token_optional"),
     });
-    const summary = node("div", { class: "provider-summary" });
-    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
-    const customForm = node("form", { class: "provider-form" });
-    const customName = node("input", {
-      class: "control",
-      required: true,
-      autocomplete: "organization",
-      placeholder: t("site.runtime.provider_name_placeholder"),
-      "aria-label": t("site.runtime.provider_name"),
-    });
-    const customEndpoint = node("input", {
-      class: "control",
-      required: true,
-      type: "url",
-      autocomplete: "url",
-      placeholder: t("site.runtime.provider_url_placeholder"),
-      "aria-label": t("site.runtime.provider_url"),
-    });
-    const customType = node(
-      "select",
-      { class: "control", "aria-label": t("site.runtime.provider_type") },
-      node("option", { value: "openai", text: t("site.runtime.provider_openai") }),
-      node("option", { value: "ollama", text: t("site.runtime.provider_ollama") }),
-    );
-    const customModel = node("input", {
+    const remember = node("input", { type: "checkbox" });
+    const model = node("input", {
       class: "control",
       required: true,
       autocomplete: "off",
+      list: "endpoint-model-options",
       placeholder: t("site.runtime.provider_model_placeholder"),
-      "aria-label": t("site.runtime.provider_model"),
     });
-    const customKey = node("input", {
-      class: "control",
-      type: "password",
-      autocomplete: "off",
-      placeholder: t("site.runtime.api_key_session"),
-      "aria-label": t("site.runtime.api_key"),
+    const modelOptions = node("datalist", { id: "endpoint-model-options" });
+    const forEmbeddings = node("input", { type: "checkbox" });
+    const forAnswers = node("input", { type: "checkbox", checked: true });
+    let discovered = [];
+
+    const field = (label, control, help) =>
+      node(
+        "label",
+        { class: "field" },
+        node("span", { text: label }),
+        control,
+        help ? node("small", { class: "muted", text: help }) : null,
+      );
+
+    function draft() {
+      let base = String(endpoint.value || "").trim();
+      try {
+        base = new URL(base).href.replace(/\/$/, "");
+      } catch {
+        base = base.replace(/\/$/, "");
+      }
+      return {
+        id: `endpoint-${globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Date.now()}`,
+        name: String(name.value || "").trim(),
+        base_url: base,
+        model: String(model.value || "").trim(),
+        remember_key: remember.checked && Boolean(key.value),
+      };
+    }
+
+    const discover = node("button", {
+      type: "button",
+      text: t("site.runtime.discover_models"),
+      on: {
+        click: async () => {
+          const candidate = draft();
+          status.className = "status";
+          status.textContent = t("site.runtime.discovering");
+          const result = await discoverModels({ ...candidate, role: "generation" }, key.value);
+          if (!result.ok) {
+            status.className = "status error";
+            status.textContent = result.message;
+            return;
+          }
+          discovered = result.models;
+          modelOptions.replaceChildren(
+            ...discovered.map((item) => node("option", { value: item.name })),
+          );
+          status.className = discovered.length ? "status success" : "status warning";
+          status.textContent = t("site.runtime.models_loaded", { count: discovered.length });
+          openModelList(discovered, model.value, (chosen) => {
+            model.value = chosen;
+            model.focus();
+          });
+        },
+      },
     });
-    const addCustom = node("button", {
+    const save = node("button", {
       class: "primary",
       type: "submit",
       text: t("site.runtime.save_provider"),
     });
-    customForm.append(
-      node("h4", { text: t("site.runtime.add_provider") }),
+
+    const form = node(
+      "form",
+      { class: "provider-form", "aria-labelledby": "provider-add-heading" },
+      node("h3", { id: "provider-add-heading", text: t("site.runtime.add_endpoint") }),
       node("p", { class: "muted", text: t("site.runtime.provider_local_help") }),
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_name") }), customName),
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_url") }), customEndpoint),
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_type") }), customType),
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_model") }), customModel),
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.api_key") }), customKey),
-      addCustom,
+      field(t("site.runtime.endpoint_name"), name),
+      field(t("site.runtime.provider_url"), endpoint),
+      field(t("site.runtime.api_token"), key, t("site.runtime.api_token_help")),
+      node("label", { class: "toggle" }, remember, node("span", { text: t("site.runtime.store_token") })),
+      field(t("site.runtime.provider_model"), model),
+      modelOptions,
+      node("div", { class: "chips" }, discover),
+      node(
+        "label",
+        { class: "toggle" },
+        forEmbeddings,
+        node("span", { text: t("site.runtime.use_for_embeddings") }),
+      ),
+      node(
+        "label",
+        { class: "toggle" },
+        forAnswers,
+        node("span", { text: t("site.runtime.use_for_answers") }),
+      ),
+      node("div", { class: "chips" }, save),
+      status,
     );
-    customForm.addEventListener("submit", async (event) => {
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const name = String(customName.value || "").trim();
-      const baseUrl = String(customEndpoint.value || "").trim();
-      const model = String(customModel.value || "").trim();
-      if (!name || !baseUrl || !model) return;
-      let parsed;
-      try {
-        parsed = new URL(baseUrl);
-      } catch {
+      const profile = normalizeEndpoint(draft());
+      if (!profile || !profile.model) {
         status.className = "status error";
-        status.textContent = t("site.runtime.provider_endpoint_invalid");
+        status.textContent = profile
+          ? t("site.runtime.provider_model_required")
+          : t("site.runtime.provider_endpoint_invalid");
         return;
       }
-      const id = `local-${globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Date.now()}`;
-      const profile = {
-        id,
-        name,
-        type: customType.value,
-        base_url: parsed.href.replace(/\/$/, ""),
-        model,
-        api_key: String(customKey.value || ""),
-      };
-      customProviderProfiles = [...customProviderProfiles, profile];
-      providerProfiles = [...exportedProviderProfiles, ...customProviderProfiles];
-      saveCustomProviderProfiles();
-      selectedProviderId = id;
-      writeLocal(providerKey, id);
-      status.className = "status success";
-      status.textContent = t("site.runtime.provider_saved");
-      await render();
+      try {
+        providerBase(profile);
+      } catch (error) {
+        status.className = "status error";
+        status.textContent = error instanceof Error ? error.message : String(error);
+        return;
+      }
+      sessionApiKeys.set(profile.id, key.value);
+      endpoints = [...endpoints, profile];
+      if (forEmbeddings.checked) selectedEmbeddingId = profile.id;
+      if (forAnswers.checked) selectedGenerationId = profile.id;
+      await applyModelSelection(status);
     });
+    return form;
+  }
+
+  function providersView() {
+    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
+    const embeddingSelect = node(
+      "select",
+      { class: "control", "aria-label": t("site.runtime.provider_embedding_select") },
+      node("option", { value: "", text: t("site.runtime.local_model_heading") }),
+      ...endpoints.map((endpoint) =>
+        node("option", { value: endpoint.id, text: `${endpoint.name} · ${endpoint.model}` }),
+      ),
+    );
+    embeddingSelect.value = selectedEmbeddingId;
+    const generationSelect = node(
+      "select",
+      { class: "control", "aria-label": t("site.runtime.provider_generation_select") },
+      node("option", { value: "", text: t("site.runtime.provider_generation_none") }),
+      ...endpoints.map((endpoint) =>
+        node("option", { value: endpoint.id, text: `${endpoint.name} · ${endpoint.model}` }),
+      ),
+    );
+    generationSelect.value = selectedGenerationId;
+    const summary = node("div", { class: "provider-summary meta" });
 
     function refreshSummary() {
-      const profile = profileById(select.value);
-      summary.replaceChildren(
-        node("strong", {
-          text: profile ? String(profile.name || profile.id) : t("site.runtime.provider_none"),
-        }),
-        node("div", {
-          class: "meta",
-          text: profile
-            ? t("site.runtime.provider_summary", {
-                type: profile.type === "openai" ? t("site.runtime.provider_openai") : t("site.runtime.provider_ollama"),
-                model: profile.model || t("site.runtime.not_configured"),
-                endpoint: profile.base_url || t("site.runtime.not_configured"),
-              })
-            : t("site.runtime.provider_none_help"),
-        }),
-      );
+      const embedding = endpointById(embeddingSelect.value);
+      const generation = endpointById(generationSelect.value);
+      summary.textContent = [
+        embedding
+          ? t("site.runtime.embedding_uses_endpoint", {
+              name: embedding.name,
+              model: embedding.model,
+            })
+          : t("site.runtime.embedding_uses_browser"),
+        generation
+          ? t("site.runtime.generation_uses_endpoint", {
+              name: generation.name,
+              model: generation.model,
+            })
+          : t("site.runtime.provider_generation_none_help"),
+      ].join(" ");
     }
     refreshSummary();
-    select.addEventListener("change", () => {
-      key.value = sessionApiKeys.get(select.value) || "";
-      refreshSummary();
-    });
+    embeddingSelect.addEventListener("change", refreshSummary);
+    generationSelect.addEventListener("change", refreshSummary);
 
     const apply = node("button", {
       class: "primary",
@@ -1127,73 +1955,71 @@
       text: t("site.runtime.apply_provider"),
       on: {
         click: async () => {
-          selectedProviderId = select.value;
-          if (selectedProviderId) sessionApiKeys.set(selectedProviderId, key.value);
-          writeLocal(providerKey, selectedProviderId);
-          status.className = "status";
-          status.textContent = t("site.runtime.provider_applying");
-          try {
-            await rebuildClient();
-            status.className = "status success";
-            status.textContent = t("site.runtime.provider_applied");
-            await render();
-          } catch (error) {
-            status.className = "status error";
-            status.textContent = t("site.runtime.provider_apply_failed", {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
+          selectedEmbeddingId = embeddingSelect.value;
+          selectedGenerationId = generationSelect.value;
+          await applyModelSelection(status);
         },
       },
     });
-
-    const test = node("button", {
+    const remove = node("button", {
+      class: "danger",
       type: "button",
-      text: t("site.runtime.test_provider"),
+      text: t("site.runtime.delete_endpoint"),
       on: {
         click: async () => {
-          const profile = profileById(select.value);
-          if (!profile) {
+          const id = generationSelect.value || embeddingSelect.value;
+          const endpoint = endpointById(id);
+          if (!endpoint) {
             status.className = "status warning";
-            status.textContent = t("site.runtime.provider_select_required");
+            status.textContent = t("site.runtime.endpoint_select_required");
             return;
           }
-          status.className = "status";
-          status.textContent = t("site.runtime.testing_provider");
-          if (select.value) sessionApiKeys.set(select.value, key.value);
-          const result = await testProvider(profile, key.value);
-          status.className = result.ok ? "status success" : "status error";
-          status.replaceChildren(node("span", { text: result.message }));
-          if (result.remediation) {
-            status.append(
-              node("code", {
-                class: "provider-command",
-                text: result.remediation,
-              }),
-            );
-          }
+          if (!window.confirm(t("site.runtime.delete_endpoint_confirm", { name: endpoint.name }))) return;
+          endpoints = endpoints.filter((item) => item.id !== endpoint.id);
+          sessionApiKeys.delete(endpoint.id);
+          if (selectedEmbeddingId === endpoint.id) selectedEmbeddingId = "";
+          if (selectedGenerationId === endpoint.id) selectedGenerationId = "";
+          await applyModelSelection(status);
         },
       },
     });
 
-    panel.append(
-      !providerProfiles.length
-        ? node("p", { class: "muted", text: t("site.runtime.no_exported_providers") })
-        : null,
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_profile") }), select),
-      summary,
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.api_key") }), key),
-      node("small", {
-        id: "provider-key-help",
-        class: "muted",
-        text: t("site.runtime.api_key_help"),
-      }),
-      node("div", { class: "chips" }, apply, test),
-      status,
-      customForm,
+    return node(
+      "section",
+      {
+        class: "panel stack provider-panel",
+        "data-tour": "provider",
+        "aria-labelledby": "provider-heading",
+      },
+      node("h2", { id: "provider-heading", text: t("site.runtime.providers") }),
+      node("p", { class: "muted", text: t("site.runtime.providers_intro") }),
+      localModelSection(),
+      node(
+        "section",
+        { class: "card stack", "aria-labelledby": "endpoints-heading" },
+        node("h3", { id: "endpoints-heading", text: t("site.runtime.endpoints_heading") }),
+        node("p", { class: "muted", text: t("site.runtime.endpoints_help") }),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.provider_embedding_heading") }),
+          embeddingSelect,
+        ),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.provider_generation_heading") }),
+          generationSelect,
+        ),
+        summary,
+        node("div", { class: "chips" }, apply, remove),
+        status,
+        selectedEmbeddingId ? indexSection() : null,
+      ),
+      endpointForm(),
     );
-    return panel;
   }
+
 
   function researchView() {
     const question = node("textarea", {
@@ -1208,7 +2034,7 @@
     });
     const methods = methodStrip({
       text: true,
-      vector: Boolean(capabilities.provider.embeddings),
+      vector: semanticReady(),
       llm: Boolean(capabilities.provider.generation),
     });
     const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
@@ -1221,11 +2047,11 @@
       ask.disabled = true;
       methods.update({
         text: true,
-        vector: Boolean(capabilities.provider.embeddings),
+        vector: semanticReady(),
         llm: Boolean(capabilities.provider.generation),
       });
       status.className = "status";
-      status.textContent = capabilities.provider.embeddings
+      status.textContent = semanticReady()
         ? t("site.runtime.activity_research_hybrid")
         : t("site.runtime.activity_research_text");
       answer.textContent = "";
@@ -1235,7 +2061,7 @@
         const response = await client.research({
           question: q,
           retrieval: {
-            mode: capabilities.provider.embeddings ? "hybrid" : "keyword",
+            mode: semanticReady() ? "hybrid" : "keyword",
             limit: 24,
             evidenceLimit: 10,
             mmrLambda: 0.72,
@@ -1307,12 +2133,12 @@
         question,
         ask,
         status,
+        browserSemanticIndexSection(),
         answer,
       ),
       node(
         "aside",
         { class: "stack", "aria-label": t("site.runtime.research_tools") },
-        providerPanel(),
         node(
           "section",
           { class: "panel stack", "data-tour": "evidence", "aria-labelledby": "evidence-heading" },
@@ -1439,7 +2265,7 @@
     },
     {
       id: "provider",
-      view: "research",
+      view: "providers",
       target: "provider",
       titleKey: "site.runtime.tutorial_provider_title",
       bodyKey: "site.runtime.tutorial_provider_body",
@@ -1590,8 +2416,8 @@
           view = step.view;
           await render();
         }
-        title.textContent = t(step.titleKey);
-        body.textContent = t(step.bodyKey);
+        title.textContent = t(`site.runtime.tutorial_${step.id}_title`);
+        body.textContent = t(`site.runtime.tutorial_${step.id}_body`);
         progress.textContent = t("site.runtime.tutorial_progress", {
           current: index + 1,
           total: TOUR_STEPS.length,
@@ -1774,6 +2600,7 @@
           navButton("site.runtime.search", "search"),
           navButton("site.runtime.works", "works"),
           navButton("site.runtime.research", "research"),
+          navButton("site.runtime.providers", "providers"),
           navButton("site.runtime.annotations", "notes"),
         ),
         headerControls(),
@@ -1795,6 +2622,7 @@
     if (view === "search") main.append(searchView());
     else if (view === "works") main.append(worksView());
     else if (view === "research") main.append(researchView());
+    else if (view === "providers") main.append(providersView());
     else if (view === "notes") main.append(await notesView());
 
     const recordCount = (publication.works || []).reduce(

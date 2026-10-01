@@ -50,6 +50,78 @@ def test_grounding_and_cost_per_accepted_field():
     assert m["ungrounded_rate"] == 0.5 and m["ms_per_accepted_field"] == 4000 and m["failed_calls"] == 1
 
 
+def test_call_latency_reports_p50_p95_total_and_family_slices():
+    rows = [
+        ev("call", field="discourse", elapsed_ms=100, ok=True),
+        ev("call", field="discourse", elapsed_ms=300, ok=True),
+        ev("call", field="quotation", elapsed_ms=900, ok=True),
+    ]
+    m = compute(rows)["models"]["m"]
+    assert m["call_latency_ms"] == {"p50": 300.0, "p95": 840.0, "max": 900.0, "total": 1300.0}
+    assert m["by_field"]["discourse"]["call_latency_ms"]["p50"] == 200.0
+
+
+def test_record_latency_reports_true_record_wall_clock_distribution():
+    rows = [
+        ev("record_run", field="__record__", record_id="r1", elapsed_ms=500),
+        ev("record_run", field="__record__", record_id="r2", elapsed_ms=1000),
+        ev("record_run", field="__record__", record_id="r3", elapsed_ms=2500),
+    ]
+    latency = compute(rows)["models"]["m"]["record_latency_ms"]
+    assert latency == {
+        "records": 3,
+        "p50": 1000.0,
+        "p95": 2350.0,
+        "max": 2500.0,
+        "total": 4000.0,
+    }
+
+
+def test_call_contract_reports_requested_fields_and_prompt_size():
+    rows = [
+        ev("call", field="indexing", elapsed_ms=100, ok=True, requested_field_count=4, input_chars=4000),
+        ev("call", field="indexing", elapsed_ms=80, ok=True, requested_field_count=2, input_chars=2600),
+        ev("call", field="indexing", elapsed_ms=60, ok=True, requested_field_count=1, input_chars=1800),
+    ]
+    contract = compute(rows)["models"]["m"]["call_contract"]
+    assert contract == {
+        "requested_fields_p50": 2.0,
+        "requested_fields_p95": 3.8,
+        "requested_fields_total": 7.0,
+        "input_chars_p50": 2600.0,
+        "input_chars_p95": 3860.0,
+        "input_chars_total": 8400.0,
+    }
+
+
+def test_structured_model_invocation_metrics_count_fallbacks_and_recovery():
+    rows = [
+        ev("call", field="discourse", elapsed_ms=100, ok=True, model_invocations=1, recovery_calls=0),
+        ev("call", field="quotation", elapsed_ms=200, ok=True, model_invocations=2, recovery_calls=0),
+        ev("call", field="indexing", elapsed_ms=300, ok=True, model_invocations=2, recovery_calls=1),
+    ]
+    invocations = compute(rows)["models"]["m"]["structured_model_invocations"]
+    assert invocations == {
+        "reported_call_events": 3,
+        "total": 5,
+        "p50_per_family": 2.0,
+        "p95_per_family": 2.0,
+        "recovery_calls": 1,
+    }
+
+
+def test_unreported_legacy_calls_are_not_guessed_as_physical_invocations():
+    rows = [
+        ev("call", field="discourse", elapsed_ms=100, ok=True),
+        ev("call", field="quotation", elapsed_ms=200, ok=True, model_invocations=2),
+    ]
+    invocations = compute(rows)["models"]["m"]["structured_model_invocations"]
+    assert invocations["reported_call_events"] == 1
+    assert invocations["total"] == 2
+    assert invocations["p50_per_family"] == 2.0
+    assert invocations["p95_per_family"] == 2.0
+
+
 def test_learning_curve_uses_whole_buckets_only():
     rows = [ev("corrected", confidence=0.5)] * 10 + [ev("accepted", confidence=0.5)] * 10 + [ev("accepted", confidence=0.5)] * 3
     curve = compute(rows)["models"]["m"]["learning_curve"]

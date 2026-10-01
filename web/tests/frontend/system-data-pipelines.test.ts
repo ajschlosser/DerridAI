@@ -1,11 +1,13 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { VueQueryPlugin } from "@tanstack/vue-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
 import { chromaApi } from "../../src/api/chroma";
 import { pipelinesApi } from "../../src/api/pipelines";
+import { analysisFixture } from "../../src/components/pipelines/fixtures/pipelineAnalysisFixture";
 import SystemDataPipelines from "../../src/components/system-data/SystemDataPipelines.vue";
 import { pipelineKey } from "../../src/domain/pipelinePresentation";
 import {
@@ -13,6 +15,8 @@ import {
   contractStrategy,
   contractVocabulary,
 } from "../../src/components/pipelines/fixtures/pipelineCatalogContract";
+import { queryClient } from "../../src/realtime/dataQuery";
+import { dataKey } from "../../src/realtime/resourceKeys";
 import { useI18nStore } from "../../src/stores/i18n";
 import type {
   PipelineCatalog,
@@ -217,7 +221,7 @@ async function mountStudio(query: Record<string, string> = {}) {
   await router.push({ name: "pipelines", query });
   await router.isReady();
   const wrapper = mount(SystemDataPipelines, {
-    global: { plugins: [router] },
+    global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
   });
   await flushPromises();
   return { wrapper, router };
@@ -226,9 +230,15 @@ async function mountStudio(query: Record<string, string> = {}) {
 describe("System Data Pipeline Studio", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    queryClient.clear();
     useI18nStore().dictionary = {};
     vi.restoreAllMocks();
     vi.spyOn(pipelinesApi, "catalog").mockResolvedValue(structuredClone(catalog));
+    vi.spyOn(pipelinesApi, "analyze").mockResolvedValue(analysisFixture());
+    vi.spyOn(pipelinesApi, "strategyLatency").mockResolvedValue({
+      strategies: {},
+      sampled_run_count: 0,
+    });
     vi.spyOn(pipelinesApi, "runs").mockResolvedValue({
       runs: [structuredClone(trace)],
       limit: 30,
@@ -458,6 +468,63 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.text()).toContain("Stages");
   });
 
+  it("analyzes a cloned draft at once and shows how it performs", async () => {
+    const { wrapper } = await mountStudio();
+    const clone = wrapper
+      .findAll(".detail-actions button")
+      .find((item) => item.text().includes("Clone & edit"));
+    await clone!.trigger("click");
+    await flushPromises();
+
+    expect(pipelinesApi.analyze).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain("How this pipeline performs");
+    expect(wrapper.text()).toContain("Typical");
+  });
+
+  it("builds a pipeline from scratch: choose a workflow, get a valid first stage, then analyze it", async () => {
+    vi.spyOn(pipelinesApi, "newDraft").mockResolvedValue({
+      pipeline: {
+        pipeline_id: "custom.research",
+        version: 1,
+        name: "Untitled pipeline",
+        purpose: "research",
+        status: "draft",
+        entry_stage_ids: ["passthrough"],
+        stages: [
+          {
+            id: "passthrough",
+            strategy: "query.passthrough",
+            enabled: true,
+            config: {},
+            next: [],
+          },
+        ],
+      },
+    });
+    const { wrapper } = await mountStudio();
+
+    await wrapper.get(".pipeline-definitions-actions button").trigger("click");
+    await flushPromises();
+    const radio = document.body.querySelector<HTMLInputElement>('input[value="research"]')!;
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change"));
+    await flushPromises();
+    const start = [...document.body.querySelectorAll<HTMLButtonElement>("footer button")].find(
+      (button) => /Start building/.test(button.textContent ?? ""),
+    )!;
+    start.click();
+    await flushPromises();
+
+    expect(pipelinesApi.newDraft).toHaveBeenCalledWith("research");
+    expect(wrapper.get("#pipeline-editor-title").text()).toBe("New pipeline");
+    expect(pipelinesApi.analyze).toHaveBeenCalledTimes(1);
+    // A pipeline in progress blocks starting another one over it.
+    expect(
+      wrapper.get(".pipeline-definitions-actions button").attributes("disabled"),
+    ).toBeDefined();
+    wrapper.unmount();
+  });
+
   it("asks the server for the next version when cloning a saved custom pipeline", async () => {
     const { wrapper } = await mountStudio();
 
@@ -566,17 +633,17 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.get("#pipeline-tab-executions").attributes("aria-selected")).toBe("true");
   });
 
-  it("refreshes data without losing the selected pipeline, section, or filters", async () => {
+  it("refetches on a pipelines invalidation without losing selection, section, or filters", async () => {
     const { wrapper, router } = await mountStudio({
       section: "executions",
       status: "failed",
       pipeline: pipelineKey(catalog.pipelines[1]),
     });
+    expect(wrapper.findAll(".ui-page-header button").some((b) => b.text() === "Refresh")).toBe(
+      false,
+    );
     const before = vi.mocked(pipelinesApi.catalog).mock.calls.length;
-    await wrapper
-      .findAll(".ui-page-header button")
-      .find((b) => b.text() === "Refresh")!
-      .trigger("click");
+    await queryClient.invalidateQueries({ queryKey: dataKey("pipelines") });
     await flushPromises();
     expect(vi.mocked(pipelinesApi.catalog).mock.calls.length).toBe(before + 1);
     expect(router.currentRoute.value.query).toMatchObject({

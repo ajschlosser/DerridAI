@@ -48,6 +48,38 @@ describe("Corpus Builder review record queue", () => {
     expect(wrapper.emitted("rootChange")?.at(-1)).toEqual([null]);
   });
 
+  it("leads each row with the short sequence number but keeps the full ID for assistive technology", () => {
+    const wrapper = mountQueue({
+      rows: [row({ record_id: "derrida-jacques-on-cosmopolitanism-00012" })],
+    });
+    const head = wrapper.get(".record-row-head b");
+    expect(head.get("[aria-hidden='true']").text()).toBe("#12");
+    expect(head.get(".sr-only").text()).toBe("derrida-jacques-on-cosmopolitanism-00012");
+    expect(head.attributes("title")).toBe("derrida-jacques-on-cosmopolitanism-00012");
+  });
+
+  it("pages the list from a footer that appears only when there is more than one page", async () => {
+    const single = mountQueue({ pageNumber: 1, pageCount: 1 });
+    expect(single.find(".pager").exists()).toBe(false);
+    const wrapper = mountQueue({
+      pageNumber: 2,
+      pageCount: 3,
+      hasPreviousPage: true,
+      hasNextPage: true,
+    });
+    expect(wrapper.get(".pager").text()).toContain("2 / 3");
+    const [previous, next] = wrapper.findAll(".pager button");
+    await previous.trigger("click");
+    await next.trigger("click");
+    expect(wrapper.emitted("previousPage")).toHaveLength(1);
+    expect(wrapper.emitted("nextPage")).toHaveLength(1);
+  });
+
+  it("shows an ID without a trailing sequence number unchanged", () => {
+    const wrapper = mountQueue({ rows: [row({ record_id: "intro" })] });
+    expect(wrapper.get(".record-row-head b [aria-hidden='true']").text()).toBe("intro");
+  });
+
   it("preserves active-row and queue-selection semantics", async () => {
     const wrapper = mountQueue();
 

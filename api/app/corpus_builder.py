@@ -36,7 +36,6 @@ from .celf_conformance import evaluate_celf_conformance
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
 from .corpus_build_lifecycle import BuildLifecycleMixin
-from .reviewer_context import current_reviewer
 from .corpus_editorial_memory import EditorialMemoryMixin
 from .corpus_enrichment_helpers import (
     _enrichment_pass_indices as _enrichment_pass_indices,
@@ -61,7 +60,7 @@ from .corpus_llm_helpers import (
     StructuredOutputError,
     _context_window,
     _llm_config,
-    _parse_json_robust,
+    _parse_json_robust,  # noqa: F401 - compatibility export
     _provider_roles,
     _stage_limits,
     _stage_timeouts,
@@ -284,30 +283,42 @@ from .metadata_schema import (
 from .metadata_schema_store import SchemaStore
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record, annotation_run_summary
-from .operation_events import note_corpus_build, note_record_metadata
+from .operation_events import (
+    note_corpus_build,
+    note_record_metadata,
+    note_resource_changed,
+)
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
 from .rag import _citation_strings, chat_complete
-from .record_semantic_map import record_semantic_map, semantic_node_neighborhood
+from .record_semantic_map import build_semantic_map_projections
+from .reviewer_context import current_reviewer
 from .run_guidance import find_guidance_matches
-from .semantic_content_graph import (
-    _records_digest as _semantic_records_digest,
-)
 from .semantic_content_graph import (
     build_semantic_content_graph,
     semantic_content_graph_view,
 )
-from .semantic_identity import SEMANTIC_IDENTITY_VERSION, ValueEquivalenceResult
+from .semantic_identity import ValueEquivalenceResult
 from .semantic_identity_registry import (
     SemanticIdentityRegistry,
     compare_field_values,
     registry_for_record,
 )
-from .semantic_identity_store import alias_digest, build_registry, review_registry
+from .semantic_identity_store import build_registry, review_registry
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
+from .structured_completion import (
+    StructuredAttemptContext,
+    StructuredAttemptOutcome,
+    StructuredCompletionError,
+    complete_structured_json,
+)
+from .structured_json import (
+    StructuredJsonMalformedError,  # noqa: F401 - compatibility export
+    StructuredJsonTruncatedError,  # noqa: F401 - compatibility export
+)
 from .system_store import system_store
 from .text_noise import (
     DEFAULT_NOISE_THRESHOLD,
@@ -1274,6 +1285,9 @@ class PdfCorpusRepository:
             if thread_mode not in valid_thread_modes:
                 raise ValueError("Unsupported thread_mode")
             unit_policy = normalize_policy(plan.get("unit_policy"))
+            from .document_layout_regions import apply_layout_regions, normalize_regions
+
+            regions = normalize_regions(plan.get("layout_regions"), page_count)
             clean_plan = {
                 "page_layout": layout, "reading_order": order,
                 "main_text_pdf_start": main_pdf, "main_text_printed_start": main_printed,
@@ -1282,6 +1296,7 @@ class PdfCorpusRepository:
                 "thread_a_language": str(plan.get("thread_a_language") or "").strip() or None,
                 "thread_b_language": str(plan.get("thread_b_language") or "").strip() or None,
                 "unit_policy": unit_policy,
+                "layout_regions": regions,
                 "confirmed_by": "human", "updated_at": iso_now(),
             }
             pages = asset.get("pages") or []
@@ -1292,7 +1307,7 @@ class PdfCorpusRepository:
                 for key in ("logical_pages", "deterministic_region_type", "thread_ids"):
                     page.pop(key, None)
             for block in blocks:
-                for key in ("logical_page_slot", "logical_printed_page_label", "deterministic_region_type", "document_thread", "thread_language"):
+                for key in ("logical_page_slot", "logical_printed_page_label", "deterministic_region_type", "document_thread", "thread_language", "layout_region_id", "layout_region_role", "layout_flow"):
                     block.pop(key, None)
             def printed_for(pdf_page: int, slot: str | None = None) -> int | None:
                 if not (main_pdf and main_printed) or pdf_page < main_pdf:
@@ -1372,6 +1387,8 @@ class PdfCorpusRepository:
                 language = clean_plan.get("thread_a_language" if thread == "thread_a" else "thread_b_language")
                 if language:
                     block["thread_language"] = language
+            if regions:
+                apply_layout_regions(blocks, pages, regions)
             tmp = self.asset_blocks_path(asset_id).with_suffix(".blocks.jsonl.tmp")
             with tmp.open("w", encoding="utf-8") as handle:
                 for block in blocks:
@@ -1720,6 +1737,9 @@ class PdfCorpusRepository:
                 connection.commit()
             self._set_records_projection_state(build_id, dirty=False)
             self._invalidate_review_records_cache(build_id)
+        # Semantic maps are System Data. Invalidate by generation in O(1);
+        # rebuilding is deferred until a map is actually requested.
+        system_store.mark_semantic_map_dirty(build_id, reason="records_saved")
 
     def _patch_review_records_cache(
         self, build_id: str, before: tuple[int, int], record_id: str, record: dict[str, Any],
@@ -1784,6 +1804,9 @@ class PdfCorpusRepository:
                 connection.commit()
             self._remember_fixed_point(payload, self._schema_signature(self._record_schema(build_id)))
             self._patch_review_records_cache(build_id, before, record_id, record)
+        # Committed single-record write (not a per-batch build write): readers may hold stale text.
+        note_resource_changed("corpus_records")
+        system_store.mark_semantic_map_dirty(build_id, reason=f"record_updated:{record_id}")
 
     def refresh_records_projection(self, build_id: str) -> None:
         """Rebuild the JSONL publication projection from the transactional index."""
@@ -2003,10 +2026,11 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # in memory so a reviewer can hot-swap profiles for subsequently scheduled
         # metadata work while the public build manifest remains secret-free.
         self._runtime_requests: dict[str, dict[str, Any]] = {}
-        # Derived semantic graphs keyed by build and the exact inputs that produced
-        # them; bounded so large corpora do not accumulate in memory.
-        self._semantic_graph_cache: dict[str, dict[str, Any]] = {}
-        self._semantic_graph_persisted: dict[str, dict[str, Any]] = {}
+        # Semantic projections are persisted as rebuildable System Data. Per-build
+        # locks make generation single-flight so concurrent Record/Work opens join
+        # one materialization instead of repeating graph traversal.
+        self._semantic_graph_cache: dict[tuple[str, str], tuple[int, dict[str, Any]]] = {}
+        self._semantic_projection_locks: dict[str, threading.RLock] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
@@ -2108,137 +2132,225 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         request = build.get("request") if isinstance(build.get("request"), dict) else {}
         self._run_document_intelligence(build_id, records, manifest, request)
         self.repo.save_records(build_id, records)
-        self._semantic_graph_cache.pop(build_id, None)
         graph = self.semantic_content_graph(build_id)
         return {
             "document_intelligence": self.document_intelligence(build_id),
             "semantic_content_graph": graph,
         }
 
-    def document_intelligence(self, build_id: str) -> dict[str, Any]:
-        """Return the retained annotation run and whether current text has made it stale."""
-        self.repo.get_build(build_id)
+    def _document_intelligence_for_records(
+        self,
+        build_id: str,
+        records: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         value = self.repo.load_checkpoint(build_id, "document_intelligence", {})
         if not isinstance(value, dict):
             return {}
-        current_text, _ = document_text_for_records(self.repo.load_records(build_id))
+        current_text, _ = document_text_for_records(records)
         current_sha256 = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
         return {
             **value,
-            "stale": bool(value.get("text_sha256") and value.get("text_sha256") != current_sha256),
+            "stale": bool(
+                value.get("text_sha256")
+                and value.get("text_sha256") != current_sha256
+            ),
             "current_text_sha256": current_sha256,
         }
 
-    def _current_semantic_graph(
-        self, build_id: str
-    ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
-        """Return the current graph, reviewer-presented Records, and annotation run.
+    def document_intelligence(self, build_id: str) -> dict[str, Any]:
+        """Return the retained annotation run and whether current text has made it stale."""
+        self.repo.get_build(build_id)
+        return self._document_intelligence_for_records(
+            build_id,
+            self.repo.load_records(build_id),
+        )
 
-        The derived graph may use the bounded in-process cache, but this helper does
-        not persist checkpoints or mutate the build. Record- and node-centred
-        exploration therefore remains read-only.
+    def _semantic_projection_lock(self, build_id: str) -> threading.RLock:
+        with self._lock:
+            return self._semantic_projection_locks.setdefault(str(build_id), threading.RLock())
+
+    @staticmethod
+    def _semantic_projection_audience() -> str:
+        """Stable reviewer key for blind-review-safe derived projections."""
+        return str(current_reviewer.get() or "")
+
+    def _materialize_semantic_projections(self, build_id: str) -> tuple[int, dict[str, Any]]:
+        """Materialize graph/Record/node/Work views once for the current generation.
+
+        The hot read path checks only System Data state and projection rows. Whole-
+        build loading, identity resolution, term folding and relationship indexing
+        happen here only after an explicit invalidation.
         """
-        # Interactive reads (record map, node walk, bounded view) must not be O(corpus) when nothing
-        # changed: the record store's file identity, the retained annotation run and the reviewed
-        # aliases decide freshness before any Record is copied, presented or hashed.
-        checkpoint = self.repo.load_checkpoint(build_id, "document_intelligence", {})
-        checkpoint = checkpoint if isinstance(checkpoint, dict) else {}
-        fast = (
-            self.repo._records_snapshot_signature(build_id),
-            json.dumps(
-                [checkpoint.get(name) for name in ("text_sha256", "provider", "provider_version", "version", "profile")],
-                default=str,
-            ),
-            len(checkpoint.get("entities") or []),
-            len(checkpoint.get("entity_clusters") or []),
-            len(checkpoint.get("characters") or []),
-            alias_digest(self.repo, build_id),
-            SEMANTIC_IDENTITY_VERSION,
-            # Blind second-opinion sealing is per reviewer; one reviewer's presentation is never reused for another.
-            current_reviewer.get(),
-        )
-        cached = self._semantic_graph_cache.get(build_id)
-        if cached is not None and cached["fast"] == fast and fast[0] != (0, 0):
-            return cached["graph"], cached["records"], cached["analysis"]
-        records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
-        for row in records:
-            _present_for_reviewer(row)
-        analysis = self.document_intelligence(build_id)
-        graph_analysis = (
-            {"profile": analysis.get("profile"), "status": "stale"}
-            if analysis.get("stale")
-            else analysis
-        )
-        key = (
-            _semantic_records_digest(records),
-            analysis.get("text_sha256"),
-            analysis.get("provider"),
-            analysis.get("provider_version"),
-            analysis.get("version"),
-            len(analysis.get("entities") or []),
-            len(analysis.get("entity_clusters") or []),
-            len(analysis.get("characters") or []),
-            bool(analysis.get("stale")),
-            str(analysis.get("profile") or ""),
-            alias_digest(self.repo, build_id),
-            SEMANTIC_IDENTITY_VERSION,
-        )
-        if cached is not None and cached["key"] == key:
-            graph = cached["graph"]
-        else:
+        lock = self._semantic_projection_lock(build_id)
+        audience = self._semantic_projection_audience()
+        with lock:
+            state = system_store.semantic_map_state(build_id)
+            generation = int(state["generation"])
+            existing = system_store.get_semantic_map_projection(
+                "graph", build_id, build_id, audience=audience
+            )
+            if (
+                not state.get("dirty")
+                and existing is not None
+                and int(existing.get("generation") or 0) == generation
+            ):
+                graph = existing["payload"]
+                self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
+                return generation, graph
+
+            records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
+            for row in records:
+                _present_for_reviewer(row)
+            analysis = self._document_intelligence_for_records(build_id, records)
+            graph_analysis = (
+                {"profile": analysis.get("profile"), "status": "stale"}
+                if analysis.get("stale")
+                else analysis
+            )
             schema = self._schema_for(build_id)
             graph = build_semantic_content_graph(
                 records,
                 graph_analysis,
                 schema=schema,
-                # Reviewer-presented records: a value sealed for blind review names no identity.
                 registry=build_registry(self.repo, build_id, schema=schema, records=records),
             )
-        with self._lock:
-            self._semantic_graph_cache.pop(build_id, None)
-            self._semantic_graph_cache[build_id] = {
-                "fast": fast, "key": key, "graph": graph, "records": records, "analysis": analysis,
+            record_maps, node_maps, work_maps = build_semantic_map_projections(
+                graph,
+                records,
+                analysis=analysis,
+            )
+
+            work_by_record = {
+                str(row.get("record_id") or ""): str(
+                    row.get("work") or row.get("document_title") or ""
+                ).strip()
+                for row in records
             }
-            while len(self._semantic_graph_cache) > 4:
-                self._semantic_graph_cache.pop(next(iter(self._semantic_graph_cache)))
-        return graph, records, analysis
+            projection_rows: list[dict[str, Any]] = [{
+                "scope_type": "graph",
+                "scope_id": build_id,
+                "build_id": build_id,
+                "generation": generation,
+                "audience": audience,
+                "payload": graph,
+            }]
+            projection_rows.extend(
+                {
+                    "scope_type": "record",
+                    "scope_id": record_id,
+                    "build_id": build_id,
+                    "generation": generation,
+                    "audience": audience,
+                    "work": work_by_record.get(record_id) or None,
+                    "payload": payload,
+                }
+                for record_id, payload in record_maps.items()
+            )
+            projection_rows.extend(
+                {
+                    "scope_type": "node",
+                    "scope_id": node_id,
+                    "build_id": build_id,
+                    "generation": generation,
+                    "audience": audience,
+                    "payload": payload,
+                }
+                for node_id, payload in node_maps.items()
+            )
+            projection_rows.extend(
+                {
+                    "scope_type": "work",
+                    "scope_id": work,
+                    "build_id": build_id,
+                    "generation": generation,
+                    "audience": audience,
+                    "work": work,
+                    "payload": payload,
+                }
+                for work, payload in work_maps.items()
+            )
+            system_store.put_semantic_map_projections(projection_rows)
+
+            self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
+            system_store.mark_semantic_map_clean(build_id, generation)
+            return generation, graph
+
+    def _semantic_projection(
+        self,
+        build_id: str,
+        scope_type: str,
+        scope_id: str,
+    ) -> dict[str, Any]:
+        audience = self._semantic_projection_audience()
+        state = system_store.semantic_map_state(build_id)
+        generation = int(state["generation"])
+        row = system_store.get_semantic_map_projection(
+            scope_type, scope_id, build_id, audience=audience
+        )
+        if (
+            not state.get("dirty")
+            and row is not None
+            and int(row.get("generation") or 0) == generation
+        ):
+            return row["payload"]
+
+        self._materialize_semantic_projections(build_id)
+        state = system_store.semantic_map_state(build_id)
+        row = system_store.get_semantic_map_projection(
+            scope_type, scope_id, build_id, audience=audience
+        )
+        if (
+            row is not None
+            and int(row.get("generation") or 0) == int(state["generation"])
+        ):
+            return row["payload"]
+        # A concurrent write may have invalidated the just-built generation.
+        # Rebuild once against the new generation rather than returning "not available".
+        self._materialize_semantic_projections(build_id)
+        state = system_store.semantic_map_state(build_id)
+        row = system_store.get_semantic_map_projection(
+            scope_type, scope_id, build_id, audience=audience
+        )
+        if row is None or int(row.get("generation") or 0) != int(state["generation"]):
+            raise KeyError(scope_id)
+        return row["payload"]
+
+    def _current_semantic_graph(
+        self, build_id: str
+    ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+        """Compatibility helper for callers that still need graph + source inputs.
+
+        New map reads do not use this method: they read persisted projections.
+        """
+        graph = self._semantic_projection(build_id, "graph", build_id)
+        records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
+        for row in records:
+            _present_for_reviewer(row)
+        return graph, records, self.document_intelligence(build_id)
 
     def record_semantic_map(self, build_id: str, record_id: str) -> dict[str, Any]:
-        """Semantic map centred on one Record, with its links to other Records."""
-        graph, records, analysis = self._current_semantic_graph(build_id)
-        return record_semantic_map(graph, records, record_id, analysis=analysis)
+        """Persisted bounded semantic map centred on one Record."""
+        self.repo.get_build(build_id)
+        return self._semantic_projection(build_id, "record", record_id)
 
     def semantic_graph_node(self, build_id: str, node_id: str) -> dict[str, Any]:
-        """One graph node's relations and Records, for walking the semantic map."""
-        graph, records, _ = self._current_semantic_graph(build_id)
-        return semantic_node_neighborhood(graph, records, node_id)
+        """Persisted node neighbourhood from the current semantic generation."""
+        self.repo.get_build(build_id)
+        return self._semantic_projection(build_id, "node", node_id)
+
+    def work_semantic_map(self, build_id: str, work: str) -> dict[str, Any]:
+        """Visual Work-map sources projected from the canonical semantic graph."""
+        self.repo.get_build(build_id)
+        return self._semantic_projection(build_id, "work", work)
 
     def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
-        """Rebuild the semantic-content graph against the current Record revisions.
-
-        Rebuilding on read keeps structural edits and human metadata corrections from
-        leaving a stale visualization. The graph remains a derived projection.
-        """
-        graph, _, _ = self._current_semantic_graph(build_id)
-        # An unchanged graph object has already been persisted; rewriting a multi-megabyte
-        # checkpoint and the build manifest on every read made the Entities panel slow.
-        if self._semantic_graph_persisted.get(build_id) is graph:
-            return graph
-        self.repo.save_checkpoint(build_id, "semantic_content_graph", graph)
-        build = self.repo.get_build(build_id)
-        build["semantic_content_graph"] = graph.get("summary") or {}
-        self.repo.save_build(build)
-        self._semantic_graph_persisted[build_id] = graph
-        return graph
+        """Return the current persisted semantic graph without rebuilding on read."""
+        self.repo.get_build(build_id)
+        return self._semantic_projection(build_id, "graph", build_id)
 
     def semantic_content_graph_view(self, build_id: str, **params: Any) -> dict[str, Any]:
-        """Bounded, filterable slice of the current graph for interactive display.
-
-        View requests must not rewrite the durable graph checkpoint or build
-        manifest; the graph cache is the read projection and the full endpoint
-        owns persistence.
-        """
-        graph, _, _ = self._current_semantic_graph(build_id)
+        """Bounded, filterable slice of the persisted current graph."""
+        graph = self._semantic_projection(build_id, "graph", build_id)
         return semantic_content_graph_view(graph, **params)
 
     def _project_metadata_exemplars(
@@ -2541,17 +2653,13 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         roles: tuple[str, ...] = ("primary", "review"),
         escalated: bool = False,
     ) -> dict[str, Any]:
-        """Generate and validate typed structured output with bounded retry/escalation.
+        """Generate typed JSON through the shared structured-completion policy.
 
-        A malformed or transient model turn must not destroy a book-length build.
-        Provider-native JSON Schema is requested when supported, every response is
-        Pydantic-validated, and an optional separately configured review provider
-        receives the same source-bound task only after the primary provider has
-        exhausted its attempts.
-
-        ``roles`` limits the chain to some provider roles; a pipeline adapter runs one role
-        per stage and passes ``escalated`` when a fallback edge reached that stage, so the
-        stage gets the same escalation note a chained review provider does.
+        Provider-native JSON Schema is requested when supported. Syntax repair,
+        cutoff classification, retry prompts, token-budget growth, schema
+        validation, and structured-output metrics are centralized in
+        complete_structured_json. This method keeps Corpus Builder-specific
+        provider escalation, tracing, stage metrics, and cancellation.
         """
         schema = response_model.model_json_schema()
         request_chain: list[tuple[str, dict[str, Any]]] = [("primary", request)] if "primary" in roles else []
@@ -2560,169 +2668,194 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             request_chain.append(("review", reviewer))
         if not request_chain:
             raise LookupError("No review provider is configured for this build.")
+
         all_failures: list[str] = []
         timed_out = False
-        for chain_index, (role, active_request) in enumerate(request_chain):
-            provider, model, base_url, api_key, generation = _llm_config(active_request)
-            escalating = chain_index > 0 or escalated
+        any_truncated = False
+
+        def run_role(
+            role: str,
+            active_request: dict[str, Any],
+            *,
+            provider: str,
+            model: str,
+            base_url: str | None,
+            api_key: str | None,
+            generation: Any,
+            escalating: bool,
+        ) -> dict[str, Any]:
+            """Run one provider role while keeping trace state scoped to that role."""
             if escalating and build_id:
                 self._increment_metric(build_id, "escalations")
-            failure: Exception | None = None
-            diagnostic = ""
-            timed_out = False
-            for attempt in range(1, max(1, attempts) + 1):
+
+            timeout_key = (
+                "manifest" if "manifest" in schema_name else
+                "reconciliation" if "reconciliation" in schema_name else
+                "segmentation" if ("boundar" in schema_name or "segment" in schema_name) else
+                "discourse" if "record_discourse" in schema_name else
+                "quotation" if "record_quotation" in schema_name else
+                "indexing"
+            )
+            attempt_state: dict[int, tuple[Any, str]] = {}
+
+            initial_note = ""
+            if escalating:
+                initial_note = (
+                    "\n\nESCALATION REVIEW: a first-pass model could not produce a valid structured "
+                    "answer. Independently perform the task from the supplied source evidence and "
+                    "return ONLY one complete JSON object matching the schema."
+                )
+
+            def retry_guidance(error: Exception) -> str:
+                if "field_evidence" not in str(error):
+                    return ""
+                return (
+                    "The validation error concerns evidence, not the metadata value. For every "
+                    "field whose assessment outcome is supported_value and whose schema requires "
+                    "evidence, include a field_evidence object with at least one valid current-record "
+                    "block_id. Use the block IDs shown in the source context; never invent IDs and "
+                    "never omit the evidence object for a supported value."
+                )
+
+            def note_metric(name: str, amount: int) -> None:
+                if build_id:
+                    self._increment_metric(build_id, name, amount)
+
+            def attempt_started(context: StructuredAttemptContext) -> None:
+                structured_counter = request.get("_structured_call_counter")
+                if isinstance(structured_counter, dict):
+                    structured_counter["attempts"] = (
+                        int(structured_counter.get("attempts") or 0) + 1
+                    )
                 if build_id and self._cancelled(build_id):
                     raise InterruptedError("Corpus build cancelled")
-                retry_note = ""
-                if escalating and attempt == 1:
-                    retry_note = (
-                        "\n\nESCALATION REVIEW: a first-pass model could not produce a valid structured "
-                        "answer. Independently perform the task from the supplied source evidence and "
-                        "return ONLY one complete JSON object matching the schema."
-                    )
-                elif attempt > 1:
-                    retry_note = (
-                        "\n\nIMPORTANT CORRECTION: the previous response could not be validated. "
-                        f"Validation error: {failure}. Return ONLY one complete JSON object that exactly "
-                        "matches the supplied schema. Do not include Markdown, commentary, or trailing text."
-                    )
-                    if "field_evidence" in str(failure):
-                        retry_note += (
-                            "\nThe validation error concerns evidence, not the metadata value. For every "
-                            "field whose assessment outcome is supported_value and whose schema requires "
-                            "evidence, include a field_evidence object with at least one valid current-record "
-                            "block_id. Use the block IDs shown in the source context; never invent IDs and "
-                            "never omit the evidence object for a supported value."
-                        )
-                    if diagnostic:
-                        retry_note += f"\nPrevious response excerpt: {diagnostic[:1200]}"
-                try:
-                    if build_id:
-                        self._increment_metric(build_id, "calls")
-                        metric_stage = (
-                            "manifest" if "manifest" in schema_name else
-                            "segmentation" if ("boundar" in schema_name or "segment" in schema_name or "reconciliation" in schema_name) else
-                            "metadata" if "record_" in schema_name else
-                            "other"
-                        )
-                        self._increment_metric(build_id, f"{metric_stage}_calls")
-                        if "record_discourse" in schema_name:
-                            self._increment_metric(build_id, "discourse_calls")
-                        elif "record_quotation" in schema_name:
-                            self._increment_metric(build_id, "quotation_calls")
-                        elif "record_indexing" in schema_name:
-                            self._increment_metric(build_id, "indexing_calls")
-                        if attempt > 1:
-                            self._increment_metric(build_id, "retries")
-                    timeout_key = (
+                if build_id:
+                    metric_stage = (
                         "manifest" if "manifest" in schema_name else
-                        "reconciliation" if "reconciliation" in schema_name else
-                        "segmentation" if ("boundar" in schema_name or "segment" in schema_name) else
-                        "discourse" if "record_discourse" in schema_name else
-                        "quotation" if "record_quotation" in schema_name else
-                        "indexing" if "record_indexing" in schema_name else "indexing"
+                        "segmentation" if ("boundar" in schema_name or "segment" in schema_name or "reconciliation" in schema_name) else
+                        "metadata" if "record_" in schema_name else
+                        "other"
                     )
-                    call_token = self._note_llm_call_start(
-                        build_id, metric_stage_of(schema_name), provider, model, base_url
+                    self._increment_metric(build_id, f"{metric_stage}_calls")
+                    if "record_discourse" in schema_name:
+                        self._increment_metric(build_id, "discourse_calls")
+                    elif "record_quotation" in schema_name:
+                        self._increment_metric(build_id, "quotation_calls")
+                    elif "record_indexing" in schema_name:
+                        self._increment_metric(build_id, "indexing_calls")
+
+                call_token = self._note_llm_call_start(
+                    build_id, metric_stage_of(schema_name), provider, model, base_url
+                )
+                call_id = f"{build_id}:{call_token}" if build_id else ""
+                attempt_state[context.attempt] = (call_token, call_id)
+                if build_id:
+                    self._llm_trace_start(
+                        build_id,
+                        call_id=call_id,
+                        schema_name=schema_name,
+                        role=role,
+                        attempt=context.attempt,
+                        provider=provider,
+                        model=model,
+                        prompt=context.prompt,
+                        response_schema=schema,
+                        generation=generation,
+                        max_tokens=context.max_tokens,
                     )
-                    call_id = f"{build_id}:{call_token}" if build_id else ""
-                    rendered_prompt = prompt + retry_note
-                    effective_max_tokens = min(8192, max_tokens + ((attempt - 1) * 1024))
-                    if build_id:
-                        self._llm_trace_start(
-                            build_id,
-                            call_id=call_id,
-                            schema_name=schema_name,
-                            role=role,
-                            attempt=attempt,
-                            provider=provider,
-                            model=model,
-                            prompt=rendered_prompt,
-                            response_schema=schema,
-                            generation=generation,
-                            max_tokens=effective_max_tokens,
-                        )
-                    raw = ""
-                    try:
-                        raw = self._with_transport_retry(
-                            build_id,
-                            chat_complete,
-                            provider=provider,
-                            model=model,
-                            base_url=base_url,
-                            api_key=api_key,
-                            prompt=rendered_prompt,
-                            options=generation,
-                            json_mode=True,
-                            json_schema=schema,
-                            schema_name=schema_name,
-                            max_tokens=effective_max_tokens,
-                            cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
-                            timeout_seconds=float(_stage_timeouts(request).get(timeout_key, 240)),
-                            on_delta=(
-                                (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
-                                if build_id
-                                else None
-                            ),
-                        )
-                    except Exception as exc:
-                        if build_id:
-                            self._llm_trace_finish(
-                                build_id,
-                                call_id,
-                                raw_response=raw or None,
-                                error=f"{type(exc).__name__}: {exc}",
-                            )
-                        raise
-                    finally:
-                        self._note_llm_call_end(build_id, call_token)
-                except InterruptedError:
-                    raise
-                except Exception as exc:
-                    failure = exc
-                    diagnostic = ""
-                    # A hard read timeout already consumed the stage budget. Repeating
-                    # the same expensive request obscures stalls rather than improving
-                    # resilience; settle it for human review instead.
-                    if "timeout" in type(exc).__name__.casefold() or "timed out" in str(exc).casefold():
-                        timed_out = True
-                        if build_id:
-                            self._increment_metric(build_id, "timeouts")
-                        break
-                    if attempt < max(1, attempts):
-                        time.sleep(min(2.0, 0.35 * attempt))
-                        continue
-                    break
-                diagnostic = str(raw or "")
+
+            def request_once(context: StructuredAttemptContext) -> str:
+                call_token, _ = attempt_state[context.attempt]
                 try:
-                    value = _parse_json_robust(raw)
-                    parsed = response_model.model_validate(value)
-                    validated = parsed.model_dump(mode="json")
-                    if build_id:
-                        self._llm_trace_finish(
-                            build_id,
-                            call_id,
-                            raw_response=str(raw or ""),
-                            validated_response=validated,
-                        )
-                    return validated
-                except (ValueError, ValidationError) as exc:
-                    failure = exc
-                    if build_id:
-                        self._llm_trace_finish(
-                            build_id,
-                            call_id,
-                            raw_response=str(raw or ""),
-                            error=f"{type(exc).__name__}: {exc}",
-                        )
-                        self._increment_metric(build_id, "structured_output_failures")
-            all_failures.append(f"{role} {provider}/{model}: {failure}")
+                    return self._with_transport_retry(
+                        build_id,
+                        chat_complete,
+                        provider=provider,
+                        model=model,
+                        base_url=base_url,
+                        api_key=api_key,
+                        prompt=context.prompt,
+                        options=generation,
+                        json_mode=True,
+                        json_schema=schema,
+                        schema_name=schema_name,
+                        max_tokens=context.max_tokens,
+                        cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
+                        timeout_seconds=float(_stage_timeouts(active_request).get(timeout_key, 240)),
+                        on_delta=(
+                            (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
+                            if build_id
+                            else None
+                        ),
+                    )
+                finally:
+                    self._note_llm_call_end(build_id, call_token)
+
+            def validate(value: dict[str, Any]) -> dict[str, Any]:
+                parsed = response_model.model_validate(value)
+                return parsed.model_dump(mode="json")
+
+            def attempt_finished(outcome: StructuredAttemptOutcome[dict[str, Any]]) -> None:
+                if not build_id:
+                    return
+                _, call_id = attempt_state.pop(outcome.context.attempt, (None, ""))
+                if outcome.error is not None:
+                    self._llm_trace_finish(
+                        build_id,
+                        call_id,
+                        raw_response=outcome.raw_response,
+                        error=f"{type(outcome.error).__name__}: {outcome.error}",
+                    )
+                    return
+                self._llm_trace_finish(
+                    build_id,
+                    call_id,
+                    raw_response=outcome.raw_response,
+                    validated_response=outcome.value,
+                )
+
+            return complete_structured_json(
+                request_once,
+                prompt=prompt,
+                validate=validate,
+                attempts=attempts,
+                max_tokens=max_tokens,
+                max_token_cap=8192,
+                initial_note=initial_note,
+                retry_guidance=retry_guidance,
+                on_attempt_start=attempt_started,
+                on_attempt_finish=attempt_finished,
+                on_metric=note_metric,
+            )
+
+        for chain_index, (role, active_request) in enumerate(request_chain):
+            provider, model, base_url, api_key, generation = _llm_config(active_request)
+            try:
+                return run_role(
+                    role,
+                    active_request,
+                    provider=provider,
+                    model=model,
+                    base_url=base_url,
+                    api_key=api_key,
+                    generation=generation,
+                    escalating=chain_index > 0 or escalated,
+                )
+            except InterruptedError:
+                raise
+            except StructuredCompletionError as exc:
+                failure = exc.last_error or exc
+                all_failures.append(f"{role} {provider}/{model}: {failure}")
+                timed_out = timed_out or exc.timed_out
+                any_truncated = any_truncated or exc.truncated
+
         raise StructuredOutputError(
             "LLM structured output failed after bounded retry"
             + (" and review-provider escalation" if len(request_chain) > 1 else "")
             + ": " + " | ".join(all_failures),
             failures=all_failures,
             timed_out=timed_out,
+            truncated=any_truncated,
         )
 
     def _document_manifest_call(
@@ -3200,6 +3333,15 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         asset = self.repo.get_asset(build["asset_id"])
         all_blocks = self.repo.load_blocks(build["asset_id"])
         blocks = [block for block in all_blocks if not block.get("excluded_reason")]
+        layout = asset.get("document_layout") if isinstance(asset.get("document_layout"), dict) else {}
+        raw_regions = layout.get("layout_regions") if isinstance(layout.get("layout_regions"), list) else []
+        if raw_regions:
+            from .document_layout_regions import reading_sequence
+
+            blocks = reading_sequence(
+                blocks,
+                [str(item.get("id")) for item in raw_regions if isinstance(item, dict) and item.get("id")],
+            )
         if not blocks:
             raise ValueError("No SourceUnits were extracted from the PDF. Check OCR support and extraction warnings.")
 
@@ -3472,49 +3614,88 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         self, build_id: str, metadata_task_total: int, snapshot: dict[str, Any],
         task_name: str, state: str, error_text: str | None,
     ) -> None:
-        """Atomically checkpoint one family and refresh live task telemetry."""
-        metadata_families = ("discourse", "quotation", "indexing")
+        """Checkpoint one family with Record-targeted persistence and incremental counters.
+
+        The old path reparsed and rewrote the entire corpus on every running/terminal
+        family transition. Initial counters are already derived once when enrichment is
+        scheduled, so under the manager lock each later callback can move exactly one
+        task between counter buckets while updating only the affected Record.
+        """
+        del error_text  # the snapshot's execution ledger already carries the bounded error text
         record_id = str(snapshot.get("record_id") or "")
+        if not record_id:
+            return
+
+        counter_for_state = {
+            "complete": "metadata_tasks_completed",
+            "failed": "metadata_tasks_failed",
+            "needs_review": "metadata_tasks_failed",
+            "skipped": "metadata_tasks_skipped",
+            "running": "metadata_tasks_running",
+            "queued": "metadata_tasks_queued",
+        }
         with self._lock:
-            live_records = self.repo.load_records(build_id)
-            live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == record_id), None)
-            if live_index is None:
+            try:
+                live_record = self.repo.get_record(build_id, record_id)
+            except KeyError:
                 return
+
+            row_status = (
+                live_record.get("metadata_stage_status")
+                if isinstance(live_record.get("metadata_stage_status"), dict)
+                else {}
+            )
+            prior_state = str(
+                row_status.get(task_name)
+                or ("complete" if live_record.get("metadata_complete") else "queued")
+            )
+
             copy = json.loads(json.dumps(snapshot))
-            copy["metadata_enrichment_state"] = "running" if state == "running" else str(copy.get("metadata_enrichment_state") or "running")
-            live_records[live_index] = _merge_enrichment_snapshot(live_records[live_index], copy, self._allowed_fields(build_id))
-            self.repo.save_records(build_id, live_records)
-            states: list[str] = []
-            active: list[dict[str, Any]] = []
-            for row in live_records:
-                row_status = row.get("metadata_stage_status") if isinstance(row.get("metadata_stage_status"), dict) else {}
-                ledger = row.get("metadata_execution_ledger") if isinstance(row.get("metadata_execution_ledger"), dict) else {}
-                for family in metadata_families:
-                    fallback = "complete" if row.get("metadata_complete") else "queued"
-                    family_state = str(row_status.get(family) or fallback)
-                    states.append(family_state)
-                    if family_state == "running":
-                        entry = ledger.get(family) if isinstance(ledger.get(family), dict) else {}
-                        active.append({
-                            "record_id": row.get("record_id"), "task": family,
-                            "started_at": entry.get("started_at"),
-                        })
-            completed_tasks = sum(1 for value in states if value == "complete")
-            failed_tasks = sum(1 for value in states if value in {"failed", "needs_review"})
-            skipped_tasks = sum(1 for value in states if value == "skipped")
-            running_tasks = sum(1 for value in states if value == "running")
-            queued_tasks = max(0, metadata_task_total - completed_tasks - failed_tasks - skipped_tasks - running_tasks)
-            updates = {
-                "metadata_tasks_total": metadata_task_total,
-                "metadata_tasks_completed": completed_tasks,
-                "metadata_tasks_failed": failed_tasks,
-                "metadata_tasks_skipped": skipped_tasks,
-                "metadata_tasks_running": running_tasks,
-                "metadata_tasks_queued": queued_tasks,
-                "metadata_active_tasks": active[:32],
-                "metadata_last_progress_at": iso_now() if state in {"complete", "failed", "skipped"} else self.repo.get_build(build_id).get("metadata_last_progress_at"),
-            }
+            copy["metadata_enrichment_state"] = (
+                "running"
+                if state == "running"
+                else str(copy.get("metadata_enrichment_state") or "running")
+            )
+            merged = _merge_enrichment_snapshot(
+                live_record, copy, self._allowed_fields(build_id)
+            )
+            self.repo.update_record(build_id, merged)
+
+            build = self.repo.get_build(build_id)
+            updates: dict[str, Any] = {"metadata_tasks_total": metadata_task_total}
+            prior_counter = counter_for_state.get(prior_state)
+            next_counter = counter_for_state.get(state)
+            if prior_counter != next_counter:
+                if prior_counter:
+                    updates[prior_counter] = max(0, int(build.get(prior_counter) or 0) - 1)
+                if next_counter:
+                    updates[next_counter] = int(build.get(next_counter) or 0) + 1
+
+            active = [
+                item
+                for item in (build.get("metadata_active_tasks") or [])
+                if not (
+                    str(item.get("record_id") or "") == record_id
+                    and str(item.get("task") or "") == task_name
+                )
+            ]
+            if state == "running":
+                ledger = (
+                    merged.get("metadata_execution_ledger")
+                    if isinstance(merged.get("metadata_execution_ledger"), dict)
+                    else {}
+                )
+                entry = ledger.get(task_name) if isinstance(ledger.get(task_name), dict) else {}
+                active.append({
+                    "record_id": record_id,
+                    "task": task_name,
+                    "started_at": entry.get("started_at"),
+                })
+            updates["metadata_active_tasks"] = active[:32]
+            if state in {"complete", "failed", "needs_review", "skipped"}:
+                updates["metadata_last_progress_at"] = iso_now()
             self._update(build_id, **updates)
+
 
     def _schedule_build_enrichment(
         self, build_id: str, request: dict[str, Any], manifest: dict[str, Any], records: list[dict[str, Any]],
@@ -4409,6 +4590,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build["published_at"] = created_at
         build["finished_at"] = created_at
         self.repo.save_build(build)
+        note_resource_changed("corpus_records")
         return publication
 
 

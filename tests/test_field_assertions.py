@@ -10,6 +10,7 @@ from app.field_assertions import (
     confirm_absence,
     confirm_assertion,
     create_model_assertion,
+    create_nlp_assertion,
     current_assertion_by_name,
     get_assertions,
     migrate_record_assertions,
@@ -41,6 +42,39 @@ def test_model_confidence_and_human_confirmation_preserve_derivation() -> None:
     assert record["metadata_field_status"]["speaker"]["status"] == "human_confirmed"
     assert record["metadata_field_status"]["speaker"]["assertion_id"] == confirmed.assertion_id
     assert not validate_projection(record)
+
+
+def test_nlp_candidate_assertion_preserves_derived_unreviewed_provenance() -> None:
+    record = {"record_id": "nlp-1", "record_revision": 1}
+    assertion = create_nlp_assertion(
+        record,
+        "persons",
+        ["Rousseau"],
+        schema=default_schema(),
+        reason="Direct PERSON entity mention in the current Record.",
+        evidence=[{
+            "kind": "nlp_span",
+            "start": 0,
+            "end": 8,
+            "text": "Rousseau",
+            "tag": "PERSON",
+        }],
+        method="nlp:spacy:test-model",
+        model="test-model",
+        legacy_metadata={"candidate_only": True, "value_source": "nlp"},
+    )
+    project_record_assertions(record)
+
+    assert assertion.derivation_method == "derridai:nlp"
+    assert assertion.evaluation_status == "value_supported"
+    assert assertion.authority_status == "unreviewed"
+    assert assertion.confidence is None
+    assert record["persons"] == ["Rousseau"]
+    status = record["metadata_field_status"]["persons"]
+    assert status["status"] == "model_inferred"
+    assert status["method"] == "nlp:spacy:test-model"
+    assert assertion.legacy_metadata["candidate_only"] is True
+    assert assertion.legacy_metadata["value_source"] == "nlp"
 
 
 def test_legacy_migration_is_idempotent_and_preserves_confirmed_absence() -> None:

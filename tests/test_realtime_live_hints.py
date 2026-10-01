@@ -96,6 +96,7 @@ def test_drain_returns_the_documented_dataclass_shape_and_clears_state():
         "metadata_dropped",
         "generation",
         "corpus_generation",
+        "resources",
     }
     assert drained.builds == {"b1": {"id": "b1", "status": "running"}}
     assert drained.model_activity == {"b1": {"calls_in_flight": 1, "task": "t", "provider": "p", "model": "m"}}

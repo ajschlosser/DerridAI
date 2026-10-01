@@ -18,10 +18,12 @@ import {
   type PipelineEdgeKind,
 } from "../../domain/pipelineGraph";
 import {
+  pipelineDataTypeLabel,
   pipelineRunStatusLabel,
   pipelineStageFamilyLabel,
   pipelineStrategyLabel,
 } from "../../domain/pipelinePresentation";
+import type { StageBadge } from "../../domain/pipelineAnalysisPresentation";
 import { findTerm, pipelinePhaseSequence, termLabel } from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
 import type {
@@ -51,8 +53,21 @@ const props = withDefaults(
     showInspector?: boolean;
     /** Put the stage inspector under the graph, for narrow panes. */
     stackInspector?: boolean;
+    /** A short per-stage badge for the active lens (latency, complexity). */
+    badges?: Record<string, StageBadge>;
+    /** Stages whose inputs the server could not wire. */
+    flaggedStageIds?: string[];
+    /** `next` edges that only order a producer first; drawn distinctly and labelled as such. */
+    orderingEdges?: Array<{ from: string; to: string }>;
   }>(),
-  { selectedStageId: undefined, showInspector: true, stackInspector: false },
+  {
+    selectedStageId: undefined,
+    showInspector: true,
+    stackInspector: false,
+    badges: () => ({}),
+    flaggedStageIds: () => [],
+    orderingEdges: () => [],
+  },
 );
 const emit = defineEmits<{ "update:selectedStageId": [id: string] }>();
 
@@ -90,13 +105,49 @@ const nodes = computed(() =>
     ...layoutState.positionFor(node.id, { x: node.x, y: node.y }),
   })),
 );
+const ordering = computed(
+  () => new Set(props.orderingEdges.map((edge) => `${edge.from}\u0000${edge.to}`)),
+);
+/**
+ * The data type an edge carries: a `next` edge hands over the producer's primary output,
+ * a fallback edge replays what the failing stage received. Ordering-only edges carry none.
+ */
+function edgeTypeFor(edge: { from: string; kind: PipelineEdgeKind }, strategyId: string) {
+  const spec = strategyFor(strategyId);
+  if (!spec) return "";
+  if (edge.kind === "next") return spec.outputs?.[0]?.data_type ?? spec.output_type ?? "";
+  return spec.inputs?.[0]?.data_type ?? spec.input_type ?? "";
+}
 const edges = computed(() => {
   const byId = new Map(nodes.value.map((node) => [node.id, node]));
-  return diagram.value.edges.map((edge) => ({
-    ...edge,
-    path: pipelineEdgePath(byId.get(edge.from)!, byId.get(edge.to)!),
-  }));
+  return diagram.value.edges.map((edge) => {
+    const from = byId.get(edge.from)!;
+    const to = byId.get(edge.to)!;
+    const orderingOnly = edge.kind === "next" && ordering.value.has(`${edge.from}\u0000${edge.to}`);
+    const type = orderingOnly ? "" : edgeTypeFor(edge, from.strategy);
+    return {
+      ...edge,
+      path: pipelineEdgePath(from, to),
+      orderingOnly,
+      typeLabel: orderingOnly
+        ? t("pipelines.edge_ordering_only", "Runs first (no data)")
+        : type
+          ? pipelineDataTypeLabel(type, t)
+          : "",
+      // Label position: the middle of the straight line between the two card centres.
+      labelX: (from.x + to.x) / 2 + PIPELINE_NODE_WIDTH / 2,
+      labelY: (from.y + to.y) / 2 + PIPELINE_NODE_HEIGHT / 2,
+    };
+  });
 });
+/** Edges touching the hovered or focused stage show what they carry. */
+const labelledEdges = computed(() =>
+  hoveredId.value
+    ? edges.value.filter(
+        (edge) => (edge.from === hoveredId.value || edge.to === hoveredId.value) && edge.typeLabel,
+      )
+    : [],
+);
 const selected = computed(
   () => nodes.value.find((node) => node.id === selectedId.value) || nodes.value[0] || null,
 );
@@ -150,6 +201,16 @@ function edgeLabel(kind: PipelineEdgeKind) {
     on_error: t("pipelines.on_error", "On error"),
   };
   return labels[kind];
+}
+
+const flagged = computed(() => new Set(props.flaggedStageIds));
+
+function nodeLabel(node: { id: string; strategy: string }) {
+  const parts = [`${node.id}: ${labelFor(node.strategy)}`];
+  if (flagged.value.has(node.id))
+    parts.push(t("pipelines.node_input_missing", "Input not satisfied"));
+  else if (props.badges[node.id]) parts.push(props.badges[node.id].text);
+  return parts.join(", ");
 }
 
 function strategyFor(strategyId: string) {
@@ -207,6 +268,21 @@ function infoRows(node: (typeof nodes.value)[number]): TooltipInfoboxRow[] {
     { label: t("pipelines.status", "Status"), value: statusLabel(node) },
     { label: t("pipelines.term_strategy", "Strategy"), value: labelFor(node.strategy) },
   ];
+  const spec = strategyFor(node.strategy);
+  if (spec?.inputs?.length)
+    rows.push({
+      label: t("pipelines.palette_takes", "Takes"),
+      value: spec.inputs
+        .map((port) => `${port.name} (${pipelineDataTypeLabel(port.data_type, t)})`)
+        .join(", "),
+    });
+  if (spec?.outputs?.length)
+    rows.push({
+      label: t("pipelines.palette_gives", "Gives"),
+      value: spec.outputs
+        .map((port) => `${port.name} (${pipelineDataTypeLabel(port.data_type, t)})`)
+        .join(", "),
+    });
   if (effectNoteFor(node.strategy))
     rows.push({
       label: t("pipelines.scholarly_effect", "Scholarly effect"),
@@ -385,8 +461,19 @@ function chooseDensity(next: PipelineDiagramDensity) {
               :path="edge.path"
               :data-kind="edge.kind"
               :data-traversed="edge.traversed ? 'true' : 'false'"
+              :data-ordering="edge.orderingOnly ? 'true' : undefined"
               :marker-end="`url(#${arrowMarkerId})`"
             />
+            <text
+              v-for="edge in labelledEdges"
+              :key="`label-${edge.id}`"
+              class="diagram-edge-label"
+              :x="edge.labelX"
+              :y="edge.labelY"
+              text-anchor="middle"
+            >
+              {{ edge.typeLabel }}
+            </text>
           </svg>
           <template v-for="node in nodes" :key="node.id">
             <UiRelationNodeShell
@@ -396,10 +483,11 @@ function chooseDensity(next: PipelineDiagramDensity) {
               :x="node.x"
               :y="node.y"
               :zoom="zoom"
-              :accessible-label="`${node.id}: ${labelFor(node.strategy)}`"
+              :accessible-label="nodeLabel(node)"
               :aria-pressed="selected?.id === node.id"
               :data-status="node.executionStatus || undefined"
               :data-presence="node.presence"
+              :data-wiring="flagged.has(node.id) ? 'problem' : undefined"
               :style="{
                 width: `${PIPELINE_NODE_WIDTH}px`,
                 height: `${PIPELINE_NODE_HEIGHT}px`,
@@ -421,6 +509,16 @@ function chooseDensity(next: PipelineDiagramDensity) {
                 </span>
                 <strong>{{ node.id }}</strong>
                 <span>{{ labelFor(node.strategy) }}</span>
+                <span v-if="flagged.has(node.id)" class="node-badge" data-tone="danger">
+                  {{ t("pipelines.node_input_missing", "Input not satisfied") }}
+                </span>
+                <span
+                  v-else-if="badges[node.id]"
+                  class="node-badge"
+                  :data-tone="badges[node.id].tone"
+                >
+                  {{ badges[node.id].text }}
+                </span>
               </UiRelationCardNode>
             </UiRelationNodeShell>
             <UiTooltipInfobox
@@ -452,6 +550,9 @@ function chooseDensity(next: PipelineDiagramDensity) {
 
     <ul class="diagram-legend">
       <li v-for="kind in edgeKinds" :key="kind" :data-kind="kind">{{ edgeLabel(kind) }}</li>
+      <li v-if="ordering.size" data-kind="ordering">
+        {{ t("pipelines.edge_ordering_only", "Runs first (no data)") }}
+      </li>
       <li v-if="execution" data-kind="not_reached">
         {{ t("pipelines.not_reached", "Not reached") }}
       </li>
@@ -554,6 +655,20 @@ function chooseDensity(next: PipelineDiagramDensity) {
   --relation-edge-stroke: var(--tone-danger-border);
   stroke-dasharray: 1 3;
 }
+.diagram-edge[data-ordering="true"] {
+  stroke-dasharray: 10 5;
+  opacity: 0.7;
+}
+.diagram-edge-label {
+  fill: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--surface-card);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
 .diagram-edge[data-traversed="true"] {
   stroke-width: 2.25;
 }
@@ -578,6 +693,25 @@ function chooseDensity(next: PipelineDiagramDensity) {
 .diagram-node :deep(.ui-relation-card-node span),
 .diagram-node :deep(.ui-relation-card-node strong) {
   white-space: nowrap;
+}
+.diagram-node[data-wiring="problem"] {
+  --relation-node-border: var(--tone-danger-border);
+}
+.node-badge {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-badge[data-tone="warn"] {
+  color: var(--tone-warn-fg);
+}
+.node-badge[data-tone="danger"] {
+  color: var(--tone-danger-fg);
 }
 .diagram-node.selected {
   --relation-node-border: var(--border-interactive);
@@ -625,6 +759,10 @@ function chooseDensity(next: PipelineDiagramDensity) {
   border-top: 2px solid var(--text-primary);
   content: "";
   transform: translateY(-3px);
+}
+.diagram-legend li[data-kind="ordering"]::before {
+  border-top-style: dashed;
+  opacity: 0.7;
 }
 .diagram-legend li[data-kind="on_empty"]::before {
   border-top-style: dashed;

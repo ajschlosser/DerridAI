@@ -233,6 +233,7 @@ export function normalizedResearchConfig(cfg: Loose = {}) {
     }),
     k: finiteResearchNumber(cfg.k, 64, { integer: true, min: 1, max: 500 }),
     fetch_k: finiteResearchNumber(cfg.fetch_k, 500, { integer: true, min: 1, max: 5000 }),
+    automatic_sizing: Boolean(cfg.automatic_sizing),
     lambda_mult: finiteResearchNumber(cfg.lambda_mult, 0.7, { min: 0, max: 1 }),
     rrf_k: finiteResearchNumber(cfg.rrf_k, 60, { integer: true, min: 1, max: 10000 }),
     rerank_top_n: finiteResearchNumber(cfg.rerank_top_n, 24, { integer: true, min: 1, max: 500 }),

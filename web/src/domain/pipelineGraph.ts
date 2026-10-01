@@ -2,7 +2,7 @@
 import type { PipelineDefinition, PipelineRunTrace, PipelineStage } from "../types/pipelines";
 
 export const PIPELINE_NODE_WIDTH = 210;
-export const PIPELINE_NODE_HEIGHT = 84;
+export const PIPELINE_NODE_HEIGHT = 100;
 const CANVAS_PAD = 16;
 
 export type PipelineEdgeKind = "next" | "on_empty" | "on_unavailable" | "on_timeout" | "on_error";

@@ -2,11 +2,13 @@
 """Deterministic, offline POS/NER candidates for schema fields.
 
 spaCy runs locally with pre-installed model packages (no network at runtime). Its
-output is *candidate surface forms* only: exact substrings of the record text with
-offsets and the linguistic tag that matched. A candidate is not a metadata value and
-not evidence of a role; a person named in a passage is not thereby its speaker,
-quoted speaker or position holder. Candidates guide the LLM prompt and let a
-proposed value be checked against the text; they never populate or confirm a field.
+output is a raw *candidate surface-form* layer: exact substrings of the record text
+with offsets and the linguistic tag that matched. A raw candidate is not scholarly
+authority and not evidence of a discourse role; a person named in a passage is not
+thereby its speaker, quoted speaker or position holder. Candidates guide model prompts
+and validation. A separate candidate resolver may promote only schema-compatible
+direct-mention indexing spans into explicitly unreviewed ``derridai:nlp`` FieldAssertions;
+the raw annotation layer itself never confirms a field.
 
 The same pass keeps a bounded record-level ``terms`` layer (named entities plus
 proper-noun and noun runs) for the Record semantic map. Terms are navigation aids:
@@ -384,6 +386,31 @@ def current_terms(record: dict[str, Any]) -> list[dict[str, Any]] | None:
     if data.get("text_sha256") != text_digest(str(record.get("text") or "")):
         return None
     return [item for item in data.get("terms") or [] if isinstance(item, dict)]
+
+def current_field_candidates(
+    record: dict[str, Any],
+    field_names: list[str] | set[str] | tuple[str, ...] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Structured field candidates bound to the Record's current text digest.
+
+    This exposes exact spans to deterministic candidate resolvers without reducing
+    them to prompt-only strings. The returned dictionaries are copies so callers
+    cannot mutate the rebuildable annotation projection in place.
+    """
+    data = record.get("nlp_candidates")
+    if not isinstance(data, dict) or data.get("status") != "ok":
+        return {}
+    if data.get("text_sha256") != text_digest(str(record.get("text") or "")):
+        return {}
+    wanted = {str(name) for name in field_names} if field_names is not None else None
+    fields = data.get("fields")
+    if not isinstance(fields, dict):
+        return {}
+    return {
+        str(name): [dict(item) for item in values if isinstance(item, dict)]
+        for name, values in fields.items()
+        if (wanted is None or str(name) in wanted) and isinstance(values, list) and values
+    }
 
 def prompt_hints(record: dict[str, Any], field_names: list[str]) -> dict[str, list[str]]:
     """Candidate surface forms for the given fields, for a prompt. Empty when not ok."""

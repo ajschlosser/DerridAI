@@ -551,6 +551,7 @@ def _values_json(field: SchemaField) -> str:
 def build_group_prompt(
     schema: MetadataSchema, group_key: str, *, base_context: str,
     allowed_region_types: list[str] | None = None, allowed_discourse_roles: list[str] | None = None,
+    field_names: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> str:
     """The prompt for one group, in the same shape DerridAI has always used:
 
@@ -558,7 +559,12 @@ def build_group_prompt(
     remarks, the shared context block, then the evidence and assessment instructions.
     """
     group = schema.group(group_key)
-    fields = schema.fields_in(group_key)
+    requested_fields = {str(name) for name in field_names} if field_names is not None else None
+    fields = [
+        field
+        for field in schema.fields_in(group_key)
+        if requested_fields is None or field.name in requested_fields
+    ]
     region_types = allowed_region_types or REGION_TYPES
     roles = allowed_discourse_roles or DISCOURSE_ROLES
     lines: list[str] = []
@@ -596,7 +602,16 @@ def build_group_prompt(
             definitions.append((field.definitions_heading or f"{field.name} values", described))
     lines += [f"- {note}" for note in group.notes]
 
-    parts = [group.intro.rstrip()]
+    scoped_names = ([*CORE_FIELDS] if group_key == CORE_GROUP else []) + [field.name for field in fields]
+    intro = group.intro.rstrip().replace("{fields}", _oxford(scoped_names))
+    parts = [intro]
+    if field_names is not None:
+        parts.append(
+            "THIS MODEL CALL IS FIELD-SCOPED. Return metadata and assessments only for: "
+            + _oxford(scoped_names)
+            + ". Other fields in this metadata family are already resolved by a higher-priority "
+            "candidate or are outside this call's contract."
+        )
     if lines:
         parts.append((group.fields_heading.rstrip() + "\n" if group.fields_heading else "") + "\n".join(lines))
     for heading, mapping in definitions:
@@ -784,7 +799,14 @@ def _annotation(field: SchemaField) -> Any:
     return str | None
 
 
-def response_model_for(schema: MetadataSchema, group_key: str, *, region_types: list[str] | None = None, roles: list[str] | None = None) -> type[BaseModel]:
+def response_model_for(
+    schema: MetadataSchema,
+    group_key: str,
+    *,
+    region_types: list[str] | None = None,
+    roles: list[str] | None = None,
+    field_names: set[str] | list[str] | tuple[str, ...] | None = None,
+) -> type[BaseModel]:
     """The JSON shape the model must return for one group.
 
     Metadata keys are required (null/[] when unsupported), and every field the
@@ -796,7 +818,12 @@ def response_model_for(schema: MetadataSchema, group_key: str, *, region_types: 
         props["region_type"] = (Literal[tuple(region_types or REGION_TYPES)] | None, ...)
         props["primary_text"] = (bool | None, ...)
         props["discourse_role"] = (Literal[tuple(roles or DISCOURSE_ROLES)] | None, ...)
-    group_fields = schema.fields_in(group_key)
+    requested_fields = {str(name) for name in field_names} if field_names is not None else None
+    group_fields = [
+        field
+        for field in schema.fields_in(group_key)
+        if requested_fields is None or field.name in requested_fields
+    ]
     for field in group_fields:
         props[field.name] = (_annotation(field), ...)
     metadata = create_model(f"{group_key.title()}Metadata", __config__=ConfigDict(extra="forbid"), **props)
@@ -903,8 +930,9 @@ _DISCOURSE_FOOTER = (
     "field_evidence using only current-record block IDs, confidence 0..1, and a short reason. Use null or [] when unsupported.\n"
     "Return one field_assessments entry for every one of {assessed_fields}, even when its metadata value is null or empty. Each assessment "
     "must contain all four keys: confidence (a number 0..1, or null only when confidence genuinely cannot be estimated), needs_review, reason, "
-    "and outcome. Use outcome=\"supported_value\" when the returned value is supported, outcome=\"no_supported_value\" when the "
-    "source supports that no value applies, and outcome=\"uncertain\" when the field cannot be determined. Mark needs_review=true whenever "
+    "and outcome. Keep every assessment reason to one short sentence. Never put a proposed value only in the reason: outcome=\"supported_value\" "
+    "requires the corresponding metadata value to be non-null/non-empty. Use outcome=\"no_supported_value\" when the source supports that no "
+    "value applies, and outcome=\"uncertain\" when the field cannot be determined. Mark needs_review=true whenever "
     "a proposed value or supported absence is genuinely ambiguous, attribution is uncertain, evidence is weak, or confidence is not sufficient "
     "for scholarly acceptance.\n"
 )
@@ -920,20 +948,22 @@ _QUOTATION_FOOTER = (
     "Return one field_assessments entry for every one of {assessed_fields}, even when its metadata value is null or empty. Each assessment must "
     "contain confidence (0..1 or null), needs_review, reason, and outcome. For is_direct_quote specifically, false is an explicit "
     "supported classification: return is_direct_quote=false with outcome=\"supported_value\" when the source supports that no direct "
-    "quotation is present; reserve outcome=\"no_supported_value\" for a null value when the field is genuinely inapplicable. Otherwise use "
+    "quotation is present; reserve outcome=\"no_supported_value\" for a null value when the field is genuinely inapplicable. Keep each reason "
+    "to one short sentence and never put a proposed value only in the reason. Otherwise use "
     "outcome=\"supported_value\", outcome=\"no_supported_value\", or outcome=\"uncertain\" according to the source evidence.\n"
 )
 _INDEXING_INTRO = (
     "Infer ONLY conservative semantic indexing metadata for one immutable DerridAI record.\n"
-    "Return topics, concepts, persons, and works_referenced that are materially present in this record. Do not infer discourse attribution, "
+    "Return {fields} when materially present in this record. Do not infer discourse attribution, "
     "quotation ownership, bibliography, summaries, or source text. Prefer a short precise list to speculative coverage; emit brief noun phrases "
     "or proper names, not full sentences or explanatory clauses. Example: concepts=[\"cities of refuge\"] is acceptable; concepts=[\"The concept "
     "and practice of 'cities of refuge' as a form of cosmopolitics distinct from state sovereignty.\"] is not."
 )
 _INDEXING_FOOTER = (
     "Return one field_assessments entry for every one of {assessed_fields}, even when the corresponding metadata list is empty. Each assessment "
-    "must contain confidence (0..1 or null), needs_review, reason, and outcome. Use outcome=\"supported_value\" for a supported non-empty "
-    "list, outcome=\"no_supported_value\" when the record supports an empty list, and outcome=\"uncertain\" when the field cannot be "
+    "must contain confidence (0..1 or null), needs_review, reason, and outcome. Keep each reason to one short sentence. Use "
+    "outcome=\"supported_value\" only for a supported non-empty list, outcome=\"no_supported_value\" when the record supports an empty list, "
+    "and outcome=\"uncertain\" when the field cannot be "
     "determined.\n"
 )
 

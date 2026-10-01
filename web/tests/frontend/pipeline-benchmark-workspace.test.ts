@@ -1,6 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { VueQueryPlugin } from "@tanstack/vue-query";
+import { queryClient } from "../../src/realtime/dataQuery";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { chromaApi } from "../../src/api/chroma";
@@ -112,6 +114,7 @@ const benchmark = {
 
 describe("PipelineBenchmarkWorkspace", () => {
   beforeEach(() => {
+    queryClient.clear();
     setActivePinia(createPinia());
     useI18nStore().dictionary = {};
     vi.restoreAllMocks();
@@ -153,6 +156,7 @@ describe("PipelineBenchmarkWorkspace", () => {
     const wrapper = mount(PipelineBenchmarkWorkspace, {
       props: { pipelines },
       attachTo: document.body,
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
     });
     await flushPromises();
     // The create form is not permanently on screen.
@@ -219,7 +223,10 @@ describe("PipelineBenchmarkWorkspace", () => {
       limit: 200,
       offset: 0,
     });
-    const wrapper = mount(PipelineBenchmarkWorkspace, { props: { pipelines } });
+    const wrapper = mount(PipelineBenchmarkWorkspace, {
+      props: { pipelines },
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
     await flushPromises();
     const choices = wrapper.findAll(".case-choice");
     expect(choices).toHaveLength(2);

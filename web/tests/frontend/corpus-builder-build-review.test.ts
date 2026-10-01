@@ -213,7 +213,7 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.findAll("li")[2].attributes("data-state")).toBe("current");
   });
 
-  it("maps issue subqueues to the primary Issues tab and supports keyboard navigation", async () => {
+  it("lists issue subqueues under Needs attention in one filter list", async () => {
     const wrapper = mount(CorpusReviewQueueTabs, {
       props: {
         modelValue: "metadata",
@@ -227,11 +227,10 @@ describe("Corpus Builder build, review, and finish states", () => {
         rejected: 0,
       },
     });
-    expect(wrapper.get('[data-review-queue="issues"]').attributes("aria-pressed")).toBe("true");
     expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("metadata");
     await wrapper.get("select").setValue("source");
     expect(lastEmission(wrapper, "update:modelValue")[0]).toBe("source");
-    await wrapper.get('[data-review-queue="issues"]').trigger("keydown", { key: "ArrowRight" });
+    await wrapper.get("select").setValue("accepted");
     expect(lastEmission(wrapper, "update:modelValue")[0]).toBe("accepted");
     expect(wrapper.get("#review-queue-count-help").text()).toContain("counts may overlap");
   });
@@ -264,6 +263,28 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.emitted("reviewRejected")).toBeTruthy();
     await buttonByText(wrapper, "Restore all rejected").trigger("click");
     expect(wrapper.emitted("restoreRejected")).toHaveLength(1);
+  });
+
+  it("never leaves 'Inspect remaining work' as a dead button: it goes to the first blocker", async () => {
+    const build: any = {
+      ...buildBase,
+      publication_readiness: {
+        ...buildBase.publication_readiness,
+        can_publish: false,
+        next_action: "inspect",
+        blockers: [{ code: "boundary_attention", count: 2 }],
+      },
+    };
+    const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
+    const primary = wrapper.get(".finish-primary button");
+    expect(primary.attributes("disabled")).toBeUndefined();
+    await primary.trigger("click");
+    expect(wrapper.emitted("reviewTopology")).toHaveLength(1);
+    await wrapper.setProps({
+      build: { ...build, publication_readiness: { ...build.publication_readiness, blockers: [] } },
+    });
+    await wrapper.get(".finish-primary button").trigger("click");
+    expect(wrapper.emitted("reviewRecords")).toHaveLength(1);
   });
 
   it("routes blocker repair actions to the owning review surface", async () => {

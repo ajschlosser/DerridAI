@@ -4,8 +4,9 @@
 Why: which provider answers a metadata group, how many attempts it gets, and when it escalates
 to the review provider used to be hard-coded in ``_chat_json``. The pipeline now owns that
 choice; the schema still owns the task, and reconciliation still owns authority.
-How: ``chat_complete`` is replaced by a scripted provider, so the tests compare the exact calls
-the legacy chain and the pipeline make, and check that stage settings change what runs.
+How: ``chat_complete`` is replaced by a scripted provider. Version 1 remains reproducible
+with its historical two-plus-two retry budget, while version 2 spends one primary attempt and
+escalates only after validation/provider failure.
 """
 
 from __future__ import annotations
@@ -25,7 +26,8 @@ from app.pipelines.manager import pipeline_manager
 from app.pipelines.service import PipelineService, pipeline_hash
 from pydantic import BaseModel
 
-BUILT_IN = ("corpus.metadata_enrichment.current", 1)
+LEGACY_BUILT_IN = ("corpus.metadata_enrichment.current", 1)
+BUILT_IN = ("corpus.metadata_enrichment.current", 2)
 PROMPT = "Classify THIS record."
 SCHEMA = "derridai_record_discourse"
 VALID = '{"label": "ok"}'
@@ -33,6 +35,15 @@ VALID = '{"label": "ok"}'
 
 class Answer(BaseModel):
     label: str
+
+
+class RepairAssessment(BaseModel):
+    reason: str
+
+
+class RepairAnswer(BaseModel):
+    label: str
+    field_assessments: dict[str, RepairAssessment]
 
 
 REQUEST = {"provider": "ollama", "model": "primary-model"}
@@ -87,50 +98,165 @@ def _enrich(manager, request):
     return record, results[0]
 
 
-def _legacy(manager, request):
-    try:
-        return manager._chat_json(request, PROMPT, response_model=Answer, max_tokens=512, schema_name=SCHEMA), None
-    except ValueError as exc:
-        return None, str(exc)
-
-
 SCENARIOS = {
     "primary answers": {"primary-model": [VALID]},
-    "review answers after primary retries": {"primary-model": ["no", "still no"], "review-model": [VALID]},
-    "both fail": {"primary-model": ["no", "no"], "review-model": ["no", "no"]},
+    "review answers after primary validation failure": {"primary-model": ["no"], "review-model": [VALID]},
+    "both fail": {"primary-model": ["no"], "review-model": ["no"]},
     "primary times out": {"primary-model": [TimeoutError("read timed out")], "review-model": [VALID]},
 }
 
 
 @pytest.mark.parametrize("scenario", sorted(SCENARIOS))
 @pytest.mark.parametrize("request_", [REQUEST, WITH_REVIEW], ids=["no-review", "review"])
-def test_built_in_pipeline_makes_the_legacy_chains_calls(monkeypatch, manager, traces, scenario, request_) -> None:
+def test_built_in_pipeline_uses_one_attempt_per_provider(monkeypatch, manager, traces, scenario, request_) -> None:
     replies = SCENARIOS[scenario]
-    legacy_calls = _provider(monkeypatch, {model: list(items) for model, items in replies.items()})
-    legacy_result, legacy_error = _legacy(manager, request_)
-
-    pipeline_calls = _provider(monkeypatch, {model: list(items) for model, items in replies.items()})
+    calls = _provider(monkeypatch, {model: list(items) for model, items in replies.items()})
     record, (_family, result, error) = _enrich(manager, request_)
 
-    assert pipeline_calls == legacy_calls
-    assert result == legacy_result
-    assert (str(error) if error else None) == legacy_error
+    expected_models = ["primary-model"]
+    if request_ is WITH_REVIEW and scenario != "primary answers":
+        expected_models.append("review-model")
+    assert [call["model"] for call in calls] == expected_models
+
+    succeeds = scenario == "primary answers" or (
+        request_ is WITH_REVIEW
+        and scenario in {"review answers after primary validation failure", "primary times out"}
+    )
+    if succeeds:
+        assert result == {"label": "ok"} and error is None
+    else:
+        assert result is None and error is not None
+
     ledger = record["metadata_execution_ledger"]["discourse"]
-    assert ledger["pipeline"]["pipeline_id"] == BUILT_IN[0] and ledger["attempts_allowed"] == 2
+    assert ledger["pipeline"]["pipeline_id"] == BUILT_IN[0]
+    assert ledger["pipeline"]["pipeline_version"] == 2
+    assert ledger["attempts_allowed"] == 1
+
+
+def test_truncated_primary_output_gets_one_bounded_recovery_call(
+    monkeypatch,
+    manager,
+    traces,
+) -> None:
+    calls = _provider(
+        monkeypatch,
+        {"primary-model": ['{"label":"unfinished', VALID]},
+    )
+    record, (_family, result, error) = _enrich(manager, REQUEST)
+
+    assert error is None
+    assert result == {"label": "ok"}
+    assert [call["model"] for call in calls] == ["primary-model", "primary-model"]
+    assert calls[1]["max_tokens"] > calls[0]["max_tokens"]
+    assert "STRUCTURED OUTPUT RECOVERY" in str(calls[1]["prompt"])
+    ledger = record["metadata_execution_ledger"]["discourse"]
+    assert ledger["recovery_kind"] == "truncated_output"
+    assert ledger["recovery_calls"] == 1
+    assert ledger["recovery_max_output_tokens"] > ledger["max_output_tokens"]
+    assert ledger["model_invocations"] == 2
+
+
+def test_assessment_contradiction_gets_one_consistency_repair_call(
+    monkeypatch,
+    manager,
+    traces,
+) -> None:
+    first = (
+        '{"label":"ok","field_assessments":{"proposition_status":'
+        '{"reason":"Structured-output contradiction: outcome=supported_value but the metadata value is empty. '
+        'The text presents its claims as definitive truths."}}}'
+    )
+    second = '{"label":"ok","field_assessments":{"proposition_status":{"reason":"Consistent."}}}'
+    calls = _provider(monkeypatch, {"primary-model": [first, second]})
+    record: dict[str, object] = {"record_id": "r1", "text": "Such genesis is impossible."}
+    results = manager._execute_metadata_tasks(
+        record,
+        REQUEST,
+        [("discourse", PROMPT, RepairAnswer, 512, SCHEMA)],
+        "",
+        None,
+    )
+    _family, result, error = results[0]
+
+    assert error is None
+    assert result is not None
+    assert [call["model"] for call in calls] == ["primary-model", "primary-model"]
+    assert "STRUCTURED OUTPUT CONSISTENCY REPAIR" in str(calls[1]["prompt"])
+    ledger = record["metadata_execution_ledger"]["discourse"]
+    assert ledger["recovery_kind"] == "assessment_contradiction"
+    assert ledger["recovery_fields"] == ["proposition_status"]
+    assert ledger["recovery_calls"] == 1
+    assert ledger["residual_contradiction_fields"] == []
+    assert ledger["model_invocations"] == 2
+
+
+def test_residual_assessment_contradiction_gets_one_final_repair_call(
+    monkeypatch,
+    manager,
+    traces,
+) -> None:
+    contradictory = (
+        '{"label":"ok","field_assessments":{"proposition_status":'
+        '{"reason":"Structured-output contradiction: outcome=supported_value but the metadata value is empty. '
+        'The text presents its claims as definitive truths."}}}'
+    )
+    repaired = '{"label":"ok","field_assessments":{"proposition_status":{"reason":"Consistent."}}}'
+    calls = _provider(
+        monkeypatch,
+        {"primary-model": [contradictory, contradictory, repaired]},
+    )
+    record: dict[str, object] = {
+        "record_id": "r1",
+        "text": "Such genesis is impossible.",
+    }
+    results = manager._execute_metadata_tasks(
+        record,
+        REQUEST,
+        [("discourse", PROMPT, RepairAnswer, 512, SCHEMA)],
+        "",
+        None,
+    )
+    _family, result, error = results[0]
+
+    assert error is None
+    assert result is not None
+    assert [call["model"] for call in calls] == [
+        "primary-model",
+        "primary-model",
+        "primary-model",
+    ]
+    assert "STRUCTURED OUTPUT CONSISTENCY REPAIR" in str(calls[1]["prompt"])
+    assert "FINAL STRUCTURED OUTPUT CONSISTENCY REPAIR" in str(calls[2]["prompt"])
+    ledger = record["metadata_execution_ledger"]["discourse"]
+    assert ledger["recovery_kind"] == "assessment_contradiction"
+    assert ledger["recovery_calls"] == 2
+    assert ledger["residual_contradiction_fields"] == []
+    assert ledger["model_invocations"] == 3
 
 
 def test_built_in_compiles_and_is_assigned() -> None:
     pipeline = built_in_pipeline(*BUILT_IN)
+    assert pipeline.status == "active"
     assert PipelineService().validate(pipeline).valid
     plan = compile_enrichment_pipeline(pipeline)
     assert (plan.entry.id, plan.fallback.id) == ("primary", "review")
+    assert plan.entry.config["attempts"] == 1
+    assert plan.fallback.config["attempts"] == 1
     assignment = built_in_assignment(ENRICHMENT_FEATURE)
     assert (assignment.pipeline_id, assignment.pipeline_version) == BUILT_IN
     assert pipeline_manager.runtime_support(pipeline) == {"supported": True, "adapter": ENRICHMENT_FEATURE}
 
 
+def test_legacy_v1_remains_available_for_reproducibility() -> None:
+    pipeline = built_in_pipeline(*LEGACY_BUILT_IN)
+    assert pipeline.status == "disabled"
+    plan = compile_enrichment_pipeline(pipeline)
+    assert plan.entry.config["attempts"] == 2
+    assert plan.fallback.config["attempts"] == 2
+
+
 def test_escalation_is_traced_by_code_without_prompt_or_answer_text(monkeypatch, manager, traces) -> None:
-    _provider(monkeypatch, {"primary-model": ["leaked answer text", "leaked answer text"], "review-model": [VALID]})
+    _provider(monkeypatch, {"primary-model": ["leaked answer text"], "review-model": [VALID]})
     record, (_family, result, _error) = _enrich(manager, WITH_REVIEW)
 
     assert result == {"label": "ok"}
@@ -144,19 +270,26 @@ def test_escalation_is_traced_by_code_without_prompt_or_answer_text(monkeypatch,
     primary, review = trace.stages
     assert (primary.status, primary.fallback_reason, primary.model) == ("failed", "structured_output_failed", "primary-model")
     assert (review.status, review.output_count, review.model) == ("completed", 1, "review-model")
-    assert review.parameters == {"provider_role": "review", "attempts": 2, "response_contracts": [SCHEMA]}
+    assert review.parameters == {"provider_role": "review", "attempts": 1, "response_contracts": [SCHEMA]}
     dumped = trace.model_dump_json()
     assert PROMPT not in dumped and "leaked answer text" not in dumped
 
 
-def test_attempts_setting_changes_how_often_a_provider_is_asked(monkeypatch, manager, traces) -> None:
-    _use(monkeypatch, [{"config": {"provider_role": "primary", "attempts": 1}}, {}])
-    calls = _provider(monkeypatch, {"primary-model": ["no"], "review-model": [VALID]})
+def test_attempts_setting_can_restore_a_second_primary_attempt(monkeypatch, manager, traces) -> None:
+    _use(monkeypatch, [{"config": {"provider_role": "primary", "attempts": 2}}, {}])
+    calls = _provider(monkeypatch, {
+        "primary-model": ["no", "still no"],
+        "review-model": [VALID],
+    })
     record, (_family, result, _error) = _enrich(manager, WITH_REVIEW)
 
-    assert [call["model"] for call in calls] == ["primary-model", "review-model"]
+    assert [call["model"] for call in calls] == [
+        "primary-model",
+        "primary-model",
+        "review-model",
+    ]
     assert result == {"label": "ok"}
-    assert record["metadata_execution_ledger"]["discourse"]["attempts_allowed"] == 1
+    assert record["metadata_execution_ledger"]["discourse"]["attempts_allowed"] == 2
 
 
 def test_review_provider_can_answer_first(monkeypatch, manager, traces) -> None:
@@ -184,7 +317,7 @@ def test_timeout_without_a_timeout_edge_does_not_escalate(monkeypatch, manager, 
 
 
 def test_unconfigured_review_provider_is_reported_as_unavailable(monkeypatch, manager, traces) -> None:
-    _provider(monkeypatch, {"primary-model": ["no", "no"]})
+    _provider(monkeypatch, {"primary-model": ["no"]})
     record, (_family, _result, error) = _enrich(manager, REQUEST)
 
     assert str(error).startswith("LLM structured output failed after bounded retry: primary ollama/primary-model")

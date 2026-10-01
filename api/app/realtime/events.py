@@ -20,6 +20,7 @@ from .. import operation_events
 from ..config import settings
 from .broker import EventBroker
 from .protocol import Audience
+from .resources import DATA_RESOURCES
 
 logger = logging.getLogger("derridai.realtime")
 
@@ -235,6 +236,8 @@ class RealtimeObserver:
             self._publish_corpus_generation(note)
         for kind, summary in notes.activity.items():
             self._publish_background_activity(kind, summary)
+        for resource in sorted(notes.resources):
+            self._publish_resource_changed(resource)
 
     def _publish_job(self, event_type: str, summary: dict[str, Any], *, previous_status: Any = None) -> None:
         job_id = str(summary.get("id"))
@@ -387,4 +390,19 @@ class RealtimeObserver:
             payload={"activity": dict(summary)},
             topics=(f"activity:{kind}",),
             audience=Audience(admin_only=True),
+        )
+
+    def _publish_resource_changed(self, resource: str) -> None:
+        """Tell subscribers that one registered data resource is stale (key-level, no values)."""
+        spec = DATA_RESOURCES.get(resource)
+        if spec is None:
+            logger.warning("Ignoring change note for unregistered data resource %r", resource)
+            return
+        self.broker.publish(
+            "resource.changed",
+            resource_type="data",
+            resource_id=resource,
+            payload={"resource": resource},
+            topics=(f"data:{resource}",),
+            audience=spec.audience,
         )

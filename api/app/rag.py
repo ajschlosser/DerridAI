@@ -24,11 +24,25 @@ from .pipelines.research import (
 )
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .research_memory import ResponseMemoryIndex, memory_guidance
+from .research_sizing import (
+    automatic_collection_sizing,
+    collapse_adjacent_candidates,
+    expand_context_neighbors,
+)
 from .retrieval_selection import (
     cosine_similarity,
     distance_to_relevance,
     mmr_select,
     source_aware_select,
+)
+from .structured_completion import (
+    StructuredAttemptContext,
+    complete_structured_json,
+)
+from .structured_json import (
+    StructuredJsonTruncatedError,
+    finish_reason_is_truncated,
+    parse_json_object,
 )
 from .system_store import system_store
 
@@ -107,22 +121,8 @@ Citation rules:
 
 
 def _extract_json(text: str) -> dict[str, Any]:
-    value = str(text or "").strip()
-    value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.I)
-    value = re.sub(r"\s*```$", "", value)
-    candidates = [value]
-    start = value.find("{")
-    end = value.rfind("}")
-    if start >= 0 and end > start:
-        candidates.append(value[start:end + 1])
-    for candidate in candidates:
-        try:
-            parsed = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            return parsed
-    raise ValueError("LLM did not return a valid JSON object.")
+    """Compatibility wrapper around the shared repair-first structured parser."""
+    return parse_json_object(text)
 
 
 def _response_detail(response: httpx.Response) -> str:
@@ -162,6 +162,17 @@ def chat_complete(
     """
     tuning = options or OllamaTouchupOptions()
     provider = provider.strip().lower()
+    structured_requested = bool(json_mode or json_schema is not None)
+
+    def complete(content: Any, finish_reason: str | None = None) -> str:
+        text = str(content or "").strip()
+        if structured_requested and finish_reason_is_truncated(finish_reason):
+            raise StructuredJsonTruncatedError(
+                f"LLM structured response was cut off by provider finish reason {finish_reason!r}.",
+                diagnostic=text[:2000],
+                finish_reason=finish_reason,
+            )
+        return text
 
     def emit(piece: str) -> None:
         if on_delta is None or not piece:
@@ -207,11 +218,12 @@ def chat_complete(
             pool=settings.openai_connect_timeout_seconds,
         )
         if cancelled is not None:
-            def stream_once(payload: dict[str, Any]) -> tuple[int, str, str]:
+            def stream_once(payload: dict[str, Any]) -> tuple[int, str, str, str | None]:
                 started_clock = time.monotonic()
                 streaming = dict(payload)
                 streaming["stream"] = True
                 chunks: list[str] = []
+                finish_reason: str | None = None
                 with httpx.Client(timeout=timeout) as client:
                     with client.stream(
                         "POST",
@@ -221,7 +233,7 @@ def chat_complete(
                     ) as response:
                         if response.status_code >= 400:
                             raw = response.read().decode("utf-8", errors="replace")
-                            return response.status_code, "", raw[:2000]
+                            return response.status_code, "", raw[:2000], None
                         for line in response.iter_lines():
                             if timeout_seconds and time.monotonic() - started_clock > timeout_seconds:
                                 raise TimeoutError(f"LLM generation exceeded {timeout_seconds:.0f}s stage deadline.")
@@ -237,6 +249,8 @@ def chat_complete(
                             except json.JSONDecodeError:
                                 continue
                             choices = event.get("choices") or []
+                            if choices and choices[0].get("finish_reason") is not None:
+                                finish_reason = str(choices[0].get("finish_reason"))
                             delta = choices[0].get("delta") if choices else {}
                             piece = (delta or {}).get("content") or ""
                             if isinstance(piece, list):
@@ -248,9 +262,9 @@ def chat_complete(
                             if piece:
                                 chunks.append(str(piece))
                                 emit(str(piece))
-                return 200, "".join(chunks).strip(), ""
+                return 200, "".join(chunks).strip(), "", finish_reason
 
-            status, content, detail = stream_once(body)
+            status, content, detail, finish_reason = stream_once(body)
             if status in {400, 422} and "response_format" in body:
                 fallback = dict(body)
                 # Some OpenAI-compatible routers support JSON mode but not JSON Schema.
@@ -260,10 +274,10 @@ def chat_complete(
                     fallback["response_format"] = {"type": "json_object"}
                 else:
                     fallback.pop("response_format", None)
-                status, content, detail = stream_once(fallback)
+                status, content, detail, finish_reason = stream_once(fallback)
                 if status in {400, 422} and "response_format" in fallback:
                     fallback.pop("response_format", None)
-                    status, content, detail = stream_once(fallback)
+                    status, content, detail, finish_reason = stream_once(fallback)
             if status in {400, 422}:
                 # Preserve compatibility with local OpenAI-compatible routers
                 # that support Chat Completions but not streaming.
@@ -279,6 +293,11 @@ def chat_complete(
                     payload = response.json()
                     choices = payload.get("choices") or []
                     message = choices[0].get("message") if choices else {}
+                    finish_reason = (
+                        str(choices[0].get("finish_reason"))
+                        if choices and choices[0].get("finish_reason") is not None
+                        else None
+                    )
                     content = (message or {}).get("content") or ""
                     if isinstance(content, list):
                         content = "".join(
@@ -293,7 +312,7 @@ def chat_complete(
                 raise RuntimeError(
                     f"OpenAI-compatible endpoint returned HTTP {status}: {detail}"
                 )
-            return str(content).strip()
+            return complete(content, finish_reason)
 
         with httpx.Client(timeout=timeout) as client:
             response = client.post(
@@ -325,6 +344,11 @@ def chat_complete(
         choices = payload.get("choices") or []
         if not choices:
             raise RuntimeError("OpenAI-compatible endpoint returned no choices.")
+        finish_reason = (
+            str(choices[0].get("finish_reason"))
+            if choices[0].get("finish_reason") is not None
+            else None
+        )
         content = (choices[0].get("message") or {}).get("content") or ""
         if isinstance(content, list):
             content = "".join(
@@ -332,7 +356,7 @@ def chat_complete(
                 for part in content
                 if isinstance(part, dict)
             )
-        return str(content).strip()
+        return complete(content, finish_reason)
 
     url = (base_url or settings.ollama_base_url).rstrip("/")
     option_values: dict[str, Any] = dict(tuning.extra_options or {})
@@ -379,16 +403,17 @@ def chat_complete(
         pool=settings.ollama_connect_timeout_seconds,
     )
     if cancelled is not None:
-        def ollama_stream_once(payload: dict[str, Any]) -> tuple[int, str, str]:
+        def ollama_stream_once(payload: dict[str, Any]) -> tuple[int, str, str, str | None]:
             started_clock = time.monotonic()
             streaming = dict(payload)
             streaming["stream"] = True
             chunks: list[str] = []
+            finish_reason: str | None = None
             with httpx.Client(timeout=timeout) as client:
                 with client.stream("POST", f"{url}/api/chat", json=streaming) as response:
                     if response.status_code >= 400:
                         raw = response.read().decode("utf-8", errors="replace")
-                        return response.status_code, "", raw[:2000]
+                        return response.status_code, "", raw[:2000], None
                     for line in response.iter_lines():
                         if timeout_seconds and time.monotonic() - started_clock > timeout_seconds:
                             raise TimeoutError(f"LLM generation exceeded {timeout_seconds:.0f}s stage deadline.")
@@ -402,17 +427,19 @@ def chat_complete(
                             chunks.append(str(piece))
                             emit(str(piece))
                         if payload_line.get("done"):
+                            reason = payload_line.get("done_reason") or payload_line.get("stop_reason")
+                            finish_reason = str(reason) if reason is not None else None
                             break
-            return 200, "".join(chunks).strip(), ""
+            return 200, "".join(chunks).strip(), "", finish_reason
 
-        status, content, detail = ollama_stream_once(body)
+        status, content, detail, finish_reason = ollama_stream_once(body)
         if status in {400, 422} and json_schema is not None:
             fallback = dict(body)
             fallback["format"] = "json"
-            status, content, detail = ollama_stream_once(fallback)
+            status, content, detail, finish_reason = ollama_stream_once(fallback)
         if status >= 400:
             raise RuntimeError(f"Ollama returned HTTP {status}: {detail}")
-        return content
+        return complete(content, finish_reason)
 
     with httpx.Client(timeout=timeout) as client:
         response = client.post(f"{url}/api/chat", json=body)
@@ -429,7 +456,69 @@ def chat_complete(
             f"{_response_detail(response)}"
         )
     payload = response.json()
-    return str((payload.get("message") or {}).get("content") or "").strip()
+    finish_reason = payload.get("done_reason") or payload.get("stop_reason")
+    return complete(
+        (payload.get("message") or {}).get("content") or "",
+        str(finish_reason) if finish_reason is not None else None,
+    )
+
+
+def structured_chat_complete(
+    *,
+    provider: str,
+    model: str,
+    base_url: str | None,
+    api_key: str | None,
+    prompt: str,
+    options: OllamaTouchupOptions | None = None,
+    json_schema: dict[str, Any] | None = None,
+    schema_name: str = "derridai_response",
+    max_tokens: int = 4096,
+    attempts: int = 2,
+    max_token_cap: int | None = None,
+    validate: Callable[[dict[str, Any]], Any] | None = None,
+    retry_guidance: Callable[[Exception], str] | None = None,
+    cancelled: Callable[[], bool] | None = None,
+    timeout_seconds: float | None = None,
+    on_delta: Callable[[str], None] | None = None,
+    on_metric: Callable[[str, int], None] | None = None,
+    completion: Callable[..., str] | None = None,
+) -> Any:
+    """Run one JSON-object task through the shared repair/retry contract.
+
+    completion is injectable for compatibility tests and specialized transports;
+    production callers normally use the module's chat_complete.
+    """
+
+    transport = completion or chat_complete
+
+    def request_once(context: StructuredAttemptContext) -> str:
+        return transport(
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            prompt=context.prompt,
+            options=options,
+            json_mode=True,
+            json_schema=json_schema,
+            schema_name=schema_name,
+            max_tokens=context.max_tokens,
+            cancelled=cancelled,
+            timeout_seconds=timeout_seconds,
+            on_delta=on_delta,
+        )
+
+    return complete_structured_json(
+        request_once,
+        prompt=prompt,
+        validate=validate,
+        attempts=attempts,
+        max_tokens=max_tokens,
+        max_token_cap=max_token_cap,
+        retry_guidance=retry_guidance,
+        on_metric=on_metric,
+    )
 
 
 def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
@@ -524,6 +613,7 @@ def _context_string(
     record_char_limit: int,
     total_char_limit: int,
     prompt_metadata: RAGPromptMetadataPolicy | None = None,
+    skip_overflow: bool = False,
 ) -> tuple[str, dict[str, str], list[EvidenceItem]]:
     blocks: list[str] = []
     works: dict[str, str] = {}
@@ -571,6 +661,12 @@ def _context_string(
 
         projected = total_chars + len(block) + (2 if blocks else 0)
         if blocks and projected > total_char_limit:
+            if skip_overflow:
+                # Auto-sizing packs all ranking anchors before neighbors. When
+                # one item cannot fit, keep looking rather than letting a single
+                # large Record prevent later compact evidence from using the
+                # remaining budget.
+                continue
             break
 
         total_chars = projected
@@ -586,6 +682,11 @@ def _context_string(
             "inline_citation": inline,
             "full_citation": full,
             "text_truncated": text_truncated,
+            "selection_role": item.get("selection_role"),
+            "neighbor_of": item.get("neighbor_of"),
+            "neighbor_distance": item.get("neighbor_distance"),
+            "neighbor_reason": item.get("neighbor_reason"),
+            "automatic_region_size": item.get("automatic_region_size"),
         })
         blocks.append(block)
 
@@ -778,7 +879,7 @@ def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[
             str(record.get("topics") or ""),
             str(record.get("concepts") or ""),
             str(record.get("persons") or ""),
-            str(record.get("text") or ""),
+            str(item.get("_rerank_text") or record.get("text") or ""),
         ])
         tokens = _tokenize(text)
         overlap = len(q & tokens) / max(1, len(q))
@@ -815,7 +916,14 @@ def _cross_encoder_rerank(
 
     scores, telemetry = predict_scores(
         [
-            (query, str(item["record"].get("text") or ""))
+            (
+                query,
+                str(
+                    item.get("_rerank_text")
+                    or item["record"].get("text")
+                    or ""
+                ),
+            )
             for item in docs
         ],
         model_name=model_name,
@@ -1068,19 +1176,18 @@ def run_rag_pipeline(
             prompt=request.prompt,
             instructions=request.instructions or "",
         )
-        raw = chat_complete(
-            provider=provider,
-            model=model,
-            base_url=request.base_url,
-            api_key=request.api_key,
-            prompt=decomposition_prompt,
-            options=request.generation,
-            json_mode=True,
-            max_tokens=runtime_settings.query_decomposition_num_predict,
-            cancelled=cancelled,
-        )
         try:
-            parsed_query = _extract_json(raw)
+            parsed_query = structured_chat_complete(
+                provider=provider,
+                model=model,
+                base_url=request.base_url,
+                api_key=request.api_key,
+                prompt=decomposition_prompt,
+                options=request.generation,
+                max_tokens=runtime_settings.query_decomposition_num_predict,
+                attempts=2,
+                cancelled=cancelled,
+            )
         except Exception as exc:
             warnings.append(
                 f"Query decomposition failed ({exc}); using the original prompt."
@@ -1158,9 +1265,55 @@ def run_rag_pipeline(
             "No selected language collection matches the requested locale scope."
         )
 
-    retrieve_k = max(1, int(request.k))
-    semantic_fetch_k = max(retrieve_k, runtime_settings.semantic_fetch_k)
-    lexical_fetch_k = max(retrieve_k, runtime_settings.lexical_fetch_k)
+    requested_retrieve_k = max(1, int(request.k))
+    semantic_fetch_k = max(requested_retrieve_k, runtime_settings.semantic_fetch_k)
+    lexical_fetch_k = max(requested_retrieve_k, runtime_settings.lexical_fetch_k)
+    effective_retrieve_k = requested_retrieve_k
+    automatic_sizing_detail: dict[str, Any] = {
+        "enabled": bool(request.automatic_sizing),
+        "collections": [],
+    }
+    if request.automatic_sizing and collections:
+        sizing_started = time.perf_counter()
+        for collection in collections:
+            try:
+                stats = store.record_size_stats(collection["name"])
+                sizing = automatic_collection_sizing(
+                    count=max(0, int(collection.get("count") or 0)),
+                    median_record_chars=stats.get("median_record_chars"),
+                    requested_k=requested_retrieve_k,
+                    semantic_fetch_k=runtime_settings.semantic_fetch_k,
+                    lexical_fetch_k=runtime_settings.lexical_fetch_k,
+                    mmr_limit=runtime_settings.retrieval_mmr_limit,
+                )
+                sizing["sample_count"] = int(stats.get("sample_count") or 0)
+            except Exception as exc:
+                sizing = automatic_collection_sizing(
+                    count=max(0, int(collection.get("count") or 0)),
+                    median_record_chars=None,
+                    requested_k=requested_retrieve_k,
+                    semantic_fetch_k=runtime_settings.semantic_fetch_k,
+                    lexical_fetch_k=runtime_settings.lexical_fetch_k,
+                    mmr_limit=runtime_settings.retrieval_mmr_limit,
+                )
+                sizing["sample_count"] = 0
+                sizing["fallback_reason"] = type(exc).__name__
+            collection["_rag_automatic_sizing"] = sizing
+            automatic_sizing_detail["collections"].append({
+                "collection": collection["name"],
+                "route": collection.get("_rag_route"),
+                **sizing,
+            })
+            effective_retrieve_k = max(effective_retrieve_k, int(sizing["k"]))
+            semantic_fetch_k = max(semantic_fetch_k, int(sizing["semantic_fetch_k"]))
+            lexical_fetch_k = max(lexical_fetch_k, int(sizing["lexical_fetch_k"]))
+        stages.append({
+            "name": "automatic_sizing",
+            "seconds": time.perf_counter() - sizing_started,
+            "detail": automatic_sizing_detail,
+        })
+        query_metadata["limit_retrieval"] = effective_retrieve_k
+
     raw_results: list[dict[str, Any]] = []
     total_units = len(collections) * max(1, len(effective_search_types))
     unit = 0
@@ -1169,6 +1322,21 @@ def run_rag_pipeline(
         update("retrieval", 1, 1, f"Retrieval skipped · {len(selected_candidates)} selected evidence records")
 
     for collection in collections:
+        sizing = (
+            collection.get("_rag_automatic_sizing")
+            if request.automatic_sizing
+            else None
+        )
+        collection_retrieve_k = int((sizing or {}).get("k") or requested_retrieve_k)
+        collection_semantic_fetch_k = int(
+            (sizing or {}).get("semantic_fetch_k") or semantic_fetch_k
+        )
+        collection_lexical_fetch_k = int(
+            (sizing or {}).get("lexical_fetch_k") or lexical_fetch_k
+        )
+        collection_mmr_limit = int(
+            (sizing or {}).get("mmr_limit") or runtime_settings.retrieval_mmr_limit
+        )
         check_cancel()
         locale_codes = set(collection.get("_rag_locales") or collection.get("language_codes") or [])
         query = (
@@ -1184,7 +1352,7 @@ def run_rag_pipeline(
                     store.semantic_candidates(
                         collection["name"],
                         query,
-                        min(semantic_fetch_k, max(1, collection["count"])),
+                        min(collection_semantic_fetch_k, max(1, collection["count"])),
                     ),
                     collection,
                     locale_codes,
@@ -1209,7 +1377,10 @@ def run_rag_pipeline(
                 total_units,
                 f"Similarity · {collection['name']} · {collection.get('_rag_route', '')}",
             )
-            for rank, candidate in enumerate(semantic_candidates[:retrieve_k], start=1):
+            for rank, candidate in enumerate(
+                semantic_candidates[:collection_retrieve_k],
+                start=1,
+            ):
                 row = dict(candidate)
                 row["search_type"] = "similarity"
                 row["search_rank"] = rank
@@ -1227,12 +1398,15 @@ def run_rag_pipeline(
                 store.lexical_search(
                     collection["name"],
                     query,
-                    min(lexical_fetch_k, max(1, collection["count"])),
+                    min(collection_lexical_fetch_k, max(1, collection["count"])),
                 ),
                 collection,
                 locale_codes,
             )
-            for rank, candidate in enumerate(lexical_candidates[:retrieve_k], start=1):
+            for rank, candidate in enumerate(
+                lexical_candidates[:collection_retrieve_k],
+                start=1,
+            ):
                 row = dict(candidate)
                 row["collection"] = collection["name"]
                 row["search_type"] = "lexical"
@@ -1249,7 +1423,7 @@ def run_rag_pipeline(
             )
             mmr = _mmr_select(
                 semantic_candidates,
-                k=min(retrieve_k, runtime_settings.retrieval_mmr_limit),
+                k=min(collection_retrieve_k, collection_mmr_limit),
                 lambda_mult=runtime_settings.retrieval_mmr_lambda,
             )
             for rank, candidate in enumerate(mmr, start=1):
@@ -1317,8 +1491,26 @@ def run_rag_pipeline(
         ),
         reverse=True,
     )
+    fused_deduplicated_count = len(deduped)
+    ranking_candidates = deduped
+    region_collapse_detail: dict[str, Any] = {
+        "enabled": bool(request.automatic_sizing and not request.skip_retrieval),
+        "input_count": len(deduped),
+        "output_count": len(deduped),
+        "collapsed_records": 0,
+    }
+    if request.automatic_sizing and not request.skip_retrieval:
+        collapse_started = time.perf_counter()
+        ranking_candidates, collapse_counts = collapse_adjacent_candidates(deduped)
+        region_collapse_detail.update(collapse_counts)
+        stages.append({
+            "name": "automatic_region_collapse",
+            "seconds": time.perf_counter() - collapse_started,
+            "detail": region_collapse_detail,
+        })
+
     pre_rerank_diagnostics = (
-        _candidate_diagnostics(deduped) if stop_after_context else []
+        _candidate_diagnostics(ranking_candidates) if stop_after_context else []
     )
     update("deduplicate", 1, 1, f"{len(deduped)} unique records after rank fusion")
     stages.append({
@@ -1368,16 +1560,23 @@ def run_rag_pipeline(
         + query_metadata["prompt_query_fr"]
     ).strip()
     requested_top_n = (
-        len(deduped)
+        len(ranking_candidates)
         if request.skip_retrieval
         else runtime_settings.rerank_top_n
     )
-    selected_pool = [item for item in deduped if item.get("selected_evidence")]
-    retrieved_pool = [item for item in deduped if not item.get("selected_evidence")]
+    selected_pool = [
+        item for item in ranking_candidates if item.get("selected_evidence")
+    ]
+    retrieved_pool = [
+        item for item in ranking_candidates if not item.get("selected_evidence")
+    ]
     effective_top_n = (
-        len(deduped)
+        len(ranking_candidates)
         if request.skip_retrieval
-        else min(max(requested_top_n, len(selected_pool)), max(1, len(deduped)))
+        else min(
+            max(requested_top_n, len(selected_pool)),
+            max(1, len(ranking_candidates)),
+        )
     )
     remaining_slots = max(0, effective_top_n - len(selected_pool))
     post_diversity = pipeline_plan.post_rerank_diversity
@@ -1396,7 +1595,7 @@ def run_rag_pipeline(
     cross_encoder_calls = 0
 
     if request.skip_retrieval:
-        reranked = selected_pool or deduped
+        reranked = selected_pool or ranking_candidates
         for item in reranked:
             item["rerank_score"] = item.get("rerank_score", 1.0)
         reranked_retrieved: list[dict[str, Any]] = []
@@ -1607,8 +1806,34 @@ def run_rag_pipeline(
     post_selection_diagnostics = (
         _candidate_diagnostics(reranked) if stop_after_context else []
     )
+    context_candidates = list(reranked)
+    context_expansion_detail: dict[str, Any] = {
+        "enabled": bool(request.automatic_sizing),
+        "anchor_count": len(reranked),
+        "neighbor_count": 0,
+    }
+    if request.automatic_sizing:
+        expansion_started = time.perf_counter()
+        context_candidates, expansion_counts = expand_context_neighbors(
+            reranked,
+            load_document_records=store.document_records,
+            total_char_limit=runtime_settings.evidence_total_char_limit,
+        )
+        context_expansion_detail.update(expansion_counts)
+        stages.append({
+            "name": "automatic_context_expansion",
+            "seconds": time.perf_counter() - expansion_started,
+            "detail": context_expansion_detail,
+        })
+
     stage_start = time.perf_counter()
-    reranked, insufficient_records = partition_sufficient_records(reranked)
+    context_candidates, insufficient_records = partition_sufficient_records(
+        context_candidates
+    )
+    if not request.automatic_sizing:
+        # Preserve the historical manual-mode meaning of reranked_count: only
+        # provenance-sufficient Records that can enter the evidence packet.
+        reranked = context_candidates
     if insufficient_records:
         warnings.append(
             "Excluded provenance-incomplete records from evidence: "
@@ -1618,10 +1843,11 @@ def run_rag_pipeline(
             )
         )
     retrieval_context, works, evidence = _context_string(
-        reranked,
+        context_candidates,
         record_char_limit=runtime_settings.evidence_record_char_limit,
         total_char_limit=runtime_settings.evidence_total_char_limit,
         prompt_metadata=request.prompt_metadata,
+        skip_overflow=request.automatic_sizing,
     )
     sufficiency_issues = evidence_sufficiency_issues(evidence)
     stages.append({
@@ -1656,14 +1882,23 @@ def run_rag_pipeline(
 
     retrieval_summary = {
         "raw_count": len(raw_results),
-        "deduplicated_count": len(deduped),
+        # Items in the searched collections (counts only), for scaling fits.
+        "scope_size": sum(max(0, int(item.get("count") or 0)) for item in collections),
+        "deduplicated_count": fused_deduplicated_count,
+        "ranking_region_count": len(ranking_candidates),
         "reranked_count": len(reranked),
+        "evidence_count": len(evidence),
         "search_types": list(effective_search_types),
         "requested_search_types": list(request.search_types),
         "available_search_types": sorted(available_search_types),
         "post_rerank_diversity": pipeline_plan.post_rerank_diversity,
         "k": request.k,
+        "effective_k": effective_retrieve_k,
         "fetch_k": max(semantic_fetch_k, lexical_fetch_k),
+        "requested_fetch_k": request.fetch_k,
+        "automatic_sizing": automatic_sizing_detail,
+        "automatic_region_collapse": region_collapse_detail,
+        "automatic_context_expansion": context_expansion_detail,
         "semantic_fetch_k": semantic_fetch_k,
         "lexical_fetch_k": lexical_fetch_k,
         "lambda_mult": runtime_settings.retrieval_mmr_lambda,

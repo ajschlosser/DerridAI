@@ -219,6 +219,18 @@ describe("setup state", () => {
     expect(summary("none")).not.toContain("document_intelligence");
   });
 
+  it("never surfaces a raw i18n key for a legacy source with no media kind", () => {
+    // Mirrors the real translator, which returns the key itself when there is no translation or fallback.
+    const strict: PresentationText = { ...text, t: (key, fallback) => fallback || key };
+    const summary = corpusSetupSectionStates(
+      input({ asset: { filename: "legacy.pdf", page_count: 12 } }),
+      [],
+      strict,
+    ).find((state) => state.id === "source")!.summary;
+    expect(summary).not.toContain("pdf_corpus.setup.media");
+    expect(summary.startsWith("legacy.pdf")).toBe(true);
+  });
+
   it("summarises audio by its probed duration, and falls back to blocks without one", () => {
     const summary = (duration?: number) =>
       corpusSetupSectionStates(
@@ -451,10 +463,6 @@ describe("review header", () => {
     selectedCount: 0,
     bulkTotalCount: 20,
     bulkDisabled: false,
-    pageNumber: 1,
-    pageCount: 1,
-    hasPreviousPage: false,
-    hasNextPage: false,
   };
 
   it("moves selected-record actions into a contextual selection bar", async () => {
@@ -484,10 +492,6 @@ describe("review header", () => {
         selectedCount: 2,
         bulkTotalCount: 20,
         bulkDisabled: false,
-        pageNumber: 1,
-        pageCount: 1,
-        hasPreviousPage: false,
-        hasNextPage: false,
       } as never,
     });
 
@@ -526,10 +530,6 @@ describe("review header", () => {
         selectedCount: 0,
         bulkTotalCount: 20,
         bulkDisabled: false,
-        pageNumber: 1,
-        pageCount: 1,
-        hasPreviousPage: false,
-        hasNextPage: false,
       } as never,
       global: { stubs: { Teleport: true } },
     });
@@ -553,6 +553,7 @@ describe("review header", () => {
         ready: 5,
         issues: 4,
         remaining: 31,
+        reviewTotal: 200,
         workspaceMode: "record",
         hasSelectedRecord: false,
         ...toolbar,
@@ -561,6 +562,10 @@ describe("review header", () => {
     });
     expect(wrapper.findAll("section.review-header")).toHaveLength(1);
     expect(wrapper.get(".review-counts").text()).toContain("142");
+    // Progress is one meter against the whole build, not three competing counts.
+    const meter = wrapper.get("progress.review-meter");
+    expect(meter.attributes("max")).toBe("200");
+    expect(meter.attributes("value")).toBe("142");
     expect(wrapper.find(".run-slot").exists()).toBe(true);
     // Toolbar controls fall through from the header's attrs.
     expect(wrapper.find("#pdf-corpus-record-search").exists()).toBe(true);
@@ -580,7 +585,7 @@ describe("review header", () => {
 describe("review queue filters", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  it("offers five primary filters and the issue kinds as a sub-filter under Needs attention", async () => {
+  it("offers five filters in one list, with the issue kinds indented under Needs attention", async () => {
     const wrapper = mount(CorpusReviewQueueTabs, {
       props: {
         modelValue: "metadata",
@@ -594,21 +599,28 @@ describe("review queue filters", () => {
         rejected: 1,
       },
     });
-    expect(wrapper.findAll(".queue-tab").map((tab) => tab.find("span").text())).toEqual([
-      "All",
-      "Ready",
-      "Needs attention",
-      "Accepted",
-      "Rejected",
-    ]);
-    // A specialised queue keeps Needs attention pressed and shows the sub-filter.
-    expect(wrapper.get('[data-review-queue="issues"]').attributes("aria-pressed")).toBe("true");
     const select = wrapper.get("select");
     expect(select.findAll("option").map((option) => option.attributes("value"))).toEqual([
+      "all",
+      "ready",
       "issues",
       "metadata",
       "topology",
+      "accepted",
+      "rejected",
     ]);
+    expect(select.findAll("option").map((option) => option.text().replace(/^\s*↳\s*/, ""))).toEqual(
+      [
+        "All · 10",
+        "Ready · 4",
+        "Needs attention · 3",
+        "Metadata decisions · 2",
+        "Topology · 1",
+        "Accepted · 2",
+        "Rejected · 1",
+      ],
+    );
+    expect((select.element as HTMLSelectElement).value).toBe("metadata");
     await select.setValue("issues");
     expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual(["issues"]);
   });

@@ -412,6 +412,8 @@ def execute_reviewer_evidence_pipeline(
     )
     observations[plan.lexical_stage_id] = {
         "input_count": len(blocks),
+        # Reviewable blocks in scope: a count, so scans can be fitted against it.
+        "parameters": {"scope_size": len(blocks)},
         "output_count": lexical_count,
         "warnings": [timing_warning],
         "score_summary": _score_summary(items, "lexical_score"),
@@ -419,6 +421,7 @@ def execute_reviewer_evidence_pipeline(
     semantic_fallback = retrieval_status.get("semantic") == "fallback"
     observations[plan.semantic_stage_id] = {
         "input_count": len(blocks),
+        "parameters": {"scope_size": len(blocks)},
         "output_count": semantic_count,
         "warnings": [timing_warning],
         "status": "unavailable" if semantic_fallback else "completed",
@@ -519,7 +522,11 @@ def execute_reviewer_evidence_pipeline(
             "elapsed_seconds": time.perf_counter() - support_started,
             "input_count": input_count,
             "output_count": len(items),
-            "parameters": {"min_score": plan.support_min_score, "validator": METHOD},
+            "parameters": {
+                "min_score": plan.support_min_score,
+                "validator": METHOD,
+                "scope_size": len(blocks),
+            },
             "score_summary": _score_summary(items, "support_score"),
         }
         if not items and plan.llm_stage_id is not None:

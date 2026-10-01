@@ -57,6 +57,47 @@ describe("PipelineStrategyConfigFields", () => {
     expect(wrapper.get("input[type=number]").attributes("max")).toBe("4");
   });
 
+  it("labels and bounds evidence recovery shortlist controls", () => {
+    const closedChoice: PipelineStrategy = {
+      ...strategy,
+      strategy_id: "llm.closed_choice_evidence",
+      config_schema: {
+        type: "object",
+        properties: {
+          candidate_scope: {
+            type: "string",
+            enum: ["all", "input_or_all"],
+            default: "input_or_all",
+          },
+          candidate_limit: { type: "integer", minimum: 1, maximum: 32, default: 4 },
+        },
+      },
+    };
+    const wrapper = mount(PipelineStrategyConfigFields, {
+      props: {
+        stage: {
+          ...stage,
+          strategy: "llm.closed_choice_evidence",
+          config: { candidate_scope: "input_or_all", candidate_limit: 4 },
+        },
+        strategy: closedChoice,
+      },
+    });
+
+    expect(wrapper.text()).toContain("Candidate scope");
+    expect(wrapper.text()).toContain("Candidate limit");
+    expect(
+      wrapper
+        .get("select")
+        .findAll("option")
+        .map((option) => option.text()),
+    ).toEqual(["All Record source units", "Upstream shortlist, otherwise all"]);
+    const limit = wrapper.get("input[type=number]");
+    expect(limit.attributes("min")).toBe("1");
+    expect(limit.attributes("max")).toBe("32");
+    expect((limit.element as HTMLInputElement).value).toBe("4");
+  });
+
   it("names evidence recovery's default primary-then-review chain", () => {
     const closedChoice: PipelineStrategy = {
       ...strategy,

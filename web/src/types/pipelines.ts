@@ -46,11 +46,58 @@ export type PipelineVocabularyTerm = {
 
 export type PipelineWorkflowVocabulary = {
   categories: PipelineVocabularyTerm[];
+  cost_drivers?: PipelineVocabularyTerm[];
+  complexity_variables?: PipelineVocabularyTerm[];
+  complexity_orders?: PipelineVocabularyTerm[];
   guarantees: PipelineVocabularyTerm[];
   phases: PipelineVocabularyTerm[];
   scholarly_effects: PipelineVocabularyTerm[];
   effect_notes: PipelineVocabularyTerm[];
 };
+
+/** What flows between stages. A port declares one; the server refuses other wiring. */
+export type PipelineDataType =
+  | "query"
+  | "candidate_set"
+  | "context_packet"
+  | "model_output"
+  | "evaluation"
+  | "number"
+  | "any";
+
+export type PipelinePort = {
+  name: string;
+  data_type: PipelineDataType;
+  required: boolean;
+  /** A tuning port: it may be fixed to a number instead of wired. */
+  accepts_constant?: boolean;
+  minimum?: number | null;
+  maximum?: number | null;
+  /** Merges several upstream sources (a union of candidate sets). */
+  multiple: boolean;
+};
+
+export type PipelineCostDriver =
+  | "cpu"
+  | "storage"
+  | "embedding"
+  | "model_inference"
+  | "llm_generation";
+
+/** Declared algorithmic cost of a strategy, in the variables n, N, k, L, q, g, P, d, S. */
+export type PipelineComplexity = {
+  time: string;
+  space: string;
+  variables: string[];
+  driver: PipelineCostDriver;
+  model_calls: string;
+  scales_with_scope: boolean;
+  order: number;
+  cardinality: { rule: string; config_key?: string | null; default?: number | null };
+};
+
+/** A value the workflow supplies to every run, which a stage input may bind to. */
+export type PipelineRunInput = { name: string; data_type: PipelineDataType };
 
 /** Server-owned contract for what a whole pipeline is for. */
 export type PipelinePurpose = {
@@ -67,6 +114,7 @@ export type PipelinePurpose = {
   assignment_scope: string;
   override_allowed: boolean;
   required_guarantees: string[];
+  run_inputs?: PipelineRunInput[];
   label_key: string;
   description_key: string;
   consumer_key: string;
@@ -93,7 +141,16 @@ export type PipelineStrategy = {
   invokes_llm: boolean;
   capabilities: string[];
   config_schema: Record<string, unknown>;
+  inputs?: PipelinePort[];
+  outputs?: PipelinePort[];
+  complexity?: PipelineComplexity | null;
 };
+
+/** Where one stage input gets its value; absent ports are wired from the graph edges. */
+export type PipelineInputBinding =
+  | { source: "stage"; stage: string; output?: string | null }
+  | { source: "run_input"; name: string }
+  | { source: "constant"; value: number };
 
 export type PipelineStage = {
   id: string;
@@ -105,6 +162,8 @@ export type PipelineStage = {
   on_unavailable?: string | null;
   on_timeout?: string | null;
   on_error?: string | null;
+  /** Explicit input wiring per port name; omitted while every port is wired by edges. */
+  inputs?: Record<string, PipelineInputBinding[]>;
 };
 
 export type PipelineValidationIssue = {
@@ -395,6 +454,7 @@ export type ResearchPipelineBenchmarkCaseCreate = {
   search_types?: Array<"similarity" | "lexical" | "mmr">;
   k?: number;
   fetch_k?: number;
+  automatic_sizing?: boolean;
   lambda_mult?: number;
   rrf_k?: number;
   rerank_top_n?: number;
@@ -443,4 +503,156 @@ export type ResearchPipelineBenchmarkRun = {
   };
   comparison: ResearchPipelineComparisonResult;
   reproducibility_warnings: string[];
+};
+
+/** One place a stage input can come from, as resolved by the server. */
+export type PipelineWiringSource = {
+  kind: "stage" | "stage_input" | "run_input" | "constant";
+  /** The fixed number, for a constant. */
+  value?: number | null;
+  stage: string | null;
+  output: string | null;
+  name: string | null;
+  data_type: PipelineDataType;
+  /** "next", a fallback edge, "run_input" or "explicit". */
+  via: string;
+  explicit: boolean;
+  producer_enabled: boolean;
+};
+
+export type PipelineWiringOption = {
+  kind: "stage" | "run_input";
+  stage?: string;
+  output?: string;
+  name?: string;
+  data_type: PipelineDataType;
+  /** The producer already runs before this stage. */
+  upstream: boolean;
+  /** False for a stage downstream of this one, which could only form a cycle. */
+  possible: boolean;
+};
+
+export type PipelineWiringInput = {
+  port: string;
+  data_type: PipelineDataType;
+  required: boolean;
+  multiple: boolean;
+  accepts_constant?: boolean;
+  minimum?: number | null;
+  maximum?: number | null;
+  explicit: boolean;
+  status: "bound" | "unbound" | "optional_unbound" | "mismatch";
+  sources: PipelineWiringSource[];
+  options: PipelineWiringOption[];
+};
+
+export type PipelineWiringOutput = {
+  name: string;
+  data_type: PipelineDataType;
+  consumers: Array<{ stage: string; port: string }>;
+};
+
+export type PipelineStageWiring = {
+  inputs: PipelineWiringInput[];
+  outputs: PipelineWiringOutput[];
+};
+
+export type PipelineComplexityStage = {
+  stage_id: string;
+  strategy_id: string;
+  time: string;
+  space: string;
+  order: number;
+  order_id: string;
+  driver: PipelineCostDriver;
+  variables: string[];
+  scales_with_scope: boolean;
+  n_in: number | null;
+  n_in_bounded: boolean;
+  n_out: number | null;
+  n_out_bounded: boolean;
+  model_calls: { formula: string; max: number | null };
+  conditional: boolean;
+};
+
+export type PipelineComplexitySummary = {
+  time_terms: string[];
+  dominant_stage_id: string;
+  dominant_time: string;
+  dominant_order_id: string;
+  dominant_driver: PipelineCostDriver;
+  scales_with_scope: boolean;
+  scope_stage_ids: string[];
+  candidate_bound: number | null;
+  candidates_request_bound: boolean;
+  model_calls: Record<string, { stage_ids: string[]; max_calls: number; calls_known: boolean }>;
+};
+
+export type PipelineLatencyFigure = {
+  samples: number;
+  p50_ms?: number | null;
+  p90_ms?: number | null;
+  p95_ms?: number | null;
+  mean_ms?: number | null;
+  min_ms?: number | null;
+  max_ms?: number | null;
+  reliable?: boolean;
+};
+
+export type PipelineObservedScaling = {
+  exponent: number;
+  r_squared: number;
+  points: number;
+  min_input: number;
+  max_input: number;
+};
+
+export type PipelineStrategyLatency = PipelineLatencyFigure & {
+  executions: number;
+  median_ms_per_input?: number | null;
+  by_model: Array<PipelineLatencyFigure & { provider: string | null; model: string | null }>;
+  observed_scaling: PipelineObservedScaling | null;
+  /** Fitted against the size of the collection or scope searched rather than candidate count. */
+  observed_scope_scaling?: PipelineObservedScaling | null;
+};
+
+export type PipelineStageLatency = PipelineLatencyFigure & {
+  stage_id: string;
+  strategy_id: string;
+  /** Where the figure came from: this exact definition, the same stage in another version, the strategy overall, or nothing. */
+  basis: "this_pipeline" | "same_stage" | "strategy" | "none";
+  conditional: boolean;
+  reach: number;
+  share: number;
+  median_ms_per_input?: number | null;
+  by_model: PipelineStrategyLatency["by_model"];
+  observed_scaling: PipelineObservedScaling | null;
+  observed_scope_scaling?: PipelineObservedScaling | null;
+};
+
+export type PipelineLatencyEstimate = {
+  stages: PipelineStageLatency[];
+  typical_ms: number | null;
+  slow_ms: number | null;
+  critical_path_ms: number | null;
+  critical_path_slow_ms: number | null;
+  critical_path: string[];
+  slowest_stage_id: string | null;
+  coverage: number;
+  reliable: boolean;
+  observed_runs: PipelineLatencyFigure;
+  observed_pipeline_runs: PipelineLatencyFigure;
+};
+
+export type PipelineAnalysis = {
+  validation: PipelineValidation;
+  wiring: {
+    stages: Record<string, PipelineStageWiring>;
+    /** `next` edges that only run a producer first for an explicit binding; they carry no data. */
+    ordering_only_edges?: Array<{ from: string; to: string }>;
+    run_inputs: Array<PipelineRunInput & { consumers: Array<{ stage: string; port: string }> }>;
+  };
+  complexity: { stages: PipelineComplexityStage[]; summary: PipelineComplexitySummary | null };
+  latency: PipelineLatencyEstimate;
+  sample: { runs: number; pipeline_runs: number; exact_runs: number };
 };

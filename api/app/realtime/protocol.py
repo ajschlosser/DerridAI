@@ -55,6 +55,7 @@ RESOURCE_EVENT_TYPES = frozenset({
     "corpus.llm_progress",
     "llm.token",
     "activity.changed",
+    "resource.changed",
 })
 
 SERVER_EVENT_TYPES = CONTROL_EVENT_TYPES | RESOURCE_EVENT_TYPES
@@ -69,6 +70,7 @@ COALESCABLE_EVENT_TYPES = frozenset({
     "corpus.metadata_progress",
     "corpus.review_queue_changed",
     "activity.changed",
+    "resource.changed",
 })
 
 # Hints that are never replayed after a reconnect and are the first to go under
@@ -87,7 +89,7 @@ CLIENT_MESSAGE_TYPES = frozenset({"subscribe", "unsubscribe", "resync", "ping"})
 
 MAX_TOPICS_PER_CONNECTION = 64
 _TOPIC_ID = r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}"
-_TOPIC_RE = re.compile(rf"^(jobs|corpus-builds|job:{_TOPIC_ID}|corpus-build:{_TOPIC_ID}|activity:{_TOPIC_ID})$")
+_TOPIC_RE = re.compile(rf"^(jobs|corpus-builds|job:{_TOPIC_ID}|corpus-build:{_TOPIC_ID}|activity:{_TOPIC_ID}|data:{_TOPIC_ID})$")
 
 
 class ProtocolError(Exception):
@@ -104,6 +106,9 @@ class Audience:
     owner: str | None = None
     admin_only: bool = True
     capability: str | None = None
+    # With `capability` set, any non-administrator holding it is a recipient and no owner is needed.
+    # Only data-resource invalidations use this (they carry no values); owned events never do.
+    capability_only: bool = False
 
 
 @dataclass(frozen=True)

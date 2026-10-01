@@ -1,0 +1,84 @@
+name: Browser embedder acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "web/scripts/browser-embedder-*.mjs"
+      - "web/scripts/build-browser-embedder.mjs"
+      - "web/scripts/smoke-browser-embedder.mjs"
+      - "web/tests/frontend/browserEmbedderBundle.test.ts"
+      - "web/package.json"
+      - "web/package-lock.json"
+      - ".github/workflows/browser-embedder.yml"
+  push:
+    branches: [master]
+    paths:
+      - "web/scripts/browser-embedder-*.mjs"
+      - "web/scripts/build-browser-embedder.mjs"
+      - "web/scripts/smoke-browser-embedder.mjs"
+      - "web/tests/frontend/browserEmbedderBundle.test.ts"
+      - "web/package.json"
+      - "web/package-lock.json"
+      - ".github/workflows/browser-embedder.yml"
+
+concurrency:
+  group: browser-embedder-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-embedder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Restore browser embedder source cache
+        uses: actions/cache@v4
+        with:
+          path: data/models/browser-embedder-cache
+          key: ${{ runner.os }}-browser-embedder-${{ hashFiles('web/scripts/browser-embedder-manifest.mjs') }}
+
+      - name: Restore Playwright Chromium cache
+        id: playwright-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
+
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Save Playwright Chromium cache
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
+
+      - name: Build self-contained multilingual embedder
+        run: node scripts/build-browser-embedder.mjs
+
+      - name: Smoke test generated artifact in Chromium
+        run: node scripts/smoke-browser-embedder.mjs
+
+      - name: Upload single-file embedder
+        uses: actions/upload-artifact@v4
+        with:
+          name: derridai-multilingual-embedder
+          path: web/dist/derridai-multilingual-embedder.mjs
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

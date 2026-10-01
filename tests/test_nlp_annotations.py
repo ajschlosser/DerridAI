@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 
 from app import nlp_annotations as nlp  # noqa: E402
+from app.metadata_schema_profiles import nonfiction_schema  # noqa: E402
 
 
 class Ent:
@@ -65,12 +66,38 @@ def test_candidates_are_exact_substrings_and_aliases_are_mapped(fake_pipeline):
     assert [c["text"] for c in result["fields"]["terms"]] == ["Rousseau", "Geneva"]
 
 
+def test_nonfiction_evidence_semantics_do_not_generate_lexical_value_candidates(fake_pipeline):
+    record = {"text": TEXT, "region_language": ["English"]}
+    result = nlp.annotate_record(record, nonfiction_schema())
+
+    # Evidence type/item values require passage-level interpretation. Raw POS/NER
+    # spans are useful for source/entity fields but should not be offered as possible
+    # values for these two semantic evidence fields.
+    assert "evidence_types" not in result["fields"]
+    assert "evidence_items" not in result["fields"]
+    assert "sources_cited" in result["fields"]
+
+
 def test_hints_go_stale_when_the_text_changes(fake_pipeline):
     record = {"text": TEXT, "region_language": ["English"]}
     nlp.annotate_record(record, SCHEMA)
     assert nlp.prompt_hints(record, ["position_holder"]) == {"position_holder": ["Rousseau"]}
     record["text"] = TEXT + " again"
     assert nlp.prompt_hints(record, ["position_holder"]) == {}
+
+
+def test_structured_field_candidates_are_current_scoped_and_copied(fake_pipeline):
+    record = {"text": TEXT, "region_language": ["English"]}
+    result = nlp.annotate_record(record, SCHEMA)
+    candidates = nlp.current_field_candidates(record, {"position_holder"})
+    assert list(candidates) == ["position_holder"]
+    assert candidates["position_holder"] == result["fields"]["position_holder"]
+
+    candidates["position_holder"][0]["text"] = "mutated"
+    assert record["nlp_candidates"]["fields"]["position_holder"][0]["text"] == "Rousseau"
+
+    record["text"] = TEXT + " again"
+    assert nlp.current_field_candidates(record, {"position_holder"}) == {}
 
 
 def test_record_terms_are_exact_spans_computed_without_tagged_fields(fake_pipeline):

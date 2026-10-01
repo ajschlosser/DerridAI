@@ -6,6 +6,8 @@ import { useAuthStore } from "../stores/auth";
 import { useCompareStore } from "../stores/workspace";
 import { corpusState } from "../state/workspaceState";
 import { useI18nStore } from "../stores/i18n";
+import { useNewerData } from "../composables/useNewerData";
+import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
 import UiButton from "../components/ui/UiButton.vue";
 import UiCard from "../components/ui/UiCard.vue";
 import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
@@ -30,6 +32,7 @@ const compare = useCompareStore();
 const runtimeState = runtime.state as unknown as {
   researcherCompareA: string;
   researcherCompareB: string;
+  storeRecords: unknown[];
 };
 const workspace = compare as unknown as {
   compareA: string;
@@ -196,6 +199,14 @@ watch([sourceA, sourceB, keyA, keyB, pasteA, pasteB, filter], persist);
 // The picker searches the library read here. Records loaded or edited while Compare is open used to be missing from it
 // until you left the view and came back, so read it again whenever the loaded corpus changes.
 watch(() => [corpusState.version, corpusState.activeFileId], refreshLibrary, { flush: "post" });
+const newer = useNewerData();
+// ensureCompareLibrary only loads when the store page is empty, so clear it to read the new data.
+async function loadNewer() {
+  newer.acknowledge();
+  runtimeState.storeRecords = [];
+  await runtime.ensureCompareLibrary?.();
+  refreshLibrary();
+}
 onMounted(async () => {
   if (typeof runtime.ensureCompareLibrary === "function") await runtime.ensureCompareLibrary();
   refreshLibrary();
@@ -203,6 +214,7 @@ onMounted(async () => {
 </script>
 <template>
   <main class="compare-page" aria-labelledby="compare-title">
+    <NewerDataBanner :visible="newer.hasNewer.value" @load="loadNewer" />
     <p class="sr-only" aria-live="polite">{{ liveMessage }}</p>
     <UiPageHeader
       :kicker="t('section.corpora', 'Corpora')"

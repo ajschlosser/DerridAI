@@ -76,9 +76,11 @@ def test_document_intelligence_hints_are_advisory_and_go_stale_after_text_edit()
     hints = di.prompt_hints(record, ["persons", "quoted_speaker"])
     assert hints["person_candidates"] == ["Emmanuel Levinas"]
     assert hints["quotation_speaker_candidates"] == ["Emmanuel Levinas"]
+    assert di.current_quotations(record) == record["document_intelligence"]["quotations"]
 
     record["text"] += " Revised."
     assert di.prompt_hints(record, ["persons", "quoted_speaker"]) == {}
+    assert di.current_quotations(record) is None
 
 
 def test_normalization_keeps_provider_clusters_replaceable():

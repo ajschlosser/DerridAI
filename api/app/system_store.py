@@ -310,6 +310,74 @@ class SystemStore:
         with self._lock:
             return self.repository.list_records_for_work(work, limit)
 
+    def semantic_map_state(self, build_id: str) -> dict[str, Any]:
+        with self._lock:
+            return self.repository.semantic_map_state(build_id)
+
+    def mark_semantic_map_dirty(self, build_id: str, *, reason: str = "changed") -> int:
+        with self._lock:
+            return self.repository.mark_semantic_map_dirty(build_id, reason=reason)
+
+    def mark_semantic_map_clean(self, build_id: str, generation: int) -> bool:
+        with self._lock:
+            return self.repository.mark_semantic_map_clean(build_id, generation)
+
+    def put_semantic_map_projection(
+        self,
+        scope_type: str,
+        scope_id: str,
+        build_id: str,
+        generation: int,
+        payload: dict[str, Any],
+        *,
+        work: str | None = None,
+        audience: str = "",
+    ) -> None:
+        with self._lock:
+            self.repository.put_semantic_map_projection(
+                scope_type,
+                scope_id,
+                build_id,
+                generation,
+                payload,
+                work=work,
+                audience=audience,
+            )
+
+    def put_semantic_map_projections(self, rows: list[dict[str, Any]]) -> int:
+        with self._lock:
+            return self.repository.put_semantic_map_projections(rows)
+
+    def get_semantic_map_projection(
+        self,
+        scope_type: str,
+        scope_id: str,
+        build_id: str,
+        *,
+        audience: str = "",
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            return self.repository.get_semantic_map_projection(
+                scope_type,
+                scope_id,
+                build_id,
+                audience=audience,
+            )
+
+    def list_semantic_map_projections_for_work(
+        self,
+        work: str,
+        *,
+        scope_type: str = "work",
+        audience: str = "",
+    ) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_semantic_map_projections_for_work(
+                work,
+                scope_type=scope_type,
+                audience=audience,
+            )
+
     def embedding_defaults(self) -> dict[str, Any]:
         with self._lock:
             stored = self.repository.get_setting("embedding_defaults")

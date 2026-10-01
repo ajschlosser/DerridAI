@@ -20,10 +20,12 @@ from app.pipelines.evidence_recovery import (
     execute_evidence_recovery,
 )
 from app.pipelines.manager import PipelineManager
+from app.pipelines.models import InputBinding
 from app.pipelines.service import PipelineService, pipeline_hash
 from app.pipelines.store import PipelineStore
 
 CASCADE = ("evidence.recovery.cascade", 1)
+CASCADE_V2 = ("evidence.recovery.cascade", 2)
 CELF = ("evidence.recovery.celf", 1)
 
 
@@ -94,19 +96,27 @@ def _ran(traces):
 # --- Built-in definitions ---------------------------------------------------------------
 
 
-def test_both_built_ins_execute_and_report_their_compliance() -> None:
+def test_built_ins_execute_and_report_their_compliance() -> None:
     service = PipelineService()
     celf = compile_recovery_pipeline(built_in_pipeline(*CELF))
-    cascade = compile_recovery_pipeline(built_in_pipeline(*CASCADE))
+    cascade_v1 = compile_recovery_pipeline(built_in_pipeline(*CASCADE))
+    cascade_v2 = compile_recovery_pipeline(built_in_pipeline(*CASCADE_V2))
 
     assert celf.celf_compliant is True
-    assert cascade.celf_compliant is False and "'mmr'" in cascade.compliance_reason
+    assert cascade_v1.celf_compliant is False and "'mmr'" in cascade_v1.compliance_reason
+    assert cascade_v2.celf_compliant is True
     celf_validation = service.validate(built_in_pipeline(*CELF))
-    cascade_validation = service.validate(built_in_pipeline(*CASCADE))
+    cascade_v1_validation = service.validate(built_in_pipeline(*CASCADE))
+    cascade_v2_validation = service.validate(built_in_pipeline(*CASCADE_V2))
     assert celf_validation.valid and not celf_validation.issues
-    assert cascade_validation.valid
-    assert [issue.code for issue in cascade_validation.issues] == ["evidence_recovery_not_celf_compliant"]
-    assert built_in_assignment(RECOVERY_FEATURE) is not None
+    assert cascade_v1_validation.valid
+    assert [issue.code for issue in cascade_v1_validation.issues] == [
+        "evidence_recovery_not_celf_compliant"
+    ]
+    assert cascade_v2_validation.valid and not cascade_v2_validation.issues
+    assignment = built_in_assignment(RECOVERY_FEATURE)
+    assert assignment is not None
+    assert (assignment.pipeline_id, assignment.pipeline_version) == CASCADE_V2
 
 
 def test_existing_built_ins_still_validate_under_fallback_type_rule() -> None:
@@ -191,6 +201,105 @@ def test_cascade_falls_to_llm_as_last_resort_and_accepts_unsupported_choice(monk
     assert result.entry["block_ids"] == ["b1"], "invented IDs never survive validation"
     assert result.entry["score_details"][0]["lexical_support"] is False
     assert _ran(traces)["semantic"] == "failed"
+
+
+def test_cascade_v2_reranks_then_adjudicates_only_a_bounded_shortlist(monkeypatch, traces):
+    _built_in(monkeypatch, CASCADE_V2)
+    blocks = [
+        {"block_id": "b1", "text": "Passage alpha."},
+        {"block_id": "b2", "text": "Passage beta."},
+        {"block_id": "b3", "text": "Passage gamma."},
+        {"block_id": "b4", "text": "Passage delta."},
+        {"block_id": "b5", "text": "Passage epsilon."},
+    ]
+
+    def fake_predict_scores(pairs, *, model_name, timeout_seconds):
+        del model_name, timeout_seconds
+        by_text = {
+            "Passage alpha.": 0.92,
+            "Passage beta.": 0.81,
+            "Passage gamma.": 0.63,
+            "Passage delta.": 0.41,
+            "Passage epsilon.": -0.2,
+        }
+        return [by_text[text] for _query, text in pairs], {}
+
+    prompts = []
+
+    def llm_choice(prompt: str, role: str, attempts: int, escalated: bool):
+        prompts.append(prompt)
+        assert (role, attempts, escalated) == ("chain", 2, False)
+        assert "[b1]" in prompt and "[b2]" in prompt
+        assert "[b5]" not in prompt, "the model must not see candidates outside the bounded shortlist"
+        return ClosedChoiceAnswer({"block_ids": ["b2", "b5"], "reason": "b2 supports the reading."})
+
+    monkeypatch.setattr(cross_encoder_module, "predict_scores", fake_predict_scores)
+    result = _recover(
+        "interpretive classification",
+        blocks,
+        projection=Projection(
+            {
+                "b1": [1.0, 0.0],
+                "b2": [0.98, 0.02],
+                "b3": [0.96, 0.04],
+                "b4": [0.94, 0.06],
+                "b5": [0.92, 0.08],
+            },
+            query_vector=[1.0, 0.0],
+        ),
+        llm_choice=llm_choice,
+    )
+
+    assert prompts
+    assert result.entry["method"] == "llm-evidence-choice-v1"
+    assert result.entry["block_ids"] == ["b2"], "IDs outside the shortlist must be rejected"
+    assert result.entry["pipeline"]["celf_compliant"] is True
+    assert result.entry["score_details"][0]["cross_encoder_score"] == 0.81
+    assert "semantic_score" in result.entry["score_details"][0]
+    assert "mmr_score" in result.entry["score_details"][0]
+    ran = _ran(traces)
+    for stage in ("semantic", "rerank", "mmr", "llm_choice", "provenance", "select"):
+        assert stage in ran
+    assert "candidate_support" not in ran, "direct support was already checked before semantic retrieval"
+    stage = {item.stage_id: item for item in traces[-1].stages}["llm_choice"]
+    assert stage.parameters["candidate_scope"] == "input_or_all"
+    assert stage.parameters["candidate_limit"] == 4
+    assert stage.parameters["candidate_count"] <= 4
+
+
+def test_cascade_v2_cross_encoder_never_establishes_evidence_by_itself(monkeypatch, traces):
+    _built_in(monkeypatch, CASCADE_V2)
+    blocks = [
+        {"block_id": "b1", "text": "A source passage about hospitality."},
+        {"block_id": "b2", "text": "A source passage about grammar."},
+    ]
+    monkeypatch.setattr(
+        cross_encoder_module,
+        "predict_scores",
+        lambda pairs, **_kwargs: ([0.99 if "hospitality" in text else 0.1 for _query, text in pairs], {}),
+    )
+
+    called = []
+
+    def llm_choice(prompt: str, _role: str, _attempts: int, _escalated: bool):
+        called.append(prompt)
+        return ClosedChoiceAnswer({"block_ids": ["b1"], "reason": "Supports the interpretation."})
+
+    result = _recover(
+        "ethical openness",
+        blocks,
+        projection=Projection(
+            {"b1": [1.0, 0.0], "b2": [0.0, 1.0]},
+            query_vector=[1.0, 0.0],
+        ),
+        llm_choice=llm_choice,
+    )
+
+    assert called, "a high reranker score is ranking evidence, not evidentiary authority"
+    assert result.entry["method"] == "llm-evidence-choice-v1"
+    stages = [stage.stage_id for stage in traces[-1].stages]
+    assert stages.index("rerank") < stages.index("mmr") < stages.index("llm_choice")
+    assert "candidate_support" not in stages
 
 
 def test_cascade_returns_none_when_the_llm_stage_raises(monkeypatch, traces):
@@ -367,3 +476,51 @@ def test_trace_lists_only_stages_that_ran_and_binds_the_exact_pipeline(monkeypat
     assert trace.resolved_hash == pipeline_hash(pipeline) == result.entry["pipeline"]["pipeline_hash"]
     assert result.entry["pipeline"]["trace_id"] == trace.run_id
     assert {stage.stage_id for stage in trace.stages}.isdisjoint({"semantic", "rerank", "mmr", "llm_choice"})
+
+
+# --- Explicit input bindings -------------------------------------------------------------
+
+
+def _bound(stage_id, producer, key=CELF):
+    binding = InputBinding(source="stage", stage=producer, output="candidates")
+    return _variant(key, "evidence.recovery.bound", lambda source: [
+        stage.model_copy(update={"inputs": {"candidates": [binding]}}) if stage.id == stage_id else stage
+        for stage in source.stages
+    ])
+
+
+def test_binding_the_provenance_gate_past_support_is_reported_non_celf() -> None:
+    plan = compile_recovery_pipeline(_bound("provenance", "lexical"))
+    assert plan.bound_sources == {"provenance": ["lexical"]}
+    assert plan.celf_compliant is False and "'lexical'" in plan.compliance_reason
+    # Restating the support gate keeps the guarantee.
+    assert compile_recovery_pipeline(_bound("provenance", "support")).celf_compliant is True
+
+
+def test_selection_cannot_be_bound_around_the_provenance_gate() -> None:
+    with pytest.raises(ValueError, match="Only the provenance gate may feed"):
+        compile_recovery_pipeline(_bound("select", "support"))
+
+
+def test_bound_recovery_pipeline_runs_and_is_supported(monkeypatch, traces) -> None:
+    from app.pipelines.workflows import runtime_support
+
+    pipeline = _bound("provenance", "lexical")
+    assert runtime_support(pipeline)["supported"] is True
+    _use(monkeypatch, pipeline)
+    result = _recover("calm", [{"block_id": "b1", "text": "calm calm calm"}], field="mood")
+    assert result.entry["block_ids"] == ["b1"]
+    assert result.status["celf_compliant"] is False
+    assert _ran(traces)["provenance"] == "completed"
+
+
+def test_rewired_recovery_run_is_flagged_in_its_trace(monkeypatch, traces) -> None:
+    _use(monkeypatch, _bound("provenance", "lexical"))
+    _recover("calm", [{"block_id": "b1", "text": "calm calm calm"}], field="mood")
+    assert traces[-1].warnings == ["rewired_inputs: provenance.candidates"]
+
+
+def test_unbound_recovery_run_carries_no_rewired_warning(monkeypatch, traces) -> None:
+    _use(monkeypatch, built_in_pipeline(*CELF))
+    _recover("calm", [{"block_id": "b1", "text": "calm calm calm"}], field="mood")
+    assert traces[-1].warnings == []

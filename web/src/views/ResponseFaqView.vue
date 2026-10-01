@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -9,6 +9,7 @@ import ResponseFaqArchiveDialog from "../components/research/ResponseFaqArchiveD
 import ResponseFaqSelectionBar from "../components/research/ResponseFaqSelectionBar.vue";
 import ResearchResultPresentation from "../components/research/ResearchResultPresentation.vue";
 import EvaluationReport from "../components/research/EvaluationReport.vue";
+import { useDataQuery } from "../realtime/dataQuery";
 import { useI18nStore } from "../stores/i18n";
 import type { ResearchResult, ResponseFaqPage, ResponseFaqRecord } from "../types/research";
 import * as runtime from "../runtime/runtimeBridge";
@@ -16,7 +17,6 @@ import * as runtime from "../runtime/runtimeBridge";
 const i18n = useI18nStore();
 const router = useRouter();
 const route = useRoute();
-const loading = ref(false);
 const routeText = (value: unknown) =>
   Array.isArray(value) ? String(value[0] ?? "") : String(value ?? "");
 const routePage = (value: unknown) => Math.max(1, Number.parseInt(routeText(value), 10) || 1);
@@ -219,40 +219,69 @@ function metadataEntries(value: unknown, kind: "retrieval" | "query"): MetaEntry
     }));
 }
 
+function faqParams() {
+  return { limit: pageSize, offset: (page.value - 1) * pageSize, query: search.value };
+}
+// The requested page is the query key; realtime invalidation of `response_library` refetches it and
+// applyPage keeps the reader's selection (it only picks a first record when none is selected).
+const applied = ref(faqParams());
+const faqQuery = useDataQuery(
+  "response_library",
+  () => runtime.getResponseFaqPage(applied.value) as Promise<ResponseFaqPage>,
+  { detail: () => [applied.value] },
+);
+const loading = computed(() => faqQuery.isFetching.value);
+let lastApplied: ResponseFaqPage | undefined;
+async function applyPage(next: ResponseFaqPage, chooseFirst = false) {
+  if (next === lastApplied) return;
+  lastApplied = next;
+  payload.value = next;
+  const maxPage = Math.max(1, Math.ceil(Number(next.count || 0) / pageSize));
+  if (page.value > maxPage) {
+    page.value = maxPage;
+    await load({ chooseFirst });
+    return;
+  }
+  const requestedId = routeText(route.query.id);
+  const requested = requestedId
+    ? next.records.find((record) => recordKey(record) === requestedId)
+    : null;
+  if (requested) selected.value = requested;
+  else if (
+    chooseFirst ||
+    !selected.value ||
+    !next.records.some((record) => recordKey(record) === selectedId.value)
+  )
+    selected.value = next.records[0] || null;
+  else
+    selected.value = next.records.find((r) => recordKey(r) === selectedId.value) || selected.value;
+  if (chooseFirst) activeEvidenceIndex.value = 0;
+  await syncFaqUrl();
+}
 async function load({ chooseFirst = false }: { chooseFirst?: boolean } = {}) {
-  loading.value = true;
+  const next = faqParams();
   try {
-    const next = (await runtime.getResponseFaqPage({
-      limit: pageSize,
-      offset: (page.value - 1) * pageSize,
-      query: search.value,
-    })) as ResponseFaqPage;
-    payload.value = next;
-    const maxPage = Math.max(1, Math.ceil(Number(next.count || 0) / pageSize));
-    if (page.value > maxPage) {
-      page.value = maxPage;
-      await load({ chooseFirst });
-      return;
-    }
-    const requestedId = routeText(route.query.id);
-    const requested = requestedId
-      ? next.records.find((record) => recordKey(record) === requestedId)
-      : null;
-    if (requested) selected.value = requested;
-    else if (
-      chooseFirst ||
-      !selected.value ||
-      !next.records.some((record) => recordKey(record) === selectedId.value)
-    )
-      selected.value = next.records[0] || null;
-    activeEvidenceIndex.value = 0;
-    await syncFaqUrl();
+    if (JSON.stringify(next) === JSON.stringify(applied.value)) await faqQuery.refetch();
+    else applied.value = next;
+    const data = await waitForPage();
+    if (data) await applyPage(data, chooseFirst);
   } catch (error) {
     runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
-  } finally {
-    loading.value = false;
   }
 }
+// After a key change the observer fetches on its own; wait for that fetch's data.
+async function waitForPage(): Promise<ResponseFaqPage | undefined> {
+  await nextTick();
+  const result = await faqQuery.suspense();
+  return result.data;
+}
+// Realtime refetches arrive here without a caller.
+watch(
+  () => faqQuery.data.value,
+  (data) => {
+    if (data) void applyPage(data);
+  },
+);
 function scheduleSearch() {
   if (applyingRoute) return;
   window.clearTimeout(searchTimer);
@@ -507,7 +536,6 @@ onMounted(() => void load({ chooseFirst: true }));
       @close="archiveOpen = false"
       @select="choose"
       @search="setArchiveSearch"
-      @refresh="load()"
       @page="goPage"
     />
   </main>

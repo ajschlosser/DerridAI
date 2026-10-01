@@ -591,6 +591,87 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
         ],
     ),
     _pipeline(
+        pipeline_id="evidence.recovery.cascade",
+        version=2,
+        name="Evidence recovery — support-validated relevance cascade",
+        purpose="evidence_recovery",
+        status="active",
+        entry_stage_ids=["query"],
+        derived_from="evidence.recovery.cascade@1",
+        notes=(
+            "Direct support still wins immediately. Otherwise semantic retrieval and "
+            "CrossEncoder reranking locate likely passages, MMR bounds and diversifies "
+            "that candidate set, and candidates may reach selection only after direct-"
+            "support validation or a closed-choice model decision over the bounded "
+            "shortlist. CrossEncoder/MMR scores are ranking signals, never evidence "
+            "authority. If semantic retrieval is unavailable, the closed-choice model "
+            "may fall back to the Record's source units. Every result remains advisory "
+            "and pending review."
+        ),
+        stages=[
+            {
+                "id": "query",
+                "strategy": "query.evidence_field",
+                "next": ["lexical"],
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.lexical_bm25",
+                "config": {"min_score": 0.5},
+                "next": ["lexical_support"],
+                "on_empty": "semantic",
+            },
+            {
+                "id": "lexical_support",
+                "strategy": "validate.evidence_support",
+                "config": {"min_score": 0.5},
+                "next": ["provenance"],
+            },
+            {
+                "id": "semantic",
+                "strategy": "retrieve.source_cosine",
+                "config": {"fetch_k": 8},
+                "next": ["rerank"],
+                "on_empty": "llm_choice",
+                "on_unavailable": "llm_choice",
+                "on_error": "llm_choice",
+            },
+            {
+                "id": "rerank",
+                "strategy": "rerank.cross_encoder",
+                "config": {"min_score": 0, "top_k": 8},
+                "next": ["mmr"],
+                "on_empty": "mmr",
+                "on_unavailable": "mmr",
+                "on_timeout": "mmr",
+                "on_error": "mmr",
+            },
+            {
+                "id": "mmr",
+                "strategy": "select.mmr",
+                "config": {"lambda_mult": 0.72, "limit": 4, "min_relevance": 0.2},
+                "next": ["llm_choice"],
+                "on_empty": "llm_choice",
+            },
+            {
+                "id": "llm_choice",
+                "strategy": "llm.closed_choice_evidence",
+                "config": {"candidate_scope": "input_or_all", "candidate_limit": 4},
+                "next": ["provenance"],
+            },
+            {
+                "id": "provenance",
+                "strategy": "validate.provenance",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+                "config": {"limit": 2},
+            },
+        ],
+    ),
+    _pipeline(
         pipeline_id="store_search.similarity",
         version=1,
         name="Store search — semantic similarity",
@@ -852,17 +933,14 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
     _pipeline(
         pipeline_id="corpus.metadata_enrichment.current",
         version=1,
-        name="Corpus metadata enrichment — current",
+        name="Corpus metadata enrichment — legacy bounded retry",
         purpose="corpus_metadata_enrichment",
-        status="active",
+        status="disabled",
         entry_stage_ids=["primary"],
         notes=(
-            "Runs each schema-derived metadata group on the build's primary "
-            "provider with two attempts. When those fail or time out and the "
-            "build configures a review provider, the review provider gets two "
-            "attempts of its own. The active metadata schema supplies the task; "
-            "every answer is validated, and review and evidence rules apply "
-            "after this pipeline."
+            "Historical parity chain retained for reproducibility: each schema-derived "
+            "metadata group gets two primary attempts and, on failure or timeout, two "
+            "review-provider attempts when configured."
         ),
         stages=[
             {
@@ -876,6 +954,37 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
                 "id": "review",
                 "strategy": "llm.structured_metadata",
                 "config": {"provider_role": "review", "attempts": 2},
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="corpus.metadata_enrichment.current",
+        version=2,
+        name="Corpus metadata enrichment — validation-driven escalation",
+        purpose="corpus_metadata_enrichment",
+        status="active",
+        entry_stage_ids=["primary"],
+        derived_from="corpus.metadata_enrichment.current@1",
+        notes=(
+            "Runs each schema-derived metadata group once on the build's primary "
+            "provider. The response is syntax-repaired conservatively and schema-validated "
+            "by DerridAI. Only a failed validation, provider error, or timeout follows the "
+            "pipeline edge to one review-provider attempt when configured. The active "
+            "metadata schema supplies the task; review, evidence, authority, and autofill "
+            "policy still apply after this computational pipeline."
+        ),
+        stages=[
+            {
+                "id": "primary",
+                "strategy": "llm.structured_metadata",
+                "config": {"provider_role": "primary", "attempts": 1},
+                "on_error": "review",
+                "on_timeout": "review",
+            },
+            {
+                "id": "review",
+                "strategy": "llm.structured_metadata",
+                "config": {"provider_role": "review", "attempts": 1},
             },
         ],
     ),
@@ -1008,7 +1117,7 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     PipelineAssignment(
         feature="corpus_metadata_enrichment",
         pipeline_id="corpus.metadata_enrichment.current",
-        pipeline_version=1,
+        pipeline_version=2,
         source="built_in",
         override_allowed=True,
     ),
@@ -1078,7 +1187,7 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     PipelineAssignment(
         feature="evidence_recovery",
         pipeline_id="evidence.recovery.cascade",
-        pipeline_version=1,
+        pipeline_version=2,
         source="built_in",
         override_allowed=True,
     ),

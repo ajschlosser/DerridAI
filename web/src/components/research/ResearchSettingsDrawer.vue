@@ -123,6 +123,7 @@ function sync() {
     search_types: [...(props.config.search_types || [])],
     k: props.config.k,
     fetch_k: props.config.fetch_k,
+    automatic_sizing: props.config.automatic_sizing,
     lambda_mult: props.config.lambda_mult,
     rrf_k: props.config.rrf_k,
     rerank_top_n: props.config.rerank_top_n,
@@ -210,6 +211,7 @@ function resetSection(section: SettingsSection) {
       search_types: [...(source.search_types || [])],
       k: source.k,
       fetch_k: source.fetch_k,
+      automatic_sizing: source.automatic_sizing,
       lambda_mult: source.lambda_mult,
       rrf_k: source.rrf_k,
       rerank_top_n: source.rerank_top_n,
@@ -541,6 +543,17 @@ defineExpose({ open, close });
               <fieldset class="research-settings-card">
                 <legend>{{ i18n.t("research.candidate_pool") }}</legend>
                 <p>{{ i18n.t("research.candidate_pool_help") }}</p>
+                <label class="research-toggle-setting automatic-sizing-toggle"
+                  ><input v-model="draft.automatic_sizing" type="checkbox" /><span
+                    ><b>{{ i18n.t("research.automatic_sizing", "Automatic sizing") }}</b
+                    ><small>{{
+                      i18n.t(
+                        "research.automatic_sizing_help",
+                        "Adapt candidate depth to median Record size, collapse short adjacent hits before reranking, and add same-document neighbors to short selected passages. k and fetch_k remain bounded baselines; reranking and the total evidence budget stay capped.",
+                      )
+                    }}</small></span
+                  ></label
+                >
                 <div class="research-settings-grid compact">
                   <label
                     ><span

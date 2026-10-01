@@ -83,6 +83,12 @@ def build_research_trace(
     search_types = [str(item) for item in retrieval.get("search_types") or []]
     collections = [str(item) for item in result.get("collections") or []]
     collection_label = ", ".join(collections[:6]) or None
+    scope_size = retrieval.get("scope_size")
+    scope_parameter = (
+        {"scope_size": scope_size}
+        if isinstance(scope_size, int) and not isinstance(scope_size, bool) and scope_size > 0
+        else {}
+    )
 
     resolved_stage_rows = {
         str(item.get("id") or ""): item
@@ -165,11 +171,16 @@ def build_research_trace(
                 output_count=raw_count if semantic_executed else 0,
                 collection=collection_label,
                 parameters={
-                    "k": retrieval.get("k"),
+                    "k": retrieval.get("effective_k", retrieval.get("k")),
+                    "requested_k": retrieval.get("k"),
                     "fetch_k": retrieval.get(
                         "semantic_fetch_k",
                         retrieval.get("fetch_k"),
                     ),
+                    "automatic_sizing": bool(
+                        (retrieval.get("automatic_sizing") or {}).get("enabled")
+                    ),
+                    **scope_parameter,
                 },
                 status="completed" if semantic_executed else "skipped",
             )
@@ -203,11 +214,16 @@ def build_research_trace(
                 output_count=raw_count if lexical_executed else 0,
                 collection=collection_label,
                 parameters={
-                    "k": retrieval.get("k"),
+                    "k": retrieval.get("effective_k", retrieval.get("k")),
+                    "requested_k": retrieval.get("k"),
                     "fetch_k": retrieval.get(
                         "lexical_fetch_k",
                         retrieval.get("fetch_k"),
                     ),
+                    "automatic_sizing": bool(
+                        (retrieval.get("automatic_sizing") or {}).get("enabled")
+                    ),
+                    **scope_parameter,
                 },
                 status="completed" if lexical_executed else "skipped",
             )

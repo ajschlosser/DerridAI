@@ -9,6 +9,19 @@ Release history for DerridAI, newest first. Each entry links to the full release
 Repository cleanup after the Fall River release removed transient implementation
 artifacts that no longer described current `master`:
 
+- Automatic metadata evidence recovery now defaults to
+  `evidence.recovery.cascade@2`: direct textual support still exits early, while
+  semantic retrieval, CrossEncoder reranking, and MMR only build a bounded
+  shortlist. Relevance scores cannot establish evidence; candidates must pass
+  deterministic support validation or a closed-choice support decision before
+  provenance. The model sees at most four ranked candidates in the normal path,
+  restoring richer evidence suggestions without reviving cascade v1's
+  relevance-as-evidence behavior.
+- Metadata review now represents a model-proposed absence as cELF no-value
+  state rather than inserting fallback text into a scholarly field, applies
+  reviewer decisions optimistically through their review-state projections,
+  advances through the Metadata queue when the last decision is made, and
+  suppresses evidence-confidence percentages when no source span is bound.
 - Deleted obsolete progress, plan, and branch-handoff documents:
   `CBI_PROGRESS.md`,
   `docs/CORPUS_BUILDER_HAPPY_PATH_UX_PLAN.md`,

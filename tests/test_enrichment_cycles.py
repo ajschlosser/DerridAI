@@ -188,6 +188,48 @@ def test_global_store_promotes_only_generalizable_conventions_seen_in_several_bu
     assert store.conventions(exclude_build_id="b2") == {}
 
 
+def test_record_wall_clock_event_is_emitted_after_durable_merge(
+    tmp_path: Path,
+    monkeypatch,
+):
+    manager, repo, build_id = make_manager(tmp_path, [{"record_id": "timed"}])
+    observed_persisted_values: list[str] = []
+    original_append = manager._ledger.append
+
+    def fake_enrich(record, manifest, request, **kwargs):
+        return proposal(record, stance=("critical", 0.9))
+
+    def observing_append(kind, **kwargs):
+        if kind == "record_run":
+            stored = repo.get_record(build_id, str(kwargs.get("record_id") or ""))
+            observed_persisted_values.append(str(stored.get("stance") or ""))
+        return original_append(kind, **kwargs)
+
+    manager._enrich_record = fake_enrich
+    monkeypatch.setattr(manager._ledger, "append", observing_append)
+    manager.rerun_metadata_enrichment(
+        build_id,
+        {
+            "families": ["discourse"],
+            "scope": "all",
+            "model": "m",
+            "provider": "ollama",
+        },
+    )
+
+    rows = [
+        row
+        for row in manager._ledger.events()
+        if row.get("kind") == "record_run"
+        and row.get("record_id") == "timed"
+    ]
+    assert len(rows) == 1
+    assert rows[0]["elapsed_ms"] >= 0
+    assert rows[0]["outcome"] == "enriched"
+    assert rows[0]["families"] == ["discourse"]
+    assert observed_persisted_values == ["critical"]
+
+
 def test_review_stays_editable_while_a_pass_runs(tmp_path: Path):
     manager, repo, build_id = make_manager(tmp_path, [{}])
     build = repo.get_build(build_id)
@@ -355,6 +397,35 @@ def test_next_pass_reads_last_pass_inferences_without_reviewing_records(tmp_path
     dispositions = [str(row.get("review_disposition") or "pending") for row in repo.load_records(build_id)]
     assert "accepted" not in dispositions[:2]
     assert repo.get_build(build_id)["status"] == "awaiting_review"
+
+
+def test_rerun_records_wall_clock_after_durable_merge(tmp_path: Path):
+    manager, repo, build_id = make_manager(tmp_path, [{}])
+
+    def fake_enrich(record, manifest, request, **kwargs):
+        return proposal(record, stance=("critical", 0.9))
+
+    manager._enrich_record = fake_enrich
+    manager.rerun_metadata_enrichment(
+        build_id,
+        {"families": ["discourse"], "scope": "all"},
+    )
+
+    stored = repo.get_record(build_id, "r1")
+    assert stored["stance"] == "critical"
+    events = [
+        row
+        for row in manager._ledger.events()
+        if row.get("kind") == "record_run"
+        and row.get("build_id") == build_id
+        and row.get("record_id") == "r1"
+    ]
+    assert len(events) == 1
+    event = events[0]
+    assert event["outcome"] == "enriched"
+    assert event["families"] == ["discourse"]
+    assert event["pass_number"] == 1
+    assert event["elapsed_ms"] >= 0
 
 
 def test_initial_enrichment_operation_marks_the_first_pass_complete():

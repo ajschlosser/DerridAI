@@ -179,6 +179,8 @@ export function pipelineConfigLabel(key: string, t: PipelineTranslator) {
     min_similarity: t("pipelines.config.min_similarity.label", "Minimum similarity"),
     provider_role: t("pipelines.config.provider_role.label", "Provider"),
     attempts: t("pipelines.config.attempts.label", "Attempts"),
+    candidate_scope: t("pipelines.config.candidate_scope.label", "Candidate scope"),
+    candidate_limit: t("pipelines.config.candidate_limit.label", "Candidate limit"),
   };
   return labels[key] || key.replaceAll("_", " ");
 }
@@ -253,6 +255,14 @@ export function pipelineConfigHelp(key: string, t: PipelineTranslator) {
       "pipelines.config.attempts.help",
       "Technical name: attempts. How many times this provider is asked when its answer does not validate. Each retry names the validation problem and allows a larger answer. A timed-out request is not retried.",
     ),
+    candidate_scope: t(
+      "pipelines.config.candidate_scope.help",
+      "Technical name: candidate_scope. In evidence recovery, 'Upstream shortlist, otherwise all' asks the model only about ranked upstream candidates when they exist and falls back to the Record's source units when retrieval produced no shortlist.",
+    ),
+    candidate_limit: t(
+      "pipelines.config.candidate_limit.help",
+      "Technical name: candidate_limit. Maximum upstream candidates shown to the closed-choice evidence model. This bounds model context; it does not make ranking scores evidentiary support.",
+    ),
   };
   return (
     help[key] ||
@@ -302,6 +312,13 @@ export function pipelineConfigOptionLabel(key: string, value: string, t: Pipelin
       review: t("pipelines.config.provider_role.review", "Review provider"),
       chain: t("pipelines.config.provider_role.chain", "Primary, then review provider"),
     },
+    candidate_scope: {
+      all: t("pipelines.config.candidate_scope.all", "All Record source units"),
+      input_or_all: t(
+        "pipelines.config.candidate_scope.input_or_all",
+        "Upstream shortlist, otherwise all",
+      ),
+    },
   };
   return labels[key]?.[value] || value;
 }
@@ -313,6 +330,7 @@ export function pipelineDataTypeLabel(value: string, t: PipelineTranslator) {
     context_packet: t("pipelines.data_type.context_packet_label", "Context packet"),
     model_output: t("pipelines.data_type.model_output_label", "Model output"),
     evaluation: t("pipelines.data_type.evaluation_label", "Evaluation"),
+    number: t("pipelines.data_type.number_label", "Number"),
     any: t("pipelines.data_type.any_label", "Any input"),
   };
   return labels[value] || value;

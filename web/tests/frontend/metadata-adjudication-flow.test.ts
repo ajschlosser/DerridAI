@@ -130,8 +130,14 @@ describe("a field's decision controls", () => {
         status: pending,
       },
     });
-    await wrapper.get("select").trigger("keydown", { key: "Enter", ctrlKey: true });
+    // A pending field with a proposal shows it read-only; Ctrl+Enter confirms from anywhere in the field.
+    expect(wrapper.find("select").exists()).toBe(false);
+    await wrapper.get(".proposal-edit").trigger("keydown", { key: "Enter", ctrlKey: true });
     expect(wrapper.emitted("save")).toEqual([["affirm"]]);
+    // And still from inside the value control once the reviewer opens it.
+    await wrapper.get(".proposal-edit").trigger("click");
+    await wrapper.get("select").trigger("keydown", { key: "Enter", ctrlKey: true });
+    expect(wrapper.emitted("save")).toEqual([["affirm"], ["affirm"]]);
     wrapper.unmount();
   });
 
@@ -147,8 +153,32 @@ describe("a field's decision controls", () => {
       },
     });
     expect(wrapper.get("[data-primary-action]").text()).toMatch(/^Confirm/);
+    await wrapper.get(".proposal-edit").trigger("click");
     await wrapper.get("select").setValue("reject");
     expect(wrapper.get("[data-primary-action]").text()).toMatch(/^Save/);
+    wrapper.unmount();
+  });
+
+  it("shows a model-proposed absence as a starred no-value state without filling the field", () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "speaker",
+        value: null,
+        control: "text",
+        open: true,
+        status: {
+          status: "unresolved",
+          method: "llm",
+          evaluation_status: "no_supported_value",
+          suggested_absence: true,
+          confidence: 0.92,
+        },
+      },
+    });
+    expect(wrapper.get(".proposal").text()).toContain("★");
+    expect(wrapper.get(".proposal").text()).toContain("No value");
+    expect(wrapper.text()).not.toContain("[not established in source]");
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("");
     wrapper.unmount();
   });
 

@@ -75,6 +75,7 @@ class EditorialMemoryMixin:
         use_global: bool = True,
         use_progressive: bool = True,
         include_canonical: bool = False,
+        field_filter: set[str] | None = None,
     ) -> dict[str, Any]:
         """Build advisory context from human decisions and the last enrichment pass.
 
@@ -86,6 +87,8 @@ class EditorialMemoryMixin:
 
         ``include_canonical`` adds ``canonical_exemplars`` (exemplar ID -> exemplar) for callers
         that must re-verify stored precedent references; it is never part of an API response.
+        ``field_filter`` lets latency-sensitive callers retrieve only the metadata fields that
+        are actually scheduled for this Record.
         """
         try:
             rows = self.repo.load_records(build_id)
@@ -168,6 +171,8 @@ class EditorialMemoryMixin:
         correction_fields: set[str] = set()
         confirmed_absence_fields: set[str] = set()
         for field, _field_id in field_ids.items():
+            if field_filter is not None and field not in field_filter:
+                continue
             item = schema_fields.get(field, {})
             profile = item.get("retrieval_profile") if isinstance(item, dict) else None
             if not isinstance(profile, dict):
@@ -577,6 +582,10 @@ class EditorialMemoryMixin:
             "example_token_estimate": example_token_estimate,
             "progressive_retrieval": retrieval_telemetry,
             "pipeline_trace": metadata_pipeline_trace,
+            # When enrichment scopes precedent work to scheduled metadata families,
+            # preserve that scope so its kept cache cannot masquerade as a completed
+            # lookup for fields that were deliberately never searched.
+            "requested_fields": sorted(field_filter) if field_filter is not None else None,
             "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id], metadata_schema, registry_for),
         }
         if include_canonical:
@@ -653,6 +662,13 @@ class EditorialMemoryMixin:
         record: dict[str, Any],
         kept: dict[str, tuple[dict[str, Any], dict[str, Any]]],
     ) -> dict[str, dict[str, Any]]:
+        """Resolve kept precedent refs and lazily rank this Record's possible evidence.
+
+        Enrichment retains the exact precedent identities/similarities it supplied to the
+        model, but source-unit remapping is reviewer assistance rather than enrichment input.
+        Running the remap here keeps that potentially embedding-backed work off the build's
+        critical path while preserving the same suggestions when the panel is actually used.
+        """
         record_id = str(record.get("record_id") or "")
         memory = self._editorial_memory(
             build_id,
@@ -676,6 +692,37 @@ class EditorialMemoryMixin:
                 "stale_count": stale,
                 "items": items,
             }
+
+        fields_with_items = [field for field, payload in out.items() if payload["items"]]
+        if not fields_with_items:
+            return out
+        try:
+            blocks = self._blocks_for(build_id)
+        except (KeyError, OSError):
+            blocks = {}
+        if not blocks:
+            return out
+        try:
+            session = RemapSession.open()
+        except Exception:  # noqa: BLE001 - candidates are advisory; precedents still render
+            session = None
+        if session is None:
+            return out
+
+        try:
+            embed = self._precedent_embedder()
+            for field in fields_with_items:
+                items = out[field]["items"]
+                candidates = rank_candidates(
+                    items, record, blocks, embed=embed, session=session,
+                )
+                for item, picks in zip(items, candidates):
+                    item["candidate_source_units"] = picks
+        finally:
+            identity = session.finish()
+        if identity is not None:
+            for field in fields_with_items:
+                out[field]["candidate_pipeline"] = identity
         return out
 
     def _precedent_embedder(self) -> Any:

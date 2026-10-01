@@ -72,6 +72,7 @@ class ResearchPipelineBenchmarkCaseCreate(BaseModel):
     )
     k: int = Field(default=64, ge=1, le=500)
     fetch_k: int = Field(default=500, ge=1, le=5000)
+    automatic_sizing: bool = False
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
     rrf_k: int = Field(default=60, ge=1, le=10000)
     rerank_top_n: int = Field(default=24, ge=1, le=500)
@@ -327,6 +328,7 @@ def benchmark_request_for_case(
         search_types=case.search_types,
         k=case.k,
         fetch_k=case.fetch_k,
+        automatic_sizing=case.automatic_sizing,
         lambda_mult=case.lambda_mult,
         rrf_k=case.rrf_k,
         rerank_top_n=case.rerank_top_n,

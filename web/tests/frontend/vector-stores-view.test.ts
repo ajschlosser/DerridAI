@@ -1,5 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { VueQueryPlugin } from "@tanstack/vue-query";
+import { queryClient } from "../../src/realtime/dataQuery";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { createVectorState, vectorState } from "../../src/state/workspaceState";
@@ -98,7 +100,7 @@ async function mountView(role: "admin" | "researcher") {
   await router.isReady();
   const wrapper = mount(VectorStoresView, {
     attachTo: document.body,
-    global: { plugins: [pinia, router] },
+    global: { plugins: [pinia, router, [VueQueryPlugin, { queryClient }]] },
   });
   await flushPromises();
   return { wrapper, router };
@@ -107,6 +109,7 @@ async function mountView(role: "admin" | "researcher") {
 describe("VectorStoresView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
     Object.assign(vectorState, createVectorState());
     chromaApi.health.mockResolvedValue(readyHealth);
     chromaApi.collections.mockResolvedValue([]);

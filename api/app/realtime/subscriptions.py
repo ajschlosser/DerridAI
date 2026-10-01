@@ -12,6 +12,7 @@ from typing import Any
 
 from .broker import Subscriber
 from .protocol import CLOSE_FORBIDDEN, CLOSE_MALFORMED, CLOSE_NOT_FOUND, valid_topic
+from .resources import DATA_RESOURCES
 
 # Background work that is not a tracked job, followable on ``activity:<kind>``.
 # Every kind is administrator-only today (its REST status route is too).
@@ -87,6 +88,13 @@ def authorize_topic(subscriber: Subscriber, topic: str) -> TopicDecision:
         if topic.split(":", 1)[1] not in ACTIVITY_KINDS:
             return TopicDecision(topic, False, CLOSE_NOT_FOUND, "not found")
         if subscriber.is_admin:
+            return TopicDecision(topic, True)
+        return TopicDecision(topic, False, CLOSE_FORBIDDEN, "forbidden")
+    if topic.startswith("data:"):
+        spec = DATA_RESOURCES.get(topic.split(":", 1)[1])
+        if spec is None:
+            return TopicDecision(topic, False, CLOSE_NOT_FOUND, "not found")
+        if spec.allows(subscriber):
             return TopicDecision(topic, True)
         return TopicDecision(topic, False, CLOSE_FORBIDDEN, "forbidden")
     # Corpus Builder is an administrator workspace.

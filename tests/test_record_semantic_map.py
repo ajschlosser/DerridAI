@@ -21,7 +21,12 @@ except ModuleNotFoundError:
 from app import corpus_builder as cb
 from app.config import APP_VERSION
 from app.nlp_annotations import text_digest
-from app.record_semantic_map import record_semantic_map, semantic_node_neighborhood
+from app.persistence import SQLiteSystemRepository
+from app.record_semantic_map import (
+    build_semantic_map_projections,
+    record_semantic_map,
+    semantic_node_neighborhood,
+)
 from app.reviewer_context import current_reviewer
 from app.semantic_content_graph import (
     build_semantic_content_graph,
@@ -178,6 +183,66 @@ def _manager(tmp_path: Path):
         "provider": "ollama", "model": "m", "request": {},
     })
     return cb.PdfCorpusBuildManager(repo), repo, build["build_id"]
+
+
+def test_materialization_reuses_one_index_for_record_node_and_work_views():
+    records = _records()
+    for row in records:
+        row["work"] = "Margins of Philosophy"
+    graph = build_semantic_content_graph(records, {"profile": "scholarly"})
+
+    record_maps, node_maps, work_maps = build_semantic_map_projections(
+        graph,
+        records,
+        analysis={"profile": "scholarly"},
+    )
+
+    assert set(record_maps) == {row["record_id"] for row in records}
+    presence = next(node for node in graph["nodes"] if node["label"] == "presence")
+    assert node_maps[presence["id"]]["total_records"] == 3
+    work = work_maps["Margins of Philosophy"]
+    assert work["record_count"] == len(records)
+    r1 = next(source for source in work["sources"] if source["id"] == "r1")
+    assert {"presence", "trace"} <= set(r1["concepts"])
+    assert "Heidegger" in r1["persons"]
+
+
+def test_hot_record_map_reads_do_not_reload_or_rewalk_the_build(
+    tmp_path,
+    monkeypatch,
+):
+    import app.system_store as system_store_module
+
+    system_repository = SQLiteSystemRepository(tmp_path / "system.sqlite3")
+    monkeypatch.setattr(system_store_module, "system_repository", system_repository)
+    store = system_store_module.SystemStore()
+    monkeypatch.setattr(cb, "system_store", store)
+
+    manager, repo, build_id = _manager(tmp_path)
+    rows = _records()
+    for row in rows:
+        row["work"] = "Speech and Phenomena"
+    repo.save_records(build_id, rows)
+
+    first = manager.record_semantic_map(build_id, "r1")
+    assert first["record_id"] == "r1"
+    assert store.semantic_map_state(build_id)["dirty"] is False
+
+    def unexpected_full_load(_build_id):
+        raise AssertionError("hot semantic-map read reloaded the complete build")
+
+    monkeypatch.setattr(repo, "load_records", unexpected_full_load)
+    second = manager.record_semantic_map(build_id, "r2")
+    assert second["record_id"] == "r2"
+
+    projection = store.get_semantic_map_projection(
+        "record",
+        "r2",
+        build_id,
+        audience="",
+    )
+    assert projection is not None
+    assert projection["generation"] == store.semantic_map_state(build_id)["generation"]
 
 
 def test_a_second_reviewer_cannot_read_a_sealed_value_through_the_record_map(tmp_path):

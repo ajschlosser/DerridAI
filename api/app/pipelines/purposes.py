@@ -55,6 +55,13 @@ class VocabularyTerm(BaseModel):
     description: str
 
 
+class RunInputSpec(BaseModel):
+    """A value the consuming workflow supplies to every run of this purpose."""
+
+    name: str = Field(min_length=1, max_length=60)
+    data_type: str = Field(min_length=1, max_length=40)
+
+
 class PipelinePurposeSpec(BaseModel):
     """What one pipeline purpose is for, and what its output may be trusted to mean."""
 
@@ -71,6 +78,7 @@ class PipelinePurposeSpec(BaseModel):
     assignment_scope: Literal["system"] = "system"
     override_allowed: bool = False
     required_guarantees: list[WorkflowGuarantee] = Field(default_factory=list)
+    run_inputs: list[RunInputSpec] = Field(default_factory=list)
 
 
 def _key_stem(value: str) -> str:
@@ -508,6 +516,28 @@ PIPELINE_PURPOSES: tuple[PipelinePurposeSpec, ...] = (
 )
 
 
+# What each workflow hands a run before any stage executes. A stage input may
+# bind to one of these instead of to another stage's output.
+_QUERY = RunInputSpec(name="query", data_type="query")
+_CONTEXT = RunInputSpec(name="context", data_type="context_packet")
+PURPOSE_RUN_INPUTS: dict[str, tuple[RunInputSpec, ...]] = {
+    "research": (_QUERY,),
+    "evidence_suggestion": (_QUERY,),
+    "evidence_recovery": (_QUERY,),
+    "precedent_evidence_remap": (_QUERY,),
+    "vector_store_search": (_QUERY,),
+    "metadata_precedents": (_QUERY,),
+    "metadata_prefill": (_QUERY,),
+    "claim_memory": (_QUERY,),
+    "response_memory": (_QUERY,),
+    "corpus_reviewer_evidence_choice": (_CONTEXT,),
+    "corpus_metadata_enrichment": (_CONTEXT,),
+    "corpus_document_manifest": (_CONTEXT,),
+    "corpus_segmentation": (_CONTEXT,),
+    "corpus_text_touchup": (_CONTEXT,),
+}
+
+
 class PurposeRegistry:
     """Lookup over the code-owned purpose contracts."""
 
@@ -515,6 +545,10 @@ class PurposeRegistry:
         self._specs: dict[str, PipelinePurposeSpec] = {}
         self._by_feature: dict[str, PipelinePurposeSpec] = {}
         for spec in specs:
+            if not spec.run_inputs and spec.purpose_id in PURPOSE_RUN_INPUTS:
+                spec = spec.model_copy(
+                    update={"run_inputs": list(PURPOSE_RUN_INPUTS[spec.purpose_id])}
+                )
             if spec.purpose_id in self._specs:
                 raise ValueError(f"Duplicate pipeline purpose: {spec.purpose_id}")
             if spec.consuming_feature in self._by_feature:
@@ -559,6 +593,46 @@ def serialize_purpose(spec: PipelinePurposeSpec) -> dict[str, Any]:
     }
 
 
+COST_DRIVER_TERMS: tuple[VocabularyTerm, ...] = (
+    VocabularyTerm(id="cpu", label="Computation", description="Plain in-process computation."),
+    VocabularyTerm(id="storage", label="Storage reads", description="Reads from the database or vector store."),
+    VocabularyTerm(id="embedding", label="Embedding", description="Embeds text with the embedding model."),
+    VocabularyTerm(
+        id="model_inference",
+        label="Model scoring",
+        description="Runs a local model over many items, such as a cross-encoder.",
+    ),
+    VocabularyTerm(
+        id="llm_generation",
+        label="Language-model generation",
+        description="Waits on a language model to read a prompt and write an answer.",
+    ),
+)
+
+COMPLEXITY_VARIABLE_TERMS: tuple[VocabularyTerm, ...] = (
+    VocabularyTerm(id="n", label="n", description="Candidates arriving at the stage."),
+    VocabularyTerm(id="N", label="N", description="Items in the collection or Record scope the stage searches."),
+    VocabularyTerm(id="k", label="k", description="Items the stage keeps or returns."),
+    VocabularyTerm(id="L", label="L", description="Text length of one item, in tokens."),
+    VocabularyTerm(id="q", label="q", description="Query length, in tokens."),
+    VocabularyTerm(id="g", label="g", description="Tokens a model generates."),
+    VocabularyTerm(id="P", label="P", description="Prompt length, in tokens."),
+    VocabularyTerm(id="d", label="d", description="Embedding dimension."),
+    VocabularyTerm(id="S", label="S", description="Source units in the current Record."),
+)
+
+COMPLEXITY_ORDER_TERMS: tuple[VocabularyTerm, ...] = (
+    VocabularyTerm(id="constant", label="Constant", description="Does not grow with input size."),
+    VocabularyTerm(id="sublinear", label="Sublinear", description="Grows more slowly than the collection, for example an index lookup."),
+    VocabularyTerm(id="linear_in_candidates", label="Linear in candidates", description="Grows in step with the candidates it receives."),
+    VocabularyTerm(id="linearithmic", label="Sorting-like", description="Grows a little faster than the candidates it receives, as sorting does."),
+    VocabularyTerm(id="linear_in_scope", label="Scans the collection", description="Reads the whole collection or Record scope, so it grows with corpus size."),
+    VocabularyTerm(id="superlinear", label="Superlinear in candidates", description="Grows faster than the candidates it receives."),
+    VocabularyTerm(id="model_inference", label="One model pass per item", description="Runs a model over every candidate."),
+    VocabularyTerm(id="generation", label="Generation", description="Waits on a language model; time depends on prompt and answer length."),
+)
+
+
 def workflow_vocabulary() -> dict[str, list[dict[str, Any]]]:
     """Closed vocabularies the catalog serves so clients need no semantic tables."""
 
@@ -568,4 +642,7 @@ def workflow_vocabulary() -> dict[str, list[dict[str, Any]]]:
         "phases": _vocabulary("phase", WORKFLOW_PHASES),
         "scholarly_effects": _vocabulary("scholarly_effect", SCHOLARLY_EFFECTS),
         "effect_notes": _vocabulary("effect_note", EFFECT_NOTES),
+        "cost_drivers": _vocabulary("cost_driver", COST_DRIVER_TERMS),
+        "complexity_variables": _vocabulary("complexity_variable", COMPLEXITY_VARIABLE_TERMS),
+        "complexity_orders": _vocabulary("complexity_order", COMPLEXITY_ORDER_TERMS),
     }

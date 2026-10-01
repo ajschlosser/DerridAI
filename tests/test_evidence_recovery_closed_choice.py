@@ -290,11 +290,19 @@ def test_reviewer_suggestion_graph_rejects_the_settings() -> None:
     reviewer = built_in_pipeline("evidence.conservative", 1)
     compile_evidence_pipeline(reviewer)
     configured = reviewer.model_copy(update={"stages": [
-        stage.model_copy(update={"config": {"provider_role": "review"}})
+        stage.model_copy(
+            update={
+                "config": {
+                    "provider_role": "review",
+                    "candidate_scope": "input_or_all",
+                    "candidate_limit": 4,
+                }
+            }
+        )
         if stage.strategy == "llm.closed_choice_evidence" else stage
         for stage in reviewer.stages
     ]})
-    with pytest.raises(ValueError, match="does not apply provider_role"):
+    with pytest.raises(ValueError, match="candidate_limit, candidate_scope, provider_role"):
         compile_evidence_pipeline(configured)
 
 

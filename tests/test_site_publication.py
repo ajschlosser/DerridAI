@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import gzip
 import io
 import json
 import struct
@@ -10,6 +11,7 @@ import zipfile
 import pytest
 from app import site_publication
 from app.chroma_store import ChromaStore
+from app.site_publication import TRANSFORMERS_GLOBAL
 
 
 def _record(record_id: str = "r1", work: str = "Glas") -> dict:
@@ -98,17 +100,21 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     publication = package["manifest"]
     chunks = package["chunks"]
 
-    assert publication["format"] == "derridai-static-site-v4"
+    assert publication["format"] == "derridai-static-site-v5"
     assert publication["corpus_id"] == "derrida-primary"
     assert [work["work"] for work in publication["works"]] == ["Glas", "Rogues"]
     assert publication["features"]["browser_llm"] is False
     assert publication["features"]["derridai_sdk"] is True
     assert publication["features"]["host_supplied_generation"] is True
-    assert publication["features"]["direct_provider_endpoints"] is False
+    assert publication["features"]["browser_providers"] is True
+    assert publication["features"]["browser_vector_index"] is True
+    assert publication["features"]["transformers_runtime"] == "inline"
+    assert "direct_provider_endpoints" not in publication["features"]
     assert publication["features"]["progressive_work_loading"] is True
     assert publication["vector_index"]["dimension"] == 3
     assert publication["vector_index"]["model"] == "bge-m3:latest"
-    assert publication["provider_profiles"] == []
+    # Providers are configured by the reader in the browser; nothing about them is exported.
+    assert "provider_profiles" not in publication
     assert "records" not in publication
     assert "vectors" not in publication["vector_index"]
 
@@ -122,20 +128,66 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     assert "DerridAI" in site_runtime
     assert "__DERRIDAI_HOST_CAPABILITIES__" in site_runtime
     assert "sdk.createClient" in site_runtime
-    assert "OLLAMA_ORIGINS" in site_runtime
+    assert "site.runtime.discover_models" in site_runtime
     assert "derridai.site.providers." in site_runtime
     assert "site.runtime.save_provider" in site_runtime
     assert "site.runtime.provider_local_help" in site_runtime
-    # The shared browser client contains provider adapters, but this publication
-    # exports no provider profile, endpoint, or credential unless the publisher
-    # explicitly selects one.
-    assert publication["provider_profiles"] == []
+    # The shared browser client contains provider adapters but no provider profile, endpoint, or credential.
     assert "https://models.example" not in site_runtime
     assert "MUST-NOT-EXPORT" not in site_runtime
+    assert f"globalThis.{TRANSFORMERS_GLOBAL}=" in site_runtime
+    assert "wasm-unsafe-eval" in index_html
     assert bundle.record_count == 2
     assert bundle.work_count == 2
 
-def test_site_bundle_exports_only_selected_installed_languages_and_safe_provider_profiles(
+
+def test_site_bundle_can_omit_vectors_and_preserve_source_embedding_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        site_publication.store,
+        "export_site_projection",
+        lambda store_name, works: {
+            "store": {
+                "name": store_name,
+                "embedding_provider": "ollama",
+                "embedding_model": "bge-m3:latest",
+                "embedding_dimension": 3,
+                "distance_metric": "cosine",
+                "text_field": "text",
+            },
+            "records": [
+                {"record": _record("r1", "Glas"), "embedding": [0.1, 0.2, 0.3]},
+            ],
+        },
+    )
+
+    bundle = site_publication.build_site_bundle(
+        store_name="derrida-primary",
+        works=["Glas"],
+        title="Browser-indexed Derrida",
+        include_vectors=False,
+    )
+
+    with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
+        package = _package_from_runtime(archive.read("derridai-site.js").decode("utf-8"))
+
+    manifest = package["manifest"]
+    chunk = package["chunks"][0]
+    assert bundle.include_vectors is False
+    assert manifest["features"]["semantic_search"] is False
+    assert manifest["features"]["semantic_record_count"] == 0
+    assert manifest["features"]["publication_vectors_included"] is False
+    assert manifest["vector_index"]["model"] == "bge-m3:latest"
+    assert manifest["vector_index"]["dimension"] is None
+    assert manifest["source_collection"]["embedding_model"] == "bge-m3:latest"
+    assert manifest["source_collection"]["embedding_dimension"] == 3
+    assert _chunk_records(chunk)[0]["record_id"] == "r1"
+    assert chunk["vector_ids"] == []
+    assert chunk["vectors_b64"] == ""
+
+
+def test_site_bundle_exports_only_selected_installed_languages_and_no_provider_profiles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -178,36 +230,12 @@ def test_site_bundle_exports_only_selected_installed_languages_and_safe_provider
             "dictionary": dictionaries[code],
         },
     )
-    monkeypatch.setattr(
-        site_publication.system_store,
-        "researcher_profiles",
-        lambda: [
-            {
-                "id": "openai-main",
-                "name": "OpenAI-compatible lab",
-                "type": "openai",
-                "base_url": "https://models.example.edu/v1",
-                "model": "gpt-oss:20b",
-                "has_api_key": True,
-                "api_key": "MUST-NOT-EXPORT",
-            },
-            {
-                "id": "other",
-                "name": "Other",
-                "type": "openai",
-                "base_url": "https://other.example/v1",
-                "model": "other-model",
-            },
-        ],
-    )
-
     bundle = site_publication.build_site_bundle(
         store_name="derrida-primary",
         works=["Glas"],
         title="Multilingual site",
         locale="de-DE",
         languages=["de-DE", "fr-CA"],
-        provider_profile_ids=["openai-main"],
     )
 
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
@@ -220,19 +248,8 @@ def test_site_bundle_exports_only_selected_installed_languages_and_safe_provider
     assert set(manifest["strings"]) == {"de-DE", "fr-CA"}
     assert manifest["strings"]["de-DE"]["site.runtime.search"] == "Suchen"
     assert manifest["strings"]["de-DE"]["site.runtime.site_title"] == site_publication.EN_US["site.runtime.site_title"]
-    assert manifest["provider_profiles"] == [
-        {
-            "id": "openai-main",
-            "name": "OpenAI-compatible lab",
-            "type": "openai",
-            "base_url": "https://models.example.edu/v1",
-            "model": "gpt-oss:20b",
-            "has_api_key": True,
-        }
-    ]
-    assert "MUST-NOT-EXPORT" not in site_runtime
-    assert manifest["features"]["direct_provider_endpoints"] is True
-    assert "site.runtime.provider_saved" in site_runtime
+    assert "provider_profiles" not in manifest
+    assert "direct_provider_endpoints" not in manifest["features"]
 
 
 def test_site_bundle_rejects_selected_language_with_missing_runtime_translations(
@@ -465,6 +482,11 @@ def test_nginx_export_contains_one_container_deployment_and_executable_scripts(
         assert archive.namelist() == [
             "index.html",
             "derridai-site.js",
+            "vendor/transformers/transformers.min.js",
+            "vendor/transformers/ort-wasm-simd-threaded.mjs",
+            "vendor/transformers/ort-wasm-simd-threaded.wasm",
+            "vendor/transformers/NOTICE.txt",
+            "vendor/transformers/LICENSE-transformers.js.txt",
             "Dockerfile",
             "nginx.conf",
             "start.sh",
@@ -509,5 +531,171 @@ def test_every_translation_key_used_by_the_site_runtime_exists_in_both_locales()
         for suffix in ("title", "body")
     )
     assert used
+    for role in ("embedding", "generation"):
+        used |= {
+            f"site.runtime.provider_{role}_{part}"
+            for part in ("heading", "help", "select", "none", "none_help")
+        }
     assert sorted(used - set(EN_US)) == []
     assert sorted(used - set(FR_CA)) == []
+
+
+def _stub_projection(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        site_publication.store,
+        "export_site_projection",
+        lambda store_name, works: {
+            "store": {
+                "name": store_name,
+                "embedding_model": "bge-m3:latest",
+                "embedding_dimension": 3,
+                "distance_metric": "cosine",
+            },
+            "records": [{"record": _record("r1", "Glas"), "embedding": [0.1, 0.2, 0.3]}],
+        },
+    )
+
+
+_FAKE_RUNTIME = {
+    "engine": b"export const engine = 1;",
+    "license": b"Apache License fixture",
+    "wasm_factory": b"export default function factory() {}",
+    "wasm": b"\x00asm" + bytes(range(64)) * 4,
+}
+
+
+@pytest.fixture(autouse=True)
+def _runtime_without_network(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Exports must never reach the network in tests; the cache module has its own tests."""
+    calls: list[int] = []
+
+    def fake_ensure_runtime() -> dict[str, bytes]:
+        calls.append(1)
+        return dict(_FAKE_RUNTIME)
+
+    monkeypatch.setattr(site_publication, "ensure_runtime", fake_ensure_runtime)
+    return calls
+
+
+def test_two_file_site_embeds_the_transformers_runtime_only_when_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_projection(monkeypatch)
+    bundle = site_publication.build_site_bundle(
+        store_name="derrida-primary",
+        works=["Glas"],
+        title="With runtime",
+        include_transformers=True,
+    )
+    with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
+        assert archive.namelist() == ["index.html", "derridai-site.js"]
+        index_html = archive.read("index.html").decode("utf-8")
+        runtime = archive.read("derridai-site.js").decode("utf-8")
+
+    manifest = _package_from_runtime(runtime)["manifest"]
+    assert manifest["features"]["transformers_runtime"] == "inline"
+    assert manifest["features"]["transformers_local_models"] is None
+    payload = json.loads(
+        runtime.split(f"globalThis.{TRANSFORMERS_GLOBAL}=", 1)[1].split(";\n", 1)[0]
+    )
+    assert base64.b64decode(payload["engine_b64"]) == _FAKE_RUNTIME["engine"]
+    assert base64.b64decode(payload["wasm_factory_b64"]) == _FAKE_RUNTIME["wasm_factory"]
+    assert gzip.decompress(base64.b64decode(payload["wasm_gzip_b64"])) == _FAKE_RUNTIME["wasm"]
+    assert "Apache License fixture" in payload["notice"]
+    # WebAssembly and blob: modules are allowed only because the runtime is included.
+    assert "'wasm-unsafe-eval'" in index_html
+    assert "blob:" in index_html
+
+
+def test_single_file_site_embeds_the_runtime_with_a_matching_standalone_csp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_projection(monkeypatch)
+    bundle = site_publication.build_local_site_file(
+        store_name="derrida-primary",
+        works=["Glas"],
+        title="With runtime",
+        include_transformers=True,
+    )
+    html = bundle.payload.decode("utf-8")
+    assert html.count(f"globalThis.{TRANSFORMERS_GLOBAL}=") == 1
+    assert "<script src=" not in html
+    assert "script-src 'unsafe-inline' 'wasm-unsafe-eval' blob:" in html
+    assert "default-src 'none'" in html
+
+
+def test_nginx_export_serves_the_runtime_as_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_projection(monkeypatch)
+    bundle = site_publication.build_nginx_site_bundle(
+        store_name="derrida-primary",
+        works=["Glas"],
+        title="Served",
+        include_transformers=True,
+    )
+    with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
+        names = set(archive.namelist())
+        runtime_script = archive.read("derridai-site.js").decode("utf-8")
+        dockerfile = archive.read("Dockerfile").decode("utf-8")
+        nginx = archive.read("nginx.conf").decode("utf-8")
+        start = archive.read("start.sh").decode("utf-8")
+        wasm = archive.read("vendor/transformers/ort-wasm-simd-threaded.wasm")
+        engine = archive.read("vendor/transformers/transformers.min.js")
+
+    assert {
+        "vendor/transformers/transformers.min.js",
+        "vendor/transformers/ort-wasm-simd-threaded.mjs",
+        "vendor/transformers/ort-wasm-simd-threaded.wasm",
+        "vendor/transformers/NOTICE.txt",
+    } <= names
+    assert not any(name.startswith("models/") for name in names)
+    assert engine == _FAKE_RUNTIME["engine"]
+    assert wasm == _FAKE_RUNTIME["wasm"]
+    # The deployment serves the runtime, so it is not duplicated inside the site script.
+    assert f"globalThis.{TRANSFORMERS_GLOBAL}=" not in runtime_script
+    manifest = _package_from_runtime(runtime_script)["manifest"]
+    assert manifest["features"]["transformers_runtime"] == "files"
+    assert manifest["features"]["transformers_local_models"] is None
+    assert "COPY vendor /usr/share/nginx/html/vendor" in dockerfile
+    assert "location /vendor/" in nginx
+    assert "location /models/" not in nginx
+    assert "/usr/share/nginx/html/models:ro" not in start
+
+
+def test_every_export_fetches_the_runtime(
+    monkeypatch: pytest.MonkeyPatch, _runtime_without_network: list[int]
+) -> None:
+    _stub_projection(monkeypatch)
+    site_publication.build_site_bundle(store_name="derrida-primary", works=["Glas"], title="Plain")
+    site_publication.build_nginx_site_bundle(store_name="derrida-primary", works=["Glas"], title="Plain")
+    assert _runtime_without_network
+
+
+def test_export_fails_before_corpus_work_when_the_runtime_cannot_be_downloaded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.site_runtime_cache import RuntimeUnavailableError
+
+    def unavailable() -> dict[str, bytes]:
+        raise RuntimeUnavailableError("offline")
+
+    def projection_must_not_run(*_args: object) -> dict:
+        raise AssertionError("corpus work started before the runtime was available")
+
+    monkeypatch.setattr(site_publication, "ensure_runtime", unavailable)
+    monkeypatch.setattr(site_publication.store, "export_site_projection", projection_must_not_run)
+    with pytest.raises(RuntimeUnavailableError):
+        site_publication.build_site_bundle(
+            store_name="derrida-primary", works=["Glas"], title="X", include_transformers=True
+        )
+
+
+def test_export_requests_ignore_legacy_provider_profile_ids() -> None:
+    from app.routers.sites import SiteExportRequest
+
+    request = SiteExportRequest(
+        store="derrida-primary", works=["Glas"], provider_profile_ids=["openai-main"]
+    )
+    assert not hasattr(request, "provider_profile_ids")
+    assert request.include_transformers is True

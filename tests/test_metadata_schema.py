@@ -20,6 +20,7 @@ from app.metadata_schema_profiles import (
     fiction_schema,
     nonfiction_schema,
 )
+from pydantic import ValidationError
 
 LEGACY = json.loads((Path(__file__).parent / "fixtures" / "legacy_prompts.json").read_text(encoding="utf-8"))
 CONTEXT = "<<CONTEXT>>\n"
@@ -39,8 +40,78 @@ def test_the_built_in_schema_prompts_require_complete_assessments():
         assert "no_supported_value" in text
         assert "uncertain" in text
     assert "even when its metadata value is null or empty" in discourse
+    assert "Never put a proposed value only in the reason" in discourse
+    assert "requires the corresponding metadata value to be non-null/non-empty" in discourse
     assert "every one of is_direct_quote" in quotation
+    assert "never put a proposed value only in the reason" in quotation
     assert "even when the corresponding metadata list is empty" in indexing
+    assert "supported_value\" only for a supported non-empty list" in indexing
+
+
+def test_group_prompt_and_response_contract_can_be_scoped_to_unresolved_fields():
+    schema = ms.default_schema()
+    scoped_prompt = ms.build_group_prompt(
+        schema,
+        "indexing",
+        base_context=CONTEXT,
+        field_names={"topics", "concepts"},
+    )
+    assert "- topics " in scoped_prompt
+    assert "- concepts " in scoped_prompt
+    assert "- persons " not in scoped_prompt
+    assert "- works_referenced " not in scoped_prompt
+    assert "topics and concepts" in scoped_prompt
+
+    model = ms.response_model_for(
+        schema,
+        "indexing",
+        field_names={"topics", "concepts"},
+    )
+    parsed = model.model_validate({
+        "metadata": {"topics": ["hospitality"], "concepts": ["sovereignty"]},
+        "field_assessments": {
+            "topics": {
+                "confidence": 0.9,
+                "needs_review": False,
+                "reason": "Explicit subject matter.",
+                "outcome": "supported_value",
+            },
+            "concepts": {
+                "confidence": 0.85,
+                "needs_review": False,
+                "reason": "Explicit conceptual vocabulary.",
+                "outcome": "supported_value",
+            },
+        },
+        "review_reason": "",
+    })
+    assert parsed.metadata.model_dump() == {
+        "topics": ["hospitality"],
+        "concepts": ["sovereignty"],
+    }
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "metadata": {
+                "topics": ["hospitality"],
+                "concepts": ["sovereignty"],
+                "persons": ["Derrida"],
+            },
+            "field_assessments": {
+                "topics": {
+                    "confidence": 0.9,
+                    "needs_review": False,
+                    "reason": "Explicit.",
+                    "outcome": "supported_value",
+                },
+                "concepts": {
+                    "confidence": 0.85,
+                    "needs_review": False,
+                    "reason": "Explicit.",
+                    "outcome": "supported_value",
+                },
+            },
+            "review_reason": "",
+        })
 
 
 def test_response_consistency_degrades_assessment_value_contradictions_to_review():
@@ -236,6 +307,21 @@ def test_domain_builtin_profiles_are_traceable_guided_and_schema_driven(
     }
     for field in schema.fields:
         assert field.name in prompts[field.group]
+
+
+def test_nonfiction_evidence_prompt_separates_attention_cues_from_metadata_values():
+    schema = nonfiction_schema()
+    by_name = schema.by_name()
+
+    assert schema.schema_version == "1.0.1"
+    for name in ("evidence_types", "evidence_items"):
+        assert by_name[name].pos_tags == []
+        assert by_name[name].ner_tags == []
+
+    evidence_prompt = prompt(schema, "evidence")
+    assert "supported_value requires a non-empty metadata value" in evidence_prompt
+    assert "no_supported_value requires null or []" in evidence_prompt
+    assert "never copy a candidate list into metadata" in evidence_prompt
 
 
 def test_default_schema_assigns_curated_pos_and_ner_hints_to_every_configurable_field():

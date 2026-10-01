@@ -99,9 +99,48 @@ class _SemanticIndex:
         for edge in self.edges:
             self.edges_by_node[str(edge.get("source") or "")].append(edge)
             self.edges_by_node[str(edge.get("target") or "")].append(edge)
+        for adjacent in self.edges_by_node.values():
+            adjacent.sort(key=_edge_rank)
         self.term_mentions: dict[str, list[dict[str, Any]]] = {}
         self.term_state: dict[str, str] = {}
         self._fold_in_terms()
+
+        # Build the expensive reverse indexes once per graph generation. Record
+        # maps and node walks must never rescan every graph edge or every node.
+        self.edges_by_record: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+        self.nodes_by_record: defaultdict[str, set[str]] = defaultdict(set)
+        node_record_sets: dict[str, set[str]] = {
+            node_id: {
+                str(value)
+                for value in node.get("record_ids") or []
+                if str(value) in self.record_order
+            }
+            for node_id, node in self.nodes.items()
+        }
+        for node_id, record_ids in node_record_sets.items():
+            for record_id in record_ids:
+                self.nodes_by_record[record_id].add(node_id)
+        for edge in self.edges:
+            source = str(edge.get("source") or "")
+            target = str(edge.get("target") or "")
+            for value in edge.get("record_ids") or []:
+                record_id = str(value)
+                if record_id not in self.record_order:
+                    continue
+                self.edges_by_record[record_id].append(edge)
+                if source in self.nodes:
+                    self.nodes_by_record[record_id].add(source)
+                    node_record_sets.setdefault(source, set()).add(record_id)
+                if target in self.nodes:
+                    self.nodes_by_record[record_id].add(target)
+                    node_record_sets.setdefault(target, set()).add(record_id)
+        self.node_records: dict[str, list[str]] = {
+            node_id: sorted(
+                record_ids,
+                key=lambda value: self.record_order[value],
+            )
+            for node_id, record_ids in node_record_sets.items()
+        }
 
     def _fold_in_terms(self) -> None:
         # Graph nodes are ordered by mention count, so an ambiguous label resolves to
@@ -189,14 +228,13 @@ class _SemanticIndex:
         return str((self.graph.get("node_aliases") or {}).get(node_id) or node_id)
 
     def _records_for_node(self, node_id: str) -> list[str]:
-        """Every Record in which the node occurs or takes part in a relation."""
-        found = set(self.nodes[node_id].get("record_ids") or [])
-        for edge in self.edges_by_node.get(node_id, []):
-            found.update(str(value) for value in edge.get("record_ids") or [] if value)
-        return sorted(
-            (value for value in found if value in self.record_order),
-            key=lambda value: self.record_order[value],
-        )
+        """Every Record in which the node occurs or takes part in a relation.
+
+        This is an indexed lookup. The previous implementation rebuilt the set by
+        walking incident edges on every call, which multiplied work while ranking
+        one Record and again while walking nodes.
+        """
+        return self.node_records.get(node_id, [])
 
     def _idf(self, document_frequency: int) -> float:
         total = max(1, len(self.record_order))
@@ -270,12 +308,8 @@ class _SemanticIndex:
             key=lambda item: (item["start"], -item["end"], item["layer"]),
         )
 
-        record_edges = [edge for edge in self.edges if record_id in (edge.get("record_ids") or [])]
-        local_ids: set[str] = {
-            node_id for node_id, node in self.nodes.items() if record_id in node["record_ids"]
-        }
-        for edge in record_edges:
-            local_ids.update({str(edge["source"]), str(edge["target"])})
+        record_edges = self.edges_by_record.get(record_id, [])
+        local_ids: set[str] = set(self.nodes_by_record.get(record_id, set()))
         local_ids.update(item["node_id"] for item in mentions if item.get("node_id"))
         local_ids &= set(self.nodes)
 
@@ -412,7 +446,7 @@ class _SemanticIndex:
         node = self.nodes.get(node_id)
         if node is None:
             raise KeyError(node_id)
-        adjacent = sorted(self.edges_by_node.get(node_id, []), key=_edge_rank)
+        adjacent = self.edges_by_node.get(node_id, [])
         neighbor_ids = list(
             dict.fromkeys(
                 str(edge["target"] if edge["source"] == node_id else edge["source"])
@@ -438,6 +472,84 @@ class _SemanticIndex:
             "total_records": len(record_ids),
             "epistemic_note": EPISTEMIC_NOTE,
         }
+
+    def work_sources(self) -> dict[str, dict[str, Any]]:
+        """Project canonical graph identities into the visual Work-map contract.
+
+        The Work map keeps the established visual treatment, but its concepts,
+        topics and persons now come from this same indexed semantic graph rather
+        than a second browser-built semantic model.
+        """
+        by_work: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+        for record_id, record in self.record_by_id.items():
+            work = _normalize(record.get("work") or record.get("document_title"))
+            if not work:
+                continue
+            concepts: list[str] = []
+            topics: list[str] = []
+            persons: list[str] = []
+            seen: set[tuple[str, str]] = set()
+            for node_id in self.nodes_by_record.get(record_id, set()):
+                node = self.nodes.get(node_id)
+                if not node or node.get("type") == "term":
+                    continue
+                kind = str(node.get("type") or "")
+                label = _normalize(node.get("label"))
+                key = (kind, text_key(label))
+                if not label or key in seen:
+                    continue
+                seen.add(key)
+                if kind == "concept":
+                    concepts.append(label)
+                elif kind == "topic":
+                    topics.append(label)
+                elif kind in {"person", "character"}:
+                    persons.append(label)
+            by_work[work].append({
+                "id": record_id,
+                "work": work,
+                "concepts": sorted(concepts, key=str.casefold),
+                "topics": sorted(topics, key=str.casefold),
+                "persons": sorted(persons, key=str.casefold),
+            })
+        return {
+            work: {
+                "version": RECORD_SEMANTIC_MAP_VERSION,
+                "kind": "work_semantic_map_sources",
+                "work": work,
+                "sources": sources,
+                "record_count": len(sources),
+                "epistemic_note": EPISTEMIC_NOTE,
+            }
+            for work, sources in by_work.items()
+        }
+
+    def materialize(
+        self,
+        analysis: dict[str, Any],
+    ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+        """Materialize all bounded projections from one shared index walk."""
+        record_maps = {
+            record_id: self.record_map(record_id, analysis)
+            for record_id in self.record_by_id
+        }
+        node_maps = {
+            node_id: self.node_neighborhood(node_id)
+            for node_id in self.nodes
+        }
+        return record_maps, node_maps, self.work_sources()
+
+
+def build_semantic_map_projections(
+    graph: dict[str, Any],
+    records: list[dict[str, Any]],
+    *,
+    analysis: dict[str, Any] | None = None,
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Build Record, node, and Work projections with one shared traversal index."""
+    return _SemanticIndex(graph, records).materialize(
+        analysis if isinstance(analysis, dict) else {}
+    )
 
 
 def record_semantic_map(

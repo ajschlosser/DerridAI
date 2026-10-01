@@ -78,12 +78,58 @@ def test_parse_json_robust_handles_common_model_wrappers_and_trailing_commas():
     assert parsed["boundaries"][0]["after_block_id"] == "p001-b001"
 
 
-def test_chat_json_retries_malformed_output_then_validates(monkeypatch, tmp_path: Path):
-    """Malformed replies are retried with a correction note and a larger token budget.
+def test_chat_json_repairs_malformed_json_before_spending_a_retry(monkeypatch, tmp_path: Path):
+    """A syntax-only JSON defect is repaired locally and validated in one model call."""
+    calls = []
 
-    Two invalid answers then a valid one: three calls total, the second prompt says the previous
-    response could not be validated, and max_tokens grows on retry.
-    """
+    def fake_chat_complete(**kwargs):
+        calls.append(kwargs)
+        return '{"boundaries": [],}'
+
+    monkeypatch.setattr(cb, "chat_complete", fake_chat_complete)
+    manager = cb.PdfCorpusBuildManager(cb.PdfCorpusRepository(tmp_path / "repo"), max_workers=1)
+    result = manager._chat_json(
+        {"provider": "ollama", "model": "test"},
+        "segment",
+        response_model=cb.SegmentationResponseModel,
+        attempts=3,
+    )
+    assert result == {"boundaries": []}
+    assert len(calls) == 1
+
+
+def test_chat_json_retries_cutoff_with_distinct_prompt_and_larger_budget(monkeypatch, tmp_path: Path):
+    """A token-limited response is not repaired; retry restarts with more output budget."""
+    calls = []
+
+    def fake_chat_complete(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise cb.StructuredJsonTruncatedError(
+                "cut off",
+                diagnostic='{"boundaries": [',
+                finish_reason="length",
+            )
+        return '{"boundaries": []}'
+
+    monkeypatch.setattr(cb, "chat_complete", fake_chat_complete)
+    manager = cb.PdfCorpusBuildManager(cb.PdfCorpusRepository(tmp_path / "repo"), max_workers=1)
+    result = manager._chat_json(
+        {"provider": "ollama", "model": "test"},
+        "segment",
+        response_model=cb.SegmentationResponseModel,
+        attempts=2,
+        max_tokens=1200,
+    )
+    assert result == {"boundaries": []}
+    assert len(calls) == 2
+    assert "OUTPUT LIMIT CORRECTION" in calls[1]["prompt"]
+    assert "do not continue the partial object" in calls[1]["prompt"]
+    assert calls[1]["max_tokens"] >= 1800
+
+
+def test_chat_json_retries_malformed_output_then_validates(monkeypatch, tmp_path: Path):
+    """Unrepairable JSON is retried with a syntax-specific note and a larger token budget."""
     calls = []
 
     def fake_chat_complete(**kwargs):
@@ -102,7 +148,7 @@ def test_chat_json_retries_malformed_output_then_validates(monkeypatch, tmp_path
     )
     assert result == {"boundaries": []}
     assert len(calls) == 3
-    assert "previous response could not be validated" in calls[1]["prompt"]
+    assert "JSON SYNTAX CORRECTION" in calls[1]["prompt"]
     assert calls[1]["max_tokens"] > calls[0]["max_tokens"]
 
 

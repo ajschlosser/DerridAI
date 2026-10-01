@@ -133,9 +133,13 @@ def _matches_review_queue(record: dict[str, Any], queue: str | None) -> bool:
         return disposition == queue
     if disposition != "pending":
         return False
+    # A record whose enrichment is still running is "preparing": _queue_counts keeps it out of every
+    # exception count, so the lists must too or a tab's badge and its rows disagree.
+    if not _metadata_enrichment_finished(record):
+        return queue not in {"ready", "issues", "metadata", "topology", "source"}
     codes = _review_issue_codes(record)
     if queue == "ready":
-        return _metadata_enrichment_finished(record) and not codes
+        return not codes
     if queue == "issues":
         return bool(codes)
     if queue in {"metadata", "topology", "source"}:

@@ -117,6 +117,379 @@ var DerridAI = (function(exports) {
       error && typeof error === "object" && "name" in error && error.name === "AbortError"
     );
   }
+  const SEPARATOR = "\0";
+  function embeddingFingerprint(descriptor) {
+    return [
+      descriptor.type ?? "",
+      descriptor.model ?? "",
+      descriptor.revision ?? "",
+      descriptor.variant ?? ""
+    ].join("|");
+  }
+  function modelName(value) {
+    return String(value ?? "").replace(/:latest$/, "");
+  }
+  function matchesPublicationModel(descriptor, contract) {
+    const expected = modelName(contract?.model);
+    const actual = modelName(descriptor.model);
+    if (!expected || !actual || expected !== actual) return false;
+    if (descriptor.variant) return false;
+    const expectedRevision = String(contract?.revision ?? "");
+    const actualRevision = String(descriptor.revision ?? "");
+    return !expectedRevision || !actualRevision || expectedRevision === actualRevision;
+  }
+  function indexKey(publicationId, fingerprint) {
+    return `${publicationId}${SEPARATOR}${fingerprint}`;
+  }
+  function summaryOf(publicationId, fingerprint, descriptor, dimension, count) {
+    return {
+      publicationId,
+      fingerprint,
+      model: String(descriptor.model ?? ""),
+      provider: String(descriptor.type ?? ""),
+      dimension,
+      count,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+  class MemoryVectorStore {
+    persistent = false;
+    indexes = /* @__PURE__ */ new Map();
+    async ids(publicationId, fingerprint) {
+      return new Set(this.indexes.get(indexKey(publicationId, fingerprint))?.vectors.keys() ?? []);
+    }
+    async load(publicationId, fingerprint) {
+      const entry = this.indexes.get(indexKey(publicationId, fingerprint));
+      if (!entry) return null;
+      return { dimension: entry.summary.dimension, vectors: new Map(entry.vectors) };
+    }
+    async put(publicationId, fingerprint, descriptor, entries) {
+      const key = indexKey(publicationId, fingerprint);
+      let entry = this.indexes.get(key);
+      if (!entry) {
+        entry = {
+          summary: summaryOf(
+            publicationId,
+            fingerprint,
+            descriptor,
+            entries[0]?.vector.length ?? 0,
+            0
+          ),
+          vectors: /* @__PURE__ */ new Map()
+        };
+        this.indexes.set(key, entry);
+      }
+      for (const item of entries) entry.vectors.set(item.recordId, new Float32Array(item.vector));
+      entry.summary = {
+        ...entry.summary,
+        count: entry.vectors.size,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    async summaries(publicationId) {
+      return [...this.indexes.values()].map((entry) => entry.summary).filter((summary) => summary.publicationId === publicationId);
+    }
+    async clear(publicationId, fingerprint) {
+      for (const key of [...this.indexes.keys()]) {
+        const [id2, print] = key.split(SEPARATOR);
+        if (id2 === publicationId && (fingerprint === void 0 || print === fingerprint)) {
+          this.indexes.delete(key);
+        }
+      }
+    }
+  }
+  function request(req) {
+    return new Promise((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error ?? new Error("IndexedDB request failed."));
+    });
+  }
+  function transactionDone(tx) {
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error("IndexedDB transaction failed."));
+      tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction aborted."));
+    });
+  }
+  class IndexedDbVectorStore {
+    constructor(name = "derridai-sdk-vectors", factory = globalThis.indexedDB) {
+      this.name = name;
+      this.factory = factory;
+    }
+    name;
+    factory;
+    persistent = true;
+    opened;
+    database() {
+      if (!this.opened) {
+        this.opened = new Promise((resolve, reject) => {
+          const open = this.factory.open(this.name, 1);
+          open.onupgradeneeded = () => {
+            open.result.createObjectStore("vectors");
+            open.result.createObjectStore("indexes");
+          };
+          open.onsuccess = () => resolve(open.result);
+          open.onerror = () => reject(open.error ?? new Error("IndexedDB could not be opened."));
+          open.onblocked = () => reject(new Error("IndexedDB upgrade was blocked."));
+        });
+        this.opened.catch(() => {
+          this.opened = void 0;
+        });
+      }
+      return this.opened;
+    }
+    range(publicationId, fingerprint) {
+      const prefix = `${indexKey(publicationId, fingerprint)}${SEPARATOR}`;
+      return IDBKeyRange.bound(prefix, `${prefix}￿`);
+    }
+    async ids(publicationId, fingerprint) {
+      const db = await this.database();
+      const prefix = `${indexKey(publicationId, fingerprint)}${SEPARATOR}`;
+      const keys = await request(
+        db.transaction("vectors", "readonly").objectStore("vectors").getAllKeys(this.range(publicationId, fingerprint))
+      );
+      return new Set(keys.map((key) => String(key).slice(prefix.length)));
+    }
+    async load(publicationId, fingerprint) {
+      const db = await this.database();
+      const tx = db.transaction(["vectors", "indexes"], "readonly");
+      const meta = await request(
+        tx.objectStore("indexes").get(indexKey(publicationId, fingerprint))
+      );
+      if (!meta) return null;
+      const prefix = `${indexKey(publicationId, fingerprint)}${SEPARATOR}`;
+      const range = this.range(publicationId, fingerprint);
+      const store = tx.objectStore("vectors");
+      const [keys, values] = await Promise.all([
+        request(store.getAllKeys(range)),
+        request(store.getAll(range))
+      ]);
+      const vectors = /* @__PURE__ */ new Map();
+      keys.forEach((key, index) => {
+        vectors.set(String(key).slice(prefix.length), values[index]);
+      });
+      return { dimension: meta.dimension, vectors };
+    }
+    async put(publicationId, fingerprint, descriptor, entries) {
+      const db = await this.database();
+      const tx = db.transaction(["vectors", "indexes"], "readwrite");
+      const done = transactionDone(tx);
+      const vectors = tx.objectStore("vectors");
+      const prefix = `${indexKey(publicationId, fingerprint)}${SEPARATOR}`;
+      for (const item of entries) vectors.put(item.vector, `${prefix}${item.recordId}`);
+      const count = await request(vectors.count(this.range(publicationId, fingerprint)));
+      const indexes = tx.objectStore("indexes");
+      const key = indexKey(publicationId, fingerprint);
+      const existing = await request(indexes.get(key));
+      indexes.put(
+        {
+          ...summaryOf(
+            publicationId,
+            fingerprint,
+            descriptor,
+            existing?.dimension || entries[0]?.vector.length || 0,
+            count
+          )
+        },
+        key
+      );
+      await done;
+    }
+    async summaries(publicationId) {
+      const db = await this.database();
+      const all = await request(
+        db.transaction("indexes", "readonly").objectStore("indexes").getAll()
+      );
+      return all.filter((summary) => summary.publicationId === publicationId);
+    }
+    async clear(publicationId, fingerprint) {
+      const targets = fingerprint !== void 0 ? [fingerprint] : (await this.summaries(publicationId)).map((summary) => summary.fingerprint);
+      const db = await this.database();
+      const tx = db.transaction(["vectors", "indexes"], "readwrite");
+      const done = transactionDone(tx);
+      for (const print of targets) {
+        tx.objectStore("vectors").delete(this.range(publicationId, print));
+        tx.objectStore("indexes").delete(indexKey(publicationId, print));
+      }
+      await done;
+    }
+  }
+  class FallbackVectorStore {
+    active;
+    fallback = new MemoryVectorStore();
+    constructor(primary) {
+      this.active = primary;
+    }
+    get persistent() {
+      return this.active.persistent;
+    }
+    async run(operation) {
+      if (this.active === this.fallback) return operation(this.active);
+      try {
+        return await operation(this.active);
+      } catch {
+        this.active = this.fallback;
+        return operation(this.active);
+      }
+    }
+    ids(publicationId, fingerprint) {
+      return this.run((store) => store.ids(publicationId, fingerprint));
+    }
+    load(publicationId, fingerprint) {
+      return this.run((store) => store.load(publicationId, fingerprint));
+    }
+    put(publicationId, fingerprint, descriptor, entries) {
+      return this.run((store) => store.put(publicationId, fingerprint, descriptor, entries));
+    }
+    summaries(publicationId) {
+      return this.run((store) => store.summaries(publicationId));
+    }
+    clear(publicationId, fingerprint) {
+      return this.run((store) => store.clear(publicationId, fingerprint));
+    }
+  }
+  function defaultVectorStore() {
+    try {
+      if (typeof globalThis.indexedDB !== "undefined" && globalThis.indexedDB) {
+        return new FallbackVectorStore(new IndexedDbVectorStore());
+      }
+    } catch {
+    }
+    return new MemoryVectorStore();
+  }
+  const vectorIndex = {
+    indexedDb: (name) => new IndexedDbVectorStore(name),
+    /** IndexedDB that degrades to memory for the session if the browser refuses it. */
+    resilient: (name) => new FallbackVectorStore(new IndexedDbVectorStore(name)),
+    memory: () => new MemoryVectorStore()
+  };
+  const DEFAULT_BATCH_SIZE = 16;
+  function throwIfAborted$2(signal) {
+    if (signal?.aborted) throw new DOMException("Operation aborted.", "AbortError");
+  }
+  class LocalVectorIndex {
+    constructor(manifest, repository, store, events) {
+      this.manifest = manifest;
+      this.repository = repository;
+      this.store = store;
+      this.events = events;
+    }
+    manifest;
+    repository;
+    store;
+    events;
+    loaded = /* @__PURE__ */ new Map();
+    get publicationId() {
+      return this.manifest.publication_id;
+    }
+    textOf(record) {
+      const field = String(this.manifest.vector_index?.text_field || "text");
+      return String(record[field] ?? "").trim();
+    }
+    usesPublishedVectors(provider) {
+      return Boolean(
+        this.manifest.features?.semantic_search && this.manifest.vector_index?.dimension && matchesPublicationModel(provider.descriptor(), this.manifest.vector_index)
+      );
+    }
+    async status(provider) {
+      const descriptor = provider.descriptor();
+      const fingerprint = embeddingFingerprint(descriptor);
+      const total = this.repository.totalRecords();
+      const usesPublishedVectors = this.usesPublishedVectors(provider);
+      const indexed = (await this.store.ids(this.publicationId, fingerprint)).size;
+      return {
+        usesPublishedVectors,
+        complete: usesPublishedVectors || total > 0 && indexed >= total,
+        indexed: usesPublishedVectors ? total : indexed,
+        total,
+        persistent: this.store.persistent,
+        model: descriptor.model
+      };
+    }
+    async vectorsFor(provider) {
+      const fingerprint = embeddingFingerprint(provider.descriptor());
+      const cached = this.loaded.get(fingerprint);
+      if (cached) return cached;
+      const stored = await this.store.load(this.publicationId, fingerprint);
+      if (stored) this.loaded.set(fingerprint, stored);
+      return stored;
+    }
+    async build(provider, runId2, options = {}) {
+      const { signal } = options;
+      const batchSize = Math.max(1, Math.min(128, options.batchSize ?? DEFAULT_BATCH_SIZE));
+      const descriptor = provider.descriptor();
+      const fingerprint = embeddingFingerprint(descriptor);
+      const total = this.repository.totalRecords();
+      const existing = await this.store.ids(this.publicationId, fingerprint);
+      const summary = (await this.store.summaries(this.publicationId)).find(
+        (item) => item.fingerprint === fingerprint
+      );
+      let dimension = summary?.dimension ?? 0;
+      let indexed = existing.size;
+      const deferredEmpty = [];
+      this.loaded.delete(fingerprint);
+      this.events.emit({ type: "index-progress", runId: runId2, indexed, total });
+      const writeEmpty = async (ids) => {
+        if (!ids.length || !dimension) return;
+        await this.store.put(
+          this.publicationId,
+          fingerprint,
+          descriptor,
+          ids.map((recordId) => ({ recordId, vector: new Float32Array(dimension) }))
+        );
+        indexed += ids.length;
+      };
+      await this.repository.eachChunk(signal, async (records) => {
+        const pending = records.filter((record) => !existing.has(String(record.record_id)));
+        const embeddable = pending.filter((record) => this.textOf(record));
+        const empty = pending.filter((record) => !this.textOf(record)).map((record) => String(record.record_id));
+        for (let start = 0; start < embeddable.length; start += batchSize) {
+          throwIfAborted$2(signal);
+          const batch = embeddable.slice(start, start + batchSize);
+          const result = await provider.embed(
+            batch.map((record) => this.textOf(record)),
+            { signal, purpose: "document" }
+          );
+          if (result.vectors.length !== batch.length) {
+            throw new Error("The embedding provider returned the wrong number of vectors.");
+          }
+          const entries = batch.map((record, index) => {
+            const vector = Float32Array.from(result.vectors[index] ?? []);
+            if (!vector.length || vector.some((value) => !Number.isFinite(value))) {
+              throw new Error("The embedding provider returned an invalid vector.");
+            }
+            if (!dimension) dimension = vector.length;
+            if (vector.length !== dimension) {
+              throw new Error("The embedding provider returned vectors of differing sizes.");
+            }
+            return { recordId: String(record.record_id), vector };
+          });
+          await this.store.put(this.publicationId, fingerprint, descriptor, entries);
+          indexed += entries.length;
+          this.events.emit({ type: "index-progress", runId: runId2, indexed, total });
+        }
+        if (dimension) await writeEmpty(empty);
+        else deferredEmpty.push(...empty);
+        this.events.emit({ type: "index-progress", runId: runId2, indexed, total });
+      });
+      await writeEmpty(deferredEmpty);
+      this.events.emit({ type: "index-progress", runId: runId2, indexed, total });
+      return this.status(provider);
+    }
+    async clear(provider) {
+      if (provider) {
+        const fingerprint = embeddingFingerprint(provider.descriptor());
+        this.loaded.delete(fingerprint);
+        await this.store.clear(this.publicationId, fingerprint);
+        return;
+      }
+      this.loaded.clear();
+      await this.store.clear(this.publicationId);
+    }
+    async summaries() {
+      return this.store.summaries(this.publicationId);
+    }
+  }
   class LruCache {
     constructor(capacity) {
       this.capacity = capacity;
@@ -259,6 +632,21 @@ var DerridAI = (function(exports) {
       }
       return { records, chunksLoaded: descriptors.length };
     }
+    totalRecords() {
+      return this.descriptors.reduce((sum, descriptor) => sum + descriptor.recordCount, 0);
+    }
+    /** Visit every Record chunk in publication order, yielding to the browser between chunks. */
+    async eachChunk(signal, visit) {
+      for (let index = 0; index < this.descriptors.length; index += 1) {
+        throwIfAborted$1(signal);
+        await visit(
+          await this.loadRecords(this.descriptors[index].id, signal),
+          index,
+          this.descriptors.length
+        );
+        if (index + 1 < this.descriptors.length) await yieldToBrowser();
+      }
+    }
     async ensureVectors(filters, runId2, signal) {
       const descriptors = this.selectedDescriptors(filters);
       for (let index = 0; index < descriptors.length; index += 1) {
@@ -351,23 +739,23 @@ ${evidence}`;
     searchEngine;
     events;
     generation;
-    async run(request, runId2) {
-      const question = String(request.question ?? "").trim();
+    async run(request2, runId2) {
+      const question = String(request2.question ?? "").trim();
       if (!question) throw new Error("Research question is required.");
       const retrieval = await this.searchEngine.search(
         {
           query: question,
-          mode: request.retrieval?.mode ?? "hybrid",
-          filters: request.retrieval?.filters,
-          limit: request.retrieval?.limit ?? 24,
-          signal: request.signal
+          mode: request2.retrieval?.mode ?? "hybrid",
+          filters: request2.retrieval?.filters,
+          limit: request2.retrieval?.limit ?? 24,
+          signal: request2.signal
         },
         runId2
       );
       const selected = this.searchEngine.diversify(
         retrieval.results,
-        request.retrieval?.evidenceLimit ?? 10,
-        request.retrieval?.mmrLambda ?? 0.72
+        request2.retrieval?.evidenceLimit ?? 10,
+        request2.retrieval?.mmrLambda ?? 0.72
       );
       const evidencePacket = {
         publicationId: this.manifest.publication_id,
@@ -416,7 +804,7 @@ ${evidence}`;
             question,
             evidencePacket
           },
-          { signal: request.signal }
+          { signal: request2.signal }
         );
         this.events.emit({ type: "generation-complete", runId: runId2 });
         return {
@@ -546,32 +934,36 @@ ${evidence}`;
     return { code, message, details };
   }
   class SearchEngine {
-    constructor(manifest, repository, events, embeddings, locale = "en-US") {
+    constructor(manifest, repository, events, embeddings, locale = "en-US", localIndex) {
       this.manifest = manifest;
       this.repository = repository;
       this.events = events;
       this.embeddings = embeddings;
       this.locale = locale;
+      this.localIndex = localIndex;
     }
     manifest;
     repository;
     events;
     embeddings;
     locale;
-    async search(request, runId2) {
-      const query = String(request.query ?? "");
-      const modeRequested = request.mode ?? "hybrid";
-      const filters = request.filters ?? {};
-      const limit = Math.max(1, Math.min(500, request.limit ?? 30));
-      const signal = request.signal;
+    localIndex;
+    vectorLookup = (id2) => this.repository.vector(id2);
+    async search(request2, runId2) {
+      const query = String(request2.query ?? "");
+      const modeRequested = request2.mode ?? "hybrid";
+      const filters = request2.filters ?? {};
+      const limit = Math.max(1, Math.min(500, request2.limit ?? 30));
+      const signal = request2.signal;
       this.events.emit({ type: "search-start", runId: runId2, query });
       const candidateSet = await this.repository.candidates(filters, this.locale, runId2, signal);
       const deduped = dedupeRecords(candidateSet.records);
       const candidates = deduped.records;
       const lexical = lexicalScores(query, candidates, this.locale);
-      const semanticAvailable = Boolean(
+      const publishedAvailable = Boolean(
         this.manifest.features?.semantic_search && this.manifest.vector_index?.dimension
       );
+      const semanticAvailable = publishedAvailable || Boolean(this.embeddings);
       if (modeRequested === "keyword" || !query.trim()) {
         return this.finish(
           lexical.slice(0, limit),
@@ -585,143 +977,132 @@ ${evidence}`;
           runId2
         );
       }
-      if (!semanticAvailable) {
-        return this.finish(
-          lexical.slice(0, limit),
-          modeRequested,
-          "keyword",
-          [
-            fallbackWarning(
-              "semantic_unavailable",
-              "This publication has no compatible semantic vectors; keyword results were returned."
-            )
-          ],
-          candidateSet.records.length,
-          candidateSet.chunksLoaded,
-          false,
-          deduped.duplicatesRemoved,
-          runId2
-        );
-      }
+      const fallback = (warning, available = semanticAvailable) => this.finish(
+        lexical.slice(0, limit),
+        modeRequested,
+        "keyword",
+        [warning],
+        candidateSet.records.length,
+        candidateSet.chunksLoaded,
+        available,
+        deduped.duplicatesRemoved,
+        runId2
+      );
       if (!this.embeddings) {
-        return this.finish(
-          lexical.slice(0, limit),
-          modeRequested,
-          "keyword",
-          [
-            fallbackWarning(
-              "embedding_provider_unavailable",
-              "No embedding capability was supplied; keyword results were returned."
-            )
-          ],
-          candidateSet.records.length,
-          candidateSet.chunksLoaded,
-          true,
-          deduped.duplicatesRemoved,
-          runId2
+        return publishedAvailable ? fallback(
+          fallbackWarning(
+            "embedding_provider_unavailable",
+            "No embedding capability was supplied; keyword results were returned."
+          )
+        ) : fallback(
+          fallbackWarning(
+            "semantic_unavailable",
+            "This publication has no semantic vectors and no embedding provider is configured; keyword results were returned."
+          ),
+          false
         );
       }
       const descriptor = this.embeddings.descriptor();
-      const descriptorMismatches = embeddingDescriptorMismatches(
-        this.manifest.vector_index,
-        descriptor
-      );
-      if (descriptorMismatches.length) {
-        return this.finish(
-          lexical.slice(0, limit),
-          modeRequested,
-          "keyword",
-          [
+      const usesPublished = publishedAvailable && matchesPublicationModel(descriptor, this.manifest.vector_index);
+      if (!usesPublished && publishedAvailable) {
+        const expectedModel = String(this.manifest.vector_index?.model ?? "").replace(/:latest$/, "");
+        const actualModel = String(descriptor.model ?? "").replace(/:latest$/, "");
+        const revisionMismatches = embeddingDescriptorMismatches(
+          this.manifest.vector_index,
+          descriptor
+        ).filter((mismatch) => mismatch.field === "revision");
+        if (expectedModel && expectedModel === actualModel && revisionMismatches.length) {
+          return fallback(
             fallbackWarning(
               "embedding_contract_mismatch",
               "The supplied embedding capability does not match the publication embedding contract; keyword results were returned.",
-              { mismatches: descriptorMismatches }
+              { mismatches: revisionMismatches }
             )
-          ],
-          candidateSet.records.length,
-          candidateSet.chunksLoaded,
-          true,
-          deduped.duplicatesRemoved,
-          runId2
-        );
+          );
+        }
+      }
+      let expectedDimension = Number(this.manifest.vector_index?.dimension || 0);
+      let localVectors;
+      if (!usesPublished) {
+        const local = this.localIndex ? await this.localIndex.vectorsFor(this.embeddings) : null;
+        const indexed = local ? candidates.filter((record) => local.vectors.has(String(record.record_id))).length : 0;
+        if (!local || indexed < candidates.length) {
+          return fallback(
+            fallbackWarning(
+              "local_index_required",
+              "Semantic search with this embedding model needs a local index of the published Records; keyword results were returned.",
+              {
+                expectedModel: String(this.manifest.vector_index?.model ?? ""),
+                actualModel: String(descriptor.model ?? ""),
+                indexed,
+                total: candidates.length
+              }
+            )
+          );
+        }
+        expectedDimension = local.dimension;
+        localVectors = local.vectors;
       }
       this.events.emit({ type: "embedding-start", runId: runId2 });
       let vector;
       try {
-        const embedded = await this.embeddings.embed([query], { signal });
+        const embedded = await this.embeddings.embed([query], { signal, purpose: "query" });
         vector = embedded.vectors[0] ?? [];
         if (embedded.provider) {
-          const resultMismatches = embeddingDescriptorMismatches(
-            this.manifest.vector_index,
-            embedded.provider
-          );
-          if (resultMismatches.length) {
-            return this.finish(
-              lexical.slice(0, limit),
-              modeRequested,
-              "keyword",
-              [
+          if (usesPublished) {
+            const resultMismatches = embeddingDescriptorMismatches(
+              this.manifest.vector_index,
+              embedded.provider
+            );
+            if (resultMismatches.length) {
+              return fallback(
                 fallbackWarning(
                   "embedding_contract_mismatch",
                   "The embedding result provenance does not match the publication embedding contract; keyword results were returned.",
                   { mismatches: resultMismatches }
                 )
-              ],
-              candidateSet.records.length,
-              candidateSet.chunksLoaded,
-              true,
-              deduped.duplicatesRemoved,
-              runId2
+              );
+            }
+          } else if (embeddingFingerprint(embedded.provider) !== embeddingFingerprint(descriptor)) {
+            return fallback(
+              fallbackWarning(
+                "embedding_contract_mismatch",
+                "The embedding result provenance does not match the configured embedding provider; keyword results were returned.",
+                {
+                  expected: embeddingFingerprint(descriptor),
+                  actual: embeddingFingerprint(embedded.provider)
+                }
+              )
             );
           }
         }
       } catch (error) {
         if (isAbortError(error)) throw error;
-        return this.finish(
-          lexical.slice(0, limit),
-          modeRequested,
-          "keyword",
-          [
-            fallbackWarning(
-              "embedding_provider_unavailable",
-              error instanceof Error ? error.message : "Embedding generation failed; keyword results were returned."
-            )
-          ],
-          candidateSet.records.length,
-          candidateSet.chunksLoaded,
-          true,
-          deduped.duplicatesRemoved,
-          runId2
+        return fallback(
+          fallbackWarning(
+            "embedding_provider_unavailable",
+            error instanceof Error ? error.message : "Embedding generation failed; keyword results were returned."
+          )
         );
       }
-      const expectedDimension = Number(this.manifest.vector_index?.dimension || 0);
       if (expectedDimension && vector.length !== expectedDimension) {
-        return this.finish(
-          lexical.slice(0, limit),
-          modeRequested,
-          "keyword",
-          [
-            fallbackWarning(
-              "embedding_dimension_mismatch",
-              "The supplied embedding dimension does not match the publication; keyword results were returned.",
-              { expected: expectedDimension, actual: vector.length }
-            )
-          ],
-          candidateSet.records.length,
-          candidateSet.chunksLoaded,
-          true,
-          deduped.duplicatesRemoved,
-          runId2
+        return fallback(
+          fallbackWarning(
+            "embedding_dimension_mismatch",
+            "The supplied embedding dimension does not match the vectors being searched; keyword results were returned.",
+            { expected: expectedDimension, actual: vector.length }
+          )
         );
       }
-      await this.repository.ensureVectors(filters, runId2, signal);
+      if (usesPublished) await this.repository.ensureVectors(filters, runId2, signal);
+      this.vectorLookup = usesPublished ? (id2) => this.repository.vector(id2) : (id2) => localVectors?.get(id2);
       const semantic = candidates.map((record) => {
-        const semanticScore = cosine(vector, this.repository.vector(String(record.record_id)));
-        return {
-          record,
-          score: semanticScore,
-          semanticScore
-        };
+        const id2 = String(record.record_id);
+        const semanticScore = cosine(
+          vector,
+          usesPublished ? this.repository.vector(id2) : localVectors?.get(id2)
+        );
+        return { record, score: semanticScore, semanticScore };
       }).filter((item) => item.semanticScore > -1).sort(compareScored);
       if (modeRequested === "semantic") {
         return this.finish(
@@ -776,10 +1157,10 @@ ${evidence}`;
         let bestScore = Number.NEGATIVE_INFINITY;
         for (let index = 0; index < remaining.length; index += 1) {
           const item = remaining[index];
-          const vector = this.repository.vector(String(item.record.record_id));
+          const vector = this.vectorLookup(String(item.record.record_id));
           const redundancy = selected.length && vector ? Math.max(
             ...selected.map(
-              (chosen) => cosine(vector, this.repository.vector(String(chosen.record.record_id)))
+              (chosen) => cosine(vector, this.vectorLookup(String(chosen.record.record_id)))
             )
           ) : 0;
           const score = boundedLambda * Number(item.score || 0) - (1 - boundedLambda) * Math.max(0, redundancy);
@@ -914,7 +1295,14 @@ ${evidence}`;
       this.manifest = manifest;
       this.events = events;
       this.repository = repository;
+      this.embeddings = options.embeddings;
       this.hasEmbeddings = Boolean(options.embeddings);
+      this.localIndex = new LocalVectorIndex(
+        manifest,
+        repository,
+        options.vectorIndex ?? defaultVectorStore(),
+        events
+      );
       this.hasGeneration = Boolean(options.generation);
       const locale = options.locale ?? manifest.locale ?? "en-US";
       this.searchEngine = new SearchEngine(
@@ -922,7 +1310,8 @@ ${evidence}`;
         repository,
         this.events,
         options.embeddings,
-        locale
+        locale,
+        this.localIndex
       );
       this.researchEngine = new ResearchEngine(
         manifest,
@@ -937,6 +1326,22 @@ ${evidence}`;
       };
       this.records = {
         get: (recordId, operation = {}) => this.repository.get(recordId, operation.signal)
+      };
+      this.index = {
+        status: async () => this.embeddings ? this.localIndex.status(this.embeddings) : null,
+        build: async (operation = {}) => {
+          if (!this.embeddings) throw new Error("No embedding provider is configured.");
+          const id2 = runId("index");
+          try {
+            return await this.localIndex.build(this.embeddings, id2, operation);
+          } catch (error) {
+            if (isAbortError(error)) {
+              this.events.emit({ type: "operation-cancelled", runId: id2 });
+            }
+            throw error;
+          }
+        },
+        clear: () => this.localIndex.clear(this.embeddings)
       };
       this.cache = {
         clear: () => this.repository.clear(),
@@ -953,7 +1358,11 @@ ${evidence}`;
     publication;
     records;
     cache;
+    /** Locally computed vectors for embedding models other than the one the publication shipped with. */
+    index;
     repository;
+    localIndex;
+    embeddings;
     searchEngine;
     researchEngine;
     hasEmbeddings;
@@ -967,10 +1376,10 @@ ${evidence}`;
       const repository = new RecordRepository(options.dataSource, descriptors, events, options.cache);
       return new DerridAIClient(manifest, options, repository, events);
     }
-    async search(request) {
+    async search(request2) {
       const id2 = runId("search");
       try {
-        return await this.searchEngine.search(request, id2);
+        return await this.searchEngine.search(request2, id2);
       } catch (error) {
         if (isAbortError(error)) {
           this.events.emit({ type: "operation-cancelled", runId: id2 });
@@ -978,10 +1387,10 @@ ${evidence}`;
         throw error;
       }
     }
-    async research(request) {
+    async research(request2) {
       const id2 = runId("research");
       try {
-        return await this.researchEngine.run(request, id2);
+        return await this.researchEngine.run(request2, id2);
       } catch (error) {
         if (isAbortError(error)) {
           this.events.emit({ type: "operation-cancelled", runId: id2 });
@@ -997,14 +1406,17 @@ ${evidence}`;
         annotations: this.manifest.features?.local_annotations !== false,
         research: this.manifest.features?.research !== false,
         publicationVectors: {
-          available: Boolean(this.manifest.vector_index?.dimension),
+          available: Boolean(
+            this.manifest.features?.semantic_search && this.manifest.vector_index?.dimension
+          ),
           model: this.manifest.vector_index?.model,
           dimension: this.manifest.vector_index?.dimension
         },
         provider: {
           embeddings: this.hasEmbeddings,
           generation: this.hasGeneration
-        }
+        },
+        localIndex: this.embeddings ? await this.localIndex.status(this.embeddings) : null
       };
     }
   }
@@ -1150,11 +1562,16 @@ ${evidence}`;
   exports.BrowserStorage = BrowserStorage;
   exports.DerridAIClient = DerridAIClient;
   exports.HttpDataSource = HttpDataSource;
+  exports.IndexedDbVectorStore = IndexedDbVectorStore;
   exports.InlineDataSource = InlineDataSource;
   exports.MemoryStorage = MemoryStorage;
+  exports.MemoryVectorStore = MemoryVectorStore;
   exports.createClient = createClient;
   exports.dataSources = dataSources;
+  exports.embeddingFingerprint = embeddingFingerprint;
+  exports.matchesPublicationModel = matchesPublicationModel;
   exports.storage = storage;
+  exports.vectorIndex = vectorIndex;
   exports.version = version;
   Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
   return exports;

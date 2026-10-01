@@ -26,7 +26,7 @@ from app.evidence_suggestions import (  # noqa: E402
     PRECEDENT_SEMANTIC_METHOD,
     record_source_blocks,
 )
-from app.metadata_precedents_cache import CACHE_KEY  # noqa: E402
+from app.metadata_precedents_cache import CACHE_KEY, cached_field  # noqa: E402
 from app.reviewer_context import current_reviewer  # noqa: E402
 
 PRECEDENT_EVIDENCE = "For Levinas, responsibility precedes the freedom of the subject."
@@ -143,6 +143,7 @@ def test_enrichment_keeps_references_only_and_review_reads_them_back(tmp_path, m
     assert len(refs) == 1 and refs[0]["exemplar_id"].startswith("mex-")
     stored = json.dumps(cache)
     assert PRECEDENT_EVIDENCE not in stored and "reported_position" not in stored
+    assert "candidate_source_units" not in stored
     assert cache["fields"]["speaker"] == {"mode": "none", "refs": []}
 
     result = manager.metadata_precedents(build_id, "t", "discourse_role")
@@ -152,6 +153,20 @@ def test_enrichment_keeps_references_only_and_review_reads_them_back(tmp_path, m
     assert item["evidence"] == PRECEDENT_EVIDENCE  # shown as the precedent's evidence, never as this record's
     assert item["candidate_source_units"][0]["block_id"] == "tb2"
     assert all(unit["block_id"] in {"tb1", "tb2"} for unit in item["candidate_source_units"])
+
+
+def test_unscheduled_family_is_not_cached_as_an_empty_precedent_search(tmp_path, monkeypatch):
+    repo, build_id, manager = _install(tmp_path, [_precedent(), _target()])
+    record = _enrich(repo, build_id, manager, monkeypatch)
+
+    # Default Fast routing did not schedule quotation for this ordinary prose
+    # record. An omitted cache entry is important: Record Review must search live
+    # later rather than mistake "not searched" for "searched and found nothing".
+    assert "quoted_speaker" not in record[CACHE_KEY]["fields"]
+    assert cached_field(record, "quoted_speaker") is None
+
+    live = manager.metadata_precedents(build_id, "t", "quoted_speaker")
+    assert live["source"] == "live"
 
 
 def test_a_precedent_changed_after_enrichment_is_reported_stale_not_shown(tmp_path, monkeypatch):
@@ -187,15 +202,19 @@ def test_records_enriched_before_the_cache_search_live(tmp_path):
     assert result["items"][0]["candidate_source_units"][0]["block_id"] == "tb2"
 
 
-def test_candidates_from_blocks_no_longer_in_the_record_are_dropped(tmp_path, monkeypatch):
+def test_lazy_candidates_use_only_blocks_still_in_the_record(tmp_path, monkeypatch):
     repo, build_id, manager = _install(tmp_path, [_precedent(), _target()])
     record = _enrich(repo, build_id, manager, monkeypatch)
-    assert "tb2" in [unit["block_id"] for unit in record[CACHE_KEY]["fields"]["discourse_role"]["refs"][0]["candidate_source_units"]]
+    ref = record[CACHE_KEY]["fields"]["discourse_role"]["refs"][0]
+    assert "candidate_source_units" not in ref, "enrichment must not perform review-only remapping"
+
     record["source_block_ids"] = ["tb1"]  # re-segmented after enrichment
     repo.save_records(build_id, [repo.get_record(build_id, "p1"), record])
 
-    [item] = manager.metadata_precedents(build_id, "t", "discourse_role")["items"]
-    assert "tb2" not in [unit["block_id"] for unit in item["candidate_source_units"]]
+    result = manager.metadata_precedents(build_id, "t", "discourse_role")
+    [item] = result["items"]
+    assert all(unit["block_id"] == "tb1" for unit in item["candidate_source_units"])
+    assert result["candidate_pipeline"]["feature"] == "precedent_evidence_remap"
 
 
 def test_the_kept_retrieval_is_not_published():
@@ -210,4 +229,7 @@ def test_one_call_returns_every_kept_field(tmp_path, monkeypatch):
     fields = manager.record_precedents(build_id, "t")["fields"]
     assert fields["discourse_role"]["items"][0]["value"] == "reported_position"
     assert fields["speaker"]["items"] == [] and fields["speaker"]["mode"] == "none"
-    assert fields["discourse_role"] == manager.metadata_precedents(build_id, "t", "discourse_role")
+    single = manager.metadata_precedents(build_id, "t", "discourse_role")
+    assert fields["discourse_role"]["items"] == single["items"]
+    assert fields["discourse_role"]["source"] == single["source"] == "enrichment"
+    assert fields["discourse_role"]["candidate_pipeline"]["pipeline_id"] == single["candidate_pipeline"]["pipeline_id"]

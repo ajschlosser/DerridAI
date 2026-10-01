@@ -313,7 +313,11 @@ onBeforeUnmount(() => {
 @media (min-width: 800px) and (max-width: 1279.98px) and (min-height: 34rem) {
   .review-grid.record-first-review {
     grid-template-columns: var(--rw-queue, 16rem) 0.5rem minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1.9fr) minmax(0, 1fr);
+    grid-template-rows: minmax(14rem, 1.9fr) minmax(12rem, 1fr);
+  }
+  /* The rows have floors, so the frame needs a floor too: the page scrolls instead of the panes overlapping. */
+  .review-frame {
+    min-height: 40rem;
   }
   .review-grid.queue-collapsed {
     grid-template-columns: minmax(0, 1fr);

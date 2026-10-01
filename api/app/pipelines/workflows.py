@@ -37,6 +37,7 @@ from .corpus_text_touchup import TEXT_TOUCHUP, compile_text_touchup_pipeline
 from .models import PipelineDefinition, StrategySpec
 from .purposes import PipelinePurposeSpec, purpose_registry, serialize_purpose
 from .registry import StrategyRegistry, strategy_registry
+from .wiring import bindings_changing_wiring
 
 StrategyFit = Literal["supported", "inspect_only", "output_contract"]
 
@@ -46,6 +47,8 @@ class PurposeAdapter:
     compile: Callable[[PipelineDefinition], Any]
     supported_strategies: frozenset[str]
     describe: Callable[[Any], dict[str, Any]] | None = None
+    # True when the adapter delivers stage inputs from the resolved wiring, so explicit bindings run.
+    honours_bindings: bool = False
 
 
 def _recovery_details(plan: Any) -> dict[str, Any]:
@@ -61,6 +64,7 @@ PURPOSE_ADAPTERS: dict[str, PurposeAdapter] = {
         evidence_recovery.compile_recovery_pipeline,
         evidence_recovery.SUPPORTED_STRATEGIES,
         _recovery_details,
+        honours_bindings=True,
     ),
     "precedent_evidence_remap": PurposeAdapter(
         precedent_remap.compile_remap_pipeline, precedent_remap.SUPPORTED_STRATEGIES
@@ -70,7 +74,9 @@ PURPOSE_ADAPTERS: dict[str, PurposeAdapter] = {
         frozenset({REVIEWER_EVIDENCE_CHOICE.strategy}),
     ),
     "vector_store_search": PurposeAdapter(
-        store_search.compile_store_search_pipeline, store_search.SUPPORTED_STRATEGIES
+        store_search.compile_store_search_pipeline,
+        store_search.SUPPORTED_STRATEGIES,
+        honours_bindings=True,
     ),
     "metadata_precedents": PurposeAdapter(
         metadata_precedents.compile_metadata_precedent_pipeline,
@@ -114,6 +120,21 @@ def runtime_support(pipeline: PipelineDefinition) -> dict[str, Any]:
         plan = adapter.compile(pipeline)
     except ValueError as exc:
         return {"supported": False, "adapter": None, "reason": str(exc)}
+    changed = (
+        []
+        if adapter.honours_bindings
+        else bindings_changing_wiring(pipeline, strategy_registry, purpose_registry.get(pipeline.purpose))
+    )
+    if changed:
+        return {
+            "supported": False,
+            "adapter": None,
+            "reason": (
+                "The runtime adapter takes stage inputs from the graph edges and cannot "
+                "apply explicit input bindings that change them: " + ", ".join(changed) + ". "
+                "The pipeline stays inspect-only."
+            ),
+        }
     details = adapter.describe(plan) if adapter.describe else {}
     return {"supported": True, "adapter": pipeline.purpose, **details}
 

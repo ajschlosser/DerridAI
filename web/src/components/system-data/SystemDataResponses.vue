@@ -1,10 +1,11 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../AppIcon.vue";
 import { systemApi, type SystemResponseCachePage } from "../../api/system";
 import * as runtime from "../../runtime/runtimeBridge";
+import { useDataQuery } from "../../realtime/dataQuery";
 import { useI18nStore } from "../../stores/i18n";
 
 type DataRow = Record<string, unknown>;
@@ -19,7 +20,7 @@ const page = ref<SystemResponseCachePage>({
   limit: 25,
   offset: Math.max(0, Number(route.query.offset) || 0),
 });
-const loading = ref(false);
+
 const error = ref("");
 const query = ref(String(route.query.q || ""));
 const requestedOffset = ref(Math.max(0, Number(route.query.offset) || 0));
@@ -74,18 +75,41 @@ function syncRoute(offset: number, push = false) {
   else void router.replace(target);
 }
 
+// The requested page is the query key; realtime invalidation of `response_library` refetches it.
+function pageParams(offset: number) {
+  return { limit: page.value.limit || 25, offset, query: query.value };
+}
+const applied = ref(pageParams(requestedOffset.value));
+const pageQuery = useDataQuery(
+  "response_library",
+  () =>
+    systemApi.responseCacheRecords(applied.value.limit, applied.value.offset, applied.value.query),
+  {
+    detail: () => [applied.value],
+  },
+);
+const loading = computed(() => pageQuery.isFetching.value);
+watch(
+  () => pageQuery.data.value,
+  (next) => {
+    if (next) {
+      page.value = next;
+      error.value = "";
+    }
+  },
+);
+watch(
+  () => pageQuery.error.value,
+  (cause) => {
+    if (cause) error.value = cause instanceof Error ? cause.message : String(cause);
+  },
+);
 async function load(offset = 0, updateRoute = true, push = false) {
   requestedOffset.value = offset;
   if (updateRoute) syncRoute(offset, push);
-  loading.value = true;
-  error.value = "";
-  try {
-    page.value = await systemApi.responseCacheRecords(page.value.limit || 25, offset, query.value);
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : String(cause);
-  } finally {
-    loading.value = false;
-  }
+  const next = pageParams(offset);
+  if (JSON.stringify(next) === JSON.stringify(applied.value)) await pageQuery.refetch();
+  else applied.value = next;
 }
 
 async function remove(record: DataRow) {
@@ -144,8 +168,6 @@ watch(
     void load(offset, false);
   },
 );
-
-onMounted(() => void load(Math.max(0, Number(route.query.offset) || 0), false));
 </script>
 
 <template>

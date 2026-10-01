@@ -94,6 +94,8 @@ def test_current_evidence_execution_preserves_separate_lexical_semantic_signals(
     assert trace["semantic"].output_count == 1
     assert trace["lexical"].elapsed_ms is None
     assert trace["semantic"].elapsed_ms is None
+    for stage_id in ("lexical", "semantic"):
+        assert trace[stage_id].parameters["scope_size"] == len(blocks)
 
 
 def test_semantic_failure_is_visible_in_evidence_trace_without_losing_lexical_result() -> None:

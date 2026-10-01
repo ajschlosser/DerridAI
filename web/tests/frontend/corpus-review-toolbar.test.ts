@@ -40,10 +40,6 @@ function mountToolbar(overrides: Record<string, unknown> = {}) {
       selectedCount: 1,
       bulkTotalCount: 12,
       bulkDisabled: false,
-      pageNumber: 1,
-      pageCount: 3,
-      hasPreviousPage: false,
-      hasNextPage: true,
       disabled: false,
       ...overrides,
     },
@@ -55,7 +51,7 @@ describe("Corpus Builder review toolbar", () => {
   it("forwards queue and search models without owning review state", async () => {
     const wrapper = mountToolbar();
 
-    await wrapper.get('[data-review-queue="ready"]').trigger("click");
+    await wrapper.get("[data-review-queue-select]").setValue("ready");
     expect(wrapper.emitted("update:queue")?.at(-1)).toEqual(["ready"]);
 
     await wrapper.get("#pdf-corpus-record-search").setValue("Levinas");
@@ -108,10 +104,6 @@ describe("Corpus Builder review toolbar", () => {
 
     wrapper.findComponent(CorpusActionMenu).vm.$emit("select", "reject-selected");
     expect(wrapper.emitted("bulkAction")?.at(-1)).toEqual(["reject-selected"]);
-
-    const pagerButtons = wrapper.findAll(".pager button");
-    await pagerButtons[1].trigger("click");
-    expect(wrapper.emitted("nextPage")).toHaveLength(1);
   });
 
   it("keeps bulk-editor mutation payloads owned by the parent", () => {
@@ -133,9 +125,8 @@ describe("Corpus Builder review toolbar", () => {
   it("disables queue/bulk actions while leaving search and paging behavior unchanged", () => {
     const wrapper = mountToolbar({ disabled: true });
 
-    expect(wrapper.get('[data-review-queue="all"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.get("[data-review-queue-select]").attributes("disabled")).toBeDefined();
     expect(wrapper.get(".review-bulk .variant-primary").attributes("disabled")).toBeDefined();
     expect(wrapper.get("#pdf-corpus-record-search").attributes("disabled")).toBeUndefined();
-    expect(wrapper.findAll(".pager button")[1].attributes("disabled")).toBeUndefined();
   });
 });

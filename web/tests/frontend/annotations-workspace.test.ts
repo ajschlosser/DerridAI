@@ -3,8 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createAnnotationsWorkspace } from "../../src/domain/annotationsWorkspace";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 
-// The rendered Annotations view is covered by the legacy baseline's annotations scenarios (recorded before this logic
-// moved); these pin the commands and the snapshot's shape.
+// The modern Annotations Playwright workflow covers rendered interactions; these pin commands and snapshot shape.
 function setup(overrides: Record<string, unknown> = {}) {
   const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
@@ -100,5 +99,55 @@ describe("annotations workspace", () => {
       ["Glas", 1],
       ["Of Grammatology", 1],
     ]);
+  });
+
+  it("removes a local annotation using the workspace item's stored file id", async () => {
+    const file = {
+      id: "f",
+      name: "a.jsonl",
+      records: [{ record_id: "r1", annotations: [{ id: "n1", note: "Remove me" }] }],
+      dirty: new Set<number>(),
+    };
+    const reviewKey = vi.fn((fileRef: { id: string }, index: number) => `${fileRef.id}::${index}`);
+    const applyRecordChanges = vi.fn(
+      (
+        target: typeof file,
+        index: number,
+        changes: { annotations: Array<{ id: string; note: string }> },
+      ) => {
+        target.records[index] = { ...target.records[index], ...changes };
+        return 1;
+      },
+    );
+    const persistFileNow = vi.fn(async () => undefined);
+    const { workspace } = setup({
+      reviewKey,
+      reviewItemFromKey: (key: string) =>
+        key === "f::0" ? { file, index: 0, record: file.records[0] } : null,
+      applyRecordChanges,
+      persistFileNow,
+      api: vi.fn(async () => ({ annotations: [] })),
+      isResearcher: () => false,
+      hasCapability: () => true,
+    });
+
+    await workspace.removeAnnotationsWorkspaceItem({
+      removable: true,
+      server: false,
+      local_file_id: "f",
+      local_index: 0,
+      local_annotation_index: 0,
+      shared_annotation_id: null,
+    });
+
+    expect(reviewKey).toHaveBeenCalledWith({ id: "f" }, 0);
+    expect(applyRecordChanges).toHaveBeenCalledWith(
+      file,
+      0,
+      { annotations: [] },
+      { source: "annotation-delete" },
+    );
+    expect(file.records[0].annotations).toEqual([]);
+    expect(persistFileNow).toHaveBeenCalledWith(file);
   });
 });

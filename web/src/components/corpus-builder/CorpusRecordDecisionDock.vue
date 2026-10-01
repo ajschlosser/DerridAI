@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "../CorpusActionMenu.vue";
@@ -51,6 +51,14 @@ const emit = defineEmits<{
   saveText: [];
 }>();
 const i18n = useI18nStore();
+const decisionsLabel = computed(() =>
+  i18n.tf(
+    props.blockingCount === 1
+      ? "pdf_corpus.metadata_decisions_count_one"
+      : "pdf_corpus.metadata_decisions_count",
+    { count: props.blockingCount },
+  ),
+);
 const acceptButton = ref<HTMLButtonElement | null>(null);
 defineExpose({ focusAccept: () => acceptButton.value?.focus({ preventScroll: true }) });
 </script>
@@ -103,14 +111,10 @@ defineExpose({ focusAccept: () => acceptButton.value?.focus({ preventScroll: tru
             aria-keyshortcuts="M"
             @click="emit('focusBlocker')"
           >
-            <AppIcon name="warning" /><b class="dock-blocker-count">{{
-              i18n.tf("pdf_corpus.metadata_decisions_count", { count: props.blockingCount })
-            }}</b
+            <AppIcon name="warning" /><b class="dock-blocker-count">{{ decisionsLabel }}</b
             ><b class="dock-blocker-short"
               ><span aria-hidden="true">{{ props.blockingCount }}</span
-              ><span class="sr-only">{{
-                i18n.tf("pdf_corpus.metadata_decisions_count", { count: props.blockingCount })
-              }}</span></b
+              ><span class="sr-only">{{ decisionsLabel }}</span></b
             ><span class="dock-blocker-text">{{ props.blockingLabel }}</span
             ><kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.metadata") }}</kbd>
           </button>
@@ -231,6 +235,12 @@ defineExpose({ focusAccept: () => acceptButton.value?.focus({ preventScroll: tru
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
+}
+/* The tooltip wrapper must shrink too, or a long field list pushes over the history buttons. */
+.dock-status > * {
+  min-width: 0;
+  max-width: 100%;
 }
 .dock-blocker,
 .dock-ready {

@@ -12,7 +12,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update:filter": [string];
   select: [name: string];
-  refresh: [];
   create: [];
 }>();
 const i18n = useI18nStore();
@@ -31,13 +30,6 @@ function statusOf(store: VectorCollection) {
           {{ i18n.t("vector.collections") }}</span
         >
       </div>
-      <UiButton
-        icon="refresh"
-        icon-only
-        size="small"
-        :label="i18n.t('ui.refresh')"
-        @click="emit('refresh')"
-      />
     </div>
     <div class="vector-rail-actions">
       <label class="sr-only" for="vector-collection-filter">{{

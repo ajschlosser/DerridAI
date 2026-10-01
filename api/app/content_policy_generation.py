@@ -18,6 +18,7 @@ English-contaminated policy is never saved but an otherwise good one is not thro
 """
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -28,7 +29,10 @@ from .content_filter import (
     normalize_policy_term,
 )
 from .models import OllamaTouchupOptions
-from .rag import _extract_json, chat_complete
+from .rag import chat_complete
+from .structured_completion import StructuredAttemptContext, complete_structured_json
+
+logger = logging.getLogger(__name__)
 
 # Each category is a kind of abusive language a researcher filter should represent.
 CATEGORY_DESCRIPTIONS: dict[str, str] = {
@@ -171,41 +175,40 @@ def _clean_terms(values: Any) -> list[str]:
     return cleaned
 
 
-def _parse(raw: str) -> dict[str, Any] | None:
-    try:
-        parsed = _extract_json(raw)
-    except Exception:
-        return None
-    return parsed if isinstance(parsed, dict) else None
-
-
 def _audit(
     *,
     label: str,
     terms: list[str],
     suspects: set[str],
-    call: Callable[[str, dict[str, Any], str], str],
+    call: Callable[[str, dict[str, Any], str, int, bool], dict[str, Any]],
 ) -> dict[str, bool]:
-    """Ask the model which of ``terms`` are words of the target language.
+    """Ask the model which terms are words of the target language.
 
-    Returns a verdict per term it answered about. Unparseable answers are retried once and then
-    raise: accepting unaudited terms would defeat the point of the audit.
+    Syntax repair, truncation handling, and the bounded retry are delegated to
+    the shared structured-completion policy. An unauditable answer is never
+    accepted as evidence that a candidate belongs to the target language.
     """
     if not terms:
         return {}
-    for _ in range(2):
-        parsed = _parse(call(_audit_prompt(label, terms, suspects), _AUDIT_SCHEMA, "derridai_policy_language_audit"))
-        if parsed is None:
-            continue
-        verdicts: dict[str, bool] = {}
-        for item in parsed.get("verdicts") or []:
-            if isinstance(item, Mapping) and isinstance(item.get("in_language"), bool):
-                try:
-                    verdicts[normalize_policy_term(str(item.get("term") or ""))] = bool(item["in_language"])
-                except ValueError:
-                    continue
-        return verdicts
-    raise ValueError(f"The language check for {label} did not return a usable answer.")
+    try:
+        parsed = call(
+            _audit_prompt(label, terms, suspects),
+            _AUDIT_SCHEMA,
+            "derridai_policy_language_audit",
+            2,
+            False,
+        )
+    except Exception as exc:
+        raise ValueError(f"The language check for {label} did not return a usable answer.") from exc
+
+    verdicts: dict[str, bool] = {}
+    for item in parsed.get("verdicts") or []:
+        if isinstance(item, Mapping) and isinstance(item.get("in_language"), bool):
+            try:
+                verdicts[normalize_policy_term(str(item.get("term") or ""))] = bool(item["in_language"])
+            except ValueError:
+                continue
+    return verdicts
 
 
 def _term_passes_language_audit(term: str, suspects: set[str], verdicts: Mapping[str, bool]) -> bool:
@@ -237,31 +240,62 @@ def generate_content_policy(
         for term in (policy.get("blocked_terms") or [])
     }
 
-    def call(prompt: str, schema: dict[str, Any], schema_name: str) -> str:
-        return chat_complete(
-            provider=provider,
-            model=model,
-            base_url=base_url,
-            api_key=api_key,
+    generation_calls = 0
+
+    def call(
+        prompt: str,
+        schema: dict[str, Any],
+        schema_name: str,
+        retry_attempts: int = 2,
+        count_generation: bool = False,
+    ) -> dict[str, Any]:
+        def request_once(context: StructuredAttemptContext) -> str:
+            nonlocal generation_calls
+            if count_generation:
+                generation_calls += 1
+            return chat_complete(
+                provider=provider,
+                model=model,
+                base_url=base_url,
+                api_key=api_key,
+                prompt=context.prompt,
+                options=generation,
+                json_mode=True,
+                json_schema=schema,
+                schema_name=schema_name,
+                max_tokens=context.max_tokens,
+                cancelled=cancelled,
+            )
+
+        return complete_structured_json(
+            request_once,
             prompt=prompt,
-            options=generation,
-            json_mode=True,
-            json_schema=schema,
-            schema_name=schema_name,
-            cancelled=cancelled,
+            attempts=max(1, retry_attempts),
+            max_tokens=4096,
         )
 
     accepted: dict[str, list[str]] = {category: [] for category in CATEGORIES}
     contextual: dict[str, dict[str, Any]] = {}
     rejected: list[str] = []
-    attempts = 0
-    for attempt in range(1, max(1, max_attempts) + 1):
+    attempt_budget = max(1, int(max_attempts))
+    while generation_calls < attempt_budget:
         needed = [category for category in CATEGORIES if len(accepted[category]) < MIN_PER_CATEGORY]
         if not needed:
             break
-        attempts = attempt
-        parsed = _parse(call(_policy_prompt(label, needed, accepted, rejected), _generation_schema(needed), "derridai_researcher_content_policy"))
-        if parsed is None:
+        remaining = attempt_budget - generation_calls
+        try:
+            parsed = call(
+                _policy_prompt(label, needed, accepted, rejected),
+                _generation_schema(needed),
+                "derridai_researcher_content_policy",
+                min(2, remaining),
+                True,
+            )
+        except Exception:
+            logger.debug(
+                "Structured content-policy generation attempt failed; retrying within budget",
+                exc_info=True,
+            )
             continue
         taken = {term for terms in accepted.values() for term in terms} | set(rejected)
         candidates: dict[str, list[str]] = {}
@@ -300,7 +334,7 @@ def generate_content_policy(
                 flat.append(term)
     if len(flat) < MIN_TOTAL_TERMS:
         raise ValueError(
-            f"Could not generate a usable {label} policy after {attempts} attempt(s): only {len(flat)} acceptable "
+            f"Could not generate a usable {label} policy after {generation_calls} attempt(s): only {len(flat)} acceptable "
             f"term(s) (at least {MIN_TOTAL_TERMS} are needed). Categories still below {MIN_PER_CATEGORY} terms: "
             f"{', '.join(short) or 'none'}. {len(rejected)} candidate term(s) were rejected as not {label} words."
         )
@@ -318,7 +352,7 @@ def generate_content_policy(
     policy["version"] = POLICY_VERSION
     policy["target_language"] = label
     policy["generation_report"] = {
-        "attempts": attempts,
+        "attempts": generation_calls,
         "categories": {category: len(accepted[category]) for category in CATEGORIES},
         "removed_as_wrong_language": len(rejected),
         "short_categories": short,
