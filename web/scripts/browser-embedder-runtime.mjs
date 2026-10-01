@@ -13,6 +13,7 @@ export const EMBEDDER_INFO = Object.freeze(/*__DERRIDAI_EMBEDDER_INFO__*/ {});
 
 const VIRTUAL_MODEL_ROOT = "https://derridai.invalid/__embedded_models__/";
 const TRANSFORMERS_ASSET_KEY = "runtime/transformers.web.min.js";
+const ORT_JAVASCRIPT_ASSET_KEY = "runtime/ort.webgpu.bundle.min.mjs";
 const ORT_WASM_ASSET_KEY = "runtime/ort-wasm-simd-threaded.jsep.wasm";
 const decodedAssets = new Map();
 
@@ -62,25 +63,55 @@ function decodeEmbeddedAsset(key) {
   return bytes;
 }
 
-function runtimeModuleSpecifier() {
-  const asset = requireAsset(TRANSFORMERS_ASSET_KEY);
-  const base64 = asset.chunks.join("");
-
-  const isNode =
+function isNodeRuntime() {
+  return (
     typeof process !== "undefined" &&
     typeof process.versions === "object" &&
-    Boolean(process.versions?.node);
+    Boolean(process.versions?.node)
+  );
+}
 
-  if (!isNode && typeof Blob !== "undefined" && typeof URL.createObjectURL === "function") {
-    const bytes = decodeEmbeddedAsset(TRANSFORMERS_ASSET_KEY);
-    return URL.createObjectURL(new Blob([bytes], { type: "text/javascript" }));
+function moduleSpecifierForSource(source) {
+  if (!isNodeRuntime() && typeof Blob !== "undefined" && typeof URL.createObjectURL === "function") {
+    return URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
   }
 
-  return `data:text/javascript;base64,${base64}`;
+  const encoded = btoa(unescape(encodeURIComponent(source)));
+  return `data:text/javascript;base64,${encoded}`;
+}
+
+function decodedTextAsset(key) {
+  return new TextDecoder().decode(decodeEmbeddedAsset(key));
+}
+
+function transformersModuleSpecifier() {
+  const onnxSpecifier = moduleSpecifierForSource(decodedTextAsset(ORT_JAVASCRIPT_ASSET_KEY));
+  const transformersSource = decodedTextAsset(TRANSFORMERS_ASSET_KEY);
+  const quotedImports = [
+    '"onnxruntime-web/webgpu"',
+    "'onnxruntime-web/webgpu'",
+  ];
+
+  let rewritten = transformersSource;
+  let replacements = 0;
+  for (const quotedImport of quotedImports) {
+    const occurrences = rewritten.split(quotedImport).length - 1;
+    if (occurrences === 0) continue;
+    replacements += occurrences;
+    rewritten = rewritten.split(quotedImport).join(JSON.stringify(onnxSpecifier));
+  }
+
+  if (replacements === 0) {
+    throw new Error(
+      "Embedded Transformers.js did not contain the expected ONNX Runtime Web import.",
+    );
+  }
+
+  return moduleSpecifierForSource(rewritten);
 }
 
 async function loadTransformersModule() {
-  transformersModulePromise ??= import(runtimeModuleSpecifier());
+  transformersModulePromise ??= import(transformersModuleSpecifier());
   return transformersModulePromise;
 }
 
