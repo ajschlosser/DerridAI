@@ -30,7 +30,9 @@ test("generated single-file publication works directly from file:// without an a
   await page.getByLabel("Search").fill("hospitality");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByText("1 results")).toBeVisible();
-  await expect(page.getByText("Hospitality exceeds the economy of conditional exchange.")).toBeVisible();
+  await expect(
+    page.getByText("Hospitality exceeds the economy of conditional exchange."),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "View record" }).click();
   const recordDialog = page.getByRole("dialog", { name: "Glas" });
@@ -48,8 +50,12 @@ test("generated single-file publication works directly from file:// without an a
   await page.getByRole("button", { name: "Research" }).click();
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");
   await page.getByRole("button", { name: "Ask" }).click();
-  await expect(page.getByText("Evidence is available without a generated answer.")).toBeVisible();
-  await expect(page.getByText("Hospitality exceeds the economy of conditional exchange.")).toBeVisible();
+  await expect(
+    page.getByText("Evidence is available without a generated answer."),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Hospitality exceeds the economy of conditional exchange."),
+  ).toBeVisible();
 
   expect(networkRequests).toEqual([]);
 });
