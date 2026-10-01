@@ -78,11 +78,7 @@ test(
     await expect(page.getByRole("dialog", { name: "Welcome" })).toBeVisible();
     await page.getByRole("button", { name: "Skip tutorial" }).click();
 
-    const addProvider = async (
-      name: string,
-      role: "embedding" | "generation",
-      model: string,
-    ) => {
+    const addProvider = async (name: string, role: "embedding" | "generation", model: string) => {
       await page.getByRole("button", { name: "Providers" }).click();
       const form = page.getByRole("form", { name: "Add a provider" });
       await form.getByLabel("Name", { exact: true }).fill(name);
