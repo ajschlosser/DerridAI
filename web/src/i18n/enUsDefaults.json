@@ -8077,6 +8077,7 @@
   "pipelines.lens_structure": "Structure",
   "pipelines.lens_latency": "Latency",
   "pipelines.lens_complexity": "Complexity",
+  "pipelines.analysis_draft_incomplete": "The draft is incomplete, so it cannot be analysed yet. The last complete analysis is shown.",
   "pipelines.ports_cycle": "That stage runs after this one, so it cannot feed it. Choose an earlier stage.",
   "pipelines.run_inputs_label": "Inputs the workflow supplies",
   "pipelines.run_inputs_kicker": "Workflow supplies",

@@ -117,6 +117,23 @@ export function setInputBinding(
   port: string,
   choice: BindingChoice | null,
 ): PipelineDefinition | null {
+  return bindInput(pipeline, stageId, port, choice)?.pipeline ?? null;
+}
+
+/** An edge added only so a bound producer runs before its consumer. */
+export interface OrderingEdge {
+  from: string;
+  to: string;
+}
+
+/** ``setInputBinding`` that also reports the ordering edge it added, if any. */
+export function bindInput(
+  pipeline: PipelineDefinition,
+  stageId: string,
+  port: string,
+  choice: BindingChoice | null,
+): { pipeline: PipelineDefinition; added: OrderingEdge | null } | null {
+  let added: OrderingEdge | null = null;
   const next = clone(pipeline);
   const stage = next.stages.find((item) => item.id === stageId);
   if (!stage) return null;
@@ -133,13 +150,40 @@ export function setInputBinding(
     if (!reaches(next, choice.stage, stageId)) {
       if (reaches(next, stageId, choice.stage)) return null;
       producer.next = [...new Set([...producer.next, stageId])];
+      added = { from: choice.stage, to: stageId };
     }
     inputs[port] = [{ source: "stage", stage: choice.stage, output: choice.output }];
   }
 
   if (Object.keys(inputs).length) stage.inputs = inputs;
   else delete stage.inputs;
-  return next;
+  return { pipeline: next, added };
+}
+
+/**
+ * Remove ordering edges recorded for ``stageId`` once no binding on it still
+ * names their producer. Only edges recorded at binding time are touched, so an
+ * edge the author drew themselves is never guessed away.
+ */
+export function releaseOrderingEdges(
+  pipeline: PipelineDefinition,
+  tracked: OrderingEdge[],
+  stageId: string,
+): { pipeline: PipelineDefinition; tracked: OrderingEdge[] } {
+  const consumer = pipeline.stages.find((item) => item.id === stageId);
+  const stillNamed = new Set(
+    Object.values(consumer?.inputs ?? {})
+      .flat()
+      .map((binding) => (binding.source === "stage" ? binding.stage : null)),
+  );
+  const release = tracked.filter((edge) => edge.to === stageId && !stillNamed.has(edge.from));
+  if (!release.length) return { pipeline, tracked };
+  const next = clone(pipeline);
+  for (const edge of release) {
+    const producer = next.stages.find((item) => item.id === edge.from);
+    if (producer) producer.next = producer.next.filter((target) => target !== edge.to);
+  }
+  return { pipeline: next, tracked: tracked.filter((edge) => !release.includes(edge)) };
 }
 
 /** Follow a stage rename through every binding that names it. */

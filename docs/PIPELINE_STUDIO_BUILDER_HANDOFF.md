@@ -1,7 +1,7 @@
 # Pipeline Studio Builder Handoff
 
 **Repository:** `ajschlosser/DerridAI`  
-**Prepared:** 2026-10-01 · **Updated:** 2026-10-01 after #370–#372  
+**Prepared:** 2026-10-01 · **Updated:** 2026-10-01 after #370–#372 (all merged)  
 **Work branch:** `feature/pipeline-studio-builder` (PR #368, based on `master`)  
 **Related:** [PIPELINE_MIGRATION_HANDOFF.md](PIPELINE_MIGRATION_HANDOFF.md), `AGENTS.md` (Pipeline execution and traceability)
 
@@ -73,11 +73,11 @@ Invariants that must survive everything below: purposes still own which strategi
 - Start with `store_search` hybrid (dense and lexical legs): the legs are `safe`/`provider_limited` and independent, the built-ins are the parity oracle, and the characterization snapshot already pins result order. Use a bounded thread pool (the stores are synchronous), not asyncio.
 - Parity test: the six built-in `store_search.*` pipelines must return identical results and identical stage order with parallelism on and off.
 
-### 2.1 Open PRs to merge first
+### 2.1 Merged so far
 
-- **#371** Pipeline Studio follow-ups: ordering edges added for a binding are released when it is reset (tracked at binding time, never guessed); a 422 from `/analyze` shows a localized "draft is incomplete" message (en-US/fr-CA).
-- **#372** `evidence_recovery` honours bindings (see table).
-  Both are against `master`; neither depends on the other. Update the table and delete this list when they merge.
+- **#370** `vector_store_search` honours bindings.
+- **#371** Pipeline Studio follow-ups: ordering edges added for a binding are released when it is reset (tracked at binding time, never guessed); a 422 from `/analyze` shows a localized “draft is incomplete” message.
+- **#372** `evidence_recovery` honours bindings.
 
 ### 2.2 Next: `evidence_suggestion` (reviewer evidence)
 
@@ -92,7 +92,7 @@ Same domain as recovery, so reuse the recovery pattern: resolve wiring at compil
 - Flag rewired runs in the Studio (the trace warning exists for store search; recovery should emit the same `rewired_inputs: …` warning, and the run/trace views should show it). This should be one shared helper, not per purpose.
 - Parallel execution as above.
 - Optional: extract a shared executor once a third purpose needs the store-search shape.
-- `AGENTS.md` wording per purpose: today it says only `vector_store_search` (and, after #372, `evidence_recovery`) honour bindings; keep that list accurate as purposes migrate.
+- `AGENTS.md` wording per purpose: today it says only `vector_store_search` and `evidence_recovery` honour bindings; keep that list accurate as purposes migrate.
 
 **Decisions:** `store_search` went first (done). Rewired graphs are flagged in the trace (done for store search; see §2.4 for the rest). Concurrency: parallel where the stage type allows it (§2.0).
 
@@ -128,9 +128,9 @@ Same domain as recovery, so reuse the recovery pattern: resolve wiring at compil
 
 ## 5. Step 4 — Smaller follow-ups
 
-- **Stale ordering edge on reset.** `setInputBinding(..., null)` in `web/src/domain/pipelineBindings.ts` removes the binding but leaves any `next` edge that was added only to order a producer, which then fails as `incompatible_stage_types` (see `ordering_only_edges` in `wiring.py`). Record, at binding time, that the edge was added for ordering (for example by returning it from the helper and storing it in editor state) and remove it on reset when nothing else uses it. Do not guess from the graph alone.
+- **Stale ordering edge on reset.** _(Done: #371.)_ `setInputBinding(..., null)` in `web/src/domain/pipelineBindings.ts` removes the binding but leaves any `next` edge that was added only to order a producer, which then fails as `incompatible_stage_types` (see `ordering_only_edges` in `wiring.py`). Record, at binding time, that the edge was added for ordering (for example by returning it from the helper and storing it in editor state) and remove it on reset when nothing else uses it. Do not guess from the graph alone.
 - **Edge type labels on the diagram.** Show the data type carried by each `next` edge in `PipelineGraphDiagram.vue`, and mark ordering-only edges distinctly. Keep it readable at the compact density; the diagram is relation-viewport based and edges are SVG paths without labels today, so decide on a hover/focus affordance before adding permanent text.
-- **Live validation message friendliness.** While a stage ID is being retyped the draft is briefly invalid and `/analyze` returns 422; the panel then shows the raw error while keeping the last analysis. Consider showing "The draft is incomplete" for 422s.
+- **Live validation message friendliness.** _(Done: #371.)_ While a stage ID is being retyped the draft is briefly invalid and `/analyze` returns 422; the panel then shows the raw error while keeping the last analysis. Consider showing "The draft is incomplete" for 422s.
 - **Still open:** edge type labels on the diagram (needs the hover/focus decision above).
 - **Do not** add a changelog entry now; it belongs to the release cut.
 

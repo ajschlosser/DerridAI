@@ -6,6 +6,8 @@ import {
   choiceFromKey,
   insertStage,
   reaches,
+  bindInput,
+  releaseOrderingEdges,
   removeBindingReferences,
   renameBindingReferences,
   setInputBinding,
@@ -202,5 +204,34 @@ describe("stage fit and insertion", () => {
       unsatisfiedInputs([{ status: "bound" }, { status: "unbound" }, { status: "mismatch" }]),
     ).toBe(2);
     expect(unsatisfiedInputs(undefined)).toBe(0);
+  });
+
+  it("removes an edge it added purely for ordering once the binding is reset", () => {
+    const base = pipeline();
+    base.stages.push(stage("side", "query.passthrough"));
+    base.entry_stage_ids = ["query", "side"];
+    const bound = bindInput(base, "rerank", "query", {
+      kind: "stage",
+      stage: "side",
+      output: "query",
+    });
+    expect(bound?.added).toEqual({ from: "side", to: "rerank" });
+    const reset = bindInput(bound!.pipeline, "rerank", "query", null)!;
+    const released = releaseOrderingEdges(reset.pipeline, [bound!.added!], "rerank");
+    expect(released.pipeline.stages.find((item) => item.id === "side")?.next).toEqual([]);
+    expect(released.tracked).toEqual([]);
+  });
+
+  it("keeps an ordering edge while another binding on the stage still names the producer", () => {
+    const base = pipeline();
+    base.stages.push(stage("side", "query.passthrough"));
+    base.entry_stage_ids = ["query", "side"];
+    const bound = bindInput(base, "rerank", "query", {
+      kind: "stage",
+      stage: "side",
+      output: "query",
+    })!;
+    const released = releaseOrderingEdges(bound.pipeline, [bound.added!], "rerank");
+    expect(released.pipeline.stages.find((item) => item.id === "side")?.next).toEqual(["rerank"]);
   });
 });
