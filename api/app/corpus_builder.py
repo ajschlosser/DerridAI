@@ -2101,9 +2101,15 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # in memory so a reviewer can hot-swap profiles for subsequently scheduled
         # metadata work while the public build manifest remains secret-free.
         self._runtime_requests: dict[str, dict[str, Any]] = {}
-        # Derived semantic graphs keyed by build and the exact inputs that produced
-        # them; bounded so large corpora do not accumulate in memory.
-        self._semantic_graph_cache: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {}
+        # One hydrated graph/index per recently used build. The generation token is
+        # advanced by record writers, so reads never hash the whole corpus.
+        self._semantic_graph_cache: dict[
+            str,
+            tuple[str, dict[str, Any], list[dict[str, Any]], dict[str, Any], SemanticMapIndex],
+        ] = {}
+        # Single-flight locks prevent concurrent requests from rebuilding the same
+        # derived projection. The durable result itself lives in System Data.
+        self._semantic_projection_locks: dict[str, threading.Lock] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
