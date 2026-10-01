@@ -1,12 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import * as runtime from "../runtime/runtime.js";
-import type {
-  WorksDbStatusKind,
-  WorksSnapshot,
-  WorksSort,
-  WorksViewMode,
-} from "../types/works";
+import type { WorksDbStatusKind, WorksSnapshot, WorksSort, WorksViewMode } from "../types/works";
 import { annotationsService } from "./annotations";
 import { requestCorpusFiles } from "./corpusFiles";
 
