@@ -171,16 +171,25 @@ describe("works workspace commands", () => {
       });
     });
 
-    it("searches deterministic bibliographic metadata with case and diacritic normalization", () => {
-      const byAuthor = snapshotSetup({ worksSearch: "JACQUES DERRIDA" }).workspace.getWorksWorkspaceSnapshot();
-      expect(titles(byAuthor)).toEqual(["Aporias", "Glas", "Of Grammatology"]);
+    it(
+      "searches deterministic bibliographic metadata with case and diacritic normalization",
+      () => {
+        const byAuthor = snapshotSetup({
+          worksSearch: "JACQUES DERRIDA",
+        }).workspace.getWorksWorkspaceSnapshot();
+        expect(titles(byAuthor)).toEqual(["Aporias", "Glas", "Of Grammatology"]);
 
-      const byPublisher = snapshotSetup({ worksSearch: "galilee" }).workspace.getWorksWorkspaceSnapshot();
-      expect(titles(byPublisher)).toEqual(["Glas"]);
+        const byPublisher = snapshotSetup({
+          worksSearch: "galilee",
+        }).workspace.getWorksWorkspaceSnapshot();
+        expect(titles(byPublisher)).toEqual(["Glas"]);
 
-      const byTranslator = snapshotSetup({ worksSearch: "leavey" }).workspace.getWorksWorkspaceSnapshot();
-      expect(titles(byTranslator)).toEqual(["Glas"]);
-    });
+        const byTranslator = snapshotSetup({
+          worksSearch: "leavey",
+        }).workspace.getWorksWorkspaceSnapshot();
+        expect(titles(byTranslator)).toEqual(["Glas"]);
+      },
+    );
 
     it("sorts by the real fields and leaves works without a year last", () => {
       const order = (sort: string) => {
@@ -308,7 +317,9 @@ describe("works workspace commands", () => {
     navigation.applyCompressedTableUrlState({ s: "drop table", d: "weird", v: "grid" }, "works");
     expect(state).toMatchObject({ worksSort: "title-asc", worksDbStatus: "", worksView: "cards" });
   });
-  it("builds cheap library summaries and computes expensive detail only for the selected work", () => {
+  it(
+    "builds cheap library summaries and computes expensive detail only for the selected work",
+    () => {
     const item = (work: string, topic: string) => ({
       work,
       count: 1,
@@ -360,13 +371,24 @@ describe("works workspace commands", () => {
     });
     state.workOverview = "Glas";
 
-    const snapshot = workspace.getWorksWorkspaceSnapshot() as {
-      works: Array<{ work: string; annotations: number; insights?: unknown[]; metadata?: unknown[] }>;
-      selected: { work: string; annotations: number; insights: Array<{ field: string; values: unknown[] }> };
-    };
+      const snapshot = workspace.getWorksWorkspaceSnapshot() as {
+        works: Array<{
+          work: string;
+          annotations: number;
+          insights?: unknown[];
+          metadata?: unknown[];
+        }>;
+        selected: {
+          work: string;
+          annotations: number;
+          insights: Array<{ field: string; values: unknown[] }>;
+        };
+      };
 
-    expect(snapshot.works).toHaveLength(2);
-    expect(snapshot.works.every((work) => !("insights" in work) && !("metadata" in work))).toBe(true);
+      expect(snapshot.works).toHaveLength(2);
+      expect(
+        snapshot.works.every((work) => !("insights" in work) && !("metadata" in work)),
+      ).toBe(true);
     expect(snapshot.works.map((work) => [work.work, work.annotations])).toEqual([
       ["Glas", 2],
       ["Margins", 1],
@@ -377,6 +399,7 @@ describe("works workspace commands", () => {
       { key: "hospitality", value: 1, other: false },
     ]);
     expect(insightSpy).toHaveBeenCalledTimes(1);
-    expect(annotationsSpy).toHaveBeenCalledTimes(1);
-  });
+      expect(annotationsSpy).toHaveBeenCalledTimes(1);
+    },
+  );
 });
