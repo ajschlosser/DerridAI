@@ -21,7 +21,8 @@ import type {
 
 export type BindingChoice =
   | { kind: "stage"; stage: string; output: string }
-  | { kind: "run_input"; name: string };
+  | { kind: "run_input"; name: string }
+  | { kind: "constant"; value: number };
 
 const FALLBACK_KEYS = ["on_empty", "on_unavailable", "on_timeout", "on_error"] as const;
 
@@ -52,12 +53,14 @@ export function primaryOutput(strategy: PipelineStrategy): PipelinePort {
 }
 
 export function optionKey(option: PipelineWiringOption | PipelineWiringSource): string {
+  if (option.kind === "constant") return "constant";
   return option.kind === "run_input"
     ? `run:${option.name}`
     : `stage:${option.stage ?? ""}:${option.output ?? ""}`;
 }
 
 export function choiceKey(choice: BindingChoice): string {
+  if (choice.kind === "constant") return "constant";
   return choice.kind === "run_input"
     ? `run:${choice.name}`
     : `stage:${choice.stage}:${choice.output}`;
@@ -141,6 +144,9 @@ export function bindInput(
 
   if (choice === null) {
     delete inputs[port];
+  } else if (choice.kind === "constant") {
+    if (!Number.isFinite(choice.value)) return null;
+    inputs[port] = [{ source: "constant", value: choice.value }];
   } else if (choice.kind === "run_input") {
     inputs[port] = [{ source: "run_input", name: choice.name }];
   } else {

@@ -29,8 +29,8 @@ from .models import (
     PortSpec,
     StrategySpec,
 )
-from .purposes import PipelinePurposeSpec
-from .registry import StrategyRegistry
+from .purposes import PipelinePurposeSpec, purpose_registry
+from .registry import StrategyRegistry, strategy_registry
 
 FALLBACK_EDGES = ("on_empty", "on_unavailable", "on_timeout", "on_error")
 
@@ -102,8 +102,10 @@ def _source_row(
     via: str = "next",
     explicit: bool = False,
     producer_enabled: bool = True,
+    value: float | None = None,
 ) -> dict[str, Any]:
     return {
+        "value": value,
         "kind": kind,
         "stage": stage,
         "output": output,
@@ -330,6 +332,9 @@ def resolve_wiring(
                     "data_type": port.data_type,
                     "required": port.required,
                     "multiple": port.multiple,
+                    "accepts_constant": port.accepts_constant,
+                    "minimum": port.minimum,
+                    "maximum": port.maximum,
                     "explicit": bool(explicit),
                     "status": status,
                     "sources": sources,
@@ -350,6 +355,10 @@ def resolve_wiring(
 
     return {
         "stages": stage_rows,
+        # ``next`` edges that only order a producer ahead of an explicit binding.
+        "ordering_only_edges": [
+            {"from": source, "to": target} for source, target in sorted(ordering_only)
+        ],
         "run_inputs": [
             {"name": name, "data_type": data_type, "consumers": run_consumers.get(name, [])}
             for name, data_type in run_inputs
@@ -369,6 +378,36 @@ def _explicit_source(
     issues: list[PipelineValidationIssue],
 ) -> list[dict[str, Any]]:
     where = f"input {port.name!r} of {stage.id!r}"
+    if binding.source == "constant":
+        if not port.accepts_constant:
+            issues.append(
+                _issue(
+                    "error",
+                    "binding_constant_not_allowed",
+                    f"The {where} takes {port.data_type!r} from the pipeline, not a fixed "
+                    "value; only tuning ports accept a constant.",
+                    stage.id,
+                )
+            )
+            return []
+        value = float(binding.value if binding.value is not None else 0.0)
+        if (port.minimum is not None and value < port.minimum) or (
+            port.maximum is not None and value > port.maximum
+        ):
+            issues.append(
+                _issue(
+                    "error",
+                    "binding_constant_out_of_range",
+                    f"The {where} accepts {port.minimum} to {port.maximum}; got {value:g}.",
+                    stage.id,
+                )
+            )
+            return []
+        return [
+            _source_row(
+                kind="constant", data_type="number", via="constant", explicit=True, value=value
+            )
+        ]
     if binding.source == "run_input":
         name = str(binding.name)
         if name not in run_input_types:
@@ -456,7 +495,7 @@ def _explicit_source(
 def _signature(wiring: dict[str, Any]) -> dict[tuple[str, str], list[tuple[Any, ...]]]:
     return {
         (stage_id, row["port"]): sorted(
-            (s["kind"], s["stage"] or "", s["output"] or "", s["name"] or "")
+            (s["kind"], s["stage"] or "", s["output"] or "", s["name"] or "", s.get("value") or 0.0)
             for s in row["sources"]
         )
         for stage_id, stage in wiring["stages"].items()
@@ -490,3 +529,14 @@ def bindings_changing_wiring(
         for (stage_id, port), value in explicit.items()
         if value != implicit.get((stage_id, port))
     )
+
+
+def rewired_warnings(pipeline: PipelineDefinition) -> list[str]:
+    """Trace warning for runs whose explicit bindings differ from the graph's own wiring.
+
+    One helper for every purpose that honours bindings, so the Studio can flag
+    rewired runs the same way regardless of which adapter executed them.
+    """
+
+    changed = bindings_changing_wiring(pipeline, strategy_registry, purpose_registry.get(pipeline.purpose))
+    return ["rewired_inputs: " + ", ".join(changed)[:280]] if changed else []

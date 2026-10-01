@@ -220,6 +220,8 @@ class Settings:
         "cross-encoder/ms-marco-MiniLM-L-6-v2",
     )
     rag_model_cache: str = os.getenv("RAG_MODEL_CACHE", "/data/models")
+    # Overlap independent, concurrency-safe pipeline branches (store-search hybrid legs).
+    pipeline_parallel_branches: bool = _bool_env("PIPELINE_PARALLEL_BRANCHES", False)
     metadata_cross_encoder_enabled: bool = _bool_env(
         "METADATA_CROSS_ENCODER_ENABLED",
         True,

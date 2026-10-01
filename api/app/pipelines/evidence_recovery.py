@@ -51,7 +51,7 @@ from .purposes import purpose_registry
 from .registry import strategy_registry
 from .service import pipeline_hash
 from .trace_safety import trace_stage
-from .wiring import resolve_wiring
+from .wiring import resolve_wiring, rewired_warnings
 
 RECOVERY_FEATURE = "evidence_recovery"
 RECOVERY_PURPOSE = "evidence_recovery"
@@ -583,6 +583,7 @@ def execute_recovery_pipeline(
         started_at=started_at,
         finished_at=finished_at,
         total_elapsed_ms=max(0, int((finished_at - started_at).total_seconds() * 1000)),
+        warnings=rewired_warnings(plan.pipeline),
         stages=traces,
     )
     return selected, (winner if selected else None), trace

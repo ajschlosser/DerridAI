@@ -1,11 +1,22 @@
 # Pipeline Studio Builder Handoff
 
 **Repository:** `ajschlosser/DerridAI`  
-**Prepared:** 2026-10-01 · **Updated:** 2026-10-01 after #370–#372 (all merged)  
-**Work branch:** `feature/pipeline-studio-builder` (PR #368, based on `master`)  
+**Prepared:** 2026-10-01 · **Updated:** 2026-10-01 after #370–#375 (all merged)  
+**Work branches:** `feature/pipeline-studio-builder` (PR #368, merged); `feature/evidence-suggestion-executor` (PR #375, merged)  
 **Related:** [PIPELINE_MIGRATION_HANDOFF.md](PIPELINE_MIGRATION_HANDOFF.md), `AGENTS.md` (Pipeline execution and traceability)
 
 This is an implementation handoff, not a release note. PR #368 landed typed stage ports, input-binding validation, latency/complexity analysis and a from-scratch builder. It deliberately did **not** make rewired pipelines executable. This document covers what remains: a generic executor (step 1), constant inputs (step 2), calibrating the declared complexities (step 3) and smaller follow-ups (step 4). These were items 2–5 of the “what is next” list in the PR discussion (item 1 was browser review); they are numbered 1–4 here. Verify every claim against the code before relying on it.
+
+## 0. What remains (read this first)
+
+Done in #375: shared `rewired_inputs` warning and its Studio notice (§2.4), store-search parallel branches with declared `concurrency` (§2.0), constant inputs on tuning ports (§3), diagram edge type labels and ordering-only edges (§5), code-read complexity corrections (§4), and assessments of `evidence_suggestion` (§2.2) and `research` (§2.3) as inspect-only for changed bindings.
+
+Still open:
+
+1. **Complexity calibration against measured traces** (§4): record a bounded `scope_size` in `PipelineStageTrace.parameters`, run representative pipelines at three or more collection sizes, then fit and correct.
+2. **More tuning ports** (§3): `fetch_k`, `rrf_k`, `lambda_mult`, each classified as pure computation first.
+3. **Optional shared executor** (§2.4) once a third purpose needs the store-search shape.
+4. Revisit §2.2 or §2.3 only if the purpose gains a real branch.
 
 ## 1. State after PR #368
 
@@ -78,19 +89,27 @@ Invariants that must survive everything below: purposes still own which strategi
 - **#370** `vector_store_search` honours bindings.
 - **#371** Pipeline Studio follow-ups: ordering edges added for a binding are released when it is reset (tracked at binding time, never guessed); a 422 from `/analyze` shows a localized “draft is incomplete” message.
 - **#372** `evidence_recovery` honours bindings.
+- **#375** Shared `rewired_inputs` warning and Studio notice, store-search parallel branches (`concurrency` capability, `PIPELINE_PARALLEL_BRANCHES`), constant inputs on tuning ports, diagram edge type labels and ordering-only edges, `validate.evidence_support` complexity correction; `evidence_suggestion` and `research` assessed as inspect-only for changed bindings.
 
-### 2.2 Next: `evidence_suggestion` (reviewer evidence)
+### 2.2 `evidence_suggestion` (reviewer evidence) — assessed, not migrated
+
+**Finding (2026-10-01).** Unlike recovery, this adapter has no alternative producers to choose between. Lexical and semantic candidates come from one legacy helper call that cannot be split per branch (the trace already says so), `support -> provenance -> select` is fixed by domain rules, and every compiler edge check is either a domain rule or pins the single supported shape. A binding that differs from the graph could therefore only (a) bypass the support gate or (b) point at a producer the runner ignores, so `honours_bindings=True` would report a version executable while running something else. This is the same situation as the fixed-shape purposes in §2.0; keep changed bindings inspect-only. Revisit only if the helper is split into independently runnable retrieval legs or the stage gains a real branch. The notes below are kept for that case.
 
 Same domain as recovery, so reuse the recovery pattern: resolve wiring at compile, per-stage bound input, recompute the provenance/support guarantees from bound sources. Before editing, read `compile_evidence_pipeline` (`evidence.py:108`) and `execute_reviewer_evidence_pipeline` (`evidence.py:359`) and list which edge checks encode _domain_ rules (support gate before provenance, terminal selection) versus _shape_ rules. Convert domain rules to resolved-source checks; leave shape rules. Characterize first: capture results, order, trace stage IDs/counts for the built-ins, then migrate. Add the same four tests as #372 (compliance verdict under a bypass binding, selection cannot be bound around the gate, a bound pipeline runs and is reported supported, built-ins unchanged).
 
-### 2.3 Then: `research` (riskiest)
+### 2.3 `research` — classified, not migrated
 
-`research.py` has about 30 `ValueError` shape checks (single decompose/transform, MMR placement before fusion or after rerank, diversity requires rerank, evaluation must follow citation binding). Many are domain guarantees (citation binding, evidence validation, evaluation after binding) that bindings could otherwise bypass. Classify every check as domain or shape first; any domain check must be re-expressed over resolved sources before `honours_bindings=True`. Research fans out and gates the answer, so also decide which stages may run in parallel under the concurrency rule above (retrieval legs yes; anything after context packing no). Do this last and in several PRs.
+**Classification of `compile_research_pipeline`'s ~29 checks (2026-10-01).** The runner is driven by the compiled plan's flags (`semantic_retrieval`, `pre_fusion_mmr`, `provenance_gate`, …), which come from _reachability_, not from per-stage inputs; there is no place where a stage chooses between producers.
+
+- **Domain (must hold over resolved sources if bindings are ever honoured):** provenance gate present and fed by the final ranking stage; context packer fed only by the gate; generation fed by the packer; citation binding fed by generation; evaluation after citation binding; fallback paths rejoin _before_ the gate; source-aware diversity and MMR only after reranking.
+- **Shape (only describe the one supported layout):** at most one of each strategy, one query-transform stage, entry-stage rules, fusion required for parallel retrieval, MMR before fusion must follow semantic retrieval, fallback targets limited to lexical fallback or top-K.
+
+**Decision.** Do not set `honours_bindings=True` for Research. Every producer a binding could name is already forced by the domain checks, so a differing binding can only bypass a gate or be ignored by the flag-driven runner; either way the version would look executable while running something else. Changed bindings stay inspect-only. Revisit only if Research gains a real branch (for example two interchangeable rerankers); at that point re-express the domain list above over `resolve_wiring` sources first, in its own PR, before flipping the flag.
 
 ### 2.4 Remaining in step 1
 
-- Flag rewired runs in the Studio (the trace warning exists for store search; recovery should emit the same `rewired_inputs: …` warning, and the run/trace views should show it). This should be one shared helper, not per purpose.
-- Parallel execution as above.
+- Flag rewired runs. _(Trace side done: `wiring.rewired_warnings` is the one shared helper, used by store search and evidence recovery; any newly migrated purpose must call it when building its run trace.)_ The Studio run/trace panel shows it as a notice above the trace.
+- Parallel execution. _(Done for store search: strategies declare `concurrency` in `contracts.py`; `execute_store_search(parallel=True)` joins each batch of independent safe/provider-limited stages in a bounded thread pool and then processes them in definition order, so results, fallback routing and trace order match the sequential run; the trace carries `branches_overlapped`. Opt-in via `PIPELINE_PARALLEL_BRANCHES`. Not done: other purposes have no independent branches to overlap that are not hidden inside one legacy helper call.)_
 - Optional: extract a shared executor once a third purpose needs the store-search shape.
 - `AGENTS.md` wording per purpose: today it says only `vector_store_search` and `evidence_recovery` honour bindings; keep that list accurate as purposes migrate.
 
@@ -98,17 +117,11 @@ Same domain as recovery, so reuse the recovery pattern: resolve wiring at compil
 
 **Done when:** a rewired `store_search` version validates, compiles, runs, records a trace, and appears as executable in the Studio; the built-ins produce identical output to before; the adapter-specific "explicit bindings change wiring" rule is lifted only for migrated purposes; `AGENTS.md` no longer says free-form wiring cannot execute for that purpose.
 
-## 3. Step 2 — Constant inputs
+## 3. Step 2 — Constant inputs _(built 2026-10-01)_
 
-**Goal.** An input may take a fixed value (a literal query, a threshold) as well as another stage's output or a run input.
+`InputBinding.source="constant"` carries a bounded finite number (`|value| ≤ 1,000,000`, omitted from the serialised form when absent so existing hashes hold). Only ports declaring `PortSpec.accepts_constant` take one, with an optional `minimum`/`maximum`; wiring reports `binding_constant_not_allowed` and `binding_constant_out_of_range`. New data type `number`. The first tuning port is `select.top_k`'s optional `limit`; the open decision was resolved as recommended: constants are never allowed on `query`, candidate or other data ports, and `config` keeps owning every existing numeric setting. Store search delivers the constant (it may narrow the request's result count, never raise it) and flags the run as rewired; every other purpose keeps a version with a constant inspect-only because a constant changes the resolved wiring. The Stage inputs panel offers **A fixed number** with a range-checked number field.
 
-**Depends on step 1** for anything beyond display. `vector_store_search` and `evidence_recovery` now deliver bindings, so a constant could be executed there. **Blocker found 2026-10-01:** no strategy declares a port other than `query` or `candidate_set` (or `context`/`model_output`), and a constant on a `query` port makes the pipeline ignore the user's question while one on a candidate port is meaningless. Constants therefore have no valid target yet. Recommended resolution: keep constants off `query` ports; introduce them together with the first strategy that has a tuning-style port (for example a `threshold` or `limit` number port), and keep `config` as the owner of existing numeric settings.
-
-**Shape.** Extend `InputBinding` (in `api/app/pipelines/models.py`) with a third source, `constant`, carrying a value and a declared data type; validate it in `wiring.py` next to `run_input` (type check, bounded size, JSON scalar or small structure only). Constants are pipeline tuning, not domain policy, so apply the user's rule to classify before exposing one: nothing that weakens provenance gates, support thresholds that the purpose fixes, access rules or reviewer decisions may become a constant knob. Add them to the stage inputs UI as a fourth group in the source picker. Include the constant in the pipeline's canonical hash (it already follows from being in the dump) and keep `inputs` omitted while empty.
-
-**Open decision:** whether a constant should be allowed for `query`-typed ports at all (it makes a pipeline ignore the user's question), or only for tuning-like values already expressed as `config`. Ask before building; a likely answer is that constants are for non-query ports and `config` keeps owning numeric settings.
-
-**Done when:** a constant binds, validates, round-trips through save and clone, shows in the wiring panel with its type, and the executor (step 1) delivers it. Tests cover type mismatch, oversize values and hash stability for pipelines without constants.
+Remaining: more tuning ports (for example `fetch_k`, `rrf_k`, `lambda_mult`) once each is classified as pure computation rather than domain policy; a constant must never reach a provenance gate, support threshold the purpose fixes, access rule or reviewer decision.
 
 ## 4. Step 3 — Calibrate declared complexity against real traces
 
@@ -124,6 +137,8 @@ Same domain as recovery, so reuse the recovery pattern: resolve wiring at compil
 
 **Known soft spots to check first:** `rerank.cross_encoder` scores all incoming candidates in the Research path but only the head `top_k` in the evidence adapter (`pipelines/evidence.py`), so its worst-case model-call count is an upper bound; `validate.evidence_support` is declared `O(n·L)` but may be model-assisted; fusion cardinality assumes distinct origins and is an upper bound. `retrieve.chroma_similarity` is declared sublinear in `N` (approximate index) and is only valid for that index type.
 
+**Status (2026-10-01).** The measurement part could not be run here (it needs real traces at several collection sizes). The code-reading part is done: `validate.evidence_support` was declared `O(n·L)` but `_support_rows` re-scores every source unit in scope, so it is now `O(N·L)` and scope-scaling (it is deterministic token overlap, not model-assisted); `rerank.cross_encoder` keeps `model_calls="n"` with a comment that the evidence adapter scores only the head `top_k`; `validate.provenance` is unchanged because the Research gate is per-candidate while the reviewer-evidence variant also builds an in-memory set of all source units, and one strategy id carries one declaration. `scope_size` is still not recorded in traces; add it before fitting scope-scaling exponents.
+
 **Done when:** each declared cost either agrees with measurement within reason or carries a corrected formula and a comment on how it was checked, and the Complexity tab no longer shows a measured exponent that contradicts its declaration without explanation.
 
 ## 5. Step 4 — Smaller follow-ups
@@ -131,7 +146,7 @@ Same domain as recovery, so reuse the recovery pattern: resolve wiring at compil
 - **Stale ordering edge on reset.** _(Done: #371.)_ `setInputBinding(..., null)` in `web/src/domain/pipelineBindings.ts` removes the binding but leaves any `next` edge that was added only to order a producer, which then fails as `incompatible_stage_types` (see `ordering_only_edges` in `wiring.py`). Record, at binding time, that the edge was added for ordering (for example by returning it from the helper and storing it in editor state) and remove it on reset when nothing else uses it. Do not guess from the graph alone.
 - **Edge type labels on the diagram.** Show the data type carried by each `next` edge in `PipelineGraphDiagram.vue`, and mark ordering-only edges distinctly. Keep it readable at the compact density; the diagram is relation-viewport based and edges are SVG paths without labels today, so decide on a hover/focus affordance before adding permanent text.
 - **Live validation message friendliness.** _(Done: #371.)_ While a stage ID is being retyped the draft is briefly invalid and `/analyze` returns 422; the panel then shows the raw error while keeping the last analysis. Consider showing "The draft is incomplete" for 422s.
-- **Still open:** edge type labels on the diagram (needs the hover/focus decision above).
+- **Edge type labels on the diagram.** _(Done: focusing or hovering a stage labels the data type of its connections; ordering-only edges are dashed, labelled “Runs first (no data)” and listed in the legend. Decision: temporary labels on hover/focus rather than permanent text. The analysis payload now carries `wiring.ordering_only_edges`.)_
 - **Do not** add a changelog entry now; it belongs to the release cut.
 
 ## 6. Working notes and gotchas

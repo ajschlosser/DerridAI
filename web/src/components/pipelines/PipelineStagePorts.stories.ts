@@ -68,3 +68,39 @@ export const Loading: Story = { args: { wiring: null, loading: true } };
 export const Unavailable: Story = { args: { wiring: null, error: "The server is unreachable." } };
 
 export const FrenchLengthStress: Story = { parameters: { locale: "fr-CA" } };
+
+export const FixedValueOnTuningPort: Story = {
+  args: {
+    stage: { ...stage, id: "pick", strategy: "select.top_k" },
+    wiring: {
+      ...wiring.c,
+      inputs: [
+        {
+          port: "limit",
+          data_type: "number",
+          required: false,
+          multiple: false,
+          accepts_constant: true,
+          minimum: 1,
+          maximum: 1000,
+          explicit: true,
+          status: "bound",
+          options: [],
+          sources: [
+            {
+              kind: "constant",
+              value: 5,
+              stage: null,
+              output: null,
+              name: null,
+              data_type: "number",
+              via: "constant",
+              explicit: true,
+              producer_enabled: true,
+            },
+          ],
+        },
+      ],
+    },
+  },
+};

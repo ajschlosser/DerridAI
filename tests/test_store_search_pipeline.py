@@ -233,3 +233,69 @@ def test_rebound_store_search_pipeline_is_reported_executable() -> None:
 
     support = runtime_support(_rebound_hybrid())
     assert support["supported"] is True
+
+
+# --- Parallel branches ---------------------------------------------------------------------
+
+
+def _run(mode, *, parallel, store=None):
+    from app.pipelines.store_search import StoreSearchRequest, execute_store_search
+
+    pipeline = built_in_pipeline(*MODE_PIPELINES[mode])
+    request = StoreSearchRequest(store="db", query="stranger", n_results=3, where=None, fetch_k=12, lambda_mult=0.5)
+    return execute_store_search(
+        compile_store_search_pipeline(pipeline),
+        store=store or fake_store(embeddings=FakeEmbeddings()),
+        request=request,
+        resolved_hash=pipeline_hash(pipeline),
+        parallel=parallel,
+    )
+
+
+@pytest.mark.parametrize("mode", sorted(MODE_PIPELINES))
+def test_parallel_execution_matches_sequential_results_and_stage_order(mode) -> None:
+    sequential, overlapped = _run(mode, parallel=False), _run(mode, parallel=True)
+    assert overlapped.results == sequential.results
+    shape = lambda run: [(s.stage_id, s.status, s.input_count, s.output_count) for s in run.trace.stages]  # noqa: E731
+    assert shape(overlapped) == shape(sequential)
+    assert [s.stage_id for s in overlapped.trace.stages] == [s.stage_id for s in sequential.trace.stages]
+
+
+def test_hybrid_legs_really_overlap_and_the_trace_says_so() -> None:
+    import threading
+
+    store = fake_store(embeddings=FakeEmbeddings())
+    meeting = threading.Barrier(2, timeout=5)  # both legs must be inside at once, or the wait breaks
+
+    def rendezvous(original):
+        def wrapped(*args, **kwargs):
+            meeting.wait()
+            return original(*args, **kwargs)
+
+        return wrapped
+
+    store.search = rendezvous(store.search)
+    store.lexical_search = rendezvous(store.lexical_search)
+    run = _run("hybrid", parallel=True, store=store)
+    assert "branches_overlapped" in run.trace.warnings
+    assert _run("hybrid", parallel=False).trace.warnings == []
+
+
+def test_failed_leg_behaves_the_same_with_and_without_overlap() -> None:
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("index unavailable")
+
+    for parallel in (False, True):
+        store = fake_store(embeddings=FakeEmbeddings())
+        store.lexical_search = broken
+        with pytest.raises(RuntimeError, match="index unavailable"):
+            _run("hybrid", parallel=parallel, store=store)
+
+
+def test_undeclared_strategies_are_exclusive() -> None:
+    from app.pipelines.contracts import strategy_concurrency
+
+    assert strategy_concurrency("fusion.rrf") == "exclusive"
+    assert strategy_concurrency("not.registered") == "exclusive"
+    assert strategy_concurrency("retrieve.lexical_bm25") == "safe"
+    assert strategy_concurrency("retrieve.chroma_similarity") == "provider_limited"
