@@ -651,14 +651,7 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
                 "id": "mmr",
                 "strategy": "select.mmr",
                 "config": {"lambda_mult": 0.72, "limit": 4, "min_relevance": 0.2},
-                "next": ["candidate_support"],
-                "on_empty": "llm_choice",
-            },
-            {
-                "id": "candidate_support",
-                "strategy": "validate.evidence_support",
-                "config": {"min_score": 0.5},
-                "next": ["provenance"],
+                "next": ["llm_choice"],
                 "on_empty": "llm_choice",
             },
             {
