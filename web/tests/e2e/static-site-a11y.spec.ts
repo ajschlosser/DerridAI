@@ -1,13 +1,26 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
+// The site runtime strings as shipped in the English locale; the subset below overrides them where a test
+// depends on specific wording.
+function shippedStrings(): Record<string, string> {
+  const source = readFileSync(resolve(process.cwd(), "../api/app/locales/en_us.py"), "utf8");
+  const found: Record<string, string> = {};
+  for (const match of source.matchAll(/'(site\.runtime\.[a-z0-9_]+)':\s*'((?:[^'\\]|\\.)*)',/g)) {
+    found[match[1]] = match[2].replace(/\\'/g, "'");
+  }
+  return found;
+}
+
 function strings() {
   const keys = {
+    ...shippedStrings(),
     "site.runtime.search": "Search",
     "site.runtime.search_placeholder": "Search this collection",
     "site.runtime.search_mode": "Search mode",
@@ -405,9 +418,11 @@ test("search terms are highlighted in result snippets and the opened record", as
   await expect(page.locator(".result .snippet mark")).toHaveCount(0);
 });
 
-test("exported OpenAI profile powers vector + LLM Research with method disclosure", async ({
-  page,
-}) => {
+const PROVIDER_FIXTURE_VECTOR = Buffer.alloc(8);
+PROVIDER_FIXTURE_VECTOR.writeFloatLE(1, 0);
+PROVIDER_FIXTURE_VECTOR.writeFloatLE(0, 4);
+
+async function mountProviderSite(page: Page, extraFeatures: Record<string, unknown> = {}) {
   const sdkSource = await readFile(
     resolve(process.cwd(), "../api/app/site_assets/derridai-sdk.js"),
     "utf8",
@@ -416,30 +431,39 @@ test("exported OpenAI profile powers vector + LLM Research with method disclosur
     resolve(process.cwd(), "../api/app/site_assets/derridai-site.js"),
     "utf8",
   );
-  const record = {
-    record_id: "r1",
-    source_document_id: "source-1",
-    source_spans: [{ source_document_id: "source-1", source_unit_id: "unit-r1" }],
-    work: "Glas",
-    citation: "Derrida, Jacques. Glas.",
-    text: "Hospitality exceeds the economy of conditional exchange.",
-    speaker: "Derrida",
-    position_holder: "Derrida",
-    stance: "argues",
-  };
-  const vector = Buffer.alloc(8);
-  vector.writeFloatLE(1, 0);
-  vector.writeFloatLE(0, 4);
+  const records = [
+    {
+      record_id: "r1",
+      source_document_id: "source-1",
+      source_spans: [{ source_document_id: "source-1", source_unit_id: "unit-r1" }],
+      work: "Glas",
+      citation: "Derrida, Jacques. Glas.",
+      text: "Hospitality exceeds the economy of conditional exchange.",
+      speaker: "Derrida",
+      position_holder: "Derrida",
+      stance: "argues",
+    },
+    {
+      record_id: "r2",
+      source_document_id: "source-1",
+      source_spans: [{ source_document_id: "source-1", source_unit_id: "unit-r2" }],
+      work: "Glas",
+      citation: "Derrida, Jacques. Glas.",
+      text: "Mourning keeps the other within.",
+    },
+  ];
+  const vectors = Buffer.alloc(16);
+  [1, 0, 0, 1].forEach((value, index) => vectors.writeFloatLE(value, index * 4));
   const packageValue = {
     manifest: {
-      format: "derridai-static-site-v4",
+      format: "derridai-static-site-v5",
       publication_id: "sitepub-provider",
       corpus_id: "test",
       created_at: "2026-09-30T12:00:00Z",
       title: "Provider fixture",
       locale: "en-US",
       languages: [{ code: "en-US", name: "English", flag: "🇺🇸" }],
-      works: [{ work: "Glas", record_count: 1, authors: ["Jacques Derrida"] }],
+      works: [{ work: "Glas", record_count: 2, authors: ["Jacques Derrida"] }],
       vector_index: {
         dimension: 2,
         model: "bge-m3:latest",
@@ -447,22 +471,14 @@ test("exported OpenAI profile powers vector + LLM Research with method disclosur
         text_field: "text",
       },
       source_collection: { filter_fields: ["work", "speaker"] },
-      provider_profiles: [
-        {
-          id: "openai-main",
-          name: "Research endpoint",
-          type: "openai",
-          base_url: "https://models.example.test/v1",
-          model: "gpt-oss:20b",
-          has_api_key: true,
-        },
-      ],
       features: {
         browse: true,
         lexical_search: true,
         semantic_search: true,
         local_annotations: true,
         research: true,
+        browser_providers: true,
+        ...extraFeatures,
       },
       strings: { "en-US": strings() },
     },
@@ -470,14 +486,16 @@ test("exported OpenAI profile powers vector + LLM Research with method disclosur
       {
         id: "work-1",
         work: "Glas",
-        record_count: 1,
-        records_b64: Buffer.from(JSON.stringify([record]), "utf8").toString("base64"),
-        vector_ids: ["r1"],
-        vectors_b64: vector.toString("base64"),
+        record_count: 2,
+        records_b64: Buffer.from(JSON.stringify(records), "utf8").toString("base64"),
+        vector_ids: ["r1", "r2"],
+        vectors_b64: vectors.toString("base64"),
       },
     ],
   };
 
+  // An OpenAI-compatible endpoint: models, embeddings (hospitality -> [1,0], anything else -> [0,1]) and chat.
+  const embedRequests: string[][] = [];
   await page.route("https://models.example.test/v1/**", async (route) => {
     const request = route.request();
     const headers = {
@@ -491,10 +509,17 @@ test("exported OpenAI profile powers vector + LLM Research with method disclosur
       return;
     }
     if (request.url().endsWith("/embeddings")) {
+      const input = (request.postDataJSON() as { input: string[] }).input;
+      embedRequests.push(input);
       await route.fulfill({
         status: 200,
         headers,
-        body: JSON.stringify({ data: [{ embedding: [1, 0] }] }),
+        body: JSON.stringify({
+          data: input.map((text, index) => ({
+            index,
+            embedding: /hospitality/i.test(text) ? [1, 0] : [0, 1],
+          })),
+        }),
       });
       return;
     }
@@ -513,7 +538,7 @@ test("exported OpenAI profile powers vector + LLM Research with method disclosur
         status: 200,
         headers,
         body: JSON.stringify({
-          data: [{ id: "gpt-oss:20b" }, { id: "bge-m3:latest" }],
+          data: [{ id: "gpt-oss:20b" }, { id: "bge-m3:latest" }, { id: "tiny-embed" }],
         }),
       });
       return;
@@ -521,7 +546,14 @@ test("exported OpenAI profile powers vector + LLM Research with method disclosur
     await route.fulfill({ status: 404, headers, body: "{}" });
   });
 
-  await page.setContent('<div id="app" role="status" aria-live="polite">Loading…</div>');
+  // A real origin, so IndexedDB behaves as it does for a hosted site (it is refused on about:blank).
+  await page.route("https://site.example.test/", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: '<!doctype html><html lang="en-US"><head><meta charset="utf-8"><title>Site</title></head><body><div id="app" role="status" aria-live="polite">Loading…</div></body></html>',
+    }),
+  );
+  await page.goto("https://site.example.test/");
   await page.evaluate((value) => {
     (window as typeof window & { __DERRIDAI_SITE_PACKAGE__?: unknown }).__DERRIDAI_SITE_PACKAGE__ =
       value;
@@ -529,12 +561,41 @@ test("exported OpenAI profile powers vector + LLM Research with method disclosur
   await page.addScriptTag({ content: sdkSource });
   await page.addScriptTag({ content: siteSource });
   await page.getByRole("button", { name: "Skip tutorial" }).click();
+  return { embedRequests };
+}
+
+async function addProvider(
+  page: Page,
+  options: { name: string; role: "embedding" | "generation"; model: string },
+) {
+  await page.getByRole("button", { name: "Providers" }).click();
+  const form = page.getByRole("form", { name: "Add a provider" });
+  await form.getByLabel("Name", { exact: true }).fill(options.name);
+  await form.getByLabel("Used for").selectOption(options.role);
+  await form.getByLabel("Engine").selectOption("openai");
+  await form.getByLabel("Endpoint URL").fill("https://models.example.test/v1");
+  await form.getByRole("button", { name: "Load models" }).click();
+  await expect(form.getByRole("status")).toContainText("3 models found");
+  await form.getByLabel("Model", { exact: true }).fill(options.model);
+  await form.getByRole("button", { name: "Save provider" }).click();
+}
+
+test("a provider the reader configures powers vector + LLM Research with method disclosure", async ({
+  page,
+}) => {
+  await mountProviderSite(page);
+  // Nothing was exported, so nothing is configured until the reader sets it up.
+  await page.getByRole("button", { name: "Providers" }).click();
+  await expect(page.getByLabel("Embedding provider")).toHaveValue("");
+  await expect(page.getByLabel("Generation provider")).toHaveValue("");
+
+  // The exact model that embedded the publication uses its published vectors: no local index needed.
+  await addProvider(page, { name: "Embedder", role: "embedding", model: "bge-m3:latest" });
+  await expect(page.getByLabel("Embedding provider")).toHaveValue(/provider-/);
+  await expect(page.locator('[data-index="ready"]')).toContainText("published vectors are used");
+  await addProvider(page, { name: "Writer", role: "generation", model: "gpt-oss:20b" });
 
   await page.getByRole("button", { name: "Research" }).click();
-  await page.getByLabel("Provider profile").selectOption("openai-main");
-  await page.getByRole("button", { name: "Use this provider" }).click();
-  await expect(page.getByLabel("Question")).toBeVisible();
-
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");
   await page.getByRole("button", { name: "Ask" }).click();
 
@@ -545,4 +606,65 @@ test("exported OpenAI profile powers vector + LLM Research with method disclosur
   await expect(methods).toContainText("LLM answer generation");
   await expect(methods).not.toContainText("not used");
   await scan(page);
+});
+
+test("a different embedding model builds a local IndexedDB index before semantic search", async ({
+  page,
+}) => {
+  const { embedRequests } = await mountProviderSite(page);
+  await addProvider(page, { name: "Tiny", role: "embedding", model: "tiny-embed" });
+  await expect(page.locator('[data-index="ready"]')).toContainText("0 of 2 Records embedded");
+
+  // Without an index the semantic request falls back to keywords and says why.
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page.getByLabel("Search mode").selectOption("semantic");
+  await page.locator(".search-row input").fill("hospitality");
+  await page.locator(".search-row button").click();
+  await expect(page.getByRole("status").filter({ hasText: "needs a local index" })).toBeVisible();
+  expect(embedRequests).toEqual([]);
+
+  await page.getByRole("button", { name: "Providers" }).click();
+  await page.getByRole("button", { name: "Build local index" }).click();
+  await expect(page.locator('[data-index="ready"]')).toContainText("Local index ready: 2 Records");
+  await expect(page.locator('[data-index="ready"]')).toContainText("IndexedDB");
+  expect(embedRequests.flat()).toEqual([
+    "Hospitality exceeds the economy of conditional exchange.",
+    "Mourning keeps the other within.",
+  ]);
+
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByLabel("Search mode")).toHaveValue("hybrid");
+  await page.getByLabel("Search mode").selectOption("semantic");
+  await page.locator(".search-row input").fill("hospitality");
+  await page.locator(".search-row button").click();
+  await expect(page.locator(".result").first()).toContainText("Hospitality exceeds");
+  const methods = page.getByRole("group", { name: "Technology used for this operation" });
+  await expect(methods).toContainText("Vector search (embeddings)");
+
+  // The index survives a reload because it lives in IndexedDB.
+  const stored = await page.evaluate(
+    () =>
+      new Promise<number>((resolveCount, reject) => {
+        const open = indexedDB.open("derridai-sdk-vectors");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const count = open.result
+            .transaction("vectors", "readonly")
+            .objectStore("vectors")
+            .count();
+          count.onsuccess = () => resolveCount(count.result);
+        };
+      }),
+  );
+  expect(stored).toBe(2);
+  await scan(page);
+});
+
+test("Transformers.js is offered only when the site includes its runtime", async ({ page }) => {
+  await mountProviderSite(page);
+  await page.getByRole("button", { name: "Providers" }).click();
+  const engine = page.getByRole("form", { name: "Add a provider" }).getByLabel("Engine");
+  const option = engine.locator('option[value="transformers"]');
+  await expect(option).toHaveAttribute("disabled", "");
+  await expect(option).toContainText("not included");
 });
