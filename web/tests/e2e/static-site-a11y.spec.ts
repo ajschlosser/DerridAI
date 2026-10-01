@@ -422,6 +422,30 @@ const PROVIDER_FIXTURE_VECTOR = Buffer.alloc(8);
 PROVIDER_FIXTURE_VECTOR.writeFloatLE(1, 0);
 PROVIDER_FIXTURE_VECTOR.writeFloatLE(0, 4);
 
+async function installFakeTransformersRuntime(page: Page) {
+  await page.route("https://site.example.test/vendor/transformers/transformers.min.js", (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      body: `
+        export const env = { backends: { onnx: { wasm: {} } } };
+        export async function pipeline(task, model, options = {}) {
+          globalThis.__DERRIDAI_FAKE_PIPELINE__ = { task, model, options };
+          return async (input) => {
+            const texts = Array.isArray(input) ? input : [input];
+            return {
+              tolist() {
+                return texts.map((text) =>
+                  /hospitality/i.test(String(text)) ? [1, 0] : [0, 1]
+                );
+              }
+            };
+          };
+        }
+      `,
+    }),
+  );
+}
+
 async function mountProviderSite(page: Page, extraFeatures: Record<string, unknown> = {}) {
   const sdkSource = await readFile(
     resolve(process.cwd(), "../api/app/site_assets/derridai-sdk.js"),
@@ -613,6 +637,49 @@ test("a provider the reader configures powers vector + LLM Research with method 
   await expect(methods).toContainText("Vector search (embeddings)");
   await expect(methods).toContainText("LLM answer generation");
   await expect(methods).not.toContainText("not used");
+  await scan(page);
+});
+
+test("the built-in browser model builds a semantic index in one compatibility-first action", async ({
+  page,
+}) => {
+  await installFakeTransformersRuntime(page);
+  await mountProviderSite(page, { transformers_runtime: "files" });
+
+  await page.getByRole("button", { name: "Models", exact: true }).click();
+  await expect(page.getByLabel("Embedding model")).toHaveValue("Xenova/multilingual-e5-small");
+  await expect(page.getByLabel("Where to run the model")).toHaveValue("wasm");
+  await expect(page.locator('[data-index="ready"]')).toContainText(
+    "Published vectors use bge-m3:latest; this browser uses Xenova/multilingual-e5-small",
+  );
+
+  // No separate provider test or model-download step is required. Building applies the current browser model,
+  // downloads it if needed, embeds the Records, and persists the derived index.
+  await page.getByRole("button", { name: "Download model & build index" }).click();
+  await expect(page.locator('[data-index="ready"]')).toContainText("Local index ready: 2 Records");
+  await expect(page.locator('[data-index="ready"]')).toContainText("IndexedDB");
+
+  const pipelineCall = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __DERRIDAI_FAKE_PIPELINE__?: {
+            task: string;
+            model: string;
+            options: Record<string, unknown>;
+          };
+        }
+      ).__DERRIDAI_FAKE_PIPELINE__,
+  );
+  expect(pipelineCall).toMatchObject({
+    task: "feature-extraction",
+    model: "Xenova/multilingual-e5-small",
+    options: {
+      device: "wasm",
+      revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+      dtype: "q8",
+    },
+  });
   await scan(page);
 });
 
