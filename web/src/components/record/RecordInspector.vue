@@ -10,7 +10,6 @@ import RecordHistoryTimeline from "./RecordHistoryTimeline.vue";
 import InspectorLayoutEditor from "./InspectorLayoutEditor.vue";
 import CorpusSemanticGraphPanel from "../corpus-builder/CorpusSemanticGraphPanel.vue";
 import CorpusRecordSemanticMap from "../corpus-builder/CorpusRecordSemanticMap.vue";
-import UiLoadingState from "../ui/UiLoadingState.vue";
 import { corpusBuildsApi } from "../../api/corpus";
 import type { RecordWorkspaceSnapshot } from "../../types/record";
 import type { DerridaiNormativeModel, ResearchObjectGraph } from "../../types/researchObjectGraph";
@@ -141,20 +140,18 @@ async function activateTab(index: number) {
 // build_id is resolved through provenance recorded at publish time, not stored on
 // the record itself (see corpus_publication.serialize_public_record).
 const semanticBuildId = ref<string | null>(null);
-const semanticLoading = ref(false);
 const semanticChecked = ref("");
 async function resolveSemanticBuild(recordId: string) {
   if (!recordId || semanticChecked.value === recordId) return;
   semanticChecked.value = recordId;
-  semanticLoading.value = true;
   semanticBuildId.value = null;
   try {
     const result = await corpusBuildsApi.recordSemanticMapBuild(recordId);
     semanticBuildId.value = result.build_id || null;
   } catch {
+    // The Record map still materializes through the direct endpoint. Build
+    // resolution is only needed for the optional full graph inspector below.
     semanticBuildId.value = null;
-  } finally {
-    semanticLoading.value = false;
   }
 }
 watch(
@@ -318,20 +315,14 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         role="tabpanel"
         :aria-labelledby="tabId('semantic')"
       >
-        <UiLoadingState v-if="semanticLoading" :label="i18n.t('ui.loading')" />
-        <p v-else-if="!semanticBuildId" class="record-semantic-status">
-          {{ i18n.t("record.semantic_map_unavailable") }}
-        </p>
         <CorpusRecordSemanticMap
-          v-else
-          :build-id="semanticBuildId"
+          v-if="snapshot.record_id"
+          :build-id="semanticBuildId || ''"
           :record="{ record_id: String(snapshot.record_id || ''), text: String(record.text || '') }"
           id-prefix="record-inspector"
+          @resolved-build="semanticBuildId = $event"
         />
-        <CorpusSemanticGraphPanel
-          v-if="semanticBuildId && !semanticLoading"
-          :build-id="semanticBuildId"
-        />
+        <CorpusSemanticGraphPanel v-if="semanticBuildId" :build-id="semanticBuildId" />
       </section>
       <RecordPdfLinks
         v-else-if="tab === 'pdf'"
