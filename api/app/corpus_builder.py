@@ -2552,9 +2552,18 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         timed_out = False
         any_truncated = False
 
-        for chain_index, (role, active_request) in enumerate(request_chain):
-            provider, model, base_url, api_key, generation = _llm_config(active_request)
-            escalating = chain_index > 0 or escalated
+        def run_role(
+            role: str,
+            active_request: dict[str, Any],
+            *,
+            provider: str,
+            model: str,
+            base_url: str | None,
+            api_key: str | None,
+            generation: Any,
+            escalating: bool,
+        ) -> dict[str, Any]:
+            """Run one provider role while keeping trace state scoped to that role."""
             if escalating and build_id:
                 self._increment_metric(build_id, "escalations")
 
@@ -2568,10 +2577,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             )
             attempt_state: dict[int, tuple[Any, str]] = {}
 
-            def initial_note() -> str:
-                if not escalating:
-                    return ""
-                return (
+            initial_note = ""
+            if escalating:
+                initial_note = (
                     "\n\nESCALATION REVIEW: a first-pass model could not produce a valid structured "
                     "answer. Independently perform the task from the supplied source evidence and "
                     "return ONLY one complete JSON object matching the schema."
@@ -2645,7 +2653,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                         schema_name=schema_name,
                         max_tokens=context.max_tokens,
                         cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
-                        timeout_seconds=float(_stage_timeouts(request).get(timeout_key, 240)),
+                        timeout_seconds=float(_stage_timeouts(active_request).get(timeout_key, 240)),
                         on_delta=(
                             (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
                             if build_id
@@ -2678,19 +2686,32 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     validated_response=outcome.value,
                 )
 
+            return complete_structured_json(
+                request_once,
+                prompt=prompt,
+                validate=validate,
+                attempts=attempts,
+                max_tokens=max_tokens,
+                max_token_cap=8192,
+                initial_note=initial_note,
+                retry_guidance=retry_guidance,
+                on_attempt_start=attempt_started,
+                on_attempt_finish=attempt_finished,
+                on_metric=note_metric,
+            )
+
+        for chain_index, (role, active_request) in enumerate(request_chain):
+            provider, model, base_url, api_key, generation = _llm_config(active_request)
             try:
-                return complete_structured_json(
-                    request_once,
-                    prompt=prompt,
-                    validate=validate,
-                    attempts=attempts,
-                    max_tokens=max_tokens,
-                    max_token_cap=8192,
-                    initial_note=initial_note(),
-                    retry_guidance=retry_guidance,
-                    on_attempt_start=attempt_started,
-                    on_attempt_finish=attempt_finished,
-                    on_metric=note_metric,
+                return run_role(
+                    role,
+                    active_request,
+                    provider=provider,
+                    model=model,
+                    base_url=base_url,
+                    api_key=api_key,
+                    generation=generation,
+                    escalating=chain_index > 0 or escalated,
                 )
             except InterruptedError:
                 raise
