@@ -25,7 +25,7 @@ export const Filtered: Story = {
     query: "gla",
     visibleWorks: 1,
     filters: { needsReview: true, dbStatus: "changed", author: "" },
-    viewMode: "compact",
+    viewMode: "list",
   },
 };
 export const Researcher: Story = { args: { mode: "researcher", totalReview: 0 } };
