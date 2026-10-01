@@ -82,6 +82,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   const latestPage = createLatestRequest();
   const latestSelection = createLatestRequest();
   let facetsLoadedForBuild = false;
+  let facetsLoadingForBuild = false;
 
   function clearSelection() {
     if (!options.selectedRecordId.value && !options.selectedRecord.value) return;
@@ -179,13 +180,18 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   }
 
   async function loadFacets() {
-    if (!options.selectedBuildId.value) return;
+    if (!options.selectedBuildId.value || facetsLoadingForBuild) return;
+    const buildId = options.selectedBuildId.value;
+    facetsLoadingForBuild = true;
     try {
-      const values = await corpusReviewReads.metadataFacets(options.selectedBuildId.value);
+      const values = await corpusReviewReads.metadataFacets(buildId);
+      if (options.selectedBuildId.value !== buildId) return;
       options.onFacets(values);
       facetsLoadedForBuild = true;
     } catch (exc) {
       if (!isAbortError(exc)) options.onError(messageOf(exc));
+    } finally {
+      facetsLoadingForBuild = false;
     }
   }
 
@@ -215,21 +221,27 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       hydratedTopologyCount.value = Math.max(hydratedTopologyCount.value, page.topologyCount);
       reviewHydrated.value = true;
       options.onPageLoaded(page.rows);
-      if (!facetsLoadedForBuild || reset) void loadFacets();
+      const shouldLoadFacets = !facetsLoadedForBuild || reset;
 
       const targetId =
         preferredId || options.selectedRecordId.value || page.rows[0]?.record_id || "";
       if (!targetId) {
         clearSelection();
+        if (shouldLoadFacets) void loadFacets();
         return;
       }
       if (options.hasActiveDraft() && targetId === options.selectedRecordId.value) {
         // An in-progress local edit is already shown optimistically; a server round trip here
         // would briefly revert it for nothing.
+        if (shouldLoadFacets) void loadFacets();
         return;
       }
       const row = page.rows.find((item) => item.record_id === targetId);
       await resolveAndActivate(targetId, row?.record_revision ?? null);
+      // Build-wide facets are expensive because they inspect every Record. They are
+      // autocomplete enrichment, not a prerequisite for reading the selected Record,
+      // so never let that O(corpus-size) work race the critical-path Record fetch.
+      if (shouldLoadFacets) void loadFacets();
     } catch (exc) {
       if (!isAbortError(exc)) options.onError(messageOf(exc));
     } finally {
@@ -308,6 +320,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     clearGraphQLReadCache();
     cache.clear();
     facetsLoadedForBuild = false;
+    facetsLoadingForBuild = false;
     queueRows.value = [];
     recordTotal.value = 0;
     recordsLoading.value = false;
