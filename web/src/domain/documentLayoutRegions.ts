@@ -2,7 +2,12 @@
 
 /** A rectangle the reviewer applies to many pages, not a box around one passage. */
 export type LayoutRole =
-  "main" | "margin_parallel" | "margin_apparatus" | "infobox" | "block_quote" | "running_matter";
+  | "main"
+  | "margin_parallel"
+  | "margin_apparatus"
+  | "infobox"
+  | "block_quote"
+  | "running_matter";
 
 export type LayoutThread = "thread_a" | "thread_b" | "thread_c" | "thread_d";
 
