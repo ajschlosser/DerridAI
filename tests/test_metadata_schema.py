@@ -238,6 +238,21 @@ def test_domain_builtin_profiles_are_traceable_guided_and_schema_driven(
         assert field.name in prompts[field.group]
 
 
+def test_nonfiction_evidence_prompt_separates_attention_cues_from_metadata_values():
+    schema = nonfiction_schema()
+    by_name = schema.by_name()
+
+    assert schema.schema_version == "1.0.1"
+    for name in ("evidence_types", "evidence_items"):
+        assert by_name[name].pos_tags == []
+        assert by_name[name].ner_tags == []
+
+    evidence_prompt = prompt(schema, "evidence")
+    assert "supported_value requires a non-empty metadata value" in evidence_prompt
+    assert "no_supported_value requires null or []" in evidence_prompt
+    assert "never copy a candidate list into metadata" in evidence_prompt
+
+
 def test_default_schema_assigns_curated_pos_and_ner_hints_to_every_configurable_field():
     schema = ms.default_schema()
     expected = {
