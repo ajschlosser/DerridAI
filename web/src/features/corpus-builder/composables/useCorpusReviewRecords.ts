@@ -38,6 +38,9 @@ function createRecordCache() {
         store.delete(oldest);
       }
     },
+    delete(id: string) {
+      store.delete(id);
+    },
     clear() {
       store.clear();
     },
@@ -276,6 +279,11 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     recordIds: readonly string[] = queueRows.value.map((row) => row.record_id),
   ): Promise<void> {
     if (!options.selectedBuildId.value || !recordIds.length) return;
+    // Metadata enrichment rewrites a Record without bumping its revision, so a cached copy would
+    // still look current. Drop it; the next open (or the selected Record's refresh) re-reads it.
+    for (const id of recordIds) {
+      if (id !== options.selectedRecordId.value) cache.delete(id);
+    }
     try {
       // A row refresh is normally caused by a realtime event or a completed mutation. It must
       // observe the server's current revision and disposition rather than a cached projection.

@@ -106,6 +106,19 @@ def _strip_llm_transport_suffix(value: Any) -> tuple[Any, Any | None]:
     return (clean or None), value
 
 
+_ECHOED_FIELD_NAMES = frozenset(
+    {
+        "region_type", "discourse_role", "speaker", "quoted_speaker", "position_holder", "target",
+        "stance", "proposition_status", "claim_scope", "primary_text",
+    }
+)
+
+
+def _is_field_name_echo(value: str) -> bool:
+    """A model that answers with a field's own name (``region_type``) has not supplied a value."""
+    return value.strip().strip("\"'`").casefold().replace(" ", "_") in _ECHOED_FIELD_NAMES
+
+
 def _normalize_semantic_value(field: str, value: Any) -> tuple[Any, Any | None]:
     """Canonicalize only closed-vocabulary grammatical aliases.
 
@@ -113,7 +126,7 @@ def _normalize_semantic_value(field: str, value: Any) -> tuple[Any, Any | None]:
     semantic synonym expansion: only direct inflectional variants are normalized.
     """
     value, transport_raw = _strip_llm_transport_suffix(value)
-    if isinstance(value, str) and is_placeholder(value):
+    if isinstance(value, str) and (is_placeholder(value) or _is_field_name_echo(value)):
         return None, transport_raw or value  # raw text is kept for audit; it is not a value
     if isinstance(value, list) and any(is_placeholder(item) for item in value):
         return clean_value(value), transport_raw or value

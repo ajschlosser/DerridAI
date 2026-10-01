@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, nextTick, ref, useId, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import AppIcon from "./AppIcon.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
@@ -218,7 +218,6 @@ watch(
     if (value) {
       editing.value = true;
       dirty.value = false;
-      revising.value = false;
       draft.value = editableValue();
     } else if (!dirty.value) {
       // A pending field that has just been decided folds back into its one-line summary.
@@ -287,7 +286,6 @@ function startEdit() {
 }
 function cancelEdit() {
   dirty.value = false;
-  revising.value = false;
   draft.value = editableValue();
   editing.value = false;
   emit("dirty", false);
@@ -324,34 +322,6 @@ const {
 } = useRecordTextSelection(editing);
 const citeSelf = ref(false);
 const selfNote = ref("");
-/** The reviewer chose to change the proposal; until then a pending field shows it read-only. */
-const revising = ref(false);
-const valueControl = ref<HTMLElement | null>(null);
-/**
- * A pending field that already carries a proposed value shows that value as plain text, so the usual
- * decision is one press of Confirm. Anything that needs the control (a blind or re-check field, a
- * several-valued scalar, an edit in progress) shows it instead.
- */
-const proposalOnly = computed(
-  () =>
-    editing.value &&
-    Boolean(props.open) &&
-    hasValue(resolvedValue.value) &&
-    !revising.value &&
-    !dirty.value &&
-    !scalarCardinalityConflict.value &&
-    !props.status?.blind &&
-    !props.status?.recheck &&
-    !props.recheck,
-);
-function reviseProposal() {
-  revising.value = true;
-  void nextTick(() =>
-    valueControl.value
-      ?.querySelector<HTMLElement>("input, textarea, select, [role=combobox]")
-      ?.focus(),
-  );
-}
 const evidenceItems = computed<CorpusActionMenuItem[]>(() => [
   ...(textSelectable.value
     ? [{ id: "select-text", label: i18n.t("pdf_corpus.select_from_text") }]
@@ -611,19 +581,7 @@ const traceRows = computed(() => {
       <p v-if="scalarCardinalityConflict" class="field-reason" role="alert">
         {{ i18n.t("pdf_corpus.scalar_cardinality_conflict") }}
       </p>
-      <div v-if="proposalOnly" class="proposal-view">
-        <p class="proposal-value">{{ display(resolvedValue) }}</p>
-        <button
-          type="button"
-          class="btn small quiet proposal-edit"
-          :disabled="busy"
-          :aria-label="i18n.tf('pdf_corpus.edit_field', { field: fieldLabel })"
-          @click="reviseProposal"
-        >
-          {{ i18n.t("ui.edit") }}
-        </button>
-      </div>
-      <div v-else ref="valueControl" class="value-control">
+      <div class="value-control">
         <select
           v-if="control === 'enum'"
           v-model="draft"
@@ -1100,29 +1058,6 @@ const traceRows = computed(() => {
   flex-wrap: wrap;
   color: var(--text-tertiary);
   font-size: var(--fs-sm);
-}
-.proposal-view {
-  display: flex;
-  gap: var(--space-2);
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-inline-start: 3px solid var(--ui-accent);
-  border-radius: var(--radius-control);
-  background: var(--surface-subtle);
-}
-.proposal-value {
-  min-width: 0;
-  margin: 0;
-  color: var(--text-primary);
-  font-size: var(--fs-md, 1rem);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-.proposal-edit {
-  flex: none;
 }
 .selection-help {
   margin: 0;

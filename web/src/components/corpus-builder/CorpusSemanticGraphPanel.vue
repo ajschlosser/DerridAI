@@ -8,7 +8,7 @@
  * or one entity's neighbourhood) and a paged index, and states plainly when
  * the drawing is partial.
  */
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import UiRelationDotNode from "../relations/UiRelationDotNode.vue";
 import UiRelationEdge from "../relations/UiRelationEdge.vue";
 import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
@@ -36,6 +36,7 @@ import {
   authorityLabel as authorityText,
   relationLabel,
 } from "../../domain/semanticGraphLabels";
+import UiLoadingState from "../ui/UiLoadingState.vue";
 import SemanticGraphEntityIndex from "./SemanticGraphEntityIndex.vue";
 import SemanticGraphInspector from "./SemanticGraphInspector.vue";
 
@@ -43,6 +44,8 @@ const props = defineProps<{
   buildId: string;
   summary?: SemanticContentGraph["summary"] | null;
   disabled?: boolean;
+  /** Shown inside the semantic dialog: always open, no disclosure summary, loads on mount. */
+  embedded?: boolean;
 }>();
 const emit = defineEmits<{ refreshed: [] }>();
 const i18n = useI18nStore();
@@ -187,6 +190,13 @@ watch(
     }
   },
 );
+
+onMounted(() => {
+  if (!props.embedded) return;
+  opened.value = true;
+  void load();
+  void loadIntelligence();
+});
 
 onBeforeUnmount(() => {
   controller?.abort();
@@ -521,8 +531,13 @@ const truncated = computed(() =>
 </script>
 
 <template>
-  <details class="semantic-graph-panel" @toggle="onToggle">
-    <summary>
+  <details
+    class="semantic-graph-panel"
+    :class="{ embedded: props.embedded }"
+    :open="props.embedded || undefined"
+    @toggle="onToggle"
+  >
+    <summary v-if="!props.embedded">
       <span>
         <b>{{ i18n.t("pdf_corpus.semantic_graph_title") }}</b>
         <small>{{
@@ -670,12 +685,18 @@ const truncated = computed(() =>
         </nav>
         <p class="result-count" role="status" aria-live="polite">
           <span v-if="loading && view" class="spinner" aria-hidden="true" />
-          {{ loading && !view ? i18n.t("ui.loading") : showingText }}
+          {{ loading && !view ? i18n.t("pdf_corpus.semantic_graph_loading") : showingText }}
         </p>
       </div>
       <p v-if="truncated && !focusId" class="graph-banner info">
         {{ i18n.t("pdf_corpus.semantic_graph_truncated_hint") }}
       </p>
+      <UiLoadingState
+        v-if="loading && !view"
+        variant="skeleton"
+        :skeleton-count="4"
+        :label="i18n.t('pdf_corpus.semantic_graph_loading')"
+      />
       <p v-if="error" class="graph-banner error" role="alert">{{ error }}</p>
 
       <div v-if="view" class="graph-layout">
@@ -869,6 +890,14 @@ const truncated = computed(() =>
   border-radius: var(--radius-lg);
   background: var(--card);
   overflow: clip;
+}
+.semantic-graph-panel.embedded {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.semantic-graph-panel.embedded .semantic-graph-body {
+  padding: 0;
 }
 .semantic-graph-panel > summary {
   cursor: pointer;

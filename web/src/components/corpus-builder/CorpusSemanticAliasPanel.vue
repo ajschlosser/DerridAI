@@ -8,7 +8,7 @@
  * and when it draws the semantic map. Saving a change retires the old set and keeps it in
  * the build's history; nothing here rewrites a Record's metadata.
  */
-import { computed, ref, useId } from "vue";
+import { computed, onMounted, ref, useId } from "vue";
 import {
   corpusBuildsApi,
   type SemanticAliasKind,
@@ -17,8 +17,14 @@ import {
 } from "../../api/corpus";
 import { useI18nStore } from "../../stores/i18n";
 import UiButton from "../ui/UiButton.vue";
+import UiLoadingState from "../ui/UiLoadingState.vue";
 
-const props = defineProps<{ buildId: string; disabled?: boolean }>();
+const props = defineProps<{
+  buildId: string;
+  disabled?: boolean;
+  /** Shown inside the semantic dialog: always open, no disclosure summary, loads on mount. */
+  embedded?: boolean;
+}>();
 const emit = defineEmits<{ changed: [] }>();
 const i18n = useI18nStore();
 const t = (key: string, fallback?: string) =>
@@ -91,6 +97,10 @@ async function load() {
     loading.value = false;
   }
 }
+
+onMounted(() => {
+  if (props.embedded) void load();
+});
 
 function resetForm() {
   editing.value = null;
@@ -221,11 +231,18 @@ async function retire(item: SemanticAliasSet) {
 <template>
   <details
     class="alias-panel"
+    :class="{ embedded: props.embedded }"
+    :open="props.embedded || undefined"
     @toggle="(e) => (e.target as HTMLDetailsElement).open && !loaded && !loading && load()"
   >
-    <summary>{{ t("title", "Reviewed identities") }}</summary>
+    <summary v-if="!props.embedded">{{ t("title", "Reviewed identities") }}</summary>
     <p class="intro">{{ t("intro") }}</p>
-    <p v-if="loading" role="status">{{ t("loading", "Loading reviewed identities…") }}</p>
+    <UiLoadingState
+      v-if="loading"
+      variant="skeleton"
+      :skeleton-count="3"
+      :label="t('loading', 'Loading reviewed identities…')"
+    />
     <p v-else-if="loadError" role="alert" class="error">
       {{ tf("load_failed", { error: loadError }) }}
       <UiButton size="small" :label="t('retry', 'Try again')" @click="load" />
@@ -431,6 +448,12 @@ async function retire(item: SemanticAliasSet) {
   border-radius: 12px;
   background: var(--card);
   padding: 0.5rem 0.875rem;
+}
+.alias-panel.embedded {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
 }
 .alias-panel summary {
   cursor: pointer;

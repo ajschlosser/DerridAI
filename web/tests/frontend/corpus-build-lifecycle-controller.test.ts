@@ -310,6 +310,23 @@ describe("Corpus Builder lifecycle controller", () => {
     state.controller.stopPolling();
   });
 
+  it("re-reads the open Record on reconciliation so a missed realtime note cannot leave it stale", async () => {
+    const running = { ...build("build-1"), status: "running", stage: "enriching" };
+    const state = setup();
+    state.selectedBuildId.value = "build-1";
+    state.currentBuild.value = running;
+    state.selectedRecordId.value = "r7";
+
+    state.controller.startPolling();
+    await follow.calls.at(-1)?.refresh();
+    expect(state.refreshRecord).toHaveBeenCalledWith("r7");
+    state.refreshRecord.mockClear();
+    // Reconciliation is bounded: an immediate second pass does not re-read again.
+    await follow.calls.at(-1)?.refresh();
+    expect(state.refreshRecord).not.toHaveBeenCalled();
+    state.controller.stopPolling();
+  });
+
   it("refreshes just the finished record's row on corpus.record_completed", async () => {
     const running = { ...build("build-1"), status: "running", stage: "enriching" };
     const state = setup();

@@ -194,6 +194,7 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     if (!buildId) return;
     let finished = false;
     let terminalPending = false;
+    let lastRecordReconcile = 0;
 
     function handleRealtimeEvent(event: RealtimeEvent): boolean {
       if (event.resource_id !== buildId) return false;
@@ -247,6 +248,13 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
         if (!options.selectedBuildId.value) return;
         const wasRunning = buildRunning() || terminalPending;
         await refreshBuild();
+        // A realtime note can be missed (reconnect, dropped under backpressure, sent before the
+        // Record was open). Reconcile the open Record on the slow path, at most every 10s.
+        const openRecordId = options.selectedRecordId.value;
+        if (wasRunning && openRecordId && Date.now() - lastRecordReconcile > 10_000) {
+          lastRecordReconcile = Date.now();
+          void options.refreshRecord(openRecordId);
+        }
         if (wasRunning && !buildRunning()) {
           terminalPending = false;
           finished = true;

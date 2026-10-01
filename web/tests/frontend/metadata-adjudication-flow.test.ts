@@ -130,14 +130,8 @@ describe("a field's decision controls", () => {
         status: pending,
       },
     });
-    // A pending field with a proposal shows it read-only; Ctrl+Enter confirms from anywhere in the field.
-    expect(wrapper.find("select").exists()).toBe(false);
-    await wrapper.get(".proposal-edit").trigger("keydown", { key: "Enter", ctrlKey: true });
-    expect(wrapper.emitted("save")).toEqual([["affirm"]]);
-    // And still from inside the value control once the reviewer opens it.
-    await wrapper.get(".proposal-edit").trigger("click");
     await wrapper.get("select").trigger("keydown", { key: "Enter", ctrlKey: true });
-    expect(wrapper.emitted("save")).toEqual([["affirm"], ["affirm"]]);
+    expect(wrapper.emitted("save")).toEqual([["affirm"]]);
     wrapper.unmount();
   });
 
@@ -153,7 +147,6 @@ describe("a field's decision controls", () => {
       },
     });
     expect(wrapper.get("[data-primary-action]").text()).toMatch(/^Confirm/);
-    await wrapper.get(".proposal-edit").trigger("click");
     await wrapper.get("select").setValue("reject");
     expect(wrapper.get("[data-primary-action]").text()).toMatch(/^Save/);
     wrapper.unmount();
