@@ -224,7 +224,7 @@ export class SearchEngine {
       const indexed = local
         ? candidates.filter((record) => local.vectors.has(String(record.record_id))).length
         : 0;
-      if (!local || indexed < candidateSet.records.length) {
+      if (!local || indexed < candidates.length) {
         return fallback(
           fallbackWarning(
             "local_index_required",
