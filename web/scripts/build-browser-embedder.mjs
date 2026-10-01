@@ -135,6 +135,11 @@ function sourceAssets() {
       mediaType: runtime.transformers.mediaType,
     },
     {
+      assetKey: runtime.onnxJavaScript.assetKey,
+      url: runtime.onnxJavaScript.url,
+      mediaType: runtime.onnxJavaScript.mediaType,
+    },
+    {
       assetKey: runtime.onnxWasm.assetKey,
       url: runtime.onnxWasm.url,
       mediaType: runtime.onnxWasm.mediaType,
@@ -166,9 +171,19 @@ function buildInfo(downloaded) {
         license: runtime.transformers.license,
         projectUrl: runtime.transformers.projectUrl,
       },
+      onnxJavaScript: {
+        version: runtime.onnxJavaScript.version,
+        sha256: byKey.get(runtime.onnxJavaScript.assetKey).sha256,
+        size: byKey.get(runtime.onnxJavaScript.assetKey).size,
+        license: runtime.onnxJavaScript.license,
+        projectUrl: runtime.onnxJavaScript.projectUrl,
+      },
       onnxWasm: {
+        version: runtime.onnxWasm.version,
         sha256: byKey.get(runtime.onnxWasm.assetKey).sha256,
         size: byKey.get(runtime.onnxWasm.assetKey).size,
+        license: runtime.onnxWasm.license,
+        projectUrl: runtime.onnxWasm.projectUrl,
       },
     },
     model: {
