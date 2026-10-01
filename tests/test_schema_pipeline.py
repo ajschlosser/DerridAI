@@ -205,6 +205,75 @@ def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path)
     )
     assert [t[0] for t in rerun] == ["indexing"]
 
+def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path):
+    m, bid = manager(tmp_path)
+    schema = m._schema_for(bid)
+    record = {
+        "record_id": "partial-memory",
+        "record_revision": 1,
+        "text": "Derrida discusses Glas, hospitality, and sovereignty.",
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+    }
+    for field, value in {
+        "persons": ["Derrida"],
+        "works_referenced": ["Glas"],
+    }.items():
+        create_memory_assertion(
+            record,
+            field,
+            value,
+            schema=schema,
+            confidence=0.9,
+            reason="Two reviewed precedents agree.",
+            evidence=[{"block_ids": ["b1"], "confidence": 0.9, "reason": "memory match"}],
+        )
+    project_record_assertions(record)
+
+    tasks, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep", "semantic_indexing": True},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        schema=schema,
+    )
+    indexing = next(task for task in tasks if task[0] == "indexing")
+    metadata_model = indexing[2].model_fields["metadata"].annotation
+    assert set(metadata_model.model_fields) == {"topics", "concepts"}
+    assert "THIS MODEL CALL IS FIELD-SCOPED" in indexing[1]
+    assert "topics and concepts" in indexing[1]
+
+    rerun, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {
+            "enrichment_mode": "deep",
+            "semantic_indexing": True,
+            "families": ["indexing"],
+        },
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        schema=schema,
+    )
+    rerun_indexing = next(task for task in rerun if task[0] == "indexing")
+    rerun_metadata_model = rerun_indexing[2].model_fields["metadata"].annotation
+    assert set(rerun_metadata_model.model_fields) == {
+        "topics",
+        "concepts",
+        "persons",
+        "works_referenced",
+    }
+
+
 def answer(**metadata):
     return {"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", **metadata},
             "field_evidence": {"mood": {"block_ids": ["b1"], "confidence": 0.95, "reason": "tone"}},
