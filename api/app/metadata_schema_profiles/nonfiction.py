@@ -290,8 +290,7 @@ def nonfiction_schema() -> MetadataSchema:
             "evidence",
             "lists the kinds of support actually used in this record for a substantive proposition, using concise labels such as statistical, documentary, "
             "archival, experimental, observational, testimonial, citation, logical, comparative, or case evidence. Do not label unsupported background "
-            "facts as evidence.",
-            pos_tags=("ADJ", "NOUN"),
+            "facts as evidence, and derive the classification from the passage rather than copying linguistic attention cues.",
         ),
         profile_field(
             "nonfiction",
@@ -300,8 +299,8 @@ def nonfiction_schema() -> MetadataSchema:
             "list",
             "evidence",
             "lists the concrete pieces of support the record presents or invokes, such as a measurement, document, quotation, observation, finding, dataset, "
-            "witness account, or cited result. Preserve key numbers and source names when they are material.",
-            pos_tags=("NOUN", "PROPN", "NUM"),
+            "witness account, or cited result. Preserve key numbers and source names when they are material. Do not copy POS/NER or other linguistic attention "
+            "cues into this field unless the passage independently supports the cue as a concrete evidence item.",
         ),
         profile_field(
             "nonfiction",
@@ -517,7 +516,7 @@ def nonfiction_schema() -> MetadataSchema:
     ]
     return MetadataSchema(
         id=NONFICTION_SCHEMA_ID,
-        schema_version="1.0.0",
+        schema_version="1.0.1",
         name="Non-fiction",
         description=(
             "Claims, attribution, quotations, evidence, findings, sources, statistics, methods, entities, rhetorical structure, "
