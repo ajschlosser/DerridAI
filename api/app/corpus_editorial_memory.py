@@ -75,6 +75,7 @@ class EditorialMemoryMixin:
         use_global: bool = True,
         use_progressive: bool = True,
         include_canonical: bool = False,
+        field_filter: set[str] | None = None,
     ) -> dict[str, Any]:
         """Build advisory context from human decisions and the last enrichment pass.
 
@@ -86,6 +87,8 @@ class EditorialMemoryMixin:
 
         ``include_canonical`` adds ``canonical_exemplars`` (exemplar ID -> exemplar) for callers
         that must re-verify stored precedent references; it is never part of an API response.
+        ``field_filter`` lets latency-sensitive callers retrieve only the metadata fields that
+        are actually scheduled for this Record.
         """
         try:
             rows = self.repo.load_records(build_id)
@@ -168,6 +171,8 @@ class EditorialMemoryMixin:
         correction_fields: set[str] = set()
         confirmed_absence_fields: set[str] = set()
         for field, _field_id in field_ids.items():
+            if field_filter is not None and field not in field_filter:
+                continue
             item = schema_fields.get(field, {})
             profile = item.get("retrieval_profile") if isinstance(item, dict) else None
             if not isinstance(profile, dict):
