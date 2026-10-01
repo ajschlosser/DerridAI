@@ -1739,6 +1739,8 @@ def run_rag_pipeline(
 
     retrieval_summary = {
         "raw_count": len(raw_results),
+        # Items in the searched collections (counts only), for scaling fits.
+        "scope_size": sum(max(0, int(item.get("count") or 0)) for item in collections),
         "deduplicated_count": len(deduped),
         "reranked_count": len(reranked),
         "search_types": list(effective_search_types),

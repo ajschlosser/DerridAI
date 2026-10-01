@@ -16,7 +16,7 @@ Done in the next branch (`feature/scope-size-and-tuning-ports`): traces now reco
 Still open:
 
 1. **Run the calibration** (§4): the data path now exists. Run representative searches against collections of three or more sizes (and several candidate counts), read `observed_scaling` / `observed_scope_scaling` from `GET /api/system/pipelines/strategy-latency`, and correct any declaration that disagrees. Needs a real deployment; not doable from tests.
-2. **Record `scope_size` for the evidence and Research retrievers** (only store search records it today).
+2. ~~Record `scope_size` for the evidence and Research retrievers.~~ Done: the reviewer-evidence lexical, semantic and support stages record the block count in scope; the Research semantic and lexical stages record the total item count of the searched collections (`retrieval.scope_size`, omitted when unknown or zero). Run the calibration (item 1) to fit against them.
 3. **Optional shared executor** (§2.4) once a third purpose needs the store-search shape.
 4. Revisit §2.2 or §2.3 only if the purpose gains a real branch.
 
