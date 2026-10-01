@@ -302,6 +302,7 @@ from .semantic_content_graph import (
 from .semantic_map_projection import (
     SEMANTIC_PROJECTION_VERSION,
     semantic_map_source,
+    work_semantic_topology,
     semantic_record_digest,
     semantic_records_digest,
     text_record_digest,
@@ -2615,6 +2616,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     "kind": "work_semantic_map",
                     "work": work,
                     "sources": sources,
+                    "topology": work_semantic_topology(sources),
                     "summary": {
                         "records": len(refs),
                         "mapped_records": len(sources),
