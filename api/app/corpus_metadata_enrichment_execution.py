@@ -911,11 +911,18 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     pipeline["error"] = exc
             session: EnrichmentSession | None = pipeline.get("session")
             started_at = iso_now()
+            metadata_field = response_model.model_fields.get("metadata")
+            metadata_contract = getattr(metadata_field, "annotation", None)
+            requested_fields = sorted(
+                str(name)
+                for name in getattr(metadata_contract, "model_fields", {})
+            )
             ledger_context = {
                 "provider_profile_id": active_request.get("provider_profile_id"),
                 "provider": active_request.get("provider"),
                 "model": active_request.get("model"),
                 "attempts_allowed": stage_attempts(session.plan.entry) if session else 0,
+                "requested_fields": requested_fields,
                 "input_chars": len(prompt),
                 "max_output_tokens": max_tokens,
                 "timeout_seconds": _stage_timeouts(active_request).get(task_name),
