@@ -15,12 +15,6 @@ const stanceOptions = [
   "describe",
 ];
 
-/** A pending field with a proposal shows it read-only; the control is behind Edit. */
-async function openControl(wrapper: ReturnType<typeof mount>) {
-  await wrapper.get(".proposal-edit").trigger("click");
-  await nextTick();
-}
-
 describe("CorpusMetadataFieldEditor auto-population", () => {
   it("selects a confident stance proposal when the record value arrives progressively", async () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
@@ -47,8 +41,6 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
       },
     });
     await nextTick();
-    expect(wrapper.get(".proposal-value").text()).toBe("affirm");
-    await openControl(wrapper);
     expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("affirm");
     wrapper.unmount();
   });
@@ -73,8 +65,6 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
       },
     });
     await nextTick();
-    expect(wrapper.get(".proposal-value").text()).toBe("affirm");
-    await openControl(wrapper);
     expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("affirm");
     wrapper.unmount();
   });
@@ -99,7 +89,6 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         },
       },
     });
-    await openControl(wrapper);
     expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("main_text");
     wrapper.unmount();
   });
@@ -177,7 +166,6 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         status: { status: "model_inferred", method: "llm", confidence: 0.72, auto_populated: true },
       },
     });
-    await openControl(wrapper);
     const input = wrapper.get("textarea");
     await input.setValue("cities of refuge, hospitality");
     await input.trigger("change");
@@ -207,7 +195,10 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
       },
     });
 
-    // An unreviewed model value is already editable; no Edit click is needed.
+    expect(wrapper.find("textarea").exists()).toBe(false);
+    const edit = wrapper.findAll("button").find((button) => button.text().includes("Edit"));
+    expect(edit).toBeTruthy();
+    await edit!.trigger("click");
     await nextTick();
     expect(wrapper.find("textarea").exists()).toBe(true);
     expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
@@ -251,8 +242,6 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     });
 
     await nextTick();
-    expect(wrapper.get(".proposal-value").text()).toBe("Emmanuel Levinas");
-    await openControl(wrapper);
     expect((wrapper.get("textarea[role=combobox]").element as HTMLTextAreaElement).value).toBe(
       "Emmanuel Levinas",
     );
@@ -270,7 +259,10 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
       },
     });
 
+    expect(wrapper.text()).toContain("Jacques Derrida");
     expect(wrapper.text()).not.toContain("[object Object]");
+    const edit = wrapper.findAll("button").find((button) => button.text().includes("Edit"));
+    await edit!.trigger("click");
     await nextTick();
     expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
     wrapper.unmount();
@@ -308,26 +300,5 @@ describe("CorpusMetadataFieldEditor memory hints", () => {
       props: { field: "stance", value: "", control: "enum", options: stanceOptions, open: true },
     });
     expect(wrapper.find(".memory-hints").exists()).toBe(false);
-  });
-
-  it("keeps every pre-filled value in its control, with no read-only summary or Edit link", () => {
-    for (const status of [
-      { status: "model_inferred", method: "llm", confidence: 0.6 },
-      { status: "model_inferred", method: "llm", autofilled: true },
-      { status: "confirmed", method: "human", value_source: "human" },
-    ]) {
-      const wrapper = mount(CorpusMetadataFieldEditor, {
-        props: {
-          field: "stance",
-          value: "affirm",
-          control: "enum",
-          options: stanceOptions,
-          status,
-        },
-      });
-      expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("affirm");
-      expect(wrapper.find(".field-edit").exists()).toBe(false);
-      wrapper.unmount();
-    }
   });
 });

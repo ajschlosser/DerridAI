@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, nextTick, ref, useId, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import AppIcon from "./AppIcon.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
@@ -61,8 +61,7 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const labelId = `${useId()}-label`;
-// A pre-filled value always stays in its control; there is no read-only summary with an Edit link.
-const editing = ref(true);
+const editing = ref(Boolean(props.open));
 const dirty = ref(false);
 const draft = ref<unknown>("");
 const confidence = computed(() =>
@@ -219,8 +218,10 @@ watch(
     if (value) {
       editing.value = true;
       dirty.value = false;
-      revising.value = false;
       draft.value = editableValue();
+    } else if (!dirty.value) {
+      // A pending field that has just been decided folds back into its one-line summary.
+      editing.value = false;
     }
   },
 );
@@ -276,11 +277,17 @@ function save() {
   dirty.value = false;
   emit("dirty", false);
   // A pending field stays open until the saved record says it is decided; an optional edit closes at once.
+  editing.value = Boolean(props.open);
+}
+function startEdit() {
+  editing.value = true;
+  dirty.value = false;
+  draft.value = editableValue();
 }
 function cancelEdit() {
   dirty.value = false;
-  revising.value = false;
   draft.value = editableValue();
+  editing.value = false;
   emit("dirty", false);
 }
 /** Ctrl/Cmd+Enter confirms from anywhere in the field, including inside its value control. */
@@ -301,6 +308,7 @@ function saveWithSelection() {
   liveSelection.value = "";
   dirty.value = false;
   emit("dirty", false);
+  editing.value = Boolean(props.open);
 }
 function markDirty() {
   dirty.value = true;
@@ -314,34 +322,6 @@ const {
 } = useRecordTextSelection(editing);
 const citeSelf = ref(false);
 const selfNote = ref("");
-/** The reviewer chose to change the proposal; until then a pending field shows it read-only. */
-const revising = ref(false);
-const valueControl = ref<HTMLElement | null>(null);
-/**
- * A pending field that already carries a proposed value shows that value as plain text, so the usual
- * decision is one press of Confirm. Anything that needs the control (a blind or re-check field, a
- * several-valued scalar, an edit in progress) shows it instead.
- */
-const proposalOnly = computed(
-  () =>
-    editing.value &&
-    Boolean(props.open) &&
-    hasValue(resolvedValue.value) &&
-    !revising.value &&
-    !dirty.value &&
-    !scalarCardinalityConflict.value &&
-    !props.status?.blind &&
-    !props.status?.recheck &&
-    !props.recheck,
-);
-function reviseProposal() {
-  revising.value = true;
-  void nextTick(() =>
-    valueControl.value
-      ?.querySelector<HTMLElement>("input, textarea, select, [role=combobox]")
-      ?.focus(),
-  );
-}
 const evidenceItems = computed<CorpusActionMenuItem[]>(() => [
   ...(textSelectable.value
     ? [{ id: "select-text", label: i18n.t("pdf_corpus.select_from_text") }]
@@ -490,8 +470,42 @@ const traceRows = computed(() => {
     :aria-labelledby="labelId"
     @keydown="onKeydown"
   >
-    <!-- Every field keeps its value in an editable control; the header says what it is and where the value came from. -->
-    <header class="field-head">
+    <!-- A decided field is one line: what it is, its value, where the value came from. -->
+    <div v-if="!editing" class="field-row">
+      <span :id="labelId" class="field-label">{{ fieldLabel }}</span>
+      <span class="field-current"
+        >{{ suggestedAbsence ? i18n.t("pdf_corpus.no_value_short") : display(resolvedValue) }}
+        <template v-if="autoResolved || suggestedAbsence"
+          ><span class="auto-star" aria-hidden="true">★</span
+          ><span class="sr-only">{{
+            suggestedAbsence
+              ? i18n.t("pdf_corpus.model_suggested_short")
+              : i18n.t("pdf_corpus.auto_filled_marker")
+          }}</span></template
+        ></span
+      >
+      <span class="field-row-aside">
+        <span v-if="saved" class="saved" role="status"
+          ><AppIcon name="check" />{{ i18n.t("pdf_corpus.field_saved_short") }}</span
+        ><CorpusFieldOwnershipBadge
+          :status="String(status?.status || '')"
+          :method="String(status?.method || '')"
+          :derivation="String(status?.derivation_method || '')"
+          :source="String(status?.value_source || '')"
+          :verification="String(status?.verification_status || '')"
+          :audit="Boolean(status?.audit_sample)"
+        /><button
+          type="button"
+          class="btn small quiet field-edit"
+          :disabled="busy"
+          :aria-label="i18n.tf('pdf_corpus.edit_field', { field: fieldLabel })"
+          @click="startEdit"
+        >
+          {{ i18n.t("ui.edit") }}
+        </button>
+      </span>
+    </div>
+    <header v-else class="field-head">
       <div class="field-title">
         <b :id="labelId" class="field-label">{{ fieldLabel }}</b
         ><span v-if="requiredToAccept" class="field-required">{{
@@ -501,9 +515,6 @@ const traceRows = computed(() => {
       <span class="field-head-aside">
         <span v-if="saved" class="saved" role="status"
           ><AppIcon name="check" />{{ i18n.t("pdf_corpus.field_saved_short") }}</span
-        ><template v-if="autoResolved"
-          ><span class="auto-star" aria-hidden="true">★</span
-          ><span class="sr-only">{{ i18n.t("pdf_corpus.auto_filled_marker") }}</span></template
         ><CorpusFieldOwnershipBadge
           :status="String(status?.status || '')"
           :method="String(status?.method || '')"
@@ -570,19 +581,7 @@ const traceRows = computed(() => {
       <p v-if="scalarCardinalityConflict" class="field-reason" role="alert">
         {{ i18n.t("pdf_corpus.scalar_cardinality_conflict") }}
       </p>
-      <div v-if="proposalOnly" class="proposal-view">
-        <p class="proposal-value">{{ display(resolvedValue) }}</p>
-        <button
-          type="button"
-          class="btn small quiet proposal-edit"
-          :disabled="busy"
-          :aria-label="i18n.tf('pdf_corpus.edit_field', { field: fieldLabel })"
-          @click="reviseProposal"
-        >
-          {{ i18n.t("ui.edit") }}
-        </button>
-      </div>
-      <div v-else ref="valueControl" class="value-control">
+      <div class="value-control">
         <select
           v-if="control === 'enum'"
           v-model="draft"
@@ -692,7 +691,7 @@ const traceRows = computed(() => {
             {{ i18n.t("pdf_corpus.no_value_short") }}
           </button>
         </UiTooltip>
-        <button v-if="dirty" type="button" class="btn small quiet" @click="cancelEdit">
+        <button v-if="!open" type="button" class="btn small quiet" @click="cancelEdit">
           {{ i18n.t("ui.cancel") }}
         </button>
       </div>
@@ -1059,29 +1058,6 @@ const traceRows = computed(() => {
   flex-wrap: wrap;
   color: var(--text-tertiary);
   font-size: var(--fs-sm);
-}
-.proposal-view {
-  display: flex;
-  gap: var(--space-2);
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-inline-start: 3px solid var(--ui-accent);
-  border-radius: var(--radius-control);
-  background: var(--surface-subtle);
-}
-.proposal-value {
-  min-width: 0;
-  margin: 0;
-  color: var(--text-primary);
-  font-size: var(--fs-md, 1rem);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-.proposal-edit {
-  flex: none;
 }
 .selection-help {
   margin: 0;

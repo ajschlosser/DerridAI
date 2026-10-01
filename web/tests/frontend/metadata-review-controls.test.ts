@@ -73,7 +73,7 @@ describe("field editor decision controls", () => {
       },
     });
     expect(wrapper.get(".auto-star").text()).toBe("★");
-    expect(wrapper.get(".field-head").text()).toContain("Auto-filled");
+    expect(wrapper.get(".field-current").text()).toContain("Auto-filled");
   });
 
   it("cites the reviewer's own knowledge from the one confirm button", async () => {
@@ -103,48 +103,16 @@ describe("field editor decision controls", () => {
         control: "text",
         memoryExamples: 3,
         status: {
-          status: "confirmed",
+          status: "model_inferred",
           method: "llm",
-          autofilled: true,
           llm_value: "trace",
           llm_confidence: 0.8,
         },
       },
     });
+    expect(wrapper.find("input, textarea").exists()).toBe(false);
     const matrix = wrapper.get(".trace-matrix");
     expect(matrix.text()).toContain("metadata memory");
     expect(matrix.text()).toContain("80%");
-  });
-
-  it("shows a pending proposal read-only, confirmable in one press, with the control behind Edit", async () => {
-    const wrapper = mount(CorpusMetadataFieldEditor, {
-      props: { field: "concept", value: "trace", control: "text", open: true, status: {} },
-    });
-    expect(wrapper.get(".proposal-value").text()).toBe("trace");
-    expect(wrapper.find("textarea").exists()).toBe(false);
-    await wrapper.get("[data-primary-action]").trigger("click");
-    expect(wrapper.emitted("save")?.at(-1)).toEqual(["trace"]);
-    await wrapper.get(".proposal-edit").trigger("click");
-    expect(wrapper.find(".proposal-value").exists()).toBe(false);
-    expect(wrapper.find("textarea").exists()).toBe(true);
-  });
-
-  it("never hides the control for a blind-review field or a field with no proposal", () => {
-    const blind = mount(CorpusMetadataFieldEditor, {
-      props: {
-        field: "concept",
-        value: "trace",
-        control: "text",
-        open: true,
-        status: { blind: true },
-      },
-    });
-    expect(blind.find(".proposal-view").exists()).toBe(false);
-    expect(blind.find("textarea").exists()).toBe(true);
-    const empty = mount(CorpusMetadataFieldEditor, {
-      props: { field: "concept", value: "", control: "text", open: true, status: {} },
-    });
-    expect(empty.find(".proposal-view").exists()).toBe(false);
-    expect(empty.find("textarea").exists()).toBe(true);
   });
 });
