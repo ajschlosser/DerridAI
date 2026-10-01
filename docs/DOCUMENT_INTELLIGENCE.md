@@ -192,10 +192,12 @@ POST /api/pdf/corpus-builds/{build_id}/document-intelligence/rerun
 ```
 
 The Semantic Content Graph remains a separate derived read surface at
-`GET /api/pdf/corpus-builds/{build_id}/semantic-content-graph`. It rebuilds
-against current reviewer-presented Records so blind-review sealing is preserved.
-The rebuilt graph is cached in process against a digest of those Records and the
-Document Intelligence run, so repeated reads do not recompute it.
+`GET /api/pdf/corpus-builds/{build_id}/semantic-content-graph`. It is materialized
+from current reviewer-presented Records so blind-review sealing is preserved, then
+saved as rebuildable System Data under a semantic generation token. Corpus writes
+advance that token when text or semantic inputs change; interactive reads therefore
+do not hash or rescan the whole corpus merely to decide whether the graph is current.
+The hydrated graph and its traversal index are reused in process.
 
 Interactive clients use the bounded view instead of the full projection:
 
@@ -219,7 +221,7 @@ GET /api/pdf/corpus-builds/{build_id}/records/{record_id}/semantic-map
 GET /api/pdf/corpus-builds/{build_id}/semantic-content-graph/nodes/{node_id}
 ```
 
-Both rebuild from the same reviewer-presented Records without persisting anything and are bounded (local and neighbour nodes, adjacent relations, linked Records, per-node Record lists).
+Both are bounded (local and neighbour nodes, adjacent relations, linked Records, per-node Record lists). Record maps and node neighbourhoods are materialized on first use and saved as rebuildable System Data. Reopening a current projection is a direct read; a missing or stale projection is regenerated from the shared graph/index and then saved.
 
 ## Metadata enrichment
 
