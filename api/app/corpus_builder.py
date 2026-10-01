@@ -2416,6 +2416,125 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             )
             return payload
 
+    def work_semantic_map(self, work: str) -> dict[str, Any]:
+        """Materialize the canonical semantic-map sources for one published Work.
+
+        The visual layer can keep its existing presentation contract while its
+        source data comes from the same persisted semantic identity graph as
+        Record maps. Reopening an unchanged Work therefore performs no corpus walk.
+        """
+        work = str(work or "").strip()
+        if not work:
+            raise ValueError("A Work is required.")
+        record_refs = system_store.list_records_for_work(work, limit=500)
+        build_ids = sorted({str(item.get("build_id") or "") for item in record_refs if item.get("build_id")})
+        generations = {
+            build_id: self._semantic_projection_generation(build_id)
+            for build_id in build_ids
+        }
+        material = {
+            "work": work,
+            "records": [
+                (str(item.get("record_id") or ""), str(item.get("build_id") or ""))
+                for item in record_refs
+            ],
+            "generations": generations,
+            "version": RECORD_SEMANTIC_MAP_VERSION,
+        }
+        generation = hashlib.sha256(
+            json.dumps(material, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:24]
+        work_key = hashlib.sha256(work.casefold().encode("utf-8")).hexdigest()[:24]
+        projection_key = f"semantic-work:{work_key}"
+        persisted = system_store.get_semantic_map_projection(projection_key)
+        if (
+            persisted
+            and persisted.get("status") == "ready"
+            and persisted.get("generation") == generation
+            and isinstance(persisted.get("payload"), dict)
+        ):
+            return dict(persisted["payload"])
+
+        with self._lock:
+            lock = self._semantic_projection_locks.setdefault(
+                f"work:{work_key}", threading.RLock()
+            )
+        with lock:
+            persisted = system_store.get_semantic_map_projection(projection_key)
+            if (
+                persisted
+                and persisted.get("status") == "ready"
+                and persisted.get("generation") == generation
+                and isinstance(persisted.get("payload"), dict)
+            ):
+                return dict(persisted["payload"])
+
+            by_build: defaultdict[str, list[str]] = defaultdict(list)
+            for item in record_refs:
+                build_id = str(item.get("build_id") or "")
+                record_id = str(item.get("record_id") or "")
+                if build_id and record_id:
+                    by_build[build_id].append(record_id)
+
+            sources: list[dict[str, Any]] = []
+            for build_id, record_ids in by_build.items():
+                index, _analysis = self._semantic_index_for_generation(
+                    build_id, generations[build_id]
+                )
+                for record_id in record_ids:
+                    if record_id not in index.record_by_id:
+                        continue
+                    buckets: dict[str, list[tuple[int, str]]] = {
+                        "concept": [],
+                        "topic": [],
+                        "person": [],
+                    }
+                    for node_id in index.node_ids_by_record.get(record_id, set()):
+                        node = index.nodes.get(node_id)
+                        if not node:
+                            continue
+                        kind = str(node.get("type") or "")
+                        if kind not in buckets:
+                            continue
+                        label = str(node.get("label") or "").strip()
+                        if label:
+                            buckets[kind].append(
+                                (int(node.get("mention_count") or 0), label)
+                            )
+                    def labels(kind: str) -> list[str]:
+                        ranked = sorted(
+                            buckets[kind],
+                            key=lambda item: (-item[0], item[1].casefold()),
+                        )
+                        return list(dict.fromkeys(label for _count, label in ranked))[:24]
+                    sources.append(
+                        {
+                            "id": record_id,
+                            "work": work,
+                            "concepts": labels("concept"),
+                            "topics": labels("topic"),
+                            "persons": labels("person"),
+                        }
+                    )
+
+            payload = {
+                "kind": "work_semantic_map",
+                "work": work,
+                "generation": generation,
+                "status": "ready" if sources else "empty",
+                "sources": sources,
+                "records": record_refs,
+            }
+            system_store.put_semantic_map_projection(
+                projection_key,
+                scope_kind="work",
+                scope_id=work,
+                generation=generation,
+                status="ready",
+                payload=payload,
+            )
+            return payload
+
     def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
         """Rebuild the semantic-content graph against the current Record revisions.
 
