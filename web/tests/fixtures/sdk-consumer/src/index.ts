@@ -113,7 +113,10 @@ const research = await client.research({
   question: "What does the passage say about hospitality?",
   retrieval: { mode: "hybrid", evidenceLimit: 1 },
 });
-if (!research.answer?.includes("[E1]") || research.evidencePacket.evidence[0]?.recordId !== "consumer-r1") {
+if (
+  !research.answer?.includes("[E1]") ||
+  research.evidencePacket.evidence[0]?.recordId !== "consumer-r1"
+) {
   throw new Error("Installed SDK failed its external-consumer Research smoke test.");
 }
 
