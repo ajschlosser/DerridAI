@@ -1878,11 +1878,7 @@ function reviewShortcut(event: KeyboardEvent) {
  * finished metadata panel does not imply that the Record itself was accepted.
  */
 async function handleMetadataComplete() {
-  if (
-    reviewQueue.value === "metadata" &&
-    selectedRecord.value &&
-    !selectedMetadataBlocked.value
-  ) {
+  if (reviewQueue.value === "metadata" && selectedRecord.value && !selectedMetadataBlocked.value) {
     await focusQueueMove(1);
     return;
   }
