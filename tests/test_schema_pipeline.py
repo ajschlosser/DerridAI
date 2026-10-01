@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import sys
 import types
 from pathlib import Path
@@ -85,6 +86,58 @@ def test_the_default_schema_still_runs_the_three_families(tmp_path):
     m, bid = manager(tmp_path)
     record = {"record_id": "r", "text": 'He said "no" and wrote about hospitality.', "source_block_ids": ["b1"], "metadata_field_status": {}}
     tasks, _, _ = m._prepare_metadata_tasks(record, {}, {"enrichment_mode": "deep", "semantic_indexing": True}, m._profile_for(bid), {}, {}, "", "", None, schema=m._schema_for(bid))
+    assert [t[0] for t in tasks] == ["discourse", "quotation", "indexing"]
+
+
+def test_deep_mode_skips_quotation_without_a_quotation_signal(tmp_path):
+    m, bid = manager(tmp_path)
+    record = {
+        "record_id": "r",
+        "text": "Hospitality and sovereignty remain in tension.",
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+    }
+    tasks, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep", "semantic_indexing": True},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        schema=m._schema_for(bid),
+    )
+    assert [t[0] for t in tasks] == ["discourse", "indexing"]
+
+
+def test_deep_mode_uses_current_document_intelligence_as_a_quotation_signal(tmp_path):
+    m, bid = manager(tmp_path)
+    text = "Hospitality and sovereignty remain in tension."
+    record = {
+        "record_id": "r",
+        "text": text,
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+        "document_intelligence": {
+            "status": "ok",
+            "record_text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            "quotations": [{"text": "Hospitality and sovereignty", "speaker": ""}],
+        },
+    }
+    tasks, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep", "semantic_indexing": True},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        schema=m._schema_for(bid),
+    )
     assert [t[0] for t in tasks] == ["discourse", "quotation", "indexing"]
 
 
