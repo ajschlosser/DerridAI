@@ -99,24 +99,41 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
         if provider_proxy_upstream and body.export_format != "nginx-docker":
             raise ValueError("Provider proxy upstream is available only for the nginx Docker export.")
 
-        common_kwargs = {
-            "store_name": body.store,
-            "works": body.works,
-            "title": body.title,
-            "description": body.description,
-            "locale": body.locale,
-            "languages": body.languages or [body.locale],
-            "include_transformers": body.include_transformers,
-            "include_vectors": body.include_vectors,
-            "record_profile": body.record_profile,
-        }
         if body.export_format == "two-file":
-            bundle = build_site_bundle(**common_kwargs)
+            bundle = build_site_bundle(
+                store_name=body.store,
+                works=body.works,
+                title=body.title,
+                description=body.description,
+                locale=body.locale,
+                languages=body.languages or [body.locale],
+                include_transformers=body.include_transformers,
+                include_vectors=body.include_vectors,
+                record_profile=body.record_profile,
+            )
         elif body.export_format == "local-single-file":
-            bundle = build_local_site_file(**common_kwargs)
+            bundle = build_local_site_file(
+                store_name=body.store,
+                works=body.works,
+                title=body.title,
+                description=body.description,
+                locale=body.locale,
+                languages=body.languages or [body.locale],
+                include_transformers=body.include_transformers,
+                include_vectors=body.include_vectors,
+                record_profile=body.record_profile,
+            )
         else:
             bundle = build_nginx_site_bundle(
-                **common_kwargs,
+                store_name=body.store,
+                works=body.works,
+                title=body.title,
+                description=body.description,
+                locale=body.locale,
+                languages=body.languages or [body.locale],
+                include_transformers=body.include_transformers,
+                include_vectors=body.include_vectors,
+                record_profile=body.record_profile,
                 provider_proxy_upstream=provider_proxy_upstream,
             )
     except (KeyError, ValueError) as exc:
