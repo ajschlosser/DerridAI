@@ -280,6 +280,7 @@ const semanticMapRecord = computed(
 );
 const semanticMapSources = ref<SemanticMapSource[]>([]);
 const semanticMapWorkSources = ref<SemanticMapSource[]>([]);
+const semanticMapLayoutKey = ref("");
 const semanticMapFallbackSources = computed(() =>
   semanticMapWorkSources.value.length
     ? semanticMapWorkSources.value
@@ -293,6 +294,7 @@ async function openWorkSemanticMap(work: string) {
   semanticMapRecords.value = [];
   semanticMapRecordId.value = "";
   semanticMapWorkSources.value = [];
+  semanticMapLayoutKey.value = "";
 
   // Keep the existing visual map available as an immediate local fallback, but
   // prefer the persisted canonical projection. The server materializes it once
@@ -314,6 +316,11 @@ async function openWorkSemanticMap(work: string) {
 
     if (projectionResult.status === "fulfilled") {
       semanticMapWorkSources.value = projectionResult.value.sources as SemanticMapSource[];
+      const generations = Object.entries(projectionResult.value.build_generations || {})
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([buildId, generation]) => `${buildId}:${generation}`)
+        .join("|");
+      semanticMapLayoutKey.value = `${work}|${generations}`;
     }
     if (recordsResult.status === "fulfilled") {
       semanticMapRecords.value = recordsResult.value.records;
@@ -667,6 +674,7 @@ onBeforeUnmount(() => {
           <SemanticMapFrame
             variant="page"
             :sources="semanticMapFallbackSources"
+            :cache-key="semanticMapLayoutKey"
             :show-close="false"
           />
         </div>
