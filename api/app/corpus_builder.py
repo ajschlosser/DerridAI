@@ -264,6 +264,11 @@ from .field_assertions import (
     migrate_record_assertions,
     project_record_assertions,
 )
+from .language_segmentation import (
+    ends_sentence_text,
+    profile_metadata as language_segmentation_profile,
+    starts_mid_sentence_text,
+)
 from .main_text_start import infer_main_text_start
 from .memory_prefill import prefill_records
 from .metadata_exemplar_projection import (
@@ -299,11 +304,6 @@ from .semantic_identity_registry import (
     registry_for_record,
 )
 from .semantic_identity_store import alias_digest, build_registry, review_registry
-from .language_segmentation import (
-    ends_sentence_text,
-    profile_metadata as language_segmentation_profile,
-    starts_mid_sentence_text,
-)
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
