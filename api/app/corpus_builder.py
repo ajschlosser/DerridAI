@@ -311,6 +311,12 @@ from .semantic_identity_store import alias_digest, build_registry, review_regist
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
+from .structured_completion import (
+    StructuredAttemptContext,
+    StructuredAttemptOutcome,
+    StructuredCompletionError,
+    complete_structured_json,
+)
 from .structured_json import (
     StructuredJsonMalformedError,
     StructuredJsonTruncatedError,
@@ -2526,17 +2532,13 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         roles: tuple[str, ...] = ("primary", "review"),
         escalated: bool = False,
     ) -> dict[str, Any]:
-        """Generate and validate typed structured output with bounded retry/escalation.
+        """Generate typed JSON through the shared structured-completion policy.
 
-        A malformed or transient model turn must not destroy a book-length build.
-        Provider-native JSON Schema is requested when supported, every response is
-        Pydantic-validated, and an optional separately configured review provider
-        receives the same source-bound task only after the primary provider has
-        exhausted its attempts.
-
-        ``roles`` limits the chain to some provider roles; a pipeline adapter runs one role
-        per stage and passes ``escalated`` when a fallback edge reached that stage, so the
-        stage gets the same escalation note a chained review provider does.
+        Provider-native JSON Schema is requested when supported. Syntax repair,
+        cutoff classification, retry prompts, token-budget growth, schema
+        validation, and structured-output metrics are centralized in
+        complete_structured_json. This method keeps Corpus Builder-specific
+        provider escalation, tracing, stage metrics, and cancellation.
         """
         schema = response_model.model_json_schema()
         request_chain: list[tuple[str, dict[str, Any]]] = [("primary", request)] if "primary" in roles else []
@@ -2545,197 +2547,159 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             request_chain.append(("review", reviewer))
         if not request_chain:
             raise LookupError("No review provider is configured for this build.")
+
         all_failures: list[str] = []
         timed_out = False
         any_truncated = False
+
         for chain_index, (role, active_request) in enumerate(request_chain):
             provider, model, base_url, api_key, generation = _llm_config(active_request)
             escalating = chain_index > 0 or escalated
             if escalating and build_id:
                 self._increment_metric(build_id, "escalations")
-            failure: Exception | None = None
-            diagnostic = ""
-            timed_out = False
-            for attempt in range(1, max(1, attempts) + 1):
-                if build_id and self._cancelled(build_id):
-                    raise InterruptedError("Corpus build cancelled")
-                retry_note = ""
-                if escalating and attempt == 1:
-                    retry_note = (
-                        "\n\nESCALATION REVIEW: a first-pass model could not produce a valid structured "
-                        "answer. Independently perform the task from the supplied source evidence and "
-                        "return ONLY one complete JSON object matching the schema."
-                    )
-                elif attempt > 1:
-                    if isinstance(failure, StructuredJsonTruncatedError):
-                        retry_note = (
-                            "\n\nOUTPUT LIMIT CORRECTION: the previous JSON response was cut off before "
-                            "completion. Start again; do not continue the partial object. Return one COMPLETE "
-                            "JSON object matching the schema, and keep optional explanations as concise as possible."
-                        )
-                    elif isinstance(failure, StructuredJsonMalformedError):
-                        retry_note = (
-                            "\n\nJSON SYNTAX CORRECTION: the previous response was malformed and could not "
-                            "be repaired locally. Return ONLY one complete JSON object matching the supplied "
-                            "schema. Do not include Markdown, commentary, or trailing text."
-                        )
-                    else:
-                        retry_note = (
-                            "\n\nIMPORTANT CORRECTION: the previous response could not be validated. "
-                            f"Validation error: {failure}. Return ONLY one complete JSON object that exactly "
-                            "matches the supplied schema. Do not include Markdown, commentary, or trailing text."
-                        )
-                    if "field_evidence" in str(failure):
-                        retry_note += (
-                            "\nThe validation error concerns evidence, not the metadata value. For every "
-                            "field whose assessment outcome is supported_value and whose schema requires "
-                            "evidence, include a field_evidence object with at least one valid current-record "
-                            "block_id. Use the block IDs shown in the source context; never invent IDs and "
-                            "never omit the evidence object for a supported value."
-                        )
-                    if diagnostic:
-                        retry_note += f"\nPrevious response excerpt: {diagnostic[:1200]}"
-                try:
-                    if build_id:
-                        self._increment_metric(build_id, "calls")
-                        metric_stage = (
-                            "manifest" if "manifest" in schema_name else
-                            "segmentation" if ("boundar" in schema_name or "segment" in schema_name or "reconciliation" in schema_name) else
-                            "metadata" if "record_" in schema_name else
-                            "other"
-                        )
-                        self._increment_metric(build_id, f"{metric_stage}_calls")
-                        if "record_discourse" in schema_name:
-                            self._increment_metric(build_id, "discourse_calls")
-                        elif "record_quotation" in schema_name:
-                            self._increment_metric(build_id, "quotation_calls")
-                        elif "record_indexing" in schema_name:
-                            self._increment_metric(build_id, "indexing_calls")
-                        if attempt > 1:
-                            self._increment_metric(build_id, "retries")
-                    timeout_key = (
+
+            timeout_key = (
+                "manifest" if "manifest" in schema_name else
+                "reconciliation" if "reconciliation" in schema_name else
+                "segmentation" if ("boundar" in schema_name or "segment" in schema_name) else
+                "discourse" if "record_discourse" in schema_name else
+                "quotation" if "record_quotation" in schema_name else
+                "indexing"
+            )
+            attempt_state: dict[int, tuple[Any, str]] = {}
+
+            def initial_note() -> str:
+                if not escalating:
+                    return ""
+                return (
+                    "\n\nESCALATION REVIEW: a first-pass model could not produce a valid structured "
+                    "answer. Independently perform the task from the supplied source evidence and "
+                    "return ONLY one complete JSON object matching the schema."
+                )
+
+            def retry_guidance(error: Exception) -> str:
+                if "field_evidence" not in str(error):
+                    return ""
+                return (
+                    "The validation error concerns evidence, not the metadata value. For every "
+                    "field whose assessment outcome is supported_value and whose schema requires "
+                    "evidence, include a field_evidence object with at least one valid current-record "
+                    "block_id. Use the block IDs shown in the source context; never invent IDs and "
+                    "never omit the evidence object for a supported value."
+                )
+
+            def note_metric(name: str, amount: int) -> None:
+                if build_id:
+                    self._increment_metric(build_id, name, amount)
+
+            def attempt_started(context: StructuredAttemptContext) -> None:
+                if build_id:
+                    metric_stage = (
                         "manifest" if "manifest" in schema_name else
-                        "reconciliation" if "reconciliation" in schema_name else
-                        "segmentation" if ("boundar" in schema_name or "segment" in schema_name) else
-                        "discourse" if "record_discourse" in schema_name else
-                        "quotation" if "record_quotation" in schema_name else
-                        "indexing" if "record_indexing" in schema_name else "indexing"
+                        "segmentation" if ("boundar" in schema_name or "segment" in schema_name or "reconciliation" in schema_name) else
+                        "metadata" if "record_" in schema_name else
+                        "other"
                     )
-                    call_token = self._note_llm_call_start(
-                        build_id, metric_stage_of(schema_name), provider, model, base_url
+                    self._increment_metric(build_id, f"{metric_stage}_calls")
+                    if "record_discourse" in schema_name:
+                        self._increment_metric(build_id, "discourse_calls")
+                    elif "record_quotation" in schema_name:
+                        self._increment_metric(build_id, "quotation_calls")
+                    elif "record_indexing" in schema_name:
+                        self._increment_metric(build_id, "indexing_calls")
+
+                call_token = self._note_llm_call_start(
+                    build_id, metric_stage_of(schema_name), provider, model, base_url
+                )
+                call_id = f"{build_id}:{call_token}" if build_id else ""
+                attempt_state[context.attempt] = (call_token, call_id)
+                if build_id:
+                    self._llm_trace_start(
+                        build_id,
+                        call_id=call_id,
+                        schema_name=schema_name,
+                        role=role,
+                        attempt=context.attempt,
+                        provider=provider,
+                        model=model,
+                        prompt=context.prompt,
+                        response_schema=schema,
+                        generation=generation,
+                        max_tokens=context.max_tokens,
                     )
-                    call_id = f"{build_id}:{call_token}" if build_id else ""
-                    rendered_prompt = prompt + retry_note
-                    token_budget = max_tokens + ((attempt - 1) * 1024)
-                    if isinstance(failure, StructuredJsonTruncatedError):
-                        token_budget = max(token_budget, int(max_tokens * 1.5))
-                    effective_max_tokens = min(8192, token_budget)
-                    if build_id:
-                        self._llm_trace_start(
-                            build_id,
-                            call_id=call_id,
-                            schema_name=schema_name,
-                            role=role,
-                            attempt=attempt,
-                            provider=provider,
-                            model=model,
-                            prompt=rendered_prompt,
-                            response_schema=schema,
-                            generation=generation,
-                            max_tokens=effective_max_tokens,
-                        )
-                    raw = ""
-                    try:
-                        raw = self._with_transport_retry(
-                            build_id,
-                            chat_complete,
-                            provider=provider,
-                            model=model,
-                            base_url=base_url,
-                            api_key=api_key,
-                            prompt=rendered_prompt,
-                            options=generation,
-                            json_mode=True,
-                            json_schema=schema,
-                            schema_name=schema_name,
-                            max_tokens=effective_max_tokens,
-                            cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
-                            timeout_seconds=float(_stage_timeouts(request).get(timeout_key, 240)),
-                            on_delta=(
-                                (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
-                                if build_id
-                                else None
-                            ),
-                        )
-                    except Exception as exc:
-                        if build_id:
-                            self._llm_trace_finish(
-                                build_id,
-                                call_id,
-                                raw_response=(raw or getattr(exc, "diagnostic", None)),
-                                error=f"{type(exc).__name__}: {exc}",
-                            )
-                        raise
-                    finally:
-                        self._note_llm_call_end(build_id, call_token)
-                except InterruptedError:
-                    raise
-                except Exception as exc:
-                    failure = exc
-                    diagnostic = str(getattr(exc, "diagnostic", "") or "")
-                    if isinstance(exc, StructuredJsonTruncatedError):
-                        any_truncated = True
-                        if build_id:
-                            self._increment_metric(build_id, "structured_output_failures")
-                            self._increment_metric(build_id, "structured_output_truncated")
-                        if attempt < max(1, attempts):
-                            time.sleep(min(1.0, 0.2 * attempt))
-                            continue
-                        break
-                    # A hard read timeout already consumed the stage budget. Repeating
-                    # the same expensive request obscures stalls rather than improving
-                    # resilience; settle it for human review instead.
-                    if "timeout" in type(exc).__name__.casefold() or "timed out" in str(exc).casefold():
-                        timed_out = True
-                        if build_id:
-                            self._increment_metric(build_id, "timeouts")
-                        break
-                    if attempt < max(1, attempts):
-                        time.sleep(min(2.0, 0.35 * attempt))
-                        continue
-                    break
-                diagnostic = str(raw or "")
+
+            def request_once(context: StructuredAttemptContext) -> str:
+                call_token, _ = attempt_state[context.attempt]
                 try:
-                    value = _parse_json_robust(raw)
-                    parsed = response_model.model_validate(value)
-                    validated = parsed.model_dump(mode="json")
-                    if build_id:
-                        self._llm_trace_finish(
-                            build_id,
-                            call_id,
-                            raw_response=str(raw or ""),
-                            validated_response=validated,
-                        )
-                    return validated
-                except (ValueError, ValidationError) as exc:
-                    failure = exc
-                    if isinstance(exc, StructuredJsonTruncatedError):
-                        any_truncated = True
-                    if build_id:
-                        self._llm_trace_finish(
-                            build_id,
-                            call_id,
-                            raw_response=str(raw or ""),
-                            error=f"{type(exc).__name__}: {exc}",
-                        )
-                        self._increment_metric(build_id, "structured_output_failures")
-                        if isinstance(exc, StructuredJsonTruncatedError):
-                            self._increment_metric(build_id, "structured_output_truncated")
-                        elif isinstance(exc, StructuredJsonMalformedError):
-                            self._increment_metric(build_id, "structured_output_malformed")
-                        elif isinstance(exc, ValidationError):
-                            self._increment_metric(build_id, "structured_output_schema_invalid")
-            all_failures.append(f"{role} {provider}/{model}: {failure}")
+                    return self._with_transport_retry(
+                        build_id,
+                        chat_complete,
+                        provider=provider,
+                        model=model,
+                        base_url=base_url,
+                        api_key=api_key,
+                        prompt=context.prompt,
+                        options=generation,
+                        json_mode=True,
+                        json_schema=schema,
+                        schema_name=schema_name,
+                        max_tokens=context.max_tokens,
+                        cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
+                        timeout_seconds=float(_stage_timeouts(request).get(timeout_key, 240)),
+                        on_delta=(
+                            (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
+                            if build_id
+                            else None
+                        ),
+                    )
+                finally:
+                    self._note_llm_call_end(build_id, call_token)
+
+            def validate(value: dict[str, Any]) -> dict[str, Any]:
+                parsed = response_model.model_validate(value)
+                return parsed.model_dump(mode="json")
+
+            def attempt_finished(outcome: StructuredAttemptOutcome[dict[str, Any]]) -> None:
+                if not build_id:
+                    return
+                _, call_id = attempt_state.pop(outcome.context.attempt, (None, ""))
+                if outcome.error is not None:
+                    self._llm_trace_finish(
+                        build_id,
+                        call_id,
+                        raw_response=outcome.raw_response,
+                        error=f"{type(outcome.error).__name__}: {outcome.error}",
+                    )
+                    return
+                self._llm_trace_finish(
+                    build_id,
+                    call_id,
+                    raw_response=outcome.raw_response,
+                    validated_response=outcome.value,
+                )
+
+            try:
+                return complete_structured_json(
+                    request_once,
+                    prompt=prompt,
+                    validate=validate,
+                    attempts=attempts,
+                    max_tokens=max_tokens,
+                    max_token_cap=8192,
+                    initial_note=initial_note(),
+                    retry_guidance=retry_guidance,
+                    on_attempt_start=attempt_started,
+                    on_attempt_finish=attempt_finished,
+                    on_metric=note_metric,
+                )
+            except InterruptedError:
+                raise
+            except StructuredCompletionError as exc:
+                failure = exc.last_error or exc
+                all_failures.append(f"{role} {provider}/{model}: {failure}")
+                timed_out = timed_out or exc.timed_out
+                any_truncated = any_truncated or exc.truncated
+
         raise StructuredOutputError(
             "LLM structured output failed after bounded retry"
             + (" and review-provider escalation" if len(request_chain) > 1 else "")
