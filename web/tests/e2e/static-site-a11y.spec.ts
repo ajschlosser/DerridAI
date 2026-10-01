@@ -653,9 +653,11 @@ test("the built-in browser model builds a semantic index in one compatibility-fi
     "Published vectors use bge-m3:latest; this browser uses Xenova/multilingual-e5-small",
   );
 
-  // No separate provider test or model-download step is required. Building applies the current browser model,
-  // downloads it if needed, embeds the Records, and persists the derived index.
-  await page.getByRole("button", { name: "Download model & build index" }).click();
+  // Search exposes the same complete happy path. The reader does not need to visit Models or run a separate
+  // provider test/download action just because the publication's BGE vectors cannot be mixed with E5.
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Enable semantic search" })).toBeVisible();
+  await page.getByRole("button", { name: "Enable semantic search" }).click();
   await expect(page.locator('[data-index="ready"]')).toContainText("Local index ready: 2 Records");
   await expect(page.locator('[data-index="ready"]')).toContainText("IndexedDB");
 
@@ -698,7 +700,7 @@ test("a different embedding model builds a local IndexedDB index before semantic
   await expect(page.getByRole("status").filter({ hasText: "needs a local index" })).toBeVisible();
   expect(embedRequests).toEqual([]);
 
-  await page.getByRole("button", { name: "Models", exact: true }).click();
+  // A remote embedding endpoint gets the same one-click index control directly in Search.
   await page.getByRole("button", { name: "Build local index" }).click();
   await expect(page.locator('[data-index="ready"]')).toContainText("Local index ready: 2 Records");
   await expect(page.locator('[data-index="ready"]')).toContainText("IndexedDB");
