@@ -82,6 +82,7 @@ def test_semantic_candidates_use_document_language() -> None:
     ]
     candidates = _deterministic_boundary_candidates(blocks, {}, "ja")
     assert candidates[0]["signals"] == ["heading_start", "strong_heading_start"]
+    assert candidates[0]["language_profile"]["profile"] == "ja"
     assert "speaker_label" in candidates[1]["signals"]
 
 
