@@ -320,56 +320,56 @@ describe("works workspace commands", () => {
   it(
     "builds cheap library summaries and computes expensive detail only for the selected work",
     () => {
-    const item = (work: string, topic: string) => ({
-      work,
-      count: 1,
-      review: 0,
-      files: new Set([`${work}.jsonl`]),
-      authors: new Set(["Author"]),
-      years: new Set(["2020"]),
-      rows: [{ record: { work, topics: [topic], document_author: "Author" } }],
-    });
-    const insightSpy = vi.fn((rows: Array<{ record: { topics?: string[] } }>) => [
-      {
-        id: "topics",
-        field: "topics",
-        title: "Topics",
-        heading: "Top topics",
-        type: "bars",
-        values: [{ key: rows[0]?.record.topics?.[0] || "", value: 1 }],
-      },
-    ]);
-    const annotationsSpy = vi.fn(() => [
-      { work: "Glas" },
-      { work: "Glas" },
-      { work: "Margins" },
-    ]);
-    const { state, workspace } = setup({
-      isResearcher: () => false,
-      recordStores: () => [],
-      providerProfiles: () => [],
-      dbUnavailableReason: () => "",
-      hasCorpusDb: () => false,
-      canUse: () => true,
-      allAnnotations: annotationsSpy,
-      workDbStatus: () => ({ kind: "absent", label: "Not synced" }),
-      worksBiblioValue: () => ({
-        field_label: "Publisher",
-        value: "",
-        mixed: false,
-        unique_count: 0,
-      }),
-      label: (field: string) => field,
-      display: (value: unknown) => String(value ?? ""),
-      tr: (key: string, fallback = "") => fallback || key,
-      workInsightMetrics: insightSpy,
-      workIndex: () =>
-        new Map([
-          ["Glas", item("Glas", "hospitality")],
-          ["Margins", item("Margins", "ethics")],
-        ]),
-    });
-    state.workOverview = "Glas";
+      const item = (work: string, topic: string) => ({
+        work,
+        count: 1,
+        review: 0,
+        files: new Set([`${work}.jsonl`]),
+        authors: new Set(["Author"]),
+        years: new Set(["2020"]),
+        rows: [{ record: { work, topics: [topic], document_author: "Author" } }],
+      });
+      const insightSpy = vi.fn((rows: Array<{ record: { topics?: string[] } }>) => [
+        {
+          id: "topics",
+          field: "topics",
+          title: "Topics",
+          heading: "Top topics",
+          type: "bars",
+          values: [{ key: rows[0]?.record.topics?.[0] || "", value: 1 }],
+        },
+      ]);
+      const annotationsSpy = vi.fn(() => [
+        { work: "Glas" },
+        { work: "Glas" },
+        { work: "Margins" },
+      ]);
+      const { state, workspace } = setup({
+        isResearcher: () => false,
+        recordStores: () => [],
+        providerProfiles: () => [],
+        dbUnavailableReason: () => "",
+        hasCorpusDb: () => false,
+        canUse: () => true,
+        allAnnotations: annotationsSpy,
+        workDbStatus: () => ({ kind: "absent", label: "Not synced" }),
+        worksBiblioValue: () => ({
+          field_label: "Publisher",
+          value: "",
+          mixed: false,
+          unique_count: 0,
+        }),
+        label: (field: string) => field,
+        display: (value: unknown) => String(value ?? ""),
+        tr: (key: string, fallback = "") => fallback || key,
+        workInsightMetrics: insightSpy,
+        workIndex: () =>
+          new Map([
+            ["Glas", item("Glas", "hospitality")],
+            ["Margins", item("Margins", "ethics")],
+          ]),
+      });
+      state.workOverview = "Glas";
 
       const snapshot = workspace.getWorksWorkspaceSnapshot() as {
         works: Array<{
@@ -389,16 +389,16 @@ describe("works workspace commands", () => {
       expect(
         snapshot.works.every((work) => !("insights" in work) && !("metadata" in work)),
       ).toBe(true);
-    expect(snapshot.works.map((work) => [work.work, work.annotations])).toEqual([
-      ["Glas", 2],
-      ["Margins", 1],
-    ]);
-    expect(snapshot.selected.work).toBe("Glas");
-    expect(snapshot.selected.annotations).toBe(2);
-    expect(snapshot.selected.insights.find((item) => item.field === "topics")?.values).toEqual([
-      { key: "hospitality", value: 1, other: false },
-    ]);
-    expect(insightSpy).toHaveBeenCalledTimes(1);
+      expect(snapshot.works.map((work) => [work.work, work.annotations])).toEqual([
+        ["Glas", 2],
+        ["Margins", 1],
+      ]);
+      expect(snapshot.selected.work).toBe("Glas");
+      expect(snapshot.selected.annotations).toBe(2);
+      expect(snapshot.selected.insights.find((item) => item.field === "topics")?.values).toEqual([
+        { key: "hospitality", value: 1, other: false },
+      ]);
+      expect(insightSpy).toHaveBeenCalledTimes(1);
       expect(annotationsSpy).toHaveBeenCalledTimes(1);
     },
   );
