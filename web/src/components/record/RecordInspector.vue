@@ -10,7 +10,6 @@ import RecordHistoryTimeline from "./RecordHistoryTimeline.vue";
 import InspectorLayoutEditor from "./InspectorLayoutEditor.vue";
 import CorpusSemanticGraphPanel from "../corpus-builder/CorpusSemanticGraphPanel.vue";
 import CorpusRecordSemanticMap from "../corpus-builder/CorpusRecordSemanticMap.vue";
-import { corpusBuildsApi } from "../../api/corpus";
 import type { RecordWorkspaceSnapshot } from "../../types/record";
 import type { DerridaiNormativeModel, ResearchObjectGraph } from "../../types/researchObjectGraph";
 import {
@@ -136,32 +135,16 @@ async function activateTab(index: number) {
   const el = document.getElementById(tabId(tab.value));
   if (el instanceof HTMLButtonElement) el.focus();
 }
-// The semantic map reads build-scoped Document Intelligence; a published Record's
-// build_id is resolved through provenance recorded at publish time, not stored on
-// the record itself (see corpus_publication.serialize_public_record).
+// The direct Record map resolves build provenance itself. Once resolved, the
+// child reports the build ID so the optional full graph inspector can share it.
 const semanticBuildId = ref<string | null>(null);
-const semanticChecked = ref("");
-async function resolveSemanticBuild(recordId: string) {
-  if (!recordId || semanticChecked.value === recordId) return;
-  semanticChecked.value = recordId;
-  semanticBuildId.value = null;
-  try {
-    const result = await corpusBuildsApi.recordSemanticMapBuild(recordId);
-    semanticBuildId.value = result.build_id || null;
-  } catch {
-    // The Record map still materializes through the direct endpoint. Build
-    // resolution is only needed for the optional full graph inspector below.
-    semanticBuildId.value = null;
-  }
-}
 watch(
-  () => [tab.value, props.snapshot.record_id],
-  ([activeTab, recordId]) => {
-    if (activeTab === "semantic" && typeof recordId === "string")
-      void resolveSemanticBuild(recordId);
+  () => props.snapshot.record_id,
+  () => {
+    semanticBuildId.value = null;
   },
-  { immediate: true },
 );
+
 function onTabKeydown(event: KeyboardEvent, index: number) {
   if (event.key === "ArrowRight" || event.key === "ArrowDown") {
     event.preventDefault();
