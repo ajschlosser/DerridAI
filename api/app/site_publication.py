@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from .corpus_publication import serialize_public_record, validate_publication_record
 from .locales.en_us import EN_US
@@ -591,7 +592,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=3s --retries=3 \\
   CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1
 """
 
-_NGINX_CONFIG = """server {
+_NGINX_CONFIG_TEMPLATE = """server {
     listen 80;
     server_name _;
 
@@ -615,6 +616,7 @@ _NGINX_CONFIG = """server {
         add_header X-Content-Type-Options "nosniff" always;
     }
 
+__PROVIDER_PROXY__
     location / {
         try_files $uri $uri/ /index.html;
         add_header X-Content-Type-Options "nosniff" always;
@@ -623,7 +625,7 @@ _NGINX_CONFIG = """server {
 }
 """
 
-_START_SCRIPT = """#!/bin/sh
+_START_SCRIPT_TEMPLATE = """#!/bin/sh
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -645,7 +647,7 @@ docker build --tag "$IMAGE" "$SCRIPT_DIR"
 docker run --detach \\
   --name "$CONTAINER" \\
   --restart unless-stopped \\
-  --publish "${PORT}:80" \\
+__HOST_GATEWAY_ARG__  --publish "${PORT}:80" \\
   "$IMAGE" >/dev/null
 
 attempt=0
@@ -682,7 +684,7 @@ else
 fi
 """
 
-_NGINX_README = """DerridAI research site — nginx Docker export
+_NGINX_README_TEMPLATE = """DerridAI research site — nginx Docker export
 
 This directory is self-contained. It serves only static publication files and
 does not require the DerridAI API, Node.js, Python, or Docker Compose.
@@ -700,12 +702,111 @@ Optional environment variables:
   DERRIDAI_SITE_IMAGE      Docker image name (default: derridai-research-site)
   DERRIDAI_SITE_CONTAINER  container name (default: derridai-research-site)
 
-The site uses the same DerridAI SDK as custom Web applications. No endpoint,
-model name, or API token is exported. Transformers.js is included so a visitor
-can run an embedding model in the browser. The model itself is downloaded once
-by that library and kept in the browser cache. A visitor may also save a named
+The site uses the same DerridAI SDK as custom Web applications. No API token or
+model name is exported. Transformers.js is included so a visitor can run an
+embedding model in the browser. The model itself is downloaded once by that
+library and kept in the browser cache. A visitor may also save a named
 OpenAI-compatible endpoint; its token stays in that browser.
+__PROVIDER_PROXY_README__
 """
+
+
+def _normalize_provider_proxy_upstream(value: str | None) -> tuple[str | None, bool]:
+    """Validate an optional nginx provider upstream and map host loopback into Docker."""
+    raw = str(value or "").strip()
+    if not raw:
+        return None, False
+    if any(char in raw for char in "\r\n\t;{}"):
+        raise ValueError("Provider proxy upstream contains characters that are unsafe in nginx.")
+
+    try:
+        parsed = urlsplit(raw)
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("Provider proxy upstream must be a valid http:// or https:// URL.") from exc
+
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Provider proxy upstream must be a valid http:// or https:// URL.")
+    if parsed.username or parsed.password:
+        raise ValueError("Provider proxy upstream must not contain embedded credentials.")
+    if parsed.query or parsed.fragment:
+        raise ValueError("Provider proxy upstream must not contain a query string or fragment.")
+
+    path = parsed.path or "/"
+    if any(char.isspace() for char in path) or any(char in path for char in ";{}\\$"):
+        raise ValueError("Provider proxy upstream path contains characters that are unsafe in nginx.")
+
+    hostname = parsed.hostname
+    normalized_host = hostname
+    host_gateway = hostname.lower() in {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
+    if hostname.lower() in {"localhost", "127.0.0.1", "::1"}:
+        normalized_host = "host.docker.internal"
+
+    host_for_url = f"[{normalized_host}]" if ":" in normalized_host else normalized_host
+    netloc = host_for_url if port is None else f"{host_for_url}:{port}"
+    normalized_path = f"/{path.lstrip('/')}".rstrip("/") + "/"
+    return urlunsplit((parsed.scheme, netloc, normalized_path, "", "")), host_gateway
+
+
+def _nginx_config(provider_proxy_upstream: str | None) -> tuple[str, bool]:
+    upstream, host_gateway = _normalize_provider_proxy_upstream(provider_proxy_upstream)
+    proxy = ""
+    if upstream:
+        proxy = f"""    # Optional same-origin OpenAI-compatible provider bridge.
+    # /provider/foo is forwarded to the configured upstream's /foo.
+    location = /provider {{
+        return 308 /provider/;
+    }}
+
+    location /provider/ {{
+        limit_except GET POST {{
+            deny all;
+        }}
+
+        proxy_pass {upstream};
+        proxy_http_version 1.1;
+        proxy_set_header Host $proxy_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_ssl_server_name on;
+        client_max_body_size 20m;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }}
+
+"""
+    return _NGINX_CONFIG_TEMPLATE.replace("__PROVIDER_PROXY__\n", proxy), host_gateway
+
+
+def _start_script(*, host_gateway: bool) -> str:
+    gateway_arg = "  --add-host=host.docker.internal:host-gateway \\\n" if host_gateway else ""
+    return _START_SCRIPT_TEMPLATE.replace("__HOST_GATEWAY_ARG__", gateway_arg)
+
+
+def _nginx_readme(provider_proxy_upstream: str | None) -> str:
+    upstream, _host_gateway = _normalize_provider_proxy_upstream(provider_proxy_upstream)
+    proxy_help = ""
+    if upstream:
+        proxy_help = f"""
+Same-origin provider proxy:
+  Browser endpoint base: /provider
+  Container upstream:    {upstream}
+
+The browser may save /provider as its OpenAI-compatible endpoint. nginx forwards
+/provider/... to the upstream server-side, so provider-side browser CORS settings
+are not required. Only GET and POST are exposed through this route. If the
+upstream was entered as localhost/127.0.0.1/::1, this bundle rewrites it to
+host.docker.internal and start.sh adds Docker's host-gateway mapping.
+
+SECURITY: anyone who can reach this site's /provider/ path can send allowed
+requests to that model server. Before exposing the site beyond a trusted local
+machine or network, put authentication or network access controls in front of
+/provider/.
+"""
+    return _NGINX_README_TEMPLATE.replace("__PROVIDER_PROXY_README__", proxy_help)
 
 
 def _zip_write(
@@ -734,6 +835,7 @@ def build_nginx_site_bundle(
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
     include_transformers: bool = True,
     include_vectors: bool = True,
+    provider_proxy_upstream: str | None = None,
 ) -> SiteBundle:
     """Create a deployable multi-file site served by exactly one nginx container.
 
@@ -741,6 +843,7 @@ def build_nginx_site_bundle(
     callers and is always treated as true.
     """
     del include_transformers
+    nginx_config, host_gateway = _nginx_config(provider_proxy_upstream)
     core = build_site_bundle(
         store_name=store_name,
         works=works,
@@ -768,10 +871,10 @@ def build_nginx_site_bundle(
         _zip_write(bundle, f"{TRANSFORMERS_FILES_BASE}NOTICE.txt", notice_text())
         _zip_write(bundle, f"{TRANSFORMERS_FILES_BASE}LICENSE-transformers.js.txt", runtime["license"])
         _zip_write(bundle, "Dockerfile", _NGINX_DOCKERFILE)
-        _zip_write(bundle, "nginx.conf", _NGINX_CONFIG)
-        _zip_write(bundle, "start.sh", _START_SCRIPT, executable=True)
+        _zip_write(bundle, "nginx.conf", nginx_config)
+        _zip_write(bundle, "start.sh", _start_script(host_gateway=host_gateway), executable=True)
         _zip_write(bundle, "stop.sh", _STOP_SCRIPT, executable=True)
-        _zip_write(bundle, "README.txt", _NGINX_README)
+        _zip_write(bundle, "README.txt", _nginx_readme(provider_proxy_upstream))
 
     base_name = core.filename.removesuffix(".zip")
     return SiteBundle(

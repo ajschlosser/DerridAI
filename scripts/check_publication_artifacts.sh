@@ -31,6 +31,7 @@ test -x "$SITE_DIR/stop.sh"
 
 test "$(curl -fsS "http://127.0.0.1:$PORT/healthz")" = "ok"
 curl -fsS "http://127.0.0.1:$PORT/" | grep -Fq "DerridAI publication acceptance"
+test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/provider")" = "308"
 docker container inspect "$CONTAINER" >/dev/null
 
 (

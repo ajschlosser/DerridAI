@@ -111,6 +111,7 @@ def build(output_dir: Path) -> None:
         description="Generated acceptance fixture.",
         locale="en-US",
         languages=["en-US"],
+        provider_proxy_upstream="http://localhost:11434/v1",
     )
     (output_dir / "nginx.zip").write_bytes(nginx.payload)
 

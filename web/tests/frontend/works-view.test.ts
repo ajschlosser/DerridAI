@@ -517,6 +517,7 @@ describe("WorksView", () => {
       record_profile: "complete",
       include_transformers: true,
       include_vectors: true,
+      provider_proxy_upstream: null,
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
     wrapper.unmount();
@@ -544,6 +545,7 @@ describe("WorksView", () => {
       record_profile: "complete",
       include_transformers: true,
       include_vectors: true,
+      provider_proxy_upstream: null,
     });
     wrapper.unmount();
   });
@@ -570,6 +572,36 @@ describe("WorksView", () => {
       record_profile: "complete",
       include_transformers: true,
       include_vectors: true,
+      provider_proxy_upstream: null,
+    });
+    wrapper.unmount();
+  });
+
+  it("can export an nginx bundle with a same-origin provider proxy", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("input[value='nginx-docker']").setValue(true);
+    await dialog.get("[data-site-provider-proxy-enabled]").setValue(true);
+    await dialog.get("[data-site-provider-proxy-upstream]").setValue("http://localhost:11434/v1");
+    await dialog.get("input[placeholder='Research collection']").setValue("Proxied Glas");
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith({
+      store: "derrida-primary",
+      works: ["Glas"],
+      title: "Proxied Glas",
+      description: "",
+      locale: "en-US",
+      languages: ["en-US", "fr-CA"],
+      export_format: "nginx-docker",
+      record_profile: "complete",
+      include_transformers: true,
+      include_vectors: true,
+      provider_proxy_upstream: "http://localhost:11434/v1",
     });
     wrapper.unmount();
   });

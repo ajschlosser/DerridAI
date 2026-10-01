@@ -663,6 +663,67 @@ def test_nginx_export_serves_the_runtime_as_files(
     assert "/usr/share/nginx/html/models:ro" not in start
 
 
+def test_nginx_provider_proxy_is_same_origin_streaming_safe_and_reaches_host_loopback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_projection(monkeypatch)
+    bundle = site_publication.build_nginx_site_bundle(
+        store_name="derrida-primary",
+        works=["Glas"],
+        title="Proxied",
+        provider_proxy_upstream="http://localhost:11434/v1",
+    )
+
+    with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
+        nginx = archive.read("nginx.conf").decode("utf-8")
+        start = archive.read("start.sh").decode("utf-8")
+        readme = archive.read("README.txt").decode("utf-8")
+
+    assert "location = /provider" in nginx
+    assert "location /provider/" in nginx
+    assert "limit_except GET POST" in nginx
+    assert "proxy_pass http://host.docker.internal:11434/v1/;" in nginx
+    assert "proxy_buffering off;" in nginx
+    assert "proxy_read_timeout 300s;" in nginx
+    assert "--add-host=host.docker.internal:host-gateway" in start
+    assert "Browser endpoint base: /provider" in readme
+    assert "provider-side browser CORS settings" in readme
+    assert "SECURITY:" in readme
+
+
+def test_nginx_provider_proxy_remote_upstream_does_not_require_host_gateway(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_projection(monkeypatch)
+    bundle = site_publication.build_nginx_site_bundle(
+        store_name="derrida-primary",
+        works=["Glas"],
+        title="Remote proxy",
+        provider_proxy_upstream="https://models.example.test/v1",
+    )
+    with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
+        nginx = archive.read("nginx.conf").decode("utf-8")
+        start = archive.read("start.sh").decode("utf-8")
+
+    assert "proxy_pass https://models.example.test/v1/;" in nginx
+    assert "--add-host=host.docker.internal:host-gateway" not in start
+
+
+@pytest.mark.parametrize(
+    "upstream",
+    [
+        "ftp://localhost:11434/v1",
+        "http://user:secret@localhost:11434/v1",
+        "http://localhost:11434/v1?debug=1",
+        "http://localhost:11434/v1#fragment",
+        "http://localhost:11434/v1;include",
+    ],
+)
+def test_nginx_provider_proxy_rejects_unsafe_upstreams(upstream: str) -> None:
+    with pytest.raises(ValueError, match="Provider proxy upstream"):
+        site_publication._normalize_provider_proxy_upstream(upstream)
+
+
 def test_every_export_fetches_the_runtime(
     monkeypatch: pytest.MonkeyPatch, _runtime_without_network: list[int]
 ) -> None:
@@ -689,6 +750,18 @@ def test_export_fails_before_corpus_work_when_the_runtime_cannot_be_downloaded(
         site_publication.build_site_bundle(
             store_name="derrida-primary", works=["Glas"], title="X", include_transformers=True
         )
+
+
+def test_site_export_request_accepts_nginx_provider_proxy_configuration() -> None:
+    from app.routers.sites import SiteExportRequest
+
+    request = SiteExportRequest(
+        store="derrida-primary",
+        works=["Glas"],
+        export_format="nginx-docker",
+        provider_proxy_upstream="http://localhost:11434/v1",
+    )
+    assert request.provider_proxy_upstream == "http://localhost:11434/v1"
 
 
 def test_export_requests_ignore_legacy_provider_profile_ids() -> None:

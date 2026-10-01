@@ -471,6 +471,27 @@
         "invalid_endpoint",
       );
     }
+
+    // A deployment may expose a same-origin nginx bridge such as /provider.
+    // Resolve only root-relative paths; bare relative strings are rejected so a typo cannot
+    // silently target an unexpected document-relative URL.
+    if (raw.startsWith("/")) {
+      if (!["http:", "https:"].includes(location.protocol)) {
+        throw providerError(
+          t("site.runtime.provider_endpoint_invalid"),
+          "invalid_endpoint",
+        );
+      }
+      const sameOrigin = new URL(raw, location.origin);
+      if (sameOrigin.origin !== location.origin) {
+        throw providerError(
+          t("site.runtime.provider_endpoint_invalid"),
+          "invalid_endpoint",
+        );
+      }
+      return sameOrigin.href.replace(/\/$/, "");
+    }
+
     let parsed;
     try {
       parsed = new URL(raw);
@@ -1770,7 +1791,8 @@
     });
     const endpoint = node("input", {
       class: "control",
-      type: "url",
+      type: "text",
+      inputmode: "url",
       required: true,
       autocomplete: "url",
       placeholder: t("site.runtime.provider_url_placeholder"),
