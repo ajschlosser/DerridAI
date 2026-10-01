@@ -175,6 +175,29 @@ def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path)
         )
         record[field] = value
     project_record_assertions(record)
+    pass_learning = {
+        "field_stats": {
+            "persons": {"marker": "PERSON_MEMORY_MARKER"},
+            "topics": {"marker": "TOPIC_MEMORY_MARKER"},
+        },
+        "prior_pass": {
+            "inferred_conventions": {
+                "persons": {
+                    "value": ["Derrida"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "PERSON_PRIOR_MARKER",
+                },
+                "topics": {
+                    "value": ["hospitality"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "TOPIC_PRIOR_MARKER",
+                },
+            },
+            "disputed_fields": {"persons": 2, "topics": 1},
+        },
+    }
 
     tasks, _, _ = m._prepare_metadata_tasks(
         record,
@@ -186,6 +209,7 @@ def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path)
         "",
         "",
         None,
+        pass_learning=pass_learning,
         schema=schema,
     )
     assert [t[0] for t in tasks] == ["discourse"]
@@ -203,6 +227,7 @@ def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path)
         "",
         "",
         None,
+        pass_learning=pass_learning,
         schema=schema,
     )
     assert [t[0] for t in rerun] == ["indexing"]
@@ -421,6 +446,10 @@ def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path
     assert set(metadata_model.model_fields) == {"topics", "concepts"}
     assert "THIS MODEL CALL IS FIELD-SCOPED" in indexing[1]
     assert "topics and concepts" in indexing[1]
+    assert "TOPIC_MEMORY_MARKER" in indexing[1]
+    assert "TOPIC_PRIOR_MARKER" in indexing[1]
+    assert "PERSON_MEMORY_MARKER" not in indexing[1]
+    assert "PERSON_PRIOR_MARKER" not in indexing[1]
 
     rerun, _, _ = m._prepare_metadata_tasks(
         record,
@@ -446,6 +475,8 @@ def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path
         "persons",
         "works_referenced",
     }
+    assert "PERSON_MEMORY_MARKER" in rerun_indexing[1]
+    assert "PERSON_PRIOR_MARKER" in rerun_indexing[1]
 
 
 def answer(**metadata):
