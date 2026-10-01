@@ -38,6 +38,7 @@ const emit = defineEmits<{
       include_vectors: boolean;
       export_format: SiteExportFormat;
       record_profile: SiteRecordProfile;
+      provider_proxy_upstream: string | null;
     },
   ];
 }>();
@@ -50,11 +51,35 @@ const description = ref("");
 const exportFormat = ref<SiteExportFormat>("two-file");
 const recordProfile = ref<SiteRecordProfile>("complete");
 const includeVectors = ref(true);
+const providerProxyEnabled = ref(false);
+const providerProxyUpstream = ref("http://localhost:11434/v1");
 const selectedLanguages = ref<string[]>(props.languages.map((item) => item.code));
 
 const selectedCount = computed(() => selected.value.length);
+const providerProxyValid = computed(() => {
+  if (exportFormat.value !== "nginx-docker" || !providerProxyEnabled.value) return true;
+  try {
+    const parsed = new URL(providerProxyUpstream.value.trim());
+    return (
+      ["http:", "https:"].includes(parsed.protocol) &&
+      Boolean(parsed.hostname) &&
+      !parsed.username &&
+      !parsed.password &&
+      !parsed.search &&
+      !parsed.hash
+    );
+  } catch {
+    return false;
+  }
+});
 const canCreate = computed(() =>
-  Boolean(selectedCount.value && selectedLanguages.value.length && props.storeName && !props.busy),
+  Boolean(
+    selectedCount.value &&
+      selectedLanguages.value.length &&
+      props.storeName &&
+      !props.busy &&
+      providerProxyValid.value,
+  ),
 );
 
 function toggle(work: string, checked: boolean) {
@@ -101,6 +126,10 @@ function submit() {
     include_vectors: includeVectors.value,
     export_format: exportFormat.value,
     record_profile: recordProfile.value,
+    provider_proxy_upstream:
+      exportFormat.value === "nginx-docker" && providerProxyEnabled.value
+        ? providerProxyUpstream.value.trim()
+        : null,
   });
 }
 
@@ -186,6 +215,46 @@ onMounted(async () => {
               <small>{{ i18n.t("site.create_format_nginx_help") }}</small>
             </span>
           </label>
+        </fieldset>
+
+        <fieldset
+          v-if="exportFormat === 'nginx-docker'"
+          class="site-export-format site-provider-proxy"
+          data-site-provider-proxy
+        >
+          <legend>{{ i18n.t("site.create_provider_proxy") }}</legend>
+          <p class="site-choice-help">{{ i18n.t("site.create_provider_proxy_help") }}</p>
+          <label class="site-export-option">
+            <input v-model="providerProxyEnabled" type="checkbox" data-site-provider-proxy-enabled />
+            <span>
+              <strong>{{ i18n.t("site.create_provider_proxy_enable") }}</strong>
+              <small>{{ i18n.t("site.create_provider_proxy_enable_help") }}</small>
+            </span>
+          </label>
+          <label v-if="providerProxyEnabled" class="field">
+            <span>{{ i18n.t("site.create_provider_proxy_upstream") }}</span>
+            <input
+              v-model="providerProxyUpstream"
+              class="control"
+              type="url"
+              autocomplete="url"
+              maxlength="2048"
+              data-site-provider-proxy-upstream
+              :aria-invalid="providerProxyValid ? undefined : 'true'"
+              :placeholder="i18n.t('site.create_provider_proxy_upstream_placeholder')"
+            />
+            <small>{{ i18n.t("site.create_provider_proxy_upstream_help") }}</small>
+          </label>
+          <p
+            v-if="providerProxyEnabled && !providerProxyValid"
+            class="site-create-error"
+            role="alert"
+          >
+            {{ i18n.t("site.create_provider_proxy_invalid") }}
+          </p>
+          <p v-if="providerProxyEnabled" class="site-choice-help">
+            {{ i18n.t("site.create_provider_proxy_security") }}
+          </p>
         </fieldset>
 
         <fieldset class="site-export-format site-record-profile">
