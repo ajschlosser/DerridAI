@@ -568,7 +568,7 @@ async function addEndpoint(
   page: Page,
   options: { name: string; role: "embedding" | "generation"; model: string },
 ) {
-  await page.getByRole("button", { name: "Models" }).click();
+  await page.getByRole("button", { name: "Models", exact: true }).click();
   const form = page.getByRole("form", { name: "Add an endpoint" });
   await form.getByLabel("Name", { exact: true }).fill(options.name);
   await form.getByLabel("Endpoint URL").fill("https://models.example.test/v1");
@@ -578,8 +578,13 @@ async function addEndpoint(
   await models.getByRole("button", { name: "Close" }).click();
   await expect(form.getByRole("status")).toContainText("3 models found");
   await form.getByLabel("Model", { exact: true }).fill(options.model);
-  if (options.role === "embedding") await form.getByLabel("Use for Research answers").uncheck();
-  else await form.getByLabel("Use for embeddings").uncheck();
+  if (options.role === "embedding") {
+    await form.getByLabel("Use for embeddings").check();
+    await form.getByLabel("Use for Research answers").uncheck();
+  } else {
+    await form.getByLabel("Use for embeddings").uncheck();
+    await form.getByLabel("Use for Research answers").check();
+  }
   await form.getByRole("button", { name: "Save endpoint" }).click();
 }
 
@@ -588,7 +593,7 @@ test("a provider the reader configures powers vector + LLM Research with method 
 }) => {
   await mountProviderSite(page);
   // Nothing was exported, so nothing is configured until the reader sets it up.
-  await page.getByRole("button", { name: "Models" }).click();
+  await page.getByRole("button", { name: "Models", exact: true }).click();
   await expect(page.getByLabel("Embedding provider")).toHaveValue("");
   await expect(page.getByLabel("Generation provider")).toHaveValue("");
 
@@ -626,7 +631,7 @@ test("a different embedding model builds a local IndexedDB index before semantic
   await expect(page.getByRole("status").filter({ hasText: "needs a local index" })).toBeVisible();
   expect(embedRequests).toEqual([]);
 
-  await page.getByRole("button", { name: "Models" }).click();
+  await page.getByRole("button", { name: "Models", exact: true }).click();
   await page.getByRole("button", { name: "Build local index" }).click();
   await expect(page.locator('[data-index="ready"]')).toContainText("Local index ready: 2 Records");
   await expect(page.locator('[data-index="ready"]')).toContainText("IndexedDB");
@@ -665,7 +670,7 @@ test("a different embedding model builds a local IndexedDB index before semantic
 
 test("embeddings run in the browser with WebGPU or WebAssembly", async ({ page }) => {
   await mountProviderSite(page);
-  await page.getByRole("button", { name: "Models" }).click();
+  await page.getByRole("button", { name: "Models", exact: true }).click();
   const device = page.getByLabel("Where to run the model");
   await expect(device).toContainText("WebGPU");
   await expect(device).toContainText("WebAssembly");
