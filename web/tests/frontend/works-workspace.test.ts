@@ -96,7 +96,15 @@ describe("works workspace commands", () => {
         files: [`${name}.jsonl`],
         authors: ["Jacques Derrida"],
         years: year ? [year] : [],
-        rows: [{ record: { work: name } }],
+        rows: [
+          {
+            record: {
+              work: name,
+              publisher: name === "Glas" ? "Galilée" : "",
+              translator: name === "Glas" ? "John P. Leavey" : "",
+            },
+          },
+        ],
         status,
       };
     }
@@ -161,6 +169,17 @@ describe("works workspace commands", () => {
         currentRecords: 450,
         absentRecords: 900,
       });
+    });
+
+    it("searches deterministic bibliographic metadata with case and diacritic normalization", () => {
+      const byAuthor = snapshotSetup({ worksSearch: "JACQUES DERRIDA" }).workspace.getWorksWorkspaceSnapshot();
+      expect(titles(byAuthor)).toEqual(["Aporias", "Glas", "Of Grammatology"]);
+
+      const byPublisher = snapshotSetup({ worksSearch: "galilee" }).workspace.getWorksWorkspaceSnapshot();
+      expect(titles(byPublisher)).toEqual(["Glas"]);
+
+      const byTranslator = snapshotSetup({ worksSearch: "leavey" }).workspace.getWorksWorkspaceSnapshot();
+      expect(titles(byTranslator)).toEqual(["Glas"]);
     });
 
     it("sorts by the real fields and leaves works without a year last", () => {
