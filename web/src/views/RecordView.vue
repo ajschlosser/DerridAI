@@ -11,11 +11,9 @@ import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import RecordReadingPane from "../components/record/RecordReadingPane.vue";
 import RecordInspector from "../components/record/RecordInspector.vue";
 import RecordEditSheet from "../components/record/RecordEditSheet.vue";
-import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
 import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
 import { corpusBuildsApi } from "../api/corpus";
 import type { RecordWorkspaceSnapshot } from "../types/record";
-import type { SemanticMapSource } from "../domain/semanticMap";
 import type { DerridaiNormativeModel, ResearchObjectGraph } from "../types/researchObjectGraph";
 import { useSemanticMapStore } from "../stores/semanticMap";
 import { annotationsService } from "../services/annotations";
@@ -50,28 +48,23 @@ const annotationScope = ref<"text" | "record" | "work">("text");
 const annotationParentId = ref<string | null>(null);
 const annotationLinkedRecords = ref("");
 const annotationError = ref("");
-const semanticSources = ref<SemanticMapSource[]>([]);
-const semanticFocus = ref("");
 const recordSemanticBuildId = ref("");
+const recordSemanticLoading = ref(false);
 const showRecordMap = computed(
   () => semanticMap.enabled && semanticMap.placement === "record" && snapshot.value.available,
 );
 
 async function loadSemanticMap() {
-  try {
-    const data = runtime.listSemanticMapSources();
-    semanticSources.value = data?.records || [];
-    semanticFocus.value = data?.focusId || String(snapshot.value.record_id || "");
-  } catch {
-    semanticSources.value = [];
-    semanticFocus.value = String(snapshot.value.record_id || "");
-  }
   recordSemanticBuildId.value = "";
   const recordId = String(snapshot.value.record_id || "");
-  if (recordId) {
+  if (!recordId) return;
+  recordSemanticLoading.value = true;
+  try {
     recordSemanticBuildId.value =
       (await corpusBuildsApi.recordSemanticMapBuild(recordId).catch(() => ({ build_id: null })))
         .build_id || "";
+  } finally {
+    recordSemanticLoading.value = false;
   }
 }
 function openSemanticMap() {
@@ -389,14 +382,12 @@ onBeforeUnmount(() => {
         @semantic-map="openSemanticMap"
       />
 
-      <SemanticMapFrame
-        v-if="showRecordMap"
-        variant="record"
-        :sources="semanticSources"
-        :focus-id="semanticFocus"
+      <UiLoadingState
+        v-if="showRecordMap && recordSemanticLoading"
+        :label="i18n.t('pdf_corpus.semantic_map_calculating')"
       />
       <CorpusRecordSemanticMap
-        v-if="showRecordMap && recordSemanticBuildId && snapshot.record_id"
+        v-else-if="showRecordMap && recordSemanticBuildId && snapshot.record_id"
         :build-id="recordSemanticBuildId"
         :record="{
           record_id: String(snapshot.record_id),
@@ -406,6 +397,9 @@ onBeforeUnmount(() => {
         }"
         @open-record="runtime.openSemanticRecord?.($event)"
       />
+      <p v-else-if="showRecordMap" class="info">
+        {{ i18n.t("record.semantic_map_unavailable") }}
+      </p>
 
       <div class="record-context-strip" :aria-label="i18n.t('record.status')">
         <span
