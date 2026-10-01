@@ -15,10 +15,21 @@ export const browserEmbedderManifest = Object.freeze({
       license: "Apache-2.0",
       projectUrl: "https://github.com/huggingface/transformers.js",
     },
+    onnxJavaScript: {
+      version: "1.31.0-dev.20260914-8d85527a0",
+      url: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort.webgpu.bundle.min.mjs",
+      assetKey: "runtime/ort.webgpu.bundle.min.mjs",
+      mediaType: "text/javascript",
+      license: "MIT",
+      projectUrl: "https://github.com/microsoft/onnxruntime",
+    },
     onnxWasm: {
+      version: "1.31.0-dev.20260914-8d85527a0",
       url: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.jsep.wasm",
       assetKey: "runtime/ort-wasm-simd-threaded.jsep.wasm",
       mediaType: "application/wasm",
+      license: "MIT",
+      projectUrl: "https://github.com/microsoft/onnxruntime",
     },
   },
   model: {
