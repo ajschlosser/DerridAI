@@ -275,7 +275,7 @@ export function createWorksWorkspace(deps: Deps) {
         dbStatus: String(state.worksDbStatus || ""),
         author: String(state.worksAuthor || ""),
       },
-      viewMode: state.worksView === "compact" ? "compact" : "cards",
+      viewMode: ["list", "compact"].includes(String(state.worksView)) ? "list" : "cards",
       stores,
       activeStore,
       activeStoreCount: Number(activeStoreInfo?.count || 0),
@@ -465,7 +465,7 @@ export function createWorksWorkspace(deps: Deps) {
     if (patch.dbStatus !== undefined) state.worksDbStatus = String(patch.dbStatus || "");
     if (patch.author !== undefined) state.worksAuthor = String(patch.author || "");
     if (patch.viewMode !== undefined)
-      state.worksView = patch.viewMode === "compact" ? "compact" : "cards";
+      state.worksView = ["list", "compact"].includes(String(patch.viewMode)) ? "list" : "cards";
     persistPrefs();
     syncUrl({ replace: true });
   }
