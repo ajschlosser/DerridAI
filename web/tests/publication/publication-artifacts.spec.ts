@@ -5,7 +5,9 @@ import { pathToFileURL } from "node:url";
 
 const artifactDir = process.env.DERRIDAI_PUBLICATION_ARTIFACT_DIR;
 
-test("real single-file export works from file:// without an application server", async ({ page }) => {
+test("real single-file export works from file:// without an application server", async ({
+  page,
+}) => {
   if (!artifactDir) throw new Error("DERRIDAI_PUBLICATION_ARTIFACT_DIR is required.");
 
   const requests: string[] = [];
