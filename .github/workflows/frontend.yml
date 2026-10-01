@@ -158,6 +158,11 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npm run format:repo:check
+      - name: Show Prettier patch on failure
+        if: failure()
+        run: |
+          npm run format:repo
+          git diff --no-ext-diff -- .
 
   backend-lint:
     needs: changes
