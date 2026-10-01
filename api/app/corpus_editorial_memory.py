@@ -582,6 +582,10 @@ class EditorialMemoryMixin:
             "example_token_estimate": example_token_estimate,
             "progressive_retrieval": retrieval_telemetry,
             "pipeline_trace": metadata_pipeline_trace,
+            # When enrichment scopes precedent work to scheduled metadata families,
+            # preserve that scope so its kept cache cannot masquerade as a completed
+            # lookup for fields that were deliberately never searched.
+            "requested_fields": sorted(field_filter) if field_filter is not None else None,
             "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id], metadata_schema, registry_for),
         }
         if include_canonical:
