@@ -15,7 +15,10 @@ from app.language_segmentation import (  # noqa: E402
     split_sentences,
     starts_mid_sentence_text,
 )
-from app.sentence_boundaries import clean_boundary, snap_boundaries_to_sentences  # noqa: E402
+from app.sentence_boundaries import (  # noqa: E402
+    clean_boundary,
+    snap_boundaries_to_sentences,
+)
 from app.source_text import html_to_text, leading_speaker  # noqa: E402
 from app.unit_policy import apply_unit_policy  # noqa: E402
 
