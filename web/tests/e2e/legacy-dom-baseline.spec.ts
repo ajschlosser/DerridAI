@@ -1668,6 +1668,19 @@ test.describe("legacy runtime DOM baseline", () => {
         expect(stableMarkup).toContain('class="ui-page-header"');
         expect(stableMarkup).toContain('id="works-page-title"');
         expect(stableMarkup).toContain('data-works-context="database"');
+      } else if (
+        ["works-open-records", "works-open-records-needing-review"].includes(scenario.name)
+      ) {
+        // These are Works → Search handoff scenarios. Search has its own full DOM baselines, while
+        // Vue-generated element IDs depend on which components were mounted before navigation.
+        // Assert the handoff contract instead of snapshotting those meaningless ID offsets.
+        expect(stableMarkup).toContain('id="search-page-title"');
+        expect(stableMarkup).toContain("Work equals Of Grammatology");
+        if (scenario.name === "works-open-records-needing-review") {
+          expect(stableMarkup).toContain("Needs review equals true");
+        } else {
+          expect(stableMarkup).not.toContain("Needs review equals true");
+        }
       } else {
         expect(stableMarkup).toMatchSnapshot(`${scenario.name}.html`);
       }
