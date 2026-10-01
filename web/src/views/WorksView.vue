@@ -114,10 +114,6 @@ const visibleWorks = computed(() => (snapshot.value?.works || []).slice(0, revea
 const showSkeleton = computed(() =>
   Boolean(snapshot.value?.mode === "admin" && snapshot.value.works.length && revealed.value === 0),
 );
-const showAddCard = computed(() =>
-  Boolean(snapshot.value?.mode === "admin" && revealed.value >= (snapshot.value.works.length || 0)),
-);
-
 /** Inspector commands, bound to the selected work; the persistent pane and the dialog share them. */
 function inspectorHandlers(work: string) {
   return {
@@ -464,26 +460,6 @@ onBeforeUnmount(() => {
                   : i18n.t("research.no_works")
             }}
           </p>
-          <button
-            v-if="showAddCard"
-            id="worksAddJsonl"
-            type="button"
-            class="work-add-jsonl-card"
-            :disabled="!snapshot.capabilities.canManageCorpus"
-            :data-disabled-reason="
-              snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
-            "
-            :title="
-              snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
-            "
-            @click="works.chooseJsonl()"
-          >
-            <span class="work-add-jsonl-icon"><AppIcon name="plus" aria-hidden="true" /></span>
-            <span>
-              <b>{{ i18n.t("works.add_jsonl") }}</b>
-              <small>{{ i18n.t("works.add_jsonl_help") }}</small>
-            </span>
-          </button>
         </section>
 
         <aside
