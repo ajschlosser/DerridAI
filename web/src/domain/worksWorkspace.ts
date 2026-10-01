@@ -5,10 +5,18 @@
 // state object and helpers are passed in as dependencies.
 import { fullCitation } from "./citations";
 import { commonWorkValue, workCoverUrl } from "./workMetadata";
+import type { WorksDbStatusKind, WorksIndexFreshness } from "../types/works";
 
 export const WORKS_SORTS = ["title-asc", "title-desc", "records-desc", "review-desc", "year-asc"];
 /** The stable `workDbStatus()` kinds a Works filter may name. */
-export const WORKS_DB_STATUSES = ["changed", "synced", "exists", "absent", "unknown", "none"];
+export const WORKS_DB_STATUSES: WorksDbStatusKind[] = [
+  "changed",
+  "synced",
+  "exists",
+  "absent",
+  "unknown",
+  "none",
+];
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -119,10 +127,43 @@ export function createWorksWorkspace(deps: Deps) {
               : byTitle;
     return [...items].sort(compare);
   }
-  function describeAdminWork(item: Any, { insights = false } = {}) {
+  function annotationCountsByWork() {
+    const counts = new Map<string, number>();
+    for (const annotation of allAnnotations()) {
+      const work = String(annotation.work || "");
+      if (!work) continue;
+      counts.set(work, (counts.get(work) || 0) + 1);
+    }
+    return counts;
+  }
+
+  function describeAdminWork(
+    item: Any,
+    {
+      detail = false,
+      annotationCounts = null,
+    }: { detail?: boolean; annotationCounts?: Map<string, number> | null } = {},
+  ) {
     const publisher = worksBiblioValue(item.rows, "publisher");
     const translator = worksBiblioValue(item.rows, "translator");
     const year = commonWorkValue(item.rows, "publication_year");
+    const base = {
+      work: item.work,
+      count: item.count,
+      review: item.review,
+      annotations: Number(annotationCounts?.get(String(item.work)) || 0),
+      files: [...item.files],
+      authors: [...item.authors],
+      years: [...item.years].map(String),
+      cover: workCoverUrl(item.rows),
+      year_label: year.value ? String(year.value) : [...item.years].sort().join(", "),
+      subtitle: "",
+      publisher,
+      translator,
+      status: workDbStatus(item.rows, item.work),
+    };
+    if (!detail) return base;
+
     const metadataFields = [
       "source_type",
       "document_author",
@@ -143,21 +184,8 @@ export function createWorksWorkspace(deps: Deps) {
       "original_language",
     ];
     return {
-      work: item.work,
-      count: item.count,
-      review: item.review,
-      annotations: allAnnotations().filter(
-        (annotation: Any) => String(annotation.work || "") === String(item.work),
-      ).length,
-      files: [...item.files],
-      authors: [...item.authors],
-      years: [...item.years].map(String),
-      cover: workCoverUrl(item.rows),
+      ...base,
       citation: fullCitation(item.rows[0]?.record || { work: item.work }, { includePages: false }),
-      year_label: year.value ? String(year.value) : [...item.years].sort().join(", "),
-      subtitle: "",
-      publisher,
-      translator,
       metadata: metadataFields.map((field) => {
         const value = commonWorkValue(item.rows, field);
         return {
@@ -168,23 +196,68 @@ export function createWorksWorkspace(deps: Deps) {
           unique_count: value.mixed ? uniqueWorkValues(item.rows, field).length : 0,
         };
       }),
-      status: workDbStatus(item.rows, item.work),
-      insights: insights
-        ? workInsightMetrics(item.rows, item.work).map((metric: Any) => ({
-            id: metric.id,
-            field: metric.field,
-            title: metric.title,
-            heading: metric.heading,
-            type: metric.type === "pie" ? "pie" : "bars",
-            values: metric.values.map((value: Any) => ({
-              key: String(value.key),
-              value: Number(value.value || 0),
-              other: Boolean(value.other),
-            })),
-          }))
-        : [],
+      insights: workInsightMetrics(item.rows, item.work).map((metric: Any) => ({
+        id: metric.id,
+        field: metric.field,
+        title: metric.title,
+        heading: metric.heading,
+        type: metric.type === "pie" ? "pie" : "bars",
+        values: metric.values.map((value: Any) => ({
+          key: String(value.key),
+          value: Number(value.value || 0),
+          other: Boolean(value.other),
+        })),
+      })),
     };
   }
+
+  function summarizeIndexFreshness(items: Any[]): WorksIndexFreshness {
+    const freshness: WorksIndexFreshness = {
+      state: "empty",
+      totalRecords: 0,
+      currentRecords: 0,
+      changedRecords: 0,
+      presentRecords: 0,
+      absentRecords: 0,
+      unknownRecords: 0,
+      unavailableRecords: 0,
+    };
+    for (const item of items) {
+      const count = Number(item.count || 0);
+      freshness.totalRecords += count;
+      switch (item.status?.kind as WorksDbStatusKind | undefined) {
+        case "synced":
+          freshness.currentRecords += count;
+          break;
+        case "changed":
+          freshness.changedRecords += count;
+          break;
+        case "exists":
+          freshness.presentRecords += count;
+          break;
+        case "absent":
+          freshness.absentRecords += count;
+          break;
+        case "unknown":
+          freshness.unknownRecords += count;
+          break;
+        default:
+          freshness.unavailableRecords += count;
+      }
+    }
+    if (!freshness.totalRecords) freshness.state = "empty";
+    else if (freshness.unavailableRecords === freshness.totalRecords) freshness.state = "unavailable";
+    else if (freshness.changedRecords || freshness.absentRecords) freshness.state = "stale";
+    else if (
+      freshness.presentRecords ||
+      freshness.unknownRecords ||
+      freshness.unavailableRecords
+    )
+      freshness.state = "unknown";
+    else freshness.state = "current";
+    return freshness;
+  }
+
   function worksSnapshotBase(extra: Any) {
     const stores = recordStores().map((store: Any) => ({
       name: store.name,
@@ -282,6 +355,19 @@ export function createWorksWorkspace(deps: Deps) {
         totalWorks: all.length,
         visibleWorks: items.length,
         totalRecords: all.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
+        indexFreshness: {
+          state: "unavailable",
+          totalRecords: all.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
+          currentRecords: 0,
+          changedRecords: 0,
+          presentRecords: 0,
+          absentRecords: 0,
+          unknownRecords: 0,
+          unavailableRecords: all.reduce(
+            (sum: Any, item: Any) => sum + Number(item.count || 0),
+            0,
+          ),
+        },
         sourceFileCount: 0,
         totalReview: 0,
         authors: [],
@@ -297,7 +383,10 @@ export function createWorksWorkspace(deps: Deps) {
     if (state.workOverview && !map.has(state.workOverview)) state.workOverview = "";
     const selectedItem = state.workOverview ? map.get(state.workOverview) : null;
     const needle = query.toLocaleLowerCase();
-    const described = [...map.values()].map((item) => describeAdminWork(item, { insights: true }));
+    const annotationCounts = annotationCountsByWork();
+    const described = [...map.values()].map((item) =>
+      describeAdminWork(item, { annotationCounts }),
+    );
     const filters = {
       needsReview: Boolean(state.worksNeedsReview),
       dbStatus: String(state.worksDbStatus || ""),
@@ -317,10 +406,13 @@ export function createWorksWorkspace(deps: Deps) {
       mode: "admin",
       available: state.files.length > 0,
       works: items,
-      selected: selectedItem ? describeAdminWork(selectedItem, { insights: true }) : null,
+      selected: selectedItem
+        ? describeAdminWork(selectedItem, { detail: true, annotationCounts })
+        : null,
       totalWorks: map.size,
       visibleWorks: items.length,
       totalRecords,
+      indexFreshness: summarizeIndexFreshness(described),
       sourceFileCount: new Set(described.flatMap((item: Any) => item.files)).size,
       totalReview: described.reduce((sum: number, item: Any) => sum + item.review, 0),
       authors: [...new Set(described.flatMap((item: Any) => item.authors as string[]))].sort(
