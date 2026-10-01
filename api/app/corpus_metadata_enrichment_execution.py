@@ -1625,6 +1625,7 @@ def _nlp_hint_line(record: dict[str, Any], group_fields: list[str]) -> str:
         lines.append(
             "LINGUISTIC ATTENTION CUES (NOT METADATA VALUES): exact surface forms found by the installed "
             "statistical tagger in THIS text. These are spans worth inspecting, not possible answers. "
+            "Cues are field-scoped: a cue listed for one field is not a candidate for another field. "
             "Do not copy a cue list into metadata. A name appearing here is not thereby the speaker, "
             "quoted speaker or position holder; every returned value must be independently justified "
             "from the source text: "
