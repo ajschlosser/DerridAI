@@ -1689,15 +1689,15 @@ class PdfCorpusRepository:
         with self._lock:
             self._bootstrap_records_db(build_id)
             with self._records_db(build_id) as connection:
-                # Stay well below SQLite's host-parameter limit for bulk row refreshes.
-                for start in range(0, len(unique_ids), 500):
-                    chunk = unique_ids[start : start + 500]
-                    placeholders = ",".join("?" for _ in chunk)
-                    rows = connection.execute(
-                        f"SELECT record_id, payload FROM corpus_records WHERE record_id IN ({placeholders})",
-                        chunk,
-                    ).fetchall()
-                    found.update({str(record_id): str(payload) for record_id, payload in rows})
+                # Review opens/prefetches only a few rows at a time. Fixed-shape indexed
+                # queries avoid dynamic SQL while preserving order/duplicate semantics below.
+                for record_id in unique_ids:
+                    row = connection.execute(
+                        "SELECT payload FROM corpus_records WHERE record_id = ?",
+                        (record_id,),
+                    ).fetchone()
+                    if row is not None:
+                        found[record_id] = str(row[0])
         schema = self._record_schema(build_id)
         decoded: dict[str, dict[str, Any]] = {
             record_id: migrate_record_assertions(
