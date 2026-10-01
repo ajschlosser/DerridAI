@@ -25,11 +25,13 @@ function workItem(overrides: Partial<WorksItem> = {}): WorksItem {
     translator: biblio({ field_label: "Translator" }),
     metadata: [
       {
-        field: "document_author",
+        field_id: "derridai.document.document_author",
+      field: "document_author",
         field_label: "Document author",
         value: "Jacques Derrida",
         mixed: false,
         unique_count: 0,
+      empty: false,
       },
     ],
     status: { kind: "synced", label: "Synced" },
