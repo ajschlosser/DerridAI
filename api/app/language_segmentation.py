@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 _COMMON_TERMINATORS = frozenset(".!?…。！？؟۔։;।॥။።།༎༏༐༑")
 _SPACELESS_TERMINATORS = frozenset("。！？؟۔։;।॥။።།༎༏༐༑")
