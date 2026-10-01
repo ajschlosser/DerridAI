@@ -255,8 +255,9 @@ def test_cascade_v2_reranks_then_adjudicates_only_a_bounded_shortlist(monkeypatc
     assert result.entry["block_ids"] == ["b2"], "IDs outside the shortlist must be rejected"
     assert result.entry["pipeline"]["celf_compliant"] is True
     ran = _ran(traces)
-    for stage in ("semantic", "rerank", "mmr", "candidate_support", "llm_choice", "provenance", "select"):
+    for stage in ("semantic", "rerank", "mmr", "llm_choice", "provenance", "select"):
         assert stage in ran
+    assert "candidate_support" not in ran, "direct support was already checked before semantic retrieval"
     stage = {item.stage_id: item for item in traces[-1].stages}["llm_choice"]
     assert stage.parameters["candidate_scope"] == "input_or_all"
     assert stage.parameters["candidate_limit"] == 4
@@ -294,7 +295,8 @@ def test_cascade_v2_cross_encoder_never_establishes_evidence_by_itself(monkeypat
     assert called, "a high reranker score is ranking evidence, not evidentiary authority"
     assert result.entry["method"] == "llm-evidence-choice-v1"
     stages = [stage.stage_id for stage in traces[-1].stages]
-    assert stages.index("rerank") < stages.index("mmr") < stages.index("candidate_support") < stages.index("llm_choice")
+    assert stages.index("rerank") < stages.index("mmr") < stages.index("llm_choice")
+    assert "candidate_support" not in stages
 
 
 def test_cascade_returns_none_when_the_llm_stage_raises(monkeypatch, traces):
