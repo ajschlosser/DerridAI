@@ -1091,7 +1091,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                         )
                         result = session.run(
                             self._structured_metadata_invoker(
-                                active_request,
+                                counted_request,
                                 repair_prompt,
                                 response_model,
                                 max_tokens,
