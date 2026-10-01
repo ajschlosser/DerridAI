@@ -1,8 +1,8 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 
-import { embeddingDescriptorMismatches } from "./embeddingContract";
 import { EventBus } from "./events";
 import { isAbortError } from "./errors";
+import type { LocalVectorIndex } from "./localIndex";
 import { RecordRepository } from "./repository";
 import type {
   EmbeddingProvider,
@@ -14,6 +14,7 @@ import type {
   SearchResult,
   SearchWarning,
 } from "./types";
+import { embeddingFingerprint, matchesPublicationModel } from "./vectorIndex";
 
 interface ScoredRecord {
   record: PublicationRecord;
@@ -143,7 +144,11 @@ export class SearchEngine {
     private readonly events: EventBus,
     private readonly embeddings?: EmbeddingProvider,
     private readonly locale = "en-US",
+    private readonly localIndex?: LocalVectorIndex,
   ) {}
+
+  private vectorLookup: (recordId: string) => ArrayLike<number> | undefined = (id) =>
+    this.repository.vector(id);
 
   async search(request: SearchRequest, runId: string): Promise<SearchResponse> {
     const query = String(request.query ?? "");
@@ -157,9 +162,12 @@ export class SearchEngine {
     const deduped = dedupeRecords(candidateSet.records);
     const candidates = deduped.records;
     const lexical = lexicalScores(query, candidates, this.locale);
-    const semanticAvailable = Boolean(
+    const publishedAvailable = Boolean(
       this.manifest.features?.semantic_search && this.manifest.vector_index?.dimension,
     );
+    // Semantic search is possible from the publication's own vectors or from a local index built with the
+    // reader's embedding provider, so it only needs one of them.
+    const semanticAvailable = publishedAvailable || Boolean(this.embeddings);
 
     if (modeRequested === "keyword" || !query.trim()) {
       return this.finish(
@@ -175,151 +183,120 @@ export class SearchEngine {
       );
     }
 
-    if (!semanticAvailable) {
-      return this.finish(
+    const fallback = (warning: SearchWarning, available = semanticAvailable): SearchResponse =>
+      this.finish(
         lexical.slice(0, limit),
         modeRequested,
         "keyword",
-        [
-          fallbackWarning(
-            "semantic_unavailable",
-            "This publication has no compatible semantic vectors; keyword results were returned.",
-          ),
-        ],
+        [warning],
         candidateSet.records.length,
         candidateSet.chunksLoaded,
-        false,
+        available,
         deduped.duplicatesRemoved,
         runId,
       );
-    }
 
     if (!this.embeddings) {
-      return this.finish(
-        lexical.slice(0, limit),
-        modeRequested,
-        "keyword",
-        [
-          fallbackWarning(
-            "embedding_provider_unavailable",
-            "No embedding capability was supplied; keyword results were returned.",
-          ),
-        ],
-        candidateSet.records.length,
-        candidateSet.chunksLoaded,
-        true,
-        deduped.duplicatesRemoved,
-        runId,
-      );
+      return publishedAvailable
+        ? fallback(
+            fallbackWarning(
+              "embedding_provider_unavailable",
+              "No embedding capability was supplied; keyword results were returned.",
+            ),
+          )
+        : fallback(
+            fallbackWarning(
+              "semantic_unavailable",
+              "This publication has no semantic vectors and no embedding provider is configured; keyword results were returned.",
+            ),
+            false,
+          );
     }
 
     const descriptor = this.embeddings.descriptor();
-    const descriptorMismatches = embeddingDescriptorMismatches(
-      this.manifest.vector_index,
-      descriptor,
-    );
-    if (descriptorMismatches.length) {
-      return this.finish(
-        lexical.slice(0, limit),
-        modeRequested,
-        "keyword",
-        [
+    // Only the exact embedding model can use the publication's vectors; any other model needs a local index.
+    const usesPublished =
+      publishedAvailable && matchesPublicationModel(descriptor, this.manifest.vector_index);
+    let expectedDimension = Number(this.manifest.vector_index?.dimension || 0);
+    let localVectors: Map<string, Float32Array> | undefined;
+    if (!usesPublished) {
+      const local = this.localIndex ? await this.localIndex.vectorsFor(this.embeddings) : null;
+      const indexed = local
+        ? candidates.filter((record) => local.vectors.has(String(record.record_id))).length
+        : 0;
+      if (!local || indexed < candidateSet.records.length) {
+        return fallback(
           fallbackWarning(
-            "embedding_contract_mismatch",
-            "The supplied embedding capability does not match the publication embedding contract; keyword results were returned.",
-            { mismatches: descriptorMismatches },
+            "local_index_required",
+            "Semantic search with this embedding model needs a local index of the published Records; keyword results were returned.",
+            {
+              expectedModel: String(this.manifest.vector_index?.model ?? ""),
+              actualModel: String(descriptor.model ?? ""),
+              indexed,
+              total: candidates.length,
+            },
           ),
-        ],
-        candidateSet.records.length,
-        candidateSet.chunksLoaded,
-        true,
-        deduped.duplicatesRemoved,
-        runId,
-      );
+        );
+      }
+      expectedDimension = local.dimension;
+      localVectors = local.vectors;
     }
 
     this.events.emit({ type: "embedding-start", runId });
     let vector: number[];
     try {
-      const embedded = await this.embeddings.embed([query], { signal });
+      const embedded = await this.embeddings.embed([query], { signal, purpose: "query" });
       vector = embedded.vectors[0] ?? [];
-      if (embedded.provider) {
-        const resultMismatches = embeddingDescriptorMismatches(
-          this.manifest.vector_index,
-          embedded.provider,
+      if (
+        embedded.provider &&
+        embeddingFingerprint(embedded.provider) !== embeddingFingerprint(descriptor)
+      ) {
+        return fallback(
+          fallbackWarning(
+            "embedding_contract_mismatch",
+            "The embedding result provenance does not match the configured embedding provider; keyword results were returned.",
+            {
+              expected: embeddingFingerprint(descriptor),
+              actual: embeddingFingerprint(embedded.provider),
+            },
+          ),
         );
-        if (resultMismatches.length) {
-          return this.finish(
-            lexical.slice(0, limit),
-            modeRequested,
-            "keyword",
-            [
-              fallbackWarning(
-                "embedding_contract_mismatch",
-                "The embedding result provenance does not match the publication embedding contract; keyword results were returned.",
-                { mismatches: resultMismatches },
-              ),
-            ],
-            candidateSet.records.length,
-            candidateSet.chunksLoaded,
-            true,
-            deduped.duplicatesRemoved,
-            runId,
-          );
-        }
       }
     } catch (error) {
       if (isAbortError(error)) throw error;
-      return this.finish(
-        lexical.slice(0, limit),
-        modeRequested,
-        "keyword",
-        [
-          fallbackWarning(
-            "embedding_provider_unavailable",
-            error instanceof Error
-              ? error.message
-              : "Embedding generation failed; keyword results were returned.",
-          ),
-        ],
-        candidateSet.records.length,
-        candidateSet.chunksLoaded,
-        true,
-        deduped.duplicatesRemoved,
-        runId,
+      return fallback(
+        fallbackWarning(
+          "embedding_provider_unavailable",
+          error instanceof Error
+            ? error.message
+            : "Embedding generation failed; keyword results were returned.",
+        ),
       );
     }
 
-    const expectedDimension = Number(this.manifest.vector_index?.dimension || 0);
     if (expectedDimension && vector.length !== expectedDimension) {
-      return this.finish(
-        lexical.slice(0, limit),
-        modeRequested,
-        "keyword",
-        [
-          fallbackWarning(
-            "embedding_dimension_mismatch",
-            "The supplied embedding dimension does not match the publication; keyword results were returned.",
-            { expected: expectedDimension, actual: vector.length },
-          ),
-        ],
-        candidateSet.records.length,
-        candidateSet.chunksLoaded,
-        true,
-        deduped.duplicatesRemoved,
-        runId,
+      return fallback(
+        fallbackWarning(
+          "embedding_dimension_mismatch",
+          "The supplied embedding dimension does not match the vectors being searched; keyword results were returned.",
+          { expected: expectedDimension, actual: vector.length },
+        ),
       );
     }
 
-    await this.repository.ensureVectors(filters, runId, signal);
+    if (usesPublished) await this.repository.ensureVectors(filters, runId, signal);
+    // Result diversification must compare Records in the same vector space the query was scored in.
+    this.vectorLookup = usesPublished
+      ? (id) => this.repository.vector(id)
+      : (id) => localVectors?.get(id);
     const semantic = candidates
       .map((record) => {
-        const semanticScore = cosine(vector, this.repository.vector(String(record.record_id)));
-        return {
-          record,
-          score: semanticScore,
-          semanticScore,
-        };
+        const id = String(record.record_id);
+        const semanticScore = cosine(
+          vector,
+          usesPublished ? this.repository.vector(id) : localVectors?.get(id),
+        );
+        return { record, score: semanticScore, semanticScore };
       })
       .filter((item) => item.semanticScore > -1)
       .sort(compareScored);
@@ -382,12 +359,12 @@ export class SearchEngine {
       let bestScore = Number.NEGATIVE_INFINITY;
       for (let index = 0; index < remaining.length; index += 1) {
         const item = remaining[index];
-        const vector = this.repository.vector(String(item.record.record_id));
+        const vector = this.vectorLookup(String(item.record.record_id));
         const redundancy =
           selected.length && vector
             ? Math.max(
                 ...selected.map((chosen) =>
-                  cosine(vector, this.repository.vector(String(chosen.record.record_id))),
+                  cosine(vector, this.vectorLookup(String(chosen.record.record_id))),
                 ),
               )
             : 0;
