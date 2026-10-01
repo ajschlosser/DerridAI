@@ -2,7 +2,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
-import type { WorksFilters, WorksSort, WorksViewMode } from "../../types/works";
+import { WORKS_DB_STATUSES } from "../../domain/worksWorkspace";
+import type { WorksDbStatusKind, WorksFilters, WorksSort, WorksViewMode } from "../../types/works";
 import UiButton from "../ui/UiButton.vue";
 
 const props = defineProps<{
@@ -39,7 +40,7 @@ const sorts = computed<Array<{ value: WorksSort; label: string; admin?: boolean 
   { value: "review-desc", label: i18n.t("works.sort_review_desc"), admin: true },
   { value: "year-asc", label: i18n.t("works.sort_year_asc"), admin: true },
 ]);
-const statusKinds = ["changed", "synced", "exists", "absent", "unknown", "none"];
+const statusKinds = WORKS_DB_STATUSES;
 const summary = computed(() => {
   const base = i18n.tf("works.result_summary", {
     visible: props.visibleWorks.toLocaleString(i18n.locale),
@@ -131,7 +132,11 @@ function clearFilters() {
         <select
           class="control compact-select"
           :value="props.filters.dbStatus"
-          @change="emit('filters', { dbStatus: ($event.target as HTMLSelectElement).value })"
+          @change="
+            emit('filters', {
+              dbStatus: ($event.target as HTMLSelectElement).value as WorksDbStatusKind | '',
+            })
+          "
         >
           <option value="">{{ i18n.t("works.filter_any") }}</option>
           <option v-for="kind in statusKinds" :key="kind" :value="kind">
