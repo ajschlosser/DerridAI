@@ -78,3 +78,8 @@ class EvidenceItem(TypedDict, total=False):
     inline_citation: str
     full_citation: str
     text_truncated: bool
+    selection_role: str
+    neighbor_of: str
+    neighbor_distance: int
+    neighbor_reason: str
+    automatic_region_size: int

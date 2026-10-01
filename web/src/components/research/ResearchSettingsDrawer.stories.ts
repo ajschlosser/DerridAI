@@ -7,6 +7,7 @@ const baseConfig = {
   search_types: ["mmr", "similarity"],
   k: 64,
   fetch_k: 500,
+  automatic_sizing: false,
   lambda_mult: 0.7,
   rrf_k: 60,
   rerank_top_n: 24,

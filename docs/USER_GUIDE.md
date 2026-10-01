@@ -931,6 +931,7 @@ Each active/recent RAG card shows:
 - MMR/similarity routes
 - `k`
 - `fetch_k`
+- **Automatic sizing** (optional; manual count-based sizing remains the default)
 - MMR lambda
 - RRF `k`
 - rerank top N
@@ -971,6 +972,8 @@ Per run:
 - Works Cited
 - prior-response memory (optional advisory guidance)
 - prior-claim provenance memory (optional advisory guidance)
+
+With **Automatic sizing** enabled, `k` and `fetch_k` remain bounded baselines rather than fixed evidence-size assumptions. Research samples the collection's median Record length, increases candidate depth only for unusually short Records, collapses short consecutive same-document hits into bounded reranking regions, and then restores the constituent/adjacent Records as separately identified context after reranking. Neighbors keep their own Record IDs and provenance. The rerank top-N and total evidence-character budget remain capped, and neighbor context is limited to a fraction of the existing evidence budget. This avoids giving finely segmented corpora less documentary coverage merely because they contain more, smaller Records. Enable it for a run under **Research → Expert settings → Retrieval**; the same browser default is available under **Settings → RAG pipeline defaults**.
 
 Default cross encoder:
 

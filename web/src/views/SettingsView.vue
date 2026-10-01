@@ -1284,6 +1284,29 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 />
               </UiField>
               <UiField
+                :label="i18n.t('settings.rag_automatic_sizing', 'Automatic sizing')"
+                :hint="
+                  i18n.t(
+                    'settings.rag_automatic_sizing_help',
+                    'Adapt retrieval depth to median Record size and restore bounded same-document context without raising the reranker or evidence-budget caps.',
+                  )
+                "
+              >
+                <label class="language-checks">
+                  <input
+                    id="settings-field-rag-automatic-sizing"
+                    v-model="ragDraft.automatic_sizing"
+                    type="checkbox"
+                  />
+                  <span>{{
+                    i18n.t(
+                      "settings.rag_automatic_sizing_control",
+                      "Adjust retrieval to Record size",
+                    )
+                  }}</span>
+                </label>
+              </UiField>
+              <UiField
                 :label="i18n.t('settings.rag_top_n')"
                 :tooltip="i18n.t('help.glossary.rerank_top_n.definition')"
               >

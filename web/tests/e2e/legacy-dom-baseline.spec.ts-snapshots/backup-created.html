@@ -1203,6 +1203,14 @@
 <input id="settings-field-rag-k" class="control" type="number" min="1" max="500" aria-invalid="false">
 </label>
 <label class="ui-field">
+<span class="ui-field-label">Automatic sizing </span>
+<label class="language-checks">
+<input id="settings-field-rag-automatic-sizing" type="checkbox">
+<span>Adjust retrieval to Record size</span>
+</label>
+<span id="v-18-hint" class="ui-field-hint">Adapt retrieval depth to median Record size and restore bounded same-document context without raising the reranker or evidence-budget caps.</span>
+</label>
+<label class="ui-field">
 <span class="ui-field-label">Rerank top N <span class="ui-tooltip" data-trigger-mode="icon">
 <button type="button" class="ui-tooltip-trigger" aria-label="Rerank top N: The maximum number of retrieved candidates sent through the more expensive reranking step." aria-describedby="ui-tooltip-<id>">
 <span aria-hidden="true">i</span>
@@ -1493,7 +1501,7 @@
 <option value="off">Off</option>
 <option value="on">On when background operations finish</option>
 </select>
-<span id="v-27-hint" class="ui-field-hint">Browser permission is required. Notifications are local to this browser.</span>
+<span id="v-28-hint" class="ui-field-hint">Browser permission is required. Notifications are local to this browser.</span>
 </label>
 </div>
 <footer class="settings-section-actions">
@@ -1563,7 +1571,7 @@
 <label class="ui-field">
 <span class="ui-field-label">Type NUKE to enable </span>
 <input id="settings-field-nuke" class="control" autocomplete="off">
-<span id="v-28-hint" class="ui-field-hint">Type "NUKE" exactly to enable this destructive action.</span>
+<span id="v-29-hint" class="ui-field-hint">Type "NUKE" exactly to enable this destructive action.</span>
 </label>
 </div>
 <footer class="settings-section-actions">

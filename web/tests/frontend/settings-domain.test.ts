@@ -29,8 +29,15 @@ describe("settings domain", () => {
   });
 
   it("normalizes rag drafts without dropping user values after a failed save", () => {
-    const draft = normalizeRag({ k: 12, fetch_k: 12, locales: ["fr"], search_types: ["lexical"] });
+    const draft = normalizeRag({
+      k: 12,
+      fetch_k: 12,
+      automatic_sizing: true,
+      locales: ["fr"],
+      search_types: ["lexical"],
+    });
     expect(draft.k).toBe(12);
+    expect(draft.automatic_sizing).toBe(true);
     expect(draft.locales).toEqual(["fr"]);
     expect(draft.search_types).toEqual(["lexical"]);
     expect(sameSettings(draft, { ...draft })).toBe(true);

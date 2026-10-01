@@ -160,6 +160,7 @@ def test_rag_request_defaults_keep_both_locales_and_hybrid_search():
     body = RAGRunRequest(prompt="What is a trace?")
     assert body.locales == ["en", "fr"]
     assert body.search_types == ["similarity", "lexical", "mmr"]
+    assert body.automatic_sizing is False
 
 
 def test_language_metadata_accepts_a_tuple_of_codes():

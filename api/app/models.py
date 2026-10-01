@@ -443,6 +443,9 @@ class RAGRunRequest(BaseModel):
     search_types: list[SearchType] = Field(default_factory=_default_search_types)
     k: int = Field(default=64, ge=1, le=500)
     fetch_k: int = Field(default=500, ge=1, le=5000)
+    # Off by default preserves exact historical count-based retrieval. When
+    # enabled, these values become bounded floors for Record-size-aware sizing.
+    automatic_sizing: bool = False
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
     rrf_k: int = Field(default=60, ge=1, le=10000)
     rerank_top_n: int = Field(default=24, ge=1, le=500)

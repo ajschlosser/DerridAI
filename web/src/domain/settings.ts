@@ -46,6 +46,7 @@ export interface EmbeddingSettingsDraft {
 export interface RagSettingsDraft {
   k: number;
   fetch_k: number;
+  automatic_sizing: boolean;
   lambda_mult: number;
   rrf_k: number;
   rerank_top_n: number;
@@ -277,6 +278,16 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     labelFallback: "Response language",
   },
   {
+    id: "rag-automatic-sizing",
+    section: "retrieval",
+    labelKey: "settings.rag_automatic_sizing",
+    labelFallback: "Automatic sizing",
+    helpKey: "settings.rag_automatic_sizing_help",
+    helpFallback:
+      "Adapt retrieval depth to median Record size and restore bounded same-document context without raising reranker or evidence-budget caps.",
+    keywords: ["record size", "automatic", "neighbors", "retrieval depth", "segmentation"],
+  },
+  {
     id: "rag-record-chars",
     section: "retrieval",
     labelKey: "settings.rag_record_chars",
@@ -342,6 +353,7 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
 export const RAG_DEFAULTS: RagSettingsDraft = {
   k: 64,
   fetch_k: 500,
+  automatic_sizing: false,
   lambda_mult: 0.7,
   rrf_k: 60,
   rerank_top_n: 24,
@@ -445,6 +457,7 @@ export function normalizeRag(
   return {
     k: Math.max(1, Math.min(500, finiteNumber(source?.k, RAG_DEFAULTS.k))),
     fetch_k: Math.max(1, Math.min(5000, finiteNumber(source?.fetch_k, RAG_DEFAULTS.fetch_k))),
+    automatic_sizing: Boolean(source?.automatic_sizing),
     lambda_mult: Math.max(
       0,
       Math.min(1, finiteNumber(source?.lambda_mult, RAG_DEFAULTS.lambda_mult)),

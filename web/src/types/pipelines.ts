@@ -454,6 +454,7 @@ export type ResearchPipelineBenchmarkCaseCreate = {
   search_types?: Array<"similarity" | "lexical" | "mmr">;
   k?: number;
   fetch_k?: number;
+  automatic_sizing?: boolean;
   lambda_mult?: number;
   rrf_k?: number;
   rerank_top_n?: number;
