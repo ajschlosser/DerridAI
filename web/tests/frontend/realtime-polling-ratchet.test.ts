@@ -20,7 +20,6 @@ const REFRESH_CONTROL_ALLOWED = new Set([
   "components/research/ResearchRunsDrawer.vue",
   "components/system-data/SystemDataAdvanced.vue",
   "components/system-data/SystemDataDatabases.vue",
-  "components/system-data/SystemDataPipelines.vue", // migrated in #362; drop this entry once it merges
   "domain/jobReviewMarkup.ts",
   "domain/operationsPanelBridge.ts",
   "views/SourcesView.vue",

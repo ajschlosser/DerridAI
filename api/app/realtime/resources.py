@@ -27,6 +27,8 @@ class DataResource:
 DATA_RESOURCES: dict[str, DataResource] = {
     "users": DataResource(),
     "roles": DataResource(),
+    "pipelines": DataResource(),
+    "pipeline_runs": DataResource(),
     "vector_collections": DataResource(),
     "metadata_exemplars": DataResource(),
     "response_library": DataResource(),

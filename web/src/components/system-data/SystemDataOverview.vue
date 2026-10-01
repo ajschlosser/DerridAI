@@ -33,6 +33,9 @@ const exemplarsQuery = useDataQuery(
 const chromaQuery = useDataQuery("vector_collections", () => systemApi.systemChromaCollections(), {
   detail: ["system-collections"],
 });
+const pipelineQuery = useDataQuery("pipelines", () => pipelinesApi.catalog(), {
+  detail: ["overview"],
+});
 function stateOf(query: { isPending: Ref<boolean>; isError: Ref<boolean> }): LoadState {
   if (query.isError.value) return "unavailable";
   return query.isPending.value ? "loading" : "available";
@@ -57,18 +60,8 @@ const collections = computed<SystemChromaCollection[]>(
   () => chromaQuery.data.value?.collections || [],
 );
 const chromaState = computed(() => stateOf(chromaQuery));
-// Pipeline definitions get a `pipelines` resource in the Pipeline Studio change; until it merges,
-// the count is read once.
-const pipelineCount = ref(0);
-const pipelineState = ref<LoadState>("loading");
-onMounted(async () => {
-  try {
-    pipelineCount.value = (await pipelinesApi.catalog()).pipelines.length;
-    pipelineState.value = "available";
-  } catch {
-    pipelineState.value = "unavailable";
-  }
-});
+const pipelineCount = computed(() => pipelineQuery.data.value?.pipelines.length || 0);
+const pipelineState = computed(() => stateOf(pipelineQuery));
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);

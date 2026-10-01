@@ -431,6 +431,7 @@ def get_pdf_asset_blocks(
     limit: int = Query(default=200, ge=1, le=1000),
     ids: str = Query(default="", max_length=20000),
     around: str = Query(default="", max_length=200),
+    page: int | None = Query(default=None, ge=1),
 ) -> dict[str, Any]:
     access = AccessContext.for_user(require_admin(request))
     try:
@@ -441,6 +442,7 @@ def get_pdf_asset_blocks(
             limit=limit,
             ids=[value.strip() for value in ids.split(",") if value.strip()],
             around=around or None,
+            page=page,
             repository=pdf_corpus_repository,
         )
     except NotFound as exc:

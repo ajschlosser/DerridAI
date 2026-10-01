@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { VueQueryPlugin } from "@tanstack/vue-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
@@ -13,6 +14,8 @@ import {
   contractStrategy,
   contractVocabulary,
 } from "../../src/components/pipelines/fixtures/pipelineCatalogContract";
+import { queryClient } from "../../src/realtime/dataQuery";
+import { dataKey } from "../../src/realtime/resourceKeys";
 import { useI18nStore } from "../../src/stores/i18n";
 import type {
   PipelineCatalog,
@@ -217,7 +220,7 @@ async function mountStudio(query: Record<string, string> = {}) {
   await router.push({ name: "pipelines", query });
   await router.isReady();
   const wrapper = mount(SystemDataPipelines, {
-    global: { plugins: [router] },
+    global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
   });
   await flushPromises();
   return { wrapper, router };
@@ -226,6 +229,7 @@ async function mountStudio(query: Record<string, string> = {}) {
 describe("System Data Pipeline Studio", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    queryClient.clear();
     useI18nStore().dictionary = {};
     vi.restoreAllMocks();
     vi.spyOn(pipelinesApi, "catalog").mockResolvedValue(structuredClone(catalog));
@@ -566,17 +570,17 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.get("#pipeline-tab-executions").attributes("aria-selected")).toBe("true");
   });
 
-  it("refreshes data without losing the selected pipeline, section, or filters", async () => {
+  it("refetches on a pipelines invalidation without losing selection, section, or filters", async () => {
     const { wrapper, router } = await mountStudio({
       section: "executions",
       status: "failed",
       pipeline: pipelineKey(catalog.pipelines[1]),
     });
+    expect(wrapper.findAll(".ui-page-header button").some((b) => b.text() === "Refresh")).toBe(
+      false,
+    );
     const before = vi.mocked(pipelinesApi.catalog).mock.calls.length;
-    await wrapper
-      .findAll(".ui-page-header button")
-      .find((b) => b.text() === "Refresh")!
-      .trigger("click");
+    await queryClient.invalidateQueries({ queryKey: dataKey("pipelines") });
     await flushPromises();
     expect(vi.mocked(pipelinesApi.catalog).mock.calls.length).toBe(before + 1);
     expect(router.currentRoute.value.query).toMatchObject({

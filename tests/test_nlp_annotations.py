@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 
 from app import nlp_annotations as nlp  # noqa: E402
+from app.metadata_schema_profiles import nonfiction_schema  # noqa: E402
 
 
 class Ent:
@@ -63,6 +64,18 @@ def test_candidates_are_exact_substrings_and_aliases_are_mapped(fake_pipeline):
     assert [c["text"] for c in result["fields"]["position_holder"]] == ["Rousseau"]  # PER -> PERSON
     assert [c["text"] for c in result["fields"]["place"]] == ["Geneva"]  # GPE satisfies LOC
     assert [c["text"] for c in result["fields"]["terms"]] == ["Rousseau", "Geneva"]
+
+
+def test_nonfiction_evidence_semantics_do_not_generate_lexical_value_candidates(fake_pipeline):
+    record = {"text": TEXT, "region_language": ["English"]}
+    result = nlp.annotate_record(record, nonfiction_schema())
+
+    # Evidence type/item values require passage-level interpretation. Raw POS/NER
+    # spans are useful for source/entity fields but should not be offered as possible
+    # values for these two semantic evidence fields.
+    assert "evidence_types" not in result["fields"]
+    assert "evidence_items" not in result["fields"]
+    assert "sources_cited" in result["fields"]
 
 
 def test_hints_go_stale_when_the_text_changes(fake_pipeline):

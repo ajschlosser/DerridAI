@@ -68,12 +68,18 @@ def _semantic_atoms(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         prev = pending[-1]
         same_page = int(prev.get("page") or 0) == int(block.get("page") or 0)
+        same_layout = (
+            str(prev.get("document_thread") or "") == str(block.get("document_thread") or "")
+            and str(prev.get("layout_region_id") or "") == str(block.get("layout_region_id") or "")
+            and str(prev.get("layout_flow") or "") == str(block.get("layout_flow") or "")
+        )
         pending_chars = sum(len(str(item.get("text") or "")) for item in pending)
         prev_text = str(prev.get("text") or "").rstrip()
         # Join line-like fragments, but stop at likely paragraph endings,
-        # headings, quotations, list starts, or a healthy paragraph size.
+        # headings, quotations, list starts, a thread change, or a healthy paragraph size.
         likely_continuation = (
             same_page
+            and same_layout
             and pending_chars < 1400
             and (len(prev_text) < 180 or not re.search(r'[.!?][”"\']?$', prev_text))
             and not re.match(r'^\s*(?:[-•*]|\d+[.)])\s+', text)
