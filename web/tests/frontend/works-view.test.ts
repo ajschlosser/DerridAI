@@ -83,6 +83,10 @@ const runtime = vi.hoisted(() => ({
   getShellSnapshot: vi.fn(() => ({
     files: [{ id: "f1", name: "glas.jsonl", count: 12, dirty: 0, active: true }],
   })),
+  listSemanticMapSources: vi.fn(() => ({
+    records: [{ id: "record-1", work: "Glas", concepts: [], topics: ["writing"], persons: [] }],
+    focusId: "record-1",
+  })),
   setWorksSearch: vi.fn(),
   setWorksOverview: vi.fn(),
   setWorksStore: vi.fn(async () => undefined),
@@ -110,6 +114,11 @@ const siteApi = vi.hoisted(() => ({
   exportSite: vi.fn(),
 }));
 vi.mock("../../src/api/sites", () => ({ sitesApi: siteApi }));
+vi.mock("../../src/api/corpus", () => ({
+  corpusBuildsApi: {
+    workSemanticMapRecords: vi.fn(async () => ({ records: [] })),
+  },
+}));
 
 import WorksView from "../../src/views/WorksView.vue";
 import { useI18nStore } from "../../src/stores/i18n";
@@ -298,6 +307,17 @@ describe("WorksView", () => {
     expect(wrapper.get(".researcher-work-menu-card").text()).toContain("Glas");
     await wrapper.get("#browseResearchWork").trigger("click");
     expect(runtime.browseResearcherWork).toHaveBeenCalledWith("Glas");
+    wrapper.unmount();
+  });
+
+  it("opens the canonical semantic map when no persisted build is available", async () => {
+    const wrapper = await mountWorks();
+    await wrapper.get("[data-semantic-map-work='Glas']").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find(".works-semantic-map-dialog").attributes("open")).toBeDefined();
+    expect(wrapper.find(".semantic-map-frame").exists()).toBe(true);
+    expect(wrapper.text()).not.toContain("A semantic map is not available");
     wrapper.unmount();
   });
 });
