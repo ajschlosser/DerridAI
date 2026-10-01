@@ -452,6 +452,22 @@ ${evidence}`;
       }
     }
   }
+  function validateEmbeddingDescriptor(contract, descriptor) {
+    const expectedModel = String(contract?.model ?? "").trim();
+    const actualModel = String(descriptor.model ?? "").trim();
+    const expectedRevision = String(contract?.revision ?? "").trim();
+    const actualRevision = String(descriptor.revision ?? "").trim();
+    const mismatch = {};
+    if (expectedModel && actualModel && expectedModel !== actualModel) {
+      mismatch.expectedModel = expectedModel;
+      mismatch.actualModel = actualModel;
+    }
+    if (expectedRevision && actualRevision && expectedRevision !== actualRevision) {
+      mismatch.expectedRevision = expectedRevision;
+      mismatch.actualRevision = actualRevision;
+    }
+    return Object.keys(mismatch).length ? mismatch : null;
+  }
   function tokens(value, locale) {
     return String(value ?? "").toLocaleLowerCase(locale).match(/[\p{L}\p{N}’'_-]+/gu) ?? [];
   }
@@ -520,22 +536,6 @@ ${evidence}`;
   }
   function fallbackWarning(code, message, details) {
     return { code, message, details };
-  }
-  function validateEmbeddingDescriptor(contract, descriptor) {
-    const expectedModel = String(contract?.model ?? "").trim();
-    const actualModel = String(descriptor.model ?? "").trim();
-    const expectedRevision = String(contract?.revision ?? "").trim();
-    const actualRevision = String(descriptor.revision ?? "").trim();
-    const mismatch = {};
-    if (expectedModel && actualModel && expectedModel !== actualModel) {
-      mismatch.expectedModel = expectedModel;
-      mismatch.actualModel = actualModel;
-    }
-    if (expectedRevision && actualRevision && expectedRevision !== actualRevision) {
-      mismatch.expectedRevision = expectedRevision;
-      mismatch.actualRevision = actualRevision;
-    }
-    return Object.keys(mismatch).length ? mismatch : null;
   }
   function deduplicateRecords(records) {
     const seen = /* @__PURE__ */ new Set();
