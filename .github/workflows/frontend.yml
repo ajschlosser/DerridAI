@@ -72,6 +72,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       contract: ${{ steps.filter.outputs.contract }}
       format: ${{ steps.filter.outputs.format }}
+      publication: ${{ steps.filter.outputs.publication }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,6 +89,7 @@ jobs:
             echo "frontend=true" >> "$GITHUB_OUTPUT"
             echo "contract=true" >> "$GITHUB_OUTPUT"
             echo "format=true" >> "$GITHUB_OUTPUT"
+            echo "publication=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -95,6 +97,7 @@ jobs:
           frontend=false
           contract=false
           format=false
+          publication=false
           while IFS= read -r path; do
             case "$path" in
               .github/workflows/frontend.yml|scripts/*)
@@ -102,6 +105,7 @@ jobs:
                 frontend=true
                 contract=true
                 format=true
+                publication=true
                 ;;
               api/*)
                 backend=true
@@ -121,6 +125,14 @@ jobs:
               web/*)
                 frontend=true
                 format=true
+                case "$path" in
+                  web/sdk/*|web/tests/publication/*|web/playwright.publication.config.ts|web/package.json)
+                    publication=true
+                    ;;
+                esac
+                ;;
+              api/app/site_publication.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|api/app/routers/sites.py|tests/test_site_publication.py)
+                publication=true
                 ;;
               README.md|CONTRIBUTING.md|AGENTS.md|docs/*|.prettierignore|.editorconfig)
                 format=true
@@ -141,6 +153,7 @@ jobs:
           echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
           echo "contract=$contract" >> "$GITHUB_OUTPUT"
           echo "format=$format" >> "$GITHUB_OUTPUT"
+          echo "publication=$publication" >> "$GITHUB_OUTPUT"
 
   format-check:
     needs: changes
@@ -265,6 +278,45 @@ jobs:
       - name: Storybook build
         run: npm run build-storybook
 
+  publication-artifacts:
+    needs: changes
+    if: needs.changes.outputs.publication == 'true'
+    name: publication-artifacts
+    runs-on: ubuntu-latest
+    env:
+      DERRIDAI_PUBLICATION_ARTIFACT_DIR: ${{ runner.temp }}/derridai-publication-artifacts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install publication generator dependencies
+        run: |
+          grep -vE '^sentence-transformers' api/requirements.txt > /tmp/derridai-publication-requirements.txt
+          pip install -r /tmp/derridai-publication-requirements.txt
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: Install Playwright Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Generate real publication artifacts
+        run: python scripts/generate_publication_acceptance_artifacts.py "$DERRIDAI_PUBLICATION_ARTIFACT_DIR"
+      - name: Exercise single-file export from file URL
+        working-directory: web
+        run: npm run test:e2e:publication
+      - name: Build, start, probe, and stop nginx export
+        run: |
+          DERRIDAI_SITE_PORT=18080 \
+          DERRIDAI_SITE_IMAGE=derridai-publication-acceptance-${GITHUB_RUN_ID} \
+          DERRIDAI_SITE_CONTAINER=derridai-publication-acceptance-${GITHUB_RUN_ID} \
+          sh scripts/test_publication_nginx_bundle.sh "$DERRIDAI_PUBLICATION_ARTIFACT_DIR/nginx"
+
   frontend-legacy:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
@@ -382,6 +434,7 @@ jobs:
       - api-contract
       - frontend-lint
       - frontend-static
+      - publication-artifacts
       - frontend-legacy
       - frontend-e2e
       - frontend-a11y
@@ -396,6 +449,8 @@ jobs:
           CONTRACT_RESULT: ${{ needs.api-contract.result }}
           LINT_RESULT: ${{ needs.frontend-lint.result }}
           STATIC_RESULT: ${{ needs.frontend-static.result }}
+          PUBLICATION_CHANGED: ${{ needs.changes.outputs.publication }}
+          PUBLICATION_RESULT: ${{ needs.publication-artifacts.result }}
           LEGACY_RESULT: ${{ needs.frontend-legacy.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           A11Y_RESULT: ${{ needs.frontend-a11y.result }}
@@ -407,6 +462,11 @@ jobs:
 
           if [ "$CONTRACT_CHANGED" = "true" ] && [ "$CONTRACT_RESULT" != "success" ]; then
             echo "The frontend/backend API contract gate did not succeed: $CONTRACT_RESULT"
+            exit 1
+          fi
+
+          if [ "$PUBLICATION_CHANGED" = "true" ] && [ "$PUBLICATION_RESULT" != "success" ]; then
+            echo "The publication artifact acceptance gate did not succeed: $PUBLICATION_RESULT"
             exit 1
           fi
 
