@@ -18,7 +18,7 @@ import CorpusSemanticGraphPanel from "../components/corpus-builder/CorpusSemanti
 import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
 import type { SemanticMapSource } from "../domain/semanticMap";
 import { corpusBuildsApi } from "../api/corpus";
-import { sitesApi, type SiteExportOptions } from "../api/sites";
+import { sitesApi, type SiteExportFormat, type SiteExportOptions } from "../api/sites";
 
 const auth = useAuthStore();
 const i18n = useI18nStore();
@@ -61,7 +61,7 @@ async function createSite(payload: {
   title: string;
   description: string;
   works: string[];
-  export_format: "local-single-file" | "nginx-docker";
+  export_format: SiteExportFormat;
   languages: string[];
   provider_profile_ids: string[];
 }) {
