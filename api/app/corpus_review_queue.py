@@ -20,6 +20,7 @@ from .corpus_review_state import (
 )
 from .corpus_reviewer_helpers import _present_for_reviewer
 from .metadata_values import is_placeholder
+from .reviewer_context import current_reviewer
 
 
 @dataclass(frozen=True)
@@ -105,7 +106,26 @@ def select_queue(
     return QueueSelection(items=items, total=total, queue_counts=_queue_counts(queue_records))
 
 
+# Facets inspect every Record, so they are memoized per (snapshot, reviewer). The snapshot is the
+# repository's cached list, which is replaced (never mutated) when any Record changes, so identity
+# is a sound key; the list itself is held so its id cannot be reused while the entry lives.
+_FACET_MEMO_CAPACITY = 8
+_facet_memo: dict[tuple[int, str], tuple[list[dict[str, Any]], dict[str, list[str]]]] = {}
+
+
 def observed_metadata_values(records: list[dict[str, Any]]) -> dict[str, list[str]]:
+    key = (id(records), str(current_reviewer.get() or ""))
+    hit = _facet_memo.get(key)
+    if hit is not None and hit[0] is records:
+        return {field: list(values) for field, values in hit[1].items()}
+    result = _compute_observed_metadata_values(records)
+    _facet_memo[key] = (records, result)
+    while len(_facet_memo) > _FACET_MEMO_CAPACITY:
+        _facet_memo.pop(next(iter(_facet_memo)))
+    return {field: list(values) for field, values in result.items()}
+
+
+def _compute_observed_metadata_values(records: list[dict[str, Any]]) -> dict[str, list[str]]:
     """Every non-placeholder value seen for a metadata field, for build-wide facets.
 
     Computed over the reviewer-presented view of every stored Record, not the raw

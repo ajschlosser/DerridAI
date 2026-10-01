@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useDebouncedModel } from "../../composables/useDebouncedModel";
 import type { MetadataSchema } from "../../api/metadataSchemas";
 import type { ReviewQueue } from "../../types/corpus";
 import { useI18nStore } from "../../stores/i18n";
@@ -47,6 +48,10 @@ const emit = defineEmits<{
 
 const queue = defineModel<ReviewQueue>("queue", { required: true });
 const query = defineModel<string>("query", { required: true });
+// Each committed query change reloads the queue server-side, so typing is debounced.
+const search = useDebouncedModel(query, (value) => {
+  query.value = value;
+});
 const i18n = useI18nStore();
 const confirmingAcceptClean = ref(false);
 const selectedEdit = computed(() => props.bulkActionItems.find((item) => item.id === "edit"));
@@ -83,9 +88,12 @@ function confirmAcceptClean() {
     </label>
     <input
       id="pdf-corpus-record-search"
-      v-model="query"
+      :value="search.draft.value"
       class="control"
       :placeholder="i18n.t('pdf_corpus.search_records')"
+      @input="search.onInput(($event.target as HTMLInputElement).value)"
+      @keydown.enter.prevent="search.flush()"
+      @blur="search.flush()"
     />
 
     <div class="review-bulk">

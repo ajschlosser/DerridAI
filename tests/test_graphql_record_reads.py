@@ -330,8 +330,8 @@ def test_targeted_record_reads_do_not_load_or_migrate_the_whole_corpus(build, mo
     assert [item["record_id"] for item in rows["data"]["corpus_build"]["rows"]] == ["r2", "r1"]
 
 
-def test_review_snapshot_cache_is_reused_and_invalidated_by_record_writes(build, monkeypatch):
-    """Paging reuses parsed records, while a durable edit makes the next page read fresh state."""
+def test_review_snapshot_cache_is_patched_in_place_by_record_writes(build, monkeypatch):
+    """Paging reuses parsed records; a one-Record edit is visible without reparsing the corpus."""
     repo, build_id = build
     original = repo.load_records
     calls = 0
@@ -353,8 +353,37 @@ def test_review_snapshot_cache_is_reused_and_invalidated_by_record_writes(build,
     repo.update_record(build_id, changed)
 
     refreshed = repo.review_records(build_id)
-    assert calls == 2
+    assert calls == 1
+    assert refreshed is not first  # replaced, never mutated: readers of the old snapshot are unaffected
+    assert next(item for item in first if item["record_id"] == "r1")["text"] != "Updated review text"
     assert next(item for item in refreshed if item["record_id"] == "r1")["text"] == "Updated review text"
+    assert [item["record_id"] for item in refreshed] == [item["record_id"] for item in first]
+
+    # A write from another process changes the file signature, so the patched snapshot is not trusted.
+    repo._review_records_cache[build_id] = ((0, 0), refreshed)
+    changed["text"] = "Second edit"
+    repo.update_record(build_id, changed)
+    assert next(item for item in repo.review_records(build_id) if item["record_id"] == "r1")["text"] == "Second edit"
+    assert calls == 2
+
+
+def test_unchanged_payloads_are_not_remigrated(build, monkeypatch):
+    repo, build_id = build
+    from app import corpus_builder as module
+
+    repo.review_records(build_id)  # first read primes the fixed-point memo
+    repo._review_records_cache.clear()
+    seen = 0
+    real = module.migrate_record_assertions
+
+    def counted(*args, **kwargs):
+        nonlocal seen
+        seen += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(module, "migrate_record_assertions", counted)
+    assert len(repo.review_records(build_id)) == 12
+    assert seen == 0
 
 
 def test_metadata_facets_matches_rest_observed_values(build):

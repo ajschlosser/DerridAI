@@ -349,3 +349,65 @@ def test_external_evidence_must_come_from_the_builds_own_source(tmp_path, monkey
                                     external_block_ids=["b2"])
     entry = result["metadata_evidence"]["discourse_role"]
     assert entry["block_ids"] == ["b1"] and entry["external_block_ids"] == ["b2"]
+
+
+def test_review_decision_and_record_view_never_touch_the_whole_corpus(tmp_path: Path, monkeypatch):
+    """Latency contract: one decision/view is a single-row write, however large the corpus.
+
+    Whole-corpus snapshots, validation and rewrites made every Accept click and every Record open
+    scale with corpus size (and kept up to 40 full-corpus undo copies).
+    """
+    repo, build = install_repo(tmp_path, [rec(f"r{i}", f"b{i}") for i in range(1, 6)])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    bid = build["build_id"]
+
+    repo.review_records(bid)  # the first read of a build parses the corpus once; clicks must not
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("whole-corpus operation on an interactive review path")
+
+    monkeypatch.setattr(repo, "save_records", forbidden)
+    monkeypatch.setattr(repo, "load_records", forbidden)
+    monkeypatch.setattr(manager, "_rewrite_and_validate", forbidden)
+
+    viewed = manager.record_view(bid, "r2")
+    assert viewed["activity"]["human_view_count"] == 1
+    assert repo.get_record(bid, "r2")["activity"]["human_view_count"] == 1
+
+    result = manager.review_decision(bid, "r1", "accepted", expected_revision=1, review_queue="all")
+    assert result["applied"] is True and result["record"]["record_id"] == "r1"
+    assert result["next_record"]["record_id"] == "r2"
+    assert result["queue_counts"]["accepted"] == 1
+    assert repo.get_record(bid, "r1")["review_disposition"] == "accepted"
+    assert repo.get_record(bid, "r2")["review_disposition"] == "pending"
+
+    # History is record-local (the previous Record only), not a corpus snapshot, and still undoes.
+    undo = repo.load_checkpoint(bid, "review_history", {})["undo"]
+    assert undo[-1]["record_id"] == "r1" and "records" not in undo[-1]
+    # The cached review snapshot already reflects the write without a reparse.
+    assert [r["review_disposition"] for r in repo.review_records(bid)][:2] == ["accepted", "pending"]
+
+
+def test_reading_a_legacy_asset_infers_the_start_once_without_recursing(tmp_path: Path, monkeypatch):
+    """An asset stored before `main_text_start_inference` existed gets it on first read and keeps it.
+
+    `get_asset` -> inference -> `load_blocks` -> `get_asset` used to recurse to the interpreter's
+    limit, swallow the RecursionError and never persist, so every read (including every review
+    click) repeated the work and its fsyncs.
+    """
+    repo, _build = install_repo(tmp_path, [rec("r1", "b1")])
+    reads = {"count": 0}
+    original = repo._load_block_rows
+
+    def counted(asset_id: str):
+        reads["count"] += 1
+        return original(asset_id)
+
+    monkeypatch.setattr(repo, "_load_block_rows", counted)
+    first = repo.get_asset("a")
+    assert "main_text_start_inference" in first
+    assert reads["count"] <= 2  # one for quality scoring, one for inference: never a recursion
+    reads["count"] = 0
+    repo.get_asset("a")
+    repo.load_blocks("a")
+    assert reads["count"] <= 1  # persisted: only load_blocks' own read remains

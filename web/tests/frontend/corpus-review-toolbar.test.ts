@@ -1,6 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CorpusRecord } from "../../src/api/corpus";
 import CorpusActionMenu from "../../src/components/CorpusActionMenu.vue";
 import CorpusBulkMetadataEditor from "../../src/components/CorpusBulkMetadataEditor.vue";
@@ -59,7 +59,42 @@ describe("Corpus Builder review toolbar", () => {
     expect(wrapper.emitted("update:queue")?.at(-1)).toEqual(["ready"]);
 
     await wrapper.get("#pdf-corpus-record-search").setValue("Levinas");
+    await wrapper.get("#pdf-corpus-record-search").trigger("keydown.enter");
     expect(wrapper.emitted("update:query")?.at(-1)).toEqual(["Levinas"]);
+  });
+
+  describe("search debounce", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("commits one query after typing pauses, not one per keystroke", async () => {
+      vi.useFakeTimers();
+      const wrapper = mountToolbar();
+      const input = wrapper.get("#pdf-corpus-record-search");
+
+      for (const text of ["L", "Le", "Lev", "Levi"]) {
+        await input.setValue(text);
+        vi.advanceTimersByTime(100);
+      }
+      expect(wrapper.emitted("update:query")).toBeUndefined();
+
+      vi.advanceTimersByTime(300);
+      expect(wrapper.emitted("update:query")).toEqual([["Levi"]]);
+    });
+
+    it("clears immediately and follows external query changes", async () => {
+      vi.useFakeTimers();
+      const wrapper = mountToolbar({ query: "abc" });
+      const input = wrapper.get("#pdf-corpus-record-search");
+      expect((input.element as HTMLInputElement).value).toBe("abc");
+
+      await input.setValue("");
+      expect(wrapper.emitted("update:query")?.at(-1)).toEqual([""]);
+
+      await wrapper.setProps({ query: "record-9" });
+      expect((input.element as HTMLInputElement).value).toBe("record-9");
+      vi.advanceTimersByTime(1000);
+      expect(wrapper.emitted("update:query")).toHaveLength(1);
+    });
   });
 
   it("forwards clean-accept, bulk, and paging actions", async () => {

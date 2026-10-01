@@ -572,6 +572,7 @@ describe("review header", () => {
     await wrapper.findAll(".review-view-option")[1].trigger("click");
     expect(wrapper.emitted("workspace")?.at(-1)).toEqual(["metadata"]);
     await wrapper.get("#pdf-corpus-record-search").setValue("Levinas");
+    await wrapper.get("#pdf-corpus-record-search").trigger("keydown.enter");
     expect(wrapper.emitted("update:query")?.at(-1)).toEqual(["Levinas"]);
   });
 });
@@ -610,5 +611,47 @@ describe("review queue filters", () => {
     ]);
     await select.setValue("issues");
     expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual(["issues"]);
+  });
+});
+
+describe("syncedReviewQuery", () => {
+  const state = { buildId: "build-1", queue: "metadata", recordId: "r7" };
+
+  it("mirrors build, queue and record while reviewing (or with no explicit workspace)", async () => {
+    const { syncedReviewQuery } = await import(
+      "../../src/features/corpus-builder/domain/workspace"
+    );
+    expect(syncedReviewQuery({}, state)).toEqual({
+      build: "build-1",
+      queue: "metadata",
+      record: "r7",
+    });
+    expect(syncedReviewQuery({ workspace: "review", other: "x" }, state)).toEqual({
+      workspace: "review",
+      other: "x",
+      build: "build-1",
+      queue: "metadata",
+      record: "r7",
+    });
+  });
+
+  it("omits record when nothing is selected", async () => {
+    const { syncedReviewQuery } = await import(
+      "../../src/features/corpus-builder/domain/workspace"
+    );
+    expect(syncedReviewQuery({ record: "stale" }, { ...state, recordId: "" })).toEqual({
+      build: "build-1",
+      queue: "metadata",
+    });
+  });
+
+  it("does not write review state back into another explicit workspace's address", async () => {
+    const { syncedReviewQuery } = await import(
+      "../../src/features/corpus-builder/domain/workspace"
+    );
+    for (const workspace of ["setup", "build", "publish"]) {
+      const query = syncedReviewQuery({ workspace, build: "build-1" }, state);
+      expect(query).toEqual({ workspace, build: "build-1" });
+    }
   });
 });
