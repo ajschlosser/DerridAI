@@ -2,7 +2,7 @@
 
 Status: active implementation plan  
 Branch: `task/enrichment-latency`  
-Baseline: `master` at `436bd7f96d09bf01df25ed6b86455575c8756fa7`
+Baseline: `master` at `deb99aab48d23189cbccf4a9f70a667b40dd84df`
 
 ## Goal
 
@@ -284,9 +284,10 @@ The first tranche is now in progress on this branch:
 - **Implemented:** the built-in `evidence_recovery` assignment now points to `evidence.recovery.celf@1`; the heavier relevance cascade remains available for explicit assignment.
 - **Implemented:** automatic evidence recovery's closed-choice LLM fallback is deployment-opt-in by default (`METADATA_EVIDENCE_CASCADE_LLM_ENABLED=false`). Direct-support recovery therefore spends no additional model call in the normal configuration.
 - **Implemented:** enrichment metrics now expose call-latency p50, p95, max, and total, including the existing per-family slices. This is the first benchmark gate for the latency work.
+- **Implemented:** quotation enrichment is now signal-routed in Deep mode too. A quotation-family model call requires quotation punctuation/attribution language or a current Document Intelligence quotation projection; Deep mode no longer spends the quotation call on ordinary prose solely because the user selected Deep enrichment.
 - **Tests updated:** focused ownership-failure, evidence-pipeline identity/default-assignment, and latency-metric coverage track these changes.
 
-The next implementation slice is deterministic/candidate-first routing for metadata families. It should reuse the existing `memory_prefill` FieldAssertions and NLP/Document Intelligence candidate layers rather than introduce a parallel authority model.
+The next implementation slice is deterministic/candidate-first routing for indexing and other metadata families. It should reuse the existing `memory_prefill` FieldAssertions and NLP/Document Intelligence candidate layers rather than introduce a parallel authority model. Quotation routing is now the first production instance of that approach.
 
 ## Implementation sequence on this branch
 
