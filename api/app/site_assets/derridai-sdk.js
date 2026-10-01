@@ -113,9 +113,9 @@ var DerridAI = (function(exports) {
     }
   }
   function isAbortError(error) {
-    if (!error || typeof error !== "object") return false;
-    if ("name" in error && error.name === "AbortError") return true;
-    return typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError";
+    return Boolean(
+      error && typeof error === "object" && "name" in error && error.name === "AbortError"
+    );
   }
   class LruCache {
     constructor(capacity) {
