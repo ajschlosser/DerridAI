@@ -16,8 +16,18 @@ export interface SiteExportRequest {
   languages: string[];
   export_format: SiteExportFormat;
   record_profile: SiteRecordProfile;
-  /** Package the optional in-browser Transformers.js runtime (no model weights). */
+  /** Every export includes Transformers.js. Kept so older clients still send a value. */
   include_transformers: boolean;
+}
+
+export interface TransformersDownloadEvent {
+  status: "progress" | "complete" | "error";
+  file?: string;
+  received?: number;
+  file_total?: number;
+  received_total?: number;
+  total?: number;
+  detail?: string;
 }
 
 export interface SiteTransformersRuntime {
@@ -50,6 +60,38 @@ function filenameFromDisposition(value: string | null): string {
 
 export const sitesApi = {
   exportOptions: () => apiRequest<SiteExportOptions>("/api/sites/export-options"),
+  deleteTransformersRuntime: () =>
+    apiRequest<{ transformers_runtime: SiteTransformersRuntime }>(
+      "/api/sites/transformers-runtime",
+      {
+        method: "DELETE",
+      },
+    ),
+  async downloadTransformersRuntime(
+    onProgress: (event: TransformersDownloadEvent) => void,
+  ): Promise<void> {
+    const response = await fetch("/api/sites/transformers-runtime", { method: "POST" });
+    if (!response.ok || !response.body) {
+      const text = await response.text();
+      throw new ApiError(text || response.statusText, response.status, { detail: text });
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line) as TransformersDownloadEvent;
+        if (event.status === "error") throw new Error(event.detail || "Download failed");
+        onProgress(event);
+      }
+    }
+  },
   async exportSite(payload: SiteExportRequest): Promise<SiteExportDownload> {
     const response = await fetch("/api/sites/export", {
       method: "POST",
