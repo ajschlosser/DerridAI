@@ -22,6 +22,7 @@ from app.field_assertions import (
     current_assertion_by_name,
     project_record_assertions,
 )
+from app.metadata_candidates import apply_indexing_nlp_candidates
 from app.nlp_annotations import text_digest
 
 
@@ -328,8 +329,6 @@ def test_scoped_indexing_reconciliation_preserves_preexisting_nlp_candidates(tmp
             },
         },
     }
-    from app.metadata_candidates import apply_indexing_nlp_candidates
-
     apply_indexing_nlp_candidates(record, schema)
     persons_before = current_assertion_by_name(record, "persons")
     works_before = current_assertion_by_name(record, "works_referenced")
