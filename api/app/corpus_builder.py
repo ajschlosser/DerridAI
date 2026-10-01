@@ -292,14 +292,18 @@ from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
 from .rag import _citation_strings, chat_complete
-from .record_semantic_map import record_semantic_map, semantic_node_neighborhood
+from .record_semantic_map import SemanticMapIndex, record_semantic_map, semantic_node_neighborhood
 from .run_guidance import find_guidance_matches
-from .semantic_content_graph import (
-    _records_digest as _semantic_records_digest,
-)
 from .semantic_content_graph import (
     build_semantic_content_graph,
     semantic_content_graph_view,
+)
+from .semantic_map_projection import (
+    semantic_map_source,
+    semantic_record_digest,
+    semantic_records_digest,
+    text_record_digest,
+    text_records_digest,
 )
 from .semantic_identity import SEMANTIC_IDENTITY_VERSION, ValueEquivalenceResult
 from .semantic_identity_registry import (
