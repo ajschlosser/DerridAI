@@ -268,24 +268,24 @@ describe("WorksView", () => {
   it(
     "presents authoritative corpus state and derived search-index freshness compactly",
     async () => {
-    const wrapper = await mountWorks();
-    const loaded = wrapper.get("[data-works-context='loaded']");
-    expect(loaded.text()).toContain("Working corpus");
-    expect(loaded.text()).toContain("1 source files · 12 records");
+      const wrapper = await mountWorks();
+      const loaded = wrapper.get("[data-works-context='loaded']");
+      expect(loaded.text()).toContain("Working corpus");
+      expect(loaded.text()).toContain("1 source files · 12 records");
 
-    const database = wrapper.get("[data-works-context='database']");
-    expect(database.text()).toContain("Search index");
-    expect(database.text()).toContain("12 / 12 records current");
-    await database
-      .findAll("button")
-      .find((button) => button.text().includes("Update search index"))!
-      .trigger("click");
-    expect(runtime.syncAllWorks).toHaveBeenCalled();
+      const database = wrapper.get("[data-works-context='database']");
+      expect(database.text()).toContain("Search index");
+      expect(database.text()).toContain("12 / 12 records current");
+      await database
+        .findAll("button")
+        .find((button) => button.text().includes("Update search index"))!
+        .trigger("click");
+      expect(runtime.syncAllWorks).toHaveBeenCalled();
 
-    // Derived-index maintenance stays contextual rather than competing with page-level actions.
-    const header = wrapper.get(".ui-page-header-actions");
-    expect(header.text()).not.toMatch(/Update search index/);
-    expect(header.findAll("button.ui-button")).toHaveLength(1);
+      // Derived-index maintenance stays contextual rather than competing with page-level actions.
+      const header = wrapper.get(".ui-page-header-actions");
+      expect(header.text()).not.toMatch(/Update search index/);
+      expect(header.findAll("button.ui-button")).toHaveLength(1);
       wrapper.unmount();
     },
   );
@@ -353,14 +353,14 @@ describe("WorksView", () => {
   it(
     "selects a work with the keyboard-operable card button and keeps the library in place",
     async () => {
-    const wrapper = await mountWorks();
-    const select = wrapper.get(".works-card-select");
-    expect(select.element.tagName).toBe("BUTTON");
-    expect(select.attributes("aria-pressed")).toBe("false");
-    const scroll = vi.spyOn(window, "scrollTo");
-    await select.trigger("click");
-    expect(scroll).not.toHaveBeenCalled();
-    expect(wrapper.find("article[role], article[tabindex]").exists()).toBe(false);
+      const wrapper = await mountWorks();
+      const select = wrapper.get(".works-card-select");
+      expect(select.element.tagName).toBe("BUTTON");
+      expect(select.attributes("aria-pressed")).toBe("false");
+      const scroll = vi.spyOn(window, "scrollTo");
+      await select.trigger("click");
+      expect(scroll).not.toHaveBeenCalled();
+      expect(wrapper.find("article[role], article[tabindex]").exists()).toBe(false);
       wrapper.unmount();
     },
   );
@@ -368,18 +368,18 @@ describe("WorksView", () => {
   it(
     "places the selected work in a stable inspector beside the library, not above it",
     async () => {
-    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
-      adminSnapshot({ selected: workItem(), selectedWork: "Glas" }),
-    );
-    const wrapper = await mountWorks();
-    const layout = wrapper.get(".works-layout");
-    expect(layout.classes()).toContain("has-inspector");
-    const children = Array.from(layout.element.children).map((node) => node.className);
-    expect(children[0]).toContain("works-library");
-    expect(children[1]).toContain("works-inspector-pane");
-    expect(wrapper.get(".works-inspector-pane h2").text()).toBe("Glas");
-    await wrapper.get("button[aria-label='Close work details']").trigger("click");
-    expect(runtime.setWorksOverview).toHaveBeenCalledWith("");
+      runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+        adminSnapshot({ selected: workItem(), selectedWork: "Glas" }),
+      );
+      const wrapper = await mountWorks();
+      const layout = wrapper.get(".works-layout");
+      expect(layout.classes()).toContain("has-inspector");
+      const children = Array.from(layout.element.children).map((node) => node.className);
+      expect(children[0]).toContain("works-library");
+      expect(children[1]).toContain("works-inspector-pane");
+      expect(wrapper.get(".works-inspector-pane h2").text()).toBe("Glas");
+      await wrapper.get("button[aria-label='Close work details']").trigger("click");
+      expect(runtime.setWorksOverview).toHaveBeenCalledWith("");
       wrapper.unmount();
     },
   );
