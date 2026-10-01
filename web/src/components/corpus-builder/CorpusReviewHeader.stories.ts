@@ -18,10 +18,6 @@ const toolbar = {
   selectedCount: 0,
   bulkTotalCount: 177,
   bulkDisabled: false,
-  pageNumber: 1,
-  pageCount: 4,
-  hasPreviousPage: false,
-  hasNextPage: true,
   disabled: false,
 };
 
@@ -35,6 +31,7 @@ const meta = {
     ready: 17,
     issues: 4,
     remaining: 31,
+    reviewTotal: 60,
     workspaceMode: "record",
     hasSelectedRecord: true,
   },

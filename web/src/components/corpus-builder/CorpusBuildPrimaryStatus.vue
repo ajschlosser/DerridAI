@@ -127,16 +127,21 @@ function confirmDelete() {
       {{ i18n.t("pdf_corpus.primary_status.review_while_running_help") }}
     </p>
 
-    <div
-      class="primary-status-track"
-      role="progressbar"
-      :aria-label="i18n.t('pdf_corpus.build_progress')"
-      aria-valuemin="0"
-      aria-valuemax="100"
-      :aria-valuenow="percent"
-      :aria-valuetext="i18n.tf('pdf_corpus.progress_percent', { percent })"
-    >
-      <span :style="{ width: `${percent}%` }"></span>
+    <div class="primary-status-progress">
+      <div
+        class="primary-status-track"
+        role="progressbar"
+        :aria-label="i18n.t('pdf_corpus.build_progress')"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="percent"
+        :aria-valuetext="i18n.tf('pdf_corpus.progress_percent', { percent })"
+      >
+        <span :style="{ width: `${percent}%` }"></span>
+      </div>
+      <span class="primary-status-percent" aria-hidden="true">{{
+        i18n.tf("pdf_corpus.progress_percent", { percent })
+      }}</span>
     </div>
 
     <dl class="primary-status-facts">
@@ -173,6 +178,20 @@ function confirmDelete() {
 </template>
 
 <style scoped>
+.primary-status-progress {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+.primary-status-progress .primary-status-track {
+  flex: 1 1 auto;
+}
+.primary-status-percent {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
 .corpus-build-primary-status {
   display: grid;
   gap: var(--space-3);

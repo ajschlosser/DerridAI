@@ -2163,6 +2163,7 @@ defineExpose({
               ? i18n.t('pdf_corpus.start_concurrent_build')
               : i18n.t('pdf_corpus.start_new_build')
           "
+          variant="ghost"
           :disabled="busy !== ''"
           @click="startNewBuildSetup"
         />
@@ -2190,6 +2191,7 @@ defineExpose({
       :sections="setupSections"
       :expanded="configurationSection"
       :disabled-sections="selectedAsset ? [] : ['structure']"
+      :existing-build-name="currentBuild ? selectedAsset?.filename || currentBuild.build_id : ''"
       @toggle="toggleSetupSection"
     >
       <template #source>
@@ -2503,6 +2505,7 @@ defineExpose({
           :ready="readyCount"
           :issues="issueCount"
           :remaining="pendingCount"
+          :review-total="Number(currentBuild?.record_count || 0)"
           :workspace-mode="reviewWorkspaceMode"
           :has-selected-record="Boolean(selectedRecord)"
           :focus-disabled="!selectedRecord"
@@ -2523,10 +2526,6 @@ defineExpose({
           :selected-count="selectedReviewCount"
           :bulk-total-count="Number(currentBuild?.record_count || recordTotal)"
           :bulk-disabled="busy !== '' || reviewLocked"
-          :page-number="pageNumber"
-          :page-count="pageCount"
-          :has-previous-page="recordOffset > 0"
-          :has-next-page="recordOffset + pageSize < recordTotal"
           :disabled="busy !== ''"
           @focus="openFocusView"
           @workspace="setReviewWorkspaceMode"
@@ -2534,8 +2533,6 @@ defineExpose({
           @bulk-action="runBulkAction"
           @bulk-apply="applyBulkMetadata"
           @bulk-close="bulkMetadataOpen = false"
-          @previous-page="previousPage"
-          @next-page="nextPage"
         >
           <template #run-status>
             <CorpusReviewRunStatus
@@ -2574,6 +2571,12 @@ defineExpose({
           :searching="Boolean(recordQuery.trim())"
           :can-open-publish="hasRecordTopology"
           :disabled="busy !== ''"
+          :page-number="pageNumber"
+          :page-count="pageCount"
+          :has-previous-page="recordOffset > 0"
+          :has-next-page="recordOffset + pageSize < recordTotal"
+          @previous-page="previousPage"
+          @next-page="nextPage"
           @root-change="setRecordListElement"
           @collapse="reviewQueueCollapsed = true"
           @toggle-visible="toggleVisibleSelection"

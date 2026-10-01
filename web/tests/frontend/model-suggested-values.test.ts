@@ -95,6 +95,7 @@ describe("model-suggested values", () => {
       props: { field: "stance", value: "Question", control: "enum", options: [], open: true },
     });
     await wrapper.setProps({ options: stance });
+    await wrapper.get(".proposal-edit").trigger("click");
     expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("question");
   });
 

@@ -30,10 +30,6 @@ const props = defineProps<{
   selectedCount: number;
   bulkTotalCount: number;
   bulkDisabled: boolean;
-  pageNumber: number;
-  pageCount: number;
-  hasPreviousPage: boolean;
-  hasNextPage: boolean;
   disabled?: boolean;
 }>();
 
@@ -42,8 +38,6 @@ const emit = defineEmits<{
   bulkAction: [id: string];
   bulkApply: [payload: { changes: Record<string, unknown>; applyToAll: boolean }];
   bulkClose: [];
-  previousPage: [];
-  nextPage: [];
 }>();
 
 const queue = defineModel<ReviewQueue>("queue", { required: true });
@@ -172,16 +166,6 @@ function confirmAcceptClean() {
       @close="emit('bulkClose')"
     />
 
-    <div class="pager">
-      <UiButton size="small" :disabled="!props.hasPreviousPage" @click="emit('previousPage')">
-        {{ i18n.t("ui.previous") }}
-      </UiButton>
-      <span>{{ props.pageNumber }} / {{ props.pageCount }}</span>
-      <UiButton size="small" :disabled="!props.hasNextPage" @click="emit('nextPage')">
-        {{ i18n.t("ui.next") }}
-      </UiButton>
-    </div>
-
     <UiDialog
       :open="confirmingAcceptClean"
       size="medium"
@@ -220,8 +204,9 @@ function confirmAcceptClean() {
 }
 .review-toolbar .control {
   min-height: 40px;
-  flex: 1 1 14rem;
-  max-width: 24rem;
+  flex: 1 1 8rem;
+  min-width: 0;
+  max-width: 16rem;
   font-size: var(--fs-sm);
 }
 .review-bulk {
@@ -267,14 +252,6 @@ function confirmAcceptClean() {
   color: var(--text-secondary);
   font-size: var(--fs-sm);
   line-height: 1.5;
-}
-.pager {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  margin-inline-start: auto;
-  color: var(--text-secondary);
-  font-size: var(--fs-sm);
 }
 .review-toolbar > :is(section, form, aside) {
   flex: 1 1 100%;

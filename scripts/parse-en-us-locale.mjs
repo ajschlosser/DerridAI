@@ -14,6 +14,8 @@ export function parseEnUsPy(text) {
     const key = match[1].replace(/\\'/g, "'");
     let i = keyRe.lastIndex;
     const parts = [];
+    // A long value may be wrapped in parentheses: 'key': ('first part ' 'second part').
+    while (i < body.length && /[\s(]/.test(body[i])) i += 1;
     for (;;) {
       while (i < body.length && /\s/.test(body[i])) i += 1;
       const quote = body[i];
@@ -36,6 +38,7 @@ export function parseEnUsPy(text) {
       }
       parts.push(value);
     }
+    while (i < body.length && /[\s)]/.test(body[i])) i += 1;
     map[key] = parts.join("");
     keyRe.lastIndex = i;
   }

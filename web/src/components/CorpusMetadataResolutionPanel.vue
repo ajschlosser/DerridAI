@@ -546,9 +546,12 @@ function displayValue(field: string) {
           enrichmentPending
             ? i18n.t("pdf_corpus.metadata_enrichment_pending")
             : attentionFields.length
-              ? i18n.tf("pdf_corpus.metadata_decisions_count", {
-                  count: attentionFields.length,
-                })
+              ? i18n.tf(
+                  attentionFields.length === 1
+                    ? "pdf_corpus.metadata_decisions_count_one"
+                    : "pdf_corpus.metadata_decisions_count",
+                  { count: attentionFields.length },
+                )
               : i18n.t("pdf_corpus.metadata_ready")
         }}</span
       >

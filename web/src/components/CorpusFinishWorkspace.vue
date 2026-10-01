@@ -91,6 +91,12 @@ function stateIcon(attention: boolean) {
   return attention ? "warning" : "check";
 }
 const noPublishable = computed(() => Boolean(readiness.value.no_publishable_records));
+const ACTIONABLE_NEXT = [
+  "review_records",
+  "resolve_document_metadata",
+  "resolve_validation",
+  "publish",
+];
 const primaryLabel = computed(() => {
   if (publication.value) return i18n.t("pdf_corpus.download_jsonl");
   if (noPublishable.value) return i18n.t("pdf_corpus.return_to_review");
@@ -104,6 +110,12 @@ const primaryLabel = computed(() => {
 function act() {
   if (noPublishable.value) {
     emit("reviewRejected");
+    return;
+  }
+  // Nothing more specific is known: go to the first blocker, else back to the Records.
+  if (!ACTIONABLE_NEXT.includes(next.value)) {
+    if (blockers.value.length) fixBlocker(blockers.value[0]?.code);
+    else emit("reviewRecords");
     return;
   }
   if (next.value === "review_records") emit("reviewRecords");
@@ -143,21 +155,7 @@ function fixBlocker(code?: string) {
           :href="`/api/pdf/publications/${encodeURIComponent(publication.publication_id)}/download`"
           >{{ primaryLabel }}</a
         >
-        <UiButton
-          variant="primary"
-          v-else
-          :disabled="
-            busy ||
-            (!noPublishable &&
-              ![
-                'review_records',
-                'resolve_document_metadata',
-                'resolve_validation',
-                'publish',
-              ].includes(next))
-          "
-          @click="act"
-        >
+        <UiButton variant="primary" v-else :disabled="busy" @click="act">
           {{ primaryLabel }}
         </UiButton>
       </div>
@@ -727,6 +725,22 @@ function fixBlocker(code?: string) {
 }
 .readiness-row[data-state="complete"] {
   box-shadow: inset 3px 0 0 var(--tone-ok-fg);
+}
+/* A gate that has passed is one quiet line; only the gates still blocking publication take room. */
+.readiness-row[data-state="complete"] {
+  padding-block: var(--space-2);
+}
+.readiness-row[data-state="complete"] > dl {
+  display: none;
+}
+.readiness-row[data-state="complete"] .readiness-row-copy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  align-items: baseline;
+}
+.readiness-row[data-state="complete"] .readiness-row-copy h3 {
+  margin: 0;
 }
 .readiness-row-copy {
   min-width: 0;

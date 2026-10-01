@@ -54,6 +54,9 @@ test("confident stance is visibly selected in the real Storybook component", asy
   await page.goto(
     "/iframe.html?id=corpus-builder-review-metadata-field--auto-populated-stance&viewMode=story",
   );
+  // The proposal is read-only until the reviewer opens it with Edit.
+  await expect(page.locator(".proposal-value")).toBeVisible();
+  await page.locator(".proposal-edit").click();
   const select = page.locator("select.control");
   await expect(select).toHaveValue("affirm");
 });
@@ -64,6 +67,8 @@ test("reviewer-defined structure remains selected in the rendered conflict edito
   await page.goto(
     "/iframe.html?id=corpus-builder-review-metadata-field--reviewer-structure-conflict&viewMode=story",
   );
+  await expect(page.locator(".proposal-value")).toBeVisible();
+  await page.locator(".proposal-edit").click();
   const select = page.locator("select.control");
   await expect(select).toHaveValue("main_text");
   await expect(page.getByText(/Deterministic and LLM suggestions disagree/i)).toBeVisible();
@@ -74,6 +79,9 @@ test("normalized stance aliases remain selected and disclose normalization", asy
   await page.goto(
     "/iframe.html?id=corpus-builder-review-metadata-field--normalized-stance-alias&viewMode=story",
   );
+  // The proposal is read-only until the reviewer opens it with Edit.
+  await expect(page.locator(".proposal-value")).toBeVisible();
+  await page.locator(".proposal-edit").click();
   const select = page.locator("select.control");
   await expect(select).toHaveValue("affirm");
   await expect(page.getByText(/normalized to/i)).toBeVisible();

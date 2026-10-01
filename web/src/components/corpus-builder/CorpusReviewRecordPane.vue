@@ -66,7 +66,69 @@ onBeforeUnmount(() => emit("rootChange", null));
             {{ record.inline_citation }}
             · {{ record.text_length.toLocaleString() }} {{ i18n.t("pdf_corpus.characters")
             }}{{ activitySummary }}
+            <span v-if="record.text_review_status === 'human_corrected'" class="human-corrected">{{
+              i18n.t("pdf_corpus.human_corrected")
+            }}</span
+            ><span
+              v-else-if="record.text_review_status === 'human_reviewed'"
+              class="human-corrected"
+              >{{ i18n.t("pdf_corpus.human_reviewed") }}</span
+            >
           </p>
+        </div>
+        <div class="record-text-head-actions">
+          <label v-if="!editing" class="context-toggle">
+            <input v-model="showContext" type="checkbox" />
+            <span :title="i18n.t('pdf_corpus.context_show')">{{
+              i18n.t("pdf_corpus.context_short")
+            }}</span>
+          </label>
+          <UiButton size="small" v-if="!editing" @click="emit('openPopout')">
+            {{ i18n.t("pdf_corpus.popout_record") }}
+          </UiButton>
+          <UiButton size="small" v-if="editing" @click="emit('cleanup')" :disabled="busy || locked">
+            {{ i18n.t("pdf_corpus.clean_text") }}</UiButton
+          ><UiTooltip
+            v-if="editing"
+            :text="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
+            trigger-mode="content"
+            :content-focusable="Boolean(busy || locked || !textDraft.trim())"
+            placement="bottom"
+          >
+            <button
+              type="button"
+              class="btn small primary"
+              @click="emit('save')"
+              :disabled="busy || locked || !textDraft.trim()"
+              aria-keyshortcuts="Control+S Meta+S"
+            >
+              {{ i18n.t("ui.save") }}
+            </button> </UiTooltip
+          ><UiButton
+            size="small"
+            v-if="editing"
+            @click="emit('llmTouchup')"
+            :disabled="busy || locked"
+          >
+            {{ i18n.t("pdf_corpus.llm_touchup") }}</UiButton
+          ><UiButton
+            size="small"
+            v-if="
+              !editing &&
+              record.text_review_status !== 'human_corrected' &&
+              record.text_review_status !== 'human_reviewed'
+            "
+            @click="emit('markReviewed')"
+            :disabled="busy || locked"
+          >
+            {{ i18n.t("pdf_corpus.mark_text_reviewed") }}</UiButton
+          ><UiButton
+            size="small"
+            @click="editing ? emit('cancelEdit') : emit('beginEdit', false)"
+            :disabled="busy || locked"
+          >
+            {{ editing ? i18n.t("ui.cancel") : i18n.t("pdf_corpus.edit_text") }}
+          </UiButton>
         </div>
       </header>
       <aside
@@ -100,76 +162,9 @@ onBeforeUnmount(() => emit("rootChange", null));
         ><span class="review-reason-text">{{ record.review_reason }}</span>
       </aside>
       <section class="record-text-review" aria-labelledby="reviewed-record-text-title">
-        <header>
-          <div>
-            <b id="reviewed-record-text-title">{{ i18n.t("pdf_corpus.reviewed_record_text") }}</b
-            ><span v-if="record.text_review_status === 'human_corrected'" class="human-corrected">{{
-              i18n.t("pdf_corpus.human_corrected")
-            }}</span
-            ><span
-              v-else-if="record.text_review_status === 'human_reviewed'"
-              class="human-corrected"
-              >{{ i18n.t("pdf_corpus.human_reviewed") }}</span
-            >
-          </div>
-          <div class="record-text-head-actions">
-            <label v-if="!editing" class="context-toggle">
-              <input v-model="showContext" type="checkbox" />
-              {{ i18n.t("pdf_corpus.context_show") }}
-            </label>
-            <UiButton size="small" v-if="!editing" @click="emit('openPopout')">
-              {{ i18n.t("pdf_corpus.reviewed_record_text") }}
-            </UiButton>
-            <UiButton
-              size="small"
-              v-if="editing"
-              @click="emit('cleanup')"
-              :disabled="busy || locked"
-            >
-              {{ i18n.t("pdf_corpus.clean_text") }}</UiButton
-            ><UiTooltip
-              v-if="editing"
-              :text="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
-              trigger-mode="content"
-              :content-focusable="Boolean(busy || locked || !textDraft.trim())"
-              placement="bottom"
-            >
-              <button
-                type="button"
-                class="btn small primary"
-                @click="emit('save')"
-                :disabled="busy || locked || !textDraft.trim()"
-                aria-keyshortcuts="Control+S Meta+S"
-              >
-                {{ i18n.t("ui.save") }}
-              </button> </UiTooltip
-            ><UiButton
-              size="small"
-              v-if="editing"
-              @click="emit('llmTouchup')"
-              :disabled="busy || locked"
-            >
-              {{ i18n.t("pdf_corpus.llm_touchup") }}</UiButton
-            ><UiButton
-              size="small"
-              v-if="
-                !editing &&
-                record.text_review_status !== 'human_corrected' &&
-                record.text_review_status !== 'human_reviewed'
-              "
-              @click="emit('markReviewed')"
-              :disabled="busy || locked"
-            >
-              {{ i18n.t("pdf_corpus.mark_text_reviewed") }}</UiButton
-            ><UiButton
-              size="small"
-              @click="editing ? emit('cancelEdit') : emit('beginEdit', false)"
-              :disabled="busy || locked"
-            >
-              {{ editing ? i18n.t("ui.cancel") : i18n.t("pdf_corpus.edit_text") }}
-            </UiButton>
-          </div>
-        </header>
+        <b id="reviewed-record-text-title" class="sr-only">{{
+          i18n.t("pdf_corpus.reviewed_record_text")
+        }}</b>
         <textarea
           v-if="editing"
           v-model="textDraft"
@@ -240,6 +235,13 @@ onBeforeUnmount(() => emit("rootChange", null));
   min-width: 0;
   flex: 1 1 8rem;
 }
+.record-review-head {
+  align-items: center;
+  gap: 6px 16px;
+}
+.record-review-head .human-corrected {
+  margin-inline-start: 6px;
+}
 .record-review-head .eyebrow {
   display: none;
 }
@@ -267,16 +269,13 @@ onBeforeUnmount(() => emit("rootChange", null));
 .record-text-review {
   display: grid;
   flex: none;
-  gap: 10px;
-  margin: 10px 16px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  overflow: hidden;
+  gap: 0;
+  margin: 0;
   background: var(--surface-card);
 }
 /* The text card keeps its full height and the pane scrolls, so a long record is never clipped. */
 .record-text-review .record-primary-text {
-  padding: 20px 24px;
+  padding: 24px 28px 40px;
   min-height: 220px;
   max-height: none;
   overflow: visible;
@@ -286,8 +285,8 @@ onBeforeUnmount(() => emit("rootChange", null));
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 6px 10px;
+  gap: 6px 12px;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-subtle);
 }

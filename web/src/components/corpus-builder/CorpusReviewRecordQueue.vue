@@ -22,6 +22,10 @@ const props = defineProps<{
   searching?: boolean;
   canOpenPublish?: boolean;
   disabled?: boolean;
+  pageNumber?: number;
+  pageCount?: number;
+  hasPreviousPage?: boolean;
+  hasNextPage?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -33,6 +37,8 @@ const emit = defineEmits<{
   sourceWarning: [row: CorpusQueueRow];
   showAll: [];
   openPublish: [];
+  previousPage: [];
+  nextPage: [];
 }>();
 
 const i18n = useI18nStore();
@@ -63,6 +69,11 @@ function locator(record: CorpusQueueRow) {
   if (start == null || start === "") return "";
   const pages = end != null && end !== "" && end !== start ? `${start}–${end}` : String(start);
   return `${i18n.t("pdf_corpus.page_abbrev")} ${pages}`;
+}
+/** A long build-prefixed ID wraps over several lines; the trailing sequence number is what tells rows apart. */
+function shortRecordId(recordId: string) {
+  const match = /^.+?[-_.:](\d+)$/.exec(recordId);
+  return match ? `#${Number(match[1])}` : recordId;
 }
 function recordStateLabel(record: CorpusQueueRow) {
   const state = record.review_state || "ready";
@@ -103,8 +114,14 @@ function recordSelectionChanged(recordId: string, event: Event) {
   <nav ref="queueRoot" class="records-pane" tabindex="-1" aria-labelledby="pdf-corpus-records-pane">
     <div class="pane-head">
       <b id="pdf-corpus-records-pane">{{ i18n.t("pdf_corpus.review_queue") }}</b>
-      <button type="button" class="link-button queue-toggle" @click="emit('collapse')">
-        {{ i18n.t("pdf_corpus.hide_queue") }}
+      <button
+        type="button"
+        class="link-button queue-toggle"
+        :title="i18n.t('pdf_corpus.hide_queue')"
+        @click="emit('collapse')"
+      >
+        <span aria-hidden="true">«</span>
+        <span class="sr-only">{{ i18n.t("pdf_corpus.hide_queue") }}</span>
       </button>
       <label class="select-visible">
         <input
@@ -148,17 +165,22 @@ function recordSelectionChanged(recordId: string, event: Event) {
           <AppIcon v-if="recordStateIcon(record)" :name="recordStateIcon(record)" />
         </span>
         <span class="record-row-main">
-          <b>{{ record.record_id }}</b>
-          <small>
-            <template v-if="locator(record)">{{ locator(record) }} · </template
-            >{{ record.text_length.toLocaleString() }} {{ i18n.t("pdf_corpus.characters") }}
-          </small>
+          <span class="record-row-head">
+            <b :title="record.record_id">
+              <span aria-hidden="true">{{ shortRecordId(record.record_id) }}</span>
+              <span class="sr-only">{{ record.record_id }}</span>
+            </b>
+            <small v-if="locator(record)">{{ locator(record) }}</small>
+            <span class="record-row-status" :data-state="record.review_state">
+              {{ recordStateLabel(record) }}
+            </span>
+          </span>
           <span v-if="record.text_preview" class="record-row-snippet">{{
             record.text_preview
           }}</span>
-          <span class="record-row-status" :data-state="record.review_state">
-            {{ recordStateLabel(record) }}
-          </span>
+          <small class="record-row-length">
+            {{ record.text_length.toLocaleString() }} {{ i18n.t("pdf_corpus.characters") }}
+          </small>
           <UiTooltip
             v-if="record.metadata_llm_processed"
             :text="llmProcessedHelp"
@@ -225,10 +247,51 @@ function recordSelectionChanged(recordId: string, event: Event) {
         />
       </span>
     </div>
+    <div
+      v-if="(props.pageCount ?? 1) > 1"
+      class="pager"
+      role="group"
+      :aria-label="i18n.t('pdf_corpus.queue_paging')"
+    >
+      <UiButton
+        size="small"
+        icon-only
+        :label="i18n.t('ui.previous')"
+        :disabled="!props.hasPreviousPage"
+        @click="emit('previousPage')"
+      >
+        <template #icon-label><span aria-hidden="true">‹</span></template>
+      </UiButton>
+      <span>{{ props.pageNumber }} / {{ props.pageCount }}</span>
+      <UiButton
+        size="small"
+        icon-only
+        :label="i18n.t('ui.next')"
+        :disabled="!props.hasNextPage"
+        @click="emit('nextPage')"
+      >
+        <template #icon-label><span aria-hidden="true">›</span></template>
+      </UiButton>
+    </div>
   </nav>
 </template>
 
 <style scoped>
+/* Paging belongs to the list it pages, pinned under the rows. */
+.pager {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.5rem;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
 .record-row-snippet {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -248,18 +311,21 @@ function recordSelectionChanged(recordId: string, event: Event) {
   top: 0;
   z-index: 4;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "title count" "select hide";
+  grid-template-columns: 32px minmax(0, 1fr) auto auto;
+  grid-template-areas: "select title count hide";
   align-items: center;
   gap: 0.25rem 0.5rem;
   min-height: 0;
-  padding: 0.5rem 0.75rem;
+  padding: 0.375rem 0.5rem 0.375rem 0;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-subtle);
   font-size: 0.8125rem;
 }
 .pane-head > b {
   grid-area: title;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pane-head > span {
   grid-area: count;
@@ -274,9 +340,19 @@ function recordSelectionChanged(recordId: string, event: Event) {
 .queue-toggle {
   font-size: 0.8125rem;
 }
+/* A single header row: the select-all box lines up with the row boxes below; its words are for assistive technology. */
+.select-visible span {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
 .select-visible {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   min-height: 1.5rem;
   color: var(--text-secondary);
@@ -292,32 +368,35 @@ function recordSelectionChanged(recordId: string, event: Event) {
 }
 .record-row-wrap {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
   align-items: stretch;
   border-bottom: 1px solid var(--border-subtle);
 }
 .record-select {
   display: grid;
   place-items: center;
-  min-width: 36px;
+  min-width: 32px;
   cursor: pointer;
 }
 .record-row {
   display: grid;
   grid-template-columns: 1.25rem minmax(0, 1fr);
   align-items: start;
-  gap: 0.625rem;
+  gap: 0.5rem;
   width: 100%;
   min-height: 0;
-  padding: 0.625rem 0.75rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.25rem;
   border: 0;
   background: transparent;
   text-align: start;
   cursor: pointer;
 }
-.record-row:hover,
-.record-row.active {
+.record-row:hover {
   background: var(--surface-subtle);
+}
+.record-row.active {
+  background: var(--surface-selected);
+  box-shadow: inset 3px 0 0 var(--ui-accent);
 }
 .record-row-wrap .record-row {
   border-bottom: 0;
@@ -337,6 +416,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
 }
 .record-row-main b {
   overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 .record-state-icon {
   display: grid;
@@ -374,11 +454,21 @@ function recordSelectionChanged(recordId: string, event: Event) {
   border-color: var(--tone-ok-border);
   color: var(--tone-ok-fg);
 }
+.record-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem 0.5rem;
+  min-width: 0;
+}
+.record-row-length {
+  font-variant-numeric: tabular-nums;
+}
 .record-row-status {
   display: inline-flex;
   width: max-content;
-  margin-top: 5px;
-  padding: 2px 7px;
+  margin-inline-start: auto;
+  padding: 1px 7px;
   border-radius: 999px;
   background: var(--surface-subtle);
   color: var(--accent-fg);

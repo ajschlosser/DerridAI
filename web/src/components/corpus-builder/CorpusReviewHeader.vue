@@ -18,6 +18,8 @@ defineProps<{
   ready: number;
   issues: number;
   remaining: number;
+  /** All Records in the build, the denominator of the progress meter. */
+  reviewTotal: number;
   workspaceMode: ReviewWorkspaceMode;
   hasSelectedRecord: boolean;
   focusDisabled?: boolean;
@@ -46,17 +48,24 @@ const viewLabels: Record<ReviewWorkspaceMode, string> = {
 <template>
   <section class="review-header" :aria-label="i18n.t('pdf_corpus.review_controls')">
     <div class="review-header-status">
-      <p class="review-counts">
-        <span
-          ><b>{{ accepted }}</b> {{ i18n.t("pdf_corpus.accepted_label") }}</span
-        >
-        <span
-          ><b>{{ remaining }}</b> {{ i18n.t("pdf_corpus.remaining") }}</span
-        >
-        <span
-          ><b>{{ issues }}</b> {{ i18n.t("pdf_corpus.need_attention") }}</span
-        >
-      </p>
+      <div class="review-progress" role="group" :aria-label="i18n.t('pdf_corpus.review_progress')">
+        <p class="review-counts">
+          <span
+            ><b>{{
+              i18n.tf("pdf_corpus.review_progress_summary", { accepted, total: reviewTotal })
+            }}</b></span
+          >
+          <span
+            ><b>{{ remaining }}</b> {{ i18n.t("pdf_corpus.remaining") }}</span
+          >
+        </p>
+        <progress
+          class="review-meter"
+          :max="Math.max(reviewTotal, 1)"
+          :value="accepted"
+          :aria-label="i18n.t('pdf_corpus.review_progress')"
+        ></progress>
+      </div>
       <slot name="run-status"></slot>
       <span class="review-header-spacer"></span>
       <UiButton
@@ -66,7 +75,7 @@ const viewLabels: Record<ReviewWorkspaceMode, string> = {
         @click="emit('focus')"
       />
       <div class="review-view" role="group" :aria-label="i18n.t('pdf_corpus.review_view')">
-        <span class="review-view-label">{{ i18n.t("pdf_corpus.review_view") }}</span>
+        <span class="review-view-label sr-only">{{ i18n.t("pdf_corpus.review_view") }}</span>
         <button
           v-for="view in views"
           :key="view.id"
@@ -94,6 +103,7 @@ const viewLabels: Record<ReviewWorkspaceMode, string> = {
 
 <style scoped>
 .review-header {
+  container-type: inline-size;
   display: grid;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
@@ -117,6 +127,29 @@ const viewLabels: Record<ReviewWorkspaceMode, string> = {
 }
 .review-counts b {
   color: var(--text-primary);
+}
+.review-progress {
+  display: grid;
+  gap: 3px;
+  min-width: 10rem;
+}
+.review-meter {
+  inline-size: 100%;
+  block-size: 6px;
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  overflow: hidden;
+}
+.review-meter::-webkit-progress-bar {
+  background: var(--border-subtle);
+}
+.review-meter::-webkit-progress-value {
+  background: var(--ui-accent);
+}
+.review-meter::-moz-progress-bar {
+  background: var(--ui-accent);
 }
 .review-header-spacer {
   flex: 1 1 0;

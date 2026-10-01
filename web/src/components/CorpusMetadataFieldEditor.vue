@@ -1,9 +1,10 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, ref, useId, watch } from "vue";
+import { computed, nextTick, ref, useId, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import AppIcon from "./AppIcon.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
+import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
@@ -217,6 +218,7 @@ watch(
     if (value) {
       editing.value = true;
       dirty.value = false;
+      revising.value = false;
       draft.value = editableValue();
     } else if (!dirty.value) {
       // A pending field that has just been decided folds back into its one-line summary.
@@ -285,6 +287,7 @@ function startEdit() {
 }
 function cancelEdit() {
   dirty.value = false;
+  revising.value = false;
   draft.value = editableValue();
   editing.value = false;
   emit("dirty", false);
@@ -321,6 +324,59 @@ const {
 } = useRecordTextSelection(editing);
 const citeSelf = ref(false);
 const selfNote = ref("");
+/** The reviewer chose to change the proposal; until then a pending field shows it read-only. */
+const revising = ref(false);
+const valueControl = ref<HTMLElement | null>(null);
+/**
+ * A pending field that already carries a proposed value shows that value as plain text, so the usual
+ * decision is one press of Confirm. Anything that needs the control (a blind or re-check field, a
+ * several-valued scalar, an edit in progress) shows it instead.
+ */
+const proposalOnly = computed(
+  () =>
+    editing.value &&
+    Boolean(props.open) &&
+    hasValue(resolvedValue.value) &&
+    !revising.value &&
+    !dirty.value &&
+    !scalarCardinalityConflict.value &&
+    !props.status?.blind &&
+    !props.status?.recheck &&
+    !props.recheck,
+);
+function reviseProposal() {
+  revising.value = true;
+  void nextTick(() =>
+    valueControl.value
+      ?.querySelector<HTMLElement>("input, textarea, select, [role=combobox]")
+      ?.focus(),
+  );
+}
+const evidenceItems = computed<CorpusActionMenuItem[]>(() => [
+  ...(textSelectable.value
+    ? [{ id: "select-text", label: i18n.t("pdf_corpus.select_from_text") }]
+    : []),
+  { id: "select-all", label: i18n.t("pdf_corpus.select_all_evidence") },
+  {
+    id: "own-knowledge",
+    label: citeSelf.value
+      ? i18n.t("pdf_corpus.own_knowledge_cancel")
+      : i18n.t("pdf_corpus.own_knowledge_toggle"),
+  },
+  {
+    id: "browse",
+    label: i18n.t("pdf_corpus.browse_evidence"),
+    reason: canSave.value ? undefined : i18n.t("pdf_corpus.browse_evidence_needs_value"),
+  },
+  { id: "view", label: i18n.t("pdf_corpus.view_evidence") },
+]);
+function evidenceAction(id: string) {
+  if (id === "select-text") selectFromText();
+  else if (id === "select-all") selectWholeRecord();
+  else if (id === "own-knowledge") citeSelf.value = !citeSelf.value;
+  else if (id === "browse") browseOtherRecords();
+  else emit("source");
+}
 function browseOtherRecords() {
   if (canSave.value) emit("browseEvidence", normalized());
 }
@@ -555,7 +611,19 @@ const traceRows = computed(() => {
       <p v-if="scalarCardinalityConflict" class="field-reason" role="alert">
         {{ i18n.t("pdf_corpus.scalar_cardinality_conflict") }}
       </p>
-      <div class="value-control">
+      <div v-if="proposalOnly" class="proposal-view">
+        <p class="proposal-value">{{ display(resolvedValue) }}</p>
+        <button
+          type="button"
+          class="btn small quiet proposal-edit"
+          :disabled="busy"
+          :aria-label="i18n.tf('pdf_corpus.edit_field', { field: fieldLabel })"
+          @click="reviseProposal"
+        >
+          {{ i18n.t("ui.edit") }}
+        </button>
+      </div>
+      <div v-else ref="valueControl" class="value-control">
         <select
           v-if="control === 'enum'"
           v-model="draft"
@@ -684,61 +752,14 @@ const traceRows = computed(() => {
         <small>{{ i18n.t("pdf_corpus.own_knowledge_help") }}</small>
       </div>
       <div class="field-tools">
-        <template v-if="textSelectable">
-          <UiTooltip
-            :text="i18n.t('pdf_corpus.select_from_text_help')"
-            trigger-mode="content"
-            :content-focusable="Boolean(busy)"
-            placement="bottom"
-          >
-            <button type="button" class="link-button" :disabled="busy" @click="selectFromText">
-              {{ i18n.t("pdf_corpus.select_from_text") }}
-            </button>
-          </UiTooltip></template
-        >
-        <UiTooltip
-          :text="i18n.t('pdf_corpus.select_all_evidence_help')"
-          trigger-mode="content"
-          :content-focusable="false"
+        <CorpusActionMenu
+          :label="i18n.t('pdf_corpus.cite_evidence_menu')"
+          :menu-label="i18n.t('pdf_corpus.evidence_tools')"
+          :items="evidenceItems"
+          :disabled="busy"
           placement="bottom"
-        >
-          <button type="button" class="link-button" @click="selectWholeRecord">
-            {{ i18n.t("pdf_corpus.select_all_evidence") }}
-          </button>
-        </UiTooltip>
-        <UiTooltip
-          :text="i18n.t('pdf_corpus.own_knowledge_help')"
-          trigger-mode="content"
-          :content-focusable="false"
-          placement="bottom"
-        >
-          <button
-            type="button"
-            class="link-button"
-            :aria-pressed="citeSelf"
-            @click="citeSelf = !citeSelf"
-          >
-            {{ i18n.t("pdf_corpus.own_knowledge_toggle") }}
-          </button>
-        </UiTooltip>
-        <UiTooltip
-          :text="i18n.t('pdf_corpus.browse_evidence_help')"
-          trigger-mode="content"
-          :content-focusable="!canSave"
-          placement="bottom"
-        >
-          <button
-            type="button"
-            class="link-button"
-            :disabled="!canSave"
-            @click="browseOtherRecords"
-          >
-            {{ i18n.t("pdf_corpus.browse_evidence") }}
-          </button>
-        </UiTooltip>
-        <button type="button" class="link-button" @click="emit('source')">
-          {{ i18n.t("pdf_corpus.view_evidence") }}
-        </button>
+          @select="evidenceAction"
+        />
       </div>
       <p v-if="selectionMissing" class="selection-help" role="alert">
         {{ i18n.t("pdf_corpus.select_text_first") }}
@@ -1074,24 +1095,34 @@ const traceRows = computed(() => {
 }
 .field-tools {
   display: flex;
-  gap: 0 14px;
+  gap: 6px;
   align-items: center;
   flex-wrap: wrap;
   color: var(--text-tertiary);
   font-size: var(--fs-sm);
 }
-.field-tools .link-button {
-  display: inline-flex;
-  align-items: center;
-  width: auto;
-  min-height: 28px;
-  padding: 0;
-  font-size: var(--fs-sm);
-  text-align: start;
+.proposal-view {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-inline-start: 3px solid var(--ui-accent);
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
 }
-.field-tools .link-button:disabled {
-  color: var(--text-tertiary);
-  cursor: default;
+.proposal-value {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-md, 1rem);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.proposal-edit {
+  flex: none;
 }
 .selection-help {
   margin: 0;

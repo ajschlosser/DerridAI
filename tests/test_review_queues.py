@@ -268,3 +268,29 @@ def test_ready_queue_excludes_source_metadata_and_concrete_review_exceptions(tmp
 
 
 
+
+
+def test_queue_filters_list_exactly_the_records_their_counts_claim():
+    """A tab's count and the rows behind it must agree, including records still being prepared.
+
+    Why: a Record whose enrichment has not finished is counted as "preparing", not as an issue, so
+    listing it under Needs attention / Metadata made the badge and the list disagree.
+    """
+    from app.corpus_review_state import _matches_review_queue, _queue_counts
+
+    finished = {"metadata_enrichment_state": "complete"}
+    records = [
+        {"record_id": "ready", **finished},
+        {"record_id": "meta", **finished, "metadata_incomplete_fields": ["speaker"]},
+        {"record_id": "src", **finished, "source_quality_issues": [{"page": 1}]},
+        {"record_id": "prep-meta", "metadata_enrichment_state": "running", "metadata_incomplete_fields": ["speaker"]},
+        {"record_id": "prep-src", "metadata_enrichment_state": "queued", "source_quality_issues": [{"page": 1}]},
+        {"record_id": "prep-clean", "metadata_enrichment_state": "running"},
+        {"record_id": "acc", **finished, "review_disposition": "accepted"},
+        {"record_id": "rej", **finished, "review_disposition": "rejected"},
+    ]
+    counts = _queue_counts(records)
+    for queue in ("all", "ready", "issues", "metadata", "source", "topology", "accepted", "rejected"):
+        listed = [r["record_id"] for r in records if _matches_review_queue(r, queue)]
+        assert len(listed) == counts[queue], (queue, listed, counts[queue])
+    assert "prep-meta" not in [r["record_id"] for r in records if _matches_review_queue(r, "metadata")]
