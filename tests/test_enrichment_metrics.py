@@ -61,6 +61,22 @@ def test_call_latency_reports_p50_p95_total_and_family_slices():
     assert m["by_field"]["discourse"]["call_latency_ms"]["p50"] == 200.0
 
 
+def test_record_latency_reports_true_wall_clock_distribution():
+    rows = [
+        ev("record_run", field="__record__", elapsed_ms=200, outcome="enriched"),
+        ev("record_run", field="__record__", elapsed_ms=500, outcome="unchanged", record_id="r2"),
+        ev("record_run", field="__record__", elapsed_ms=1100, outcome="failed", record_id="r3"),
+    ]
+    latency = compute(rows)["models"]["m"]["record_latency_ms"]
+    assert latency == {
+        "records": 3,
+        "p50": 500.0,
+        "p95": 1040.0,
+        "max": 1100.0,
+        "total": 1800.0,
+    }
+
+
 def test_call_contract_reports_requested_fields_and_prompt_size():
     rows = [
         ev("call", field="indexing", elapsed_ms=100, ok=True, requested_field_count=4, input_chars=4000),
@@ -75,6 +91,22 @@ def test_call_contract_reports_requested_fields_and_prompt_size():
         "input_chars_p50": 2600.0,
         "input_chars_p95": 3860.0,
         "input_chars_total": 8400.0,
+    }
+
+
+def test_structured_model_invocation_metrics_count_fallbacks_and_recovery():
+    rows = [
+        ev("call", field="discourse", elapsed_ms=100, ok=True, model_invocations=1, recovery_calls=0),
+        ev("call", field="quotation", elapsed_ms=200, ok=True, model_invocations=2, recovery_calls=0),
+        ev("call", field="indexing", elapsed_ms=300, ok=True, model_invocations=2, recovery_calls=1),
+    ]
+    invocations = compute(rows)["models"]["m"]["structured_model_invocations"]
+    assert invocations == {
+        "reported_call_events": 3,
+        "total": 5,
+        "p50_per_family": 2.0,
+        "p95_per_family": 2.0,
+        "recovery_calls": 1,
     }
 
 

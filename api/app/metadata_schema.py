@@ -930,8 +930,9 @@ _DISCOURSE_FOOTER = (
     "field_evidence using only current-record block IDs, confidence 0..1, and a short reason. Use null or [] when unsupported.\n"
     "Return one field_assessments entry for every one of {assessed_fields}, even when its metadata value is null or empty. Each assessment "
     "must contain all four keys: confidence (a number 0..1, or null only when confidence genuinely cannot be estimated), needs_review, reason, "
-    "and outcome. Use outcome=\"supported_value\" when the returned value is supported, outcome=\"no_supported_value\" when the "
-    "source supports that no value applies, and outcome=\"uncertain\" when the field cannot be determined. Mark needs_review=true whenever "
+    "and outcome. Keep every assessment reason to one short sentence. Never put a proposed value only in the reason: outcome=\"supported_value\" "
+    "requires the corresponding metadata value to be non-null/non-empty. Use outcome=\"no_supported_value\" when the source supports that no "
+    "value applies, and outcome=\"uncertain\" when the field cannot be determined. Mark needs_review=true whenever "
     "a proposed value or supported absence is genuinely ambiguous, attribution is uncertain, evidence is weak, or confidence is not sufficient "
     "for scholarly acceptance.\n"
 )
@@ -947,7 +948,8 @@ _QUOTATION_FOOTER = (
     "Return one field_assessments entry for every one of {assessed_fields}, even when its metadata value is null or empty. Each assessment must "
     "contain confidence (0..1 or null), needs_review, reason, and outcome. For is_direct_quote specifically, false is an explicit "
     "supported classification: return is_direct_quote=false with outcome=\"supported_value\" when the source supports that no direct "
-    "quotation is present; reserve outcome=\"no_supported_value\" for a null value when the field is genuinely inapplicable. Otherwise use "
+    "quotation is present; reserve outcome=\"no_supported_value\" for a null value when the field is genuinely inapplicable. Keep each reason "
+    "to one short sentence and never put a proposed value only in the reason. Otherwise use "
     "outcome=\"supported_value\", outcome=\"no_supported_value\", or outcome=\"uncertain\" according to the source evidence.\n"
 )
 _INDEXING_INTRO = (
@@ -959,8 +961,9 @@ _INDEXING_INTRO = (
 )
 _INDEXING_FOOTER = (
     "Return one field_assessments entry for every one of {assessed_fields}, even when the corresponding metadata list is empty. Each assessment "
-    "must contain confidence (0..1 or null), needs_review, reason, and outcome. Use outcome=\"supported_value\" for a supported non-empty "
-    "list, outcome=\"no_supported_value\" when the record supports an empty list, and outcome=\"uncertain\" when the field cannot be "
+    "must contain confidence (0..1 or null), needs_review, reason, and outcome. Keep each reason to one short sentence. Use "
+    "outcome=\"supported_value\" only for a supported non-empty list, outcome=\"no_supported_value\" when the record supports an empty list, "
+    "and outcome=\"uncertain\" when the field cannot be "
     "determined.\n"
 )
 

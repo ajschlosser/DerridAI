@@ -37,6 +37,15 @@ class Answer(BaseModel):
     label: str
 
 
+class RepairAssessment(BaseModel):
+    reason: str
+
+
+class RepairAnswer(BaseModel):
+    label: str
+    field_assessments: dict[str, RepairAssessment]
+
+
 REQUEST = {"provider": "ollama", "model": "primary-model"}
 WITH_REVIEW = {**REQUEST, "_review_provider": {"provider": "ollama", "model": "review-model"}}
 
@@ -122,6 +131,63 @@ def test_built_in_pipeline_uses_one_attempt_per_provider(monkeypatch, manager, t
     assert ledger["pipeline"]["pipeline_id"] == BUILT_IN[0]
     assert ledger["pipeline"]["pipeline_version"] == 2
     assert ledger["attempts_allowed"] == 1
+
+
+def test_truncated_primary_output_gets_one_bounded_recovery_call(
+    monkeypatch,
+    manager,
+    traces,
+) -> None:
+    calls = _provider(
+        monkeypatch,
+        {"primary-model": ['{"label":"unfinished', VALID]},
+    )
+    record, (_family, result, error) = _enrich(manager, REQUEST)
+
+    assert error is None
+    assert result == {"label": "ok"}
+    assert [call["model"] for call in calls] == ["primary-model", "primary-model"]
+    assert calls[1]["max_tokens"] > calls[0]["max_tokens"]
+    assert "STRUCTURED OUTPUT RECOVERY" in str(calls[1]["prompt"])
+    ledger = record["metadata_execution_ledger"]["discourse"]
+    assert ledger["recovery_kind"] == "truncated_output"
+    assert ledger["recovery_calls"] == 1
+    assert ledger["recovery_max_output_tokens"] > ledger["max_output_tokens"]
+    assert ledger["model_invocations"] == 2
+
+
+def test_assessment_contradiction_gets_one_consistency_repair_call(
+    monkeypatch,
+    manager,
+    traces,
+) -> None:
+    first = (
+        '{"label":"ok","field_assessments":{"proposition_status":'
+        '{"reason":"Structured-output contradiction: outcome=supported_value but the metadata value is empty. '
+        'The text presents its claims as definitive truths."}}}'
+    )
+    second = '{"label":"ok","field_assessments":{"proposition_status":{"reason":"Consistent."}}}'
+    calls = _provider(monkeypatch, {"primary-model": [first, second]})
+    record: dict[str, object] = {"record_id": "r1", "text": "Such genesis is impossible."}
+    results = manager._execute_metadata_tasks(
+        record,
+        REQUEST,
+        [("discourse", PROMPT, RepairAnswer, 512, SCHEMA)],
+        "",
+        None,
+    )
+    _family, result, error = results[0]
+
+    assert error is None
+    assert result is not None
+    assert [call["model"] for call in calls] == ["primary-model", "primary-model"]
+    assert "STRUCTURED OUTPUT CONSISTENCY REPAIR" in str(calls[1]["prompt"])
+    ledger = record["metadata_execution_ledger"]["discourse"]
+    assert ledger["recovery_kind"] == "assessment_contradiction"
+    assert ledger["recovery_fields"] == ["proposition_status"]
+    assert ledger["recovery_calls"] == 1
+    assert ledger["residual_contradiction_fields"] == []
+    assert ledger["model_invocations"] == 2
 
 
 def test_built_in_compiles_and_is_assigned() -> None:

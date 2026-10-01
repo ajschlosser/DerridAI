@@ -144,6 +144,34 @@ def _field_resolved_before_indexing_model(record: dict[str, Any], field_name: st
         return is_direct_nlp_indexing_candidate(assertion)
     return _field_has_strong_memory_prefill(record, field_name)
 
+_STRUCTURED_CONTRADICTION_PREFIX = "Structured-output contradiction:"
+
+
+def _structured_output_contradiction_fields(result: dict[str, Any]) -> list[str]:
+    """Return fields whose validated assessment contradicts its metadata value."""
+    assessments = result.get("field_assessments")
+    if not isinstance(assessments, dict):
+        return []
+    return sorted(
+        str(field)
+        for field, payload in assessments.items()
+        if isinstance(payload, dict)
+        and str(payload.get("reason") or "").startswith(_STRUCTURED_CONTRADICTION_PREFIX)
+    )
+
+
+def _is_truncated_structured_output(exc: Exception) -> bool:
+    """Use the shared structured-output classification, with legacy text fallback."""
+    return bool(getattr(exc, "truncated", False)) or (
+        "truncated before its closing brace" in str(exc).casefold()
+    )
+
+
+def _recovery_token_budget(max_tokens: int) -> int:
+    """Give one exceptional malformed-output repair more room than the normal call."""
+    return min(8192, max(max_tokens + 1024, int(max_tokens * 1.5)))
+
+
 class MetadataEnrichmentExecutionMixin:
     """Mixin members declared here exist on PdfCorpusBuildManager, not on this mixin itself.
 
@@ -994,23 +1022,112 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             }
             stage_status[task_name] = "running"
             stage_ledger[task_name] = {**ledger_context, "state": "running", "started_at": started_at, "finished_at": None, "error": None}
+            model_invocations_before = (
+                sum(int(item.get("input_count") or 0) for item in session.counts.values())
+                if session is not None
+                else 0
+            )
             if stage_callback:
                 stage_callback(record, task_name, "running", None)
             started_clock = time.monotonic()
+            recovery_kind: str | None = None
+            recovery_fields: list[str] = []
+            recovery_max_tokens: int | None = None
+            residual_contradictions: list[str] = []
             try:
                 if session is None:
                     raise pipeline["error"]
-                result = session.run(
-                    self._structured_metadata_invoker(active_request, prompt, response_model, max_tokens, schema_name, build_id),
-                    response_contract=schema_name,
-                    providers=_provider_roles(active_request),
-                )
+                try:
+                    result = session.run(
+                        self._structured_metadata_invoker(
+                            active_request,
+                            prompt,
+                            response_model,
+                            max_tokens,
+                            schema_name,
+                            build_id,
+                        ),
+                        response_contract=schema_name,
+                        providers=_provider_roles(active_request),
+                    )
+                except Exception as first_error:
+                    if not _is_truncated_structured_output(first_error):
+                        raise
+                    recovery_kind = "truncated_output"
+                    recovery_max_tokens = _recovery_token_budget(max_tokens)
+                    repair_prompt = (
+                        prompt
+                        + "\n\nSTRUCTURED OUTPUT RECOVERY: the previous response was truncated. "
+                        "Return the complete JSON object from the beginning. Keep assessment and "
+                        "evidence reasons to one short sentence each; do not add commentary outside JSON."
+                    )
+                    result = session.run(
+                        self._structured_metadata_invoker(
+                            active_request,
+                            repair_prompt,
+                            response_model,
+                            recovery_max_tokens,
+                            schema_name,
+                            build_id,
+                        ),
+                        response_contract=schema_name,
+                        providers=_provider_roles(active_request),
+                    )
+
+                if recovery_kind is None:
+                    recovery_fields = _structured_output_contradiction_fields(result)
+                    if recovery_fields:
+                        recovery_kind = "assessment_contradiction"
+                        repair_prompt = (
+                            prompt
+                            + "\n\nSTRUCTURED OUTPUT CONSISTENCY REPAIR: the previous response "
+                            "contradicted its metadata value for: "
+                            + ", ".join(recovery_fields)
+                            + ". Re-evaluate those fields from THIS record. Never put a proposed "
+                            "value only in an assessment reason: supported_value requires the "
+                            "corresponding metadata value to be non-null/non-empty; otherwise use "
+                            "no_supported_value or uncertain as appropriate. Return the complete "
+                            "family JSON object and keep every reason to one short sentence."
+                        )
+                        result = session.run(
+                            self._structured_metadata_invoker(
+                                active_request,
+                                repair_prompt,
+                                response_model,
+                                max_tokens,
+                                schema_name,
+                                build_id,
+                            ),
+                            response_contract=schema_name,
+                            providers=_provider_roles(active_request),
+                        )
+
+                residual_contradictions = _structured_output_contradiction_fields(result)
                 persisted_stage_results[task_name] = result
                 stage_status[task_name] = "complete"
+                model_invocations = max(
+                    0,
+                    (
+                        sum(int(item.get("input_count") or 0) for item in session.counts.values())
+                        if session is not None
+                        else 0
+                    )
+                    - model_invocations_before,
+                )
                 stage_ledger[task_name] = {
-                    **ledger_context, "pipeline": session.identity(),
-                    "state": "complete", "started_at": started_at, "finished_at": iso_now(),
-                    "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": None,
+                    **ledger_context,
+                    "pipeline": session.identity(),
+                    "state": "complete",
+                    "started_at": started_at,
+                    "finished_at": iso_now(),
+                    "elapsed_ms": int((time.monotonic() - started_clock) * 1000),
+                    "error": None,
+                    "recovery_kind": recovery_kind,
+                    "recovery_fields": recovery_fields,
+                    "recovery_calls": 1 if recovery_kind else 0,
+                    "recovery_max_output_tokens": recovery_max_tokens,
+                    "residual_contradiction_fields": residual_contradictions,
+                    "model_invocations": model_invocations,
                 }
                 stage_results.append((task_name, result, None))
                 self._ledger.append(
@@ -1027,6 +1144,12 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     input_chars=len(prompt),
                     max_output_tokens=max_tokens,
                     attempts_allowed=ledger_context["attempts_allowed"],
+                    recovery_kind=recovery_kind,
+                    recovery_fields=recovery_fields,
+                    recovery_calls=1 if recovery_kind else 0,
+                    recovery_max_output_tokens=recovery_max_tokens,
+                    residual_contradiction_fields=residual_contradictions,
+                    model_invocations=model_invocations,
                     **experiment.context(
                         request,
                         model=str(active_request.get("model") or ""),
@@ -1046,10 +1169,28 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 raise
             except Exception as exc:
                 stage_status[task_name] = "failed"
+                model_invocations = max(
+                    0,
+                    (
+                        sum(int(item.get("input_count") or 0) for item in session.counts.values())
+                        if session is not None
+                        else 0
+                    )
+                    - model_invocations_before,
+                )
                 stage_ledger[task_name] = {
-                    **ledger_context, **({"pipeline": session.identity()} if session else {}),
-                    "state": "failed", "started_at": started_at, "finished_at": iso_now(),
-                    "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": str(exc)[:1200],
+                    **ledger_context,
+                    **({"pipeline": session.identity()} if session else {}),
+                    "state": "failed",
+                    "started_at": started_at,
+                    "finished_at": iso_now(),
+                    "elapsed_ms": int((time.monotonic() - started_clock) * 1000),
+                    "error": str(exc)[:1200],
+                    "recovery_kind": recovery_kind,
+                    "recovery_fields": recovery_fields,
+                    "recovery_calls": 1 if recovery_kind else 0,
+                    "recovery_max_output_tokens": recovery_max_tokens,
+                    "model_invocations": model_invocations,
                 }
                 stage_results.append((task_name, None, exc))
                 self._ledger.append(
@@ -1066,6 +1207,12 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     input_chars=len(prompt),
                     max_output_tokens=max_tokens,
                     attempts_allowed=ledger_context["attempts_allowed"],
+                    recovery_kind=recovery_kind,
+                    recovery_fields=recovery_fields,
+                    recovery_calls=1 if recovery_kind else 0,
+                    recovery_max_output_tokens=recovery_max_tokens,
+                    residual_contradiction_fields=residual_contradictions,
+                    model_invocations=model_invocations,
                     **experiment.context(
                         request,
                         model=str(active_request.get("model") or ""),

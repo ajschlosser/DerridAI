@@ -22,6 +22,7 @@ from .enrichment_ledger import (
     CALL,
     CORRECTED,
     PROPOSED,
+    RECORD_RUN,
     RECHECK,
     REJECTED,
     RESUMED,
@@ -118,6 +119,7 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
     proposals = [e for e in events if e["kind"] == PROPOSED]
     reviews = [e for e in events if e["kind"] in REVIEW_EVENTS]
     calls = [e for e in events if e["kind"] == CALL]
+    record_runs = [e for e in events if e["kind"] == RECORD_RUN]
     accepted = [e for e in reviews if e["kind"] == ACCEPTED]
     # A reviewer who restated the value (J.P. -> J. P.) accepted it; it is counted apart so
     # "accepted" is never read as "kept exactly as proposed".
@@ -163,6 +165,11 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         if isinstance(e.get("elapsed_ms"), (int, float))
     ]
     elapsed = sum(call_elapsed)
+    record_elapsed = [
+        float(e.get("elapsed_ms") or 0)
+        for e in record_runs
+        if isinstance(e.get("elapsed_ms"), (int, float))
+    ]
     requested_field_counts = [
         float(e["requested_field_count"])
         for e in calls
@@ -173,6 +180,16 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         for e in calls
         if isinstance(e.get("input_chars"), (int, float))
     ]
+    model_invocations = [
+        int(e["model_invocations"])
+        for e in calls
+        if isinstance(e.get("model_invocations"), (int, float))
+    ]
+    recovery_calls = sum(
+        int(e.get("recovery_calls") or 0)
+        for e in calls
+        if isinstance(e.get("recovery_calls"), (int, float))
+    )
 
     # 10. Learning curve: acceptance in successive groups of reviews.
     curve = []
@@ -238,6 +255,13 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
             "max": round(max(call_elapsed), 2) if call_elapsed else None,
             "total": round(elapsed, 2),
         },
+        "record_latency_ms": {
+            "records": len(record_elapsed),
+            "p50": _percentile(record_elapsed, 0.50),
+            "p95": _percentile(record_elapsed, 0.95),
+            "max": round(max(record_elapsed), 2) if record_elapsed else None,
+            "total": round(sum(record_elapsed), 2),
+        },
         "call_contract": {
             "requested_fields_p50": _percentile(requested_field_counts, 0.50),
             "requested_fields_p95": _percentile(requested_field_counts, 0.95),
@@ -245,6 +269,19 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
             "input_chars_p50": _percentile(input_char_counts, 0.50),
             "input_chars_p95": _percentile(input_char_counts, 0.95),
             "input_chars_total": round(sum(input_char_counts), 2),
+        },
+        "structured_model_invocations": {
+            "reported_call_events": len(model_invocations),
+            "total": sum(model_invocations),
+            "p50_per_family": _percentile(
+                [float(value) for value in model_invocations],
+                0.50,
+            ),
+            "p95_per_family": _percentile(
+                [float(value) for value in model_invocations],
+                0.95,
+            ),
+            "recovery_calls": recovery_calls,
         },
         "ms_per_call": _rate(elapsed, len(calls)),  # 9
         "ms_per_accepted_field": _rate(elapsed, len(accepted)),  # 9
