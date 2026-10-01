@@ -13,9 +13,11 @@ records within `hard_max_chars`, and dropped only when the joined record stays w
 it is kept where it is and reported, so a reviewer sees a record that ends mid-sentence rather than
 one that silently outgrows the size the build asked for.
 
-What this cannot know: a sentence-final full stop after an abbreviation ("Dr.") looks like a clean
-end, and text with no punctuation at all (verse, lists, OCR noise) has no sentence ends to find.
-Those are covered by the next-block-starts-lowercase test and by the size cap, not by certainty.
+What this cannot know with certainty: punctuation can be ambiguous, and text with no sentence
+punctuation at all (verse, lists, OCR noise, or languages whose written conventions do not expose
+reliable sentence marks in the source) may have no deterministic sentence end to find. The shared
+language profile therefore uses conservative continuation and abbreviation rules, and the size cap
+remains authoritative rather than manufacturing a linguistic boundary.
 """
 
 from __future__ import annotations
