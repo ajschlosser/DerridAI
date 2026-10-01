@@ -278,6 +278,31 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
+  it("shows stale search-index records as needing an update", async () => {
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({
+        indexFreshness: {
+          state: "stale",
+          totalRecords: 12,
+          currentRecords: 9,
+          changedRecords: 2,
+          presentRecords: 0,
+          absentRecords: 1,
+          unknownRecords: 0,
+          unavailableRecords: 0,
+        },
+      }),
+    );
+    const wrapper = await mountWorks();
+    expect(wrapper.get("[data-works-context='database']").text()).toContain(
+      "9 / 12 records current · 3 need updating",
+    );
+    expect(
+      wrapper.get("[data-index-state='stale']").classes(),
+    ).toContain("works-context-index-summary");
+    wrapper.unmount();
+  });
+
   it("keeps bibliographic and corpus actions on the runtime command surface", async () => {
     runtime.getWorksWorkspaceSnapshot.mockReturnValue(
       adminSnapshot({
