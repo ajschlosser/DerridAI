@@ -3,12 +3,10 @@
 
 from __future__ import annotations
 
-from app import (
-    field_assertions,
-    metadata_candidates,
-    metadata_schema,
-    nlp_annotations,
-)
+import app.field_assertions
+import app.metadata_candidates
+import app.metadata_schema
+import app.nlp_annotations
 
 
 TEXT = "Rousseau discusses Of Grammatology and hospitality."
@@ -25,7 +23,7 @@ def _record() -> dict:
             "engine": "spacy",
             "engine_version": "3.8.7",
             "model": "en_core_web_lg",
-            "text_sha256": nlp_annotations.text_digest(TEXT),
+            "text_sha256": app.nlp_annotations.text_digest(TEXT),
             "fields": {
                 "persons": [
                     {
@@ -77,14 +75,14 @@ def _record() -> dict:
 
 def test_safe_direct_ner_indexing_candidates_become_unreviewed_assertions():
     record = _record()
-    summary = metadata_candidates.apply_indexing_nlp_candidates(record, metadata_schema.default_schema())
+    summary = app.metadata_candidates.apply_indexing_nlp_candidates(record, app.metadata_schema.default_schema())
 
     assert summary["resolved_fields"] == ["persons", "works_referenced"]
     assert record["persons"] == ["Rousseau"]
     assert record["works_referenced"] == ["Of Grammatology"]
     assert "topics" not in record and "concepts" not in record
 
-    persons = field_assertions.current_assertion_by_name(record, "persons")
+    persons = app.field_assertions.current_assertion_by_name(record, "persons")
     assert persons is not None
     assert persons.derivation_method == "derridai:nlp"
     assert persons.evaluation_status == "value_supported"
@@ -97,7 +95,7 @@ def test_safe_direct_ner_indexing_candidates_become_unreviewed_assertions():
         "text": "Rousseau",
         "tag": "PERSON",
         "source": "ner",
-        "text_sha256": nlp_annotations.text_digest(TEXT),
+        "text_sha256": app.nlp_annotations.text_digest(TEXT),
         "engine": "spacy",
         "engine_version": "3.8.7",
         "model": "en_core_web_lg",
@@ -120,7 +118,7 @@ def test_crowded_direct_ner_set_is_deferred_to_semantic_indexing():
             "engine": "spacy",
             "engine_version": "3.8.7",
             "model": "en_core_web_lg",
-            "text_sha256": nlp_annotations.text_digest(text),
+            "text_sha256": app.nlp_annotations.text_digest(text),
             "fields": {
                 "persons": [
                     {
@@ -136,7 +134,7 @@ def test_crowded_direct_ner_set_is_deferred_to_semantic_indexing():
         },
     }
 
-    summary = metadata_candidates.apply_indexing_nlp_candidates(record, metadata_schema.default_schema())
+    summary = app.metadata_candidates.apply_indexing_nlp_candidates(record, app.metadata_schema.default_schema())
 
     assert summary["resolved_fields"] == []
     assert "persons" not in record
@@ -146,7 +144,7 @@ def test_crowded_direct_ner_set_is_deferred_to_semantic_indexing():
 def test_stale_nlp_projection_is_never_promoted():
     record = _record()
     record["text"] += " Revised."
-    summary = metadata_candidates.apply_indexing_nlp_candidates(record, metadata_schema.default_schema())
+    summary = app.metadata_candidates.apply_indexing_nlp_candidates(record, app.metadata_schema.default_schema())
 
     assert summary["resolved_fields"] == []
     assert "persons" not in record
@@ -154,9 +152,9 @@ def test_stale_nlp_projection_is_never_promoted():
 
 
 def test_nlp_candidates_do_not_overwrite_present_memory_or_human_values():
-    schema = metadata_schema.default_schema()
+    schema = app.metadata_schema.default_schema()
     record = _record()
-    field_assertions.create_memory_assertion(
+    app.field_assertions.create_memory_assertion(
         record,
         "persons",
         ["Derrida"],
@@ -165,19 +163,19 @@ def test_nlp_candidates_do_not_overwrite_present_memory_or_human_values():
         reason="Reviewed precedents agree.",
         evidence=[{"block_ids": ["b1"], "confidence": 0.9}],
     )
-    field_assertions.create_human_assertion(
+    app.field_assertions.create_human_assertion(
         record,
         "works_referenced",
         ["Glas"],
         schema=schema,
         reason="Reviewer selected this work.",
     )
-    field_assertions.project_record_assertions(record)
+    app.field_assertions.project_record_assertions(record)
 
-    summary = metadata_candidates.apply_indexing_nlp_candidates(record, schema)
+    summary = app.metadata_candidates.apply_indexing_nlp_candidates(record, schema)
 
     assert summary["resolved_fields"] == []
     assert record["persons"] == ["Derrida"]
     assert record["works_referenced"] == ["Glas"]
-    assert field_assertions.current_assertion_by_name(record, "persons").derivation_method == "derridai:memory"
-    assert field_assertions.current_assertion_by_name(record, "works_referenced").authority_status == "human_confirmed"
+    assert app.field_assertions.current_assertion_by_name(record, "persons").derivation_method == "derridai:memory"
+    assert app.field_assertions.current_assertion_by_name(record, "works_referenced").authority_status == "human_confirmed"
