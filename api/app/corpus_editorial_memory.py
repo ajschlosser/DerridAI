@@ -653,6 +653,13 @@ class EditorialMemoryMixin:
         record: dict[str, Any],
         kept: dict[str, tuple[dict[str, Any], dict[str, Any]]],
     ) -> dict[str, dict[str, Any]]:
+        """Resolve kept precedent refs and lazily rank this Record's possible evidence.
+
+        Enrichment retains the exact precedent identities/similarities it supplied to the
+        model, but source-unit remapping is reviewer assistance rather than enrichment input.
+        Running the remap here keeps that potentially embedding-backed work off the build's
+        critical path while preserving the same suggestions when the panel is actually used.
+        """
         record_id = str(record.get("record_id") or "")
         memory = self._editorial_memory(
             build_id,
@@ -676,6 +683,37 @@ class EditorialMemoryMixin:
                 "stale_count": stale,
                 "items": items,
             }
+
+        fields_with_items = [field for field, payload in out.items() if payload["items"]]
+        if not fields_with_items:
+            return out
+        try:
+            blocks = self._blocks_for(build_id)
+        except (KeyError, OSError):
+            blocks = {}
+        if not blocks:
+            return out
+        try:
+            session = RemapSession.open()
+        except Exception:  # noqa: BLE001 - candidates are advisory; precedents still render
+            session = None
+        if session is None:
+            return out
+
+        try:
+            embed = self._precedent_embedder()
+            for field in fields_with_items:
+                items = out[field]["items"]
+                candidates = rank_candidates(
+                    items, record, blocks, embed=embed, session=session,
+                )
+                for item, picks in zip(items, candidates):
+                    item["candidate_source_units"] = picks
+        finally:
+            identity = session.finish()
+        if identity is not None:
+            for field in fields_with_items:
+                out[field]["candidate_pipeline"] = identity
         return out
 
     def _precedent_embedder(self) -> Any:
