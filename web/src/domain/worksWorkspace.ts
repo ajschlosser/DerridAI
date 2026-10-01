@@ -280,7 +280,7 @@ export function createWorksWorkspace(deps: Deps) {
       activeStore,
       activeStoreCount: Number(activeStoreInfo?.count || 0),
       dbUnavailableReason: noDbReason,
-      storesEmptyLabel: "No corpus Chroma collections",
+      storesEmptyLabel: tr("works.no_search_indexes"),
       citationLabel: label("full_citation"),
       populateDisabledReason: "",
       syncAllDisabledReason: noDbReason || tr("works.select_collection"),
