@@ -234,7 +234,7 @@ The provenance gate and top-K selection cannot be removed; candidates remain adv
 
 ### 4.14 Corpus Builder metadata enrichment moved onto pipeline runtime
 
-`_execute_metadata_tasks()` no longer decides how a metadata group's model call runs. It resolves the `corpus_metadata_enrichment` assignment once per Record (built-in `corpus.metadata_enrichment.current@1`: `llm.structured_metadata` on the primary provider, 2 attempts, escalating on error or timeout to `llm.structured_metadata` on the review provider, 2 attempts) and runs each group through `EnrichmentSession` in `api/app/pipelines/corpus_metadata_enrichment.py`. `_chat_json()` takes `roles` and `escalated` so one stage runs one provider role; its default chain is unchanged for the callers that have not migrated (page-marker choice, the text-noise second reader, schema preview, evidence recovery's closed-choice callback).
+`_execute_metadata_tasks()` no longer decides how a metadata group's model call runs. It resolves the `corpus_metadata_enrichment` assignment once per Record and runs each group through `EnrichmentSession` in `api/app/pipelines/corpus_metadata_enrichment.py`. The active built-in `corpus.metadata_enrichment.current@2` gives `llm.structured_metadata` one primary-provider attempt and follows the error/timeout edge to one review-provider attempt when configured. Version 1 preserves the historical 2+2 chain as a disabled built-in for reproducibility. `_chat_json()` takes `roles` and `escalated` so one stage runs one provider role; its default chain is unchanged for callers that have not migrated (page-marker choice, the text-noise second reader, schema preview, evidence recovery's closed-choice callback).
 
 - Classification: provider role and attempts are pipeline settings. The correction/escalation prompt notes, the growing token budget, not retrying a timed-out provider, and the per-family `max_tokens`/timeouts from build settings stay server policy. The schema-derived prompt and response model, family routing (fast/deep, human-owned, adaptive skip, settle), reconciliation, evidence and autofill stay domain code outside the pipeline.
 - The compiler accepts one terminal structured stage with at most one terminal escalation stage on the other provider role. A review stage without a configured review provider is `unavailable`; with no edge, the primary failure is reported exactly as before.
@@ -311,7 +311,7 @@ As of current `master`, built-in system assignments are:
 | Vector Store search          | `store_search.similarity@1`                 | active |
 | Metadata pre-fill            | `metadata.prefill.current@1`                | active |
 | Precedent evidence remapping | `precedent.remap.current@1`                 | active |
-| Corpus metadata enrichment   | `corpus.metadata_enrichment.current@1`      | active |
+| Corpus metadata enrichment   | `corpus.metadata_enrichment.current@2`      | active |
 | Corpus segmentation          | `corpus.segmentation.current@1`             | active |
 | Corpus document manifest     | `corpus.document_manifest.current@1`        | active |
 | Corpus text touch-up         | `corpus.text_touchup.current@1`             | active |
@@ -324,6 +324,7 @@ There are also important draft/legacy definitions:
 
 - `research.balanced@1` — draft target architecture;
 - `evidence.reviewer.current@1` — disabled legacy reviewer chain;
+- `corpus.metadata_enrichment.current@1` — disabled legacy 2+2 retry chain;
 - `evidence.conservative@1` — draft deeper evidence chain.
 
 ### Research remains deliberately on the current production ordering

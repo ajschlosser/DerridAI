@@ -70,6 +70,10 @@ from .field_assertions import (
     reopen_assertion,
 )
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
+from .metadata_candidates import (
+    apply_indexing_nlp_candidates,
+    is_direct_nlp_indexing_candidate,
+)
 from .metadata_precedents_cache import CACHE_KEY as PRECEDENTS_CACHE_KEY
 from .metadata_precedents_cache import build_precedents_cache
 from .metadata_schema import (
@@ -107,27 +111,38 @@ def _has_quotation_signal(record: dict[str, Any], source_text: str) -> bool:
     )
 
 
-def _family_has_strong_memory_prefill(
-    record: dict[str, Any], schema: MetadataSchema, group_key: str,
-) -> bool:
-    """Whether every schema field in a family already has a strong memory proposal."""
-    fields = [field.name for field in schema.fields_in(group_key)]
-    if not fields:
-        return False
-    for field_name in fields:
-        assertion = current_assertion_by_name(record, field_name)
-        if (
-            assertion is None
-            or assertion.derivation_method != "derridai:memory"
-            or assertion.evaluation_status != "value_supported"
-            or assertion.value_status != "present"
-            or assertion.value in (None, "", [])
-            or not isinstance(assertion.confidence, (int, float))
-            or float(assertion.confidence) < 0.88
-        ):
-            return False
-    return True
+def _field_has_strong_memory_prefill(record: dict[str, Any], field_name: str) -> bool:
+    """Whether one field already has a strong reviewed-memory proposal."""
+    assertion = current_assertion_by_name(record, field_name)
+    return bool(
+        assertion is not None
+        and assertion.derivation_method == "derridai:memory"
+        and assertion.evaluation_status == "value_supported"
+        and assertion.value_status == "present"
+        and assertion.value not in (None, "", [])
+        and isinstance(assertion.confidence, (int, float))
+        and float(assertion.confidence) >= 0.88
+    )
 
+
+def _field_resolved_before_indexing_model(record: dict[str, Any], field_name: str) -> bool:
+    """Whether a higher-priority candidate makes indexing generation redundant.
+
+    Human/structural authority always wins. Reviewed-memory values require the
+    existing conservative similarity threshold. derridai:nlp values are eligible
+    only because metadata_candidates already restricts promotion to direct-mention
+    indexing semantics and binds the exact current-text spans.
+    """
+    assertion = current_assertion_by_name(record, field_name)
+    if assertion is None or assertion.value_status != "present" or assertion.value in (None, "", []):
+        return False
+    if assertion.authority_status in {"human_confirmed", "human_override"}:
+        return True
+    if assertion.derivation_method in {"deterministic", "inherited"}:
+        return True
+    if assertion.derivation_method == "derridai:nlp":
+        return is_direct_nlp_indexing_candidate(assertion)
+    return _field_has_strong_memory_prefill(record, field_name)
 
 class MetadataEnrichmentExecutionMixin:
     """Mixin members declared here exist on PdfCorpusBuildManager, not on this mixin itself.
@@ -276,6 +291,26 @@ class MetadataEnrichmentExecutionMixin:
         )
         semantic_indexing = bool(request.get("semantic_indexing")) or enrichment_mode == "deep"
         quotation_signal = _has_quotation_signal(record, source_text_for_routing)
+        if explicit_families is None and semantic_indexing:
+            # NLP is a derived candidate source, not authority. Only the narrow
+            # direct-mention indexing resolver may promote it into unreviewed
+            # FieldAssertions before retrieval/model routing.
+            nlp_routing = apply_indexing_nlp_candidates(record, schema)
+            if build_id:
+                resolved_nlp = nlp_routing.get("resolved_fields")
+                deferred_nlp = nlp_routing.get("deferred_fields")
+                if isinstance(resolved_nlp, list) and resolved_nlp:
+                    self._increment_metric(
+                        build_id,
+                        "metadata_nlp_candidate_fields",
+                        len(resolved_nlp),
+                    )
+                if isinstance(deferred_nlp, dict) and deferred_nlp:
+                    self._increment_metric(
+                        build_id,
+                        "metadata_nlp_candidate_deferred_fields",
+                        len(deferred_nlp),
+                    )
         precedent_fields: set[str] = set()
         for group in schema.groups:
             if explicit_families is not None and group.key not in explicit_families:
@@ -285,7 +320,15 @@ class MetadataEnrichmentExecutionMixin:
                     continue
                 if group.key == "indexing" and not semantic_indexing:
                     continue
-                if group.key == "indexing" and _family_has_strong_memory_prefill(record, schema, group.key):
+                if group.key == "indexing":
+                    unresolved_indexing = {
+                        field.name
+                        for field in schema.fields_in(group.key)
+                        if not _field_resolved_before_indexing_model(record, field.name)
+                    }
+                    if not unresolved_indexing:
+                        continue
+                    precedent_fields.update(unresolved_indexing)
                     continue
             precedent_fields.update(field.name for field in schema.fields_in(group.key))
             if group.key == CORE_GROUP:
@@ -587,24 +630,60 @@ class MetadataEnrichmentExecutionMixin:
                 and assertion.authority_status in {"human_confirmed", "human_override"}
             )
         )
+        def pass_learning_for(group_fields: list[str]) -> dict[str, Any]:
+            """Keep field-keyed pass memory aligned with this model contract."""
+            wanted = set(group_fields)
+            scoped = json.loads(json.dumps(prompt_pass_learning))
+            for key in ("field_stats", "rejected_examples"):
+                values = scoped.get(key)
+                if isinstance(values, dict):
+                    scoped[key] = {
+                        field: payload
+                        for field, payload in values.items()
+                        if field in wanted
+                    }
+            prior = scoped.get("prior_pass")
+            if isinstance(prior, dict):
+                for key in ("inferred_conventions", "disputed_fields"):
+                    values = prior.get(key)
+                    if isinstance(values, dict):
+                        prior[key] = {
+                            field: payload
+                            for field, payload in values.items()
+                            if field in wanted
+                        }
+            return scoped
+
         def base_context_for(group_fields: list[str]) -> str:
-            # Each LLM family receives only precedents for fields it can actually
-            # return. This preserves the global exemplar budget while avoiding
-            # repeated prompt-prefill cost from unrelated metadata families.
+            # Each LLM family receives only precedent/convention context for fields
+            # it can actually return. This preserves the global exemplar budget
+            # while avoiding repeated prompt-prefill cost from resolved or unrelated
+            # metadata fields.
             relevant_examples = {
                 field: compatible
                 for field in group_fields
                 if field in editorial_examples
                 and (compatible := prompt_compatible_examples(field, editorial_examples[field]))
             }
+            relevant_conventions = {
+                field: payload
+                for field, payload in prompt_editorial_context.items()
+                if field in group_fields
+            }
+            relevant_human_fields = {
+                field: record.get(field)
+                for field in human_locked_fields
+                if field in group_fields
+            }
+            relevant_pass_learning = pass_learning_for(group_fields)
             return f"""Document manifest: {json.dumps(manifest, ensure_ascii=False)}
 When document_author is present in the manifest, use it as source-document authorship context. Do not substitute a default author when it is absent, and do not infer that document_author is the speaker or position holder without evidence in this record.
-Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(prompt_editorial_context, ensure_ascii=False)}
+Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(relevant_conventions, ensure_ascii=False)}
 Relevant human-confirmed examples for fields in THIS metadata family (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps(relevant_examples, ensure_ascii=False)}
 If a retrieved example has kind="correction", its value is the human-supported classification and rejected_value is a known prior model mistake. Treat rejected_value as a negative precedent only; never copy or prefer it because it appears in the example.
 If an example has a "match" object, the reviewed values of the listed fields on that example's record equal this record's reviewed values; examples without it were not compared on those fields and are analogous by text only.
-How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps(prompt_pass_learning, ensure_ascii=False)}
-Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({field: record.get(field) for field in human_locked_fields}, ensure_ascii=False)}
+How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps(relevant_pass_learning, ensure_ascii=False)}
+Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps(relevant_human_fields, ensure_ascii=False)}
 Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
 {_nlp_hint_line(record, group_fields)}Current source block IDs: {source_id_json}
 {labelled_blocks}CURRENT REVIEWED RECORD TEXT:
@@ -616,22 +695,48 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         region_type = str(record.get("region_type") or "")
         obvious_apparatus = region_type in {"bibliography", "index", "copyright", "front_matter", "back_matter"} or record.get("primary_text") is False
         quote_signal = _has_quotation_signal(record, source_text)
-        # One task per group of the build's schema: the prompt is assembled from the schema and the answer's shape is generated from it.
+        requested_families = request.get("families")
+        explicitly_requested = (
+            {str(value) for value in requested_families}
+            if isinstance(requested_families, list) and requested_families
+            else None
+        )
+        routing_skip_reasons: dict[str, str] = {}
+        # One task per group of the build's schema. Automatic indexing may narrow
+        # the contract to fields not already resolved by strong reviewed-memory
+        # candidates; an explicit human rerun always requests the full family.
         all_task_specs: dict[str, tuple[str, str, type[BaseModel], int, str]] = {}
+        model_fields_by_family: dict[str, list[str]] = {}
         run_guidance = request.get("run_guidance") if isinstance(request.get("run_guidance"), dict) else {}
         guidance_matches = record.get("metadata_guidance_matches")
         if not isinstance(guidance_matches, dict):
             guidance_matches = find_guidance_matches(source_text, run_guidance)
         for group in schema.groups:
-            group_fields = [field.name for field in schema.fields_in(group.key)]
+            schema_group_fields = list(schema.fields_in(group.key))
+            model_fields = list(schema_group_fields)
+            if explicitly_requested is None and group.key == "indexing":
+                model_fields = [
+                    field
+                    for field in schema_group_fields
+                    if not _field_resolved_before_indexing_model(record, field.name)
+                ]
+            model_field_names = [field.name for field in model_fields]
+            model_fields_by_family[group.key] = model_field_names
+            group_fields = list(model_field_names)
             if group.key == CORE_GROUP:
                 group_fields = [*CORE_FIELDS, *group_fields]
+            scoped_contract = (
+                model_field_names
+                if len(model_field_names) != len(schema_group_fields)
+                else None
+            )
             prompt = build_group_prompt(
                 schema,
                 group.key,
                 base_context=base_context_for(group_fields),
                 allowed_region_types=allowed_region_types,
                 allowed_discourse_roles=allowed_discourse_roles,
+                field_names=scoped_contract,
             )
             if evidence_mode(request) == "backfill":
                 prompt += (
@@ -642,7 +747,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             if guidance_prompt:
                 prompt = prompt + "\n\n" + guidance_prompt
             remembered: dict[str, Any] = {}
-            for field in schema.fields_in(group.key):
+            for field in model_fields:
                 cached = adjudication_suggestions(
                     record_id=str(record.get("record_id") or ""),
                     text=source_text,
@@ -668,13 +773,16 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             all_task_specs[group.key] = (
                 group.key,
                 prompt,
-                response_model_for(schema, group.key, region_types=allowed_region_types, roles=allowed_discourse_roles),
+                response_model_for(
+                    schema,
+                    group.key,
+                    region_types=allowed_region_types,
+                    roles=allowed_discourse_roles,
+                    field_names=scoped_contract,
+                ),
                 int(limits.get(f"{group.key}_num_predict") or limits["indexing_num_predict"]),
                 f"derridai_record_{group.key}",
             )
-        requested_families = request.get("families")
-        routing_skip_reasons: dict[str, str] = {}
-
         if isinstance(requested_families, list) and requested_families:
             # Explicit human reruns bypass automatic routing, but only for the
             # selected family/families. This prevents a text correction from
@@ -701,7 +809,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 if name == "indexing" and not semantic_indexing:
                     routing_skip_reasons[name] = "Semantic indexing is disabled for this enrichment run."
                     continue
-                if name == "indexing" and _family_has_strong_memory_prefill(record, schema, name):
+                if name == "indexing" and not model_fields_by_family.get(name):
                     routing_skip_reasons[name] = (
                         "All indexing fields already have strong reviewed-memory prefills; "
                         "the advisory values are surfaced directly for review."
@@ -868,11 +976,18 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     pipeline["error"] = exc
             session: EnrichmentSession | None = pipeline.get("session")
             started_at = iso_now()
+            metadata_field = response_model.model_fields.get("metadata")
+            metadata_contract = getattr(metadata_field, "annotation", None)
+            requested_fields = sorted(
+                str(name)
+                for name in getattr(metadata_contract, "model_fields", {})
+            )
             ledger_context = {
                 "provider_profile_id": active_request.get("provider_profile_id"),
                 "provider": active_request.get("provider"),
                 "model": active_request.get("model"),
                 "attempts_allowed": stage_attempts(session.plan.entry) if session else 0,
+                "requested_fields": requested_fields,
                 "input_chars": len(prompt),
                 "max_output_tokens": max_tokens,
                 "timeout_seconds": _stage_timeouts(active_request).get(task_name),
@@ -898,7 +1013,28 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": None,
                 }
                 stage_results.append((task_name, result, None))
-                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0), ok=True, **experiment.context(request, model=str(active_request.get("model") or ""), record_id=str(record.get("record_id") or ""), code_version=APP_VERSION, prompt_version=PROFILE_VERSION))
+                self._ledger.append(
+                    CALL,
+                    model=str(active_request.get("model") or ""),
+                    field=task_name,
+                    build_id=build_id,
+                    record_id=str(record.get("record_id") or ""),
+                    run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")),
+                    elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0),
+                    ok=True,
+                    requested_fields=requested_fields,
+                    requested_field_count=len(requested_fields),
+                    input_chars=len(prompt),
+                    max_output_tokens=max_tokens,
+                    attempts_allowed=ledger_context["attempts_allowed"],
+                    **experiment.context(
+                        request,
+                        model=str(active_request.get("model") or ""),
+                        record_id=str(record.get("record_id") or ""),
+                        code_version=APP_VERSION,
+                        prompt_version=PROFILE_VERSION,
+                    ),
+                )
                 self._record_family_effectiveness(
                     build_id, task_name, result, elapsed_ms=stage_ledger[task_name].get("elapsed_ms", 0),
                     provider_profile_id=str(ledger_context.get("provider_profile_id") or ""),
@@ -916,7 +1052,28 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000), "error": str(exc)[:1200],
                 }
                 stage_results.append((task_name, None, exc))
-                self._ledger.append(CALL, model=str(active_request.get("model") or ""), field=task_name, build_id=build_id, record_id=str(record.get("record_id") or ""), run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")), elapsed_ms=int((time.monotonic() - started_clock) * 1000), ok=False, **experiment.context(request, model=str(active_request.get("model") or ""), record_id=str(record.get("record_id") or ""), code_version=APP_VERSION, prompt_version=PROFILE_VERSION))
+                self._ledger.append(
+                    CALL,
+                    model=str(active_request.get("model") or ""),
+                    field=task_name,
+                    build_id=build_id,
+                    record_id=str(record.get("record_id") or ""),
+                    run_id=str(request.get("run_id") or (f"build-{build_id}" if build_id else "")),
+                    elapsed_ms=int((time.monotonic() - started_clock) * 1000),
+                    ok=False,
+                    requested_fields=requested_fields,
+                    requested_field_count=len(requested_fields),
+                    input_chars=len(prompt),
+                    max_output_tokens=max_tokens,
+                    attempts_allowed=ledger_context["attempts_allowed"],
+                    **experiment.context(
+                        request,
+                        model=str(active_request.get("model") or ""),
+                        record_id=str(record.get("record_id") or ""),
+                        code_version=APP_VERSION,
+                        prompt_version=PROFILE_VERSION,
+                    ),
+                )
                 if stage_callback:
                     stage_callback(record, task_name, "failed", str(exc))
                 if build_id:

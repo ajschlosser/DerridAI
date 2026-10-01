@@ -163,6 +163,16 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         if isinstance(e.get("elapsed_ms"), (int, float))
     ]
     elapsed = sum(call_elapsed)
+    requested_field_counts = [
+        float(e["requested_field_count"])
+        for e in calls
+        if isinstance(e.get("requested_field_count"), (int, float))
+    ]
+    input_char_counts = [
+        float(e["input_chars"])
+        for e in calls
+        if isinstance(e.get("input_chars"), (int, float))
+    ]
 
     # 10. Learning curve: acceptance in successive groups of reviews.
     curve = []
@@ -227,6 +237,14 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
             "p95": _percentile(call_elapsed, 0.95),
             "max": round(max(call_elapsed), 2) if call_elapsed else None,
             "total": round(elapsed, 2),
+        },
+        "call_contract": {
+            "requested_fields_p50": _percentile(requested_field_counts, 0.50),
+            "requested_fields_p95": _percentile(requested_field_counts, 0.95),
+            "requested_fields_total": round(sum(requested_field_counts), 2),
+            "input_chars_p50": _percentile(input_char_counts, 0.50),
+            "input_chars_p95": _percentile(input_char_counts, 0.95),
+            "input_chars_total": round(sum(input_char_counts), 2),
         },
         "ms_per_call": _rate(elapsed, len(calls)),  # 9
         "ms_per_accepted_field": _rate(elapsed, len(accepted)),  # 9

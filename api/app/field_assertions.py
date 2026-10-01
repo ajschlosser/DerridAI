@@ -366,6 +366,38 @@ def create_model_assertion(
     )
 
 
+def create_nlp_assertion(
+    record: dict[str, Any],
+    field_name: str,
+    value: Any,
+    *,
+    schema: Any | None = None,
+    reason: str,
+    evidence: list[dict[str, Any]],
+    method: str = "nlp",
+    confidence: float | None = None,
+    model: str | None = None,
+    legacy_metadata: dict[str, Any] | None = None,
+    select: bool = True,
+) -> FieldAssertion:
+    """An unreviewed value candidate derived from current-text linguistic analysis."""
+    return _new_assertion(
+        record,
+        field_name=field_name,
+        schema=schema,
+        value=value,
+        derivation_method="derridai:nlp",
+        evaluation_status="value_supported",
+        method=method,
+        confidence=confidence,
+        reason=reason,
+        evidence=evidence,
+        model=model,
+        legacy_metadata=copy.deepcopy(legacy_metadata or {}),
+        select=select,
+    )
+
+
 def create_memory_assertion(
     record: dict[str, Any],
     field_name: str,

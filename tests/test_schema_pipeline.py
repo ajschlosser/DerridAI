@@ -22,6 +22,8 @@ from app.field_assertions import (
     current_assertion_by_name,
     project_record_assertions,
 )
+from app.metadata_candidates import apply_indexing_nlp_candidates
+from app.nlp_annotations import text_digest
 
 
 def notes_schema():
@@ -173,6 +175,29 @@ def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path)
         )
         record[field] = value
     project_record_assertions(record)
+    pass_learning = {
+        "field_stats": {
+            "persons": {"marker": "PERSON_MEMORY_MARKER"},
+            "topics": {"marker": "TOPIC_MEMORY_MARKER"},
+        },
+        "prior_pass": {
+            "inferred_conventions": {
+                "persons": {
+                    "value": ["Derrida"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "PERSON_PRIOR_MARKER",
+                },
+                "topics": {
+                    "value": ["hospitality"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "TOPIC_PRIOR_MARKER",
+                },
+            },
+            "disputed_fields": {"persons": 2, "topics": 1},
+        },
+    }
 
     tasks, _, _ = m._prepare_metadata_tasks(
         record,
@@ -184,6 +209,7 @@ def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path)
         "",
         "",
         None,
+        pass_learning=pass_learning,
         schema=schema,
     )
     assert [t[0] for t in tasks] == ["discourse"]
@@ -201,9 +227,282 @@ def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path)
         "",
         "",
         None,
+        pass_learning=pass_learning,
         schema=schema,
     )
     assert [t[0] for t in rerun] == ["indexing"]
+
+def test_enrich_record_promotes_direct_ner_candidates_before_indexing_generation(
+    tmp_path,
+    monkeypatch,
+):
+    m, bid = manager(tmp_path)
+    text = "Rousseau discusses Of Grammatology and hospitality."
+    record = {
+        "record_id": "nlp-routing",
+        "record_revision": 1,
+        "text": text,
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+        "nlp_candidates": {
+            "status": "ok",
+            "engine": "spacy",
+            "engine_version": "3.8.7",
+            "model": "en_core_web_lg",
+            "text_sha256": text_digest(text),
+            "fields": {
+                "persons": [{
+                    "start": 0,
+                    "end": 8,
+                    "text": "Rousseau",
+                    "source": "ner",
+                    "tag": "PERSON",
+                }],
+                "works_referenced": [{
+                    "start": 19,
+                    "end": 34,
+                    "text": "Of Grammatology",
+                    "source": "ner",
+                    "tag": "WORK_OF_ART",
+                }],
+                "topics": [{
+                    "start": 39,
+                    "end": 50,
+                    "text": "hospitality",
+                    "source": "pos",
+                    "tag": "NOUN",
+                }],
+            },
+        },
+    }
+    captured = {}
+
+    monkeypatch.setattr(
+        m,
+        "_editorial_memory",
+        lambda *args, **kwargs: {
+            "conventions": {},
+            "examples": {},
+            "requested_fields": sorted(kwargs.get("field_filter") or []),
+        },
+    )
+    monkeypatch.setattr(m, "_keep_precedent_retrieval", lambda *args, **kwargs: None)
+
+    def fake_execute(current, request, tasks, build_id, stage_callback):
+        captured["tasks"] = tasks
+        return []
+
+    monkeypatch.setattr(m, "_execute_metadata_tasks", fake_execute)
+    monkeypatch.setattr(
+        m,
+        "_reconcile_metadata_results",
+        lambda current, *args, **kwargs: current,
+    )
+
+    out = m._enrich_record(
+        record,
+        {},
+        {
+            "provider": "ollama",
+            "model": "test",
+            "enrichment_mode": "deep",
+            "semantic_indexing": True,
+            "_interactive_provider_override": True,
+        },
+        build_id=bid,
+    )
+
+    assert out["persons"] == ["Rousseau"]
+    assert out["works_referenced"] == ["Of Grammatology"]
+    assert current_assertion_by_name(out, "persons").derivation_method == "derridai:nlp"
+    indexing = next(task for task in captured["tasks"] if task[0] == "indexing")
+    metadata_model = indexing[2].model_fields["metadata"].annotation
+    assert set(metadata_model.model_fields) == {"topics", "concepts"}
+
+
+def test_scoped_indexing_reconciliation_preserves_preexisting_nlp_candidates(tmp_path):
+    m, bid = manager(tmp_path)
+    schema = m._schema_for(bid)
+    text = "Rousseau discusses Of Grammatology and hospitality."
+    record = {
+        "record_id": "nlp-reconcile",
+        "record_revision": 1,
+        "text": text,
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+        "nlp_candidates": {
+            "status": "ok",
+            "engine": "spacy",
+            "engine_version": "3.8.7",
+            "model": "en_core_web_lg",
+            "text_sha256": text_digest(text),
+            "fields": {
+                "persons": [{
+                    "start": 0,
+                    "end": 8,
+                    "text": "Rousseau",
+                    "source": "ner",
+                    "tag": "PERSON",
+                }],
+                "works_referenced": [{
+                    "start": 19,
+                    "end": 34,
+                    "text": "Of Grammatology",
+                    "source": "ner",
+                    "tag": "WORK_OF_ART",
+                }],
+            },
+        },
+    }
+    apply_indexing_nlp_candidates(record, schema)
+    persons_before = current_assertion_by_name(record, "persons")
+    works_before = current_assertion_by_name(record, "works_referenced")
+    record["metadata_stage_status"] = {"indexing": "complete"}
+    record["metadata_execution_ledger"] = {"indexing": {"state": "complete"}}
+
+    out = m._reconcile_metadata_results(
+        record,
+        m._profile_for(bid),
+        ["b1"],
+        [(
+            "indexing",
+            {
+                "metadata": {
+                    "topics": ["hospitality"],
+                    "concepts": ["hospitality"],
+                },
+                "field_assessments": {
+                    "topics": {
+                        "confidence": 0.9,
+                        "needs_review": False,
+                        "reason": "Explicit subject matter.",
+                        "outcome": "supported_value",
+                    },
+                    "concepts": {
+                        "confidence": 0.85,
+                        "needs_review": False,
+                        "reason": "Explicit concept.",
+                        "outcome": "supported_value",
+                    },
+                },
+                "field_evidence": {},
+                "review_reason": "",
+            },
+            None,
+        )],
+        False,
+        request={"provider": "ollama", "model": "test"},
+        build_id=bid,
+        schema=schema,
+    )
+
+    assert out["persons"] == ["Rousseau"]
+    assert out["works_referenced"] == ["Of Grammatology"]
+    assert current_assertion_by_name(out, "persons").assertion_id == persons_before.assertion_id
+    assert current_assertion_by_name(out, "works_referenced").assertion_id == works_before.assertion_id
+    assert out["topics"] == ["hospitality"]
+    assert out["concepts"] == ["hospitality"]
+
+
+def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path):
+    m, bid = manager(tmp_path)
+    schema = m._schema_for(bid)
+    record = {
+        "record_id": "partial-memory",
+        "record_revision": 1,
+        "text": "Derrida discusses Glas, hospitality, and sovereignty.",
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+    }
+    for field, value in {
+        "persons": ["Derrida"],
+        "works_referenced": ["Glas"],
+    }.items():
+        create_memory_assertion(
+            record,
+            field,
+            value,
+            schema=schema,
+            confidence=0.9,
+            reason="Two reviewed precedents agree.",
+            evidence=[{"block_ids": ["b1"], "confidence": 0.9, "reason": "memory match"}],
+        )
+    project_record_assertions(record)
+    pass_learning = {
+        "field_stats": {
+            "persons": {"marker": "PERSON_MEMORY_MARKER"},
+            "topics": {"marker": "TOPIC_MEMORY_MARKER"},
+        },
+        "prior_pass": {
+            "inferred_conventions": {
+                "persons": {
+                    "value": ["Derrida"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "PERSON_PRIOR_MARKER",
+                },
+                "topics": {
+                    "value": ["hospitality"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "TOPIC_PRIOR_MARKER",
+                },
+            },
+            "disputed_fields": {"persons": 2, "topics": 1},
+        },
+    }
+
+    tasks, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep", "semantic_indexing": True},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        pass_learning=pass_learning,
+        schema=schema,
+    )
+    indexing = next(task for task in tasks if task[0] == "indexing")
+    metadata_model = indexing[2].model_fields["metadata"].annotation
+    assert set(metadata_model.model_fields) == {"topics", "concepts"}
+    assert "THIS MODEL CALL IS FIELD-SCOPED" in indexing[1]
+    assert "topics and concepts" in indexing[1]
+    assert "TOPIC_MEMORY_MARKER" in indexing[1]
+    assert "TOPIC_PRIOR_MARKER" in indexing[1]
+    assert "PERSON_MEMORY_MARKER" not in indexing[1]
+    assert "PERSON_PRIOR_MARKER" not in indexing[1]
+
+    rerun, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {
+            "enrichment_mode": "deep",
+            "semantic_indexing": True,
+            "families": ["indexing"],
+        },
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        pass_learning=pass_learning,
+        schema=schema,
+    )
+    rerun_indexing = next(task for task in rerun if task[0] == "indexing")
+    rerun_metadata_model = rerun_indexing[2].model_fields["metadata"].annotation
+    assert set(rerun_metadata_model.model_fields) == {
+        "topics",
+        "concepts",
+        "persons",
+        "works_referenced",
+    }
+    assert "PERSON_MEMORY_MARKER" in rerun_indexing[1]
+    assert "PERSON_PRIOR_MARKER" in rerun_indexing[1]
+
 
 def answer(**metadata):
     return {"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", **metadata},
