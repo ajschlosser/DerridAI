@@ -363,7 +363,8 @@ describe("DerridAI SDK", () => {
       async loadRecords() {
         throw new DOMException("cancelled", "AbortError");
       },
-      loadVectors: (chunkId, options) => base.loadVectors(chunkId, options),
+      loadVectors: async (chunkId, options) =>
+        base.loadVectors ? base.loadVectors(chunkId, options) : null,
     };
     const client = await createClient({
       dataSource,
