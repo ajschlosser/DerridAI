@@ -428,6 +428,29 @@ def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path
             evidence=[{"block_ids": ["b1"], "confidence": 0.9, "reason": "memory match"}],
         )
     project_record_assertions(record)
+    pass_learning = {
+        "field_stats": {
+            "persons": {"marker": "PERSON_MEMORY_MARKER"},
+            "topics": {"marker": "TOPIC_MEMORY_MARKER"},
+        },
+        "prior_pass": {
+            "inferred_conventions": {
+                "persons": {
+                    "value": ["Derrida"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "PERSON_PRIOR_MARKER",
+                },
+                "topics": {
+                    "value": ["hospitality"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "TOPIC_PRIOR_MARKER",
+                },
+            },
+            "disputed_fields": {"persons": 2, "topics": 1},
+        },
+    }
 
     tasks, _, _ = m._prepare_metadata_tasks(
         record,
@@ -439,6 +462,7 @@ def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path
         "",
         "",
         None,
+        pass_learning=pass_learning,
         schema=schema,
     )
     indexing = next(task for task in tasks if task[0] == "indexing")
@@ -465,6 +489,7 @@ def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path
         "",
         "",
         None,
+        pass_learning=pass_learning,
         schema=schema,
     )
     rerun_indexing = next(task for task in rerun if task[0] == "indexing")
