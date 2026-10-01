@@ -37,6 +37,7 @@
     "pack:sdk": "npm run build:sdk:package && npm pack ./sdk"
   },
   "dependencies": {
+    "@tanstack/vue-query": "^5.104.0",
     "diff": "^7.0.0",
     "pdfjs-dist": "^4.10.38",
     "pinia": "^3.0.3",

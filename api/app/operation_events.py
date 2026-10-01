@@ -39,6 +39,7 @@ _activity: dict[str, dict[str, Any]] = {}
 _metadata_notes: deque[dict[str, Any]] = deque(maxlen=MAX_METADATA_NOTES)
 _metadata_dropped = 0
 _generation: dict[str, GenerationBuffer] = {}
+_resources: set[str] = set()
 _corpus_generation: dict[tuple[str, str], dict[str, Any]] = {}
 
 
@@ -62,6 +63,22 @@ class Drained:
     metadata_dropped: int
     generation: dict[str, GenerationBuffer]
     corpus_generation: list[dict[str, Any]]
+    resources: frozenset[str] = frozenset()
+
+
+def note_resource_changed(resource: str) -> None:
+    """Record that a registered data resource (``realtime/resources.py``) changed.
+
+    Key-level invalidation only: no ids, values or text. Repeated notes between
+    observer ticks collapse into one, and clients refetch over REST.
+    """
+    if not resource:
+        return
+    try:
+        with _lock:
+            _resources.add(str(resource))
+    except Exception:  # noqa: BLE001, S110 - notifications must never break a mutation
+        pass
 
 
 def note_corpus_build(summary: dict[str, Any]) -> None:
@@ -216,6 +233,7 @@ def drain() -> Drained:
             metadata_dropped=_metadata_dropped,
             generation=dict(_generation),
             corpus_generation=list(_corpus_generation.values()),
+            resources=frozenset(_resources),
         )
         _corpus_builds.clear()
         _model_activity.clear()
@@ -224,4 +242,5 @@ def drain() -> Drained:
         _metadata_dropped = 0
         _generation.clear()
         _corpus_generation.clear()
+        _resources.clear()
     return drained

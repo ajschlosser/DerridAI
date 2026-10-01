@@ -5661,7 +5661,6 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'users.provider_ready': 'Provider ready',
  'users.provider_type': 'Provider type',
  'users.provider_unavailable': 'Provider unavailable',
- 'users.refresh': 'Refresh',
  'users.remove_profile_confirm': 'Remove this researcher LLM profile?',
  'users.researcher_profiles': 'Researcher LLM profiles',
  'users.researcher_profiles_help': 'Only these static profiles are available to researchers. Provider secrets stay '

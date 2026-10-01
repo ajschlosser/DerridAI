@@ -5941,7 +5941,6 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'users.provider_ready': 'Fournisseur prêt',
  'users.provider_type': 'Type de fournisseur',
  'users.provider_unavailable': 'Fournisseur indisponible',
- 'users.refresh': 'Actualiser',
  'users.remove_profile_confirm': 'Supprimer ce profil LLM chercheur?',
  'users.researcher_profiles': 'Profils LLM pour chercheurs',
  'users.researcher_profiles_help': 'Seuls ces profils statiques sont offerts aux chercheurs. Les secrets restent côté '

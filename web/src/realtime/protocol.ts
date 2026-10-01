@@ -150,6 +150,9 @@ export type CorpusRecordEventType =
   | "corpus.record_completed";
 export type ActivityEventType = "activity.changed";
 
+/** Key-level "this data is stale" notice, delivered on `data:<resource>` only (resource.changed). */
+export type DataEventType = "resource.changed";
+
 export type JobEvent = Envelope<
   JobEventType,
   "job",
@@ -184,7 +187,11 @@ export type ActivityEvent = Envelope<
   { activity: GutenbergActivitySummary | Record<string, unknown> }
 >;
 
+/** Carries no values: the page refetches the named resource over REST/GraphQL. */
+export type DataEvent = Envelope<DataEventType, "data", { resource: string }>;
+
 export type RealtimeEvent =
+  | DataEvent
   | JobEvent
   | CorpusBuildEvent
   | ModelActivityEvent
@@ -238,6 +245,7 @@ export function topicsForEvent(event: RealtimeEvent): string[] {
   if (event.type === "corpus.llm_progress") return [`corpus-build:${event.resource_id}`];
   if (event.resource_type === "job") return ["jobs", `job:${event.resource_id}`];
   if (event.resource_type === "activity") return [`activity:${event.resource_id}`];
+  if (event.resource_type === "data") return [`data:${event.resource_id}`];
   if (
     event.type === "corpus.record_started" ||
     event.type === "corpus.field_checked" ||

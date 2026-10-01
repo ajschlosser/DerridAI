@@ -84,6 +84,7 @@ Resource events:
 | `corpus.llm_progress` (ephemeral)                                                                                                                                                                                      | `corpus-build:<id>` only             | `generation`: `call_id`, `seq`, `chars`, `gap`, `final`; **no model text**     |
 | `corpus.record_started`, `corpus.field_checked`, `corpus.record_completed` (ephemeral)                                                                                                                                 | `corpus-build:<id>` only             | `metadata`: `record_id`, `family?`, `state?`, `field_ids?`, `precedents_used?` |
 | `activity.changed`                                                                                                                                                                                                     | `activity:<kind>` only               | `activity`: a bounded, kind-specific public summary                            |
+| `resource.changed`                                                                                                                                                                                                     |
 
 Job summaries contain only bounded, text-free fields (status, stage, a truncated stage detail, counts, timestamps, warning count, `has_error`, pending-result count). They never contain requests, prompts, results, evidence, answers, diagnostics, API keys or owners. Clients read details through the owner-scoped REST endpoints; for example upsert receipts are fetched from `GET /api/jobs/{id}` when the completed count rises.
 
@@ -95,18 +96,21 @@ Job summaries contain only bounded, text-free fields (status, stage, a truncated
 
 `activity.changed` reports background work that is not a tracked job (currently only the Gutenberg offline-collection download/catalogue on `activity:gutenberg`; see `ACTIVITY_KINDS` in `realtime/subscriptions.py`), replacing that view's fixed-interval status poll.
 
+`resource.changed` is the one event for page data that is not a job or build: it says that one registered data resource (`DATA_RESOURCES` in `realtime/resources.py`, mirrored in `web/src/realtime/resourceKeys.ts`) is stale, on `data:<resource>` only. It carries the resource key and nothing else (no ids or values), is coalescable, and is replayed like other non-ephemeral events. Domain code calls `operation_events.note_resource_changed("<key>")` after the mutation commits; the observer publishes at most one event per key per tick. The frontend follows these through one path: pages read server data with `useDataQuery(resource, fetcher)` (TanStack Query), and `realtime/dataBridge.ts` subscribes to exactly the `data:` topics that have a mounted query, invalidates that resource's queries on each event, invalidates every `data` query on resync, and clears the cache when the client stops (logout or account switch). Pages do not subscribe, poll, or add reload buttons; REST polling happens only inside `useDataQuery` while the socket is unavailable. To add a resource: register the key in both lists, emit the note from the store that owns the mutation, and read it with `useDataQuery`.
+
 ### Ephemeral events
 
 `llm.token`, `corpus.llm_progress`, `corpus.record_started`, `corpus.field_checked` and `corpus.record_completed` are **ephemeral** (`EPHEMERAL_EVENT_TYPES` in `protocol.py`): each is a discrete fact, not a latest-value snapshot, so it is never replayed after a reconnect and is the first kind of event dropped under backpressure. A client must treat a gap in these events as "reconcile from REST/GraphQL," not as data loss to recover: Research waits for the final REST answer; per-record progress is recovered by re-reading counts/rows, never by reconstructing missed events.
 
 ### Topics and authorization
 
-| Topic                                | Who may subscribe                                                                                             |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `jobs`                               | Administrators (all jobs); roles with `rag.jobs.own` or `rag.run` (their own Research jobs only)              |
-| `job:<id>`                           | Administrators; a non-administrator only for their own Research (RAG) job. Anything else is 4404.             |
-| `corpus-builds`, `corpus-build:<id>` | Administrators only (Corpus Builder is an administrator workspace)                                            |
-| `activity:<kind>`                    | Administrators only. `<kind>` must be one of `ACTIVITY_KINDS` (currently `gutenberg`); anything else is 4404. |
+| Topic                                | Who may subscribe                                                                                                          |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `jobs`                               | Administrators (all jobs); roles with `rag.jobs.own` or `rag.run` (their own Research jobs only)                           |
+| `job:<id>`                           | Administrators; a non-administrator only for their own Research (RAG) job. Anything else is 4404.                          |
+| `corpus-builds`, `corpus-build:<id>` | Administrators only (Corpus Builder is an administrator workspace)                                                         |
+| `activity:<kind>`                    | Administrators only. `<kind>` must be one of `ACTIVITY_KINDS` (currently `gutenberg`); anything else is 4404.              |
+| `data:<resource>`                    | Per the resource registry; `users` and `roles` are administrators only (their REST routes are too). Unknown keys are 4404. |
 
 Each topic is authorized independently at subscribe time; every event is also filtered by its audience at delivery (owner, administrator-only, capability). Another user's job is indistinguishable from a missing one. A role with no available topic is refused with 4403.
 
