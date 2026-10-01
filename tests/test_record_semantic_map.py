@@ -203,3 +203,24 @@ def test_a_second_reviewer_cannot_read_a_sealed_value_through_the_record_map(tmp
     assert "Sealed Holder" in json.dumps(mine)
     with pytest.raises(KeyError):
         manager.record_semantic_map(build_id, "nope")
+
+
+def test_a_warm_semantic_map_does_not_reload_or_rebuild_until_records_change(tmp_path, monkeypatch):
+    manager, repo, build_id = _manager(tmp_path)
+    repo.save_records(build_id, _records())
+    manager.record_semantic_map(build_id, "r1")
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("an unchanged build must be served from the cached graph")
+
+    monkeypatch.setattr(repo, "load_records", forbidden)
+    monkeypatch.setattr(cb, "build_semantic_content_graph", forbidden)
+    assert manager.record_semantic_map(build_id, "r1")["record_id"] == "r1"
+    manager.semantic_content_graph_view(build_id)
+
+    monkeypatch.undo()
+    rows = _records()
+    rows[1]["persons"] = ["Heidegger"]
+    repo.save_records(build_id, rows)
+    after = manager.record_semantic_map(build_id, "r1")
+    assert after["record_id"] == "r1"

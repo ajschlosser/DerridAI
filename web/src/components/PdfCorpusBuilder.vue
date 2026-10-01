@@ -88,8 +88,7 @@ import CorpusRecordSizeAdvice from "./CorpusRecordSizeAdvice.vue";
 import CorpusUnitPolicy from "./CorpusUnitPolicy.vue";
 import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
-import CorpusSemanticGraphPanel from "./corpus-builder/CorpusSemanticGraphPanel.vue";
-import CorpusSemanticAliasPanel from "./corpus-builder/CorpusSemanticAliasPanel.vue";
+import CorpusSemanticWorkspace from "./corpus-builder/CorpusSemanticWorkspace.vue";
 import CorpusRecordSemanticMap from "./corpus-builder/CorpusRecordSemanticMap.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusMissingDocumentFields from "./corpus-builder/CorpusMissingDocumentFields.vue";
@@ -2473,16 +2472,11 @@ defineExpose({
       @frame-change="reviewFrameEl = $event"
     >
       <template #panels>
-        <CorpusSemanticGraphPanel
-          v-if="currentBuild?.semantic_content_graph"
+        <CorpusSemanticWorkspace
           :build-id="currentBuild.build_id"
           :summary="currentBuild.semantic_content_graph"
           :disabled="busy !== '' || buildRunning"
           @refreshed="refreshBuild"
-        />
-        <CorpusSemanticAliasPanel
-          :build-id="currentBuild.build_id"
-          :disabled="busy !== ''"
           @changed="refreshBuild"
         />
       </template>

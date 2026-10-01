@@ -362,6 +362,25 @@ const verificationStatus = computed(() => String(props.status?.verification_stat
 const autoResolved = computed(
   () => verificationStatus.value === "auto_resolved" || props.status?.autofilled === true,
 );
+/**
+ * A model-populated value nobody has confirmed is open for review as it arrives; the reviewer should not have to
+ * click Edit to change it. Auto-filled and human-decided values stay folded to one line.
+ */
+const modelValueAwaitingReview = computed(
+  () =>
+    isLlm.value &&
+    !autoResolved.value &&
+    props.status?.method !== "human" &&
+    props.status?.value_source !== "human" &&
+    hasValue(resolvedValue.value),
+);
+watch(
+  modelValueAwaitingReview,
+  (value) => {
+    if (value && !dirty.value) editing.value = true;
+  },
+  { immediate: true },
+);
 /** Who or what proposed the current value, in words, including whether metadata memory shaped the model's answer. */
 const sourceLabel = computed(() => {
   const status = props.status || {};

@@ -195,10 +195,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
       },
     });
 
-    expect(wrapper.find("textarea").exists()).toBe(false);
-    const edit = wrapper.findAll("button").find((button) => button.text().includes("Edit"));
-    expect(edit).toBeTruthy();
-    await edit!.trigger("click");
+    // An unreviewed model value is already editable; no Edit click is needed.
     await nextTick();
     expect(wrapper.find("textarea").exists()).toBe(true);
     expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
@@ -259,10 +256,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
       },
     });
 
-    expect(wrapper.text()).toContain("Jacques Derrida");
     expect(wrapper.text()).not.toContain("[object Object]");
-    const edit = wrapper.findAll("button").find((button) => button.text().includes("Edit"));
-    await edit!.trigger("click");
     await nextTick();
     expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
     wrapper.unmount();
@@ -300,5 +294,30 @@ describe("CorpusMetadataFieldEditor memory hints", () => {
       props: { field: "stance", value: "", control: "enum", options: stanceOptions, open: true },
     });
     expect(wrapper.find(".memory-hints").exists()).toBe(false);
+  });
+
+  it("opens an unreviewed model value for editing without an Edit click, and folds a human one", async () => {
+    const model = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "stance",
+        value: "affirm",
+        control: "enum",
+        options: stanceOptions,
+        status: { status: "model_inferred", method: "llm", confidence: 0.6 },
+      },
+    });
+    expect(model.find("select").exists()).toBe(true);
+    const human = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "stance",
+        value: "affirm",
+        control: "enum",
+        options: stanceOptions,
+        status: { status: "confirmed", method: "human", value_source: "human" },
+      },
+    });
+    expect(human.find("select").exists()).toBe(false);
+    model.unmount();
+    human.unmount();
   });
 });

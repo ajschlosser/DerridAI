@@ -100,8 +100,9 @@ describe("field editor decision controls", () => {
         control: "text",
         memoryExamples: 3,
         status: {
-          status: "model_inferred",
+          status: "confirmed",
           method: "llm",
+          autofilled: true,
           llm_value: "trace",
           llm_confidence: 0.8,
         },

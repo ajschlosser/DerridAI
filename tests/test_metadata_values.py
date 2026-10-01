@@ -31,6 +31,12 @@ def test_a_model_proposal_of_a_placeholder_becomes_no_value_and_keeps_the_raw_te
     assert _normalize_semantic_value("speaker", "Derrida") == ("Derrida", None)
 
 
+@pytest.mark.parametrize("field", ["region_type", "discourse_role", "speaker", "position_holder", "target", "stance", "proposition_status", "claim_scope", "primary_text"])
+def test_a_model_answering_with_a_field_name_supplies_no_value(field):
+    assert _normalize_semantic_value(field, field) == (None, field)
+    assert _normalize_semantic_value("speaker", "Derrida") == ("Derrida", None)
+
+
 def test_structured_output_transport_suffix_is_not_persisted_as_metadata():
     raw = (
         "Jacques Derrida, field_evidence-p00007-b0013-b0014-b0015: "

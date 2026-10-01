@@ -36,6 +36,7 @@ from .celf_conformance import evaluate_celf_conformance
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
 from .corpus_build_lifecycle import BuildLifecycleMixin
+from .reviewer_context import current_reviewer
 from .corpus_editorial_memory import EditorialMemoryMixin
 from .corpus_enrichment_helpers import (
     _enrichment_pass_indices as _enrichment_pass_indices,
@@ -2004,7 +2005,8 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._runtime_requests: dict[str, dict[str, Any]] = {}
         # Derived semantic graphs keyed by build and the exact inputs that produced
         # them; bounded so large corpora do not accumulate in memory.
-        self._semantic_graph_cache: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {}
+        self._semantic_graph_cache: dict[str, dict[str, Any]] = {}
+        self._semantic_graph_persisted: dict[str, dict[str, Any]] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
@@ -2136,6 +2138,28 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         not persist checkpoints or mutate the build. Record- and node-centred
         exploration therefore remains read-only.
         """
+        # Interactive reads (record map, node walk, bounded view) must not be O(corpus) when nothing
+        # changed: the record store's file identity, the retained annotation run and the reviewed
+        # aliases decide freshness before any Record is copied, presented or hashed.
+        checkpoint = self.repo.load_checkpoint(build_id, "document_intelligence", {})
+        checkpoint = checkpoint if isinstance(checkpoint, dict) else {}
+        fast = (
+            self.repo._records_snapshot_signature(build_id),
+            json.dumps(
+                [checkpoint.get(name) for name in ("text_sha256", "provider", "provider_version", "version", "profile")],
+                default=str,
+            ),
+            len(checkpoint.get("entities") or []),
+            len(checkpoint.get("entity_clusters") or []),
+            len(checkpoint.get("characters") or []),
+            alias_digest(self.repo, build_id),
+            SEMANTIC_IDENTITY_VERSION,
+            # Blind second-opinion sealing is per reviewer; one reviewer's presentation is never reused for another.
+            current_reviewer.get(),
+        )
+        cached = self._semantic_graph_cache.get(build_id)
+        if cached is not None and cached["fast"] == fast and fast[0] != (0, 0):
+            return cached["graph"], cached["records"], cached["analysis"]
         records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
         for row in records:
             _present_for_reviewer(row)
@@ -2159,20 +2183,22 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             alias_digest(self.repo, build_id),
             SEMANTIC_IDENTITY_VERSION,
         )
-        cached = self._semantic_graph_cache.get(build_id)
-        if cached is not None and cached[0] == key:
-            return cached[1], records, analysis
-        schema = self._schema_for(build_id)
-        graph = build_semantic_content_graph(
-            records,
-            graph_analysis,
-            schema=schema,
-            # Reviewer-presented records: a value sealed for blind review names no identity.
-            registry=build_registry(self.repo, build_id, schema=schema, records=records),
-        )
+        if cached is not None and cached["key"] == key:
+            graph = cached["graph"]
+        else:
+            schema = self._schema_for(build_id)
+            graph = build_semantic_content_graph(
+                records,
+                graph_analysis,
+                schema=schema,
+                # Reviewer-presented records: a value sealed for blind review names no identity.
+                registry=build_registry(self.repo, build_id, schema=schema, records=records),
+            )
         with self._lock:
             self._semantic_graph_cache.pop(build_id, None)
-            self._semantic_graph_cache[build_id] = (key, graph)
+            self._semantic_graph_cache[build_id] = {
+                "fast": fast, "key": key, "graph": graph, "records": records, "analysis": analysis,
+            }
             while len(self._semantic_graph_cache) > 4:
                 self._semantic_graph_cache.pop(next(iter(self._semantic_graph_cache)))
         return graph, records, analysis
@@ -2194,10 +2220,15 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         leaving a stale visualization. The graph remains a derived projection.
         """
         graph, _, _ = self._current_semantic_graph(build_id)
+        # An unchanged graph object has already been persisted; rewriting a multi-megabyte
+        # checkpoint and the build manifest on every read made the Entities panel slow.
+        if self._semantic_graph_persisted.get(build_id) is graph:
+            return graph
         self.repo.save_checkpoint(build_id, "semantic_content_graph", graph)
         build = self.repo.get_build(build_id)
         build["semantic_content_graph"] = graph.get("summary") or {}
         self.repo.save_build(build)
+        self._semantic_graph_persisted[build_id] = graph
         return graph
 
     def semantic_content_graph_view(self, build_id: str, **params: Any) -> dict[str, Any]:
