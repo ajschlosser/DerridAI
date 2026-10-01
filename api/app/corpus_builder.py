@@ -1858,17 +1858,26 @@ class PdfCorpusRepository:
             self._set_records_projection_state(build_id, dirty=True)
             with self._records_db(build_id) as connection:
                 row = connection.execute(
-                    "SELECT ordinal FROM corpus_records WHERE record_id = ?",
+                    "SELECT ordinal, payload FROM corpus_records WHERE record_id = ?",
                     (record_id,),
                 ).fetchone()
                 if row is None:
                     raise KeyError(record_id)
+                previous = json.loads(str(row[1]))
+                semantic_changed = semantic_record_digest(previous) != semantic_record_digest(record)
+                text_changed = text_record_digest(previous) != text_record_digest(record)
                 connection.execute(
                     "UPDATE corpus_records SET payload = ? WHERE record_id = ?",
                     (payload, record_id),
                 )
                 connection.commit()
             self._remember_fixed_point(payload, self._schema_signature(self._record_schema(build_id)))
+            if semantic_changed or text_changed:
+                self._update_semantic_projection_state(
+                    build_id,
+                    semantic_changed=semantic_changed,
+                    text_changed=text_changed,
+                )
             self._patch_review_records_cache(build_id, before, record_id, record)
         # Committed single-record write (not a per-batch build write): readers may hold stale text.
         note_resource_changed("corpus_records")
