@@ -61,9 +61,12 @@ function filenameFromDisposition(value: string | null): string {
 export const sitesApi = {
   exportOptions: () => apiRequest<SiteExportOptions>("/api/sites/export-options"),
   deleteTransformersRuntime: () =>
-    apiRequest<{ transformers_runtime: SiteTransformersRuntime }>("/api/sites/transformers-runtime", {
-      method: "DELETE",
-    }),
+    apiRequest<{ transformers_runtime: SiteTransformersRuntime }>(
+      "/api/sites/transformers-runtime",
+      {
+        method: "DELETE",
+      },
+    ),
   async downloadTransformersRuntime(
     onProgress: (event: TransformersDownloadEvent) => void,
   ): Promise<void> {
