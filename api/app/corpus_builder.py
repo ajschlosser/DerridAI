@@ -209,6 +209,7 @@ from .corpus_reviewer_helpers import (
     _present_for_reviewer,
     _scrub_canonical_transport,
 )
+from .reviewer_context import current_reviewer
 from .corpus_reviewer_helpers import (
     _operation_from_build as _operation_from_build,
 )
@@ -2214,7 +2215,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         request = build.get("request") if isinstance(build.get("request"), dict) else {}
         self._run_document_intelligence(build_id, records, manifest, request)
         self.repo.save_records(build_id, records)
-        self._semantic_graph_cache.pop(build_id, None)
+        self._semantic_graph_cache.clear()
         graph = self.semantic_content_graph(build_id)
         return {
             "document_intelligence": self.document_intelligence(build_id),
@@ -2254,6 +2255,10 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             "current_text_sha256": current_sha256,
         }
 
+    @staticmethod
+    def _semantic_audience() -> str:
+        return str(current_reviewer.get() or "system")
+
     def _semantic_generation(self, build_id: str) -> str:
         """Cheap identity for every derived semantic projection of one build."""
         state = self.repo.semantic_projection_state(build_id)
@@ -2261,6 +2266,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             (
                 str(SEMANTIC_PROJECTION_VERSION),
                 str(build_id),
+                self._semantic_audience(),
                 str(int(state.get("revision") or 0)),
                 alias_digest(self.repo, build_id),
                 str(SEMANTIC_IDENTITY_VERSION),
