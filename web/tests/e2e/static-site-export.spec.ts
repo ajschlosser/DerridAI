@@ -60,9 +60,9 @@ test("single-file export works directly from file://", async ({ page }) => {
   expect(networkRequests).toEqual([]);
 });
 
-test("single-file export preserves evidence when reader-configured providers are unreachable", async ({
-  page,
-}) => {
+test(
+  "single-file export preserves evidence when reader-configured providers are unreachable",
+  async ({ page }) => {
   const html = fixturePath("local-provider.html");
   await access(html);
 
@@ -110,5 +110,6 @@ test("single-file export preserves evidence when reader-configured providers are
 
   expect(providerRequests.some((url) => url.endsWith("/embeddings"))).toBe(true);
   expect(providerRequests.some((url) => url.endsWith("/chat/completions"))).toBe(true);
-  expect(pageErrors).toEqual([]);
-});
+    expect(pageErrors).toEqual([]);
+  },
+);
