@@ -1,0 +1,44 @@
+name: Temporary semantic-map formatter
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/temporary-semantic-map-format.yml"
+      - "web/src/components/semantic/SemanticMapCanvas.vue"
+      - "web/src/components/semantic/SemanticMapFrame.vue"
+      - "web/src/domain/semanticMap.ts"
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.head_ref == 'feature/semantic-map-workspace-ux'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - working-directory: web
+        run: npm ci --no-audit --no-fund
+      - working-directory: web
+        run: npx prettier --write src/components/semantic/SemanticMapCanvas.vue src/components/semantic/SemanticMapFrame.vue src/domain/semanticMap.ts
+      - name: Commit formatting if needed
+        shell: bash
+        run: |
+          if git diff --quiet -- web/src/components/semantic/SemanticMapCanvas.vue web/src/components/semantic/SemanticMapFrame.vue web/src/domain/semanticMap.ts; then
+            echo "No formatting changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/src/components/semantic/SemanticMapCanvas.vue web/src/components/semantic/SemanticMapFrame.vue web/src/domain/semanticMap.ts
+          git commit -m "Format semantic map implementation"
+          git push origin HEAD:${{ github.head_ref }}
