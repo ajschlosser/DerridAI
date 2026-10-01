@@ -21,9 +21,12 @@ Work has started on the first data-model/performance tranche on \`task/works-ref
 - replace animation-frame progressive reveal with bounded client-side pagination (48 cards / 100 list rows per page);
 - expand deterministic library search across work-level bibliographic metadata with case/Unicode/diacritic normalization;
 - expose author filtering to researchers and show active filters as removable chips with a visible clear-all action;
-- remove the duplicate add-files card from the end of the library.
+- remove the duplicate add-files card from the end of the library;
+- replace the Works-local inspector metadata field list with stable document identities plus schema/FieldAssertion discovery, so custom metadata can surface without being added to a Works whitelist;
+- separate field identity from localized display labels, hide empty bibliographic fields by default, and give administrators an explicit “show empty fields” diagnostic control;
+- merge the latest `master` publication/semantic-map hardening into the branch without carrying unrelated stale site-export changes.
 
-The next implementation step is to finish the remaining snapshot/metadata-presentation work, including replacing the Works-local hard-coded metadata field list with the shared schema/assertion presentation contract, then continue the inspector and dialog decomposition passes.
+The next implementation step is to reduce the remaining `Loose`/`Any` helper-injection surface in `domain/worksWorkspace.ts`, add large-library regression/performance coverage, and continue the inspector/dialog decomposition passes.
 
 ## Implementation proposals
 
