@@ -23,6 +23,7 @@ from .enrichment_ledger import (
     CORRECTED,
     PROPOSED,
     RECHECK,
+    RECORD_RUN,
     REJECTED,
     RESUMED,
     REVIEW_EVENTS,
@@ -118,6 +119,7 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
     proposals = [e for e in events if e["kind"] == PROPOSED]
     reviews = [e for e in events if e["kind"] in REVIEW_EVENTS]
     calls = [e for e in events if e["kind"] == CALL]
+    record_runs = [e for e in events if e["kind"] == RECORD_RUN]
     accepted = [e for e in reviews if e["kind"] == ACCEPTED]
     # A reviewer who restated the value (J.P. -> J. P.) accepted it; it is counted apart so
     # "accepted" is never read as "kept exactly as proposed".
@@ -163,6 +165,11 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         if isinstance(e.get("elapsed_ms"), (int, float))
     ]
     elapsed = sum(call_elapsed)
+    record_elapsed = [
+        float(e.get("elapsed_ms") or 0)
+        for e in record_runs
+        if isinstance(e.get("elapsed_ms"), (int, float))
+    ]
     requested_field_counts = [
         float(e["requested_field_count"])
         for e in calls
@@ -237,6 +244,23 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
             "p95": _percentile(call_elapsed, 0.95),
             "max": round(max(call_elapsed), 2) if call_elapsed else None,
             "total": round(elapsed, 2),
+        },
+        "record_latency_ms": {
+            "records": len(record_elapsed),
+            "p50": _percentile(record_elapsed, 0.50),
+            "p95": _percentile(record_elapsed, 0.95),
+            "max": round(max(record_elapsed), 2) if record_elapsed else None,
+            "total": round(sum(record_elapsed), 2),
+        },
+        "structured_model_invocations": {
+            "total": sum(
+                int(e.get("model_invocations") or 1)
+                for e in calls
+            ),
+            "recovery_calls": sum(
+                int(e.get("recovery_calls") or 0)
+                for e in calls
+            ),
         },
         "call_contract": {
             "requested_fields_p50": _percentile(requested_field_counts, 0.50),
