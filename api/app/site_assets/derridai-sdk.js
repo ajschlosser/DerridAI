@@ -763,7 +763,7 @@ ${evidence}`;
         modeRequested,
         "hybrid",
         [],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
         true,
         deduped.duplicatesRemoved,
