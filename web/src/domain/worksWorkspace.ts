@@ -391,15 +391,19 @@ export function createWorksWorkspace(deps: Deps) {
     if (isResearcher()) {
       const stores = recordStores();
       const all = state.storeWorkStats || [];
+      const researcherAuthor = String(state.worksAuthor || "");
       const items = sortWorkItems(
         all
           .map((item: Any) => ({
             ...describeResearcherWork(item, { selected: false }),
             searchText: researcherWorkSearchText(item),
+            authors: item.document_author ? [String(item.document_author)] : [],
           }))
           .filter(
             (item: Any) =>
-              !query || String(item.searchText || item.work).includes(normalizeLibrarySearch(query)),
+              (!query ||
+                String(item.searchText || item.work).includes(normalizeLibrarySearch(query))) &&
+              (!researcherAuthor || item.authors.includes(researcherAuthor)),
           ),
       );
       const selectedStat = all.find((item: Any) => item.work === state.workOverview) || null;
@@ -432,7 +436,13 @@ export function createWorksWorkspace(deps: Deps) {
         },
         sourceFileCount: 0,
         totalReview: 0,
-        authors: [],
+        authors: [
+          ...new Set(
+            all
+              .map((item: Any) => String(item.document_author || "").trim())
+              .filter(Boolean),
+          ),
+        ].sort((a, b) => a.localeCompare(b)),
         capabilities: {
           canManageCorpus: false,
           canSync: false,
