@@ -628,10 +628,9 @@ def _propose_ollama(
     cancelled: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     url = (base_url or settings.ollama_base_url).rstrip("/")
-    option_values: dict[str, Any] = dict(tuning.extra_options or {})
+    base_options: dict[str, Any] = dict(tuning.extra_options or {})
     explicit_options = {
         "num_ctx": tuning.num_ctx,
-        "num_predict": num_predict,
         "temperature": temperature,
         "top_k": tuning.top_k,
         "top_p": tuning.top_p,
@@ -645,25 +644,7 @@ def _propose_ollama(
     }
     for key, value in explicit_options.items():
         if value is not None:
-            option_values[key] = value
-
-    request_body: dict[str, Any] = {
-        "model": selected_model,
-        "stream": False,
-        "format": "json",
-        "messages": messages,
-        "options": option_values,
-    }
-    if tuning.think is not None:
-        request_body["think"] = tuning.think
-
-    keep_alive = (
-        tuning.keep_alive
-        if tuning.keep_alive is not None
-        else settings.ollama_keep_alive
-    )
-    if keep_alive:
-        request_body["keep_alive"] = keep_alive
+            base_options[key] = value
 
     timeout = httpx.Timeout(
         connect=settings.ollama_connect_timeout_seconds,
@@ -671,104 +652,154 @@ def _propose_ollama(
         write=settings.ollama_timeout_seconds,
         pool=settings.ollama_connect_timeout_seconds,
     )
-    content = ""
-    finish_reason: str | None = None
-    try:
-        if cancelled is not None:
-            request_body["stream"] = True
-            chunks: list[str] = []
-            with httpx.Client(timeout=timeout) as client:
-                with client.stream("POST", f"{url}/api/chat", json=request_body) as response:
-                    if response.status_code >= 400:
-                        response.read()
-                        detail = _response_detail(response)
-                        message = f"Ollama returned HTTP {response.status_code}."
-                        if detail:
-                            message += f" {detail}"
-                        if response.status_code == 404:
-                            message += " Check that the selected model is installed."
-                        raise TouchupFailure(502, message)
-                    for line in response.iter_lines():
-                        if cancelled():
-                            raise InterruptedError("LLM review cancelled.")
-                        if not line:
-                            continue
-                        try:
-                            payload = json.loads(line)
-                        except json.JSONDecodeError as exc:
-                            raise TouchupFailure(
-                                502,
-                                "Ollama returned an invalid streaming response.",
-                                line[:1500],
-                            ) from exc
-                        piece = ((payload.get("message") or {}).get("content") or "")
-                        if piece:
-                            chunks.append(str(piece))
-                        if payload.get("done"):
-                            reason = payload.get("done_reason") or payload.get("stop_reason")
-                            finish_reason = str(reason) if reason is not None else None
-                            break
-            content = "".join(chunks).strip()
-        else:
-            with httpx.Client(timeout=timeout) as client:
-                response = client.post(f"{url}/api/chat", json=request_body)
-            if response.status_code >= 400:
-                detail = _response_detail(response)
-                message = f"Ollama returned HTTP {response.status_code}."
-                if detail:
-                    message += f" {detail}"
-                if response.status_code == 404:
-                    message += " Check that the selected model is installed."
-                raise TouchupFailure(502, message)
-            try:
-                payload = response.json()
-            except json.JSONDecodeError as exc:
-                raise TouchupFailure(
-                    502,
-                    "Ollama returned a non-JSON API response.",
-                    response.text[:1500],
-                ) from exc
-            reason = payload.get("done_reason") or payload.get("stop_reason")
-            finish_reason = str(reason) if reason is not None else None
-            content = ((payload.get("message") or {}).get("content") or "").strip()
-    except InterruptedError:
-        raise
-    except TouchupFailure:
-        raise
-    except httpx.ConnectError as exc:
-        raise TouchupFailure(
-            503,
-            f"Cannot connect to Ollama at {url}.",
-            "Check the Ollama endpoint and confirm it is reachable from the API container.",
-        ) from exc
-    except httpx.TimeoutException as exc:
-        raise TouchupFailure(
-            504,
-            f"Ollama did not finish within {settings.ollama_timeout_seconds:g} seconds.",
-        ) from exc
-    except Exception as exc:
-        logger.exception("Unexpected network failure while calling Ollama")
-        raise TouchupFailure(
-            502,
-            "Unexpected error while contacting Ollama.",
-            str(exc),
-        ) from exc
+    user_prompt = str(messages[-1].get("content") or "") if messages else ""
+    prefix_messages = [dict(item) for item in messages[:-1]]
+    last_effective_options: dict[str, Any] = {}
 
-    return _parse_proposal(
-        content=content,
-        finish_reason=finish_reason,
-        record=record,
-        field_list=field_list,
-        selected_model=selected_model,
-        provider="ollama",
-        context=context,
-        effective_options={
+    def request_once(attempt: StructuredAttemptContext) -> str:
+        nonlocal last_effective_options
+        option_values = dict(base_options)
+        option_values["num_predict"] = attempt.max_tokens
+        request_body: dict[str, Any] = {
+            "model": selected_model,
+            "stream": False,
+            "format": "json",
+            "messages": [
+                *prefix_messages,
+                {"role": "user", "content": attempt.prompt},
+            ],
+            "options": option_values,
+        }
+        if tuning.think is not None:
+            request_body["think"] = tuning.think
+        keep_alive = (
+            tuning.keep_alive
+            if tuning.keep_alive is not None
+            else settings.ollama_keep_alive
+        )
+        if keep_alive:
+            request_body["keep_alive"] = keep_alive
+
+        last_effective_options = {
             "base_url": url,
             "think": request_body.get("think"),
             "keep_alive": request_body.get("keep_alive"),
             **option_values,
-        },
-    )
+        }
+        content = ""
+        finish_reason: str | None = None
+        try:
+            if cancelled is not None:
+                streaming_body = dict(request_body)
+                streaming_body["stream"] = True
+                chunks: list[str] = []
+                with httpx.Client(timeout=timeout) as client:
+                    with client.stream("POST", f"{url}/api/chat", json=streaming_body) as response:
+                        if response.status_code >= 400:
+                            response.read()
+                            detail = _response_detail(response)
+                            message = f"Ollama returned HTTP {response.status_code}."
+                            if detail:
+                                message += f" {detail}"
+                            if response.status_code == 404:
+                                message += " Check that the selected model is installed."
+                            raise TouchupFailure(502, message)
+                        for line in response.iter_lines():
+                            if cancelled():
+                                raise InterruptedError("LLM review cancelled.")
+                            if not line:
+                                continue
+                            try:
+                                payload = json.loads(line)
+                            except json.JSONDecodeError as exc:
+                                raise TouchupFailure(
+                                    502,
+                                    "Ollama returned an invalid streaming response.",
+                                    line[:1500],
+                                ) from exc
+                            piece = ((payload.get("message") or {}).get("content") or "")
+                            if piece:
+                                chunks.append(str(piece))
+                            if payload.get("done"):
+                                reason = payload.get("done_reason") or payload.get("stop_reason")
+                                finish_reason = str(reason) if reason is not None else None
+                                break
+                content = "".join(chunks).strip()
+            else:
+                with httpx.Client(timeout=timeout) as client:
+                    response = client.post(f"{url}/api/chat", json=request_body)
+                if response.status_code >= 400:
+                    detail = _response_detail(response)
+                    message = f"Ollama returned HTTP {response.status_code}."
+                    if detail:
+                        message += f" {detail}"
+                    if response.status_code == 404:
+                        message += " Check that the selected model is installed."
+                    raise TouchupFailure(502, message)
+                try:
+                    payload = response.json()
+                except json.JSONDecodeError as exc:
+                    raise TouchupFailure(
+                        502,
+                        "Ollama returned a non-JSON API response.",
+                        response.text[:1500],
+                    ) from exc
+                reason = payload.get("done_reason") or payload.get("stop_reason")
+                finish_reason = str(reason) if reason is not None else None
+                content = ((payload.get("message") or {}).get("content") or "").strip()
+        except InterruptedError:
+            raise
+        except TouchupFailure:
+            raise
+        except httpx.ConnectError as exc:
+            raise TouchupFailure(
+                503,
+                f"Cannot connect to Ollama at {url}.",
+                "Check the Ollama endpoint and confirm it is reachable from the API container.",
+            ) from exc
+        except httpx.TimeoutException as exc:
+            raise TouchupFailure(
+                504,
+                f"Ollama did not finish within {settings.ollama_timeout_seconds:g} seconds.",
+            ) from exc
+        except Exception as exc:
+            logger.exception("Unexpected network failure while calling Ollama")
+            raise TouchupFailure(
+                502,
+                "Unexpected error while contacting Ollama.",
+                str(exc),
+            ) from exc
+
+        if finish_reason_is_truncated(finish_reason):
+            raise StructuredJsonTruncatedError(
+                f"LLM structured response was cut off by provider finish reason {finish_reason!r}.",
+                diagnostic=str(content or "")[:2000],
+                finish_reason=finish_reason,
+            )
+        return str(content or "").strip()
+
+    def validate(parsed: dict[str, Any]) -> dict[str, Any]:
+        return _normalize_proposal(
+            parsed,
+            record=record,
+            field_list=field_list,
+            selected_model=selected_model,
+            provider="ollama",
+            context=context,
+            effective_options=dict(last_effective_options),
+        )
+
+    try:
+        return complete_structured_json(
+            request_once,
+            prompt=user_prompt,
+            validate=validate,
+            attempts=2,
+            max_tokens=num_predict,
+            max_token_cap=max(num_predict, 8192),
+        )
+    except StructuredCompletionError as exc:
+        raise _touchup_failure_from_structured(exc) from exc
 
 
 def _propose_openai(
