@@ -293,6 +293,7 @@ from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
 from .rag import _citation_strings, chat_complete
 from .record_semantic_map import build_semantic_map_projections
+from .reviewer_context import current_reviewer
 from .run_guidance import find_guidance_matches
 from .semantic_content_graph import (
     _records_digest as _semantic_records_digest,
@@ -2031,7 +2032,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # Semantic projections are persisted as rebuildable System Data. Per-build
         # locks make generation single-flight so concurrent Record/Work opens join
         # one materialization instead of repeating graph traversal.
-        self._semantic_graph_cache: dict[str, tuple[int, dict[str, Any]]] = {}
+        self._semantic_graph_cache: dict[tuple[str, str], tuple[int, dict[str, Any]]] = {}
         self._semantic_projection_locks: dict[str, threading.RLock] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
@@ -2134,7 +2135,6 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         request = build.get("request") if isinstance(build.get("request"), dict) else {}
         self._run_document_intelligence(build_id, records, manifest, request)
         self.repo.save_records(build_id, records)
-        self._semantic_graph_cache.pop(build_id, None)
         graph = self.semantic_content_graph(build_id)
         return {
             "document_intelligence": self.document_intelligence(build_id),
@@ -2159,6 +2159,11 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         with self._lock:
             return self._semantic_projection_locks.setdefault(str(build_id), threading.RLock())
 
+    @staticmethod
+    def _semantic_projection_audience() -> str:
+        """Stable reviewer key for blind-review-safe derived projections."""
+        return str(current_reviewer.get() or "")
+
     def _materialize_semantic_projections(self, build_id: str) -> tuple[int, dict[str, Any]]:
         """Materialize graph/Record/node/Work views once for the current generation.
 
@@ -2167,17 +2172,20 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         happen here only after an explicit invalidation.
         """
         lock = self._semantic_projection_lock(build_id)
+        audience = self._semantic_projection_audience()
         with lock:
             state = system_store.semantic_map_state(build_id)
             generation = int(state["generation"])
-            existing = system_store.get_semantic_map_projection("graph", build_id, build_id)
+            existing = system_store.get_semantic_map_projection(
+                "graph", build_id, build_id, audience=audience
+            )
             if (
                 not state.get("dirty")
                 and existing is not None
                 and int(existing.get("generation") or 0) == generation
             ):
                 graph = existing["payload"]
-                self._semantic_graph_cache[build_id] = (generation, graph)
+                self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
                 return generation, graph
 
             records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
@@ -2203,7 +2211,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             )
 
             system_store.put_semantic_map_projection(
-                "graph", build_id, build_id, generation, graph
+                "graph", build_id, build_id, generation, graph, audience=audience
             )
             for record_id, payload in record_maps.items():
                 record = next(
@@ -2218,17 +2226,24 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     generation,
                     payload,
                     work=work or None,
+                    audience=audience,
                 )
             for node_id, payload in node_maps.items():
                 system_store.put_semantic_map_projection(
-                    "node", node_id, build_id, generation, payload
+                    "node", node_id, build_id, generation, payload, audience=audience
                 )
             for work, payload in work_maps.items():
                 system_store.put_semantic_map_projection(
-                    "work", work, build_id, generation, payload, work=work
+                    "work",
+                    work,
+                    build_id,
+                    generation,
+                    payload,
+                    work=work,
+                    audience=audience,
                 )
 
-            self._semantic_graph_cache[build_id] = (generation, graph)
+            self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
             system_store.mark_semantic_map_clean(build_id, generation)
             return generation, graph
 
@@ -2238,9 +2253,12 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         scope_type: str,
         scope_id: str,
     ) -> dict[str, Any]:
+        audience = self._semantic_projection_audience()
         state = system_store.semantic_map_state(build_id)
         generation = int(state["generation"])
-        row = system_store.get_semantic_map_projection(scope_type, scope_id, build_id)
+        row = system_store.get_semantic_map_projection(
+            scope_type, scope_id, build_id, audience=audience
+        )
         if (
             not state.get("dirty")
             and row is not None
@@ -2250,7 +2268,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
 
         self._materialize_semantic_projections(build_id)
         state = system_store.semantic_map_state(build_id)
-        row = system_store.get_semantic_map_projection(scope_type, scope_id, build_id)
+        row = system_store.get_semantic_map_projection(
+            scope_type, scope_id, build_id, audience=audience
+        )
         if (
             row is not None
             and int(row.get("generation") or 0) == int(state["generation"])
@@ -2260,7 +2280,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # Rebuild once against the new generation rather than returning "not available".
         self._materialize_semantic_projections(build_id)
         state = system_store.semantic_map_state(build_id)
-        row = system_store.get_semantic_map_projection(scope_type, scope_id, build_id)
+        row = system_store.get_semantic_map_projection(
+            scope_type, scope_id, build_id, audience=audience
+        )
         if row is None or int(row.get("generation") or 0) != int(state["generation"]):
             raise KeyError(scope_id)
         return row["payload"]
