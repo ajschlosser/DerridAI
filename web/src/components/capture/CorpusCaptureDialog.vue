@@ -10,7 +10,7 @@ import {
   type SourceProviderInfo,
 } from "../../api/corpus";
 import { useI18nStore } from "../../stores/i18n";
-import { useCapturePolling } from "../../composables/useCapturePolling";
+import { useCaptureFollow } from "../../composables/useCaptureFollow";
 import {
   acquirableCount,
   includesFromOptions,
@@ -61,7 +61,7 @@ const candidates = ref<CaptureCandidate[]>([]);
 const busy = ref(false);
 const error = ref("");
 
-const polling = useCapturePolling({
+const polling = useCaptureFollow({
   onUpdate: (next) => {
     emit("changed", next);
     // Follow a running job's phase; an idle capture stays on the step the user chose.
