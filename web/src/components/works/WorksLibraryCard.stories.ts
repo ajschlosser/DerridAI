@@ -44,3 +44,24 @@ export const Selected: Story = { args: { selected: true } };
 export const NeedsReview: Story = {
   args: { work: { ...work, review: 12, status: { kind: "changed", label: "Pending changes" } } },
 };
+export const Compact: Story = { args: { compact: true } };
+export const LongTitleMissingCover: Story = {
+  args: {
+    work: {
+      ...work,
+      work: "Introduction to Edmund Husserl’s Origin of Geometry: A Translation with Extended Commentary on the Problem of Ideal Objectivity",
+      cover: "",
+      publisher: { field_label: "Publisher", value: "", mixed: true, unique_count: 3 },
+    },
+  },
+};
+export const DatabaseUnavailable: Story = {
+  args: {
+    canSync: false,
+    syncDisabledReason: "Select a corpus database to sync.",
+    work: { ...work, status: { kind: "none", label: "No database" } },
+  },
+};
+export const Researcher: Story = {
+  args: { mode: "researcher", work: { ...work, subtitle: "Jacques Derrida · 1999" } },
+};

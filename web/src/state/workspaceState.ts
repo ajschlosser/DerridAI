@@ -89,6 +89,11 @@ export function createWorksState() {
   return {
     worksSearch: "",
     workOverview: "",
+    worksSort: "title-asc",
+    worksNeedsReview: false,
+    worksDbStatus: "",
+    worksAuthor: "",
+    worksView: "cards",
     /** Bumped by the runtime when it re-renders this workspace, so Vue code can watch for in-place changes. */
     version: 0,
   };

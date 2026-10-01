@@ -9,27 +9,43 @@ async function scan(page: Page, include: string) {
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 }
 
-test("Works library card has no WCAG 2.2 AA violations", async ({ page }) => {
-  await page.goto("/iframe.html?id=works-library-card--default&viewMode=story");
-  const card = page.locator(".work-library-card");
-  await expect(card).toBeVisible();
-  await scan(page, ".work-library-card");
-});
+const COMPONENTS = [
+  ["works-workspace-header--admin", ".ui-page-header"],
+  ["works-workspace-header--researcher", ".ui-page-header"],
+  ["works-corpus-context--admin", ".works-context"],
+  ["works-library-toolbar--default", ".works-toolbar-shell"],
+  ["works-library-card--default", ".works-card"],
+  ["works-library-card--selected", ".works-card"],
+  ["works-library-card--compact", ".works-card"],
+  ["works-library-card--long-title-missing-cover", ".works-card"],
+  ["works-library-card--database-unavailable", ".works-card"],
+  ["works-overview-card--admin", ".works-inspector"],
+  ["works-overview-card--inspector-needs-review", ".works-inspector"],
+] as const;
 
-test("Works overview card has no WCAG 2.2 AA violations", async ({ page }) => {
-  await page.goto("/iframe.html?id=works-overview-card--admin&viewMode=story");
-  const card = page.locator(".work-overview-card");
-  await expect(card).toBeVisible();
-  await scan(page, ".work-overview-card");
-});
+for (const [id, selector] of COMPONENTS) {
+  test(`Works story ${id} has no WCAG 2.2 AA violations`, async ({ page }) => {
+    await page.goto(`/iframe.html?id=${id}&viewMode=story`);
+    await expect(page.locator(selector).first()).toBeVisible();
+    await scan(page, selector);
+  });
+}
 
-test("Works library card exposes review status and its action menu", async ({ page }) => {
+test("Works library card selects with the keyboard and exposes review status and its menu", async ({
+  page,
+}) => {
   await page.goto("/iframe.html?id=works-library-card--needs-review&viewMode=story");
-  const card = page.locator(".work-library-card");
+  const card = page.locator(".works-card");
   await expect(card).toBeVisible();
   await expect(card.getByText("Pending changes")).toBeVisible();
 
-  await card.locator("summary").click();
-  await expect(card.getByRole("button", { name: "Edit metadata" })).toBeVisible();
-  await expect(card.getByRole("button", { name: "Remove entire work" })).toBeVisible();
+  const select = card.getByRole("button", { name: /Adieu to Emmanuel Levinas/ }).first();
+  await select.focus();
+  await expect(select).toBeFocused();
+
+  await card.getByRole("button", { name: "Actions for Adieu to Emmanuel Levinas" }).click();
+  await expect(page.getByRole("menuitem", { name: "Edit metadata" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Remove entire work" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menuitem", { name: "Edit metadata" })).toHaveCount(0);
 });

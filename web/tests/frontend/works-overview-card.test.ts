@@ -54,14 +54,16 @@ describe("WorksOverviewCard", () => {
     ] as never;
   });
 
-  it("keeps the cover in the masthead so insights use the full content width", () => {
+  it("is inspector content: no page heading, insights disclosed, secondary actions in a menu", () => {
     const wrapper = mount(WorksOverviewCard, {
       props: { work: workItem(), mode: "admin", citationLabel: "Full citation" },
     });
-    expect(wrapper.find(".work-overview-card > .work-overview-cover").exists()).toBe(false);
-    expect(wrapper.find(".work-overview-masthead .work-overview-cover").exists()).toBe(true);
-    expect(wrapper.find(".work-overview-content .work-insights-panel").exists()).toBe(true);
-    expect(wrapper.find("img, .work-cover-placeholder").exists()).toBe(true);
+    expect(wrapper.find("h1").exists()).toBe(false);
+    expect(wrapper.get("h2#selected-work-title").text()).toBe("Glas");
+    expect(wrapper.find("details.works-inspector-insights").exists()).toBe(true);
+    expect(wrapper.text()).toContain("Open records");
+    expect(wrapper.text()).toContain("Edit metadata");
+    expect(wrapper.text()).not.toContain("Populate metadata with LLM");
   });
 
   it("names the cover image from the work title", () => {
@@ -72,7 +74,27 @@ describe("WorksOverviewCard", () => {
         citationLabel: "Full citation",
       },
     });
-    expect(wrapper.get(".work-overview-cover img").attributes("alt")).toContain("Glas");
-    expect(wrapper.get(".work-overview-cover").attributes("aria-hidden")).toBeUndefined();
+    expect(wrapper.get(".works-inspector-cover img").attributes("alt")).toContain("Glas");
+    expect(wrapper.get(".works-inspector-cover").attributes("aria-hidden")).toBeUndefined();
+  });
+
+  it("offers review only when records need it and emits close for the persistent inspector", async () => {
+    const wrapper = mount(WorksOverviewCard, {
+      props: { work: workItem({ review: 3 }), mode: "admin", closable: true },
+    });
+    expect(wrapper.text()).toContain("Review records");
+    await wrapper.get("button[aria-label='Close work details']").trigger("click");
+    expect(wrapper.emitted("close")).toHaveLength(1);
+    await wrapper.setProps({ work: workItem({ review: 0 }) });
+    expect(wrapper.text()).not.toContain("Review records");
+  });
+
+  it("does not expose admin operations to researchers", () => {
+    const wrapper = mount(WorksOverviewCard, {
+      props: { work: workItem(), mode: "researcher" },
+    });
+    expect(wrapper.text()).toContain("Browse records");
+    expect(wrapper.text()).not.toContain("Edit metadata");
+    expect(wrapper.find(".ui-menu").exists()).toBe(false);
   });
 });

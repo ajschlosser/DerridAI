@@ -59,6 +59,16 @@ export interface WorksStore {
   count: number;
 }
 
+export type WorksSort = "title-asc" | "title-desc" | "records-desc" | "review-desc" | "year-asc";
+export type WorksViewMode = "cards" | "compact";
+
+export interface WorksFilters {
+  needsReview: boolean;
+  /** A stable `workDbStatus()` kind (changed, synced, exists, absent, unknown, none), or "" for any. */
+  dbStatus: string;
+  author: string;
+}
+
 export interface WorksSnapshot {
   mode: "admin" | "researcher";
   available: boolean;
@@ -71,8 +81,20 @@ export interface WorksSnapshot {
   stores: WorksStore[];
   activeStore: string;
   activeStoreCount: number;
+  /** Every work in the corpus or database, regardless of search, filter or sort. */
   totalWorks: number;
+  /** Works that match the current search and filters (the length of `works`). */
+  visibleWorks: number;
   totalRecords: number;
+  /** Distinct source files across all loaded works; 0 when the source is a database. */
+  sourceFileCount: number;
+  /** Records needing review across all works. */
+  totalReview: number;
+  /** Distinct authors across all works, for the author filter. */
+  authors: string[];
+  sort: WorksSort;
+  filters: WorksFilters;
+  viewMode: WorksViewMode;
   dbUnavailableReason: string;
   storesEmptyLabel: string;
   citationLabel: string;

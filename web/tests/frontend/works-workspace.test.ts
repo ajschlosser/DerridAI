@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { describe, expect, it, vi } from "vitest";
+import { createNavigation } from "../../src/domain/navigation";
 import { createWorksWorkspace } from "../../src/domain/worksWorkspace";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 
@@ -74,5 +75,154 @@ describe("works workspace commands", () => {
     expect(spies.openTouchup).toHaveBeenCalledWith(rows);
     workspace.reviewFlaggedWork("Unknown work");
     expect(spies.openTouchup).toHaveBeenLastCalledWith([]);
+  });
+
+  describe("library snapshot", () => {
+    function work(name: string, count: number, review: number, year: string, status = "synced") {
+      return {
+        work: name,
+        count,
+        review,
+        files: [`${name}.jsonl`],
+        authors: ["Jacques Derrida"],
+        years: year ? [year] : [],
+        rows: [{ record: { work: name } }],
+        status,
+      };
+    }
+    const items = [
+      work("Glas", 400, 12, "1974"),
+      work("Of Grammatology", 900, 0, "1967", "absent"),
+      work("Aporias", 50, 3, ""),
+    ];
+    function snapshotSetup(view: Record<string, unknown> = {}) {
+      const { state, workspace } = setup({
+        isResearcher: () => false,
+        providerProfiles: () => [],
+        recordStores: () => [],
+        hasCorpusDb: () => true,
+        workIndex: () => new Map(items.map((item) => [item.work, item])),
+        allAnnotations: () => [],
+        worksBiblioValue: () => ({ value: "", mixed: false }),
+        workDbStatus: (rows: Array<{ record: { work: string } }>) => ({
+          kind: items.find((item) => item.work === rows[0].record.work)!.status,
+          label: "",
+        }),
+        label: (key: string) => key,
+        display: String,
+        uniqueWorkValues: () => [],
+        workInsightMetrics: () => [],
+        tr: (key: string) => key,
+        dbUnavailableReason: () => "",
+      });
+      state.files = [{ id: "f" }];
+      // The runtime state object is shared between tests, so every view field starts from its default.
+      Object.assign(state, {
+        worksSearch: "",
+        workOverview: "",
+        worksSort: "title-asc",
+        worksNeedsReview: false,
+        worksDbStatus: "",
+        worksAuthor: "",
+        worksView: "cards",
+        ...view,
+      });
+      return { state, workspace };
+    }
+    const titles = (snapshot: any) => snapshot.works.map((item: { work: string }) => item.work);
+
+    it("keeps page-wide totals stable while the query narrows the visible works", () => {
+      const { workspace } = snapshotSetup({ worksSearch: "gla" });
+      const snapshot = workspace.getWorksWorkspaceSnapshot() as any;
+      expect(titles(snapshot)).toEqual(["Glas"]);
+      expect(snapshot.visibleWorks).toBe(1);
+      expect(snapshot.totalWorks).toBe(3);
+      expect(snapshot.totalRecords).toBe(1350);
+      expect(snapshot.sourceFileCount).toBe(3);
+      expect(snapshot.totalReview).toBe(15);
+    });
+
+    it("sorts by the real fields and leaves works without a year last", () => {
+      const order = (sort: string) => {
+        const { workspace } = snapshotSetup({ worksSort: sort });
+        return titles(workspace.getWorksWorkspaceSnapshot());
+      };
+      expect(order("title-asc")).toEqual(["Aporias", "Glas", "Of Grammatology"]);
+      expect(order("title-desc")).toEqual(["Of Grammatology", "Glas", "Aporias"]);
+      expect(order("records-desc")).toEqual(["Of Grammatology", "Glas", "Aporias"]);
+      expect(order("review-desc")).toEqual(["Glas", "Aporias", "Of Grammatology"]);
+      expect(order("year-asc")).toEqual(["Of Grammatology", "Glas", "Aporias"]);
+      expect(order("bogus")).toEqual(["Aporias", "Glas", "Of Grammatology"]);
+    });
+
+    it("filters by review need, database status and author", () => {
+      const only = (view: Record<string, unknown>) =>
+        titles(snapshotSetup(view).workspace.getWorksWorkspaceSnapshot());
+      expect(only({ worksNeedsReview: true })).toEqual(["Aporias", "Glas"]);
+      expect(only({ worksDbStatus: "absent" })).toEqual(["Of Grammatology"]);
+      expect(only({ worksAuthor: "Nobody" })).toEqual([]);
+      expect(only({ worksNeedsReview: true, worksDbStatus: "synced" })).toEqual([
+        "Aporias",
+        "Glas",
+      ]);
+    });
+
+    it("stores safe view state and normalizes unknown values", () => {
+      const { state, calls, workspace } = setup();
+      workspace.setWorksView({ sort: "records-desc", needsReview: true, viewMode: "compact" });
+      expect([state.worksSort, state.worksNeedsReview, state.worksView]).toEqual([
+        "records-desc",
+        true,
+        "compact",
+      ]);
+      expect(calls).toEqual(["persistPrefs", "syncUrl"]);
+      workspace.setWorksView({ sort: "nonsense", viewMode: "grid", dbStatus: "", author: "X" });
+      expect([state.worksSort, state.worksView, state.worksAuthor]).toEqual([
+        "title-asc",
+        "cards",
+        "X",
+      ]);
+    });
+  });
+
+  it("restores Works sort, filters and view mode from the URL state", () => {
+    const { state } = setup();
+    const navigation = createNavigation({
+      state,
+      persistPrefs: vi.fn(),
+    } as never);
+    Object.assign(state, {
+      view: "works",
+      worksSearch: "gla",
+      workOverview: "Glas",
+      worksSort: "review-desc",
+      worksNeedsReview: true,
+      worksDbStatus: "changed",
+      worksAuthor: "Jacques Derrida",
+      worksView: "compact",
+    });
+    const encoded = JSON.parse(JSON.stringify(navigation.currentTableUrlState("works")));
+    Object.assign(state, {
+      worksSearch: "",
+      workOverview: "",
+      worksSort: "title-asc",
+      worksNeedsReview: false,
+      worksDbStatus: "",
+      worksAuthor: "",
+      worksView: "cards",
+    });
+    navigation.applyCompressedTableUrlState(encoded, "works");
+    expect(state).toMatchObject({
+      worksSearch: "gla",
+      workOverview: "Glas",
+      worksSort: "review-desc",
+      worksNeedsReview: true,
+      worksDbStatus: "changed",
+      worksAuthor: "Jacques Derrida",
+      worksView: "compact",
+    });
+    // Hand-edited or stale values fall back to safe defaults rather than corrupting the view.
+    navigation.applyCompressedTableUrlState({ s: "drop table", d: "weird", v: "grid" }, "works");
+    expect(state).toMatchObject({ worksSort: "title-asc", worksDbStatus: "", worksView: "cards" });
   });
 });

@@ -45,6 +45,17 @@ export function useWorksWorkspace() {
     load();
   }
 
+  function setView(patch: {
+    sort?: string;
+    needsReview?: boolean;
+    dbStatus?: string;
+    author?: string;
+    viewMode?: string;
+  }) {
+    runtime.setWorksView?.(patch);
+    load();
+  }
+
   async function setStore(name: string) {
     await runtime.setWorksStore?.(name);
     await prepare();
@@ -124,6 +135,7 @@ export function useWorksWorkspace() {
     activate,
     setQuery,
     setOverview,
+    setView,
     setStore,
     syncWork,
     syncAll,
