@@ -30,13 +30,13 @@ from .corpus_record_quality import iso_now
 from .corpus_review_actions import _serialize_record_mutation
 from .corpus_review_state import _sync_record_metadata_state
 from .corpus_reviewer_helpers import _metadata_issue_type_for_field
-from .enrichment_ledger import RECORD_RUN
 from .enrichment_cycles import (
     CONFIDENCE_FIELDS,
     MAX_PASSES,
     resolve_conflict,
     same_value,
 )
+from .enrichment_ledger import RECORD_RUN
 from .field_assertions import (
     create_model_assertion,
     current_assertion_by_name,
@@ -66,6 +66,7 @@ class EnrichmentRerunsMixin:
         _lock: Any
         _executor: ThreadPoolExecutor
         _global_learning: Any
+        _ledger: Any
         _provider_epoch: dict[str, int]
         _cancel: set[str]
 
