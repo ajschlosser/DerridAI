@@ -25,6 +25,7 @@ from app.pipelines.service import PipelineService, pipeline_hash
 from app.pipelines.store import PipelineStore
 
 CASCADE = ("evidence.recovery.cascade", 1)
+CASCADE_V2 = ("evidence.recovery.cascade", 2)
 CELF = ("evidence.recovery.celf", 1)
 
 
@@ -95,21 +96,27 @@ def _ran(traces):
 # --- Built-in definitions ---------------------------------------------------------------
 
 
-def test_both_built_ins_execute_and_report_their_compliance() -> None:
+def test_built_ins_execute_and_report_their_compliance() -> None:
     service = PipelineService()
     celf = compile_recovery_pipeline(built_in_pipeline(*CELF))
-    cascade = compile_recovery_pipeline(built_in_pipeline(*CASCADE))
+    cascade_v1 = compile_recovery_pipeline(built_in_pipeline(*CASCADE))
+    cascade_v2 = compile_recovery_pipeline(built_in_pipeline(*CASCADE_V2))
 
     assert celf.celf_compliant is True
-    assert cascade.celf_compliant is False and "'mmr'" in cascade.compliance_reason
+    assert cascade_v1.celf_compliant is False and "'mmr'" in cascade_v1.compliance_reason
+    assert cascade_v2.celf_compliant is True
     celf_validation = service.validate(built_in_pipeline(*CELF))
-    cascade_validation = service.validate(built_in_pipeline(*CASCADE))
+    cascade_v1_validation = service.validate(built_in_pipeline(*CASCADE))
+    cascade_v2_validation = service.validate(built_in_pipeline(*CASCADE_V2))
     assert celf_validation.valid and not celf_validation.issues
-    assert cascade_validation.valid
-    assert [issue.code for issue in cascade_validation.issues] == ["evidence_recovery_not_celf_compliant"]
+    assert cascade_v1_validation.valid
+    assert [issue.code for issue in cascade_v1_validation.issues] == [
+        "evidence_recovery_not_celf_compliant"
+    ]
+    assert cascade_v2_validation.valid and not cascade_v2_validation.issues
     assignment = built_in_assignment(RECOVERY_FEATURE)
     assert assignment is not None
-    assert (assignment.pipeline_id, assignment.pipeline_version) == CELF
+    assert (assignment.pipeline_id, assignment.pipeline_version) == CASCADE_V2
 
 
 def test_existing_built_ins_still_validate_under_fallback_type_rule() -> None:
@@ -194,6 +201,100 @@ def test_cascade_falls_to_llm_as_last_resort_and_accepts_unsupported_choice(monk
     assert result.entry["block_ids"] == ["b1"], "invented IDs never survive validation"
     assert result.entry["score_details"][0]["lexical_support"] is False
     assert _ran(traces)["semantic"] == "failed"
+
+
+def test_cascade_v2_reranks_then_adjudicates_only_a_bounded_shortlist(monkeypatch, traces):
+    _built_in(monkeypatch, CASCADE_V2)
+    blocks = [
+        {"block_id": "b1", "text": "Passage alpha."},
+        {"block_id": "b2", "text": "Passage beta."},
+        {"block_id": "b3", "text": "Passage gamma."},
+        {"block_id": "b4", "text": "Passage delta."},
+        {"block_id": "b5", "text": "Passage epsilon."},
+    ]
+
+    def fake_predict_scores(pairs, *, model_name, timeout_seconds):
+        del model_name, timeout_seconds
+        by_text = {
+            "Passage alpha.": 0.92,
+            "Passage beta.": 0.81,
+            "Passage gamma.": 0.63,
+            "Passage delta.": 0.41,
+            "Passage epsilon.": -0.2,
+        }
+        return [by_text[text] for _query, text in pairs], {}
+
+    prompts = []
+
+    def llm_choice(prompt: str, role: str, attempts: int, escalated: bool):
+        prompts.append(prompt)
+        assert (role, attempts, escalated) == ("chain", 2, False)
+        assert "[b1]" in prompt and "[b2]" in prompt
+        assert "[b5]" not in prompt, "the model must not see candidates outside the bounded shortlist"
+        return ClosedChoiceAnswer({"block_ids": ["b2", "b5"], "reason": "b2 supports the reading."})
+
+    monkeypatch.setattr(cross_encoder_module, "predict_scores", fake_predict_scores)
+    result = _recover(
+        "interpretive classification",
+        blocks,
+        projection=Projection(
+            {
+                "b1": [1.0, 0.0],
+                "b2": [0.98, 0.02],
+                "b3": [0.96, 0.04],
+                "b4": [0.94, 0.06],
+                "b5": [0.92, 0.08],
+            },
+            query_vector=[1.0, 0.0],
+        ),
+        llm_choice=llm_choice,
+    )
+
+    assert prompts
+    assert result.entry["method"] == "llm-evidence-choice-v1"
+    assert result.entry["block_ids"] == ["b2"], "IDs outside the shortlist must be rejected"
+    assert result.entry["pipeline"]["celf_compliant"] is True
+    ran = _ran(traces)
+    for stage in ("semantic", "rerank", "mmr", "candidate_support", "llm_choice", "provenance", "select"):
+        assert stage in ran
+    stage = {item.stage_id: item for item in traces[-1].stages}["llm_choice"]
+    assert stage.parameters["candidate_scope"] == "input_or_all"
+    assert stage.parameters["candidate_limit"] == 4
+    assert stage.parameters["candidate_count"] <= 4
+
+
+def test_cascade_v2_cross_encoder_never_establishes_evidence_by_itself(monkeypatch, traces):
+    _built_in(monkeypatch, CASCADE_V2)
+    blocks = [
+        {"block_id": "b1", "text": "A source passage about hospitality."},
+        {"block_id": "b2", "text": "A source passage about grammar."},
+    ]
+    monkeypatch.setattr(
+        cross_encoder_module,
+        "predict_scores",
+        lambda pairs, **_kwargs: ([0.99 if "hospitality" in text else 0.1 for _query, text in pairs], {}),
+    )
+
+    called = []
+
+    def llm_choice(prompt: str, _role: str, _attempts: int, _escalated: bool):
+        called.append(prompt)
+        return ClosedChoiceAnswer({"block_ids": ["b1"], "reason": "Supports the interpretation."})
+
+    result = _recover(
+        "ethical openness",
+        blocks,
+        projection=Projection(
+            {"b1": [1.0, 0.0], "b2": [0.0, 1.0]},
+            query_vector=[1.0, 0.0],
+        ),
+        llm_choice=llm_choice,
+    )
+
+    assert called, "a high reranker score is ranking evidence, not evidentiary authority"
+    assert result.entry["method"] == "llm-evidence-choice-v1"
+    stages = [stage.stage_id for stage in traces[-1].stages]
+    assert stages.index("rerank") < stages.index("mmr") < stages.index("candidate_support") < stages.index("llm_choice")
 
 
 def test_cascade_returns_none_when_the_llm_stage_raises(monkeypatch, traces):
