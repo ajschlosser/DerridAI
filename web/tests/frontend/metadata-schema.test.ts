@@ -144,7 +144,6 @@ describe("metadata field cardinality", () => {
   });
 });
 
-
 describe("review autocomplete hygiene", () => {
   beforeEach(() => setActivePinia(createPinia()));
 

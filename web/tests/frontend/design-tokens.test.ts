@@ -155,7 +155,6 @@ describe("unified workbench contract", () => {
   });
 });
 
-
 describe("provider profile surfaces", () => {
   it("uses semantic theme tokens instead of light-only warning and surface fallbacks", () => {
     expect(providerProfileSelect).toContain("var(--surface-card)");
