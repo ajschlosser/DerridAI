@@ -31,6 +31,7 @@ from .language_segmentation import (
 
 _RUNNING_TEXT = {"body", "paragraph", "text"}
 
+
 def ends_sentence(block: dict[str, Any], language: str | None = None) -> bool:
     """True when a block can be the last block of a record."""
     text = str(block.get("text") or "").rstrip()
