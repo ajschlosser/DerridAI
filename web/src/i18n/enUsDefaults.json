@@ -8108,6 +8108,7 @@
   "pipelines.strategy_observed_latency": "Observed latency",
   "pipelines.latency_per_item": "≈ {time} per candidate",
   "pipelines.strategy_observed_scaling": "Elapsed time grows roughly as n^{exponent} (R² {r2}, {points} runs)",
+  "pipelines.strategy_observed_scope_scaling": "Elapsed time grows roughly as N^{exponent} with collection size (R² {r2}, {points} runs)",
   "pipelines.strategy_no_latency": "No recorded runs yet",
   "pipelines.new_pipeline_heading": "New pipeline",
   "pipelines.analysis_title": "How this pipeline performs",

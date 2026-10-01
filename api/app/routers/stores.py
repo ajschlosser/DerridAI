@@ -487,7 +487,13 @@ def search(store_name: str, body: SearchRequest, request: Request) -> dict[str, 
 def _search_collection_identity(store_name: str) -> dict[str, Any]:
     """Embedding identity for the trace; unknown when the collection cannot be opened."""
     try:
-        provider, model = store._embedding_spec(store._collection(store_name))
+        collection = store._collection(store_name)
+        provider, model = store._embedding_spec(collection)
     except Exception:  # noqa: BLE001 - the retrieval stage reports the real failure
         return {}
-    return {"embedding_provider": provider, "embedding_model": model}
+    identity: dict[str, Any] = {"embedding_provider": provider, "embedding_model": model}
+    try:
+        identity["scope_size"] = int(collection.count())
+    except Exception:  # noqa: BLE001 - scope size is optional telemetry; the trace simply omits it
+        identity.pop("scope_size", None)
+    return identity

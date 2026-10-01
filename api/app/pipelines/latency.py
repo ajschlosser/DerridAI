@@ -96,6 +96,7 @@ def strategy_latency(runs: Iterable[PipelineRunTrace]) -> dict[str, dict[str, An
     per_item: dict[str, list[float]] = defaultdict(list)
     models: dict[str, dict[tuple[str, str], list[float]]] = defaultdict(lambda: defaultdict(list))
     points: dict[str, list[tuple[int, float]]] = defaultdict(list)
+    scope_points: dict[str, list[tuple[int, float]]] = defaultdict(list)
     executions: dict[str, int] = defaultdict(int)
     for run in runs:
         for stage in run.stages:
@@ -107,6 +108,9 @@ def strategy_latency(runs: Iterable[PipelineRunTrace]) -> dict[str, dict[str, An
             if stage.input_count:
                 per_item[stage.strategy_id].append(ms / stage.input_count)
                 points[stage.strategy_id].append((int(stage.input_count), ms))
+            scope = (stage.parameters or {}).get("scope_size")
+            if isinstance(scope, int) and not isinstance(scope, bool) and scope > 0:
+                scope_points[stage.strategy_id].append((scope, ms))
             if stage.model or stage.provider:
                 models[stage.strategy_id][(stage.provider or "", stage.model or "")].append(ms)
 
@@ -125,6 +129,9 @@ def strategy_latency(runs: Iterable[PipelineRunTrace]) -> dict[str, dict[str, An
             "median_ms_per_input": _round(percentile(per_item[strategy_id], 0.5)),
             "by_model": by_model,
             "observed_scaling": fit_scaling(points[strategy_id]),
+            # Against the size of the collection or scope searched (counts only),
+            # which candidate counts cannot reveal for a scan.
+            "observed_scope_scaling": fit_scaling(scope_points[strategy_id]),
         }
     return result
 
@@ -218,6 +225,9 @@ def estimate_pipeline_latency(
                 "by_model": (by_strategy.get(stage.strategy) or {}).get("by_model", []),
                 "observed_scaling": (by_strategy.get(stage.strategy) or {}).get(
                     "observed_scaling"
+                ),
+                "observed_scope_scaling": (by_strategy.get(stage.strategy) or {}).get(
+                    "observed_scope_scaling"
                 ),
             }
         )

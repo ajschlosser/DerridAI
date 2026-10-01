@@ -11,10 +11,12 @@ This is an implementation handoff, not a release note. PR #368 landed typed stag
 
 Done in #375: shared `rewired_inputs` warning and its Studio notice (§2.4), store-search parallel branches with declared `concurrency` (§2.0), constant inputs on tuning ports (§3), diagram edge type labels and ordering-only edges (§5), code-read complexity corrections (§4), and assessments of `evidence_suggestion` (§2.2) and `research` (§2.3) as inspect-only for changed bindings.
 
+Done in the next branch (`feature/scope-size-and-tuning-ports`): traces now record `scope_size` (collection item count, counts only) on retrieval stages; `strategy_latency` and the stage rows carry `observed_scope_scaling` fitted against it, shown as N^x in the Complexity tab and strategy inspector; tuning ports `fetch_k` (retrievers), `rrf_k`, `lambda_mult`, and `limit` (MMR) accept constants, executed by store search only.
+
 Still open:
 
-1. **Complexity calibration against measured traces** (§4): record a bounded `scope_size` in `PipelineStageTrace.parameters`, run representative pipelines at three or more collection sizes, then fit and correct.
-2. **More tuning ports** (§3): `fetch_k`, `rrf_k`, `lambda_mult`, each classified as pure computation first.
+1. **Run the calibration** (§4): the data path now exists. Run representative searches against collections of three or more sizes (and several candidate counts), read `observed_scaling` / `observed_scope_scaling` from `GET /api/system/pipelines/strategy-latency`, and correct any declaration that disagrees. Needs a real deployment; not doable from tests.
+2. **Record `scope_size` for the evidence and Research retrievers** (only store search records it today).
 3. **Optional shared executor** (§2.4) once a third purpose needs the store-search shape.
 4. Revisit §2.2 or §2.3 only if the purpose gains a real branch.
 
@@ -121,7 +123,7 @@ Same domain as recovery, so reuse the recovery pattern: resolve wiring at compil
 
 `InputBinding.source="constant"` carries a bounded finite number (`|value| ≤ 1,000,000`, omitted from the serialised form when absent so existing hashes hold). Only ports declaring `PortSpec.accepts_constant` take one, with an optional `minimum`/`maximum`; wiring reports `binding_constant_not_allowed` and `binding_constant_out_of_range`. New data type `number`. The first tuning port is `select.top_k`'s optional `limit`; the open decision was resolved as recommended: constants are never allowed on `query`, candidate or other data ports, and `config` keeps owning every existing numeric setting. Store search delivers the constant (it may narrow the request's result count, never raise it) and flags the run as rewired; every other purpose keeps a version with a constant inspect-only because a constant changes the resolved wiring. The Stage inputs panel offers **A fixed number** with a range-checked number field.
 
-Remaining: more tuning ports (for example `fetch_k`, `rrf_k`, `lambda_mult`) once each is classified as pure computation rather than domain policy; a constant must never reach a provenance gate, support threshold the purpose fixes, access rule or reviewer decision.
+Added later: `fetch_k`, `rrf_k`, `lambda_mult` and MMR `limit` (retrieval arithmetic; each was classified as computation, not domain policy). Any further constant must pass the same test: it must never reach a provenance gate, a support threshold the purpose fixes, an access rule or a reviewer decision.
 
 ## 4. Step 3 — Calibrate declared complexity against real traces
 
@@ -137,7 +139,7 @@ Remaining: more tuning ports (for example `fetch_k`, `rrf_k`, `lambda_mult`) onc
 
 **Known soft spots to check first:** `rerank.cross_encoder` scores all incoming candidates in the Research path but only the head `top_k` in the evidence adapter (`pipelines/evidence.py`), so its worst-case model-call count is an upper bound; `validate.evidence_support` is declared `O(n·L)` but may be model-assisted; fusion cardinality assumes distinct origins and is an upper bound. `retrieve.chroma_similarity` is declared sublinear in `N` (approximate index) and is only valid for that index type.
 
-**Status (2026-10-01).** The measurement part could not be run here (it needs real traces at several collection sizes). The code-reading part is done: `validate.evidence_support` was declared `O(n·L)` but `_support_rows` re-scores every source unit in scope, so it is now `O(N·L)` and scope-scaling (it is deterministic token overlap, not model-assisted); `rerank.cross_encoder` keeps `model_calls="n"` with a comment that the evidence adapter scores only the head `top_k`; `validate.provenance` is unchanged because the Research gate is per-candidate while the reviewer-evidence variant also builds an in-memory set of all source units, and one strategy id carries one declaration. `scope_size` is still not recorded in traces; add it before fitting scope-scaling exponents.
+**Status (2026-10-01).** The measurement part could not be run here (it needs real traces at several collection sizes). The code-reading part is done: `validate.evidence_support` was declared `O(n·L)` but `_support_rows` re-scores every source unit in scope, so it is now `O(N·L)` and scope-scaling (it is deterministic token overlap, not model-assisted); `rerank.cross_encoder` keeps `model_calls="n"` with a comment that the evidence adapter scores only the head `top_k`; `validate.provenance` is unchanged because the Research gate is per-candidate while the reviewer-evidence variant also builds an in-memory set of all source units, and one strategy id carries one declaration. `scope_size` is now recorded by store search (see §0); the evidence and Research retrievers do not record it yet.
 
 **Done when:** each declared cost either agrees with measurement within reason or carries a corrected formula and a comment on how it was checked, and the Complexity tab no longer shows a measured exponent that contradicts its declaration without explanation.
 

@@ -1666,6 +1666,15 @@
           "accepts_constant": false,
           "minimum": null,
           "maximum": null
+        },
+        {
+          "name": "rrf_k",
+          "data_type": "number",
+          "required": false,
+          "multiple": false,
+          "accepts_constant": true,
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
@@ -2875,6 +2884,15 @@
           "accepts_constant": false,
           "minimum": null,
           "maximum": null
+        },
+        {
+          "name": "fetch_k",
+          "data_type": "number",
+          "required": false,
+          "multiple": false,
+          "accepts_constant": true,
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
@@ -3024,6 +3042,15 @@
           "accepts_constant": false,
           "minimum": null,
           "maximum": null
+        },
+        {
+          "name": "fetch_k",
+          "data_type": "number",
+          "required": false,
+          "multiple": false,
+          "accepts_constant": true,
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
@@ -3432,6 +3459,15 @@
           "accepts_constant": false,
           "minimum": null,
           "maximum": null
+        },
+        {
+          "name": "fetch_k",
+          "data_type": "number",
+          "required": false,
+          "multiple": false,
+          "accepts_constant": true,
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
@@ -3497,6 +3533,15 @@
           "accepts_constant": false,
           "minimum": null,
           "maximum": null
+        },
+        {
+          "name": "fetch_k",
+          "data_type": "number",
+          "required": false,
+          "multiple": false,
+          "accepts_constant": true,
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
@@ -3765,6 +3810,24 @@
           "accepts_constant": false,
           "minimum": null,
           "maximum": null
+        },
+        {
+          "name": "lambda_mult",
+          "data_type": "number",
+          "required": false,
+          "multiple": false,
+          "accepts_constant": true,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        {
+          "name": "limit",
+          "data_type": "number",
+          "required": false,
+          "multiple": false,
+          "accepts_constant": true,
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [

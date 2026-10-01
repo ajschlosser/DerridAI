@@ -214,6 +214,19 @@ const configKeys = computed(() => {
                 )
               }}
             </small>
+            <small v-if="latency.observed_scope_scaling" class="block">
+              {{
+                i18n.tf(
+                  "pipelines.strategy_observed_scope_scaling",
+                  "Elapsed time grows roughly as N^{exponent} with collection size (R² {r2}, {points} runs)",
+                  {
+                    exponent: latency.observed_scope_scaling.exponent,
+                    r2: latency.observed_scope_scaling.r_squared,
+                    points: latency.observed_scope_scaling.points,
+                  },
+                )
+              }}
+            </small>
             <small
               v-for="row in latency.by_model"
               :key="`${row.provider}:${row.model}`"
