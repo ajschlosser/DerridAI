@@ -34,6 +34,9 @@ def _record(record_id: str = "r1") -> dict[str, Any]:
         "quoted_speaker": "Hegel",
         "position_holder": "Hegel",
         "topics": ["sublation", "family"],
+        "semantic_function": "objection",
+        "is_direct_quote": True,
+        "quotation_chain": ["Derrida", "Hegel"],
         "extraction_quality": 0.91,
         "text": "A publication-safe passage.",
     }
@@ -72,19 +75,20 @@ def test_default_profile_is_complete_and_keeps_field_assertions(monkeypatch: pyt
     assert manifest["celf_conformance"]["core_record"] is True
 
 
-def test_reader_profile_drops_assertions_but_keeps_core_citation_and_attribution(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_reader_profile_drops_only_the_assertion_layer(monkeypatch: pytest.MonkeyPatch) -> None:
     _, full_records, full_size = _site_records(monkeypatch)
     manifest, records, slim_size = _site_records(monkeypatch, record_profile="reader")
     record = records[0]
 
     assert "field_assertions" not in record and "current_field_assertions" not in record
-    assert "extraction_quality" not in record and "topics" not in record
-    for field in CELF_REQUIRED_RECORD_FIELDS:
+    # Every metadata value survives unchanged: bibliographic, attribution, quotation, semantic and indexing.
+    removed = set(full_records[0]) - set(record)
+    assert removed == {"field_assertions", "current_field_assertions"}
+    for field in set(record) - {"field_authority"}:
         assert record[field] == full_records[0][field]
-    # Edition, translation, page and the three separate attribution fields survive unflattened.
-    for field in ("edition", "translator", "page_start", "citation", "speaker", "quoted_speaker", "position_holder"):
+    for field in ("topics", "extraction_quality", "semantic_function", "is_direct_quote", "quotation_chain"):
+        assert record[field] == full_records[0][field]
+    for field in ("edition", "translator", "page_start", "speaker", "quoted_speaker", "position_holder"):
         assert record[field] == full_records[0][field]
     assert slim_size < full_size
 
@@ -92,21 +96,15 @@ def test_reader_profile_drops_assertions_but_keeps_core_citation_and_attribution
     assert conformance["record_profile"] == "reader"
     assert conformance["core_record"] is True
     assert conformance["field_assertions"] == "omitted"
-    assert "field_assertions" in conformance["omitted_fields"]
+    assert set(conformance["omitted_fields"]) == {"field_assertions", "current_field_assertions"}
 
 
-def test_reader_profile_keeps_unreviewed_state_of_attribution_values(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reader_profile_keeps_unreviewed_state_of_every_kept_value(monkeypatch: pytest.MonkeyPatch) -> None:
     _, records, _ = _site_records(monkeypatch, record_profile="reader")
     authority = records[0]["field_authority"]
-    assert authority["position_holder"]["derivation"] == "model"
-    assert authority["position_holder"]["authority"] == "unreviewed"
-    # Only attribution fields are summarized; indexing fields that were dropped leave no trace to misread.
-    assert "topics" not in authority
-
-
-def test_reader_profile_keeps_collection_filter_fields(monkeypatch: pytest.MonkeyPatch) -> None:
-    _, records, _ = _site_records(monkeypatch, record_profile="reader", filter_fields=["work", "topics"])
-    assert records[0]["topics"] == ["sublation", "family"]
+    for field in ("position_holder", "topics"):
+        assert authority[field]["derivation"] == "model"
+        assert authority[field]["authority"] == "unreviewed"
 
 
 def test_profile_never_removes_required_fields_and_rejects_unknown_profiles() -> None:
