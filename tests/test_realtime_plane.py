@@ -123,7 +123,7 @@ def test_cross_origin_browsers_are_refused(test_broker):
 
 
 def test_a_role_with_no_realtime_topic_is_refused(test_broker, monkeypatch):
-    monkeypatch.setattr(realtime_router, "capabilities_for", lambda user: frozenset({"corpus.read"}))
+    monkeypatch.setattr(realtime_router, "capabilities_for", lambda user: frozenset({"annotations.read"}))
     with _client("ann-cookie").websocket_connect("/api/ws/events") as ws:
         assert _close_code(ws) == 4403
 

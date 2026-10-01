@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
 import { useI18nStore } from "../stores/i18n";
+import { useNewerData } from "../composables/useNewerData";
+import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
 import { useShellStore } from "../stores/shell";
 import AppIcon from "../components/AppIcon.vue";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
@@ -595,6 +597,11 @@ watch(
     if (snapshot.value?.scope === "database") void load({ refresh: false, autoRun: false });
   },
 );
+const newer = useNewerData();
+async function loadNewer() {
+  newer.acknowledge();
+  await load({ refresh: true });
+}
 onMounted(() => {
   loadSavedState();
   void load({ refresh: true, autoRun: true });
@@ -612,6 +619,7 @@ onBeforeUnmount(() => {
     aria-labelledby="search-page-title"
     @wheel="forwardVerticalWheelToDocument"
   >
+    <NewerDataBanner :visible="newer.hasNewer.value" @load="loadNewer" />
     <div v-if="loading && !snapshot" class="search-page-loading">
       <UiLoadingState :label="i18n.t('search.loading')" />
     </div>

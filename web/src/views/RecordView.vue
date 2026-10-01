@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRoute } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
 import { useI18nStore } from "../stores/i18n";
+import { useNewerData } from "../composables/useNewerData";
+import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
 import { useShellStore } from "../stores/shell";
 import RecordWorkspaceHeader from "../components/record/RecordWorkspaceHeader.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
@@ -147,6 +149,11 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+const newer = useNewerData();
+async function loadNewer() {
+  newer.acknowledge();
+  await load();
 }
 async function refreshAfter(action: () => Promise<unknown> | unknown) {
   try {
@@ -324,6 +331,7 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="record-workspace-page" :aria-busy="loading">
+    <NewerDataBanner :visible="newer.hasNewer.value" @load="loadNewer" />
     <div v-if="loading" class="record-workspace-loading">
       <UiLoadingState :label="i18n.t('record.loading')" />
     </div>

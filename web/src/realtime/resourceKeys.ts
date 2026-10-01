@@ -6,9 +6,11 @@ export const DATA_RESOURCES = [
   "roles",
   "pipelines",
   "pipeline_runs",
+  "pipeline_benchmarks",
   "vector_collections",
   "metadata_exemplars",
   "response_library",
+  "corpus_records",
 ] as const;
 export type DataResource = (typeof DATA_RESOURCES)[number];
 

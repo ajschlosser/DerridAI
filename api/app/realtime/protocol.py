@@ -106,6 +106,9 @@ class Audience:
     owner: str | None = None
     admin_only: bool = True
     capability: str | None = None
+    # With `capability` set, any non-administrator holding it is a recipient and no owner is needed.
+    # Only data-resource invalidations use this (they carry no values); owned events never do.
+    capability_only: bool = False
 
 
 @dataclass(frozen=True)

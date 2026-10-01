@@ -181,6 +181,8 @@ class BenchmarkRunRetention(OperationalStore):
                 )
                 removed += int(cursor.rowcount or 0)
             conn.commit()
+        if removed:
+            operation_events.note_resource_changed("pipeline_benchmarks")
         return removed
 
 

@@ -1,9 +1,11 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { chromaApi } from "../../api/chroma";
 import { pipelinesApi } from "../../api/pipelines";
 import { pipelineKey } from "../../domain/pipelinePresentation";
+import { dataKey } from "../../realtime/resourceKeys";
+import { queryClient, useDataQuery } from "../../realtime/dataQuery";
 import PipelineBenchmarkCaseList from "./PipelineBenchmarkCaseList.vue";
 import PipelineComparisonResult from "./PipelineComparisonResult.vue";
 import UiButton from "../ui/UiButton.vue";
@@ -14,7 +16,6 @@ import type {
   ResearchPipelineBenchmarkCase,
   ResearchPipelineBenchmarkRun,
 } from "../../types/pipelines";
-import type { VectorCollection } from "../../types/vector";
 
 const props = defineProps<{
   pipelines: PipelineDefinition[];
@@ -24,15 +25,19 @@ const emit = defineEmits<{ openPipeline: [key: string] }>();
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
 
-const loaded = ref(false);
 const createOpen = ref(false);
-const loading = ref(false);
 const creating = ref(false);
 const running = ref(false);
 const error = ref("");
 
-const collections = ref<VectorCollection[]>([]);
-const cases = ref<ResearchPipelineBenchmarkCase[]>([]);
+// Cases and collections are server data: realtime invalidation keeps them current (docs/REALTIME.md).
+const casesQuery = useDataQuery("pipeline_benchmarks", () =>
+  pipelinesApi.researchBenchmarkCases({ limit: 200 }),
+);
+const collectionsQuery = useDataQuery("vector_collections", () => chromaApi.collections());
+const cases = computed(() => casesQuery.data.value?.cases ?? []);
+const collections = computed(() => collectionsQuery.data.value ?? []);
+const loading = computed(() => casesQuery.isPending.value || collectionsQuery.isPending.value);
 const selectedCaseKey = ref("");
 
 const caseId = ref("");
@@ -76,33 +81,23 @@ function initializePipelineChoices() {
   }
 }
 
-async function loadWorkspace() {
-  if (loaded.value || loading.value) return;
-  loading.value = true;
-  error.value = "";
-  initializePipelineChoices();
-  try {
-    const [availableCollections, casePage] = await Promise.all([
-      chromaApi.collections(),
-      pipelinesApi.researchBenchmarkCases({ limit: 200 }),
-    ]);
-    collections.value = availableCollections;
-    cases.value = casePage.cases;
-    if (!collection.value && collections.value.length) {
-      collection.value = collections.value[0].name;
-    }
+watch(
+  [cases, collections, researchPipelines],
+  () => {
+    initializePipelineChoices();
+    if (!collection.value && collections.value.length) collection.value = collections.value[0].name;
     if (!selectedCaseKey.value && cases.value.length) {
       selectedCaseKey.value = benchmarkCaseKey(cases.value[0]);
     }
-    loaded.value = true;
-  } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
-  } finally {
-    loading.value = false;
-  }
-}
-
-onMounted(() => void loadWorkspace());
+  },
+  { immediate: true },
+);
+watch(
+  () => casesQuery.error.value || collectionsQuery.error.value,
+  (exc) => {
+    if (exc) error.value = exc instanceof Error ? exc.message : String(exc);
+  },
+);
 
 async function createCase() {
   if (
@@ -129,10 +124,14 @@ async function createCase() {
       notes: notes.value.trim() || null,
     });
     const saved = response.case;
-    cases.value = [
-      saved,
-      ...cases.value.filter((item) => benchmarkCaseKey(item) !== benchmarkCaseKey(saved)),
-    ];
+    // The server also announces this change; applying it now keeps the new case selectable at once.
+    queryClient.setQueryData(dataKey("pipeline_benchmarks"), {
+      ...casesQuery.data.value,
+      cases: [
+        saved,
+        ...cases.value.filter((item) => benchmarkCaseKey(item) !== benchmarkCaseKey(saved)),
+      ],
+    });
     selectedCaseKey.value = benchmarkCaseKey(saved);
     createOpen.value = false;
   } catch (exc) {

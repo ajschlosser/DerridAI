@@ -283,7 +283,11 @@ from .metadata_schema import (
 from .metadata_schema_store import SchemaStore
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record, annotation_run_summary
-from .operation_events import note_corpus_build, note_record_metadata
+from .operation_events import (
+    note_corpus_build,
+    note_record_metadata,
+    note_resource_changed,
+)
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
@@ -1789,6 +1793,8 @@ class PdfCorpusRepository:
                 connection.commit()
             self._remember_fixed_point(payload, self._schema_signature(self._record_schema(build_id)))
             self._patch_review_records_cache(build_id, before, record_id, record)
+        # Committed single-record write (not a per-batch build write): readers may hold stale text.
+        note_resource_changed("corpus_records")
 
     def refresh_records_projection(self, build_id: str) -> None:
         """Rebuild the JSONL publication projection from the transactional index."""
@@ -4393,6 +4399,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build["published_at"] = created_at
         build["finished_at"] = created_at
         self.repo.save_build(build)
+        note_resource_changed("corpus_records")
         return publication
 
 

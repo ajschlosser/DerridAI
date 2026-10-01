@@ -13,7 +13,7 @@ const INTERVAL_ALLOWED = new Set([
   "components/OperationsPanel.vue",
   "components/CorpusModelActivity.vue",
 ]);
-// Pages and dialogs that still carry a manual refresh control (REALTIME_INVALIDATION_HANDOFF.md).
+// Pages and dialogs that still carry a manual refresh control (see docs/REALTIME.md).
 const REFRESH_CONTROL_ALLOWED = new Set([
   "components/OperationsPanel.vue",
   "components/capture/CorpusCaptureDialog.vue",
