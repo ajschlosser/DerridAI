@@ -49,7 +49,7 @@ def _record() -> dict:
                 "works_referenced": [
                     {
                         "start": 19,
-                        "end": 35,
+                        "end": 34,
                         "text": "Of Grammatology",
                         "source": "ner",
                         "tag": "WORK_OF_ART",
