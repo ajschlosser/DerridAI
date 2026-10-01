@@ -16,7 +16,7 @@ from app.language_segmentation import (  # noqa: E402
     starts_mid_sentence_text,
 )
 from app.sentence_boundaries import clean_boundary, snap_boundaries_to_sentences  # noqa: E402
-from app.source_text import html_to_text  # noqa: E402
+from app.source_text import html_to_text, leading_speaker  # noqa: E402
 from app.unit_policy import apply_unit_policy  # noqa: E402
 
 
@@ -128,3 +128,8 @@ def test_html_lang_is_preserved_as_documentary_language_metadata() -> None:
     text, metadata = html_to_text("<html lang=\"ja\"><body><p>第一文。</p></body></html>")
     assert text == "第一文。"
     assert metadata["language"] == "ja"
+
+
+def test_ingest_speaker_detection_accepts_non_latin_labels() -> None:
+    assert leading_speaker("デリダ：テクストが始まる") == "デリダ"
+    assert leading_speaker("دريدا: يبدأ النص") == "دريدا"
