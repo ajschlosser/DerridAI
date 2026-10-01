@@ -1605,6 +1605,11 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     confidence = max(0.0, min(1.0, float(raw_confidence))) if isinstance(raw_confidence, (int, float)) else None
                 except (TypeError, ValueError):
                     confidence = None
+                # Evidence confidence describes the model's support for the cited
+                # source spans. Once block-id validation leaves no bound span,
+                # there is no evidence object for that score to qualify.
+                if not block_ids:
+                    confidence = None
                 clean_evidence[field] = {
                     "block_ids": block_ids,
                     "confidence": confidence,
