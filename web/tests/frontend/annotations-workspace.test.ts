@@ -113,7 +113,7 @@ describe("annotations workspace", () => {
       (
         target: typeof file,
         index: number,
-        changes: { annotations: Array<Record<string, unknown>> },
+        changes: { annotations: Array<{ id: string; note: string }> },
       ) => {
         target.records[index] = { ...target.records[index], ...changes };
         return 1;
