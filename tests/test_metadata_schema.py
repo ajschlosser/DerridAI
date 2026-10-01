@@ -668,8 +668,8 @@ def test_retrieval_match_conditions_must_name_another_known_field():
 
 
 def test_boolean_false_is_supported_value_not_missing_value():
-    schema = default_schema()
-    response = response_model_for(schema, "quotation")
+    schema = ms.default_schema()
+    response = ms.response_model_for(schema, "quotation")
     quotation_fields = [field.name for field in schema.fields_in("quotation")]
     scalar_fields = [name for name in quotation_fields if name != "quotation_chain"]
     payload = {
@@ -697,8 +697,8 @@ def test_boolean_false_is_supported_value_not_missing_value():
 
 
 def test_open_fields_reject_pos_ner_and_foreign_closed_vocabulary_leakage():
-    schema = default_schema()
-    response = response_model_for(schema, "quotation")
+    schema = ms.default_schema()
+    response = ms.response_model_for(schema, "quotation")
     quotation_fields = [field.name for field in schema.fields_in("quotation")]
     metadata = {name: None for name in quotation_fields if name != "quotation_chain"}
     metadata["quotation_chain"] = ["PROPN", "assertion", "Jacques Derrida"]
