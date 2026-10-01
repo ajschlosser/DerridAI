@@ -16,7 +16,7 @@ export const browserEmbedderManifest = Object.freeze({
       projectUrl: "https://github.com/huggingface/transformers.js",
     },
     onnxWasm: {
-      url: "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/ort-wasm-simd-threaded.jsep.wasm",
+      url: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.jsep.wasm",
       assetKey: "runtime/ort-wasm-simd-threaded.jsep.wasm",
       mediaType: "application/wasm",
     },
