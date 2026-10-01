@@ -27,14 +27,16 @@ Goal: pages show server changes immediately, with one mechanism and no HTTP poll
 
 Intentionally left: the System Data Databases and Advanced inspectors (raw tables of arbitrary SQLite stores, no write hook) keep **Refresh**; backups are a command with no listing.
 
-## Next steps
+## Done after #362 and #364 merged
 
-Merge #362 before #364. #364 is now stacked on #362 and already keeps every resource key, removes `SystemDataPipelines.vue` from the ratchet allow-list, and makes the Storage overview's pipeline count follow `useDataQuery("pipelines", ...)`.
+- **Reader pages (Search, Record, Compare):** key `corpus_records`, noted from `PdfCorpusRepository.update_record`, `publish()`, and the Chroma record-content mutations (`finish_sync`, `delete_store`, `update_existing`, `patch_existing`, record/work deletes; not per-batch `upsert_many`). `useNewerData()` + `NewerDataBanner` show "Newer data is available / Load newer"; content is never replaced silently. Administrators only.
+- **Pipeline benchmarks:** key `pipeline_benchmarks` (cases, results, clear, restore, retention). `PipelineBenchmarkWorkspace` reads cases and collections through `useDataQuery`.
+- The Storage overview pipeline count already uses `useDataQuery("pipelines", ...)`.
 
-1. **Reader-facing pages (Search, Record, Compare)**: do not replace content under a reader. Show a "newer data available" banner driven by the same invalidation (decision recorded with the user: banner, not silent replace; confirm scope if unsure). Not started. It needs a record/corpus change resource first: register a key (for example `corpus_records`), emit it from the corpus store's committed mutations (record save, review decision, build publish) and not from per-batch build writes, then add a small composable that watches `useDataQuery` data identity and exposes `hasNewer` plus an explicit "Load newer" action. Keep researcher accounts out: they must not receive record text, and the key carries none, but check `DataResource.allows` against the REST route's permission.
-2. **Widen `response_library` beyond administrators** (optional): allow the `page.faq` capability. `broker.audience_allows` requires an owner for non-administrators, so this needs a capability-only audience flag that cannot affect existing audiences (rag generation uses `capability="rag.jobs.own"` with an owner that can be None). Until then non-administrators refetch on window focus only. The same applies to `vector_collections` for roles holding `page.vector`.
-3. **Pipeline benchmarks**: not keyed yet; if the Operations benchmark list should be live, emit from `PipelineBenchmarkStore` and read it through `useDataQuery`.
-4. **Docs and release**: add a release note in `docs/notes/<version>.md` when cutting a release (summarise the resources and removed Refresh buttons) and remove this handoff once the items above are done or dropped; the lasting contract lives in [REALTIME.md](REALTIME.md).
+## Remaining work
+
+1. **Widen to non-administrators** (optional): allow the `page.faq` capability for `response_library`, `page.vector` for `vector_collections`, and researcher access to `corpus_records` (so reader banners reach researchers). `broker.audience_allows` requires an owner for non-administrators, so this needs a capability-only audience flag that cannot affect existing audiences (rag generation uses `capability="rag.jobs.own"` with an owner that can be None). Until then non-administrators refetch on window focus only. Researchers must still never receive record text; the key carries none.
+2. **Release note:** add `docs/notes/<version>.md` when cutting a release (summarise the resources, the reader banner and the removed Refresh buttons), then delete this file; the lasting contract lives in [REALTIME.md](REALTIME.md).
 
 ## Gotchas
 

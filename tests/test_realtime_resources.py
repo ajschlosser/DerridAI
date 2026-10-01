@@ -154,3 +154,42 @@ def test_vector_store_mutations_note_collections_changed():
     operation_events.drain()
     store.set_protection("x", True)
     assert "vector_collections" in operation_events.drain().resources
+
+
+def test_record_content_mutations_note_corpus_records_but_not_a_protection_flip():
+    from app.chroma_store import ChromaStore
+
+    class _Collection:
+        metadata: dict = {}
+
+        def modify(self, metadata):
+            self.metadata = metadata
+
+        def delete(self, **_kwargs):
+            return None
+
+    store = ChromaStore.__new__(ChromaStore)
+    store._collection = lambda name: _Collection()  # type: ignore[method-assign]
+    store._public_store = lambda collection: {}  # type: ignore[method-assign]
+    operation_events.drain()
+    store.set_protection("x", True)
+    assert "corpus_records" not in operation_events.drain().resources
+    store.delete_record("x", "chroma-1")
+    drained = operation_events.drain().resources
+    assert {"corpus_records", "vector_collections"} <= set(drained)
+
+
+def test_benchmark_cases_and_results_note_pipeline_benchmarks(tmp_path):
+    from test_pipeline_benchmark import _case, _run
+
+    from app.pipelines.store import PipelineStore
+
+    store = PipelineStore(tmp_path / "b.db")
+    case = _case()
+    operation_events.drain()
+    store.put_benchmark_case(case)
+    assert "pipeline_benchmarks" in operation_events.drain().resources
+    store.put_benchmark(_run(case))
+    assert "pipeline_benchmarks" in operation_events.drain().resources
+    store.benchmarks.clear()
+    assert "pipeline_benchmarks" in operation_events.drain().resources

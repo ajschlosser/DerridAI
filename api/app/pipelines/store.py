@@ -530,6 +530,7 @@ class PipelineStore:
                 conn.commit()
                 operation_events.note_resource_changed("pipelines")
                 operation_events.note_resource_changed("pipeline_runs")
+                operation_events.note_resource_changed("pipeline_benchmarks")
             except Exception:
                 conn.rollback()
                 raise

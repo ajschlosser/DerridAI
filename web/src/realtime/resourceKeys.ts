@@ -6,6 +6,7 @@ export const DATA_RESOURCES = [
   "roles",
   "pipelines",
   "pipeline_runs",
+  "pipeline_benchmarks",
   "vector_collections",
   "metadata_exemplars",
   "response_library",

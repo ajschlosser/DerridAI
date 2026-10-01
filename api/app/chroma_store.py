@@ -911,7 +911,7 @@ class ChromaStore:
         collection.modify(metadata=metadata)
         return self._public_store(collection)
 
-    @_notes_collection_change()
+    @_notes_collection_change("corpus_records")
     def finish_sync(self, name: str, *, status: str = "ready") -> dict[str, Any]:
         collection = self._collection(name)
         metadata = dict(collection.metadata or {})
@@ -1383,7 +1383,7 @@ class ChromaStore:
             raise
         return self._public_store(col)
 
-    @_notes_collection_change()
+    @_notes_collection_change("corpus_records")
     def delete_store(self, name: str, *, force: bool = False) -> None:
         collection = self._collection(name)
         if self._manifest_spec(collection).get("protected") and not force:
@@ -1655,7 +1655,7 @@ class ChromaStore:
         )
         return {**result, "language_sync": language_sync}
 
-    @_notes_collection_change()
+    @_notes_collection_change("corpus_records")
     def update_existing(
         self,
         store: str,
@@ -2736,7 +2736,7 @@ class ChromaStore:
         records = self._decode_result(payload, include_updates=include_updates)
         return records[0] if records else None
 
-    @_notes_collection_change()
+    @_notes_collection_change("corpus_records")
     def patch_existing(
         self,
         store: str,
@@ -2774,11 +2774,11 @@ class ChromaStore:
             embedding_field=embedding_field,
         )
 
-    @_notes_collection_change()
+    @_notes_collection_change("corpus_records")
     def delete_record(self, store: str, chroma_id: str) -> None:
         self._collection(store).delete(ids=[chroma_id])
 
-    @_notes_collection_change()
+    @_notes_collection_change("corpus_records")
     def delete_record_with_language_sync(self, store: str, chroma_id: str) -> dict[str, Any]:
         collection = self._collection(store)
         _, role, _ = self._language_spec(collection)
@@ -2792,7 +2792,7 @@ class ChromaStore:
 
     UNTITLED_WORK = "(Untitled work)"
 
-    @_notes_collection_change()
+    @_notes_collection_change("corpus_records")
     def delete_work_with_language_sync(self, store: str, work: str) -> dict[str, Any]:
         """Delete every record whose decoded ``work`` metadata equals ``work``.
 
