@@ -16,7 +16,6 @@ from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
 from ..auth import SESSION_COOKIE
 from ..config import settings
 from .auth import capabilities_for, origin_allowed, revalidate, session_user
-from .resources import follows_any_resource
 from .broker import EventBroker, Subscriber, broker
 from .protocol import (
     CLOSE_FORBIDDEN,
@@ -31,6 +30,7 @@ from .protocol import (
     ProtocolError,
     parse_client_message,
 )
+from .resources import follows_any_resource
 from .subscriptions import authorize_topic
 
 logger = logging.getLogger("derridai.realtime")
