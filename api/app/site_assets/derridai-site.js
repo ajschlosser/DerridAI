@@ -1594,7 +1594,7 @@
         ? t("site.runtime.index_rebuild")
         : index.indexed
           ? t("site.runtime.index_resume")
-          : t("site.runtime.index_build"),
+          : t(beforeBuild ? "site.runtime.index_build_browser" : "site.runtime.index_build"),
     });
     const cancel = node("button", { type: "button", text: t("site.runtime.index_cancel") });
     cancel.hidden = true;
