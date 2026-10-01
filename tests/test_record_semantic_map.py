@@ -269,6 +269,8 @@ def test_work_map_uses_saved_server_projection_but_keeps_visual_source_contract(
     assert first["projection"]["source"] == "generated"
     assert first["summary"]["mapped_records"] == len(rows)
     assert first["sources"][0].keys() >= {"id", "work", "concepts", "topics", "persons"}
+    assert first["topology"]["nodes"]
+    assert all(edge["source"] and edge["target"] for edge in first["topology"]["edges"])
 
     original_get_records = repo.get_records
 
