@@ -285,9 +285,10 @@ The first tranche is now in progress on this branch:
 - **Implemented:** automatic evidence recovery's closed-choice LLM fallback is deployment-opt-in by default (`METADATA_EVIDENCE_CASCADE_LLM_ENABLED=false`). Direct-support recovery therefore spends no additional model call in the normal configuration.
 - **Implemented:** enrichment metrics now expose call-latency p50, p95, max, and total, including the existing per-family slices. This is the first benchmark gate for the latency work.
 - **Implemented:** quotation enrichment is now signal-routed in Deep mode too. A quotation-family model call requires quotation punctuation/attribution language or a current Document Intelligence quotation projection; Deep mode no longer spends the quotation call on ordinary prose solely because the user selected Deep enrichment.
+- **Implemented:** automatic indexing now skips its generative family call when every indexing field already has a strong `derridai:memory` prefill (value-supported, present, confidence ≥ 0.88). The reviewed-memory assertions remain advisory/pending review, and an explicit indexing rerun always bypasses this router.
 - **Tests updated:** focused ownership-failure, evidence-pipeline identity/default-assignment, and latency-metric coverage track these changes.
 
-The next implementation slice is deterministic/candidate-first routing for indexing and other metadata families. It should reuse the existing `memory_prefill` FieldAssertions and NLP/Document Intelligence candidate layers rather than introduce a parallel authority model. Quotation routing is now the first production instance of that approach.
+The next implementation slice is broader deterministic/candidate-first indexing: use NLP/Document Intelligence and reviewed-memory candidates to reduce routine generation even when not every indexing field has a strong memory prefill. It should extend the existing FieldAssertion authority model rather than introduce a parallel candidate store.
 
 ## Implementation sequence on this branch
 
