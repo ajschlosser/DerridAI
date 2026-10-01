@@ -1,6 +1,7 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 
 import { EventBus } from "./events";
+import { isAbortError } from "./errors";
 import { RecordRepository } from "./repository";
 import type {
   EmbeddingProvider,
@@ -215,6 +216,7 @@ export class SearchEngine {
       const embedded = await this.embeddings.embed([query], { signal });
       vector = embedded.vectors[0] ?? [];
     } catch (error) {
+      if (isAbortError(error)) throw error;
       return this.finish(
         lexical.slice(0, limit),
         modeRequested,
