@@ -62,16 +62,48 @@ const i18n = useI18nStore();
 
 const MACHINE_VOCABULARY_LABELS = new Set(
   [
-    "ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM", "PART",
-    "PRON", "PROPN", "PUNCT", "SCONJ", "SYM", "VERB", "X",
-    "CARDINAL", "DATE", "EVENT", "FAC", "GPE", "LANGUAGE", "LAW", "LOC", "MONEY",
-    "NORP", "ORDINAL", "ORG", "PERCENT", "PERSON", "PER", "PRODUCT", "QUANTITY",
-    "TIME", "WORK_OF_ART",
+    "ADJ",
+    "ADP",
+    "ADV",
+    "AUX",
+    "CCONJ",
+    "DET",
+    "INTJ",
+    "NOUN",
+    "NUM",
+    "PART",
+    "PRON",
+    "PROPN",
+    "PUNCT",
+    "SCONJ",
+    "SYM",
+    "VERB",
+    "X",
+    "CARDINAL",
+    "DATE",
+    "EVENT",
+    "FAC",
+    "GPE",
+    "LANGUAGE",
+    "LAW",
+    "LOC",
+    "MONEY",
+    "NORP",
+    "ORDINAL",
+    "ORG",
+    "PERCENT",
+    "PERSON",
+    "PER",
+    "PRODUCT",
+    "QUANTITY",
+    "TIME",
+    "WORK_OF_ART",
   ].map((value) => value.toLocaleLowerCase()),
 );
 
 const nlpProvenance = computed(() => {
-  const data = (props.record as unknown as { nlp_candidates?: Record<string, unknown> }).nlp_candidates;
+  const data = (props.record as unknown as { nlp_candidates?: Record<string, unknown> })
+    .nlp_candidates;
   if (!data || typeof data !== "object") return null;
   const status = String(data.status || "");
   const engine = String(data.engine || "spacy");
@@ -344,12 +376,14 @@ function spec(field: string) {
   );
 }
 function nlpOptions(field: string): string[] {
-  const data = (props.record as unknown as {
-    nlp_candidates?: {
-      status?: string;
-      fields?: Record<string, Array<{ start?: number; end?: number; text?: string }>>;
-    };
-  }).nlp_candidates;
+  const data = (
+    props.record as unknown as {
+      nlp_candidates?: {
+        status?: string;
+        fields?: Record<string, Array<{ start?: number; end?: number; text?: string }>>;
+      };
+    }
+  ).nlp_candidates;
   if (!data || data.status !== "ok") return [];
   const sourceText = String(props.record.text || "");
   const candidates = data.fields?.[field] || [];
@@ -385,7 +419,8 @@ function foreignClosedVocabulary(field: string): Set<string> {
 function isSafeSuggestionForField(field: string, value: string): boolean {
   const normalized = value.trim().toLocaleLowerCase();
   if (!normalized || MACHINE_VOCABULARY_LABELS.has(normalized)) return false;
-  if (spec(field).control !== "enum" && foreignClosedVocabulary(field).has(normalized)) return false;
+  if (spec(field).control !== "enum" && foreignClosedVocabulary(field).has(normalized))
+    return false;
   return true;
 }
 function options(field: string) {

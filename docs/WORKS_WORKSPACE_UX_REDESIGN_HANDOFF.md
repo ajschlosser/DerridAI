@@ -230,10 +230,10 @@ Also normalize admin/researcher meanings. `totalWorks` should mean the same thin
 Prefer explicit fields such as:
 
 ```ts
-totalWorks
-visibleWorks
-totalRecords
-sourceFileCount
+totalWorks;
+visibleWorks;
+totalRecords;
+sourceFileCount;
 ```
 
 rather than overloading one number.
