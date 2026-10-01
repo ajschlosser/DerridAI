@@ -311,6 +311,10 @@ from .semantic_identity_store import alias_digest, build_registry, review_regist
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
+from .structured_json import (
+    StructuredJsonMalformedError,
+    StructuredJsonTruncatedError,
+)
 from .system_store import system_store
 from .text_noise import (
     DEFAULT_NOISE_THRESHOLD,
@@ -2543,6 +2547,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             raise LookupError("No review provider is configured for this build.")
         all_failures: list[str] = []
         timed_out = False
+        any_truncated = False
         for chain_index, (role, active_request) in enumerate(request_chain):
             provider, model, base_url, api_key, generation = _llm_config(active_request)
             escalating = chain_index > 0 or escalated
@@ -2562,11 +2567,24 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                         "return ONLY one complete JSON object matching the schema."
                     )
                 elif attempt > 1:
-                    retry_note = (
-                        "\n\nIMPORTANT CORRECTION: the previous response could not be validated. "
-                        f"Validation error: {failure}. Return ONLY one complete JSON object that exactly "
-                        "matches the supplied schema. Do not include Markdown, commentary, or trailing text."
-                    )
+                    if isinstance(failure, StructuredJsonTruncatedError):
+                        retry_note = (
+                            "\n\nOUTPUT LIMIT CORRECTION: the previous JSON response was cut off before "
+                            "completion. Start again; do not continue the partial object. Return one COMPLETE "
+                            "JSON object matching the schema, and keep optional explanations as concise as possible."
+                        )
+                    elif isinstance(failure, StructuredJsonMalformedError):
+                        retry_note = (
+                            "\n\nJSON SYNTAX CORRECTION: the previous response was malformed and could not "
+                            "be repaired locally. Return ONLY one complete JSON object matching the supplied "
+                            "schema. Do not include Markdown, commentary, or trailing text."
+                        )
+                    else:
+                        retry_note = (
+                            "\n\nIMPORTANT CORRECTION: the previous response could not be validated. "
+                            f"Validation error: {failure}. Return ONLY one complete JSON object that exactly "
+                            "matches the supplied schema. Do not include Markdown, commentary, or trailing text."
+                        )
                     if "field_evidence" in str(failure):
                         retry_note += (
                             "\nThe validation error concerns evidence, not the metadata value. For every "
@@ -2608,7 +2626,10 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     )
                     call_id = f"{build_id}:{call_token}" if build_id else ""
                     rendered_prompt = prompt + retry_note
-                    effective_max_tokens = min(8192, max_tokens + ((attempt - 1) * 1024))
+                    token_budget = max_tokens + ((attempt - 1) * 1024)
+                    if isinstance(failure, StructuredJsonTruncatedError):
+                        token_budget = max(token_budget, int(max_tokens * 1.5))
+                    effective_max_tokens = min(8192, token_budget)
                     if build_id:
                         self._llm_trace_start(
                             build_id,
@@ -2651,7 +2672,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                             self._llm_trace_finish(
                                 build_id,
                                 call_id,
-                                raw_response=raw or None,
+                                raw_response=(raw or getattr(exc, "diagnostic", None)),
                                 error=f"{type(exc).__name__}: {exc}",
                             )
                         raise
@@ -2661,7 +2682,16 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     raise
                 except Exception as exc:
                     failure = exc
-                    diagnostic = ""
+                    diagnostic = str(getattr(exc, "diagnostic", "") or "")
+                    if isinstance(exc, StructuredJsonTruncatedError):
+                        any_truncated = True
+                        if build_id:
+                            self._increment_metric(build_id, "structured_output_failures")
+                            self._increment_metric(build_id, "structured_output_truncated")
+                        if attempt < max(1, attempts):
+                            time.sleep(min(1.0, 0.2 * attempt))
+                            continue
+                        break
                     # A hard read timeout already consumed the stage budget. Repeating
                     # the same expensive request obscures stalls rather than improving
                     # resilience; settle it for human review instead.
@@ -2689,6 +2719,8 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     return validated
                 except (ValueError, ValidationError) as exc:
                     failure = exc
+                    if isinstance(exc, StructuredJsonTruncatedError):
+                        any_truncated = True
                     if build_id:
                         self._llm_trace_finish(
                             build_id,
@@ -2697,6 +2729,12 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                             error=f"{type(exc).__name__}: {exc}",
                         )
                         self._increment_metric(build_id, "structured_output_failures")
+                        if isinstance(exc, StructuredJsonTruncatedError):
+                            self._increment_metric(build_id, "structured_output_truncated")
+                        elif isinstance(exc, StructuredJsonMalformedError):
+                            self._increment_metric(build_id, "structured_output_malformed")
+                        elif isinstance(exc, ValidationError):
+                            self._increment_metric(build_id, "structured_output_schema_invalid")
             all_failures.append(f"{role} {provider}/{model}: {failure}")
         raise StructuredOutputError(
             "LLM structured output failed after bounded retry"
@@ -2704,6 +2742,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             + ": " + " | ".join(all_failures),
             failures=all_failures,
             timed_out=timed_out,
+            truncated=any_truncated,
         )
 
     def _document_manifest_call(

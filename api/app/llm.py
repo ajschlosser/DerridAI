@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -12,6 +11,11 @@ import httpx
 
 from .config import settings
 from .models import OllamaTouchupOptions
+from .structured_json import (
+    StructuredJsonMalformedError,
+    StructuredJsonTruncatedError,
+    parse_json_object,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -114,39 +118,36 @@ class TouchupFailure(Exception):
     status_code: int
     message: str
     diagnostic: str | None = None
+    kind: str | None = None
+    truncated: bool = False
 
     def __str__(self) -> str:
         return self.message
 
 
-def _extract_json(text: str) -> dict[str, Any]:
-    value = text.strip()
-    if not value:
-        raise TouchupFailure(502, "The LLM returned an empty response.")
-
-    if value.startswith("```"):
-        value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.I)
-        value = re.sub(r"\s*```$", "", value)
-
-    candidates = [value]
-    start = value.find("{")
-    end = value.rfind("}")
-    if start >= 0 and end > start:
-        candidates.append(value[start : end + 1])
-
-    for candidate in candidates:
-        try:
-            parsed = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            return parsed
-
-    raise TouchupFailure(
-        502,
-        "The model response was not valid JSON.",
-        diagnostic=value[:2000],
-    )
+def _extract_json(
+    text: str,
+    *,
+    finish_reason: str | None = None,
+) -> dict[str, Any]:
+    """Parse structured model output, repairing malformed syntax before failing."""
+    try:
+        return parse_json_object(text, finish_reason=finish_reason)
+    except StructuredJsonTruncatedError as exc:
+        raise TouchupFailure(
+            502,
+            "The model response was cut off before its JSON object was complete.",
+            diagnostic=exc.diagnostic,
+            kind="truncated",
+            truncated=True,
+        ) from exc
+    except StructuredJsonMalformedError as exc:
+        raise TouchupFailure(
+            502,
+            "The model response was malformed JSON and could not be repaired.",
+            diagnostic=exc.diagnostic,
+            kind="malformed",
+        ) from exc
 
 
 def _field_type_ok(field: str, current: Any, proposed: Any) -> bool:
@@ -379,6 +380,7 @@ def llm_status(
 def _parse_proposal(
     *,
     content: str,
+    finish_reason: str | None = None,
     record: dict[str, Any],
     field_list: list[str],
     selected_model: str,
@@ -386,7 +388,7 @@ def _parse_proposal(
     context: dict[str, Any],
     effective_options: dict[str, Any],
 ) -> dict[str, Any]:
-    parsed = _extract_json(content)
+    parsed = _extract_json(content, finish_reason=finish_reason)
 
     changes = parsed.get("changes") or {}
     rationale = parsed.get("rationale") or {}
@@ -607,6 +609,7 @@ def _propose_ollama(
         pool=settings.ollama_connect_timeout_seconds,
     )
     content = ""
+    finish_reason: str | None = None
     try:
         if cancelled is not None:
             request_body["stream"] = True
@@ -639,6 +642,8 @@ def _propose_ollama(
                         if piece:
                             chunks.append(str(piece))
                         if payload.get("done"):
+                            reason = payload.get("done_reason") or payload.get("stop_reason")
+                            finish_reason = str(reason) if reason is not None else None
                             break
             content = "".join(chunks).strip()
         else:
@@ -660,6 +665,8 @@ def _propose_ollama(
                     "Ollama returned a non-JSON API response.",
                     response.text[:1500],
                 ) from exc
+            reason = payload.get("done_reason") or payload.get("stop_reason")
+            finish_reason = str(reason) if reason is not None else None
             content = ((payload.get("message") or {}).get("content") or "").strip()
     except InterruptedError:
         raise
@@ -686,6 +693,7 @@ def _propose_ollama(
 
     return _parse_proposal(
         content=content,
+        finish_reason=finish_reason,
         record=record,
         field_list=field_list,
         selected_model=selected_model,
@@ -753,10 +761,11 @@ def _propose_openai(
         pool=settings.openai_connect_timeout_seconds,
     )
 
-    def stream_request(payload: dict[str, Any]) -> tuple[int, str, str]:
+    def stream_request(payload: dict[str, Any]) -> tuple[int, str, str, str | None]:
         streaming = dict(payload)
         streaming["stream"] = True
         chunks: list[str] = []
+        finish_reason: str | None = None
         with httpx.Client(timeout=timeout) as client:
             with client.stream(
                 "POST",
@@ -766,7 +775,7 @@ def _propose_openai(
             ) as response:
                 if response.status_code >= 400:
                     raw = response.read().decode("utf-8", errors="replace")
-                    return response.status_code, "", raw[:2000]
+                    return response.status_code, "", raw[:2000], None
                 for line in response.iter_lines():
                     if cancelled and cancelled():
                         raise InterruptedError("LLM review cancelled.")
@@ -780,6 +789,8 @@ def _propose_openai(
                     except json.JSONDecodeError:
                         continue
                     choices = event.get("choices") or []
+                    if choices and choices[0].get("finish_reason") is not None:
+                        finish_reason = str(choices[0].get("finish_reason"))
                     delta = choices[0].get("delta") if choices else {}
                     piece = (delta or {}).get("content") or ""
                     if isinstance(piece, list):
@@ -790,15 +801,16 @@ def _propose_openai(
                         )
                     if piece:
                         chunks.append(str(piece))
-        return 200, "".join(chunks).strip(), ""
+        return 200, "".join(chunks).strip(), "", finish_reason
 
+    finish_reason: str | None = None
     try:
         if cancelled is not None:
-            status_code, content, detail = stream_request(body)
+            status_code, content, detail, finish_reason = stream_request(body)
             if status_code == 400 and "response_format" in body:
                 fallback = dict(body)
                 fallback.pop("response_format", None)
-                status_code, content, detail = stream_request(fallback)
+                status_code, content, detail, finish_reason = stream_request(fallback)
                 body = fallback
             if status_code in {400, 422}:
                 # Some OpenAI-compatible local routers implement Chat Completions
@@ -817,6 +829,11 @@ def _propose_openai(
                     payload = response.json()
                     choices = payload.get("choices") or []
                     message_payload = choices[0].get("message") if choices else {}
+                    finish_reason = (
+                        str(choices[0].get("finish_reason"))
+                        if choices and choices[0].get("finish_reason") is not None
+                        else None
+                    )
                     content = (message_payload or {}).get("content") or ""
                     if isinstance(content, list):
                         content = "".join(
@@ -862,6 +879,11 @@ def _propose_openai(
                 ) from exc
             choices = payload.get("choices") or []
             message = choices[0].get("message") if choices else {}
+            finish_reason = (
+                str(choices[0].get("finish_reason"))
+                if choices and choices[0].get("finish_reason") is not None
+                else None
+            )
             content = (message or {}).get("content") or ""
             if isinstance(content, list):
                 content = "".join(
@@ -895,6 +917,7 @@ def _propose_openai(
 
     return _parse_proposal(
         content=str(content).strip(),
+        finish_reason=finish_reason,
         record=record,
         field_list=field_list,
         selected_model=selected_model,

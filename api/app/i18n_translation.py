@@ -106,26 +106,8 @@ def _translation_prompt(code: str, batch: Mapping[str, str], *, retry: bool = Fa
 
 
 def _extract_translation_json(text: str) -> dict[str, Any]:
-    """Parse constrained translation JSON with conservative local repairs.
-
-    Some OpenAI-compatible/local models wrap JSON in prose or emit a trailing
-    comma despite JSON mode.  We accept only an object and never infer missing
-    translations, but harmless syntax repairs keep a good batch from being lost.
-    """
-    try:
-        return _extract_json(text)
-    except Exception:
-        value = str(text or "").strip()
-        value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.I)
-        value = re.sub(r"\s*```$", "", value)
-        start, end = value.find("{"), value.rfind("}")
-        if start >= 0 and end > start:
-            value = value[start : end + 1]
-        repaired = re.sub(r",\s*([}\]])", r"\1", value)
-        parsed = json.loads(repaired)
-        if not isinstance(parsed, dict):
-            raise ValueError("provider returned a non-object JSON payload") from None
-        return parsed
+    """Use the shared repair/cutoff policy for structured translation output."""
+    return _extract_json(text)
 
 
 def _validate_batch(
