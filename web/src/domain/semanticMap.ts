@@ -336,8 +336,20 @@ function semanticLayout(
   return { positions, components: componentIds };
 }
 
+const GRAPH_CACHE = new Map<string, SemanticMapGraph>();
+const MAX_GRAPH_CACHE_ENTRIES = 16;
+
 /** Co-occurring concepts, topics, persons, and Records across the supplied works. */
-export function buildSemanticMap(sources: SemanticMapSource[], focusId = ""): SemanticMapGraph {
+export function buildSemanticMap(
+  sources: SemanticMapSource[],
+  focusId = "",
+  cacheKey = "",
+): SemanticMapGraph {
+  const key = cacheKey ? `${cacheKey}|${focusId}` : "";
+  if (key) {
+    const cached = GRAPH_CACHE.get(key);
+    if (cached) return cached;
+  }
   const weights = new Map<string, { label: string; kind: SemanticMapKind; weight: number }>();
   const links = new Map<string, { source: string; target: string; weight: number }>();
 
@@ -406,7 +418,17 @@ export function buildSemanticMap(sources: SemanticMapSource[], focusId = ""): Se
       component: layout.components.get(id) || 0,
     }));
   const edges = keptEdges.map((edge) => ({ ...edge, id: `${edge.source}|${edge.target}` }));
-  return { nodes, edges };
+  const graph = { nodes, edges };
+  if (key) {
+    GRAPH_CACHE.delete(key);
+    GRAPH_CACHE.set(key, graph);
+    while (GRAPH_CACHE.size > MAX_GRAPH_CACHE_ENTRIES) {
+      const oldest = GRAPH_CACHE.keys().next().value;
+      if (oldest === undefined) break;
+      GRAPH_CACHE.delete(oldest);
+    }
+  }
+  return graph;
 }
 
 /** Screen-pixel drag of the map background. */
