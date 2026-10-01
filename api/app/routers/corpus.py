@@ -737,6 +737,18 @@ def get_pdf_corpus_record_semantic_map(build_id: str, record_id: str) -> dict[st
         raise HTTPException(status_code=404, detail="Corpus build or record not found") from exc
 
 
+@router.get("/api/records/{record_id}/semantic-map")
+def get_record_semantic_map(record_id: str) -> dict[str, Any]:
+    """Resolve and materialize a published Record's semantic map in one request."""
+    build_id = system_store.get_record_build_id(record_id)
+    if not build_id:
+        raise HTTPException(status_code=404, detail="Record provenance was not found")
+    try:
+        return pdf_corpus_builds.record_semantic_map(build_id, record_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Record or corpus build not found") from exc
+
+
 @router.get("/api/records/{record_id}/semantic-map-build")
 def get_record_semantic_map_build(record_id: str) -> dict[str, Any]:
     """Resolve the build whose Document Intelligence covers a published Record.
@@ -752,6 +764,17 @@ def get_record_semantic_map_build(record_id: str) -> dict[str, Any]:
 def get_work_semantic_map_builds(work: str) -> dict[str, Any]:
     """Resolve the build(s) whose Document Intelligence covers a Work's Records."""
     return {"build_ids": system_store.list_build_ids_for_work(work)}
+
+
+@router.get("/api/works/{work}/semantic-map")
+def get_work_semantic_map(work: str) -> dict[str, Any]:
+    """Persisted semantic source projection for the Work-level map."""
+    try:
+        return pdf_corpus_builds.work_semantic_map(work)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/api/works/{work}/semantic-map-records")
