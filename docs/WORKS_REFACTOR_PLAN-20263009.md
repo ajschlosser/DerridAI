@@ -16,9 +16,14 @@ Work has started on the first data-model/performance tranche on \`task/works-ref
 - replace the hidden global-file-input query with an explicit shell-level corpus file-picker command;
 - remove runtime DOM decoration from the Works rendering lifecycle and route semantic-map source discovery through a typed service;
 - replace the two large corpus/database cards with a compact `Working corpus → Search index` relationship strip, expose freshness there, rename the maintenance action to “Update search index,” and localize the new English/French terminology;
-- remove the hard-coded English empty-index label from the domain snapshot.
+- remove the hard-coded English empty-index label from the domain snapshot;
+- replace Compact with a genuine semantic table-like List mode, retain Cards as the browsable mode, and keep legacy `v=compact` URLs backward-compatible by mapping them to List;
+- replace animation-frame progressive reveal with bounded client-side pagination (48 cards / 100 list rows per page);
+- expand deterministic library search across work-level bibliographic metadata with case/Unicode/diacritic normalization;
+- expose author filtering to researchers and show active filters as removable chips with a visible clear-all action;
+- remove the duplicate add-files card from the end of the library.
 
-The next implementation step is to finish the remaining snapshot/metadata-discovery work, then replace Compact with a true List mode and expand deterministic search/faceting before the inspector and dialog decomposition passes.
+The next implementation step is to finish the remaining snapshot/metadata-presentation work, including replacing the Works-local hard-coded metadata field list with the shared schema/assertion presentation contract, then continue the inspector and dialog decomposition passes.
 
 ## Implementation proposals
 
