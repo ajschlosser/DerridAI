@@ -333,6 +333,15 @@ The administrator **Works** page includes **Create site** when a corpus database
 
 The generated reference site is fully internationalized from the selected DerridAI dictionaries. Its language menu contains only the languages included in that export. Publication is blocked if any selected language is missing a required static-site translation; DerridAI does not silently fall back to English for a selected language. Locale direction is applied at runtime for both left-to-right and right-to-left scripts.
 
+### Record metadata in a site
+
+The **Record metadata** choice in the export dialog sets how much metadata each Record carries, and so how large the files are.
+
+- **Complete** (the default) packages every public Record field, including FieldAssertions: how each value was derived, evaluated, reviewed, and supported by evidence. It carries the cELF Core Record and the Scholarly Assertion layer.
+- **Reader-optimized (smaller files)** packages only what the site reads and cites: Record text, source spans, citation, edition, translator and page data, speaker, quoted speaker, position holder and the related attribution fields, review state, and any fields the collection offers as search filters. It omits FieldAssertions, evidence and confidence detail, and indexing fields such as topics and concepts. Keyword search covers only the fields that are kept. Because the assertions are gone, each kept attribution field carries a short `field_authority` summary (derivation, evaluation, and authority) so that a model-proposed, unreviewed value does not read as settled.
+
+The dialog states the cELF status of each choice, and the published manifest records it under `celf_conformance`. Both choices are cELF Core Record-compliant: every published Record keeps `record_id`, `source_document_id`, `text`, and `source_spans`, and export fails rather than publish a Record that has lost one. Only **Complete** also carries FieldAssertions, so a reader-optimized site is not a full cELF publication and its metadata provenance cannot be inspected in the site.
+
 ### Two-file static site
 
 Choose **Two-file static site** for the standard DerridAI publication. The ZIP contains exactly `index.html` and `derridai-site.js`. The JavaScript file contains the immutable publication package, progressive work chunks, the framework-neutral DerridAI browser SDK, and the reference interface. The same two files can be opened locally or served unchanged by an ordinary static HTTP/HTTPS host. No DerridAI application server is required.
@@ -380,6 +389,8 @@ On first use, an accessible tutorial dialog explains browsing, Record inspection
 Every search and Research screen includes a persistent method disclosure showing whether the current operation uses **Text search**, **Vector search (embeddings)**, and/or **LLM answer generation**. As an operation runs, the live status message also names embedding and generation stages. If semantic retrieval falls back to text search or generation is unavailable, the final status states that explicitly rather than silently changing methods.
 
 The Research panel lists the safe provider profiles selected at export time. Choosing an OpenAI-compatible or Ollama profile configures both generation and, when the publication has a compatible embedding contract, query embedding through that endpoint. **Test connection** verifies browser reachability/model discovery before use. Provider failures never erase locally retrieved evidence; Research can still return the auditable evidence packet when generation is unavailable.
+
+In the reference site, the words you searched for are highlighted in each result snippet and in the Record you open from it. Highlighting follows the keyword matching the site itself uses, whole words compared without regard to case, plus the whole phrase when it appears verbatim, so semantic-only results are highlighted only where the words really occur. When the first match lies beyond the start of a long Record, the snippet is taken from around it. Highlights keep a visible underline and weight as well as colour, so they remain visible in high-contrast and forced-colors modes.
 
 ### Publication architecture
 

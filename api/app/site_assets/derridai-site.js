@@ -80,19 +80,19 @@
       color-scheme:light;
       --bg:#ffffff;--fg:#111827;--muted:#4b5563;--surface:#f8fafc;--raised:#e5e7eb;
       --border:#6b7280;--accent:#005ea8;--accent-text:#ffffff;--danger:#b42318;
-      --success:#166534;--warning:#7c4a03;--shadow:0 12px 32px rgba(17,24,39,.18)
+      --success:#166534;--warning:#7c4a03;--mark-bg:#fde68a;--mark-fg:#111827;--shadow:0 12px 32px rgba(17,24,39,.18)
     }
     :root[data-theme="dark"]{
       color-scheme:dark;
       --bg:#111827;--fg:#f9fafb;--muted:#d1d5db;--surface:#1f2937;--raised:#374151;
       --border:#9ca3af;--accent:#8ecbff;--accent-text:#0b1725;--danger:#ffb4ab;
-      --success:#9ee6b1;--warning:#ffd38a;--shadow:0 12px 32px rgba(0,0,0,.55)
+      --success:#9ee6b1;--warning:#ffd38a;--mark-bg:#facc15;--mark-fg:#111827;--shadow:0 12px 32px rgba(0,0,0,.55)
     }
     :root[data-contrast="high"]{
       color-scheme:dark;
       --bg:#000000;--fg:#ffffff;--muted:#ffffff;--surface:#000000;--raised:#1a1a1a;
       --border:#ffffff;--accent:#ffdf00;--accent-text:#000000;--danger:#ff8a80;
-      --success:#9cff9c;--warning:#ffe66d;--shadow:0 0 0 2px #ffffff
+      --success:#9cff9c;--warning:#ffe66d;--mark-bg:#ffdf00;--mark-fg:#000000;--shadow:0 0 0 2px #ffffff
     }
     *{box-sizing:border-box}
     html{background:var(--bg);scroll-behavior:auto}
@@ -128,6 +128,7 @@
     .search-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.6rem}.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:.7rem;margin-top:.8rem}
     .field{display:grid;gap:.3rem}.field>span{font-size:.82rem;font-weight:800;color:var(--muted)}
     .result{display:grid;gap:.5rem}.result-head{display:flex;gap:.7rem;justify-content:space-between;align-items:start}
+    mark{background:var(--mark-bg);color:var(--mark-fg);border-radius:.2em;padding:0 .12em;font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:.15em}
     .score{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.875rem}.snippet{white-space:pre-wrap}
     .chips,.method-strip{display:flex;flex-wrap:wrap;gap:.4rem}.chip,.method-badge{font-size:.82rem;padding:.25rem .55rem;border-radius:999px;background:var(--raised);border:1px solid var(--border)}
     .method-strip{margin:.75rem 0}.method-badge[data-active="true"]{border-width:2px;font-weight:800}.method-badge[data-active="false"]{opacity:.72}
@@ -149,7 +150,7 @@
     .footer{margin-top:3rem;border-top:1px solid var(--border);padding:1.2rem 0 2.5rem;color:var(--muted);font-size:.875rem}
     .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
     @media(max-width:760px){.research-layout{grid-template-columns:1fr}.search-row{grid-template-columns:1fr}.top{position:static}.top-inner,.main{width:min(100% - 1rem,1180px)}.main{scroll-margin-top:1rem}.header-controls{width:100%}}
-    @media(forced-colors:active){button,.control,.panel,.card,.method-badge,.toggle{forced-color-adjust:auto}.method-badge[data-active="true"]{outline:2px solid CanvasText}}
+    @media(forced-colors:active){mark{background:Mark;color:MarkText;forced-color-adjust:none}button,.control,.panel,.card,.method-badge,.toggle{forced-color-adjust:auto}.method-badge[data-active="true"]{outline:2px solid CanvasText}}
   `;
   document.head.appendChild(style);
 
@@ -604,7 +605,7 @@
     });
   }
 
-  async function openRecord(record) {
+  async function openRecord(record, searchedQuery = "") {
     const dialog = node("dialog", {
       "aria-labelledby": "record-title",
       "aria-describedby": "record-citation",
@@ -625,11 +626,11 @@
         class: "meta",
         text: client.citations.format(record).plain,
       }),
-      node("div", {
-        class: "record-text",
-        text: record.text || "",
-        tabindex: "0",
-      }),
+      node(
+        "div",
+        { class: "record-text", tabindex: "0" },
+        ...highlighted(String(record.text || ""), searchedQuery),
+      ),
     );
 
     const metadata = node("dl", { class: "metadata" });
@@ -707,11 +708,67 @@
     document.body.append(dialog);
     dialog.showModal();
     close.focus();
+    dialog.querySelector("mark")?.scrollIntoView({ block: "center" });
   }
 
-  function resultCard(item) {
+  // Search-term highlighting mirrors the SDK's lexical matching: whole tokens of the query (case-folded for the
+  // site locale), plus the whole query as a phrase. Text is only ever set as text nodes, never as HTML.
+  const TERM_PATTERN = /[\p{L}\p{N}’'_-]+/gu;
+
+  function queryTerms(query) {
+    return [...new Set(String(query || "").toLocaleLowerCase(locale).match(TERM_PATTERN) ?? [])];
+  }
+
+  function matchRanges(text, query) {
+    const terms = new Set(queryTerms(query));
+    if (!terms.size) return [];
+    const ranges = [];
+    for (const match of text.matchAll(TERM_PATTERN)) {
+      if (terms.has(match[0].toLocaleLowerCase(locale))) {
+        ranges.push([match.index, match.index + match[0].length]);
+      }
+    }
+    const phrase = String(query || "").trim().toLocaleLowerCase(locale);
+    const folded = text.toLocaleLowerCase(locale);
+    if (terms.size > 1 && folded.length === text.length) {
+      for (let at = folded.indexOf(phrase); phrase && at !== -1; at = folded.indexOf(phrase, at + 1)) {
+        ranges.push([at, at + phrase.length]);
+      }
+    }
+    ranges.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+    const merged = [];
+    for (const range of ranges) {
+      const lastRange = merged[merged.length - 1];
+      if (lastRange && range[0] <= lastRange[1]) lastRange[1] = Math.max(lastRange[1], range[1]);
+      else merged.push([...range]);
+    }
+    return merged;
+  }
+
+  function highlighted(text, query) {
+    const parts = [];
+    let from = 0;
+    for (const [start, end] of matchRanges(text, query)) {
+      if (start > from) parts.push(text.slice(from, start));
+      parts.push(node("mark", { text: text.slice(start, end) }));
+      from = end;
+    }
+    if (from < text.length) parts.push(text.slice(from));
+    return parts;
+  }
+
+  /** The start of the record text, or a window around the first match when it lies beyond the start. */
+  function snippetText(text, query, limit = 640) {
+    if (text.length <= limit) return text;
+    const first = matchRanges(text, query)[0];
+    if (!first || first[1] <= limit - 40) return text.slice(0, limit);
+    const start = Math.max(text.lastIndexOf(" ", Math.max(first[0] - 200, 0)), 0);
+    return `${start ? "…" : ""}${text.slice(start, start + limit).trimStart()}`;
+  }
+
+  function resultCard(item, searchedQuery = "") {
     const record = item.record;
-    const snippet = String(record.text || "").slice(0, 640);
+    const snippet = snippetText(String(record.text || ""), searchedQuery);
     return node(
       "article",
       { class: "result card" },
@@ -726,11 +783,11 @@
         ),
         node("span", { class: "score", text: Number(item.score || 0).toFixed(3) }),
       ),
-      node("div", { class: "snippet", text: snippet }),
+      node("div", { class: "snippet" }, ...highlighted(snippet, searchedQuery)),
       node("button", {
         type: "button",
         text: t("site.runtime.view_record"),
-        on: { click: () => openRecord(record) },
+        on: { click: () => openRecord(record, searchedQuery) },
       }),
     );
   }
@@ -817,6 +874,7 @@
       results.replaceChildren();
       const stopProgress = progressListener(status);
       try {
+        const searchedQuery = query.value;
         const filters = {};
         if (work.value) filters.work = work.value;
         if (field.value && value.value) filters[field.value] = value.value;
@@ -842,7 +900,7 @@
         if (!response.results.length) {
           results.append(node("div", { class: "empty", text: t("site.runtime.no_results") }));
         } else {
-          results.append(...response.results.map(resultCard));
+          results.append(...response.results.map((item) => resultCard(item, searchedQuery)));
         }
       } catch (error) {
         status.className = "status error";

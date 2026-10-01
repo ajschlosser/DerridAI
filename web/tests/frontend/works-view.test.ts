@@ -395,6 +395,7 @@ describe("WorksView", () => {
       languages: ["en-US", "fr-CA"],
       provider_profile_ids: ["openai-main"],
       export_format: "two-file",
+      record_profile: "complete",
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
     wrapper.unmount();
@@ -421,6 +422,7 @@ describe("WorksView", () => {
       languages: ["en-US"],
       provider_profile_ids: [],
       export_format: "two-file",
+      record_profile: "complete",
     });
     wrapper.unmount();
   });
@@ -445,7 +447,31 @@ describe("WorksView", () => {
       languages: ["en-US", "fr-CA"],
       provider_profile_ids: ["openai-main"],
       export_format: "nginx-docker",
+      record_profile: "complete",
     });
+    wrapper.unmount();
+  });
+
+  it("offers a reader-optimized record profile and states its cELF status", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    // The complete profile is the default and is described as carrying the assertion layer.
+    expect(
+      dialog.get("input[name='site-record-profile'][value='complete']").element,
+    ).toHaveProperty("checked", true);
+    expect(dialog.get("[data-celf='complete']").text()).toContain("cELF-compliant");
+    expect(dialog.get("[data-celf='reader']").text()).toContain("not a full cELF publication");
+
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("input[name='site-record-profile'][value='reader']").setValue(true);
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith(
+      expect.objectContaining({ works: ["Glas"], record_profile: "reader" }),
+    );
     wrapper.unmount();
   });
 

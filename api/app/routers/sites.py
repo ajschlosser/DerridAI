@@ -27,6 +27,8 @@ class SiteExportRequest(BaseModel):
     languages: list[str] = Field(default_factory=list, max_length=100)
     provider_profile_ids: list[str] = Field(default_factory=list, max_length=100)
     export_format: Literal["two-file", "local-single-file", "nginx-docker"] = "two-file"
+    # "reader" packages only the Record metadata a site reads and cites; it omits FieldAssertions.
+    record_profile: Literal["complete", "reader"] = "complete"
 
 
 @router.get("/api/sites/export-options")
@@ -58,6 +60,7 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
             locale=body.locale,
             languages=body.languages or [body.locale],
             provider_profile_ids=body.provider_profile_ids,
+            record_profile=body.record_profile,
         )
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -75,5 +78,6 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
             "X-DerridAI-Publication-ID": bundle.publication_id,
             "X-DerridAI-Record-Count": str(bundle.record_count),
             "X-DerridAI-Work-Count": str(bundle.work_count),
+            "X-DerridAI-Record-Profile": bundle.record_profile,
         },
     )
