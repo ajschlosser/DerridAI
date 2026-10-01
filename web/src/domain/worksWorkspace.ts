@@ -5,6 +5,7 @@
 // state object and helpers are passed in as dependencies.
 import { fullCitation } from "./citations";
 import { commonWorkValue, workCoverUrl } from "./workMetadata";
+import { WORK_METADATA_LLM_FIELDS } from "./runtimeConstants";
 import type { WorksDbStatusKind, WorksIndexFreshness } from "../types/works";
 
 export const WORKS_SORTS = ["title-asc", "title-desc", "records-desc", "review-desc", "year-asc"];
@@ -98,6 +99,55 @@ export function createWorksWorkspace(deps: Deps) {
     workInsightMetrics,
     worksBiblioValue,
   } = deps;
+  const workSearchCache = new WeakMap<object, string>();
+  const librarySearchFields = [
+    ...WORK_METADATA_LLM_FIELDS,
+    "canonical_work_id",
+    "original_language",
+  ];
+
+  function normalizeLibrarySearch(value: unknown): string {
+    return String(value ?? "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase()
+      .trim();
+  }
+
+  function appendSearchValue(values: string[], value: unknown) {
+    if (Array.isArray(value)) {
+      for (const item of value) appendSearchValue(values, item);
+      return;
+    }
+    if (value === null || value === undefined || typeof value === "object") return;
+    const normalized = normalizeLibrarySearch(value);
+    if (normalized) values.push(normalized);
+  }
+
+  function adminWorkSearchText(item: Any): string {
+    if (item && typeof item === "object") {
+      const cached = workSearchCache.get(item);
+      if (cached !== undefined) return cached;
+    }
+    const values: string[] = [];
+    appendSearchValue(values, item?.work);
+    appendSearchValue(values, [...(item?.authors || [])]);
+    appendSearchValue(values, [...(item?.years || [])]);
+    for (const row of item?.rows || []) {
+      for (const field of librarySearchFields) appendSearchValue(values, row.record?.[field]);
+    }
+    const text = [...new Set(values)].join(" ");
+    if (item && typeof item === "object") workSearchCache.set(item, text);
+    return text;
+  }
+
+  function researcherWorkSearchText(item: Any): string {
+    const values: string[] = [];
+    appendSearchValue(values, item?.work);
+    for (const field of librarySearchFields) appendSearchValue(values, item?.[field]);
+    return [...new Set(values)].join(" ");
+  }
+
   function worksSortValue() {
     return WORKS_SORTS.includes(state.worksSort) ? String(state.worksSort) : "title-asc";
   }
@@ -161,6 +211,7 @@ export function createWorksWorkspace(deps: Deps) {
       publisher,
       translator,
       status: workDbStatus(item.rows, item.work),
+      searchText: adminWorkSearchText(item),
     };
     if (!detail) return base;
 
@@ -343,8 +394,14 @@ export function createWorksWorkspace(deps: Deps) {
       const needle = query.toLocaleLowerCase();
       const items = sortWorkItems(
         all
-          .filter((item: Any) => !query || String(item.work).toLocaleLowerCase().includes(needle))
-          .map((item: Any) => describeResearcherWork(item, { selected: false })),
+          .map((item: Any) => ({
+            ...describeResearcherWork(item, { selected: false }),
+            searchText: researcherWorkSearchText(item),
+          }))
+          .filter(
+            (item: Any) =>
+              !query || String(item.searchText || item.work).includes(normalizeLibrarySearch(query)),
+          ),
       );
       const selectedStat = all.find((item: Any) => item.work === state.workOverview) || null;
       return worksSnapshotBase({
@@ -388,7 +445,7 @@ export function createWorksWorkspace(deps: Deps) {
     const map = workIndex();
     if (state.workOverview && !map.has(state.workOverview)) state.workOverview = "";
     const selectedItem = state.workOverview ? map.get(state.workOverview) : null;
-    const needle = query.toLocaleLowerCase();
+    const needle = normalizeLibrarySearch(query);
     const annotationCounts = annotationCountsByWork();
     const described = [...map.values()].map((item) =>
       describeAdminWork(item, { annotationCounts }),
@@ -401,7 +458,7 @@ export function createWorksWorkspace(deps: Deps) {
     const items = sortWorkItems(
       described.filter(
         (item: Any) =>
-          (!query || item.work.toLocaleLowerCase().includes(needle)) &&
+          (!query || String(item.searchText || item.work).includes(needle)) &&
           (!filters.needsReview || item.review > 0) &&
           (!filters.dbStatus || item.status.kind === filters.dbStatus) &&
           (!filters.author || item.authors.includes(filters.author)),
