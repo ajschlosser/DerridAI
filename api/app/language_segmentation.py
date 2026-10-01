@@ -65,6 +65,14 @@ _PROFILES: dict[str, LanguageSegmentationProfile] = {
                 "sur", "un", "une", "der", "die", "das", "und", "zu",
             }
         ),
+        # Preserve the former generic English structural headings when no
+        # documentary language is available; these are strong lexical markers,
+        # not an attempt to infer the document's language.
+        heading_terms=(
+            "chapter", "part", "session", "section", "book", "introduction",
+            "preface", "foreword", "conclusion", "epilogue", "notes",
+            "bibliography", "works cited",
+        ),
     ),
     "en": LanguageSegmentationProfile(
         code="en",
