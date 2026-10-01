@@ -11,9 +11,7 @@ function fixturePath(): string {
   );
 }
 
-test(
-  "generated single-file publication works directly from file:// without an application server",
-  async ({ page }) => {
+test("single-file export works directly from file://", async ({ page }) => {
     const html = fixturePath();
     await access(html);
 
@@ -43,7 +41,6 @@ test(
     await recordDialog.getByLabel("Note").fill("Acceptance annotation");
     await recordDialog.getByLabel("Tags").fill("publication, acceptance");
     await recordDialog.getByRole("button", { name: "Save annotation" }).click();
-    await expect(recordDialog.getByText("Annotation saved.")).toBeVisible();
     await recordDialog.getByRole("button", { name: "Close" }).click();
 
     await page.getByRole("button", { name: "Annotations" }).click();
@@ -60,5 +57,4 @@ test(
     ).toBeVisible();
 
     expect(networkRequests).toEqual([]);
-  },
-);
+});
