@@ -172,8 +172,11 @@ def test_segmentation_cache_fingerprint_changes_with_prompt_text_or_language(tmp
     b["text"]="changed"
     second=manager._boundary_cache_fingerprint(a,b,req,manifest={"language":"en"})
     third=manager._boundary_cache_fingerprint(a,b,req,manifest={"language":"fr"})
+    b["thread_language"]="de"
+    fourth=manager._boundary_cache_fingerprint(a,b,req,manifest={"language":"fr"})
     assert first!=second
     assert second!=third
+    assert third!=fourth
 
 
 
