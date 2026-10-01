@@ -40,8 +40,12 @@ def test_the_built_in_schema_prompts_require_complete_assessments():
         assert "no_supported_value" in text
         assert "uncertain" in text
     assert "even when its metadata value is null or empty" in discourse
+    assert "Never put a proposed value only in the reason" in discourse
+    assert "requires the corresponding metadata value to be non-null/non-empty" in discourse
     assert "every one of is_direct_quote" in quotation
+    assert "never put a proposed value only in the reason" in quotation
     assert "even when the corresponding metadata list is empty" in indexing
+    assert "supported_value\" only for a supported non-empty list" in indexing
 
 
 def test_group_prompt_and_response_contract_can_be_scoped_to_unresolved_fields():
