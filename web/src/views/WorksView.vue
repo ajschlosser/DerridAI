@@ -363,6 +363,7 @@ onBeforeUnmount(() => {
         :active-store-count="snapshot.activeStoreCount"
         :source-file-count="snapshot.sourceFileCount"
         :total-records="snapshot.totalRecords"
+        :index-freshness="snapshot.indexFreshness"
         :stores-empty-label="snapshot.storesEmptyLabel"
         :db-unavailable-reason="snapshot.dbUnavailableReason"
         :can-sync-all="snapshot.capabilities.canSyncAll"
