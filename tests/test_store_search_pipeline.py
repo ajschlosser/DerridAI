@@ -86,6 +86,7 @@ def test_trace_keeps_identity_and_score_types_without_query_or_filter_values(mon
     assert stages["dense"].collection == "db"
     assert (stages["dense"].provider, stages["dense"].model) == ("local", "fake-embedder")
     assert stages["dense"].parameters["filter_fields"] == ["work"]
+    assert stages["dense"].parameters["scope_size"] == stages["lexical"].parameters["scope_size"] > 0
     assert stages["dense"].score_summary["score_type"] == "distance"
     assert stages["lexical"].score_summary["score_type"] == "lexical_score"
     assert stages["fuse"].score_summary["score_type"] == "hybrid_score"

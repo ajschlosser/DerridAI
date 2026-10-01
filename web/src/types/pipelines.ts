@@ -611,6 +611,8 @@ export type PipelineStrategyLatency = PipelineLatencyFigure & {
   median_ms_per_input?: number | null;
   by_model: Array<PipelineLatencyFigure & { provider: string | null; model: string | null }>;
   observed_scaling: PipelineObservedScaling | null;
+  /** Fitted against the size of the collection or scope searched rather than candidate count. */
+  observed_scope_scaling?: PipelineObservedScaling | null;
 };
 
 export type PipelineStageLatency = PipelineLatencyFigure & {
@@ -624,6 +626,7 @@ export type PipelineStageLatency = PipelineLatencyFigure & {
   median_ms_per_input?: number | null;
   by_model: PipelineStrategyLatency["by_model"];
   observed_scaling: PipelineObservedScaling | null;
+  observed_scope_scaling?: PipelineObservedScaling | null;
 };
 
 export type PipelineLatencyEstimate = {

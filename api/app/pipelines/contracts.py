@@ -178,7 +178,7 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
         ),
     ),
     "retrieve.chroma_similarity": (
-        [QUERY_IN],
+        [QUERY_IN, _tuning("fetch_k", minimum=1, maximum=1000)],
         [_in("candidates", "candidate_set")],
         _retrieve_ann(),
     ),
@@ -197,7 +197,7 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
         ),
     ),
     "retrieve.lexical_bm25": (
-        [QUERY_IN],
+        [QUERY_IN, _tuning("fetch_k", minimum=1, maximum=1000)],
         [_in("candidates", "candidate_set")],
         _retrieve_scan(),
     ),
@@ -207,12 +207,12 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
         _retrieve_scan(),
     ),
     "retrieve.store_keyword": (
-        [QUERY_IN],
+        [QUERY_IN, _tuning("fetch_k", minimum=1, maximum=1000)],
         [_in("candidates", "candidate_set")],
         _retrieve_scan("storage"),
     ),
     "retrieve.store_filter": (
-        [QUERY_IN],
+        [QUERY_IN, _tuning("fetch_k", minimum=1, maximum=1000)],
         [_in("candidates", "candidate_set")],
         _complexity(
             "O(N)",
@@ -267,7 +267,7 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
         _complexity("O(n)", "O(n)", order=2, variables=("n",)),
     ),
     "fusion.rrf": (
-        [CANDIDATES_IN],
+        [CANDIDATES_IN, _tuning("rrf_k", minimum=1, maximum=1000)],
         [_in("candidates", "candidate_set")],
         _complexity("O(n log n)", "O(n)", order=3, variables=("n",), cardinality=_SUM),
     ),
@@ -321,7 +321,11 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
         _complexity("O(n)", "O(n)", order=2, variables=("n",), driver="storage"),
     ),
     "select.mmr": (
-        [CANDIDATES_IN],
+        [
+            CANDIDATES_IN,
+            _tuning("lambda_mult", minimum=0, maximum=1),
+            _tuning("limit", minimum=1, maximum=1000),
+        ],
         [_in("candidates", "candidate_set")],
         _complexity(
             "O(n·k²·d)", "O(n·d)", order=5, variables=("n", "k", "d"), cardinality=_cap("limit")

@@ -28,6 +28,9 @@ const summary = computed(() => props.complexity.summary);
 const observed = computed(
   () => new Map(props.latency.stages.map((row) => [row.stage_id, row.observed_scaling])),
 );
+const observedScope = computed(
+  () => new Map(props.latency.stages.map((row) => [row.stage_id, row.observed_scope_scaling])),
+);
 const used = computed(() => {
   const ids = new Set(props.complexity.stages.flatMap((row) => row.variables));
   return (props.vocabulary?.complexity_variables ?? []).filter((term) => ids.has(term.id));
@@ -173,7 +176,15 @@ const callRows = computed(() =>
                 {{ t("pipelines.complexity_runs", "runs") }}
               </small>
             </template>
-            <span v-else class="none">—</span>
+            <span v-else-if="!observedScope.get(row.stage_id)" class="none">—</span>
+            <template v-if="observedScope.get(row.stage_id)">
+              <code>N^{{ observedScope.get(row.stage_id)?.exponent }}</code>
+              <small>
+                R² {{ observedScope.get(row.stage_id)?.r_squared }} ·
+                {{ observedScope.get(row.stage_id)?.points }}
+                {{ t("pipelines.complexity_runs", "runs") }}
+              </small>
+            </template>
           </td>
         </tr>
       </tbody>

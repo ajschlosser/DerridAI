@@ -74,6 +74,17 @@ class StoreSearchPlan:
     # Fixed numbers bound to tuning ports: stage id -> port name -> value.
     constants: dict[str, dict[str, float]] = field(default_factory=dict)
 
+    def tuned(self, stage: PipelineStageDefinition, port: str, fallback: Any) -> Any:
+        """A tuning value: the bound constant, else the stage's own config, else ``fallback``.
+
+        Only retrieval/fusion/selection arithmetic is tunable this way; nothing here can
+        touch provenance, validation or access rules.
+        """
+
+        if port in self.constants.get(stage.id, {}):
+            return self.constants[stage.id][port]
+        return stage.config.get(port, fallback)
+
 
 @dataclass(frozen=True)
 class StoreSearchRequest:
@@ -217,8 +228,9 @@ def _candidate_depth(stage: PipelineStageDefinition, plan: StoreSearchPlan, requ
     fetches exactly the requested number of results.
     """
 
-    if "fetch_k" in stage.config:
-        return int(stage.config["fetch_k"])
+    tuned = plan.tuned(stage, "fetch_k", None)
+    if tuned is not None:
+        return int(tuned)
     depths = [request.n_results]
     for consumer in plan.consumers.get(stage.id, ()):
         strategy = plan.stages[consumer].strategy
@@ -266,8 +278,7 @@ class _Runner:
                 return self._fuse(stage, inputs)
             if strategy == _MMR:
                 return self._mmr(stage, inputs)
-            configured = self.plan.constants.get(stage.id, {}).get("limit", stage.config.get("limit", self.request.n_results))
-            limit = min(self.request.n_results, int(configured))
+            limit = min(self.request.n_results, int(self.plan.tuned(stage, "limit", self.request.n_results)))
             return _single(stage, inputs)[:limit], {"parameters": {"limit": limit}}
         except _StageFailure:
             raise
@@ -277,7 +288,7 @@ class _Runner:
             raise _StageFailure("failed", exc) from exc
 
     def _fuse(self, stage: PipelineStageDefinition, inputs: list[tuple[str, Any]]) -> tuple[Any, dict[str, Any]]:
-        rrf_k = int(stage.config.get("rrf_k", 60))
+        rrf_k = int(self.plan.tuned(stage, "rrf_k", 60))
         fused: dict[str, dict[str, Any]] = {}
         for source_id, rows in inputs:
             if not isinstance(rows, list):
@@ -305,8 +316,8 @@ class _Runner:
         return ranked, {"parameters": {"rrf_k": rrf_k}}
 
     def _mmr(self, stage: PipelineStageDefinition, inputs: list[tuple[str, Any]]) -> tuple[Any, dict[str, Any]]:
-        lambda_mult = float(stage.config.get("lambda_mult", self.request.lambda_mult))
-        limit = min(self.request.n_results, int(stage.config.get("limit", self.request.n_results)))
+        lambda_mult = float(self.plan.tuned(stage, "lambda_mult", self.request.lambda_mult))
+        limit = min(self.request.n_results, int(self.plan.tuned(stage, "limit", self.request.n_results)))
         selected = mmr_select(
             _single(stage, inputs),
             limit=limit,
@@ -424,6 +435,12 @@ def execute_store_search(
                     **(
                         {"filter_fields": sorted(request.where or {})}
                         if stage.strategy in _RETRIEVERS and request.where
+                        else {}
+                    ),
+                    # Size of the collection searched: a count, so scans can be fitted against it.
+                    **(
+                        {"scope_size": int(identity["scope_size"])}
+                        if stage.strategy in _RETRIEVERS and isinstance(identity.get("scope_size"), int)
                         else {}
                     ),
                 },

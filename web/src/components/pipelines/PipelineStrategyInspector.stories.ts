@@ -61,6 +61,13 @@ export const WithObservedLatency: Story = {
         min_input: 8,
         max_input: 400,
       },
+      observed_scope_scaling: {
+        exponent: 0.97,
+        r_squared: 0.91,
+        points: 40,
+        min_input: 500,
+        max_input: 20000,
+      },
     },
   },
 };
