@@ -42,12 +42,7 @@ const selectedProviderProfiles = ref<string[]>(props.providerProfiles.map((item)
 
 const selectedCount = computed(() => selected.value.length);
 const canCreate = computed(() =>
-  Boolean(
-    selectedCount.value &&
-      selectedLanguages.value.length &&
-      props.storeName &&
-      !props.busy,
-  ),
+  Boolean(selectedCount.value && selectedLanguages.value.length && props.storeName && !props.busy),
 );
 
 function toggle(work: string, checked: boolean) {
