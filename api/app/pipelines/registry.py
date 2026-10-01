@@ -555,7 +555,7 @@ DEFAULT_STRATEGIES = [
         family="llm",
         scholarly_effect="generation",
         label="Closed-choice evidence selection",
-        description="Ask a chat model to choose only among the current Record's source-unit IDs, then validate the IDs deterministically. It reads every source unit of the Record, not only upstream candidates. In evidence recovery the stage chooses which configured provider answers (by default the primary provider, then the review provider) and how many attempts each gets.",
+        description="Ask a chat model to choose only among source-unit IDs from the current Record, then validate the IDs deterministically. Evidence recovery may scope the choice to a bounded upstream shortlist, falling back to the Record's source units when no shortlist exists. The stage also chooses which configured provider answers (by default the primary provider, then the review provider) and how many attempts each gets.",
         input_type="any",
         output_type="candidate_set",
         deterministic=False,
@@ -566,6 +566,12 @@ DEFAULT_STRATEGIES = [
             "properties": {
                 "provider_role": {"type": "string", "enum": ["chain", "primary", "review"], "default": "chain"},
                 "attempts": {**_integer(1, 4), "default": 2},
+                "candidate_scope": {
+                    "type": "string",
+                    "enum": ["all", "input_or_all"],
+                    "default": "all",
+                },
+                "candidate_limit": {**_integer(1, 32), "default": 2},
             },
         },
     ),
@@ -593,7 +599,9 @@ RECOVERY_ONLY_CONFIG: dict[str, frozenset[str]] = {
     "rerank.cross_encoder": frozenset({"min_score"}),
     "select.mmr": frozenset({"min_relevance"}),
     # The reviewer-suggestion graph never calls a model; only recovery asks it.
-    "llm.closed_choice_evidence": frozenset({"provider_role", "attempts"}),
+    "llm.closed_choice_evidence": frozenset(
+        {"provider_role", "attempts", "candidate_scope", "candidate_limit"}
+    ),
 }
 
 
