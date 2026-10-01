@@ -193,6 +193,7 @@
     document.documentElement.dataset.contrast = highContrast ? "high" : "normal";
     document.documentElement.lang = locale;
     document.documentElement.dir = directionForLocale(locale);
+    document.title = publication.title || t("site.runtime.site_title");
   }
 
   function formatDate(value) {
