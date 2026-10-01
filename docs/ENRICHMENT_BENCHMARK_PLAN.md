@@ -148,17 +148,22 @@ Both paths are recorded in the family execution ledger and enrichment ledger. Th
 
 ### Phase B — immutable enrichment benchmark fixture
 
-Status: **planned**.
+Status: **implemented on this branch; pending full CI**.
 
-Introduce a typed benchmark-fixture contract that contains no source text but fingerprints the exact input records/schema/configuration.
+The typed benchmark-fixture contract contains no source text but fingerprints the exact input records/schema/configuration.
 
-The fixture should:
+The fixture:
 
-- be immutable/versioned;
-- hash canonical input identity;
-- reject comparisons when Record/schema/provider/model/config identities drift;
-- retain explicit reproducibility limitations when an exact provider/model revision is unavailable;
-- remain separate from canonical corpus authority.
+- is immutable/versioned;
+- hashes Record IDs/revisions/text digests and source-binding identity without retaining Record text;
+- binds metadata-schema ID/version/content hash and the document-manifest hash;
+- retains prompt/execution controls that can change enrichment behavior;
+- retains provider/model identity but excludes credentials and endpoints;
+- binds the exact enrichment pipeline ID/version/hash;
+- rejects comparisons when Record/schema/provider/model/config identities drift;
+- retains explicit reproducibility limitations when an exact model/source/revision identity is unavailable;
+- explicitly warns that cross-build editorial memory must be frozen or disabled by the isolated runner;
+- remains separate from canonical corpus authority.
 
 ### Phase C — benchmark-run artifact and comparison
 
@@ -271,6 +276,7 @@ Default project target:
 - Added one exceptional metadata-family recovery turn for classified truncation with bounded output headroom.
 - Added one bounded consistency-repair turn for assessment/value contradictions such as `supported_value` with an empty metadata value.
 - Tightened built-in metadata prompts so assessment reasons stay concise and cannot substitute for the metadata value itself.
+- Implemented the Phase B immutable enrichment benchmark fixture and compatibility gate; the fixture stores only hashes/identities for source text and bindings and strips provider credentials/endpoints.
 
 ## Non-goals for this tranche
 
