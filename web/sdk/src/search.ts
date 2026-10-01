@@ -1,5 +1,6 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 
+import { validateEmbeddingDescriptor } from "./embeddingContract";
 import { EventBus } from "./events";
 import { isAbortError } from "./errors";
 import { RecordRepository } from "./repository";
@@ -188,10 +189,9 @@ export class SearchEngine {
       );
     }
 
-    const expectedModel = String(this.manifest.vector_index?.model ?? "");
     const descriptor = this.embeddings.descriptor();
-    const actualModel = String(descriptor.model ?? "");
-    if (expectedModel && actualModel && expectedModel !== actualModel) {
+    const contractMismatch = validateEmbeddingDescriptor(this.manifest.vector_index, descriptor);
+    if (contractMismatch) {
       return this.finish(
         lexical.slice(0, limit),
         modeRequested,
@@ -199,8 +199,8 @@ export class SearchEngine {
         [
           fallbackWarning(
             "embedding_contract_mismatch",
-            "The supplied embedding capability does not match the publication embedding model; keyword results were returned.",
-            { expectedModel, actualModel },
+            "The supplied embedding capability does not match the publication embedding contract; keyword results were returned.",
+            contractMismatch,
           ),
         ],
         candidateSet.records.length,
