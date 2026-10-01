@@ -12,6 +12,8 @@ import hashlib
 import json
 from typing import Any
 
+SEMANTIC_PROJECTION_VERSION = 1
+
 # Everything consumed by the Semantic Content Graph or the Record term/document
 # layers belongs here. Review disposition, UI state, and other editorial workflow
 # fields are intentionally excluded so accepting a Record does not invalidate its
