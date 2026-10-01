@@ -42,7 +42,7 @@ def types_compatible(source: str, target: str) -> bool:
 def _issue(
     level: str, code: str, message: str, stage_id: str | None = None
 ) -> PipelineValidationIssue:
-    return PipelineValidationIssue(level=level, code=code, message=message, stage_id=stage_id)  # type: ignore[arg-type]
+    return PipelineValidationIssue(level=level, code=code, message=message, stage_id=stage_id)
 
 
 def _descendants(pipeline: PipelineDefinition) -> dict[str, set[str]]:
