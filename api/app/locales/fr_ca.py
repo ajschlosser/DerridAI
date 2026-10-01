@@ -4579,7 +4579,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'record.secondary_text': 'Texte secondaire',
  'record.select_help': 'Sélectionnez cette fiche pour les actions de révision, modification ou synchronisation en lot.',
  'record.selection_actions': 'Actions sur le texte sélectionné',
- 'record.semantic_map_unavailable': 'Aucune relation sémantique n’a encore été dérivée pour cette fiche.'
+ 'record.semantic_map_unavailable': 'Aucune relation sémantique n’a encore été dérivée pour cette fiche.',
  'record.show_inspector': 'Afficher le volet d’inspection',
  'record.source_documents': 'Documents sources',
  'record.sparse_save_help': 'Seuls les champs modifiés seront enregistrés et ajoutés à la piste d’audit.',
