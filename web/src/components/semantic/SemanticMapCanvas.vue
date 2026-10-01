@@ -65,11 +65,10 @@ function densityAdjusted(source: readonly SemanticMapNode[]): SemanticMapNode[] 
 const baseLayoutNodes = computed(() => densityAdjusted(props.graph.nodes));
 
 const frame = computed(() => {
-  const bounds =
-    relationBoundsForPoints(
-      baseLayoutNodes.value.map((node) => ({ x: node.x, y: node.y })),
-      128,
-    ) || { x: -320, y: -210, width: 640, height: 420 };
+  const bounds = relationBoundsForPoints(
+    baseLayoutNodes.value.map((node) => ({ x: node.x, y: node.y })),
+    128,
+  ) || { x: -320, y: -210, width: 640, height: 420 };
   return {
     width: Math.max(320, bounds.width),
     height: Math.max(240, bounds.height),
@@ -225,10 +224,7 @@ defineExpose({ zoomBy, fitView, resetView, centerNode });
           :key="edge.id"
           class="semantic-map-edge"
           :class="{
-            dimmed:
-              selectedId &&
-              edge.source !== selectedId &&
-              edge.target !== selectedId,
+            dimmed: selectedId && edge.source !== selectedId && edge.target !== selectedId,
           }"
           :path="edgePath(edge.source, edge.target)"
           :width="edgeWidth(edge.weight)"
@@ -245,10 +241,7 @@ defineExpose({ zoomBy, fitView, resetView, centerNode });
             related: selectedId && relatedIds.has(node.id) && node.id !== selectedId,
             dimmed: selectedId && !relatedIds.has(node.id),
             decluttered:
-              zoom < 0.58 &&
-              node.weight <= 1 &&
-              node.kind !== 'record' &&
-              node.id !== selectedId,
+              zoom < 0.58 && node.weight <= 1 && node.kind !== 'record' && node.id !== selectedId,
           },
         ]"
         :node-id="node.id"
@@ -264,7 +257,12 @@ defineExpose({ zoomBy, fitView, resetView, centerNode });
     </template>
   </UiRelationViewport>
   <p v-else class="semantic-map-empty">
-    {{ i18n.t("semantic_map.empty", "No concepts, topics, persons, or Records are available to map yet.") }}
+    {{
+      i18n.t(
+        "semantic_map.empty",
+        "No concepts, topics, persons, or Records are available to map yet.",
+      )
+    }}
   </p>
 </template>
 

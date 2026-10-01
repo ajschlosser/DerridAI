@@ -114,7 +114,10 @@ function balancedTerms(
     { kind: "person", values: source.persons, index: 0 },
   ];
   const out: Array<{ kind: Exclude<SemanticMapKind, "record">; label: string }> = [];
-  while (out.length < MAX_TERMS_PER_RECORD && buckets.some((bucket) => bucket.index < bucket.values.length)) {
+  while (
+    out.length < MAX_TERMS_PER_RECORD &&
+    buckets.some((bucket) => bucket.index < bucket.values.length)
+  ) {
     for (const bucket of buckets) {
       if (out.length >= MAX_TERMS_PER_RECORD) break;
       const label = bucket.values[bucket.index];
@@ -198,7 +201,8 @@ function layoutComponent(
           distance = 1;
         }
         const minimum =
-          48 + (estimatedNodeWidth(labels.get(a.id)!) + estimatedNodeWidth(labels.get(b.id)!)) * 0.24;
+          48 +
+          (estimatedNodeWidth(labels.get(a.id)!) + estimatedNodeWidth(labels.get(b.id)!)) * 0.24;
         const force =
           (distance < minimum ? (minimum - distance) * 0.18 : 720 / (distance * distance)) *
           (iteration < 45 ? 1 : 0.55);
@@ -240,7 +244,10 @@ function layoutComponent(
  * compact shelves. This prevents disconnected clusters from being pushed onto
  * an ever-growing ring while preserving deterministic positions.
  */
-function semanticLayout(entries: LayoutEntry[], links: Array<{ source: string; target: string }>): LayoutResult {
+function semanticLayout(
+  entries: LayoutEntry[],
+  links: Array<{ source: string; target: string }>,
+): LayoutResult {
   const adjacency = new Map<string, string[]>(entries.map((entry) => [entry.id, []]));
   links.forEach(({ source, target }) => {
     adjacency.get(source)?.push(target);

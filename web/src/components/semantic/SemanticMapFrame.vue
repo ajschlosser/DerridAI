@@ -78,8 +78,7 @@ const filteredGraph = computed<SemanticMapGraph>(() => {
     const matches = new Set(
       source.nodes
         .filter(
-          (node) =>
-            kindEnabled.value[node.kind] && node.label.toLocaleLowerCase().includes(needle),
+          (node) => kindEnabled.value[node.kind] && node.label.toLocaleLowerCase().includes(needle),
         )
         .map((node) => node.id),
     );
@@ -93,9 +92,7 @@ const filteredGraph = computed<SemanticMapGraph>(() => {
   }
 
   const nodes = source.nodes.filter((node) => allowed.has(node.id));
-  const edges = source.edges.filter(
-    (edge) => allowed.has(edge.source) && allowed.has(edge.target),
-  );
+  const edges = source.edges.filter((edge) => allowed.has(edge.source) && allowed.has(edge.target));
   return { nodes, edges };
 });
 
@@ -118,7 +115,10 @@ const selectedNeighbors = computed(() => {
       }
       return [];
     })
-    .sort((left, right) => right.weight - left.weight || left.node.label.localeCompare(right.node.label));
+    .sort(
+      (left, right) =>
+        right.weight - left.weight || left.node.label.localeCompare(right.node.label),
+    );
 });
 
 const placementLabel: Record<SemanticMapPlacement, string> = {
