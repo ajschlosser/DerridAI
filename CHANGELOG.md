@@ -4,6 +4,43 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## Post-0.81.0 maintenance
+
+Repository cleanup after the Fall River release removed transient implementation
+artifacts that no longer described current `master`:
+
+- Deleted obsolete progress, plan, and branch-handoff documents:
+  `CBI_PROGRESS.md`,
+  `docs/CORPUS_BUILDER_HAPPY_PATH_UX_PLAN.md`,
+  `docs/CORPUS_BUILDER_HAPPY_PATH_UX_HANDOFF.md`,
+  `docs/GRAPH_NORMALIZATION_PLAN.md`,
+  `docs/GRAPH_NORMALIZATION_HANDOFF.md`,
+  `docs/TOOLTIPS_HELP_HANDOFF.md`, and
+  `docs/PIPELINE_STUDIO_WORKFLOW_SEMANTICS_IMPLEMENTATION.md`.
+- Deleted the one-off `scripts/runtime-refactor/` migration helpers now that
+  their runtime/CSS extraction campaign is historical.
+- Deleted the stray source backup
+  `web/src/components/OperationsPanel.vue.pre-a11y-fix.bak`; Git history is
+  the authoritative backup.
+- Current architecture, requirements, user documentation, release notes,
+  compatibility tests, and legacy characterization baselines were retained.
+
+## 0.81.0 — Fall River
+
+Fall River is the first consolidated release after Exeter. It brings together
+evidence-aware review, whole-document intelligence and semantic maps, versioned
+Pipeline Studio execution, schema-driven metadata, safer source ingestion,
+stronger provenance gates, modernized navigation/help/accessibility,
+operational-retention controls, and threaded annotations. See
+[0.81.0](docs/notes/0.81.0.md) for the complete release note.
+
+## 0.80.7 — Exeter
+
+Exeter is a focused follow-up to Danvers: it aligns cELF terminology, improves
+Record Review and evidence workflows, fixes semantic metadata retrieval, and
+tightens publication/review behavior. See
+[0.80.7](docs/notes/0.80.7.md) for the complete release note.
+
 ## 0.80.6 — Danvers
 
 Danvers consolidates the post-Cambridge Corpus Builder work: reliable
