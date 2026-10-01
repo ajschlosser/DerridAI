@@ -30,6 +30,11 @@ from .retrieval_selection import (
     mmr_select,
     source_aware_select,
 )
+from .structured_json import (
+    StructuredJsonTruncatedError,
+    finish_reason_is_truncated,
+    parse_json_object,
+)
 from .system_store import system_store
 
 logger = logging.getLogger(__name__)
@@ -107,22 +112,8 @@ Citation rules:
 
 
 def _extract_json(text: str) -> dict[str, Any]:
-    value = str(text or "").strip()
-    value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.I)
-    value = re.sub(r"\s*```$", "", value)
-    candidates = [value]
-    start = value.find("{")
-    end = value.rfind("}")
-    if start >= 0 and end > start:
-        candidates.append(value[start:end + 1])
-    for candidate in candidates:
-        try:
-            parsed = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            return parsed
-    raise ValueError("LLM did not return a valid JSON object.")
+    """Compatibility wrapper around the shared repair-first structured parser."""
+    return parse_json_object(text)
 
 
 def _response_detail(response: httpx.Response) -> str:
@@ -162,6 +153,17 @@ def chat_complete(
     """
     tuning = options or OllamaTouchupOptions()
     provider = provider.strip().lower()
+    structured_requested = bool(json_mode or json_schema is not None)
+
+    def complete(content: Any, finish_reason: str | None = None) -> str:
+        text = str(content or "").strip()
+        if structured_requested and finish_reason_is_truncated(finish_reason):
+            raise StructuredJsonTruncatedError(
+                f"LLM structured response was cut off by provider finish reason {finish_reason!r}.",
+                diagnostic=text[:2000],
+                finish_reason=finish_reason,
+            )
+        return text
 
     def emit(piece: str) -> None:
         if on_delta is None or not piece:
@@ -207,11 +209,12 @@ def chat_complete(
             pool=settings.openai_connect_timeout_seconds,
         )
         if cancelled is not None:
-            def stream_once(payload: dict[str, Any]) -> tuple[int, str, str]:
+            def stream_once(payload: dict[str, Any]) -> tuple[int, str, str, str | None]:
                 started_clock = time.monotonic()
                 streaming = dict(payload)
                 streaming["stream"] = True
                 chunks: list[str] = []
+                finish_reason: str | None = None
                 with httpx.Client(timeout=timeout) as client:
                     with client.stream(
                         "POST",
@@ -221,7 +224,7 @@ def chat_complete(
                     ) as response:
                         if response.status_code >= 400:
                             raw = response.read().decode("utf-8", errors="replace")
-                            return response.status_code, "", raw[:2000]
+                            return response.status_code, "", raw[:2000], None
                         for line in response.iter_lines():
                             if timeout_seconds and time.monotonic() - started_clock > timeout_seconds:
                                 raise TimeoutError(f"LLM generation exceeded {timeout_seconds:.0f}s stage deadline.")
@@ -237,6 +240,8 @@ def chat_complete(
                             except json.JSONDecodeError:
                                 continue
                             choices = event.get("choices") or []
+                            if choices and choices[0].get("finish_reason") is not None:
+                                finish_reason = str(choices[0].get("finish_reason"))
                             delta = choices[0].get("delta") if choices else {}
                             piece = (delta or {}).get("content") or ""
                             if isinstance(piece, list):
@@ -248,9 +253,9 @@ def chat_complete(
                             if piece:
                                 chunks.append(str(piece))
                                 emit(str(piece))
-                return 200, "".join(chunks).strip(), ""
+                return 200, "".join(chunks).strip(), "", finish_reason
 
-            status, content, detail = stream_once(body)
+            status, content, detail, finish_reason = stream_once(body)
             if status in {400, 422} and "response_format" in body:
                 fallback = dict(body)
                 # Some OpenAI-compatible routers support JSON mode but not JSON Schema.
@@ -260,10 +265,10 @@ def chat_complete(
                     fallback["response_format"] = {"type": "json_object"}
                 else:
                     fallback.pop("response_format", None)
-                status, content, detail = stream_once(fallback)
+                status, content, detail, finish_reason = stream_once(fallback)
                 if status in {400, 422} and "response_format" in fallback:
                     fallback.pop("response_format", None)
-                    status, content, detail = stream_once(fallback)
+                    status, content, detail, finish_reason = stream_once(fallback)
             if status in {400, 422}:
                 # Preserve compatibility with local OpenAI-compatible routers
                 # that support Chat Completions but not streaming.
@@ -279,6 +284,11 @@ def chat_complete(
                     payload = response.json()
                     choices = payload.get("choices") or []
                     message = choices[0].get("message") if choices else {}
+                    finish_reason = (
+                        str(choices[0].get("finish_reason"))
+                        if choices and choices[0].get("finish_reason") is not None
+                        else None
+                    )
                     content = (message or {}).get("content") or ""
                     if isinstance(content, list):
                         content = "".join(
@@ -293,7 +303,7 @@ def chat_complete(
                 raise RuntimeError(
                     f"OpenAI-compatible endpoint returned HTTP {status}: {detail}"
                 )
-            return str(content).strip()
+            return complete(content, finish_reason)
 
         with httpx.Client(timeout=timeout) as client:
             response = client.post(
@@ -325,6 +335,11 @@ def chat_complete(
         choices = payload.get("choices") or []
         if not choices:
             raise RuntimeError("OpenAI-compatible endpoint returned no choices.")
+        finish_reason = (
+            str(choices[0].get("finish_reason"))
+            if choices[0].get("finish_reason") is not None
+            else None
+        )
         content = (choices[0].get("message") or {}).get("content") or ""
         if isinstance(content, list):
             content = "".join(
@@ -332,7 +347,7 @@ def chat_complete(
                 for part in content
                 if isinstance(part, dict)
             )
-        return str(content).strip()
+        return complete(content, finish_reason)
 
     url = (base_url or settings.ollama_base_url).rstrip("/")
     option_values: dict[str, Any] = dict(tuning.extra_options or {})
@@ -379,16 +394,17 @@ def chat_complete(
         pool=settings.ollama_connect_timeout_seconds,
     )
     if cancelled is not None:
-        def ollama_stream_once(payload: dict[str, Any]) -> tuple[int, str, str]:
+        def ollama_stream_once(payload: dict[str, Any]) -> tuple[int, str, str, str | None]:
             started_clock = time.monotonic()
             streaming = dict(payload)
             streaming["stream"] = True
             chunks: list[str] = []
+            finish_reason: str | None = None
             with httpx.Client(timeout=timeout) as client:
                 with client.stream("POST", f"{url}/api/chat", json=streaming) as response:
                     if response.status_code >= 400:
                         raw = response.read().decode("utf-8", errors="replace")
-                        return response.status_code, "", raw[:2000]
+                        return response.status_code, "", raw[:2000], None
                     for line in response.iter_lines():
                         if timeout_seconds and time.monotonic() - started_clock > timeout_seconds:
                             raise TimeoutError(f"LLM generation exceeded {timeout_seconds:.0f}s stage deadline.")
@@ -402,17 +418,19 @@ def chat_complete(
                             chunks.append(str(piece))
                             emit(str(piece))
                         if payload_line.get("done"):
+                            reason = payload_line.get("done_reason") or payload_line.get("stop_reason")
+                            finish_reason = str(reason) if reason is not None else None
                             break
-            return 200, "".join(chunks).strip(), ""
+            return 200, "".join(chunks).strip(), "", finish_reason
 
-        status, content, detail = ollama_stream_once(body)
+        status, content, detail, finish_reason = ollama_stream_once(body)
         if status in {400, 422} and json_schema is not None:
             fallback = dict(body)
             fallback["format"] = "json"
-            status, content, detail = ollama_stream_once(fallback)
+            status, content, detail, finish_reason = ollama_stream_once(fallback)
         if status >= 400:
             raise RuntimeError(f"Ollama returned HTTP {status}: {detail}")
-        return content
+        return complete(content, finish_reason)
 
     with httpx.Client(timeout=timeout) as client:
         response = client.post(f"{url}/api/chat", json=body)
@@ -429,7 +447,11 @@ def chat_complete(
             f"{_response_detail(response)}"
         )
     payload = response.json()
-    return str((payload.get("message") or {}).get("content") or "").strip()
+    finish_reason = payload.get("done_reason") or payload.get("stop_reason")
+    return complete(
+        (payload.get("message") or {}).get("content") or "",
+        str(finish_reason) if finish_reason is not None else None,
+    )
 
 
 def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
