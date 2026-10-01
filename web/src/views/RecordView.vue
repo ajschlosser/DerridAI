@@ -366,7 +366,6 @@ onBeforeUnmount(() => {
 
       <CorpusRecordSemanticMap
         v-if="showRecordMap && snapshot.record_id"
-        :build-id="''"
         :record="{
           record_id: String(snapshot.record_id),
           text: typeof record.text === 'string' ? record.text : undefined,
