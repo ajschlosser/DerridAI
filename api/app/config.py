@@ -234,7 +234,7 @@ class Settings:
     )
     metadata_evidence_cascade_llm_enabled: bool = _bool_env(
         "METADATA_EVIDENCE_CASCADE_LLM_ENABLED",
-        True,
+        False,
     )
 
 
