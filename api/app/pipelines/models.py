@@ -46,12 +46,16 @@ ScholarlyEffect = Literal[
 
 # What flows between stages. A port declares exactly one of these and the
 # validator refuses any wiring that would hand a stage something else.
+# Constants are tuning values, so they are small, finite numbers.
+CONSTANT_BOUND = 1_000_000.0
+
 DataType = Literal[
     "query",
     "candidate_set",
     "context_packet",
     "model_output",
     "evaluation",
+    "number",
     "any",
 ]
 CostDriver = Literal["cpu", "storage", "embedding", "model_inference", "llm_generation"]
@@ -67,6 +71,11 @@ class PortSpec(BaseModel):
     required: bool = True
     # A port that merges several upstream sources (a union of candidate sets).
     multiple: bool = False
+    # A tuning port: it may take a fixed number instead of another stage's output.
+    # Only ports that declare this accept a constant; query/candidate ports never do.
+    accepts_constant: bool = False
+    minimum: float | None = None
+    maximum: float | None = None
 
 
 class OutputCardinality(BaseModel):
@@ -128,14 +137,18 @@ class InputBinding(BaseModel):
 
     ``stage`` binds to a named output of an upstream stage; ``run_input`` binds
     to a value the consuming workflow supplies for every run (its purpose
-    declares which). A port with no explicit binding is wired implicitly from
+    declares which); ``constant`` fixes a number on a tuning port that declares
+    it accepts one. A port with no explicit binding is wired implicitly from
     the graph edges, and the resolved wiring says which.
     """
 
-    source: Literal["stage", "run_input"]
+    source: Literal["stage", "run_input", "constant"]
     stage: str | None = Field(default=None, max_length=120)
     output: str | None = Field(default=None, max_length=60)
     name: str | None = Field(default=None, max_length=60)
+    # Only for ``constant``; omitted from the serialised form otherwise so the
+    # identity hashes of pipelines saved before constants existed stay valid.
+    value: float | None = Field(default=None, ge=-CONSTANT_BOUND, le=CONSTANT_BOUND)
 
     @model_validator(mode="after")
     def _shape(self) -> InputBinding:
@@ -143,7 +156,18 @@ class InputBinding(BaseModel):
             raise ValueError("A stage binding names the producing stage.")
         if self.source == "run_input" and not self.name:
             raise ValueError("A run-input binding names the run input.")
+        if self.source == "constant" and self.value is None:
+            raise ValueError("A constant binding carries a value.")
+        if self.source != "constant" and self.value is not None:
+            raise ValueError("Only a constant binding carries a value.")
         return self
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_value(self, handler: Any) -> dict[str, Any]:
+        data = handler(self)
+        if data.get("value") is None:
+            data.pop("value", None)
+        return data
 
 
 class PipelineStageDefinition(BaseModel):

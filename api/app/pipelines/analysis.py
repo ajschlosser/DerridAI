@@ -52,6 +52,7 @@ def analyze_pipeline(
         "wiring": {
             "stages": wiring["stages"],
             "run_inputs": wiring["run_inputs"],
+            "ordering_only_edges": wiring["ordering_only_edges"],
         },
         "complexity": analyze_complexity(pipeline, registry, conditional),
         "latency": estimate_pipeline_latency(

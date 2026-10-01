@@ -40,6 +40,21 @@ function statusLabel(status: string) {
   };
   return labels[status] || status;
 }
+const REWIRED_PREFIX = "rewired_inputs: ";
+/** Ports whose explicit binding differs from the graph's own wiring (see wiring.rewired_warnings). */
+const rewiredPorts = computed(() => {
+  const line = (props.trace.warnings ?? []).find((w) => w.startsWith(REWIRED_PREFIX));
+  return line
+    ? line
+        .slice(REWIRED_PREFIX.length)
+        .split(",")
+        .map((port) => port.trim())
+        .filter(Boolean)
+    : [];
+});
+const otherWarnings = computed(() =>
+  (props.trace.warnings ?? []).filter((w) => !w.startsWith(REWIRED_PREFIX)),
+);
 function stageDetail(stage: PipelineStageTrace) {
   return [stage.provider, stage.model, stage.collection].filter(Boolean).join(" · ");
 }
@@ -175,12 +190,25 @@ function stageDetail(stage: PipelineStageTrace) {
       </li>
     </ol>
 
-    <details v-if="trace.warnings?.length" class="run-warnings">
+    <p v-if="rewiredPorts.length" class="trace-warning rewired-notice" role="note">
+      <AppIcon name="warning" />
+      <span>
+        {{
+          t(
+            "pipelines.rewired_run_notice",
+            "This run used explicit input bindings that differ from the graph's own wiring:",
+          )
+        }}
+        <code v-for="port in rewiredPorts" :key="port">{{ port }}</code>
+      </span>
+    </p>
+
+    <details v-if="otherWarnings.length" class="run-warnings">
       <summary>
-        {{ t("pipelines.run_warnings", "Run warnings") }} ({{ trace.warnings.length }})
+        {{ t("pipelines.run_warnings", "Run warnings") }} ({{ otherWarnings.length }})
       </summary>
       <ul>
-        <li v-for="warning in trace.warnings" :key="warning">{{ warning }}</li>
+        <li v-for="warning in otherWarnings" :key="warning">{{ warning }}</li>
       </ul>
     </details>
   </article>
@@ -358,6 +386,9 @@ function stageDetail(stage: PipelineStageTrace) {
   width: 14px;
   height: 14px;
   margin-top: 1px;
+}
+.rewired-notice code {
+  margin-inline-start: var(--space-2, 0.5rem);
 }
 .trace-warning-list,
 .run-warnings ul {

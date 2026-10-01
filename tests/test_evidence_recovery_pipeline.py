@@ -406,3 +406,15 @@ def test_bound_recovery_pipeline_runs_and_is_supported(monkeypatch, traces) -> N
     assert result.entry["block_ids"] == ["b1"]
     assert result.status["celf_compliant"] is False
     assert _ran(traces)["provenance"] == "completed"
+
+
+def test_rewired_recovery_run_is_flagged_in_its_trace(monkeypatch, traces) -> None:
+    _use(monkeypatch, _bound("provenance", "lexical"))
+    _recover("calm", [{"block_id": "b1", "text": "calm calm calm"}], field="mood")
+    assert traces[-1].warnings == ["rewired_inputs: provenance.candidates"]
+
+
+def test_unbound_recovery_run_carries_no_rewired_warning(monkeypatch, traces) -> None:
+    _use(monkeypatch, built_in_pipeline(*CELF))
+    _recover("calm", [{"block_id": "b1", "text": "calm calm calm"}], field="mood")
+    assert traces[-1].warnings == []
