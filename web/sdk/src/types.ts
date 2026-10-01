@@ -183,6 +183,7 @@ export interface SearchResponse {
     candidateCount: number;
     chunksLoaded: number;
     semanticAvailable: boolean;
+    duplicatesRemoved: number;
   };
 }
 

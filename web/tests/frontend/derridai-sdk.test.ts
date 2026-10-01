@@ -6,6 +6,7 @@ import {
   dataSources,
   MemoryStorage,
   type GenerationRequest,
+  type PublicationDataSource,
   type PublicationRecord,
 } from "../../sdk/src";
 
@@ -72,6 +73,7 @@ function publicationPackage() {
       ],
       vector_index: {
         model: "bge-m3:latest",
+        revision: "fixture-revision",
         dimension: 2,
         distance_metric: "cosine",
         text_field: "text",
@@ -210,6 +212,171 @@ describe("DerridAI SDK", () => {
     expect(response.warnings.some((warning) => warning.code === "generation_unavailable")).toBe(
       true,
     );
+  });
+
+  it("deduplicates stable record identities before scoring and reports the removal", async () => {
+    const publication = publicationPackage();
+    publication.chunks.push({
+      id: "work-3",
+      work: "Glas",
+      record_count: 1,
+      records_b64: base64Json([
+        record("g1", "Glas", "duplicate transport copy that must not become a second result"),
+      ]),
+      vector_ids: ["g1"],
+      vectors_b64: base64Float32([[0, 1]]),
+    });
+
+    const client = await createClient({
+      dataSource: dataSources.inline(publication),
+      storage: new MemoryStorage(),
+    });
+    const response = await client.search({
+      query: "hospitality",
+      mode: "keyword",
+      filters: { work: ["Glas"] },
+    });
+
+    expect(response.results.map((item) => item.record.record_id)).toEqual(["g1"]);
+    expect(response.diagnostics.candidateCount).toBe(2);
+    expect(response.diagnostics.duplicatesRemoved).toBe(1);
+    expect(response.results[0].record.text).toBe("hospitality gift responsibility");
+  });
+
+  it("rejects an explicitly incompatible embedding revision before calling the provider", async () => {
+    const embed = vi.fn(async () => ({ vectors: [[1, 0]] }));
+    const client = await createClient({
+      dataSource: dataSources.inline(publicationPackage()),
+      storage: new MemoryStorage(),
+      embeddings: {
+        descriptor: () => ({
+          type: "host",
+          model: "bge-m3:latest",
+          revision: "different-revision",
+        }),
+        embed,
+      },
+    });
+
+    const response = await client.search({ query: "hospitality", mode: "hybrid" });
+
+    expect(response.modeUsed).toBe("keyword");
+    expect(response.warnings[0]).toMatchObject({
+      code: "embedding_contract_mismatch",
+      details: {
+        mismatches: [
+          {
+            field: "revision",
+            expected: "fixture-revision",
+            actual: "different-revision",
+          },
+        ],
+      },
+    });
+    expect(embed).not.toHaveBeenCalled();
+  });
+
+  it("rejects embedding-result provenance that contradicts the publication contract", async () => {
+    const client = await createClient({
+      dataSource: dataSources.inline(publicationPackage()),
+      storage: new MemoryStorage(),
+      embeddings: {
+        descriptor: () => ({ type: "host", model: "bge-m3:latest" }),
+        async embed() {
+          return {
+            vectors: [[1, 0]],
+            provider: {
+              type: "host",
+              model: "bge-m3:latest",
+              revision: "different-revision",
+            },
+          };
+        },
+      },
+    });
+
+    const response = await client.search({ query: "hospitality", mode: "hybrid" });
+
+    expect(response.modeUsed).toBe("keyword");
+    expect(response.warnings[0]).toMatchObject({
+      code: "embedding_contract_mismatch",
+      details: {
+        mismatches: [
+          {
+            field: "revision",
+            expected: "fixture-revision",
+            actual: "different-revision",
+          },
+        ],
+      },
+    });
+  });
+
+  it("propagates embedding cancellation and emits operation-cancelled", async () => {
+    const client = await createClient({
+      dataSource: dataSources.inline(publicationPackage()),
+      storage: new MemoryStorage(),
+      embeddings: {
+        descriptor: () => ({ type: "host", model: "bge-m3:latest" }),
+        async embed() {
+          throw new DOMException("cancelled", "AbortError");
+        },
+      },
+    });
+    const events: string[] = [];
+    client.events.subscribe((event) => events.push(event.type));
+
+    await expect(client.search({ query: "hospitality", mode: "hybrid" })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(events).toContain("operation-cancelled");
+  });
+
+  it("propagates generation cancellation and preserves cancellation as an operation event", async () => {
+    const client = await createClient({
+      dataSource: dataSources.inline(publicationPackage()),
+      storage: new MemoryStorage(),
+      generation: {
+        descriptor: () => ({ type: "host", model: "qwen3:8b" }),
+        async generate() {
+          throw new DOMException("cancelled", "AbortError");
+        },
+      },
+    });
+    const events: string[] = [];
+    client.events.subscribe((event) => events.push(event.type));
+
+    await expect(
+      client.research({
+        question: "What does the passage say about hospitality?",
+        retrieval: { mode: "keyword", evidenceLimit: 1 },
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(events).toContain("operation-cancelled");
+  });
+
+  it("propagates cancellation raised while loading publication records", async () => {
+    const base = dataSources.inline(publicationPackage());
+    const dataSource: PublicationDataSource = {
+      getManifest: (options) => base.getManifest(options),
+      getChunkDescriptors: (options) => base.getChunkDescriptors(options),
+      async loadRecords() {
+        throw new DOMException("cancelled", "AbortError");
+      },
+      loadVectors: async (chunkId, options) =>
+        base.loadVectors ? base.loadVectors(chunkId, options) : null,
+    };
+    const client = await createClient({
+      dataSource,
+      storage: new MemoryStorage(),
+    });
+    const events: string[] = [];
+    client.events.subscribe((event) => events.push(event.type));
+
+    await expect(client.search({ query: "hospitality", mode: "keyword" })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(events).toContain("operation-cancelled");
   });
 
   it("stores annotations through the injected storage contract", async () => {

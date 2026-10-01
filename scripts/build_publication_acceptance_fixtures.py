@@ -43,6 +43,19 @@ def _record() -> dict:
     }
 
 
+def _provider_profiles() -> list[dict]:
+    return [
+        {
+            "id": "acceptance-provider",
+            "name": "Acceptance provider",
+            "type": "openai",
+            "base_url": "https://models.example.test/v1",
+            "model": "fixture-generation",
+            "has_api_key": False,
+        }
+    ]
+
+
 def _install_fixture_sources() -> None:
     site_publication.store.export_site_projection = lambda store_name, works: {
         "store": {
@@ -64,7 +77,7 @@ def _install_fixture_sources() -> None:
         "flag": "🇺🇸",
         "dictionary": dict(site_publication.EN_US),
     }
-    site_publication.system_store.researcher_profiles = lambda: []
+    site_publication.system_store.researcher_profiles = _provider_profiles
 
 
 def build(output_dir: Path) -> None:
@@ -82,6 +95,17 @@ def build(output_dir: Path) -> None:
     )
     (output_dir / "local.html").write_bytes(local.payload)
 
+    local_provider = site_publication.build_local_site_file(
+        store_name="acceptance-corpus",
+        works=["Glas"],
+        title="DerridAI provider acceptance",
+        description="Generated direct-provider acceptance fixture.",
+        locale="en-US",
+        languages=["en-US"],
+        provider_profile_ids=["acceptance-provider"],
+    )
+    (output_dir / "local-provider.html").write_bytes(local_provider.payload)
+
     nginx = site_publication.build_nginx_site_bundle(
         store_name="acceptance-corpus",
         works=["Glas"],
@@ -94,6 +118,7 @@ def build(output_dir: Path) -> None:
     (output_dir / "nginx.zip").write_bytes(nginx.payload)
 
     print(output_dir / "local.html")
+    print(output_dir / "local-provider.html")
     print(output_dir / "nginx.zip")
 
 
