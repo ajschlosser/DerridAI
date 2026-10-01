@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -82,16 +81,10 @@ def build(output_dir: Path) -> None:
         languages=["en-US"],
         provider_profile_ids=[],
     )
-    nginx_dir = output_dir / "nginx"
-    nginx_dir.mkdir(exist_ok=True)
-    with zipfile.ZipFile(Path(output_dir / "nginx.zip"), "w") as _:
-        pass
     (output_dir / "nginx.zip").write_bytes(nginx.payload)
-    with zipfile.ZipFile(output_dir / "nginx.zip") as archive:
-        archive.extractall(nginx_dir)
 
     print(output_dir / "local.html")
-    print(nginx_dir)
+    print(output_dir / "nginx.zip")
 
 
 def main() -> None:
