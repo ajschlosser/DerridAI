@@ -12,7 +12,6 @@ import WorksLibraryToolbar from "../components/works/WorksLibraryToolbar.vue";
 import WorksWorkspaceHeader from "../components/works/WorksWorkspaceHeader.vue";
 import CreateSiteDialog from "../components/works/CreateSiteDialog.vue";
 import { useWorksWorkspace } from "../composables/useWorksWorkspace";
-import * as runtime from "../runtime/runtime.js";
 import UiDialog from "../components/ui/UiDialog.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
@@ -20,6 +19,7 @@ import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
 import type { WorksFilters, WorksSort, WorksViewMode } from "../types/works";
 import type { SemanticMapSource } from "../domain/semanticMap";
 import { corpusBuildsApi } from "../api/corpus";
+import { semanticMapService } from "../services/semanticMap";
 import {
   sitesApi,
   type SiteExportFormat,
@@ -149,15 +149,8 @@ function startReveal() {
     if (token !== revealToken) return;
     revealed.value = Math.min(total, (revealed.value || 0) + 12);
     if (revealed.value < total) requestAnimationFrame(step);
-    else decorate();
   };
   requestAnimationFrame(step);
-}
-
-function decorate() {
-  void nextTick(() => {
-    if (page.value) runtime.decorateDisabledControls?.(page.value);
-  });
 }
 
 async function boot() {
@@ -166,14 +159,12 @@ async function boot() {
   query.value = snapshot.value?.query || "";
   loading.value = false;
   startReveal();
-  decorate();
 }
 
 function reload() {
   works.load();
   query.value = snapshot.value?.query || "";
   startReveal();
-  decorate();
 }
 
 function applyQuery(value: string) {
@@ -183,19 +174,16 @@ function applyQuery(value: string) {
   queryTimer = window.setTimeout(() => {
     works.setQuery(value);
     startReveal();
-    decorate();
-  }, delay);
+    }, delay);
 }
 
 function selectWork(work: string) {
   works.setOverview(work);
-  decorate();
 }
 
 async function closeInspector() {
   const work = snapshot.value?.selectedWork || "";
   works.setOverview("");
-  decorate();
   await nextTick();
   // The persistent inspector has no dialog to restore focus, so return it to the work it described.
   if (wide.value) {
@@ -212,7 +200,6 @@ function applyView(patch: {
 }) {
   works.setView(patch);
   startReveal();
-  decorate();
 }
 function applyFilters(patch: Partial<WorksFilters>) {
   applyView(patch);
@@ -248,8 +235,8 @@ async function openWorkSemanticMap(work: string) {
   semanticMapTab.value = "graph";
   semanticMapRecords.value = [];
   semanticMapRecordId.value = "";
-  const allSources = runtime.listSemanticMapSources?.();
-  semanticMapSources.value = allSources?.records || [];
+  const allSources = semanticMapService.listSources();
+  semanticMapSources.value = allSources.records;
   semanticMapDialog.value?.showModal();
   try {
     const result = await corpusBuildsApi.workSemanticMapRecords(work);
@@ -273,7 +260,6 @@ async function changeStore(name: string) {
   query.value = snapshot.value?.query || "";
   loading.value = false;
   startReveal();
-  decorate();
 }
 
 watch(fileSignature, () => {
