@@ -150,6 +150,12 @@ describe("works workspace commands", () => {
       expect(snapshot.totalRecords).toBe(1350);
       expect(snapshot.sourceFileCount).toBe(3);
       expect(snapshot.totalReview).toBe(15);
+      expect(snapshot.indexFreshness).toMatchObject({
+        state: "stale",
+        totalRecords: 1350,
+        currentRecords: 450,
+        absentRecords: 900,
+      });
     });
 
     it("sorts by the real fields and leaves works without a year last", () => {
@@ -235,7 +241,7 @@ describe("works workspace commands", () => {
     navigation.applyCompressedTableUrlState({ s: "drop table", d: "weird", v: "grid" }, "works");
     expect(state).toMatchObject({ worksSort: "title-asc", worksDbStatus: "", worksView: "cards" });
   });
-  it("populates metadata insights for every admin work", () => {
+  it("builds cheap library summaries and computes expensive detail only for the selected work", () => {
     const item = (work: string, topic: string) => ({
       work,
       count: 1,
@@ -245,14 +251,29 @@ describe("works workspace commands", () => {
       years: new Set(["2020"]),
       rows: [{ record: { work, topics: [topic], document_author: "Author" } }],
     });
-    const { workspace } = setup({
+    const insightSpy = vi.fn((rows: Array<{ record: { topics?: string[] } }>) => [
+      {
+        id: "topics",
+        field: "topics",
+        title: "Topics",
+        heading: "Top topics",
+        type: "bars",
+        values: [{ key: rows[0]?.record.topics?.[0] || "", value: 1 }],
+      },
+    ]);
+    const annotationsSpy = vi.fn(() => [
+      { work: "Glas" },
+      { work: "Glas" },
+      { work: "Margins" },
+    ]);
+    const { state, workspace } = setup({
       isResearcher: () => false,
       recordStores: () => [],
       providerProfiles: () => [],
       dbUnavailableReason: () => "",
       hasCorpusDb: () => false,
       canUse: () => true,
-      allAnnotations: () => [],
+      allAnnotations: annotationsSpy,
       workDbStatus: () => ({ kind: "absent", label: "Not synced" }),
       worksBiblioValue: () => ({
         field_label: "Publisher",
@@ -263,33 +284,32 @@ describe("works workspace commands", () => {
       label: (field: string) => field,
       display: (value: unknown) => String(value ?? ""),
       tr: (key: string, fallback = "") => fallback || key,
-      workInsightMetrics: (rows: Array<{ record: { topics?: string[] } }>) => [
-        {
-          id: "topics",
-          field: "topics",
-          title: "Topics",
-          heading: "Top topics",
-          type: "bars",
-          values: [{ key: rows[0]?.record.topics?.[0] || "", value: 1 }],
-        },
-      ],
+      workInsightMetrics: insightSpy,
       workIndex: () =>
         new Map([
           ["Glas", item("Glas", "hospitality")],
           ["Margins", item("Margins", "ethics")],
         ]),
     });
+    state.workOverview = "Glas";
 
     const snapshot = workspace.getWorksWorkspaceSnapshot() as {
-      works: Array<{ work: string; insights: Array<{ field: string; values: unknown[] }> }>;
+      works: Array<{ work: string; annotations: number; insights?: unknown[]; metadata?: unknown[] }>;
+      selected: { work: string; annotations: number; insights: Array<{ field: string; values: unknown[] }> };
     };
 
     expect(snapshot.works).toHaveLength(2);
-    expect(
-      snapshot.works.map((work) => work.insights.find((item) => item.field === "topics")?.values),
-    ).toEqual([
-      [{ key: "hospitality", value: 1, other: false }],
-      [{ key: "ethics", value: 1, other: false }],
+    expect(snapshot.works.every((work) => !("insights" in work) && !("metadata" in work))).toBe(true);
+    expect(snapshot.works.map((work) => [work.work, work.annotations])).toEqual([
+      ["Glas", 2],
+      ["Margins", 1],
     ]);
+    expect(snapshot.selected.work).toBe("Glas");
+    expect(snapshot.selected.annotations).toBe(2);
+    expect(snapshot.selected.insights.find((item) => item.field === "topics")?.values).toEqual([
+      { key: "hospitality", value: 1, other: false },
+    ]);
+    expect(insightSpy).toHaveBeenCalledTimes(1);
+    expect(annotationsSpy).toHaveBeenCalledTimes(1);
   });
 });
