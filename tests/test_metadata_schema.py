@@ -664,3 +664,62 @@ def test_retrieval_match_conditions_must_name_another_known_field():
     first["retrieval_profile"] = {"match_field_ids": [first["field_id"]]}
     with pytest.raises(ValueError, match="itself"):
         MetadataSchema.model_validate(base)
+
+
+
+def test_boolean_false_is_supported_value_not_missing_value():
+    schema = default_schema()
+    response = response_model_for(schema, "quotation")
+    quotation_fields = [field.name for field in schema.fields_in("quotation")]
+    scalar_fields = [name for name in quotation_fields if name != "quotation_chain"]
+    payload = {
+        "metadata": {
+            **{name: None for name in scalar_fields},
+            "is_direct_quote": False,
+            "quotation_chain": [],
+        },
+        "field_assessments": {
+            name: {
+                "confidence": 0.95,
+                "needs_review": False,
+                "reason": "No direct quotation is present.",
+                "outcome": "no_supported_value",
+            }
+            for name in [field.name for field in schema.fields_in("quotation") if field.assess]
+        },
+        "field_evidence": {},
+        "review_reason": "",
+    }
+    parsed = response.model_validate(payload)
+    assert parsed.metadata.is_direct_quote is False
+    assert parsed.field_assessments.is_direct_quote.outcome == "supported_value"
+    assert "Structured-output contradiction" not in parsed.field_assessments.is_direct_quote.reason
+
+
+def test_open_fields_reject_pos_ner_and_foreign_closed_vocabulary_leakage():
+    schema = default_schema()
+    response = response_model_for(schema, "quotation")
+    quotation_fields = [field.name for field in schema.fields_in("quotation")]
+    metadata = {name: None for name in quotation_fields if name != "quotation_chain"}
+    metadata["quotation_chain"] = ["PROPN", "assertion", "Jacques Derrida"]
+    assessments = {
+        field.name: {
+            "confidence": 0.8,
+            "needs_review": False,
+            "reason": "candidate",
+            "outcome": "supported_value",
+        }
+        for field in schema.fields_in("quotation")
+        if field.assess
+    }
+    payload = {
+        "metadata": metadata,
+        "field_assessments": assessments,
+        "field_evidence": {},
+        "review_reason": "",
+    }
+    parsed = response.model_validate(payload)
+    assert parsed.metadata.quotation_chain == ["Jacques Derrida"]
+    assert parsed.field_assessments.quotation_chain.outcome == "uncertain"
+    assert parsed.field_assessments.quotation_chain.needs_review is True
+    assert "structured-vocabulary leakage" in parsed.field_assessments.quotation_chain.reason
