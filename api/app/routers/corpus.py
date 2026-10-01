@@ -819,6 +819,7 @@ def get_record_semantic_map(record_id: str) -> dict[str, Any]:
             "version": 1,
             "kind": "record_semantic_map",
             "record_id": record_id,
+            "build_id": "",
             "record_revision": 0,
             "record_text_sha256": "",
             "layers": {
