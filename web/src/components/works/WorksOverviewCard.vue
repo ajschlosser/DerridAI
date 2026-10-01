@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 import MixedValueInspect from "./MixedValueInspect.vue";
@@ -50,6 +50,11 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 
 const admin = computed(() => props.mode === "admin");
+const showEmptyMetadata = ref(false);
+const emptyMetadataCount = computed(() => props.work.metadata.filter((item) => item.empty).length);
+const visibleMetadata = computed(() =>
+  props.work.metadata.filter((item) => showEmptyMetadata.value || !item.empty),
+);
 const menuItems = computed<UiMenuItem[]>(() => {
   const items: UiMenuItem[] = [
     { id: "populate", label: i18n.t("works.populate_metadata_llm"), icon: "spark" },
@@ -169,21 +174,41 @@ function onMenu(id: string) {
       </template>
     </div>
 
-    <dl class="works-inspector-metadata">
-      <div v-for="item in props.work.metadata" :key="item.field">
-        <dt>{{ item.field_label }}</dt>
-        <dd>
-          <MixedValueInspect
-            v-if="item.mixed"
-            :field="item.field"
-            :field-label="item.field_label"
-            :count="item.unique_count"
-            @inspect="emit('inspect', $event)"
-          />
-          <template v-else>{{ item.value }}</template>
-        </dd>
-      </div>
-    </dl>
+    <section class="works-inspector-metadata-section">
+      <header>
+        <h3>{{ i18n.t("works.bibliographic_metadata") }}</h3>
+        <UiButton
+          v-if="admin && emptyMetadataCount"
+          size="small"
+          variant="ghost"
+          :label="
+            showEmptyMetadata
+              ? i18n.t('works.hide_empty_metadata')
+              : i18n.tf('works.show_empty_metadata', { count: emptyMetadataCount })
+          "
+          :pressed="showEmptyMetadata"
+          @click="showEmptyMetadata = !showEmptyMetadata"
+        />
+      </header>
+      <dl class="works-inspector-metadata">
+        <div v-for="item in visibleMetadata" :key="item.field_id">
+          <dt>{{ item.field_label }}</dt>
+          <dd>
+            <MixedValueInspect
+              v-if="item.mixed"
+              :field="item.field"
+              :field-label="item.field_label"
+              :count="item.unique_count"
+              @inspect="emit('inspect', $event)"
+            />
+            <template v-else>{{ item.value }}</template>
+          </dd>
+        </div>
+      </dl>
+      <p v-if="!visibleMetadata.length" class="works-inspector-note">
+        {{ i18n.t("works.no_bibliographic_metadata") }}
+      </p>
+    </section>
 
     <div v-if="admin || props.work.citation" class="works-inspector-citation">
       <h3>{{ props.citationLabel }}</h3>
@@ -256,6 +281,23 @@ function onMenu(id: string) {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+.works-inspector-metadata-section {
+  display: grid;
+  gap: var(--space-2);
+}
+.works-inspector-metadata-section > header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+.works-inspector-metadata-section h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
 }
 .works-inspector-metadata {
   display: grid;
