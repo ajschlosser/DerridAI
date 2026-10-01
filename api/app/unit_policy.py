@@ -25,6 +25,8 @@ MIN_CHARS, MAX_CHARS = 60, 20000
 MAX_GROUP = 50
 GROUPABLE = {"paragraph", "sentence"}
 DIVISIBLE = {"paragraph", "block_quote", "list_item", "footnote", "speech", "text"}
+
+
 def normalize_policy(policy: dict[str, Any] | None) -> dict[str, Any]:
     """Validated policy; raises ValueError for unknown modes or unusable sizes."""
     raw = dict(policy or {})
