@@ -68,7 +68,9 @@ describe("WorksOverviewCard", () => {
     expect(wrapper.text()).not.toContain("Populate metadata with LLM");
   });
 
-  it("shows populated metadata by default and lets administrators reveal empty fields", async () => {
+  it(
+    "shows populated metadata by default and lets administrators reveal empty fields",
+    async () => {
     const wrapper = mount(WorksOverviewCard, {
       props: {
         work: workItem({
@@ -104,8 +106,9 @@ describe("WorksOverviewCard", () => {
       .find((button) => button.text().includes("Show empty fields"))!;
     await toggle.trigger("click");
     expect(wrapper.get(".works-inspector-metadata").text()).toContain("Publisher");
-    expect(wrapper.get(".works-inspector-metadata").text()).toContain("—");
-  });
+      expect(wrapper.get(".works-inspector-metadata").text()).toContain("—");
+    },
+  );
 
   it("names the cover image from the work title", () => {
     const wrapper = mount(WorksOverviewCard, {
