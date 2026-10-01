@@ -36,6 +36,7 @@ from .semantic_identity_registry import (
     project_document_intelligence,
     project_reviewed_metadata,
 )
+from .system_store import system_store
 
 ALIAS_FILE = "semantic_aliases.json"
 MAX_ALIAS_SETS = 2000
@@ -182,6 +183,7 @@ def create_alias_set(
                 item["replaced_by"] = entry["alias_set_id"]
         items.append(entry)
         _write(path, items)
+    system_store.mark_semantic_map_dirty(build_id, reason="semantic_alias_changed")
     return entry
 
 
@@ -194,6 +196,7 @@ def retire_alias_set(repo: Any, build_id: str, alias_set_id: str, *, reviewer: s
                 item["retired_at"] = datetime.now(UTC).isoformat()
                 item["retired_by"] = reviewer
                 _write(path, items)
+                system_store.mark_semantic_map_dirty(build_id, reason="semantic_alias_changed")
                 return item
     raise KeyError(alias_set_id)
 
