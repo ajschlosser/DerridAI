@@ -19,7 +19,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar, cast
 
 from .structured_json import (
     StructuredJsonMalformedError,
@@ -95,8 +95,10 @@ def classify_structured_failure(
         return "malformed"
 
     kind = str(getattr(error, "kind", "") or "").strip().casefold()
-    if kind in {"truncated", "malformed"}:
-        return kind  # type: ignore[return-value]
+    if kind == "truncated":
+        return "truncated"
+    if kind == "malformed":
+        return "malformed"
     if bool(getattr(error, "truncated", False)):
         return "truncated"
 
@@ -306,7 +308,7 @@ def complete_structured_json(
             metric("structured_output_repaired")
 
         try:
-            value = validate(parsed.value) if validate is not None else parsed.value
+            value = validate(parsed.value) if validate is not None else cast(T, parsed.value)
         except InterruptedError:
             raise
         except Exception as exc:  # noqa: BLE001 - caller validator defines its own error type
