@@ -238,7 +238,7 @@ describe("DerridAI SDK", () => {
     });
 
     expect(response.results.map((item) => item.record.record_id)).toEqual(["g1"]);
-    expect(response.diagnostics.candidateCount).toBe(1);
+    expect(response.diagnostics.candidateCount).toBe(2);
     expect(response.diagnostics.duplicatesRemoved).toBe(1);
     expect(response.results[0].record.text).toBe("hospitality gift responsibility");
   });
