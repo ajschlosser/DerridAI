@@ -67,6 +67,7 @@ def apply_indexing_nlp_candidates(record: dict[str, Any], schema: Any) -> dict[s
     engine = str(nlp_data.get("engine") or "spacy")
     engine_version = str(nlp_data.get("engine_version") or "")
     text_sha256 = str(nlp_data.get("text_sha256") or "")
+    current_text = str(record.get("text") or "")
     resolved: list[str] = []
     values_by_field: dict[str, list[str]] = {}
 
@@ -85,16 +86,29 @@ def apply_indexing_nlp_candidates(record: dict[str, Any], schema: Any) -> dict[s
         seen: set[str] = set()
         evidence: list[dict[str, Any]] = []
         for item in spans:
-            value = str(item.get("text") or "").strip()
+            raw_value = str(item.get("text") or "")
+            try:
+                start = int(item.get("start"))
+                end = int(item.get("end"))
+            except (TypeError, ValueError):
+                continue
+            value = raw_value.strip()
             key = value.casefold()
-            if not value or key in seen:
+            if (
+                not value
+                or value != raw_value
+                or start < 0
+                or end <= start
+                or current_text[start:end] != raw_value
+                or key in seen
+            ):
                 continue
             seen.add(key)
             values.append(value)
             evidence.append({
                 "kind": "nlp_span",
-                "start": int(item.get("start") or 0),
-                "end": int(item.get("end") or 0),
+                "start": start,
+                "end": end,
                 "text": value,
                 "tag": str(item.get("tag") or ""),
                 "source": "ner",
