@@ -721,7 +721,8 @@ test("a different embedding model builds a local IndexedDB index before semantic
     "Mourning keeps the other within.",
   ]);
 
-  await page.getByRole("button", { name: "Search", exact: true }).click();
+  // Building the index re-renders the current Search view. Do not click the Search nav control here:
+  // the view also contains the Search submit button, so an unscoped role lookup would be ambiguous.
   await expect(page.getByLabel("Search mode")).toHaveValue("semantic");
   await page.getByLabel("Search mode").selectOption("semantic");
   await page.locator(".search-row input").fill("hospitality");
