@@ -92,5 +92,7 @@ test("Annotations modern workflow opens the owning work and record", async ({ pa
   const central = page.locator(".annotation-feed-item").filter({ hasText: "Central claim" });
   await central.getByRole("button", { name: "Open record" }).click();
   await expect(page.locator("main.record-workspace-page")).toBeVisible();
-  await expect(page.getByText("The sign and divinity have the same place and time of birth.")).toBeVisible();
+  await expect(
+    page.getByText("The sign and divinity have the same place and time of birth."),
+  ).toBeVisible();
 });

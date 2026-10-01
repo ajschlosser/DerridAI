@@ -29,7 +29,6 @@ test("Records file rail has no WCAG 2.2 AA violations", async ({ page }) => {
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 });
 
-
 const APP = `http://127.0.0.1:${process.env.APP_PORT || "5199"}`;
 const RECORD_WORKFLOW_ROWS = [
   {

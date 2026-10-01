@@ -47,7 +47,12 @@ for (const file of files) {
 
   // Computed-style scenarios no longer compare snapshot files. Any committed
   // .txt baseline is therefore dead, even if a styles-* scenario still exists.
-  if (extension === ".txt" || !active || semanticOnly.has(name) || name.startsWith("records-")) {
+  if (
+    extension === ".txt" ||
+    !active ||
+    semanticOnly.has(name) ||
+    name.startsWith("records-")
+  ) {
     stale.push(file);
   }
 }

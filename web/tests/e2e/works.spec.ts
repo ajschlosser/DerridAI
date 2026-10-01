@@ -52,7 +52,6 @@ test("Works library card selects with the keyboard and exposes review status and
   await expect(page.getByRole("menuitem", { name: "Edit metadata" })).toHaveCount(0);
 });
 
-
 const APP = `http://127.0.0.1:${process.env.APP_PORT || "5199"}`;
 const WORKS_WORKFLOW_ROWS = [
   {
