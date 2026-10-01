@@ -190,6 +190,50 @@ def test_assessment_contradiction_gets_one_consistency_repair_call(
     assert ledger["model_invocations"] == 2
 
 
+def test_residual_assessment_contradiction_gets_one_final_repair_call(
+    monkeypatch,
+    manager,
+    traces,
+) -> None:
+    contradictory = (
+        '{"label":"ok","field_assessments":{"proposition_status":'
+        '{"reason":"Structured-output contradiction: outcome=supported_value but the metadata value is empty. '
+        'The text presents its claims as definitive truths."}}}'
+    )
+    repaired = '{"label":"ok","field_assessments":{"proposition_status":{"reason":"Consistent."}}}'
+    calls = _provider(
+        monkeypatch,
+        {"primary-model": [contradictory, contradictory, repaired]},
+    )
+    record: dict[str, object] = {
+        "record_id": "r1",
+        "text": "Such genesis is impossible.",
+    }
+    results = manager._execute_metadata_tasks(
+        record,
+        REQUEST,
+        [("discourse", PROMPT, RepairAnswer, 512, SCHEMA)],
+        "",
+        None,
+    )
+    _family, result, error = results[0]
+
+    assert error is None
+    assert result is not None
+    assert [call["model"] for call in calls] == [
+        "primary-model",
+        "primary-model",
+        "primary-model",
+    ]
+    assert "STRUCTURED OUTPUT CONSISTENCY REPAIR" in str(calls[1]["prompt"])
+    assert "FINAL STRUCTURED OUTPUT CONSISTENCY REPAIR" in str(calls[2]["prompt"])
+    ledger = record["metadata_execution_ledger"]["discourse"]
+    assert ledger["recovery_kind"] == "assessment_contradiction"
+    assert ledger["recovery_calls"] == 2
+    assert ledger["residual_contradiction_fields"] == []
+    assert ledger["model_invocations"] == 3
+
+
 def test_built_in_compiles_and_is_assigned() -> None:
     pipeline = built_in_pipeline(*BUILT_IN)
     assert pipeline.status == "active"
