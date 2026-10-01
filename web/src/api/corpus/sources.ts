@@ -174,11 +174,11 @@ export const corpusSourcesApi = {
       method: "PATCH",
       body: JSON.stringify({ metadata, skip_fields: skipFields }),
     }),
-  blocks: (assetId: string, offset = 0, limit = 200, ids: string[] = []) =>
+  blocks: (assetId: string, offset = 0, limit = 200, ids: string[] = [], page?: number) =>
     apiRequest<{ items: SourceBlock[]; total: number }>(
       `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/blocks?offset=${offset}&limit=${limit}${
         ids.length ? `&ids=${encodeURIComponent(ids.join(","))}` : ""
-      }`,
+      }${page ? `&page=${page}` : ""}`,
     ),
   /** A window of blocks that starts a little before `blockId`, with its offset for further paging. */
   blocksAround: (assetId: string, blockId: string, limit = 60) =>

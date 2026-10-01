@@ -42,6 +42,46 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const TwoUpBilingual: Story = {};
+export const MarginColumn: Story = {
+  args: {
+    asset: {
+      ...asset,
+      filename: "glossed-edition.pdf",
+      document_layout: {
+        page_layout: "single",
+        reading_order: "left_to_right",
+        main_text_pdf_start: 8,
+        main_text_printed_start: 1,
+        thread_mode: "continuous",
+        layout_regions: [
+          {
+            id: "main",
+            role: "main",
+            thread: "thread_a",
+            flow: "with_main",
+            x0: 0,
+            y0: 0,
+            x1: 1,
+            y1: 1,
+            applies_to: "all",
+          },
+          {
+            id: "margin",
+            role: "margin_apparatus",
+            thread: "thread_b",
+            flow: "separate",
+            x0: 0,
+            y0: 0.04,
+            x1: 0.2,
+            y1: 0.96,
+            applies_to: "all",
+          },
+        ],
+      },
+    },
+  },
+};
+
 export const SinglePage: Story = {
   args: {
     asset: {

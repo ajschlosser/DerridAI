@@ -195,6 +195,9 @@ def _deterministic_boundary_candidates(
         right_text = str(right.get("text") or "").strip()
         signals: list[str] = []
         score = 0.0
+        if _layout_region_change(left, right):
+            signals.append("layout_region_change")
+            score += 1.0
         left_type = str(left.get("type") or "body").casefold()
         right_type = str(right.get("type") or "body").casefold()
         left_language = _block_language(left, language)
@@ -252,10 +255,23 @@ def _deterministic_boundary_candidates(
     return candidates
 
 
+def _layout_region_change(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """A reviewer-confirmed thread or separate region is a hard record boundary."""
+    left_thread = str(left.get("document_thread") or "")
+    right_thread = str(right.get("document_thread") or "")
+    if left_thread != right_thread and (left_thread or right_thread):
+        return True
+    if str(left.get("layout_flow") or "") == "separate" or str(right.get("layout_flow") or "") == "separate":
+        return str(left.get("layout_region_id") or "") != str(right.get("layout_region_id") or "")
+    return False
+
+
 def _candidate_route(candidate: dict[str, Any], profile: dict[str, Any]) -> str:
+    signals = set(candidate.get("signals") or [])
+    if "layout_region_change" in signals:
+        return "split"
     if bool(candidate.get("protected")):
         return "keep"
-    signals = set(candidate.get("signals") or [])
     score = float(candidate.get("candidate_score") or 0.0)
     deterministic_threshold = float(profile.get("deterministic_split_threshold") or 0.92)
     llm_threshold = float(profile.get("candidate_llm_threshold") or 0.30)

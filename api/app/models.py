@@ -604,6 +604,8 @@ class PdfDocumentLayoutPatch(BaseModel):
     thread_a_language: str | None = None
     thread_b_language: str | None = None
     unit_policy: dict[str, Any] | None = None
+    # Repeating rectangles (margin, infobox, quotation, running matter). Empty keeps the page-level thread pattern.
+    layout_regions: list[dict[str, Any]] | None = Field(default=None, max_length=24)
 
 
 class PdfCorpusProviderConfig(BaseModel):

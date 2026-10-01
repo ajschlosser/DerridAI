@@ -23,7 +23,13 @@ PROFILE_FOOTER = (
     "Use outcome=\"supported_value\" for a supported value, "
     "outcome=\"no_supported_value\" when the source supports that no value applies, "
     "and outcome=\"uncertain\" when the field cannot be determined. Preserve "
-    "ambiguity rather than inventing specificity."
+    "ambiguity rather than inventing specificity.\n"
+    "Keep metadata and assessment structurally consistent: supported_value requires "
+    "a non-empty metadata value (or false for a supported boolean); no_supported_value "
+    "requires null or []; uncertain requires needs_review=true and may retain a tentative "
+    "proposal. Linguistic and document-intelligence candidates are attention cues only, "
+    "not candidate metadata values: inspect the source text and never copy a candidate "
+    "list into metadata merely because it was provided as a hint."
 )
 
 

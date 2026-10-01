@@ -144,6 +144,7 @@ def source_units_page(
     limit: int = 200,
     ids: list[str] | None = None,
     around: str | None = None,
+    page: int | None = None,
     repository: Any = None,
 ) -> dict[str, Any]:
     """Return a bounded page of persisted extraction/source units."""
@@ -162,6 +163,9 @@ def source_units_page(
         blocks = repository.load_blocks(source_id)
     except KeyError as exc:
         raise NotFound("Source document not found.") from exc
+    if page is not None:
+        page_number = int(page)
+        blocks = [block for block in blocks if int(block.get("page") or 0) == page_number]
 
     center = str(around or "").strip()
     if center:
