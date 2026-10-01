@@ -33,13 +33,7 @@ export interface WorksInsight {
   values: WorksInsightValue[];
 }
 
-export type WorksDbStatusKind =
-  | "changed"
-  | "synced"
-  | "exists"
-  | "absent"
-  | "unknown"
-  | "none";
+export type WorksDbStatusKind = "changed" | "synced" | "exists" | "absent" | "unknown" | "none";
 
 export interface WorksStatus {
   /** Empty for researcher/library records that do not expose corpus-index state. */
