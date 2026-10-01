@@ -107,26 +107,29 @@ def _has_quotation_signal(record: dict[str, Any], source_text: str) -> bool:
     )
 
 
+def _field_has_strong_memory_prefill(record: dict[str, Any], field_name: str) -> bool:
+    """Whether one field already has a strong reviewed-memory proposal."""
+    assertion = current_assertion_by_name(record, field_name)
+    return bool(
+        assertion is not None
+        and assertion.derivation_method == "derridai:memory"
+        and assertion.evaluation_status == "value_supported"
+        and assertion.value_status == "present"
+        and assertion.value not in (None, "", [])
+        and isinstance(assertion.confidence, (int, float))
+        and float(assertion.confidence) >= 0.88
+    )
+
+
 def _family_has_strong_memory_prefill(
     record: dict[str, Any], schema: MetadataSchema, group_key: str,
 ) -> bool:
     """Whether every schema field in a family already has a strong memory proposal."""
     fields = [field.name for field in schema.fields_in(group_key)]
-    if not fields:
-        return False
-    for field_name in fields:
-        assertion = current_assertion_by_name(record, field_name)
-        if (
-            assertion is None
-            or assertion.derivation_method != "derridai:memory"
-            or assertion.evaluation_status != "value_supported"
-            or assertion.value_status != "present"
-            or assertion.value in (None, "", [])
-            or not isinstance(assertion.confidence, (int, float))
-            or float(assertion.confidence) < 0.88
-        ):
-            return False
-    return True
+    return bool(fields) and all(
+        _field_has_strong_memory_prefill(record, field_name)
+        for field_name in fields
+    )
 
 
 class MetadataEnrichmentExecutionMixin:
