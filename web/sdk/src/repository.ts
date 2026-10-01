@@ -105,9 +105,11 @@ export class RecordRepository {
     throwIfAborted(signal);
     if (chunk) {
       chunk.ids.forEach((id, index) => {
+        const recordId = String(id);
+        if (this.vectorsByRecordId.has(recordId)) return;
         const start = index * chunk.dimension;
         this.vectorsByRecordId.set(
-          String(id),
+          recordId,
           chunk.values.subarray(start, start + chunk.dimension),
         );
       });
