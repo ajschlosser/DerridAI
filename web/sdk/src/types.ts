@@ -182,6 +182,7 @@ export interface SearchResponse {
   diagnostics: {
     candidateCount: number;
     chunksLoaded: number;
+    duplicatesRemoved: number;
     semanticAvailable: boolean;
   };
 }
