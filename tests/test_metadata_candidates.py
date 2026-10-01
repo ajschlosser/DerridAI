@@ -4,11 +4,7 @@
 from __future__ import annotations
 
 from app import field_assertions as assertions
-from app import (
-    metadata_candidates,
-    metadata_schema,
-    nlp_annotations,
-)
+from app import metadata_candidates, metadata_schema, nlp_annotations
 
 
 TEXT = "Rousseau discusses Of Grammatology and hospitality."
