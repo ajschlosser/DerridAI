@@ -120,7 +120,11 @@ test("Works modern workflow covers search, actions, and Search handoffs", async 
   await expect(page.getByText("Work equals Of Grammatology")).toBeVisible();
   await expect(page.getByText("Needs review equals true")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Works", exact: true }).click();
+  await page
+    .locator(".shell-sidebar")
+    .getByRole("button", { name: "Works", exact: true })
+    .first()
+    .click();
   await expect(page.locator("#works-page-title")).toBeVisible();
   await page
     .getByRole("button", { name: /records needing review for Of Grammatology/ })
