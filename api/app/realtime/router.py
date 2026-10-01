@@ -16,6 +16,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
 from ..auth import SESSION_COOKIE
 from ..config import settings
 from .auth import capabilities_for, origin_allowed, revalidate, session_user
+from .resources import follows_any_resource
 from .broker import EventBroker, Subscriber, broker
 from .protocol import (
     CLOSE_FORBIDDEN,
@@ -205,7 +206,11 @@ async def run_realtime_session(websocket: WebSocket, event_broker: EventBroker) 
         return
     session = RealtimeSession(websocket, user, event_broker)
     subscriber = session.subscriber
-    if not subscriber.is_admin and not ({"rag.jobs.own", "rag.run"} & subscriber.capabilities):
+    if (
+        not subscriber.is_admin
+        and not ({"rag.jobs.own", "rag.run"} & subscriber.capabilities)
+        and not follows_any_resource(subscriber)
+    ):
         # No topic is available to this role.
         await websocket.close(code=CLOSE_FORBIDDEN, reason="no realtime topics available")
         return

@@ -82,9 +82,13 @@ def test_unregistered_resources_are_never_published():
     assert seen == []
 
 
-def test_every_registered_resource_is_admin_audience():
+def test_every_registered_resource_is_admin_only_unless_it_names_a_read_capability():
     assert DATA_RESOURCES
-    assert all(spec.audience.admin_only for spec in DATA_RESOURCES.values())
+    for key, spec in DATA_RESOURCES.items():
+        if spec.capability:
+            assert spec.audience.capability_only and not spec.audience.admin_only, key
+        else:
+            assert spec.audience.admin_only and not spec.audience.capability_only, key
 
 
 @pytest.fixture()
@@ -193,3 +197,41 @@ def test_benchmark_cases_and_results_note_pipeline_benchmarks(tmp_path):
     assert "pipeline_benchmarks" in operation_events.drain().resources
     store.benchmarks.clear()
     assert "pipeline_benchmarks" in operation_events.drain().resources
+
+
+def test_capability_resources_reach_holders_of_the_read_capability_only():
+    from app.realtime.broker import Subscriber, audience_allows
+    from app.realtime.protocol import Audience
+    from app.realtime.resources import follows_any_resource
+
+    reader = Subscriber(username="ann", role="researcher", capabilities=frozenset({"corpus.read"}))
+    other = Subscriber(username="bob", role="researcher", capabilities=frozenset({"rag.run"}))
+    admin = Subscriber(username="root", role="admin")
+
+    for key in ("corpus_records", "vector_collections"):
+        spec = DATA_RESOURCES[key]
+        assert spec.allows(reader) and spec.allows(admin) and not spec.allows(other)
+        assert authorize_topic(reader, f"data:{key}").allowed
+        assert not authorize_topic(other, f"data:{key}").allowed
+        assert audience_allows(spec.audience, username="ann", is_admin=False, capabilities=reader.capabilities)
+        assert not audience_allows(spec.audience, username="bob", is_admin=False, capabilities=other.capabilities)
+
+    # Resources whose REST route is administrator-only stay so, whatever capabilities a user holds.
+    holder = Subscriber(username="ann", role="researcher", capabilities=frozenset({"corpus.read", "page.faq"}))
+    for key in ("response_library", "users", "roles", "pipelines", "pipeline_runs", "pipeline_benchmarks", "metadata_exemplars"):
+        assert not DATA_RESOURCES[key].allows(holder), key
+    assert follows_any_resource(reader) and not follows_any_resource(other)
+
+    # The new flag cannot loosen owned or administrator-only audiences.
+    job = Audience(owner="ann", admin_only=False, capability="rag.jobs.own")
+    assert not audience_allows(job, username="bob", is_admin=False, capabilities=frozenset({"rag.jobs.own"}))
+    assert not audience_allows(Audience(admin_only=True), username="ann", is_admin=False, capabilities=reader.capabilities)
+
+
+def test_corpus_record_notice_carries_no_values_to_a_researcher():
+    observer, seen = _observer()
+    operation_events.note_resource_changed("corpus_records")
+    observer.tick()
+    event = next(e for e in seen if e.resource_id == "corpus_records")
+    assert event.payload == {"resource": "corpus_records"}
+    assert event.audience.capability == "corpus.read" and event.audience.capability_only

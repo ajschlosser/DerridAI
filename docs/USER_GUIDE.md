@@ -115,6 +115,8 @@ The filter chips (**All**, **Running**, **Needs attention**, **Finished**) show 
 
 Operations update live: the page keeps one connection to the server and changes appear as they happen, without reloading. A small line under the panel heading says whether live updates are on. If a network or proxy blocks the connection, DerridAI keeps working and refreshes the list every 25 seconds instead (a watched corpus build, job dialog or translation every 5 seconds), then switches back automatically when the connection returns. Signing out closes the connection.
 
+Search, Record and Compare never swap what you are reading. When another change to the corpus arrives (a record is saved, a build is published or a record is deleted), a short notice says **Newer data is available**; select **Load newer** when you are ready. Signed-in researchers see the same notice, which carries no record text.
+
 The panel is built for keyboard and screen-reader use: real headings and lists, a labelled progress bar per operation, buttons named after their row ("Cancel PDF corpus build"), status shown as text plus an icon, and one polite announcement when an operation completes, fails, or is cancelled. Updates never move keyboard focus. Motion follows the "reduce motion" system setting, and the panel adapts to high-contrast (forced colors) modes.
 
 Supported operation types:

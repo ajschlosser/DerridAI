@@ -63,6 +63,8 @@ def audience_allows(audience: Audience, *, username: str, is_admin: bool, capabi
         return True
     if audience.admin_only:
         return False
+    if audience.capability_only:
+        return bool(audience.capability) and audience.capability in capabilities
     if audience.capability and audience.capability not in capabilities:
         return False
     return audience.owner is not None and audience.owner == username
