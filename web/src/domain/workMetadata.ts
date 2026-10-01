@@ -203,7 +203,8 @@ export function workMetadataPresentationRows(rows: Loose[]): WorkMetadataPresent
     const values = prepared.map(({ record, assertionByName }) => {
       if (record[field] !== undefined) return record[field];
       const assertion = assertionByName.get(field);
-      if (!assertion || (assertion.value_status && assertion.value_status !== "present")) return null;
+      if (!assertion || (assertion.value_status && assertion.value_status !== "present"))
+        return null;
       return assertion.value;
     });
     const serialized = values.map((value) => JSON.stringify(value ?? null));
