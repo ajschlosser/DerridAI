@@ -84,15 +84,18 @@ function strings() {
     "site.runtime.ask": "Ask",
     "site.runtime.evidence": "Evidence",
     "site.runtime.research_tools": "Research tools and evidence",
-    "site.runtime.activity_research_hybrid": "Research: text + vector retrieval before LLM synthesis.",
+    "site.runtime.activity_research_hybrid":
+      "Research: text + vector retrieval before LLM synthesis.",
     "site.runtime.activity_research_text": "Research: text retrieval before LLM synthesis.",
     "site.runtime.activity_vector_embedding": "Vector search: creating a query embedding.",
     "site.runtime.activity_llm_generation": "LLM: generating an answer.",
     "site.runtime.complete": "Research complete.",
     "site.runtime.complete_with_warning": "Research complete with warning: {warning}",
     "site.runtime.no_evidence": "No evidence found.",
-    "site.runtime.generation_unavailable_evidence": "Evidence is available without a generated answer.",
-    "site.runtime.sdk_generation_unavailable": "LLM generation is unavailable; evidence remains available.",
+    "site.runtime.generation_unavailable_evidence":
+      "Evidence is available without a generated answer.",
+    "site.runtime.sdk_generation_unavailable":
+      "LLM generation is unavailable; evidence remains available.",
     "site.runtime.sdk_embedding_unavailable": "Embedding provider unavailable.",
     "site.runtime.sdk_embedding_contract_mismatch": "Embedding contract mismatch.",
     "site.runtime.sdk_embedding_dimension_mismatch": "Embedding dimension mismatch.",
@@ -178,8 +181,8 @@ async function mountStaticSite(page: Page) {
     '<main><div id="app" role="status" aria-live="polite">Loading…</div></main>',
   );
   await page.evaluate((value) => {
-    (window as typeof window & { __DERRIDAI_SITE_PACKAGE__?: unknown })
-      .__DERRIDAI_SITE_PACKAGE__ = value;
+    (window as typeof window & { __DERRIDAI_SITE_PACKAGE__?: unknown }).__DERRIDAI_SITE_PACKAGE__ =
+      value;
   }, packageValue);
   await page.addScriptTag({ content: sdkSource });
   await page.addScriptTag({ content: siteSource });
