@@ -351,6 +351,7 @@ export function createWorksWorkspace(deps: Deps) {
         mode: "researcher",
         available: stores.length > 0,
         works: items,
+        scopeWorks: all.map((item: Any) => ({ work: String(item.work || "") })),
         selected: selectedStat ? describeResearcherWork(selectedStat, { selected: true }) : null,
         totalWorks: all.length,
         visibleWorks: items.length,
@@ -406,6 +407,7 @@ export function createWorksWorkspace(deps: Deps) {
       mode: "admin",
       available: state.files.length > 0,
       works: items,
+      scopeWorks: described.map((item: Any) => ({ work: String(item.work || "") })),
       selected: selectedItem
         ? describeAdminWork(selectedItem, { detail: true, annotationCounts })
         : null,
