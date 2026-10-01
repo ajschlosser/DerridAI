@@ -1,0 +1,38 @@
+name: Temporary semantic-map formatter
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/format-semantic-map-temp.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.head_ref == 'feature/semantic-map-workspace-ux'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - working-directory: web
+        run: npm ci --no-audit --no-fund
+      - working-directory: web
+        run: npx prettier --write src/components/semantic/SemanticMapCanvas.vue
+      - name: Commit formatting and remove temporary workflow
+        shell: bash
+        run: |
+          git rm .github/workflows/format-semantic-map-temp.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/src/components/semantic/SemanticMapCanvas.vue
+          git commit -m "Format semantic map overview interaction"
+          git push origin HEAD:${{ github.head_ref }}
