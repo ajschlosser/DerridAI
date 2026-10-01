@@ -314,6 +314,9 @@ jobs:
       - name: Install Playwright Chromium
         working-directory: web
         run: npx playwright install --with-deps chromium
+      - name: Build SDK browser artifact from source
+        working-directory: web
+        run: npm run build:sdk
       - name: Generate real publication artifacts
         run: python scripts/generate_publication_acceptance_artifacts.py "$DERRIDAI_PUBLICATION_ARTIFACT_DIR"
       - name: Exercise single-file export from file URL
