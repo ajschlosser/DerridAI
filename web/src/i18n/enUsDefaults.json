@@ -5371,6 +5371,7 @@
   "works.sync_workspace": "Sync workspace to database",
   "works.search_label": "Search works",
   "works.filters": "Filters",
+  "works.active_filters": "Active filters",
   "works.filters_clear": "Clear filters",
   "works.filter_needs_review": "Only works needing review",
   "works.filter_db_status": "Database status",
