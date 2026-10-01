@@ -16,6 +16,7 @@ from app.language_segmentation import (  # noqa: E402
     starts_mid_sentence_text,
 )
 from app.sentence_boundaries import clean_boundary, snap_boundaries_to_sentences  # noqa: E402
+from app.source_text import html_to_text  # noqa: E402
 from app.unit_policy import apply_unit_policy  # noqa: E402
 
 
@@ -115,3 +116,15 @@ def test_automatic_unit_policy_uses_language_profile() -> None:
     )
     assert len(derived) > 1
     assert "".join(block["text"] for block in derived).replace(" ", "") == text.replace(" ", "")
+
+
+def test_abbreviation_sensitive_boundary_is_not_treated_as_a_sentence_end() -> None:
+    left = {"block_id": "b0", "text": "Dr.", "type": "body"}
+    right = {"block_id": "b1", "text": "Derrida continues the sentence.", "type": "body"}
+    assert not clean_boundary(left, right, "en")
+
+
+def test_html_lang_is_preserved_as_documentary_language_metadata() -> None:
+    text, metadata = html_to_text("<html lang=\"ja\"><body><p>第一文。</p></body></html>")
+    assert text == "第一文。"
+    assert metadata["language"] == "ja"
