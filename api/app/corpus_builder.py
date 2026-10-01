@@ -2383,15 +2383,145 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     self._semantic_graph_cache.pop(next(iter(self._semantic_graph_cache)))
             return graph, records, analysis
 
+    def _current_semantic_index(
+        self, build_id: str
+    ) -> tuple[str, SemanticMapIndex, dict[str, Any]]:
+        generation = self._semantic_generation(build_id)
+        cached = self._semantic_graph_cache.get(build_id)
+        if cached is None or cached[0] != generation:
+            self._current_semantic_graph(build_id)
+            cached = self._semantic_graph_cache.get(build_id)
+        if cached is None or cached[0] != generation:
+            raise RuntimeError("Semantic graph cache did not hydrate.")
+        return generation, cached[4], cached[3]
+
     def record_semantic_map(self, build_id: str, record_id: str) -> dict[str, Any]:
-        """Semantic map centred on one Record, with its links to other Records."""
-        graph, records, analysis = self._current_semantic_graph(build_id)
-        return record_semantic_map(graph, records, record_id, analysis=analysis)
+        """Return a saved Record projection, materializing it once when absent/stale."""
+        generation = self._semantic_generation(build_id)
+        scope_id = f"{build_id}:{record_id}"
+        saved = system_store.get_semantic_map_projection(
+            scope_type="record_semantic_map",
+            scope_id=scope_id,
+        )
+        payload = self._projection_payload(saved, generation)
+        if payload is not None:
+            # Review-only edits do not invalidate semantic content. Keep the small
+            # revision field current without rebuilding the projection.
+            try:
+                payload["record_revision"] = int(
+                    self.repo.get_record(build_id, record_id).get("record_revision") or 0
+                )
+            except KeyError:
+                raise
+            return self._with_projection_meta(
+                payload,
+                generation=generation,
+                source="saved",
+            )
+
+        lock = self._semantic_projection_lock(f"record:{scope_id}")
+        with lock:
+            saved = system_store.get_semantic_map_projection(
+                scope_type="record_semantic_map",
+                scope_id=scope_id,
+            )
+            payload = self._projection_payload(saved, generation)
+            if payload is not None:
+                return self._with_projection_meta(
+                    payload,
+                    generation=generation,
+                    source="saved",
+                )
+            system_store.put_semantic_map_projection(
+                scope_type="record_semantic_map",
+                scope_id=scope_id,
+                generation=generation,
+                status="building",
+            )
+            try:
+                generation, index, analysis = self._current_semantic_index(build_id)
+                payload = index.record_map(record_id, analysis)
+                system_store.put_semantic_map_projection(
+                    scope_type="record_semantic_map",
+                    scope_id=scope_id,
+                    generation=generation,
+                    status="ready",
+                    payload=payload,
+                )
+            except Exception as exc:
+                system_store.put_semantic_map_projection(
+                    scope_type="record_semantic_map",
+                    scope_id=scope_id,
+                    generation=generation,
+                    status="failed",
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+                raise
+        return self._with_projection_meta(
+            payload,
+            generation=generation,
+            source="generated",
+        )
 
     def semantic_graph_node(self, build_id: str, node_id: str) -> dict[str, Any]:
-        """One graph node's relations and Records, for walking the semantic map."""
-        graph, records, _ = self._current_semantic_graph(build_id)
-        return semantic_node_neighborhood(graph, records, node_id)
+        """Return one saved node neighbourhood without rewalking the full graph."""
+        generation = self._semantic_generation(build_id)
+        scope_id = f"{build_id}:{node_id}"
+        saved = system_store.get_semantic_map_projection(
+            scope_type="semantic_node_neighborhood",
+            scope_id=scope_id,
+        )
+        payload = self._projection_payload(saved, generation)
+        if payload is not None:
+            return self._with_projection_meta(
+                payload,
+                generation=generation,
+                source="saved",
+            )
+
+        lock = self._semantic_projection_lock(f"node:{scope_id}")
+        with lock:
+            saved = system_store.get_semantic_map_projection(
+                scope_type="semantic_node_neighborhood",
+                scope_id=scope_id,
+            )
+            payload = self._projection_payload(saved, generation)
+            if payload is not None:
+                return self._with_projection_meta(
+                    payload,
+                    generation=generation,
+                    source="saved",
+                )
+            system_store.put_semantic_map_projection(
+                scope_type="semantic_node_neighborhood",
+                scope_id=scope_id,
+                generation=generation,
+                status="building",
+            )
+            try:
+                generation, index, _analysis = self._current_semantic_index(build_id)
+                payload = index.node_neighborhood(node_id)
+                system_store.put_semantic_map_projection(
+                    scope_type="semantic_node_neighborhood",
+                    scope_id=scope_id,
+                    generation=generation,
+                    status="ready",
+                    payload=payload,
+                )
+            except Exception as exc:
+                system_store.put_semantic_map_projection(
+                    scope_type="semantic_node_neighborhood",
+                    scope_id=scope_id,
+                    generation=generation,
+                    status="failed",
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+                raise
+        return self._with_projection_meta(
+            payload,
+            generation=generation,
+            source="generated",
+        )
 
     def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
         """Rebuild the semantic-content graph against the current Record revisions.
