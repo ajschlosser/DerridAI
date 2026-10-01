@@ -203,3 +203,83 @@ def test_a_second_reviewer_cannot_read_a_sealed_value_through_the_record_map(tmp
     assert "Sealed Holder" in json.dumps(mine)
     with pytest.raises(KeyError):
         manager.record_semantic_map(build_id, "nope")
+
+
+def test_record_map_is_persisted_and_reopened_without_reloading_the_corpus(tmp_path):
+    manager, repo, build_id = _manager(tmp_path)
+    repo.save_records(build_id, _records())
+
+    first = manager.record_semantic_map(build_id, "r1")
+    assert first["projection"]["source"] == "generated"
+
+    original_load = repo.load_records
+
+    def no_full_load(_build_id: str):
+        raise AssertionError("a saved Record map must not reload the whole corpus")
+
+    repo.load_records = no_full_load  # type: ignore[method-assign]
+    try:
+        second = manager.record_semantic_map(build_id, "r1")
+    finally:
+        repo.load_records = original_load  # type: ignore[method-assign]
+
+    assert second["projection"]["source"] == "saved"
+    assert second["nodes"] == first["nodes"]
+    assert second["edges"] == first["edges"]
+
+
+def test_review_only_record_updates_do_not_invalidate_semantic_generation(tmp_path):
+    _manager_instance, repo, build_id = _manager(tmp_path)
+    rows = _records()
+    repo.save_records(build_id, rows)
+    before = repo.semantic_projection_state(build_id)
+
+    updated = repo.get_record(build_id, "r1")
+    updated["record_revision"] = int(updated.get("record_revision") or 0) + 1
+    updated["review_disposition"] = "accepted"
+    repo.update_record(build_id, updated)
+    after_review = repo.semantic_projection_state(build_id)
+    assert after_review["revision"] == before["revision"]
+    assert after_review["text_revision"] == before["text_revision"]
+
+    updated = repo.get_record(build_id, "r1")
+    updated["concepts"] = [*updated.get("concepts", []), "supplement"]
+    repo.update_record(build_id, updated)
+    after_semantic = repo.semantic_projection_state(build_id)
+    assert after_semantic["revision"] == before["revision"] + 1
+    assert after_semantic["text_revision"] == before["text_revision"]
+
+
+def test_work_map_uses_saved_server_projection_but_keeps_visual_source_contract(tmp_path):
+    from app.system_store import system_store
+
+    manager, repo, build_id = _manager(tmp_path)
+    rows = _records()
+    for row in rows:
+        row["work"] = "Of Grammatology"
+    repo.save_records(build_id, rows)
+    for row in rows:
+        system_store.set_record_build_provenance(
+            row["record_id"],
+            build_id,
+            work="Of Grammatology",
+        )
+
+    first = manager.work_semantic_map("Of Grammatology")
+    assert first["projection"]["source"] == "generated"
+    assert first["summary"]["mapped_records"] == len(rows)
+    assert first["sources"][0].keys() >= {"id", "work", "concepts", "topics", "persons"}
+
+    original_get_records = repo.get_records
+
+    def no_record_reads(_build_id: str, _record_ids):
+        raise AssertionError("a saved Work map must not reread Record payloads")
+
+    repo.get_records = no_record_reads  # type: ignore[method-assign]
+    try:
+        second = manager.work_semantic_map("Of Grammatology")
+    finally:
+        repo.get_records = original_get_records  # type: ignore[method-assign]
+
+    assert second["projection"]["source"] == "saved"
+    assert second["sources"] == first["sources"]
