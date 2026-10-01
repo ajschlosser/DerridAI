@@ -61,6 +61,23 @@ def test_call_latency_reports_p50_p95_total_and_family_slices():
     assert m["by_field"]["discourse"]["call_latency_ms"]["p50"] == 200.0
 
 
+def test_call_contract_reports_requested_fields_and_prompt_size():
+    rows = [
+        ev("call", field="indexing", elapsed_ms=100, ok=True, requested_field_count=4, input_chars=4000),
+        ev("call", field="indexing", elapsed_ms=80, ok=True, requested_field_count=2, input_chars=2600),
+        ev("call", field="indexing", elapsed_ms=60, ok=True, requested_field_count=1, input_chars=1800),
+    ]
+    contract = compute(rows)["models"]["m"]["call_contract"]
+    assert contract == {
+        "requested_fields_p50": 2.0,
+        "requested_fields_p95": 3.8,
+        "requested_fields_total": 7.0,
+        "input_chars_p50": 2600.0,
+        "input_chars_p95": 3860.0,
+        "input_chars_total": 8400.0,
+    }
+
+
 def test_learning_curve_uses_whole_buckets_only():
     rows = [ev("corrected", confidence=0.5)] * 10 + [ev("accepted", confidence=0.5)] * 10 + [ev("accepted", confidence=0.5)] * 3
     curve = compute(rows)["models"]["m"]["learning_curve"]
