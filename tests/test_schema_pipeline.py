@@ -234,14 +234,14 @@ def test_enrich_record_promotes_direct_ner_candidates_before_indexing_generation
                 }],
                 "works_referenced": [{
                     "start": 19,
-                    "end": 33,
+                    "end": 34,
                     "text": "Of Grammatology",
                     "source": "ner",
                     "tag": "WORK_OF_ART",
                 }],
                 "topics": [{
-                    "start": 38,
-                    "end": 49,
+                    "start": 39,
+                    "end": 50,
                     "text": "hospitality",
                     "source": "pos",
                     "tag": "NOUN",
