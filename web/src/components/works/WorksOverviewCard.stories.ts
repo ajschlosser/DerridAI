@@ -97,3 +97,7 @@ type Story = StoryObj<typeof WorksOverviewCard>;
 export const Admin: Story = {};
 export const WithCover: Story = { args: { work: { ...work, cover } } };
 export const Researcher: Story = { args: { mode: "researcher" } };
+export const InspectorNeedsReview: Story = {
+  args: { work: { ...work, review: 12 }, closable: true, canSync: true },
+};
+export const InDialog: Story = { args: { embedded: true } };

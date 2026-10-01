@@ -1,5 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorksItem, WorksSnapshot } from "../../src/types/works";
@@ -62,7 +62,14 @@ function adminSnapshot(overrides: Partial<WorksSnapshot> = {}): WorksSnapshot {
     activeStore: "derrida-primary",
     activeStoreCount: 40,
     totalWorks: 1,
+    visibleWorks: 1,
     totalRecords: 12,
+    sourceFileCount: 1,
+    totalReview: 2,
+    authors: ["Jacques Derrida"],
+    sort: "title-asc",
+    filters: { needsReview: false, dbStatus: "", author: "" },
+    viewMode: "cards",
     dbUnavailableReason: "",
     storesEmptyLabel: "No corpus Chroma collections",
     citationLabel: "Full citation",
@@ -83,12 +90,9 @@ const runtime = vi.hoisted(() => ({
   getShellSnapshot: vi.fn(() => ({
     files: [{ id: "f1", name: "glas.jsonl", count: 12, dirty: 0, active: true }],
   })),
-  listSemanticMapSources: vi.fn(() => ({
-    records: [{ id: "record-1", work: "Glas", concepts: [], topics: ["writing"], persons: [] }],
-    focusId: "record-1",
-  })),
   setWorksSearch: vi.fn(),
   setWorksOverview: vi.fn(),
+  setWorksView: vi.fn(),
   setWorksStore: vi.fn(async () => undefined),
   syncWork: vi.fn(async () => true),
   syncAllWorks: vi.fn(async () => true),
@@ -106,6 +110,10 @@ const runtime = vi.hoisted(() => ({
   removeEntireWork: vi.fn(),
   browseResearcherWork: vi.fn(),
   decorateDisabledControls: vi.fn(),
+  listSemanticMapSources: vi.fn(() => ({
+    records: [{ id: "record-1", work: "Glas", concepts: [], topics: ["writing"], persons: [] }],
+    focusId: "record-1",
+  })),
   setTranslationDictionary: vi.fn(),
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
@@ -142,6 +150,31 @@ async function waitForCards() {
   await flushPromises();
 }
 
+/** Opens the menu whose trigger has this accessible name and chooses an item. */
+async function chooseMenuItem(wrapper: VueWrapper, trigger: string, item: string) {
+  const button = wrapper
+    .findAll("button.ui-menu-trigger")
+    .find((candidate) => (candidate.attributes("aria-label") || candidate.text()) === trigger);
+  expect(button, `menu trigger ${trigger}`).toBeDefined();
+  await button!.trigger("click");
+  const entry = wrapper.findAll("[role='menuitem']").find((node) => node.text().includes(item));
+  expect(entry, `menu item ${item}`).toBeDefined();
+  await entry!.trigger("click");
+  await flushPromises();
+}
+
+function setViewportWide(wide: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({
+      matches: wide,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }),
+  });
+}
+
 async function mountWorks() {
   const wrapper = mount(WorksView, { attachTo: document.body });
   await waitForCards();
@@ -151,6 +184,7 @@ async function mountWorks() {
 describe("WorksView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setViewportWide(true);
     siteApi.exportOptions.mockResolvedValue({
       languages: [
         { code: "en-US", name: "English", flag: "🇺🇸" },
@@ -199,13 +233,33 @@ describe("WorksView", () => {
     const wrapper = await mountWorks();
     expect(runtime.prepareWorksWorkspace).toHaveBeenCalled();
     expect(runtime.state.view).toBe("works");
+    expect(wrapper.get("h1").text()).toBe("Works");
+    expect(wrapper.find(".ui-page-header").exists()).toBe(true);
     expect(wrapper.find("#worksSearch").exists()).toBe(true);
     expect(wrapper.text()).toContain("Glas");
-    expect(wrapper.text()).toContain("Sync all works");
     expect(wrapper.get("[data-work-status='Glas']").attributes("data-tone")).toBe("success");
-    expect(wrapper.get(".work-library-card").text()).not.toMatch(/Synchroniser/);
-    await wrapper.get(".work-library-card").trigger("click");
+    // The per-card Sync no longer outranks review and Records: it lives in the card menu.
+    expect(wrapper.get(".works-card-footer").text()).not.toMatch(/\bSync\b/);
+    await wrapper.get(".works-card-select").trigger("click");
     expect(runtime.setWorksOverview).toHaveBeenCalledWith("Glas");
+    wrapper.unmount();
+  });
+
+  it("separates the loaded workspace from the corpus database and keeps sync with the database", async () => {
+    const wrapper = await mountWorks();
+    const loaded = wrapper.get("[data-works-context='loaded']");
+    expect(loaded.text()).toContain("1 source files · 12 records");
+    const database = wrapper.get("[data-works-context='database']");
+    expect(database.text()).toContain("40 records");
+    await database
+      .findAll("button")
+      .find((button) => button.text().includes("Sync workspace to database"))!
+      .trigger("click");
+    expect(runtime.syncAllWorks).toHaveBeenCalled();
+    // The page header holds one direct action and one menu, and no sync.
+    const header = wrapper.get(".ui-page-header-actions");
+    expect(header.text()).not.toMatch(/Sync/);
+    expect(header.findAll("button.ui-button")).toHaveLength(1);
     wrapper.unmount();
   });
 
@@ -217,21 +271,111 @@ describe("WorksView", () => {
       }),
     );
     const wrapper = await mountWorks();
-    await wrapper.get("#overviewSearchWork").trigger("click");
+    const inspector = wrapper.get(".works-inspector-pane");
+    await inspector
+      .findAll("button")
+      .find((button) => button.text().includes("Open records"))!
+      .trigger("click");
     expect(runtime.searchWorkOverview).toHaveBeenCalledWith("Glas");
-    await wrapper.get("#populateAllWorks").trigger("click");
+    await chooseMenuItem(wrapper, "More actions", "Populate all metadata with LLM");
     expect(runtime.populateAllWorksMetadata).toHaveBeenCalled();
-    await wrapper.get("#syncAllWorks").trigger("click");
-    expect(runtime.syncAllWorks).toHaveBeenCalled();
-    await wrapper.get("[data-upsert-work='Glas']").trigger("click");
+    await chooseMenuItem(wrapper, "More actions", "Separate works");
+    expect(runtime.openSeparateWorksModal).toHaveBeenCalled();
+    await chooseMenuItem(wrapper, "Actions for Glas", "Sync this work to database");
     expect(runtime.syncWork).toHaveBeenCalledWith("Glas");
+    await chooseMenuItem(wrapper, "Actions for Glas", "Semantic map");
+    await chooseMenuItem(wrapper, "Actions for Glas", "Edit metadata");
+    expect(runtime.openWorkMetadataEditor).toHaveBeenCalledWith("Glas");
+    wrapper.unmount();
+  });
+
+  it("opens the records that need review from the review count", async () => {
+    const wrapper = await mountWorks();
+    await wrapper.get("[data-work-review='Glas']").trigger("click");
+    expect(runtime.searchWorkRecords).toHaveBeenCalledWith("Glas", { needsReview: true });
+    await wrapper.get("[data-work-records='Glas']").trigger("click");
+    expect(runtime.searchWorkRecords).toHaveBeenCalledWith("Glas", { needsReview: false });
+    wrapper.unmount();
+  });
+
+  it("selects a work with the keyboard-operable card button and keeps the library in place", async () => {
+    const wrapper = await mountWorks();
+    const select = wrapper.get(".works-card-select");
+    expect(select.element.tagName).toBe("BUTTON");
+    expect(select.attributes("aria-pressed")).toBe("false");
+    const scroll = vi.spyOn(window, "scrollTo");
+    await select.trigger("click");
+    expect(scroll).not.toHaveBeenCalled();
+    expect(wrapper.find("article[role], article[tabindex]").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("places the selected work in a stable inspector beside the library, not above it", async () => {
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({ selected: workItem(), selectedWork: "Glas" }),
+    );
+    const wrapper = await mountWorks();
+    const layout = wrapper.get(".works-layout");
+    expect(layout.classes()).toContain("has-inspector");
+    const children = Array.from(layout.element.children).map((node) => node.className);
+    expect(children[0]).toContain("works-library");
+    expect(children[1]).toContain("works-inspector-pane");
+    expect(wrapper.get(".works-inspector-pane h2").text()).toBe("Glas");
+    await wrapper.get("button[aria-label='Close work details']").trigger("click");
+    expect(runtime.setWorksOverview).toHaveBeenCalledWith("");
+    wrapper.unmount();
+  });
+
+  it("opens the selected work in an accessible dialog on narrow screens", async () => {
+    setViewportWide(false);
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({ selected: workItem(), selectedWork: "Glas" }),
+    );
+    const wrapper = await mountWorks();
+    expect(wrapper.find(".works-inspector-pane").exists()).toBe(false);
+    expect(wrapper.get(".works-layout").classes()).not.toContain("has-inspector");
+    const dialog = document.body.querySelector("[role='dialog']");
+    expect(dialog?.getAttribute("aria-modal")).toBe("true");
+    expect(dialog?.textContent).toContain("Glas");
+    expect(dialog?.textContent).toContain("Open records");
+    expect(wrapper.findAll("h1")).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("does not change page-wide totals when a search narrows the library", async () => {
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({
+        works: [],
+        visibleWorks: 0,
+        totalWorks: 64,
+        totalRecords: 3218,
+        totalReview: 7,
+      }),
+    );
+    const wrapper = await mountWorks();
+    expect(wrapper.get("[data-works-context='loaded']").text()).toContain("3,218 records");
+    expect(wrapper.get(".works-toolbar-summary").text()).toContain("0 of 64 works");
+    expect(wrapper.get(".works-toolbar-summary").text()).toContain("7 need review");
+    expect(wrapper.text()).toContain("No works match the current search and filters.");
+    wrapper.unmount();
+  });
+
+  it("sends sort, filter and view-mode changes through the typed command", async () => {
+    const wrapper = await mountWorks();
+    await wrapper.get("#worksSort").setValue("records-desc");
+    expect(runtime.setWorksView).toHaveBeenCalledWith({ sort: "records-desc" });
+    await wrapper.get(".works-toolbar-views .ui-button-wrap:last-child button").trigger("click");
+    expect(runtime.setWorksView).toHaveBeenCalledWith({ viewMode: "compact" });
+    const filters = wrapper.findAll("button").find((button) => button.text().includes("Filters"))!;
+    await filters.trigger("click");
+    await wrapper.get("#works-filter-panel input[type='checkbox']").setValue(true);
+    expect(runtime.setWorksView).toHaveBeenCalledWith({ needsReview: true });
     wrapper.unmount();
   });
 
   it("creates a static site from selected works in the active corpus database", async () => {
     const wrapper = await mountWorks();
-    await wrapper.get("#createSite").trigger("click");
-    await flushPromises();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
 
     const dialog = wrapper.get(".create-site-dialog");
     expect(dialog.attributes("open")).toBeDefined();
@@ -258,8 +402,7 @@ describe("WorksView", () => {
 
   it("exports any selected subset of installed languages and provider profiles", async () => {
     const wrapper = await mountWorks();
-    await wrapper.get("#createSite").trigger("click");
-    await flushPromises();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
 
     const dialog = wrapper.get(".create-site-dialog");
     await dialog.get("[data-site-work='Glas']").setValue(true);
@@ -284,8 +427,7 @@ describe("WorksView", () => {
 
   it("can export the research site as a single-container nginx bundle", async () => {
     const wrapper = await mountWorks();
-    await wrapper.get("#createSite").trigger("click");
-    await flushPromises();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
 
     const dialog = wrapper.get(".create-site-dialog");
     await dialog.get("[data-site-work='Glas']").setValue(true);
@@ -350,15 +492,25 @@ describe("WorksView", () => {
     );
     const wrapper = await mountWorks();
     expect(wrapper.get("#works-page-title").text()).toContain("Works");
-    expect(wrapper.get(".researcher-work-menu-card").text()).toContain("Glas");
-    await wrapper.get("#browseResearchWork").trigger("click");
+    // Same header grammar as the admin variant, without corpus-management controls.
+    expect(wrapper.find(".ui-page-header").exists()).toBe(true);
+    expect(wrapper.find(".ui-page-header-actions").exists()).toBe(false);
+    expect(wrapper.find("[data-works-context='loaded']").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Sync workspace to database");
+    expect(wrapper.find("[data-work-review]").exists()).toBe(false);
+    expect(wrapper.get(".works-card").text()).toContain("Glas");
+    await wrapper
+      .get(".works-inspector-pane")
+      .findAll("button")
+      .find((button) => button.text().includes("Browse records"))!
+      .trigger("click");
     expect(runtime.browseResearcherWork).toHaveBeenCalledWith("Glas");
     wrapper.unmount();
   });
 
   it("opens the canonical semantic map when no persisted build is available", async () => {
     const wrapper = await mountWorks();
-    await wrapper.get("[data-semantic-map-work='Glas']").trigger("click");
+    await chooseMenuItem(wrapper, "Actions for Glas", "Semantic map");
     await flushPromises();
 
     expect(wrapper.find(".works-semantic-map-dialog").attributes("open")).toBeDefined();

@@ -1,77 +1,178 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 import MixedValueInspect from "./MixedValueInspect.vue";
 import WorksInsightCard from "./WorksInsightCard.vue";
 import type { WorksItem } from "../../types/works";
 import { statusTone } from "../../domain/status";
+import UiButton from "../ui/UiButton.vue";
+import UiMenu, { type UiMenuItem } from "../ui/UiMenu.vue";
 import UiStatusBadge from "../ui/UiStatusBadge.vue";
 
+/** The selected work's details. It is inspector content: it sits beside the library (or inside a dialog)
+ *  and never introduces a page-level heading. */
 const props = withDefaults(
   defineProps<{
     work: WorksItem;
     mode?: "admin" | "researcher";
     citationLabel?: string;
+    /** Show a close control (the persistent inspector); the dialog supplies its own. */
+    closable?: boolean;
+    /** The surrounding dialog already names the work, so the heading is not repeated. */
+    embedded?: boolean;
+    canSync?: boolean;
+    syncDisabledReason?: string;
   }>(),
-  { mode: "admin", citationLabel: "" },
+  {
+    mode: "admin",
+    citationLabel: "",
+    closable: false,
+    embedded: false,
+    canSync: false,
+    syncDisabledReason: "",
+  },
 );
 const emit = defineEmits<{
   search: [];
+  review: [];
   edit: [];
   populate: [];
   annotations: [];
   browse: [];
+  semanticMap: [];
+  sync: [];
+  close: [];
   inspect: [field: string];
   insight: [field: string, value: string];
 }>();
 const i18n = useI18nStore();
+
+const admin = computed(() => props.mode === "admin");
+const menuItems = computed<UiMenuItem[]>(() => {
+  const items: UiMenuItem[] = [
+    { id: "populate", label: i18n.t("works.populate_metadata_llm"), icon: "spark" },
+    { id: "semantic-map", label: i18n.t("works.semantic_map"), icon: "spark" },
+  ];
+  if (props.work.annotations) {
+    items.push({
+      id: "annotations",
+      label: i18n.tf("works.view_annotations", {
+        count: props.work.annotations.toLocaleString(i18n.locale),
+      }),
+      icon: "record",
+    });
+  }
+  items.push({
+    id: "sync",
+    label: i18n.t("works.sync_work"),
+    icon: "database",
+    reason: props.canSync ? undefined : props.syncDisabledReason || undefined,
+  });
+  return items;
+});
+function onMenu(id: string) {
+  if (id === "populate") emit("populate");
+  else if (id === "semantic-map") emit("semanticMap");
+  else if (id === "annotations") emit("annotations");
+  else if (id === "sync") emit("sync");
+}
 </script>
 <template>
-  <section class="card work-overview-card" aria-labelledby="selected-work-title">
-    <header class="work-overview-masthead">
-      <figure
-        class="work-overview-cover"
-        :class="{ 'work-overview-cover-empty': !props.work.cover }"
-        :aria-hidden="props.work.cover ? undefined : true"
-      >
+  <section
+    class="works-inspector"
+    :aria-labelledby="props.embedded ? undefined : 'selected-work-title'"
+    :aria-label="props.embedded ? i18n.t('works.inspector_label') : undefined"
+  >
+    <header class="works-inspector-masthead">
+      <figure class="works-inspector-cover" :aria-hidden="props.work.cover ? undefined : true">
         <img
           v-if="props.work.cover"
           :src="props.work.cover"
           :alt="i18n.tf('works.cover_alt', { work: props.work.work })"
-          :loading="props.mode === 'admin' ? 'lazy' : undefined"
+          loading="lazy"
         />
-        <div v-else class="work-cover-placeholder">
-          <AppIcon name="books" aria-hidden="true" />
-        </div>
+        <AppIcon v-else name="books" aria-hidden="true" />
       </figure>
-      <div class="work-overview-heading">
-        <div class="work-overview-identity">
-          <span class="section-label">{{ i18n.t("works.overview") }}</span>
-          <h1 id="selected-work-title">{{ props.work.work }}</h1>
-          <p v-if="props.mode === 'admin'">
-            {{ props.work.count.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.records") }} ·
+      <div class="works-inspector-heading">
+        <h2 v-if="!props.embedded" id="selected-work-title">{{ props.work.work }}</h2>
+        <p>
+          {{ props.work.count.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }}
+          <template v-if="admin">
+            ·
+            {{ props.work.review.toLocaleString(i18n.locale) }} {{ i18n.t("works.need_review") }}
+            ·
             {{ props.work.files.length.toLocaleString(i18n.locale) }}
             {{ i18n.t("works.source_files") }}
-          </p>
-          <p v-else>
-            {{ props.work.count.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.records") }}
-          </p>
-        </div>
+          </template>
+        </p>
         <UiStatusBadge
-          v-if="props.mode === 'admin'"
+          v-if="admin"
           :label="props.work.status.label"
           :tone="statusTone(props.work.status.kind)"
           :data-work-status="props.work.work"
         />
       </div>
+      <UiButton
+        v-if="props.closable"
+        size="small"
+        variant="ghost"
+        icon-only
+        icon="close"
+        :label="i18n.t('works.close_inspector')"
+        @click="emit('close')"
+      />
     </header>
-    <div class="work-overview-content">
-      <div class="work-overview-metadata">
-        <div v-for="item in props.work.metadata" :key="item.field">
-          <span>{{ item.field_label }}</span>
+
+    <div class="works-inspector-actions">
+      <template v-if="admin">
+        <UiButton
+          variant="primary"
+          icon="search"
+          :label="i18n.t('works.open_records')"
+          @click="emit('search')"
+        />
+        <UiButton
+          v-if="props.work.review"
+          icon="spark"
+          :label="i18n.t('works.review_records')"
+          :count="props.work.review"
+          @click="emit('review')"
+        />
+        <UiButton icon="edit" :label="i18n.t('works.edit_metadata')" @click="emit('edit')" />
+        <UiMenu
+          :label="i18n.t('ui.more_actions')"
+          :menu-label="i18n.t('works.more_work_actions')"
+          :items="menuItems"
+          align="end"
+          @select="onMenu"
+        />
+      </template>
+      <template v-else>
+        <UiButton
+          variant="primary"
+          icon="search"
+          :label="i18n.t('works.browse_records')"
+          @click="emit('browse')"
+        />
+        <UiButton
+          v-if="props.work.annotations"
+          icon="record"
+          :label="
+            i18n.tf('works.view_annotations', {
+              count: props.work.annotations.toLocaleString(i18n.locale),
+            })
+          "
+          @click="emit('annotations')"
+        />
+      </template>
+    </div>
+
+    <dl class="works-inspector-metadata">
+      <div v-for="item in props.work.metadata" :key="item.field">
+        <dt>{{ item.field_label }}</dt>
+        <dd>
           <MixedValueInspect
             v-if="item.mixed"
             :field="item.field"
@@ -79,178 +180,151 @@ const i18n = useI18nStore();
             :count="item.unique_count"
             @inspect="emit('inspect', $event)"
           />
-          <b v-else>{{ item.value }}</b>
-        </div>
+          <template v-else>{{ item.value }}</template>
+        </dd>
       </div>
-      <div v-if="props.mode === 'admin' || props.work.citation" class="work-overview-citation">
-        <span>{{ props.citationLabel }}</span>
-        <p>{{ props.work.citation }}</p>
-      </div>
-      <section
-        v-if="props.mode === 'admin'"
-        class="work-insights-panel"
-        :aria-label="i18n.t('works.work_insights')"
-      >
-        <div class="work-insights-heading">
-          <div>
-            <span class="section-label">{{ i18n.t("works.work_insights") }}</span>
-            <h2>{{ i18n.t("works.indexed_patterns") }}</h2>
-          </div>
-          <p>
-            {{ i18n.t("works.work_insights_help") }}
-          </p>
-        </div>
-        <div class="work-insights-grid">
-          <WorksInsightCard
-            v-for="insight in props.work.insights"
-            :key="insight.id"
-            :insight="insight"
-            @search="(field, value) => emit('insight', field, value)"
-          />
-        </div>
-      </section>
-      <div class="work-overview-actions">
-        <template v-if="props.mode === 'admin'">
-          <button id="overviewSearchWork" type="button" class="btn primary" @click="emit('search')">
-            <AppIcon name="search" aria-hidden="true" />{{ i18n.t("works.search_records") }}
-          </button>
-          <button id="overviewEditWork" type="button" class="btn" @click="emit('edit')">
-            <AppIcon name="edit" aria-hidden="true" />{{ i18n.t("works.edit_metadata") }}
-          </button>
-          <button
-            id="overviewPopulateWork"
-            type="button"
-            class="btn soft"
-            @click="emit('populate')"
-          >
-            <AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.populate_metadata_llm") }}
-          </button>
-          <button
-            v-if="props.work.annotations"
-            id="overviewAnnotations"
-            type="button"
-            class="btn"
-            @click="emit('annotations')"
-          >
-            <AppIcon name="record" aria-hidden="true" />{{
-              i18n.tf("works.view_annotations", {
-                count: props.work.annotations.toLocaleString(i18n.locale),
-              })
-            }}
-          </button>
-        </template>
-        <template v-else>
-          <button id="browseResearchWork" type="button" class="btn primary" @click="emit('browse')">
-            <AppIcon name="search" aria-hidden="true" />{{ i18n.t("works.browse_records") }}
-          </button>
-          <button
-            v-if="props.work.annotations"
-            id="researchWorkAnnotations"
-            type="button"
-            class="btn"
-            @click="emit('annotations')"
-          >
-            <AppIcon name="record" aria-hidden="true" />{{
-              i18n.tf("works.view_annotations", {
-                count: props.work.annotations.toLocaleString(i18n.locale),
-              })
-            }}
-          </button>
-        </template>
-      </div>
+    </dl>
+
+    <div v-if="admin || props.work.citation" class="works-inspector-citation">
+      <h3>{{ props.citationLabel }}</h3>
+      <p>{{ props.work.citation }}</p>
     </div>
+
+    <details v-if="admin" class="works-inspector-insights">
+      <summary>{{ i18n.t("works.insights_toggle") }}</summary>
+      <p class="works-inspector-note">{{ i18n.t("works.work_insights_help") }}</p>
+      <div class="works-inspector-insight-grid">
+        <WorksInsightCard
+          v-for="insight in props.work.insights"
+          :key="insight.id"
+          :insight="insight"
+          @search="(field, value) => emit('insight', field, value)"
+        />
+      </div>
+    </details>
   </section>
 </template>
 
 <style scoped>
-.work-overview-card {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) !important;
-  gap: var(--space-5) !important;
-  align-items: stretch;
-}
-.work-overview-masthead {
+.works-inspector {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-6);
-  align-items: start;
-  padding-bottom: var(--space-5);
-  border-bottom: 1px solid var(--border-subtle);
+  gap: var(--space-4);
+  min-width: 0;
 }
-.work-overview-cover {
-  margin: 0;
-  width: 12.5rem !important;
-  height: 18.75rem !important;
-  align-self: start;
-  border: 1px solid var(--line);
-  border-radius: 2px 12px 12px 2px;
-  overflow: hidden;
-  background: var(--soft);
+.works-inspector-masthead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: start;
+}
+.works-inspector-cover {
   display: grid;
   place-items: center;
-  box-shadow:
-    1px 0 0 color-mix(in srgb, var(--text) 18%, transparent),
-    8px 14px 28px color-mix(in srgb, var(--text) 12%, transparent);
+  width: 6rem;
+  height: 9rem;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px var(--radius-control) var(--radius-control) 2px;
+  background: var(--surface-inset);
+  color: var(--text-secondary);
 }
-.work-overview-cover img {
+.works-inspector-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
 }
-.work-overview-cover-empty {
-  box-shadow:
-    1px 0 0 color-mix(in srgb, var(--text) 10%, transparent),
-    var(--elev-1);
-}
-.work-cover-placeholder {
-  width: 100%;
-  height: 100%;
+.works-inspector-heading {
   display: grid;
-  place-items: center;
-  color: var(--muted);
-  background: linear-gradient(145deg, var(--card), var(--soft));
-}
-.work-cover-placeholder :deep(svg) {
-  width: 2.5rem;
-  height: 2.5rem;
-}
-.work-overview-heading {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-4);
-  align-items: start;
+  gap: var(--space-2);
+  justify-items: start;
   min-width: 0;
 }
-.work-overview-identity {
-  min-width: 0;
+.works-inspector-heading h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-xl);
+  line-height: var(--lh-tight);
+  overflow-wrap: anywhere;
 }
-.work-overview-content {
+.works-inspector-heading p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+.works-inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.works-inspector-metadata {
   display: grid;
-  gap: var(--space-4);
-  min-width: 0;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
 }
-@media (max-width: 720px) {
-  .work-overview-masthead {
-    gap: var(--space-4);
-  }
-  .work-overview-cover {
-    width: 8.75rem !important;
-    height: 13.125rem !important;
-  }
+.works-inspector-metadata > div {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+.works-inspector-metadata dt {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.works-inspector-metadata dd {
+  margin: 2px 0 0;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+.works-inspector-citation h3 {
+  margin: 0 0 var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.works-inspector-citation p,
+.works-inspector-note {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+.works-inspector-note {
+  margin-block: var(--space-2);
+  color: var(--text-secondary);
+}
+.works-inspector-insights {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-3);
+}
+.works-inspector-insights summary {
+  color: var(--text-primary);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+.works-inspector-insights summary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.works-inspector-insight-grid {
+  display: grid;
+  gap: var(--space-3);
 }
 @media (max-width: 520px) {
-  .work-overview-heading {
-    grid-template-columns: 1fr !important;
+  .works-inspector-masthead {
+    grid-template-columns: auto minmax(0, 1fr);
   }
-  .work-overview-cover {
-    width: 6.75rem !important;
-    height: 10.125rem !important;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .work-overview-cover {
-    box-shadow: var(--elev-1);
+  .works-inspector-cover {
+    width: 4.5rem;
+    height: 6.75rem;
   }
 }
 </style>

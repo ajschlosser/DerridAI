@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { cloneAuditValue } from "./recordValues";
+import { WORKS_DB_STATUSES, WORKS_SORTS } from "./worksWorkspace";
 import { viewConfig } from "./runtimeConstants";
 import { compressUrlState, decompressUrlState } from "./urlState";
 
@@ -155,7 +156,16 @@ export function createNavigation(deps: Deps) {
         ss: state.storeSearchSort,
         q: state.storeQuery,
       };
-    if (view === "works") return { q: state.worksSearch || "", w: state.workOverview || "" };
+    if (view === "works")
+      return {
+        q: state.worksSearch || "",
+        w: state.workOverview || "",
+        s: state.worksSort || "title-asc",
+        r: Boolean(state.worksNeedsReview),
+        d: state.worksDbStatus || "",
+        a: state.worksAuthor || "",
+        v: state.worksView || "cards",
+      };
     if (view === "annotations")
       return { q: state.annotationSearch || "", m: state.annotationView || "works" };
     if (view === "home")
@@ -219,6 +229,11 @@ export function createNavigation(deps: Deps) {
     } else if (view === "works") {
       if (typeof value.q === "string") state.worksSearch = value.q;
       if (typeof value.w === "string") state.workOverview = value.w;
+      state.worksSort = WORKS_SORTS.includes(value.s) ? value.s : "title-asc";
+      state.worksNeedsReview = value.r === true;
+      state.worksDbStatus = WORKS_DB_STATUSES.includes(value.d) ? value.d : "";
+      state.worksAuthor = typeof value.a === "string" ? value.a : "";
+      state.worksView = value.v === "compact" ? "compact" : "cards";
     } else if (view === "annotations") {
       if (typeof value.q === "string") state.annotationSearch = value.q;
       if (["works", "recent"].includes(value.m)) state.annotationView = value.m;

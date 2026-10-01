@@ -6,6 +6,10 @@
 import { fullCitation } from "./citations";
 import { commonWorkValue, workCoverUrl } from "./workMetadata";
 
+export const WORKS_SORTS = ["title-asc", "title-desc", "records-desc", "review-desc", "year-asc"];
+/** The stable `workDbStatus()` kinds a Works filter may name. */
+export const WORKS_DB_STATUSES = ["changed", "synced", "exists", "absent", "unknown", "none"];
+
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
 type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -86,6 +90,35 @@ export function createWorksWorkspace(deps: Deps) {
     workInsightMetrics,
     worksBiblioValue,
   } = deps;
+  function worksSortValue() {
+    return WORKS_SORTS.includes(state.worksSort) ? String(state.worksSort) : "title-asc";
+  }
+  /** The first four-digit year in a label, or null when the work has no defined year. */
+  function workYear(item: Any): number | null {
+    const match = String(item.year_label || "").match(/\d{4}/);
+    return match ? Number(match[0]) : null;
+  }
+  function sortWorkItems(items: Any[]) {
+    const byTitle = (a: Any, b: Any) => a.work.localeCompare(b.work);
+    const sort = worksSortValue();
+    const compare: (a: Any, b: Any) => number =
+      sort === "title-desc"
+        ? (a, b) => byTitle(b, a)
+        : sort === "records-desc"
+          ? (a, b) => b.count - a.count || byTitle(a, b)
+          : sort === "review-desc"
+            ? (a, b) => b.review - a.review || byTitle(a, b)
+            : sort === "year-asc"
+              ? (a, b) => {
+                  const ya = workYear(a);
+                  const yb = workYear(b);
+                  if (ya === null || yb === null)
+                    return ya === yb ? byTitle(a, b) : ya === null ? 1 : -1;
+                  return ya - yb || byTitle(a, b);
+                }
+              : byTitle;
+    return [...items].sort(compare);
+  }
   function describeAdminWork(item: Any, { insights = false } = {}) {
     const publisher = worksBiblioValue(item.rows, "publisher");
     const translator = worksBiblioValue(item.rows, "translator");
@@ -163,6 +196,13 @@ export function createWorksWorkspace(deps: Deps) {
     return {
       query: String(state.worksSearch || ""),
       selectedWork: String(state.workOverview || ""),
+      sort: worksSortValue(),
+      filters: {
+        needsReview: Boolean(state.worksNeedsReview),
+        dbStatus: String(state.worksDbStatus || ""),
+        author: String(state.worksAuthor || ""),
+      },
+      viewMode: state.worksView === "compact" ? "compact" : "cards",
       stores,
       activeStore,
       activeStoreCount: Number(activeStoreInfo?.count || 0),
@@ -226,18 +266,25 @@ export function createWorksWorkspace(deps: Deps) {
     const hasProfiles = providerProfiles().length > 0;
     if (isResearcher()) {
       const stores = recordStores();
-      const items = (state.storeWorkStats || []).filter(
-        (item: Any) =>
-          !query || String(item.work).toLocaleLowerCase().includes(query.toLocaleLowerCase()),
+      const all = state.storeWorkStats || [];
+      const needle = query.toLocaleLowerCase();
+      const items = sortWorkItems(
+        all
+          .filter((item: Any) => !query || String(item.work).toLocaleLowerCase().includes(needle))
+          .map((item: Any) => describeResearcherWork(item, { selected: false })),
       );
-      const selectedStat = items.find((item: Any) => item.work === state.workOverview) || null;
+      const selectedStat = all.find((item: Any) => item.work === state.workOverview) || null;
       return worksSnapshotBase({
         mode: "researcher",
         available: stores.length > 0,
-        works: items.map((item: Any) => describeResearcherWork(item, { selected: false })),
+        works: items,
         selected: selectedStat ? describeResearcherWork(selectedStat, { selected: true }) : null,
-        totalWorks: items.length,
-        totalRecords: items.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
+        totalWorks: all.length,
+        visibleWorks: items.length,
+        totalRecords: all.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
+        sourceFileCount: 0,
+        totalReview: 0,
+        authors: [],
         capabilities: {
           canManageCorpus: false,
           canSync: false,
@@ -249,17 +296,36 @@ export function createWorksWorkspace(deps: Deps) {
     const map = workIndex();
     if (state.workOverview && !map.has(state.workOverview)) state.workOverview = "";
     const selectedItem = state.workOverview ? map.get(state.workOverview) : null;
-    const items = [...map.values()]
-      .filter((item) => !query || item.work.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-      .sort((a, b) => a.work.localeCompare(b.work));
-    const totalRecords = [...map.values()].reduce((sum, item) => sum + item.count, 0);
+    const needle = query.toLocaleLowerCase();
+    const described = [...map.values()].map((item) => describeAdminWork(item, { insights: true }));
+    const filters = {
+      needsReview: Boolean(state.worksNeedsReview),
+      dbStatus: String(state.worksDbStatus || ""),
+      author: String(state.worksAuthor || ""),
+    };
+    const items = sortWorkItems(
+      described.filter(
+        (item: Any) =>
+          (!query || item.work.toLocaleLowerCase().includes(needle)) &&
+          (!filters.needsReview || item.review > 0) &&
+          (!filters.dbStatus || item.status.kind === filters.dbStatus) &&
+          (!filters.author || item.authors.includes(filters.author)),
+      ),
+    );
+    const totalRecords = described.reduce((sum: number, item: Any) => sum + item.count, 0);
     return worksSnapshotBase({
       mode: "admin",
       available: state.files.length > 0,
-      works: items.map((item) => describeAdminWork(item, { insights: true })),
+      works: items,
       selected: selectedItem ? describeAdminWork(selectedItem, { insights: true }) : null,
       totalWorks: map.size,
+      visibleWorks: items.length,
       totalRecords,
+      sourceFileCount: new Set(described.flatMap((item: Any) => item.files)).size,
+      totalReview: described.reduce((sum: number, item: Any) => sum + item.review, 0),
+      authors: [...new Set(described.flatMap((item: Any) => item.authors as string[]))].sort(
+        (a, b) => a.localeCompare(b),
+      ),
       populateDisabledReason: hasProfiles
         ? tr("works.no_works_to_populate")
         : tr("works.no_provider_profiles_help"),
@@ -278,6 +344,24 @@ export function createWorksWorkspace(deps: Deps) {
   }
   function setWorksOverview(work: Any) {
     state.workOverview = String(work || "");
+    persistPrefs();
+    syncUrl({ replace: true });
+  }
+  /** Sort, filter and density are safe workspace state: they persist and ride in the Works URL. */
+  function setWorksView(patch: {
+    sort?: string;
+    needsReview?: boolean;
+    dbStatus?: string;
+    author?: string;
+    viewMode?: string;
+  }) {
+    if (patch.sort !== undefined)
+      state.worksSort = WORKS_SORTS.includes(patch.sort) ? patch.sort : "title-asc";
+    if (patch.needsReview !== undefined) state.worksNeedsReview = Boolean(patch.needsReview);
+    if (patch.dbStatus !== undefined) state.worksDbStatus = String(patch.dbStatus || "");
+    if (patch.author !== undefined) state.worksAuthor = String(patch.author || "");
+    if (patch.viewMode !== undefined)
+      state.worksView = patch.viewMode === "compact" ? "compact" : "cards";
     persistPrefs();
     syncUrl({ replace: true });
   }
@@ -311,9 +395,6 @@ export function createWorksWorkspace(deps: Deps) {
     state.globalPage = 1;
     persistPrefs();
     navigateTo("global");
-  }
-  function searchWork(work: Any) {
-    searchWorkRecords(work);
   }
   function searchWorkOverview(work: Any) {
     state.globalSearch = "";
@@ -372,11 +453,11 @@ export function createWorksWorkspace(deps: Deps) {
     getWorksWorkspaceSnapshot,
     setWorksSearch,
     setWorksOverview,
+    setWorksView,
     setWorksStore,
     syncWork,
     syncAllWorks,
     searchWorkRecords,
-    searchWork,
     searchWorkOverview,
     openWorkMetadataEditorForVue,
     openWorkMetadataLlmDialogForVue,

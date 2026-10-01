@@ -7,14 +7,17 @@ import { useShellStore } from "../stores/shell";
 import AppIcon from "../components/AppIcon.vue";
 import WorksOverviewCard from "../components/works/WorksOverviewCard.vue";
 import WorksLibraryCard from "../components/works/WorksLibraryCard.vue";
+import WorksCorpusContext from "../components/works/WorksCorpusContext.vue";
+import WorksLibraryToolbar from "../components/works/WorksLibraryToolbar.vue";
 import WorksWorkspaceHeader from "../components/works/WorksWorkspaceHeader.vue";
 import CreateSiteDialog from "../components/works/CreateSiteDialog.vue";
 import { useWorksWorkspace } from "../composables/useWorksWorkspace";
 import * as runtime from "../runtime/runtime.js";
-import UiPageHeader from "../components/ui/UiPageHeader.vue";
+import UiDialog from "../components/ui/UiDialog.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
 import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
+import type { WorksFilters, WorksSort, WorksViewMode } from "../types/works";
 import type { SemanticMapSource } from "../domain/semanticMap";
 import { corpusBuildsApi } from "../api/corpus";
 import { sitesApi, type SiteExportFormat, type SiteExportOptions } from "../api/sites";
@@ -100,15 +103,28 @@ const fileSignature = computed(() =>
   shell.snapshot.files.map((file) => `${file.id}:${file.count}:${file.dirty}`).join("|"),
 );
 const visibleWorks = computed(() => (snapshot.value?.works || []).slice(0, revealed.value));
-const sourceFileCount = computed(
-  () => new Set((snapshot.value?.works || []).flatMap((work) => work.files || [])).size,
-);
 const showSkeleton = computed(() =>
   Boolean(snapshot.value?.mode === "admin" && snapshot.value.works.length && revealed.value === 0),
 );
 const showAddCard = computed(() =>
   Boolean(snapshot.value?.mode === "admin" && revealed.value >= (snapshot.value.works.length || 0)),
 );
+
+/** Inspector commands, bound to the selected work; the persistent pane and the dialog share them. */
+function inspectorHandlers(work: string) {
+  return {
+    onSearch: () => works.searchOverview(work),
+    onReview: () => works.reviewFlagged(work),
+    onEdit: () => works.editMetadata(work),
+    onPopulate: () => works.populateWork(work),
+    onAnnotations: () => works.openAnnotations(work),
+    onBrowse: () => works.browseResearcher(work),
+    onSemanticMap: () => openWorkSemanticMap(work),
+    onSync: () => works.syncWork(work),
+    onInspect: (field: string) => works.inspectMixed(work, field),
+    onInsight: works.searchInsight,
+  };
+}
 const loadingTitle = computed(() => i18n.t("works.loading"));
 const loadingDetail = computed(() =>
   auth.isResearcher ? i18n.t("works.checking_database") : i18n.t("works.checking_database"),
@@ -165,10 +181,42 @@ function applyQuery(value: string) {
 }
 
 function selectWork(work: string) {
-  const y = window.scrollY;
   works.setOverview(work);
-  requestAnimationFrame(() => window.scrollTo(0, y));
   decorate();
+}
+
+async function closeInspector() {
+  const work = snapshot.value?.selectedWork || "";
+  works.setOverview("");
+  decorate();
+  await nextTick();
+  // The persistent inspector has no dialog to restore focus, so return it to the work it described.
+  if (wide.value) {
+    page.value?.querySelector<HTMLElement>(`[data-select-work="${CSS.escape(work)}"]`)?.focus();
+  }
+}
+
+function applyView(patch: {
+  sort?: WorksSort;
+  needsReview?: boolean;
+  dbStatus?: string;
+  author?: string;
+  viewMode?: WorksViewMode;
+}) {
+  works.setView(patch);
+  startReveal();
+  decorate();
+}
+function applyFilters(patch: Partial<WorksFilters>) {
+  applyView(patch);
+}
+
+// The inspector sits beside the library when there is room, and opens in a dialog otherwise, so
+// selecting a work never pushes the library down the page.
+const wide = ref(true);
+let wideQuery: MediaQueryList | null = null;
+function syncWide() {
+  wide.value = wideQuery ? wideQuery.matches : true;
 }
 
 // --- semantic map dialog ----------------------------------------------------------------------------------------
@@ -242,9 +290,15 @@ watch(
 watch(visibleWorks, decorate);
 
 onMounted(() => {
+  wideQuery = window.matchMedia?.("(min-width: 1100px)") ?? null;
+  wideQuery?.addEventListener?.("change", syncWide);
+  syncWide();
   void boot();
 });
-onBeforeUnmount(() => window.clearTimeout(queryTimer));
+onBeforeUnmount(() => {
+  window.clearTimeout(queryTimer);
+  wideQuery?.removeEventListener?.("change", syncWide);
+});
 </script>
 
 <template>
@@ -290,191 +344,166 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
       </div>
     </section>
 
-    <template v-else-if="snapshot?.mode === 'admin' && snapshot.available">
+    <template v-else-if="snapshot?.available">
       <WorksWorkspaceHeader
-        :stores="snapshot.stores"
-        :active-store="snapshot.activeStore"
-        :active-store-count="snapshot.activeStoreCount"
-        :total-works="snapshot.totalWorks"
-        :total-records="snapshot.totalRecords"
-        :source-file-count="sourceFileCount"
-        :stores-empty-label="snapshot.storesEmptyLabel"
-        :db-unavailable-reason="snapshot.dbUnavailableReason"
+        :mode="snapshot.mode"
         :can-manage-corpus="snapshot.capabilities.canManageCorpus"
         :can-populate="snapshot.capabilities.canPopulate"
-        :can-sync-all="snapshot.capabilities.canSyncAll"
-        :can-create-site="Boolean(snapshot.activeStore && snapshot.works.length)"
+        :can-create-site="Boolean(snapshot.activeStore && snapshot.totalWorks)"
         :corpus-manage-denied-reason="snapshot.corpusManageDeniedReason"
         :populate-disabled-reason="snapshot.populateDisabledReason"
-        :sync-all-disabled-reason="snapshot.syncAllDisabledReason"
         :create-site-disabled-reason="
           !snapshot.activeStore
             ? i18n.t('site.create_requires_store')
             : i18n.t('site.create_requires_works')
         "
-        @change-store="changeStore"
         @choose-jsonl="works.chooseJsonl()"
         @separate="works.separateWorks()"
         @populate-all="works.populateAll()"
-        @sync-all="works.syncAll()"
         @create-site="openCreateSite"
       />
 
-      <WorksOverviewCard
-        v-if="snapshot.selected"
-        :work="snapshot.selected"
-        mode="admin"
-        :citation-label="snapshot.citationLabel"
-        @search="works.searchOverview(snapshot.selected.work)"
-        @edit="works.editMetadata(snapshot.selected.work)"
-        @populate="works.populateWork(snapshot.selected.work)"
-        @annotations="works.openAnnotations(snapshot.selected.work)"
-        @inspect="works.inspectMixed(snapshot.selected.work, $event)"
-        @insight="works.searchInsight"
+      <WorksCorpusContext
+        :mode="snapshot.mode"
+        :stores="snapshot.stores"
+        :active-store="snapshot.activeStore"
+        :active-store-count="snapshot.activeStoreCount"
+        :source-file-count="snapshot.sourceFileCount"
+        :total-records="snapshot.totalRecords"
+        :stores-empty-label="snapshot.storesEmptyLabel"
+        :db-unavailable-reason="snapshot.dbUnavailableReason"
+        :can-sync-all="snapshot.capabilities.canSyncAll"
+        :sync-all-disabled-reason="snapshot.syncAllDisabledReason"
+        @change-store="changeStore"
+        @sync-all="works.syncAll()"
       />
 
-      <div class="toolbar works-toolbar aligned-toolbar">
-        <div class="search">
-          <input
-            id="worksSearch"
-            :value="query"
-            :placeholder="i18n.t('works.filter_title')"
-            @input="applyQuery(($event.target as HTMLInputElement).value)"
+      <WorksLibraryToolbar
+        :mode="snapshot.mode"
+        :query="query"
+        :sort="snapshot.sort"
+        :filters="snapshot.filters"
+        :view-mode="snapshot.viewMode"
+        :authors="snapshot.authors"
+        :total-works="snapshot.totalWorks"
+        :visible-works="snapshot.visibleWorks"
+        :total-review="snapshot.totalReview"
+        @query="applyQuery"
+        @sort="applyView({ sort: $event })"
+        @filters="applyFilters"
+        @view-mode="applyView({ viewMode: $event })"
+      />
+
+      <div class="works-layout" :class="{ 'has-inspector': wide && snapshot.selected }">
+        <section
+          id="worksGrid"
+          class="works-library"
+          :class="{ compact: snapshot.viewMode === 'compact' }"
+          :aria-label="i18n.t('nav.works')"
+        >
+          <UiLoadingState
+            v-if="showSkeleton"
+            :label="
+              i18n.tf('works.loading_cards', {
+                count: snapshot.works.length.toLocaleString(i18n.locale),
+              })
+            "
+            variant="skeleton"
+            :skeleton-count="Math.min(4, snapshot.works.length)"
           />
-        </div>
-        <div class="tools">
-          <span class="note"
-            >{{ snapshot.works.length.toLocaleString(i18n.locale) }} {{ i18n.t("works.shown") }} ·
-            {{ snapshot.totalWorks.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.works") }} ·
-            {{ snapshot.totalRecords.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.records") }}</span
+          <WorksLibraryCard
+            v-for="work in visibleWorks"
+            :key="work.work"
+            :work="work"
+            :mode="snapshot.mode"
+            :compact="snapshot.viewMode === 'compact'"
+            :selected="snapshot.selectedWork === work.work"
+            :can-sync="snapshot.capabilities.canSync"
+            :sync-disabled-reason="snapshot.dbUnavailableReason"
+            @select="selectWork(work.work)"
+            @sync="works.syncWork(work.work)"
+            @populate="works.populateWork(work.work)"
+            @edit="works.editMetadata(work.work)"
+            @review="works.reviewFlagged(work.work)"
+            @improve="works.autoImprove(work.work)"
+            @remove="works.removeWork(work.work)"
+            @records="
+              snapshot.mode === 'admin'
+                ? works.searchRecords(work.work)
+                : works.browseResearcher(work.work)
+            "
+            @flagged="works.searchRecords(work.work, true)"
+            @inspect="works.inspectMixed(work.work, $event)"
+            @semantic-map="openWorkSemanticMap(work.work)"
+          />
+          <p v-if="!snapshot.works.length" class="works-empty">
+            {{
+              snapshot.totalWorks
+                ? i18n.t("works.no_matches")
+                : snapshot.mode === "admin"
+                  ? i18n.t("works.add_jsonl_help")
+                  : i18n.t("research.no_works")
+            }}
+          </p>
+          <button
+            v-if="showAddCard"
+            id="worksAddJsonl"
+            type="button"
+            class="work-add-jsonl-card"
+            :disabled="!snapshot.capabilities.canManageCorpus"
+            :data-disabled-reason="
+              snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
+            "
+            :title="
+              snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
+            "
+            @click="works.chooseJsonl()"
           >
-        </div>
+            <span class="work-add-jsonl-icon"><AppIcon name="plus" aria-hidden="true" /></span>
+            <span>
+              <b>{{ i18n.t("works.add_jsonl") }}</b>
+              <small>{{ i18n.t("works.add_jsonl_help") }}</small>
+            </span>
+          </button>
+        </section>
+
+        <aside
+          v-if="wide && snapshot.selected"
+          class="works-inspector-pane"
+          :aria-label="i18n.t('works.inspector_label')"
+        >
+          <WorksOverviewCard
+            :key="snapshot.selected.work"
+            :work="snapshot.selected"
+            :mode="snapshot.mode"
+            :citation-label="snapshot.citationLabel"
+            :can-sync="snapshot.capabilities.canSync"
+            :sync-disabled-reason="snapshot.dbUnavailableReason"
+            closable
+            v-bind="inspectorHandlers(snapshot.selected.work)"
+            @close="closeInspector"
+          />
+        </aside>
       </div>
 
-      <section id="worksGrid" class="works works-library-grid" :aria-label="i18n.t('nav.works')">
-        <UiLoadingState
-          v-if="showSkeleton"
-          :label="
-            i18n.tf('works.loading_cards', {
-              count: snapshot.works.length.toLocaleString(i18n.locale),
-            })
-          "
-          variant="skeleton"
-          :skeleton-count="Math.min(4, snapshot.works.length)"
-        />
-        <WorksLibraryCard
-          v-for="work in visibleWorks"
-          :key="work.work"
-          :work="work"
-          :selected="snapshot.selectedWork === work.work"
+      <UiDialog
+        v-if="!wide && snapshot.selected"
+        :title="snapshot.selected.work"
+        :close-label="i18n.t('ui.close')"
+        size="large"
+        @close="closeInspector"
+      >
+        <WorksOverviewCard
+          :key="snapshot.selected.work"
+          :work="snapshot.selected"
+          :mode="snapshot.mode"
+          :citation-label="snapshot.citationLabel"
           :can-sync="snapshot.capabilities.canSync"
           :sync-disabled-reason="snapshot.dbUnavailableReason"
-          @select="selectWork(work.work)"
-          @sync="works.syncWork(work.work)"
-          @populate="works.populateWork(work.work)"
-          @edit="works.editMetadata(work.work)"
-          @review="works.reviewFlagged(work.work)"
-          @improve="works.autoImprove(work.work)"
-          @remove="works.removeWork(work.work)"
-          @records="works.searchRecords(work.work)"
-          @flagged="works.searchRecords(work.work, true)"
-          @inspect="works.inspectMixed(work.work, $event)"
-          @semantic-map="openWorkSemanticMap(work.work)"
+          embedded
+          v-bind="inspectorHandlers(snapshot.selected.work)"
         />
-        <button
-          v-if="showAddCard"
-          id="worksAddJsonl"
-          type="button"
-          class="work-add-jsonl-card"
-          :disabled="!snapshot.capabilities.canManageCorpus"
-          :data-disabled-reason="
-            snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
-          "
-          :title="
-            snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
-          "
-          @click="works.chooseJsonl()"
-        >
-          <span class="work-add-jsonl-icon"><AppIcon name="plus" aria-hidden="true" /></span>
-          <span>
-            <b>{{ i18n.t("works.add_jsonl") }}</b>
-            <small>{{ i18n.t("works.add_jsonl_help") }}</small>
-          </span>
-        </button>
-      </section>
-    </template>
-
-    <template v-else-if="snapshot?.mode === 'researcher' && snapshot.available">
-      <UiPageHeader
-        :kicker="i18n.t('section.corpus')"
-        :title="i18n.t('nav.works')"
-        title-id="works-page-title"
-        :description="i18n.t('research.works_menu_help')"
-      />
-
-      <WorksOverviewCard
-        v-if="snapshot.selected"
-        :work="snapshot.selected"
-        mode="researcher"
-        :citation-label="snapshot.citationLabel"
-        @browse="works.browseResearcher(snapshot.selected.work)"
-        @annotations="works.openAnnotations(snapshot.selected.work)"
-      />
-
-      <div class="toolbar works-toolbar">
-        <div class="search">
-          <input
-            id="worksSearch"
-            :value="query"
-            :placeholder="i18n.t('research.filter_works')"
-            @input="applyQuery(($event.target as HTMLInputElement).value)"
-          />
-        </div>
-        <div class="tools">
-          <select
-            id="researchWorksStore"
-            class="control"
-            :value="snapshot.activeStore"
-            @change="changeStore(($event.target as HTMLSelectElement).value)"
-          >
-            <option v-for="store in snapshot.stores" :key="store.name" :value="store.name">
-              {{ store.name }}
-            </option>
-          </select>
-          <span class="note"
-            >{{ snapshot.works.length.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.works") }}</span
-          >
-        </div>
-      </div>
-
-      <section class="researcher-work-menu">
-        <button
-          v-for="work in snapshot.works"
-          :key="work.work"
-          type="button"
-          class="researcher-work-menu-card"
-          :class="{ active: snapshot.selectedWork === work.work }"
-          :data-research-work="work.work"
-          @click="selectWork(work.work)"
-        >
-          <img v-if="work.cover" class="researcher-work-cover" :src="work.cover" alt="" />
-          <span v-else class="work-book-icon"><AppIcon name="books" aria-hidden="true" /></span>
-          <span>
-            <b>{{ work.work }}</b>
-            <small>{{ work.subtitle }}</small>
-            <small
-              >{{ work.count.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }}</small
-            >
-          </span>
-          <span class="work-menu-arrow">›</span>
-        </button>
-        <div v-if="!snapshot.works.length" class="llm-empty">
-          {{ i18n.t("research.no_works") }}
-        </div>
-      </section>
+      </UiDialog>
     </template>
 
     <CreateSiteDialog
@@ -599,3 +628,42 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
     </dialog>
   </main>
 </template>
+
+<style scoped>
+.works-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+.works-layout.has-inspector {
+  grid-template-columns: minmax(0, 1fr) minmax(24rem, 30rem);
+}
+.works-library {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+}
+.works-library.compact {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+.works-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--text-secondary);
+}
+.works-inspector-pane {
+  position: sticky;
+  top: var(--space-4);
+  max-height: calc(100vh - var(--space-8));
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+}
+</style>

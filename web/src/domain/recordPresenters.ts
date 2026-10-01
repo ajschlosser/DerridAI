@@ -217,10 +217,6 @@ export function createRecordPresenters(deps: Deps) {
     }
     return `<div class="work-meta-row"><label class="work-meta-apply"><input type="checkbox" data-work-meta-apply="${esc(field)}"><span>${esc(tr("ui.apply"))}</span></label><div class="work-meta-field"><b>${esc(label(field))}</b>${mixed ? mixedWorkValueButton(rows, field, { compact: true }) : ""}</div>${control}</div>`;
   }
-  function workInsightsPanelHtml(rows: Loose[], work: string) {
-    const metrics = workInsightMetrics(rows, work);
-    return `<section class="work-insights-panel" aria-label="${esc(tr("works.work_insights"))}"><div class="work-insights-heading"><div><span class="section-label">${esc(tr("works.work_insights"))}</span><h2>${esc(tr("works.indexed_patterns"))}</h2></div><p>${esc(tr("works.work_insights_help"))}</p></div><div class="work-insights-grid">${metrics.map((metric) => `<article class="work-insight-card ${metric.type === "pie" ? "work-insight-card-pie" : ""}"><h3>${esc(metric.title)}</h3>${metric.type === "pie" ? workInsightPieHtml(metric) : `<ol>${metric.values.map((item) => `<li><button type="button" data-work-insight-field="${esc(metric.field)}" data-work-insight-value="${esc(item.key)}"><span>${esc(item.key)}</span><b>${Number(item.value).toLocaleString()}</b></button></li>`).join("") || `<li class="note">${esc(tr("works.no_indexed_values"))}</li>`}</ol>`}</article>`).join("")}</div></section>`;
-  }
   function dashboardPieChart(
     series: Loose[],
     title: string,
@@ -493,7 +489,6 @@ export function createRecordPresenters(deps: Deps) {
     workInsightMetrics,
     mixedWorkValueButton,
     workMetadataControl,
-    workInsightsPanelHtml,
     dashboardPieChart,
     pieShareSeries,
     dashboardMetricBody,

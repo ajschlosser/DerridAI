@@ -1604,15 +1604,6 @@ tbody tr.row-selected:hover {
 .compact-select {
   max-width: 210px;
 }
-.work-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.work-top h2 {
-  margin-top: 0;
-}
 .llm-param-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1840,9 +1831,6 @@ tbody tr.row-selected:hover {
   .llm-queue-summary .llm-status {
     grid-column: 2/4;
     justify-self: start;
-  }
-  .work-top {
-    display: grid;
   }
 }
 
@@ -2385,16 +2373,6 @@ tbody tr.row-selected:hover {
 .db-status.unknown,
 .db-status.none {
   color: var(--muted);
-}
-
-.work-title-line {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-}
-.work-title-line h2 {
-  margin: 0;
 }
 
 .record-index-card .section + .section {
@@ -5833,43 +5811,6 @@ code {
   margin-left: 2px;
 }
 
-/* v0.10.2 refinement — dashboard density, grouped subsets, compare, model picker, history */
-
-.work-primary-actions {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-.work-action-menu {
-  position: relative;
-}
-.work-action-menu > summary {
-  list-style: none;
-  cursor: pointer;
-}
-.work-action-menu > summary::-webkit-details-marker {
-  display: none;
-}
-.work-action-popover {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 35;
-  display: grid;
-  gap: 5px;
-  min-width: 210px;
-  padding: 7px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--card);
-  box-shadow: 0 14px 38px rgba(20, 29, 24, 0.16);
-}
-.work-action-popover .btn {
-  justify-content: flex-start;
-  width: 100%;
-}
-
 .compare-page {
   display: grid;
   gap: 12px;
@@ -6587,16 +6528,6 @@ select:disabled[data-disabled-reason] {
   overflow: visible;
   contain: layout style;
   content-visibility: visible;
-}
-.work:has(.work-action-menu[open]) {
-  z-index: 80;
-}
-.work-action-menu[open] {
-  z-index: 90;
-}
-.work-action-popover {
-  z-index: 120;
-  isolation: isolate;
 }
 .works,
 .faq-list,
@@ -7731,17 +7662,6 @@ select:disabled[data-disabled-reason] {
   color: var(--muted);
   align-self: start;
 }
-.aligned-toolbar {
-  align-items: center;
-}
-.aligned-toolbar > .tools {
-  align-items: center;
-  flex-wrap: wrap;
-}
-.aligned-toolbar .control,
-.aligned-toolbar .btn {
-  min-height: 36px;
-}
 
 .workflow-provider-area {
   display: grid;
@@ -7832,205 +7752,6 @@ select:disabled[data-disabled-reason] {
   border-top: 1px solid var(--line);
   background: color-mix(in srgb, var(--card) 97%, transparent);
   backdrop-filter: blur(8px);
-}
-
-/* Language dictionary: deliberately narrow description column and give the
-   translation editor the majority of horizontal space. */
-
-/* Works: library cards + an information-rich overview. */
-.works-library-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(370px, 1fr));
-  gap: 12px;
-  align-items: start;
-}
-.work-library-card {
-  display: grid !important;
-  grid-template-columns: 76px minmax(0, 1fr);
-  gap: 13px;
-  padding: 13px !important;
-  min-height: 170px;
-  cursor: pointer;
-  transition:
-    border-color 0.12s ease,
-    box-shadow 0.12s ease,
-    transform 0.12s ease;
-}
-.work-library-card:hover {
-  border-color: color-mix(in srgb, var(--ui-accent, #466b5b) 30%, var(--line));
-  box-shadow: 0 7px 24px rgba(15, 23, 42, 0.07);
-}
-.work-library-card.selected {
-  border-color: var(--ui-accent, #466b5b);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent, #466b5b) 10%, transparent);
-}
-.work-card-cover {
-  width: 72px;
-  height: 108px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  overflow: hidden;
-  background: var(--soft);
-  display: grid;
-  place-items: center;
-  align-self: start;
-}
-.work-card-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.work-cover-placeholder {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  color: var(--muted);
-  background: linear-gradient(145deg, var(--card), var(--soft));
-}
-.work-cover-placeholder svg {
-  width: 28px;
-  height: 28px;
-}
-.work-card-body {
-  min-width: 0;
-  display: grid;
-  gap: 10px;
-}
-.work-library-card .work-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 9px;
-  align-items: start;
-}
-.work-library-card h2 {
-  font-size: 1rem;
-  line-height: 1.25;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.work-card-biblio {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px 10px;
-  margin-top: 5px;
-  color: var(--muted);
-  font-size: 0.8125rem;
-}
-.work-library-card .stats {
-  display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-.work-library-card .stat {
-  padding: 7px 8px !important;
-  min-width: 0;
-}
-.work-library-card .stat strong {
-  font-size: 0.875rem !important;
-}
-.work-library-card .stat span {
-  font-size: 0.8125rem !important;
-}
-.work-action-popover {
-  min-width: 220px;
-  right: 0;
-  left: auto;
-  z-index: 40;
-}
-.work-overview-card {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  gap: 20px;
-  padding: 18px;
-  margin-bottom: 12px;
-  border-left: 4px solid var(--ui-accent, #466b5b);
-}
-.work-overview-cover {
-  width: 142px;
-  height: 208px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  overflow: hidden;
-  background: var(--soft);
-  display: grid;
-  place-items: center;
-}
-.work-overview-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.work-overview-content {
-  min-width: 0;
-}
-.work-overview-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  align-items: flex-start;
-}
-.work-overview-heading h1 {
-  margin: 3px 0 5px;
-  font-size: 1.6875rem;
-  line-height: 1.15;
-  color: var(--text);
-}
-.work-overview-heading p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
-}
-.work-overview-metadata {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 7px;
-  margin: 16px 0 10px;
-}
-.work-overview-metadata > div {
-  min-width: 0;
-  padding: 8px 9px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card);
-}
-.work-overview-metadata span {
-  display: block;
-  font-size: 0.8125rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.work-overview-metadata b {
-  display: block;
-  margin-top: 3px;
-  font-size: 0.8125rem;
-  color: var(--text-2);
-  overflow-wrap: anywhere;
-}
-.work-overview-citation {
-  padding: 10px 11px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card);
-}
-.work-overview-citation > span {
-  font-size: 0.8125rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.work-overview-citation p {
-  margin: 5px 0 0;
-  font-size: 0.78125rem;
-  line-height: 1.5;
-  color: var(--text-2);
-}
-.work-overview-actions {
-  display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
-  margin-top: 13px;
 }
 
 /* Metadata proposal review behaves like a real bulk-edit surface. */
@@ -8364,17 +8085,11 @@ select:disabled[data-disabled-reason] {
 }
 
 @media (max-width: 1050px) {
-  .work-overview-metadata {
-    grid-template-columns: repeat(3, minmax(120px, 1fr));
-  }
   .workflow-identity-fields {
     grid-template-columns: 1fr 1fr;
   }
   .workflow-identity-fields > .workflow-field:last-child {
     grid-column: 1/-1;
-  }
-  .works-library-grid {
-    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
   }
 }
 @media (max-width: 780px) {
@@ -8409,19 +8124,6 @@ select:disabled[data-disabled-reason] {
   .workflow-actions {
     padding: 15px 17px;
   }
-  .work-overview-card {
-    grid-template-columns: 100px minmax(0, 1fr);
-  }
-  .work-overview-cover {
-    width: 94px;
-    height: 138px;
-  }
-  .work-overview-metadata {
-    grid-template-columns: repeat(2, minmax(110px, 1fr));
-  }
-  .works-library-grid {
-    grid-template-columns: 1fr;
-  }
   .annotations-toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -8436,32 +8138,6 @@ select:disabled[data-disabled-reason] {
   }
   .workflow-steps {
     padding-inline: 17px;
-  }
-  .work-overview-card {
-    grid-template-columns: 1fr;
-  }
-  .work-overview-cover {
-    width: 96px;
-    height: 142px;
-  }
-  .work-overview-heading {
-    flex-direction: column;
-  }
-  .work-overview-metadata {
-    grid-template-columns: 1fr;
-  }
-  .work-library-card {
-    grid-template-columns: 58px minmax(0, 1fr);
-  }
-  .work-card-cover {
-    width: 54px;
-    height: 82px;
-  }
-  .work-library-card .work-top {
-    grid-template-columns: 1fr;
-  }
-  .work-library-card .work-primary-actions {
-    justify-content: flex-start;
   }
   .annotation-work-group > summary {
     align-items: flex-start;
@@ -9415,71 +9091,6 @@ label,
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.45;
-}
-/* works / record / search */
-.works-library-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 12px;
-}
-.work-library-card {
-  min-height: 176px;
-}
-.work-overview-card {
-  border-left: 4px solid var(--ui-accent);
-}
-.researcher-work-menu {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 10px;
-}
-.researcher-work-menu-card {
-  min-height: 90px;
-  display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--card);
-  color: var(--text-2);
-  text-align: left;
-}
-.researcher-work-menu-card:hover,
-.researcher-work-menu-card.active {
-  border-color: var(--ui-accent);
-  background: var(--ui-accent-soft);
-}
-.researcher-work-cover {
-  width: 50px;
-  height: 68px;
-  border-radius: 3px;
-  object-fit: cover;
-}
-.work-book-icon {
-  width: 50px;
-  height: 68px;
-  display: grid;
-  place-items: center;
-  border-radius: 5px;
-  background: var(--soft);
-  color: var(--muted);
-}
-.work-book-icon svg {
-  width: 25px;
-}
-.researcher-work-menu-card > span:nth-child(2) {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-.researcher-work-menu-card b {
-  font-size: 0.875rem;
-}
-.researcher-work-menu-card small {
-  font-size: 0.8125rem;
-  color: var(--muted);
 }
 .recordgrid {
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -10965,120 +10576,6 @@ label,
   font-size: 0.78125rem !important;
 }
 
-/* Works: collection context is separate from work filtering/actions. */
-.works-database-context {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
-  gap: 22px;
-  align-items: center;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  background: linear-gradient(180deg, var(--card), var(--card));
-}
-.works-database-context > div {
-  display: grid;
-  gap: 3px;
-}
-.works-database-context > div > b {
-  font-size: 1rem;
-  color: var(--text-2);
-}
-.works-database-context > div > small {
-  max-width: 760px;
-  font-size: 0.8125rem;
-  color: var(--muted);
-  line-height: 1.5;
-}
-.works-database-context .field {
-  margin: 0;
-}
-.works-toolbar.aligned-toolbar {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-}
-.works-toolbar .tools {
-  align-items: center;
-  justify-content: flex-end;
-}
-.work-overview-card {
-  display: grid !important;
-  grid-template-columns: 112px minmax(0, 1fr) !important;
-  gap: 16px !important;
-  padding: 16px !important;
-  align-items: start;
-}
-.work-overview-card .work-overview-cover {
-  width: 108px !important;
-  height: 156px !important;
-}
-.work-overview-content {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-}
-.work-overview-heading {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: start;
-}
-.work-overview-heading h1 {
-  margin: 3px 0 4px !important;
-  font-size: 1.5rem !important;
-  line-height: 1.18;
-}
-.work-overview-heading p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.78125rem;
-}
-.work-overview-metadata {
-  display: grid !important;
-  grid-template-columns: repeat(3, minmax(130px, 1fr)) !important;
-  gap: 7px !important;
-}
-.work-overview-metadata > div {
-  min-height: 58px;
-  padding: 8px 9px !important;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card);
-}
-.work-overview-metadata span {
-  font-size: 0.8125rem !important;
-  color: var(--muted);
-}
-.work-overview-metadata b {
-  display: block;
-  margin-top: 3px;
-  font-size: 0.78125rem !important;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-.work-overview-citation {
-  padding: 9px 11px;
-  border-left: 3px solid var(--ui-accent);
-  background: var(--ui-accent-soft);
-  border-radius: 0 8px 8px 0;
-}
-.work-overview-citation > span {
-  font-size: 0.8125rem !important;
-  color: var(--muted);
-}
-.work-overview-citation p {
-  margin: 3px 0 0;
-  font-size: 0.78125rem;
-  line-height: 1.45;
-}
-.work-overview-actions {
-  display: flex !important;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 0 !important;
-}
-
 /* Workflow info is a pair of compact status cards rather than a stretched bar. */
 .workflow-review-strip {
   display: grid !important;
@@ -11367,7 +10864,6 @@ label,
   .user-identity span,
   .user-identity small,
   .dashboard-search-help,
-  .work-card-biblio,
   .annotation-feed-meta span,
   .annotation-feed-meta time
 ) {
@@ -11396,12 +10892,6 @@ label > span {
 }
 
 @media (max-width: 900px) {
-  .works-database-context {
-    grid-template-columns: 1fr;
-  }
-  .work-overview-metadata {
-    grid-template-columns: repeat(2, minmax(120px, 1fr)) !important;
-  }
   .compare-intro-card {
     grid-template-columns: 1fr;
   }
@@ -11419,22 +10909,6 @@ label > span {
   }
 }
 @media (max-width: 620px) {
-  .work-overview-card {
-    grid-template-columns: 82px minmax(0, 1fr) !important;
-  }
-  .work-overview-card .work-overview-cover {
-    width: 78px !important;
-    height: 114px !important;
-  }
-  .work-overview-heading {
-    grid-template-columns: 1fr !important;
-  }
-  .work-overview-metadata {
-    grid-template-columns: 1fr !important;
-  }
-  .works-toolbar.aligned-toolbar {
-    grid-template-columns: 1fr;
-  }
   .workflow-review-strip {
     grid-template-columns: 1fr !important;
   }
@@ -11523,27 +10997,6 @@ label > span {
 }
 .dashboard-overview-icon {
   margin: 0 !important;
-}
-
-.work-overview-card {
-  grid-template-columns: 96px minmax(0, 1fr) !important;
-  gap: 14px !important;
-}
-.work-overview-card .work-overview-cover {
-  width: 92px !important;
-  height: 134px !important;
-}
-.work-overview-content {
-  gap: 9px !important;
-}
-.work-overview-metadata {
-  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)) !important;
-}
-.work-overview-metadata > div {
-  min-height: 50px !important;
-}
-.work-overview-actions {
-  padding-top: 1px;
 }
 .workflow-review-strip {
   grid-template-columns: 36px repeat(2, minmax(0, 1fr)) !important;
@@ -11636,13 +11089,6 @@ body {
   .researcher-provider-admin-card > .cardhead {
     grid-template-columns: 1fr !important;
   }
-  .work-overview-card {
-    grid-template-columns: 78px minmax(0, 1fr) !important;
-  }
-  .work-overview-card .work-overview-cover {
-    width: 74px !important;
-    height: 108px !important;
-  }
   .workflow-review-strip {
     grid-template-columns: 1fr !important;
   }
@@ -11689,61 +11135,6 @@ body {
 }
 :where(h1, h2, h3, .cardhead b, .dashboard-card-title b) {
   line-height: 1.25;
-}
-
-/* Works: selecting an overview no longer visually resets the page. Overview
-   actions and database context use a stable grid. */
-.works-database-context {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
-  gap: 18px;
-  align-items: end;
-  padding: 16px;
-}
-.works-database-context > div {
-  display: grid;
-  gap: 4px;
-}
-.works-database-context .field {
-  margin: 0;
-}
-.work-overview-card {
-  grid-template-columns: 118px minmax(0, 1fr) !important;
-  gap: 18px !important;
-  padding: 16px !important;
-}
-.work-overview-content {
-  display: grid;
-  gap: 14px;
-}
-.work-overview-heading {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: start;
-}
-.work-overview-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 2px;
-}
-.work-overview-metadata {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
-  gap: 8px !important;
-}
-.work-overview-metadata > div {
-  min-height: 58px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card);
-}
-.work-overview-citation {
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card);
 }
 
 /* Researcher index terms use the same badge grammar as the administrator
@@ -12105,9 +11496,6 @@ body {
 }
 
 @media (max-width: 1000px) {
-  .works-database-context {
-    grid-template-columns: 1fr;
-  }
   .record-annotation {
     grid-template-columns: 1fr !important;
   }
@@ -12133,12 +11521,6 @@ body {
   .compare-selectors,
   .compare-paste-grid,
   .research-page-0309 .rag-config-grid {
-    grid-template-columns: 1fr !important;
-  }
-  .work-overview-card {
-    grid-template-columns: 88px minmax(0, 1fr) !important;
-  }
-  .work-overview-heading {
     grid-template-columns: 1fr !important;
   }
   .research-hero h1 {
@@ -14963,40 +14345,6 @@ button {
   outline: 3px solid var(--ui-accent-focus);
   outline-offset: 2px;
 }
-
-.work-insights-panel {
-  margin-top: 2px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: linear-gradient(180deg, var(--card), var(--card));
-}
-.work-insights-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
-  gap: 18px;
-  align-items: end;
-  margin-bottom: 11px;
-}
-.work-insights-heading h2 {
-  margin: 2px 0 0;
-  color: var(--text-2);
-  font-size: 1rem;
-  line-height: 1.2;
-}
-.work-insights-heading p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-}
-.work-insights-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(150px, 1fr));
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
 .work-insight-card {
   min-width: 150px;
   padding: 10px;
@@ -15092,23 +14440,6 @@ button {
   font-variant-numeric: tabular-nums;
   color: var(--text-2);
 }
-.work-stat-link {
-  font: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-.work-stat-link:hover:not(:disabled) {
-  border-color: var(--ui-accent-border) !important;
-  background: var(--ui-accent-soft) !important;
-}
-.work-stat-link:focus-visible {
-  outline: 3px solid var(--ui-accent-focus);
-  outline-offset: 2px;
-}
-.work-stat-link:disabled {
-  cursor: default;
-  opacity: 0.62;
-}
 
 .llm-provider-section {
   min-width: 0;
@@ -15157,14 +14488,6 @@ button {
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 900px) {
-  .work-insights-heading {
-    grid-template-columns: 1fr;
-  }
-  .work-insights-grid {
-    grid-template-columns: repeat(5, minmax(180px, 1fr));
-  }
-}
 @media (max-width: 620px) {
   .records-table-wrap .extracted-text-head,
   .records-table-wrap .extracted-text-cell {
@@ -15183,9 +14506,6 @@ button {
     width: calc(100vw - 12px);
     max-height: calc(100vh - 12px);
     border-radius: 12px;
-  }
-  .work-insights-panel {
-    padding: 11px;
   }
 }
 
@@ -17423,152 +16743,9 @@ html[data-color-scheme="dark"][data-contrast="more"] {
   }
 }
 
-/* Works refinement: preserve the overview-first workflow while making the
-   library easier to scan, operate, and read at research-workspace scale. */
-.works-database-context,
-.works-toolbar,
-.work-overview-card,
-.work-library-card {
-  border-color: color-mix(in srgb, var(--ui-accent) 14%, var(--ref-line));
-}
-.work-overview-card {
-  background: linear-gradient(135deg, var(--panel) 0%, var(--panel-2) 100%);
-  box-shadow: var(--shadow-sm);
-}
-.work-overview-card .work-overview-cover {
-  box-shadow: var(--shadow-sm);
-}
-.work-overview-heading h1 {
-  letter-spacing: -0.015em;
-}
-.work-overview-metadata > div {
-  transition:
-    border-color 0.12s ease,
-    background-color 0.12s ease;
-}
-.work-overview-metadata > div:hover {
-  border-color: var(--ui-accent-border);
-  background: var(--ui-accent-soft);
-}
-.work-library-card {
-  min-height: 184px;
-  transition:
-    border-color 0.12s ease,
-    box-shadow 0.12s ease,
-    transform 0.12s ease;
-}
-.work-library-card:focus-within,
-.work-library-card:hover {
-  border-color: var(--ui-accent-border);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
-}
-.work-library-card.selected {
-  border-color: var(--ui-accent);
-  box-shadow:
-    0 0 0 3px var(--ui-accent-focus),
-    var(--shadow-sm);
-}
-.work-card-cover {
-  box-shadow: var(--shadow-sm);
-}
-.work-library-card .work-primary-actions .btn:first-child {
-  background: var(--ui-accent-soft);
-  border-color: var(--ui-accent-border);
-  color: var(--accent-fg);
-}
-.work-library-card .stats .stat,
-.work-library-card .stats > div {
-  transition:
-    border-color 0.12s ease,
-    background-color 0.12s ease;
-}
-.work-library-card .stats .stat:hover:not(:disabled) {
-  border-color: var(--ui-accent-border);
-  background: var(--ui-accent-soft);
-}
-.work-action-menu > summary:focus-visible,
-.work-library-card .stats .stat:focus-visible,
-.work-library-card [data-work]:focus-visible {
-  outline: 3px solid var(--ui-accent-focus);
-  outline-offset: 2px;
-}
-.work-insights-panel {
-  background: var(--panel-2);
-  box-shadow: var(--shadow-sm);
-}
-@media (max-width: 720px) {
-  .works-toolbar.aligned-toolbar {
-    gap: 9px;
-  }
-  .works-toolbar.aligned-toolbar .tools {
-    justify-content: flex-start;
-  }
-  .work-library-card .work-top {
-    grid-template-columns: 1fr;
-  }
-  .work-library-card .work-primary-actions {
-    justify-content: flex-start;
-  }
-  .work-overview-card {
-    padding: 14px !important;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .work-library-card,
-  .work-overview-metadata > div,
-  .work-library-card .stats .stat {
-    transition: none;
-  }
-}
-
 /* Dark-mode corrections for the legacy Home dashboard. */
 
-.works-database-context,
-.works-toolbar {
-  background: var(--surface-raised);
-}
-.work-overview-card {
-  background: var(--surface-raised);
-}
-.work-overview-card {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) !important;
-  gap: var(--space-5) !important;
-  align-items: stretch;
-}
-.work-overview-card .work-overview-cover {
-  width: 12.5rem !important;
-  height: 18.75rem !important;
-}
-@media (max-width: 720px) {
-  .work-overview-card {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-  .work-overview-card .work-overview-cover {
-    width: 8.75rem !important;
-    height: 13.125rem !important;
-  }
-}
-@media (max-width: 520px) {
-  .work-overview-card .work-overview-cover {
-    width: 6.75rem !important;
-    height: 10.125rem !important;
-  }
-}
-.work-overview-metadata > div {
-  background: var(--soft);
-  border-color: transparent;
-}
-.work-overview-citation {
-  background: var(--ui-accent-soft);
-  border-color: var(--ui-accent-border);
-}
-.work-insights-panel {
-  background: var(--soft);
-}
-.work-insight-card,
-.work-library-card {
+.work-insight-card {
   background: var(--surface-raised);
 }
 .chart-axis {
@@ -17820,51 +16997,6 @@ html[data-color-scheme="dark"][data-contrast="more"] {
   overscroll-behavior-x: contain;
   overscroll-behavior-y: auto;
 }
-
-/* Works overview: give the cover enough scale to identify the edition while
-   keeping it as a compact accent beside the work's metadata and actions. */
-.work-overview-card {
-  grid-template-columns: 148px minmax(0, 1fr) !important;
-  gap: 20px !important;
-  padding: 20px !important;
-  align-items: start;
-}
-.work-overview-card .work-overview-cover {
-  width: 132px !important;
-  height: 194px !important;
-  justify-self: center;
-  box-shadow: var(--shadow-md, 0 10px 24px rgba(15, 23, 42, 0.16));
-}
-@media (max-width: 760px) {
-  .work-overview-card {
-    grid-template-columns: 112px minmax(0, 1fr) !important;
-    gap: 16px !important;
-  }
-  .work-overview-card .work-overview-cover {
-    width: 100px !important;
-    height: 148px !important;
-  }
-}
-@media (max-width: 520px) {
-  .work-overview-card {
-    grid-template-columns: 92px minmax(0, 1fr) !important;
-    gap: 12px !important;
-    padding: 14px !important;
-  }
-  .work-overview-card .work-overview-cover {
-    width: 82px !important;
-    height: 122px !important;
-  }
-  .work-overview-heading {
-    grid-template-columns: 1fr !important;
-  }
-  .work-overview-card .work-overview-metadata,
-  .work-overview-card .work-overview-citation,
-  .work-overview-card .work-overview-actions {
-    grid-column: 1/-1;
-  }
-}
-
 /*
  * Icon SVGs use a zero-specificity default size so they cannot fall back to the
  * browser's large replaced-element dimensions. Context-specific component rules
