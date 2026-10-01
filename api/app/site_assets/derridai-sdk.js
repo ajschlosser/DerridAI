@@ -834,19 +834,6 @@ ${evidence}`;
       }
     }
   }
-  function embeddingDescriptorMismatches(contract, descriptor) {
-    if (!contract) return [];
-    const mismatches = [];
-    const pairs = ["model", "revision"];
-    for (const field of pairs) {
-      const expected = String(contract[field] ?? "").trim();
-      const actual = String(descriptor[field] ?? "").trim();
-      if (expected && actual && expected !== actual) {
-        mismatches.push({ field, expected, actual });
-      }
-    }
-    return mismatches;
-  }
   function dedupeRecords(records) {
     const seen = /* @__PURE__ */ new Set();
     const unique = [];
@@ -1006,8 +993,8 @@ ${evidence}`;
       let localVectors;
       if (!usesPublished) {
         const local = this.localIndex ? await this.localIndex.vectorsFor(this.embeddings) : null;
-        const indexed = local ? candidateSet.records.filter((record) => local.vectors.has(String(record.record_id))).length : 0;
-        if (!local || indexed < candidateSet.records.length) {
+        const indexed = local ? candidates.filter((record) => local.vectors.has(String(record.record_id))).length : 0;
+        if (!local || indexed < candidates.length) {
           return fallback(
             fallbackWarning(
               "local_index_required",
@@ -1016,7 +1003,7 @@ ${evidence}`;
                 expectedModel: String(this.manifest.vector_index?.model ?? ""),
                 actualModel: String(descriptor.model ?? ""),
                 indexed,
-                total: candidateSet.records.length
+                total: candidates.length
               }
             )
           );
@@ -1029,33 +1016,19 @@ ${evidence}`;
       try {
         const embedded = await this.embeddings.embed([query], { signal, purpose: "query" });
         vector = embedded.vectors[0] ?? [];
-        if (embedded.provider) {
-          const resultMismatches = embeddingDescriptorMismatches(
-            this.manifest.vector_index,
-            embedded.provider
+        if (embedded.provider && embeddingFingerprint(embedded.provider) !== embeddingFingerprint(descriptor)) {
+          return fallback(
+            fallbackWarning(
+              "embedding_contract_mismatch",
+              "The embedding result provenance does not match the configured embedding provider; keyword results were returned.",
+              {
+                expected: embeddingFingerprint(descriptor),
+                actual: embeddingFingerprint(embedded.provider)
+              }
+            )
           );
-          if (resultMismatches.length) {
-            return this.finish(
-              lexical.slice(0, limit),
-              modeRequested,
-              "keyword",
-              [
-                fallbackWarning(
-                  "embedding_contract_mismatch",
-                  "The embedding result provenance does not match the publication embedding contract; keyword results were returned.",
-                  { mismatches: resultMismatches }
-                )
-              ],
-              candidateSet.records.length,
-              candidateSet.chunksLoaded,
-              true,
-              deduped.duplicatesRemoved,
-              runId2
-            );
-          }
         }
       } catch (error) {
-        if (isAbortError(error)) throw error;
         if (isAbortError(error)) throw error;
         return fallback(
           fallbackWarning(
@@ -1314,7 +1287,7 @@ ${evidence}`;
           try {
             return await this.localIndex.build(this.embeddings, id2, operation);
           } catch (error) {
-            if (error instanceof DOMException && error.name === "AbortError") {
+            if (isAbortError(error)) {
               this.events.emit({ type: "operation-cancelled", runId: id2 });
             }
             throw error;
