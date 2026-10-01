@@ -2431,10 +2431,10 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                             index_row is None
                             or int(index_row.get("generation") or 0) != generation
                         ):
-                            system_store.mark_semantic_map_dirty(
-                                build_id,
-                                reason="semantic_index_missing",
-                            )
+                            # Legacy/current System Data may have the graph but not
+                            # the new traversal substrate. Rebuild the same semantic
+                            # generation; reviewer changes must not invalidate other
+                            # reviewers' otherwise-current projections.
                             self._materialize_semantic_projections(build_id)
                             continue
                         raise
