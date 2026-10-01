@@ -108,10 +108,7 @@ export class RecordRepository {
         const recordId = String(id);
         if (this.vectorsByRecordId.has(recordId)) return;
         const start = index * chunk.dimension;
-        this.vectorsByRecordId.set(
-          recordId,
-          chunk.values.subarray(start, start + chunk.dimension),
-        );
+        this.vectorsByRecordId.set(recordId, chunk.values.subarray(start, start + chunk.dimension));
       });
     }
     this.vectorChunks.set(chunkId, chunk);
