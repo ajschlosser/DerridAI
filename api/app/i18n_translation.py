@@ -325,7 +325,7 @@ def translate_english_dictionary(
                 attempts += amount
 
         try:
-            parsed = complete_structured_json(
+            parsed: dict[str, Any] = complete_structured_json(
                 request_once,
                 prompt=prompt,
                 attempts=2,
