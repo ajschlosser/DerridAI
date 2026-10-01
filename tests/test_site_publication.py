@@ -752,6 +752,18 @@ def test_export_fails_before_corpus_work_when_the_runtime_cannot_be_downloaded(
         )
 
 
+def test_site_export_request_accepts_nginx_provider_proxy_configuration() -> None:
+    from app.routers.sites import SiteExportRequest
+
+    request = SiteExportRequest(
+        store="derrida-primary",
+        works=["Glas"],
+        export_format="nginx-docker",
+        provider_proxy_upstream="http://localhost:11434/v1",
+    )
+    assert request.provider_proxy_upstream == "http://localhost:11434/v1"
+
+
 def test_export_requests_ignore_legacy_provider_profile_ids() -> None:
     from app.routers.sites import SiteExportRequest
 
