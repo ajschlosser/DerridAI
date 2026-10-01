@@ -2210,38 +2210,56 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 analysis=analysis,
             )
 
-            system_store.put_semantic_map_projection(
-                "graph", build_id, build_id, generation, graph, audience=audience
+            work_by_record = {
+                str(row.get("record_id") or ""): str(
+                    row.get("work") or row.get("document_title") or ""
+                ).strip()
+                for row in records
+            }
+            projection_rows: list[dict[str, Any]] = [{
+                "scope_type": "graph",
+                "scope_id": build_id,
+                "build_id": build_id,
+                "generation": generation,
+                "audience": audience,
+                "payload": graph,
+            }]
+            projection_rows.extend(
+                {
+                    "scope_type": "record",
+                    "scope_id": record_id,
+                    "build_id": build_id,
+                    "generation": generation,
+                    "audience": audience,
+                    "work": work_by_record.get(record_id) or None,
+                    "payload": payload,
+                }
+                for record_id, payload in record_maps.items()
             )
-            for record_id, payload in record_maps.items():
-                record = next(
-                    (row for row in records if str(row.get("record_id") or "") == record_id),
-                    {},
-                )
-                work = str(record.get("work") or record.get("document_title") or "").strip()
-                system_store.put_semantic_map_projection(
-                    "record",
-                    record_id,
-                    build_id,
-                    generation,
-                    payload,
-                    work=work or None,
-                    audience=audience,
-                )
-            for node_id, payload in node_maps.items():
-                system_store.put_semantic_map_projection(
-                    "node", node_id, build_id, generation, payload, audience=audience
-                )
-            for work, payload in work_maps.items():
-                system_store.put_semantic_map_projection(
-                    "work",
-                    work,
-                    build_id,
-                    generation,
-                    payload,
-                    work=work,
-                    audience=audience,
-                )
+            projection_rows.extend(
+                {
+                    "scope_type": "node",
+                    "scope_id": node_id,
+                    "build_id": build_id,
+                    "generation": generation,
+                    "audience": audience,
+                    "payload": payload,
+                }
+                for node_id, payload in node_maps.items()
+            )
+            projection_rows.extend(
+                {
+                    "scope_type": "work",
+                    "scope_id": work,
+                    "build_id": build_id,
+                    "generation": generation,
+                    "audience": audience,
+                    "work": work,
+                    "payload": payload,
+                }
+                for work, payload in work_maps.items()
+            )
+            system_store.put_semantic_map_projections(projection_rows)
 
             self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
             system_store.mark_semantic_map_clean(build_id, generation)
