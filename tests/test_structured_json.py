@@ -23,8 +23,12 @@ def test_parse_json_object_accepts_valid_object():
 
 
 def test_parse_json_object_repairs_malformed_complete_json():
-    parsed = sj.parse_json_object('{"answer": 1, "items": ["a", "b",],}')
+    raw = '{"answer": 1, "items": ["a", "b",],}'
+    parsed = sj.parse_json_object(raw)
+    result = sj.parse_json_object_result(raw)
     assert parsed == {"answer": 1, "items": ["a", "b"]}
+    assert result.value == parsed
+    assert result.repaired is True
 
 
 def test_parse_json_object_extracts_complete_object_from_wrapped_response():
