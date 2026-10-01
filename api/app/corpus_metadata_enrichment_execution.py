@@ -303,7 +303,22 @@ class MetadataEnrichmentExecutionMixin:
             # NLP is a derived candidate source, not authority. Only the narrow
             # direct-mention indexing resolver may promote it into unreviewed
             # FieldAssertions before retrieval/model routing.
-            apply_indexing_nlp_candidates(record, schema)
+            nlp_routing = apply_indexing_nlp_candidates(record, schema)
+            if build_id:
+                resolved_nlp = nlp_routing.get("resolved_fields")
+                deferred_nlp = nlp_routing.get("deferred_fields")
+                if isinstance(resolved_nlp, list) and resolved_nlp:
+                    self._increment_metric(
+                        build_id,
+                        "metadata_nlp_candidate_fields",
+                        len(resolved_nlp),
+                    )
+                if isinstance(deferred_nlp, dict) and deferred_nlp:
+                    self._increment_metric(
+                        build_id,
+                        "metadata_nlp_candidate_deferred_fields",
+                        len(deferred_nlp),
+                    )
         precedent_fields: set[str] = set()
         for group in schema.groups:
             if explicit_families is not None and group.key not in explicit_families:
