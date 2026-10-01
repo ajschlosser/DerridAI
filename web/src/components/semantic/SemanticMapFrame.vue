@@ -511,7 +511,7 @@ function clearSearch() {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   background: var(--surface-card);
-  box-shadow: var(--shadow-popover);
+  box-shadow: var(--shadow-overlay);
 }
 .semantic-map-view-menu fieldset {
   margin: 0;
