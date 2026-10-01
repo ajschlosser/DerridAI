@@ -85,7 +85,11 @@ export interface PdfAsset {
     speakers?: string[];
     language?: string;
     language_status?:
-      "deterministic" | "llm_proposed" | "human_confirmed" | "confirmed_absent" | "unresolved";
+      | "deterministic"
+      | "llm_proposed"
+      | "human_confirmed"
+      | "confirmed_absent"
+      | "unresolved";
     [key: string]: unknown;
   };
   document_layout?: DocumentLayoutPlan;
@@ -1061,7 +1065,12 @@ export interface CorpusRecord {
     string,
     {
       status?:
-        "deterministic" | "model_inferred" | "human_confirmed" | "unresolved" | "invalid" | string;
+        | "deterministic"
+        | "model_inferred"
+        | "human_confirmed"
+        | "unresolved"
+        | "invalid"
+        | string;
       method?: string;
       confidence?: number | null;
       reason?: string;
@@ -1333,7 +1342,13 @@ export interface HumanEvidenceSource {
 
 export type SourceProviderId = "gutenberg" | "wikisource";
 export type ContributionRole =
-  "author" | "coauthor" | "translator" | "editor" | "contributor" | "about_author" | "unknown";
+  | "author"
+  | "coauthor"
+  | "translator"
+  | "editor"
+  | "contributor"
+  | "about_author"
+  | "unknown";
 export type WorkRelationship = "original_language_edition" | "translation" | "edition" | "unknown";
 export type IdentityConfidence = "exact" | "probable" | "needs_review";
 export type CaptureStatus =
@@ -1347,7 +1362,12 @@ export type CaptureStatus =
   | "interrupted"
   | "failed";
 export type CandidateAcquisitionStatus =
-  "pending" | "fetching" | "acquired" | "registered" | "failed" | "cancelled";
+  | "pending"
+  | "fetching"
+  | "acquired"
+  | "registered"
+  | "failed"
+  | "cancelled";
 export type SourceBuildStatus = "not_built" | "building" | "built" | "failed";
 
 /** A classified provider/capture failure, as the API reports it in `detail`. */
