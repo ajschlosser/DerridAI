@@ -30,6 +30,10 @@ from .retrieval_selection import (
     mmr_select,
     source_aware_select,
 )
+from .structured_completion import (
+    StructuredAttemptContext,
+    complete_structured_json,
+)
 from .structured_json import (
     StructuredJsonTruncatedError,
     finish_reason_is_truncated,
@@ -451,6 +455,64 @@ def chat_complete(
     return complete(
         (payload.get("message") or {}).get("content") or "",
         str(finish_reason) if finish_reason is not None else None,
+    )
+
+
+def structured_chat_complete(
+    *,
+    provider: str,
+    model: str,
+    base_url: str | None,
+    api_key: str | None,
+    prompt: str,
+    options: OllamaTouchupOptions | None = None,
+    json_schema: dict[str, Any] | None = None,
+    schema_name: str = "derridai_response",
+    max_tokens: int = 4096,
+    attempts: int = 2,
+    max_token_cap: int | None = None,
+    validate: Callable[[dict[str, Any]], Any] | None = None,
+    retry_guidance: Callable[[Exception], str] | None = None,
+    cancelled: Callable[[], bool] | None = None,
+    timeout_seconds: float | None = None,
+    on_delta: Callable[[str], None] | None = None,
+    on_metric: Callable[[str, int], None] | None = None,
+    completion: Callable[..., str] | None = None,
+) -> Any:
+    """Run one JSON-object task through the shared repair/retry contract.
+
+    completion is injectable for compatibility tests and specialized transports;
+    production callers normally use the module's chat_complete.
+    """
+
+    transport = completion or chat_complete
+
+    def request_once(context: StructuredAttemptContext) -> str:
+        return transport(
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            prompt=context.prompt,
+            options=options,
+            json_mode=True,
+            json_schema=json_schema,
+            schema_name=schema_name,
+            max_tokens=context.max_tokens,
+            cancelled=cancelled,
+            timeout_seconds=timeout_seconds,
+            on_delta=on_delta,
+        )
+
+    return complete_structured_json(
+        request_once,
+        prompt=prompt,
+        validate=validate,
+        attempts=attempts,
+        max_tokens=max_tokens,
+        max_token_cap=max_token_cap,
+        retry_guidance=retry_guidance,
+        on_metric=on_metric,
     )
 
 
@@ -1090,19 +1152,18 @@ def run_rag_pipeline(
             prompt=request.prompt,
             instructions=request.instructions or "",
         )
-        raw = chat_complete(
-            provider=provider,
-            model=model,
-            base_url=request.base_url,
-            api_key=request.api_key,
-            prompt=decomposition_prompt,
-            options=request.generation,
-            json_mode=True,
-            max_tokens=runtime_settings.query_decomposition_num_predict,
-            cancelled=cancelled,
-        )
         try:
-            parsed_query = _extract_json(raw)
+            parsed_query = structured_chat_complete(
+                provider=provider,
+                model=model,
+                base_url=request.base_url,
+                api_key=request.api_key,
+                prompt=decomposition_prompt,
+                options=request.generation,
+                max_tokens=runtime_settings.query_decomposition_num_predict,
+                attempts=2,
+                cancelled=cancelled,
+            )
         except Exception as exc:
             warnings.append(
                 f"Query decomposition failed ({exc}); using the original prompt."

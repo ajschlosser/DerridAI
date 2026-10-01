@@ -8,6 +8,7 @@ from typing import Any
 
 from .models import OllamaTouchupOptions
 from .rag import _extract_json, chat_complete
+from .structured_completion import StructuredAttemptContext, complete_structured_json
 
 _PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 _WORD_RE = re.compile(r"[A-Za-z]{3,}")
@@ -301,22 +302,37 @@ def translate_english_dictionary(
             return
         if cancelled and cancelled():
             interrupted()
-        attempts += 1
         prompt = _translation_prompt(code, batch, retry=retry)
         batch_json = json.dumps(dict(batch), ensure_ascii=False)
-        try:
-            raw = chat_complete(
+        base_max_tokens = max(1800, min(10000, int(len(batch_json) * 3.2)))
+
+        def request_once(context: StructuredAttemptContext) -> str:
+            return chat_complete(
                 provider=provider,
                 model=model,
                 base_url=base_url,
                 api_key=api_key,
-                prompt=prompt,
+                prompt=context.prompt,
                 options=generation,
                 json_mode=True,
-                max_tokens=max(1800, min(10000, int(len(batch_json) * 3.2))),
+                max_tokens=context.max_tokens,
                 cancelled=cancelled,
             )
-            parsed = _extract_translation_json(raw)
+
+        def note_metric(name: str, amount: int) -> None:
+            nonlocal attempts
+            if name == "calls":
+                attempts += amount
+
+        try:
+            parsed: dict[str, Any] = complete_structured_json(
+                request_once,
+                prompt=prompt,
+                attempts=2,
+                max_tokens=base_max_tokens,
+                max_token_cap=max(base_max_tokens, 12000),
+                on_metric=note_metric,
+            )
             # Common local-model wrappers are harmless when they contain the
             # exact requested key/value object. Accept them rather than forcing
             # every key through individual retries.

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from json_repair import repair_json
@@ -33,6 +34,14 @@ _TRUNCATION_REASONS = {
     "max_length",
     "max_new_tokens",
 }
+
+
+@dataclass(frozen=True)
+class StructuredJsonParseResult:
+    """One parsed structured response plus whether syntax repair was required."""
+
+    value: dict[str, Any]
+    repaired: bool = False
 
 
 class StructuredJsonError(ValueError):
@@ -116,14 +125,14 @@ def _object_candidate(value: str) -> tuple[str, bool]:
     return value[start:], True
 
 
-def parse_json_object(
+def parse_json_object_result(
     text: str,
     *,
     finish_reason: str | None = None,
-) -> dict[str, Any]:
-    """Parse one JSON object, repairing malformed-but-complete syntax once.
+) -> StructuredJsonParseResult:
+    """Parse one JSON object and report whether local syntax repair was needed.
 
-    Truncation is intentionally detected before repair.  json-repair can close
+    Truncation is intentionally detected before repair. json-repair can close
     braces/strings and fill missing values; doing that to a token-limited answer
     could turn an incomplete model answer into apparently valid data.
     """
@@ -156,9 +165,10 @@ def parse_json_object(
                 diagnostic=value[:2000],
                 finish_reason=finish_reason,
             )
-        return parsed
+        return StructuredJsonParseResult(parsed)
 
     candidate, structurally_incomplete = _object_candidate(value)
+    repaired = False
     try:
         parsed = json.loads(candidate)
     except json.JSONDecodeError as strict_error:
@@ -174,6 +184,7 @@ def parse_json_object(
                 return_objects=True,
                 skip_json_loads=True,
             )
+            repaired = True
         except Exception as repair_error:  # noqa: BLE001 - normalize third-party parser failures
             raise StructuredJsonMalformedError(
                 f"LLM returned malformed JSON that could not be repaired: {strict_error.msg} "
@@ -188,4 +199,14 @@ def parse_json_object(
             diagnostic=value[:2000],
             finish_reason=finish_reason,
         )
-    return parsed
+    return StructuredJsonParseResult(parsed, repaired=repaired)
+
+
+def parse_json_object(
+    text: str,
+    *,
+    finish_reason: str | None = None,
+) -> dict[str, Any]:
+    """Compatibility wrapper returning only the parsed JSON object."""
+
+    return parse_json_object_result(text, finish_reason=finish_reason).value
