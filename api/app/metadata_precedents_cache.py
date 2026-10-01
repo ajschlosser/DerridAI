@@ -2,9 +2,10 @@
 """Precedent retrieval kept from metadata enrichment, for the reviewer's precedents panel.
 
 Enrichment already retrieves reviewed precedents for every field to build its prompt. This
-module keeps that result on the record so Record Review does not repeat the semantic search,
-and ranks the record's *own* source blocks against each precedent's reviewed evidence so a
-reviewer who adopts a precedent's value has a shortlist of where this record may support it.
+module keeps that result on the record so Record Review does not repeat the semantic search.
+Ranking the current Record's source blocks against precedent evidence is deliberately deferred
+until the reviewer opens the precedents view: it is useful interactive assistance, but it is
+not needed to generate metadata and must not lengthen every enrichment run.
 
 What is stored on the record is references only: exemplar IDs, similarities, and block IDs
 of this record. A precedent's value and evidence text belong to another record and are
@@ -25,7 +26,7 @@ from .pipelines.precedent_remap import RemapSession
 
 CACHE_KEY = "metadata_precedents_cache"
 # Bump when the stored shape or its meaning changes; other versions are ignored and recomputed live.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
 def precedent_mode(field: str, items: list[dict[str, Any]], telemetry: dict[str, Any]) -> str:
@@ -64,47 +65,38 @@ def build_precedents_cache(
     fields: Iterable[str],
     examples: dict[str, list[dict[str, Any]]],
     telemetry: dict[str, Any],
-    record: dict[str, Any],
-    blocks_by_id: dict[str, dict[str, Any]],
     *,
     computed_at: str,
-    embed: Callable[[list[str]], list[list[float]]] | None = None,
 ) -> dict[str, Any]:
-    """The stored form of one enrichment pass's precedent retrieval for ``record``.
+    """Keep the precedent identities/similarities retrieved for enrichment.
 
-    A field whose precedents include one without a stable exemplar identity (older reviews
-    with no bound evidence) is left out, so the panel recomputes it live instead of showing
-    something it could not re-verify.
+    This intentionally does *not* remap precedent evidence onto the current Record.
+    Remapping may require embeddings and a separate versioned pipeline, and the result
+    is only useful when a reviewer inspects/adopts a precedent. Deferring that work
+    removes it from the per-Record enrichment critical path while preserving the exact
+    precedent set the model saw.
     """
     stored: dict[str, Any] = {}
-    session = RemapSession.open()
     for field in dict.fromkeys(str(name) for name in fields if str(name)):
         items = [item for item in examples.get(field) or [] if isinstance(item, dict)]
         if any(not str(item.get("exemplar_id") or "") for item in items):
             continue
-        candidates = rank_candidates(items, record, blocks_by_id, embed=embed, session=session)
         refs = []
-        for item, picks in zip(items, candidates):
+        for item in items:
             ref: dict[str, Any] = {
                 "exemplar_id": str(item["exemplar_id"]),
                 "similarity": item.get("similarity"),
-                "candidate_source_units": picks,
             }
             if isinstance(item.get("match"), dict):
                 ref["match"] = item["match"]
             refs.append(ref)
         stored[field] = {"mode": precedent_mode(field, items, telemetry), "refs": refs}
-    cache: dict[str, Any] = {
+    return {
         "version": CACHE_VERSION,
         "computed_at": computed_at,
         "fallback_reason": str(telemetry.get("fallback_reason") or ""),
         "fields": stored,
     }
-    identity = session.finish() if session is not None else None
-    if identity is not None:
-        # Which remap pipeline ranked the candidate source units; readers may ignore it.
-        cache["candidate_pipeline"] = identity
-    return cache
 
 
 def cached_field(record: dict[str, Any], field: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
