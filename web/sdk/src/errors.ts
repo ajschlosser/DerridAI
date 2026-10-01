@@ -2,9 +2,6 @@
 
 export function isAbortError(error: unknown): boolean {
   return Boolean(
-    error &&
-      typeof error === "object" &&
-      "name" in error &&
-      error.name === "AbortError",
+    error && typeof error === "object" && "name" in error && error.name === "AbortError",
   );
 }
