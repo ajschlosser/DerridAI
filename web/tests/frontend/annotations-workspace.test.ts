@@ -108,9 +108,7 @@ describe("annotations workspace", () => {
       records: [{ record_id: "r1", annotations: [{ id: "n1", note: "Remove me" }] }],
       dirty: new Set<number>(),
     };
-    const reviewKey = vi.fn(
-      (fileRef: { id: string }, index: number) => `${fileRef.id}::${index}`,
-    );
+    const reviewKey = vi.fn((fileRef: { id: string }, index: number) => `${fileRef.id}::${index}`);
     const applyRecordChanges = vi.fn(
       (
         target: typeof file,
