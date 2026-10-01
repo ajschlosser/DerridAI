@@ -2645,10 +2645,11 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         return self._with_projection_meta(payload, generation=generation, source="generated")
 
     def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
-        """Rebuild the semantic-content graph against the current Record revisions.
+        """Return the current materialized semantic-content graph.
 
-        Rebuilding on read keeps structural edits and human metadata corrections from
-        leaving a stale visualization. The graph remains a derived projection.
+        Semantic-affecting writes advance the generation token. A missing/stale
+        generation is rebuilt once and saved as derived System Data; current reads
+        reuse it without rescanning the corpus.
         """
         graph, _, _ = self._current_semantic_graph(build_id)
         self.repo.save_checkpoint(build_id, "semantic_content_graph", graph)
