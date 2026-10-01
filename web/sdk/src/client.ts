@@ -3,7 +3,6 @@
 import { AnnotationStore } from "./annotations";
 import { citationForEvidence, formatCitation } from "./citations";
 import { EventBus } from "./events";
-import { isAbortError } from "./errors";
 import { RecordRepository } from "./repository";
 import { ResearchEngine } from "./research";
 import { SearchEngine } from "./search";
@@ -104,7 +103,7 @@ export class DerridAIClient {
     try {
       return await this.searchEngine.search(request, id);
     } catch (error) {
-      if (isAbortError(error)) {
+      if (error instanceof DOMException && error.name === "AbortError") {
         this.events.emit({ type: "operation-cancelled", runId: id });
       }
       throw error;
@@ -116,7 +115,7 @@ export class DerridAIClient {
     try {
       return await this.researchEngine.run(request, id);
     } catch (error) {
-      if (isAbortError(error)) {
+      if (error instanceof DOMException && error.name === "AbortError") {
         this.events.emit({ type: "operation-cancelled", runId: id });
       }
       throw error;
