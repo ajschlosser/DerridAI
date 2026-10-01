@@ -146,6 +146,11 @@ describe("works workspace commands", () => {
       const snapshot = workspace.getWorksWorkspaceSnapshot() as any;
       expect(titles(snapshot)).toEqual(["Glas"]);
       expect(snapshot.visibleWorks).toBe(1);
+      expect(snapshot.scopeWorks.map((item: { work: string }) => item.work).sort()).toEqual([
+        "Aporias",
+        "Glas",
+        "Of Grammatology",
+      ]);
       expect(snapshot.totalWorks).toBe(3);
       expect(snapshot.totalRecords).toBe(1350);
       expect(snapshot.sourceFileCount).toBe(3);
