@@ -1,9 +1,11 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { authApi, type AuthUser, type RoleDefinition, type UserRole } from "../api/auth";
 import { useAuthStore } from "../stores/auth";
+import { queryClient, useDataQuery } from "../realtime/dataQuery";
+import { dataKey } from "../realtime/resourceKeys";
 import { useI18nStore } from "../stores/i18n";
 import { notify } from "../composables/notifications";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
@@ -15,11 +17,26 @@ import { localizedAuthError } from "../domain/authErrors";
 const auth = useAuthStore();
 const router = useRouter();
 const i18n = useI18nStore();
-const users = ref<AuthUser[]>([]);
-const roles = ref<RoleDefinition[]>([]);
-const loading = ref(true);
-const dataCurrent = ref(false);
-const error = ref("");
+// Server state lives in the query cache; realtime invalidation refreshes it (no manual reload).
+const usersQuery = useDataQuery("users", () => authApi.listUsers());
+const rolesQuery = useDataQuery("roles", () => authApi.listRoles());
+const users = computed<AuthUser[]>(() => usersQuery.data.value?.users ?? []);
+const roles = computed<RoleDefinition[]>(() => rolesQuery.data.value?.roles ?? []);
+const loading = computed(() => usersQuery.isPending.value || rolesQuery.isPending.value);
+const dataCurrent = computed(() => usersQuery.isSuccess.value && rolesQuery.isSuccess.value);
+const actionError = ref("");
+const error = computed(
+  () =>
+    actionError.value ||
+    (usersQuery.error.value || rolesQuery.error.value
+      ? localizedAuthError(usersQuery.error.value || rolesQuery.error.value, (key, fallback) =>
+          i18n.t(key, fallback),
+        )
+      : ""),
+);
+function setUsers(update: (current: AuthUser[]) => AuthUser[]) {
+  queryClient.setQueryData(dataKey("users"), { users: update(users.value) });
+}
 const username = ref("");
 const password = ref("");
 const role = ref<UserRole>("researcher");
@@ -30,37 +47,28 @@ const dialogUser = ref<AuthUser | null>(null);
 const newPassword = ref("");
 const dialogBusy = ref(false);
 
-async function refresh() {
-  loading.value = true;
-  dataCurrent.value = false;
-  error.value = "";
-  try {
-    const [userData, roleData] = await Promise.all([authApi.listUsers(), authApi.listRoles()]);
-    users.value = userData.users;
-    roles.value = roleData.roles;
-    dataCurrent.value = true;
-    if (!roles.value.some((item) => item.id === role.value))
-      role.value =
-        roles.value.find((item) => item.id === "researcher")?.id ||
-        roles.value[0]?.id ||
-        "researcher";
-  } catch (exc) {
-    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
-  } finally {
-    loading.value = false;
-  }
+function refresh() {
+  void Promise.all([usersQuery.refetch(), rolesQuery.refetch()]);
 }
+watch(
+  roles,
+  (list) => {
+    if (list.length && !list.some((item) => item.id === role.value))
+      role.value = list.find((item) => item.id === "researcher")?.id || list[0]?.id || "researcher";
+  },
+  { immediate: true },
+);
 async function createUser() {
   if (!dataCurrent.value) return;
   createBusy.value = true;
-  error.value = "";
+  actionError.value = "";
   try {
     const { user } = await authApi.createUser({
       username: username.value.trim(),
       password: password.value,
       role: role.value,
     });
-    users.value = [...users.value, user].sort((a, b) => a.username.localeCompare(b.username));
+    setUsers((current) => [...current, user].sort((a, b) => a.username.localeCompare(b.username)));
     username.value = "";
     password.value = "";
     role.value =
@@ -69,7 +77,7 @@ async function createUser() {
       "researcher";
     notify(i18n.t("users.created_toast"), "success");
   } catch (exc) {
-    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
+    actionError.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     createBusy.value = false;
   }
@@ -78,20 +86,20 @@ async function changeRole(user: AuthUser, nextRole: UserRole) {
   if (!dataCurrent.value) return;
   try {
     const result = await authApi.updateUser(user.id, { role: nextRole });
-    users.value = users.value.map((item) => (item.id === user.id ? result.user : item));
+    setUsers((current) => current.map((item) => (item.id === user.id ? result.user : item)));
     notify(i18n.t("users.role_saved_toast"), "success");
   } catch (exc) {
-    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
+    actionError.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   }
 }
 async function toggleActive(user: AuthUser) {
   if (!dataCurrent.value) return;
   try {
     const result = await authApi.updateUser(user.id, { active: !user.active });
-    users.value = users.value.map((item) => (item.id === user.id ? result.user : item));
+    setUsers((current) => current.map((item) => (item.id === user.id ? result.user : item)));
     notify(user.active ? i18n.t("users.disabled_toast") : i18n.t("users.enabled_toast"), "success");
   } catch (exc) {
-    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
+    actionError.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   }
 }
 function openPasswordModal(user: AuthUser) {
@@ -114,14 +122,16 @@ function closeDialog() {
 async function applyDialog() {
   if (!dataCurrent.value || !dialogUser.value) return;
   dialogBusy.value = true;
-  error.value = "";
+  actionError.value = "";
   try {
     if (dialogMode.value === "password") {
       const result = await authApi.updateUser(dialogUser.value.id, { password: newPassword.value });
-      users.value = users.value.map((item) => (item.id === result.user.id ? result.user : item));
+      setUsers((current) =>
+        current.map((item) => (item.id === result.user.id ? result.user : item)),
+      );
     } else {
       await authApi.deleteUser(dialogUser.value.id);
-      users.value = users.value.filter((item) => item.id !== dialogUser.value?.id);
+      setUsers((current) => current.filter((item) => item.id !== dialogUser.value?.id));
     }
     dialogRef.value?.close();
     const completedMode = dialogMode.value;
@@ -132,7 +142,7 @@ async function applyDialog() {
       "success",
     );
   } catch (exc) {
-    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
+    actionError.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     dialogBusy.value = false;
   }
@@ -141,8 +151,6 @@ async function applyDialog() {
 function openRoles() {
   void router.push({ name: "roles" });
 }
-
-onMounted(refresh);
 </script>
 
 <template>
@@ -226,9 +234,6 @@ onMounted(refresh);
             }}
           </div>
         </div>
-        <button class="btn small" type="button" :disabled="loading" @click="refresh">
-          {{ i18n.t("users.refresh") }}
-        </button>
       </div>
       <div v-if="loading && !dataCurrent" class="users-loading">
         <UiLoadingState :label="i18n.t('users.loading')" />

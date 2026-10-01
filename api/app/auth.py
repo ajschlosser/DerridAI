@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from . import operation_events
 from .config import settings
 
 type Role = str
@@ -414,6 +415,7 @@ class AuthStore:
                     for capability in sorted(CAPABILITY_CATALOG)
                 ],
             )
+        operation_events.note_resource_changed("roles")
         roles, _ = self.role_definitions()
         return next(item for item in roles if item["id"] == role_id)
 
@@ -433,6 +435,7 @@ class AuthStore:
                 raise ValueError("Reassign users from this role before deleting it.")
             conn.execute("DELETE FROM role_permissions WHERE role=?", (role,))
             conn.execute("DELETE FROM roles WHERE id=?", (role,))
+        operation_events.note_resource_changed("roles")
 
     def create_user(self, username: str, password: str, role: Role) -> AuthUser:
         username = username.strip()
@@ -460,6 +463,7 @@ class AuthStore:
         except sqlite3.IntegrityError as exc:
             raise ValueError("A user with that username already exists.") from exc
         assert row is not None
+        operation_events.note_resource_changed("users")
         return self._row_user(row)
 
     @staticmethod
@@ -691,6 +695,7 @@ class AuthStore:
                 )
             row = conn.execute(self._user_select("WHERE u.id=?"), (user_id,)).fetchone()
         assert row is not None
+        operation_events.note_resource_changed("users")
         return self._row_user(row)
 
     def delete_user(self, user_id: int) -> None:
@@ -711,6 +716,7 @@ class AuthStore:
                 if active_admins <= 1:
                     raise ValueError("The last active administrator cannot be deleted.")
             conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+        operation_events.note_resource_changed("users")
 
     def snapshot_users(self) -> list[dict]:
         """Return a backup-safe logical user snapshot. Sessions are excluded."""
@@ -774,6 +780,7 @@ class AuthStore:
                     [(role_id, capability, 1 if capability in permissions else 0) for capability in sorted(CAPABILITY_CATALOG)],
                 )
                 restored += 1
+        operation_events.note_resource_changed("roles")
         return restored
 
     def restore_users(self, users: list[dict]) -> int:
@@ -837,6 +844,7 @@ class AuthStore:
                         "INSERT OR IGNORE INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)",
                         (token_hash, user_id, created_at, expires_at),
                     )
+        operation_events.note_resource_changed("users")
         return len(normalized)
 
     def capabilities_for_role(self, role: Role) -> list[str]:
@@ -902,6 +910,7 @@ class AuthStore:
                     for capability in sorted(CAPABILITY_CATALOG)
                 ],
             )
+        operation_events.note_resource_changed("roles")
         return sorted(allowed)
 
 auth_store = AuthStore()
