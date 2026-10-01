@@ -4,8 +4,7 @@ import { createNavigation } from "../../src/domain/navigation";
 import { createWorksWorkspace } from "../../src/domain/worksWorkspace";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 
-// The rendered Works view is covered by the legacy baseline's works scenarios (recorded before this logic moved);
-// these pin the commands themselves.
+// The modern Works Playwright workflow covers rendered search/actions/handoffs; these tests pin the commands.
 function setup(overrides: Record<string, unknown> = {}) {
   const state = createRuntimeState() as unknown as Record<string, any>;
   // createRuntimeState binds the shared Vue Works store, so reset its view state for test isolation.
