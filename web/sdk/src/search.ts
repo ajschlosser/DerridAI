@@ -1,8 +1,6 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 
-import { validateEmbeddingDescriptor } from "./embeddingContract";
 import { EventBus } from "./events";
-import { isAbortError } from "./errors";
 import { RecordRepository } from "./repository";
 import type {
   EmbeddingProvider,
@@ -117,22 +115,6 @@ function fallbackWarning(
   return { code, message, details };
 }
 
-
-function deduplicateRecords(records: PublicationRecord[]): {
-  records: PublicationRecord[];
-  duplicatesRemoved: number;
-} {
-  const seen = new Set<string>();
-  const unique: PublicationRecord[] = [];
-  for (const record of records) {
-    const id = String(record.record_id);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    unique.push(record);
-  }
-  return { records: unique, duplicatesRemoved: records.length - unique.length };
-}
-
 export class SearchEngine {
   constructor(
     private readonly manifest: PublicationManifest,
@@ -151,10 +133,7 @@ export class SearchEngine {
     this.events.emit({ type: "search-start", runId, query });
 
     const candidateSet = await this.repository.candidates(filters, this.locale, runId, signal);
-    const deduplicated = deduplicateRecords(candidateSet.records);
-    const candidates = deduplicated.records;
-    const duplicatesRemoved = deduplicated.duplicatesRemoved;
-    const lexical = lexicalScores(query, candidates, this.locale);
+    const lexical = lexicalScores(query, candidateSet.records, this.locale);
     const semanticAvailable = Boolean(
       this.manifest.features?.semantic_search && this.manifest.vector_index?.dimension,
     );
@@ -165,9 +144,8 @@ export class SearchEngine {
         modeRequested,
         "keyword",
         [],
-        candidates.length,
+        candidateSet.records.length,
         candidateSet.chunksLoaded,
-        duplicatesRemoved,
         semanticAvailable,
         runId,
       );
@@ -184,9 +162,8 @@ export class SearchEngine {
             "This publication has no compatible semantic vectors; keyword results were returned.",
           ),
         ],
-        candidates.length,
+        candidateSet.records.length,
         candidateSet.chunksLoaded,
-        duplicatesRemoved,
         false,
         runId,
       );
@@ -203,17 +180,17 @@ export class SearchEngine {
             "No embedding capability was supplied; keyword results were returned.",
           ),
         ],
-        candidates.length,
+        candidateSet.records.length,
         candidateSet.chunksLoaded,
-        duplicatesRemoved,
         true,
         runId,
       );
     }
 
+    const expectedModel = String(this.manifest.vector_index?.model ?? "");
     const descriptor = this.embeddings.descriptor();
-    const contractMismatch = validateEmbeddingDescriptor(this.manifest.vector_index, descriptor);
-    if (contractMismatch) {
+    const actualModel = String(descriptor.model ?? "");
+    if (expectedModel && actualModel && expectedModel !== actualModel) {
       return this.finish(
         lexical.slice(0, limit),
         modeRequested,
@@ -221,13 +198,12 @@ export class SearchEngine {
         [
           fallbackWarning(
             "embedding_contract_mismatch",
-            "The supplied embedding capability does not match the publication embedding contract; keyword results were returned.",
-            { ...contractMismatch },
+            "The supplied embedding capability does not match the publication embedding model; keyword results were returned.",
+            { expectedModel, actualModel },
           ),
         ],
-        candidates.length,
+        candidateSet.records.length,
         candidateSet.chunksLoaded,
-        duplicatesRemoved,
         true,
         runId,
       );
@@ -239,7 +215,6 @@ export class SearchEngine {
       const embedded = await this.embeddings.embed([query], { signal });
       vector = embedded.vectors[0] ?? [];
     } catch (error) {
-      if (isAbortError(error)) throw error;
       return this.finish(
         lexical.slice(0, limit),
         modeRequested,
@@ -252,9 +227,8 @@ export class SearchEngine {
               : "Embedding generation failed; keyword results were returned.",
           ),
         ],
-        candidates.length,
+        candidateSet.records.length,
         candidateSet.chunksLoaded,
-        duplicatesRemoved,
         true,
         runId,
       );
@@ -273,16 +247,15 @@ export class SearchEngine {
             { expected: expectedDimension, actual: vector.length },
           ),
         ],
-        candidates.length,
+        candidateSet.records.length,
         candidateSet.chunksLoaded,
-        duplicatesRemoved,
         true,
         runId,
       );
     }
 
     await this.repository.ensureVectors(filters, runId, signal);
-    const semantic = candidates
+    const semantic = candidateSet.records
       .map((record) => {
         const semanticScore = cosine(vector, this.repository.vector(String(record.record_id)));
         return {
@@ -300,9 +273,8 @@ export class SearchEngine {
         modeRequested,
         "semantic",
         [],
-        candidates.length,
+        candidateSet.records.length,
         candidateSet.chunksLoaded,
-        duplicatesRemoved,
         true,
         runId,
       );
@@ -316,7 +288,7 @@ export class SearchEngine {
       lexical.map((item) => [String(item.record.record_id), item.lexicalScore ?? 0]),
     );
 
-    const merged: ScoredRecord[] = candidates.map((record) => {
+    const merged: ScoredRecord[] = candidateSet.records.map((record) => {
       const id = String(record.record_id);
       const lexicalScore = lexicalById.get(id) ?? 0;
       const semanticScore = semanticById.get(id);
@@ -334,9 +306,8 @@ export class SearchEngine {
       modeRequested,
       "hybrid",
       [],
-      candidates.length,
+      candidateSet.records.length,
       candidateSet.chunksLoaded,
-      duplicatesRemoved,
       true,
       runId,
     );
@@ -387,7 +358,6 @@ export class SearchEngine {
     warnings: SearchWarning[],
     candidateCount: number,
     chunksLoaded: number,
-    duplicatesRemoved: number,
     semanticAvailable: boolean,
     runId: string,
   ): SearchResponse {
@@ -407,7 +377,6 @@ export class SearchEngine {
       diagnostics: {
         candidateCount,
         chunksLoaded,
-        duplicatesRemoved,
         semanticAvailable,
       },
     };
