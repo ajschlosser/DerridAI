@@ -20,6 +20,7 @@ from app.pipelines.evidence_recovery import (
     execute_evidence_recovery,
 )
 from app.pipelines.manager import PipelineManager
+from app.pipelines.models import InputBinding
 from app.pipelines.service import PipelineService, pipeline_hash
 from app.pipelines.store import PipelineStore
 
@@ -369,3 +370,39 @@ def test_trace_lists_only_stages_that_ran_and_binds_the_exact_pipeline(monkeypat
     assert trace.resolved_hash == pipeline_hash(pipeline) == result.entry["pipeline"]["pipeline_hash"]
     assert result.entry["pipeline"]["trace_id"] == trace.run_id
     assert {stage.stage_id for stage in trace.stages}.isdisjoint({"semantic", "rerank", "mmr", "llm_choice"})
+
+
+# --- Explicit input bindings -------------------------------------------------------------
+
+
+def _bound(stage_id, producer, key=CELF):
+    binding = InputBinding(source="stage", stage=producer, output="candidates")
+    return _variant(key, "evidence.recovery.bound", lambda source: [
+        stage.model_copy(update={"inputs": {"candidates": [binding]}}) if stage.id == stage_id else stage
+        for stage in source.stages
+    ])
+
+
+def test_binding_the_provenance_gate_past_support_is_reported_non_celf() -> None:
+    plan = compile_recovery_pipeline(_bound("provenance", "lexical"))
+    assert plan.bound_sources == {"provenance": ["lexical"]}
+    assert plan.celf_compliant is False and "'lexical'" in plan.compliance_reason
+    # Restating the support gate keeps the guarantee.
+    assert compile_recovery_pipeline(_bound("provenance", "support")).celf_compliant is True
+
+
+def test_selection_cannot_be_bound_around_the_provenance_gate() -> None:
+    with pytest.raises(ValueError, match="Only the provenance gate may feed"):
+        compile_recovery_pipeline(_bound("select", "support"))
+
+
+def test_bound_recovery_pipeline_runs_and_is_supported(monkeypatch, traces) -> None:
+    from app.pipelines.workflows import runtime_support
+
+    pipeline = _bound("provenance", "lexical")
+    assert runtime_support(pipeline)["supported"] is True
+    _use(monkeypatch, pipeline)
+    result = _recover("calm", [{"block_id": "b1", "text": "calm calm calm"}], field="mood")
+    assert result.entry["block_ids"] == ["b1"]
+    assert result.status["celf_compliant"] is False
+    assert _ran(traces)["provenance"] == "completed"
