@@ -1,3 +1,5 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # DerridAI SDK changelog
 
 ## 0.1.1
