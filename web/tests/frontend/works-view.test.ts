@@ -577,7 +577,7 @@ describe("WorksView", () => {
     const section = wrapper.get(".create-site-dialog [data-site-transformers]");
     expect(section.get("[data-transformers-source]").text()).toContain("not in the DerridAI image");
     expect(section.get("[data-transformers-source]").text()).toContain("14.2 MB");
-    expect(section.get("[data-transformers-download]").exists()).toBe(true);
+    expect(section.find("[data-transformers-download]").exists()).toBe(true);
     wrapper.unmount();
 
     siteApi.exportOptions.mockResolvedValue({
@@ -592,7 +592,7 @@ describe("WorksView", () => {
     const cached = await mountWorks();
     await chooseMenuItem(cached, "More actions", "Create site");
     expect(cached.get("[data-transformers-source]").text()).toContain("already downloaded");
-    expect(cached.get("[data-transformers-delete]").exists()).toBe(true);
+    expect(cached.find("[data-transformers-delete]").exists()).toBe(true);
     cached.unmount();
   });
 
