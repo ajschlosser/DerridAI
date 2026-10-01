@@ -1,7 +1,7 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 """Candidate-first indexing: safe NLP spans become unreviewed FieldAssertions."""
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001 -- keep candidate-layer module namespaces explicit
 
 import app.field_assertions
 import app.metadata_candidates
