@@ -1,0 +1,42 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+name: Format cleanup follow-up
+
+on:
+  push:
+    branches:
+      - chore/release-metadata-repository-cleanup
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chore/release-metadata-repository-cleanup
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend tooling
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: Format the pre-existing Works handoff
+        working-directory: web
+        run: npx prettier --write ../docs/WORKS_WORKSPACE_UX_REDESIGN_HANDOFF.md --config .prettierrc
+      - name: Commit formatting if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/WORKS_WORKSPACE_UX_REDESIGN_HANDOFF.md; then
+            echo "No formatting changes needed."
+            exit 0
+          fi
+          git config user.name "Aaron Schlosser, PhD"
+          git config user.email "aaron@aaronschlosser.com"
+          git add docs/WORKS_WORKSPACE_UX_REDESIGN_HANDOFF.md
+          git commit -m "docs: format Works workspace handoff"
+          git push origin HEAD:chore/release-metadata-repository-cleanup
