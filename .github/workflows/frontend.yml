@@ -132,7 +132,7 @@ jobs:
                 frontend=true
                 format=true
                 case "$path" in
-                  web/sdk/*|web/tests/publication/*|web/playwright.publication.config.ts|web/package.json)
+                  web/sdk/*|web/tests/publication/*|web/playwright.publication.config.ts|web/vite.sdk.config.ts|web/vite.sdk.package.config.ts|web/package.json)
                     publication=true
                     ;;
                 esac
@@ -143,7 +143,7 @@ jobs:
             esac
 
             case "$path" in
-              api/app/site_publication.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|api/app/routers/sites.py|tests/test_site_publication.py|scripts/generate_publication_acceptance_artifacts.py|scripts/test_publication_nginx_bundle.sh)
+              api/app/site_publication.py|api/app/site_record_profile.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|api/app/locales/*.py|api/app/routers/sites.py|tests/test_site_publication.py|tests/test_site_record_profile.py|scripts/generate_publication_acceptance_artifacts.py|scripts/test_publication_nginx_bundle.sh)
                 publication=true
                 ;;
             esac
