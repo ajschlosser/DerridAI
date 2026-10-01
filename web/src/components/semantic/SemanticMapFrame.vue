@@ -632,7 +632,7 @@ function clearSearch() {
 }
 .semantic-map-kind {
   color: var(--text-tertiary);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 750;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -655,7 +655,7 @@ function clearSearch() {
 }
 .semantic-map-inspector-stats dt {
   color: var(--text-tertiary);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
 }
 .semantic-map-inspector-stats dd {
   margin: 2px 0 0;
