@@ -73,8 +73,8 @@ def test_nlp_candidate_assertion_preserves_derived_unreviewed_provenance() -> No
     status = record["metadata_field_status"]["persons"]
     assert status["status"] == "model_inferred"
     assert status["method"] == "nlp:spacy:test-model"
-    assert status["candidate_only"] is True
-    assert status["value_source"] == "nlp"
+    assert assertion.legacy_metadata["candidate_only"] is True
+    assert assertion.legacy_metadata["value_source"] == "nlp"
 
 
 def test_legacy_migration_is_idempotent_and_preserves_confirmed_absence() -> None:
