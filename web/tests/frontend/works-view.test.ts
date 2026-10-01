@@ -57,7 +57,14 @@ function adminSnapshot(overrides: Partial<WorksSnapshot> = {}): WorksSnapshot {
     shared: false,
     error: "",
     works: [item],
-    scopeWorks: [{ work: item.work, count: item.count, authors: item.authors, year_label: item.year_label }],
+    scopeWorks: [
+      {
+        work: item.work,
+        count: item.count,
+        authors: item.authors,
+        year_label: item.year_label,
+      },
+    ],
     selected: null,
     query: "",
     selectedWork: "",
@@ -258,7 +265,9 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
-  it("presents authoritative corpus state and derived search-index freshness compactly", async () => {
+  it(
+    "presents authoritative corpus state and derived search-index freshness compactly",
+    async () => {
     const wrapper = await mountWorks();
     const loaded = wrapper.get("[data-works-context='loaded']");
     expect(loaded.text()).toContain("Working corpus");
@@ -277,8 +286,9 @@ describe("WorksView", () => {
     const header = wrapper.get(".ui-page-header-actions");
     expect(header.text()).not.toMatch(/Update search index/);
     expect(header.findAll("button.ui-button")).toHaveLength(1);
-    wrapper.unmount();
-  });
+      wrapper.unmount();
+    },
+  );
 
   it("shows stale search-index records as needing an update", async () => {
     runtime.getWorksWorkspaceSnapshot.mockReturnValue(
@@ -340,7 +350,9 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
-  it("selects a work with the keyboard-operable card button and keeps the library in place", async () => {
+  it(
+    "selects a work with the keyboard-operable card button and keeps the library in place",
+    async () => {
     const wrapper = await mountWorks();
     const select = wrapper.get(".works-card-select");
     expect(select.element.tagName).toBe("BUTTON");
@@ -349,10 +361,13 @@ describe("WorksView", () => {
     await select.trigger("click");
     expect(scroll).not.toHaveBeenCalled();
     expect(wrapper.find("article[role], article[tabindex]").exists()).toBe(false);
-    wrapper.unmount();
-  });
+      wrapper.unmount();
+    },
+  );
 
-  it("places the selected work in a stable inspector beside the library, not above it", async () => {
+  it(
+    "places the selected work in a stable inspector beside the library, not above it",
+    async () => {
     runtime.getWorksWorkspaceSnapshot.mockReturnValue(
       adminSnapshot({ selected: workItem(), selectedWork: "Glas" }),
     );
@@ -365,8 +380,9 @@ describe("WorksView", () => {
     expect(wrapper.get(".works-inspector-pane h2").text()).toBe("Glas");
     await wrapper.get("button[aria-label='Close work details']").trigger("click");
     expect(runtime.setWorksOverview).toHaveBeenCalledWith("");
-    wrapper.unmount();
-  });
+      wrapper.unmount();
+    },
+  );
 
   it("opens the selected work in an accessible dialog on narrow screens", async () => {
     setViewportWide(false);
@@ -428,7 +444,11 @@ describe("WorksView", () => {
     const wrapper = await mountWorks();
     const chips = wrapper.findAll(".works-filter-chip");
     expect(chips.map((chip) => chip.text())).toEqual(
-      expect.arrayContaining(["Only works needing review×Remove", "Pending changes×Remove", "Jacques Derrida×Remove"]),
+      expect.arrayContaining([
+        "Only works needing review×Remove",
+        "Pending changes×Remove",
+        "Jacques Derrida×Remove",
+      ]),
     );
 
     await chips.find((chip) => chip.text().includes("Jacques Derrida"))!.trigger("click");
@@ -436,7 +456,9 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
-  it("paginates large card libraries instead of revealing all cards by animation frame", async () => {
+  it(
+    "paginates large card libraries instead of revealing all cards by animation frame",
+    async () => {
     const items = Array.from({ length: 50 }, (_, index) =>
       workItem({ work: `Work ${String(index + 1).padStart(2, "0")}` }),
     );
@@ -464,8 +486,9 @@ describe("WorksView", () => {
     await next.trigger("click");
     expect(wrapper.findAll(".works-card")).toHaveLength(2);
     expect(wrapper.get(".works-library-pagination").text()).toContain("Page 2 / 2");
-    wrapper.unmount();
-  });
+      wrapper.unmount();
+    },
+  );
 
   it("renders List mode as a semantic dense table rather than compressed cards", async () => {
     runtime.getWorksWorkspaceSnapshot.mockReturnValue(adminSnapshot({ viewMode: "list" }));
