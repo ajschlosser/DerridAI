@@ -60,3 +60,38 @@ test("real single-file export works from file:// without an application server",
   expect(requests).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
+
+
+test("real single-file export keeps evidence when a direct provider is unreachable", async ({
+  page,
+}) => {
+  if (!artifactDir) throw new Error("DERRIDAI_PUBLICATION_ARTIFACT_DIR is required.");
+
+  const providerRequests: string[] = [];
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.route("https://models.example.test/v1/**", async (route) => {
+    providerRequests.push(route.request().url());
+    await route.abort("connectionrefused");
+  });
+
+  await page.goto(pathToFileURL(resolve(artifactDir, "local-provider.html")).href);
+  await page.getByRole("button", { name: "Skip tutorial" }).click();
+  await page.getByRole("button", { name: "Research" }).click();
+
+  await page.getByLabel("Provider profile").selectOption("acceptance-provider");
+  await page.getByRole("button", { name: "Use this provider" }).click();
+  await expect(page.getByText("Provider applied.")).toBeVisible();
+
+  await page.getByLabel("Question").fill("What does the passage say about hospitality?");
+  await page.getByRole("button", { name: "Ask" }).click();
+
+  await expect(page.getByText("Evidence is available without a generated answer.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /\[E1\] Glas/ })).toBeVisible();
+  await expect(
+    page.getByRole("group", { name: "Technology used for this operation" }),
+  ).toContainText("Text search");
+  expect(providerRequests.some((url) => url.endsWith("/embeddings"))).toBe(true);
+  expect(providerRequests.some((url) => url.endsWith("/chat/completions"))).toBe(true);
+  expect(pageErrors).toEqual([]);
+});
