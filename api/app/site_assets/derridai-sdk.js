@@ -112,6 +112,11 @@ var DerridAI = (function(exports) {
       for (const listener of this.listeners) listener(event);
     }
   }
+  function isAbortError(error) {
+    if (!error || typeof error !== "object") return false;
+    if ("name" in error && error.name === "AbortError") return true;
+    return typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError";
+  }
   class LruCache {
     constructor(capacity) {
       this.capacity = capacity;
@@ -218,9 +223,11 @@ var DerridAI = (function(exports) {
       throwIfAborted$1(signal);
       if (chunk) {
         chunk.ids.forEach((id2, index) => {
+          const recordId = String(id2);
+          if (this.vectorsByRecordId.has(recordId)) return;
           const start = index * chunk.dimension;
           this.vectorsByRecordId.set(
-            String(id2),
+            recordId,
             chunk.values.subarray(start, start + chunk.dimension)
           );
         });
@@ -426,6 +433,7 @@ ${evidence}`;
           warnings
         };
       } catch (error) {
+        if (isAbortError(error)) throw error;
         warnings.push({
           code: "generation_unavailable",
           message: error instanceof Error ? error.message : "Generation failed. The retrieved evidence packet remains available."
@@ -442,6 +450,34 @@ ${evidence}`;
         };
       }
     }
+  }
+  function embeddingDescriptorMismatches(contract, descriptor) {
+    if (!contract) return [];
+    const mismatches = [];
+    const pairs = ["model", "revision"];
+    for (const field of pairs) {
+      const expected = String(contract[field] ?? "").trim();
+      const actual = String(descriptor[field] ?? "").trim();
+      if (expected && actual && expected !== actual) {
+        mismatches.push({ field, expected, actual });
+      }
+    }
+    return mismatches;
+  }
+  function dedupeRecords(records) {
+    const seen = /* @__PURE__ */ new Set();
+    const unique = [];
+    let duplicatesRemoved = 0;
+    for (const record of records) {
+      const id2 = String(record.record_id);
+      if (seen.has(id2)) {
+        duplicatesRemoved += 1;
+        continue;
+      }
+      seen.add(id2);
+      unique.push(record);
+    }
+    return { records: unique, duplicatesRemoved };
   }
   function tokens(value, locale) {
     return String(value ?? "").toLocaleLowerCase(locale).match(/[\p{L}\p{N}’'_-]+/gu) ?? [];
@@ -533,7 +569,9 @@ ${evidence}`;
       const signal = request.signal;
       this.events.emit({ type: "search-start", runId: runId2, query });
       const candidateSet = await this.repository.candidates(filters, this.locale, runId2, signal);
-      const lexical = lexicalScores(query, candidateSet.records, this.locale);
+      const deduped = dedupeRecords(candidateSet.records);
+      const candidates = deduped.records;
+      const lexical = lexicalScores(query, candidates, this.locale);
       const semanticAvailable = Boolean(
         this.manifest.features?.semantic_search && this.manifest.vector_index?.dimension
       );
@@ -543,9 +581,10 @@ ${evidence}`;
           modeRequested,
           "keyword",
           [],
-          candidateSet.records.length,
+          candidates.length,
           candidateSet.chunksLoaded,
           semanticAvailable,
+          deduped.duplicatesRemoved,
           runId2
         );
       }
@@ -560,9 +599,10 @@ ${evidence}`;
               "This publication has no compatible semantic vectors; keyword results were returned."
             )
           ],
-          candidateSet.records.length,
+          candidates.length,
           candidateSet.chunksLoaded,
           false,
+          deduped.duplicatesRemoved,
           runId2
         );
       }
@@ -577,16 +617,19 @@ ${evidence}`;
               "No embedding capability was supplied; keyword results were returned."
             )
           ],
-          candidateSet.records.length,
+          candidates.length,
           candidateSet.chunksLoaded,
           true,
+          deduped.duplicatesRemoved,
           runId2
         );
       }
-      const expectedModel = String(this.manifest.vector_index?.model ?? "");
       const descriptor = this.embeddings.descriptor();
-      const actualModel = String(descriptor.model ?? "");
-      if (expectedModel && actualModel && expectedModel !== actualModel) {
+      const descriptorMismatches = embeddingDescriptorMismatches(
+        this.manifest.vector_index,
+        descriptor
+      );
+      if (descriptorMismatches.length) {
         return this.finish(
           lexical.slice(0, limit),
           modeRequested,
@@ -594,13 +637,14 @@ ${evidence}`;
           [
             fallbackWarning(
               "embedding_contract_mismatch",
-              "The supplied embedding capability does not match the publication embedding model; keyword results were returned.",
-              { expectedModel, actualModel }
+              "The supplied embedding capability does not match the publication embedding contract; keyword results were returned.",
+              { mismatches: descriptorMismatches }
             )
           ],
-          candidateSet.records.length,
+          candidates.length,
           candidateSet.chunksLoaded,
           true,
+          deduped.duplicatesRemoved,
           runId2
         );
       }
@@ -609,7 +653,33 @@ ${evidence}`;
       try {
         const embedded = await this.embeddings.embed([query], { signal });
         vector = embedded.vectors[0] ?? [];
+        if (embedded.provider) {
+          const resultMismatches = embeddingDescriptorMismatches(
+            this.manifest.vector_index,
+            embedded.provider
+          );
+          if (resultMismatches.length) {
+            return this.finish(
+              lexical.slice(0, limit),
+              modeRequested,
+              "keyword",
+              [
+                fallbackWarning(
+                  "embedding_contract_mismatch",
+                  "The embedding result provenance does not match the publication embedding contract; keyword results were returned.",
+                  { mismatches: resultMismatches }
+                )
+              ],
+              candidates.length,
+              candidateSet.chunksLoaded,
+              true,
+              deduped.duplicatesRemoved,
+              runId2
+            );
+          }
+        }
       } catch (error) {
+        if (isAbortError(error)) throw error;
         return this.finish(
           lexical.slice(0, limit),
           modeRequested,
@@ -620,9 +690,10 @@ ${evidence}`;
               error instanceof Error ? error.message : "Embedding generation failed; keyword results were returned."
             )
           ],
-          candidateSet.records.length,
+          candidates.length,
           candidateSet.chunksLoaded,
           true,
+          deduped.duplicatesRemoved,
           runId2
         );
       }
@@ -639,14 +710,15 @@ ${evidence}`;
               { expected: expectedDimension, actual: vector.length }
             )
           ],
-          candidateSet.records.length,
+          candidates.length,
           candidateSet.chunksLoaded,
           true,
+          deduped.duplicatesRemoved,
           runId2
         );
       }
       await this.repository.ensureVectors(filters, runId2, signal);
-      const semantic = candidateSet.records.map((record) => {
+      const semantic = candidates.map((record) => {
         const semanticScore = cosine(vector, this.repository.vector(String(record.record_id)));
         return {
           record,
@@ -660,9 +732,10 @@ ${evidence}`;
           modeRequested,
           "semantic",
           [],
-          candidateSet.records.length,
+          candidates.length,
           candidateSet.chunksLoaded,
           true,
+          deduped.duplicatesRemoved,
           runId2
         );
       }
@@ -673,7 +746,7 @@ ${evidence}`;
       const lexicalById = new Map(
         lexical.map((item) => [String(item.record.record_id), item.lexicalScore ?? 0])
       );
-      const merged = candidateSet.records.map((record) => {
+      const merged = candidates.map((record) => {
         const id2 = String(record.record_id);
         const lexicalScore = lexicalById.get(id2) ?? 0;
         const semanticScore = semanticById.get(id2);
@@ -690,9 +763,10 @@ ${evidence}`;
         modeRequested,
         "hybrid",
         [],
-        candidateSet.records.length,
+        candidates.length,
         candidateSet.chunksLoaded,
         true,
+        deduped.duplicatesRemoved,
         runId2
       );
     }
@@ -723,7 +797,7 @@ ${evidence}`;
       }
       return selected.map((item, index) => ({ ...item, rank: index + 1 }));
     }
-    finish(items, modeRequested, modeUsed, warnings, candidateCount, chunksLoaded, semanticAvailable, runId2) {
+    finish(items, modeRequested, modeUsed, warnings, candidateCount, chunksLoaded, semanticAvailable, duplicatesRemoved, runId2) {
       const results = items.map((item, index) => ({
         record: item.record,
         score: item.score,
@@ -740,7 +814,8 @@ ${evidence}`;
         diagnostics: {
           candidateCount,
           chunksLoaded,
-          semanticAvailable
+          semanticAvailable,
+          duplicatesRemoved
         }
       };
     }
@@ -900,7 +975,7 @@ ${evidence}`;
       try {
         return await this.searchEngine.search(request, id2);
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
+        if (isAbortError(error)) {
           this.events.emit({ type: "operation-cancelled", runId: id2 });
         }
         throw error;
@@ -911,7 +986,7 @@ ${evidence}`;
       try {
         return await this.researchEngine.run(request, id2);
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
+        if (isAbortError(error)) {
           this.events.emit({ type: "operation-cancelled", runId: id2 });
         }
         throw error;
@@ -1074,7 +1149,7 @@ ${evidence}`;
     inline: (publication) => new InlineDataSource(publication),
     http: (options) => new HttpDataSource(options)
   };
-  const version = "0.1.0";
+  const version = "0.1.1";
   exports.BrowserStorage = BrowserStorage;
   exports.DerridAIClient = DerridAIClient;
   exports.HttpDataSource = HttpDataSource;
