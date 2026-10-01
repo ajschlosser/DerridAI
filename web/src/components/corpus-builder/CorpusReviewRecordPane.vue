@@ -102,7 +102,9 @@ onBeforeUnmount(() => emit("rootChange", null));
       <section class="record-text-review" aria-labelledby="reviewed-record-text-title">
         <header>
           <div>
-            <b id="reviewed-record-text-title">{{ i18n.t("pdf_corpus.reviewed_record_text") }}</b
+            <b id="reviewed-record-text-title" :class="{ 'sr-only': !editing }">{{
+              i18n.t("pdf_corpus.reviewed_record_text")
+            }}</b
             ><span v-if="record.text_review_status === 'human_corrected'" class="human-corrected">{{
               i18n.t("pdf_corpus.human_corrected")
             }}</span
@@ -118,7 +120,7 @@ onBeforeUnmount(() => emit("rootChange", null));
               {{ i18n.t("pdf_corpus.context_show") }}
             </label>
             <UiButton size="small" v-if="!editing" @click="emit('openPopout')">
-              {{ i18n.t("pdf_corpus.reviewed_record_text") }}
+              {{ i18n.t("pdf_corpus.popout_record") }}
             </UiButton>
             <UiButton
               size="small"
@@ -267,16 +269,13 @@ onBeforeUnmount(() => emit("rootChange", null));
 .record-text-review {
   display: grid;
   flex: none;
-  gap: 10px;
-  margin: 10px 16px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  overflow: hidden;
+  gap: 0;
+  margin: 0;
   background: var(--surface-card);
 }
 /* The text card keeps its full height and the pane scrolls, so a long record is never clipped. */
 .record-text-review .record-primary-text {
-  padding: 20px 24px;
+  padding: 24px 28px 40px;
   min-height: 220px;
   max-height: none;
   overflow: visible;
@@ -286,8 +285,8 @@ onBeforeUnmount(() => emit("rootChange", null));
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 6px 10px;
+  gap: 6px 12px;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-subtle);
 }

@@ -220,6 +220,29 @@ test.describe("on a laptop", () => {
   });
 });
 
+test.describe("at a small laptop width", () => {
+  test.use({ viewport: { width: 1280, height: 720 } });
+  test.beforeEach(({}, info) =>
+    test.skip(info.project.name !== "chromium-desktop", "Runs once, at its own viewports."),
+  );
+
+  test("the inspector tabs stay on one row and the decision bar does not overlap itself", async ({
+    page,
+  }) => {
+    await open(page);
+    const tabs = await page
+      .locator(".review-inspector-tabs button")
+      .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
+    expect(tabs.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(tabs).size, "every tab shares one row").toBe(1);
+    const blocker = await rect(page, ".dock-blocker");
+    const history = await rect(page, ".decision-history");
+    expect(blocker.right, "the blocker stops before the undo/redo buttons").toBeLessThanOrEqual(
+      history.x + 1,
+    );
+  });
+});
+
 test.describe("on a short window", () => {
   test.use({ viewport: { width: 1366, height: 650 } });
   test.beforeEach(({}, info) =>

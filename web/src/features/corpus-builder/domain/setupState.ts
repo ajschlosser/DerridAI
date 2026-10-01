@@ -67,6 +67,8 @@ const MEDIA_LABELS: Record<string, string> = {
 
 function mediaLabel(kind: string | undefined, text: PresentationText): string {
   const key = String(kind || "").toLowerCase();
+  // Legacy assets carry no media kind; an empty key would otherwise surface the raw i18n key.
+  if (!key) return "";
   return text.t(`pdf_corpus.setup.media.${key}`, MEDIA_LABELS[key] || key.toUpperCase());
 }
 

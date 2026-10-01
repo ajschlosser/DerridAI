@@ -107,12 +107,19 @@ const tabs: Array<{ id: ReviewInspectorTab; key: string }> = [
   top: 0;
   z-index: 6;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* One row however many tabs there are (the semantic map is a fourth). */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(max-content, 1fr);
+  overflow-x: auto;
+  scrollbar-width: none;
   background: var(--surface-card);
   border-bottom: 1px solid var(--border-subtle);
 }
 .review-inspector-tabs button {
-  min-height: 48px;
+  min-height: 44px;
+  min-width: 0;
+  padding-inline: 4px;
+  white-space: nowrap;
   border: 0;
   border-inline-end: 1px solid var(--border-subtle);
   background: transparent;

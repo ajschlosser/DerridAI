@@ -1054,7 +1054,7 @@ const traceRows = computed(() => {
 }
 .field-tools {
   display: flex;
-  gap: 0 14px;
+  gap: 6px;
   align-items: center;
   flex-wrap: wrap;
   color: var(--text-tertiary);
@@ -1064,10 +1064,23 @@ const traceRows = computed(() => {
   display: inline-flex;
   align-items: center;
   width: auto;
-  min-height: 28px;
-  padding: 0;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
   font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
   text-align: start;
+}
+.field-tools .link-button:hover:not(:disabled),
+.field-tools .link-button[aria-pressed="true"] {
+  border-color: var(--border-interactive);
+  background: var(--surface-selected);
+}
+.field-tools .link-button:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 1px;
 }
 .field-tools .link-button:disabled {
   color: var(--text-tertiary);

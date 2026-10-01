@@ -48,6 +48,21 @@ describe("Corpus Builder review record queue", () => {
     expect(wrapper.emitted("rootChange")?.at(-1)).toEqual([null]);
   });
 
+  it("leads each row with the short sequence number but keeps the full ID for assistive technology", () => {
+    const wrapper = mountQueue({
+      rows: [row({ record_id: "derrida-jacques-on-cosmopolitanism-00012" })],
+    });
+    const head = wrapper.get(".record-row-head b");
+    expect(head.get("[aria-hidden='true']").text()).toBe("#12");
+    expect(head.get(".sr-only").text()).toBe("derrida-jacques-on-cosmopolitanism-00012");
+    expect(head.attributes("title")).toBe("derrida-jacques-on-cosmopolitanism-00012");
+  });
+
+  it("shows an ID without a trailing sequence number unchanged", () => {
+    const wrapper = mountQueue({ rows: [row({ record_id: "intro" })] });
+    expect(wrapper.get(".record-row-head b [aria-hidden='true']").text()).toBe("intro");
+  });
+
   it("preserves active-row and queue-selection semantics", async () => {
     const wrapper = mountQueue();
 

@@ -191,7 +191,8 @@ kbd {
 }
 .focus-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   border-bottom: 1px solid var(--line);
   background: var(--surface-card, var(--card));
 }

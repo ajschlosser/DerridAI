@@ -212,6 +212,29 @@ function phaseLabel(phase: WorkspacePhase) {
 .corpus-workspace-identity {
   min-width: 0;
 }
+/* With a build open the page title is already on the tab and breadcrumb, so the header becomes one
+   compact row: the source and status, then the phase stepper, instead of a repeated heading. */
+.contextual .corpus-workspace-identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  align-items: center;
+}
+.contextual .eyebrow,
+.contextual .corpus-workspace-title-row {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.contextual .workspace-mode-nav .workspace-phase-list {
+  margin: 0;
+}
+.contextual .corpus-workspace-context strong {
+  font-size: var(--fs-md, 1rem);
+}
 .eyebrow {
   display: block;
   color: var(--text-secondary);

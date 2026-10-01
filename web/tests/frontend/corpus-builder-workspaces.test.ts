@@ -219,6 +219,18 @@ describe("setup state", () => {
     expect(summary("none")).not.toContain("document_intelligence");
   });
 
+  it("never surfaces a raw i18n key for a legacy source with no media kind", () => {
+    // Mirrors the real translator, which returns the key itself when there is no translation or fallback.
+    const strict: PresentationText = { ...text, t: (key, fallback) => fallback || key };
+    const summary = corpusSetupSectionStates(
+      input({ asset: { filename: "legacy.pdf", page_count: 12 } }),
+      [],
+      strict,
+    ).find((state) => state.id === "source")!.summary;
+    expect(summary).not.toContain("pdf_corpus.setup.media");
+    expect(summary.startsWith("legacy.pdf")).toBe(true);
+  });
+
   it("summarises audio by its probed duration, and falls back to blocks without one", () => {
     const summary = (duration?: number) =>
       corpusSetupSectionStates(
@@ -553,6 +565,7 @@ describe("review header", () => {
         ready: 5,
         issues: 4,
         remaining: 31,
+        reviewTotal: 200,
         workspaceMode: "record",
         hasSelectedRecord: false,
         ...toolbar,
@@ -561,6 +574,10 @@ describe("review header", () => {
     });
     expect(wrapper.findAll("section.review-header")).toHaveLength(1);
     expect(wrapper.get(".review-counts").text()).toContain("142");
+    // Progress is one meter against the whole build, not three competing counts.
+    const meter = wrapper.get("progress.review-meter");
+    expect(meter.attributes("max")).toBe("200");
+    expect(meter.attributes("value")).toBe("142");
     expect(wrapper.find(".run-slot").exists()).toBe(true);
     // Toolbar controls fall through from the header's attrs.
     expect(wrapper.find("#pdf-corpus-record-search").exists()).toBe(true);

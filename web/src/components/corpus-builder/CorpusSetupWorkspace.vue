@@ -12,6 +12,8 @@ const props = defineProps<{
   /** The one section whose controls are open; empty when all are collapsed. */
   expanded: CorpusSetupSectionId | "";
   disabledSections?: CorpusSetupSectionId[];
+  /** Set when a build already exists: edits here configure the next build, never the existing one. */
+  existingBuildName?: string;
 }>();
 defineEmits<{ toggle: [section: CorpusSetupSectionId] }>();
 const i18n = useI18nStore();
@@ -32,6 +34,9 @@ const titleKeys: Record<CorpusSetupSectionId, [string, string]> = {
     <h2 id="pdf-corpus-config-title" class="sr-only">
       {{ i18n.t("pdf_corpus.build_configuration") }}
     </h2>
+    <p v-if="props.existingBuildName" class="corpus-setup-next-build" role="note">
+      {{ i18n.tf("pdf_corpus.setup.applies_to_next_build", { build: props.existingBuildName }) }}
+    </p>
     <div class="corpus-setup-layout">
       <div class="corpus-setup-sections">
         <CorpusSetupSection
@@ -57,6 +62,16 @@ const titleKeys: Record<CorpusSetupSectionId, [string, string]> = {
 </template>
 
 <style scoped>
+.corpus-setup-next-build {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--tone-info-border);
+  border-radius: var(--radius-control);
+  background: var(--tone-info-bg);
+  color: var(--tone-info-fg);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
 /* Structure-section content is slotted from the parent, so it is styled from here. */
 .corpus-setup-workspace :deep(.setup-continue) {
   display: flex;

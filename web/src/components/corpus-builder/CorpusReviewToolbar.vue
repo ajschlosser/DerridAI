@@ -172,13 +172,25 @@ function confirmAcceptClean() {
       @close="emit('bulkClose')"
     />
 
-    <div class="pager">
-      <UiButton size="small" :disabled="!props.hasPreviousPage" @click="emit('previousPage')">
-        {{ i18n.t("ui.previous") }}
+    <div class="pager" role="group" :aria-label="i18n.t('pdf_corpus.queue_paging')">
+      <UiButton
+        size="small"
+        icon-only
+        :label="i18n.t('ui.previous')"
+        :disabled="!props.hasPreviousPage"
+        @click="emit('previousPage')"
+      >
+        <template #icon-label><span aria-hidden="true">‹</span></template>
       </UiButton>
       <span>{{ props.pageNumber }} / {{ props.pageCount }}</span>
-      <UiButton size="small" :disabled="!props.hasNextPage" @click="emit('nextPage')">
-        {{ i18n.t("ui.next") }}
+      <UiButton
+        size="small"
+        icon-only
+        :label="i18n.t('ui.next')"
+        :disabled="!props.hasNextPage"
+        @click="emit('nextPage')"
+      >
+        <template #icon-label><span aria-hidden="true">›</span></template>
       </UiButton>
     </div>
 
@@ -220,8 +232,8 @@ function confirmAcceptClean() {
 }
 .review-toolbar .control {
   min-height: 40px;
-  flex: 1 1 14rem;
-  max-width: 24rem;
+  flex: 1 1 12rem;
+  max-width: 16rem;
   font-size: var(--fs-sm);
 }
 .review-bulk {

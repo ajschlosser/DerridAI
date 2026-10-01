@@ -35,6 +35,7 @@ const meta = {
     ready: 17,
     issues: 4,
     remaining: 31,
+    reviewTotal: 60,
     workspaceMode: "record",
     hasSelectedRecord: true,
   },
