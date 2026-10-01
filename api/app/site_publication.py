@@ -21,6 +21,12 @@ from typing import Any
 from .corpus_publication import serialize_public_record, validate_publication_record
 from .locales.en_us import EN_US
 from .services import store
+from .site_record_profile import (
+    DEFAULT_SITE_RECORD_PROFILE,
+    apply_record_profile,
+    celf_conformance,
+    normalize_site_record_profile,
+)
 from .system_store import normalize_locale_code, system_store
 
 SITE_FORMAT = "derridai-static-site-v4"
@@ -41,6 +47,7 @@ class SiteBundle:
     publication_id: str
     record_count: int
     work_count: int
+    record_profile: str = DEFAULT_SITE_RECORD_PROFILE
 
 
 def _slug(value: str) -> str:
@@ -246,8 +253,14 @@ def build_site_bundle(
     locale: str = "en-US",
     languages: Sequence[str] | None = None,
     provider_profile_ids: Sequence[str] | None = None,
+    record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
 ) -> SiteBundle:
-    """Create an SDK-backed static research site from one immutable publication snapshot."""
+    """Create an SDK-backed static research site from one immutable publication snapshot.
+
+    ``record_profile`` chooses how much Record metadata is packaged: ``complete`` keeps every public field,
+    including FieldAssertions; ``reader`` keeps only what the site reads and cites (see ``site_record_profile``).
+    """
+    record_profile = normalize_site_record_profile(record_profile)
     selected_works = list(dict.fromkeys(str(item).strip() for item in works if str(item).strip()))
     if not selected_works:
         raise ValueError("Select at least one work.")
@@ -276,6 +289,8 @@ def build_site_bundle(
             f"database. Missing: {preview}{suffix}"
         )
 
+    vector_contract = dict(projection.get("store") or {})
+    full_records: list[dict[str, Any]] = []
     public_records: list[dict[str, Any]] = []
     vectors: list[list[float] | None] = []
     ids: set[str] = set()
@@ -295,7 +310,7 @@ def build_site_bundle(
         if record_id in ids:
             raise ValueError(f"Duplicate record_id in site publication: {record_id}")
         ids.add(record_id)
-        public_records.append(public_record)
+        full_records.append(public_record)
 
         vector = item.get("embedding")
         if vector is None:
@@ -319,10 +334,20 @@ def build_site_bundle(
             "Site creation is blocked because selected records are not publication-valid: "
             f"{preview}{suffix}"
         )
-    if not public_records:
+    if not full_records:
         raise ValueError("No publication-valid records remain after validating the selected works.")
 
-    vector_contract = dict(projection.get("store") or {})
+    public_records = apply_record_profile(
+        full_records, record_profile, vector_contract.get("filter_fields") or []
+    )
+    # The profile must never remove what cELF Core requires; fail rather than publish a broken Record.
+    profile_errors = [
+        error for record in public_records for error in validate_publication_record(record)
+    ]
+    if profile_errors:
+        raise ValueError(
+            "The record metadata profile removed required fields: " + "; ".join(profile_errors[:8])
+        )
     semantic_count = sum(1 for vector in vectors if vector)
     created_at = datetime.now(UTC).isoformat()
     publication_id = f"sitepub-{uuid.uuid4().hex}"
@@ -363,6 +388,7 @@ def build_site_bundle(
         "corpus_id": str(store_name).strip(),
         "publication_version": 1,
         "celf_version": "1.0",
+        "celf_conformance": celf_conformance(record_profile, full_records, public_records),
         "created_at": created_at,
         "title": title,
         "description": description,
@@ -456,6 +482,7 @@ def build_site_bundle(
         publication_id=publication_id,
         record_count=len(public_records),
         work_count=len(selected_works),
+        record_profile=record_profile,
     )
 
 
@@ -479,6 +506,7 @@ def build_local_site_file(
     locale: str = "en-US",
     languages: Sequence[str] | None = None,
     provider_profile_ids: Sequence[str] | None = None,
+    record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
 ) -> SiteBundle:
     """Create one self-contained HTML file for direct local use.
 
@@ -493,6 +521,7 @@ def build_local_site_file(
         locale=locale,
         languages=languages,
         provider_profile_ids=provider_profile_ids,
+        record_profile=record_profile,
     )
     files = _core_site_files(core)
     index_html = files["index.html"].decode("utf-8")
@@ -529,6 +558,7 @@ def build_local_site_file(
         publication_id=core.publication_id,
         record_count=core.record_count,
         work_count=core.work_count,
+        record_profile=core.record_profile,
     )
 
 
@@ -675,6 +705,7 @@ def build_nginx_site_bundle(
     locale: str = "en-US",
     languages: Sequence[str] | None = None,
     provider_profile_ids: Sequence[str] | None = None,
+    record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
 ) -> SiteBundle:
     """Create a deployable multi-file site served by exactly one nginx container."""
     core = build_site_bundle(
@@ -685,6 +716,7 @@ def build_nginx_site_bundle(
         locale=locale,
         languages=languages,
         provider_profile_ids=provider_profile_ids,
+        record_profile=record_profile,
     )
     files = _core_site_files(core)
     archive = io.BytesIO()
@@ -706,4 +738,5 @@ def build_nginx_site_bundle(
         publication_id=core.publication_id,
         record_count=core.record_count,
         work_count=core.work_count,
+        record_profile=core.record_profile,
     )

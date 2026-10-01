@@ -333,6 +333,15 @@ The administrator **Works** page includes **Create site** when a corpus database
 
 The generated reference site is fully internationalized from the selected DerridAI dictionaries. Its language menu contains only the languages included in that export. Publication is blocked if any selected language is missing a required static-site translation; DerridAI does not silently fall back to English for a selected language. Locale direction is applied at runtime for both left-to-right and right-to-left scripts.
 
+### Record metadata in a site
+
+The **Record metadata** choice in the export dialog sets how much metadata each Record carries, and so how large the files are.
+
+- **Complete** (the default) packages every public Record field, including FieldAssertions: how each value was derived, evaluated, reviewed, and supported by evidence. It carries the cELF Core Record and the Scholarly Assertion layer.
+- **Reader-optimized (smaller files)** packages only what the site reads and cites: Record text, source spans, citation, edition, translator and page data, speaker, quoted speaker, position holder and the related attribution fields, review state, and any fields the collection offers as search filters. It omits FieldAssertions, evidence and confidence detail, and indexing fields such as topics and concepts. Keyword search covers only the fields that are kept. Because the assertions are gone, each kept attribution field carries a short `field_authority` summary (derivation, evaluation, and authority) so that a model-proposed, unreviewed value does not read as settled.
+
+The dialog states the cELF status of each choice, and the published manifest records it under `celf_conformance`. Both choices are cELF Core Record-compliant: every published Record keeps `record_id`, `source_document_id`, `text`, and `source_spans`, and export fails rather than publish a Record that has lost one. Only **Complete** also carries FieldAssertions, so a reader-optimized site is not a full cELF publication and its metadata provenance cannot be inspected in the site.
+
 ### Two-file static site
 
 Choose **Two-file static site** for the standard DerridAI publication. The ZIP contains exactly `index.html` and `derridai-site.js`. The JavaScript file contains the immutable publication package, progressive work chunks, the framework-neutral DerridAI browser SDK, and the reference interface. The same two files can be opened locally or served unchanged by an ordinary static HTTP/HTTPS host. No DerridAI application server is required.
