@@ -120,9 +120,13 @@ function localPoint(event: WheelEvent | MouseEvent): RelationPoint {
   };
 }
 
+function centerOnPoint(point: RelationPoint, nextZoom = viewport.zoom.value) {
+  viewport.centerOn(point, viewportSize(), nextZoom);
+}
+
 function centerInitial(nextZoom = props.initialZoom) {
   if (props.initialCenter) {
-    viewport.centerOn(props.initialCenter, viewportSize(), nextZoom);
+    centerOnPoint(props.initialCenter, nextZoom);
     return;
   }
   viewport.setState({ pan: { x: 0, y: 0 }, zoom: nextZoom });
@@ -199,7 +203,7 @@ defineExpose({
   zoomBy,
   fitView,
   resetView,
-  centerOn: viewport.centerOn,
+  centerOn: centerOnPoint,
   setViewport: viewport.setState,
   resetSize: resize.resetSize,
 });
