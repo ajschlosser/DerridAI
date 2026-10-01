@@ -1551,7 +1551,8 @@
   // separately just because the publication was embedded with another model.
   function browserSemanticIndexSection() {
     const index = capabilities?.localIndex;
-    if (selectedEmbeddingId || !index || index.usesPublishedVectors || index.complete) return null;
+    if (!index || index.usesPublishedVectors || index.complete) return null;
+    if (selectedEmbeddingId) return indexSection();
     return indexSection(async () => {
       saveLocalModel();
       await rebuildClient();
