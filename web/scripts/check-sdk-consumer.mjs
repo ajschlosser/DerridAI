@@ -5,7 +5,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -39,31 +38,26 @@ try {
   mkdirSync(packDir);
   cpSync(fixtureRoot, consumerDir, { recursive: true });
 
-  run("npm", ["pack", "./sdk", "--pack-destination", packDir], webRoot);
-  const tarballs = readdirSync(packDir).filter((name) => name.endsWith(".tgz"));
-  if (tarballs.length !== 1) {
-    throw new Error(`Expected one SDK tarball, found ${tarballs.length}.`);
+  const packed = JSON.parse(
+    output("npm", ["pack", "./sdk", "--json", "--pack-destination", packDir], webRoot),
+  );
+  if (!Array.isArray(packed) || packed.length !== 1 || !packed[0]?.filename) {
+    throw new Error("npm pack did not return exactly one SDK package.");
   }
 
-  const tarball = join(packDir, tarballs[0]);
-  const packedFiles = output("tar", ["-tzf", tarball], webRoot)
-    .trim()
-    .split("\n")
-    .filter(Boolean);
+  const tarball = join(packDir, packed[0].filename);
+  const packedFiles = (packed[0].files ?? []).map((item) => String(item.path));
   const unexpected = packedFiles.filter(
     (path) =>
-      path !== "package/package.json" &&
-      path !== "package/README.md" &&
-      path !== "package/CHANGELOG.md" &&
-      !path.startsWith("package/dist/"),
+      path !== "package.json" &&
+      path !== "README.md" &&
+      path !== "CHANGELOG.md" &&
+      !path.startsWith("dist/"),
   );
   if (unexpected.length) {
     throw new Error(`Unexpected files in SDK tarball: ${unexpected.join(", ")}`);
   }
-  if (
-    !packedFiles.includes("package/dist/index.js") ||
-    !packedFiles.includes("package/dist/index.d.ts")
-  ) {
+  if (!packedFiles.includes("dist/index.js") || !packedFiles.includes("dist/index.d.ts")) {
     throw new Error("SDK tarball is missing its JavaScript or TypeScript declaration entry point.");
   }
 
