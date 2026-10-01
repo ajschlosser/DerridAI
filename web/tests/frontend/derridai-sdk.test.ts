@@ -276,6 +276,42 @@ describe("DerridAI SDK", () => {
     expect(embed).not.toHaveBeenCalled();
   });
 
+  it("rejects embedding-result provenance that contradicts the publication contract", async () => {
+    const client = await createClient({
+      dataSource: dataSources.inline(publicationPackage()),
+      storage: new MemoryStorage(),
+      embeddings: {
+        descriptor: () => ({ type: "host", model: "bge-m3:latest" }),
+        async embed() {
+          return {
+            vectors: [[1, 0]],
+            provider: {
+              type: "host",
+              model: "bge-m3:latest",
+              revision: "different-revision",
+            },
+          };
+        },
+      },
+    });
+
+    const response = await client.search({ query: "hospitality", mode: "hybrid" });
+
+    expect(response.modeUsed).toBe("keyword");
+    expect(response.warnings[0]).toMatchObject({
+      code: "embedding_contract_mismatch",
+      details: {
+        mismatches: [
+          {
+            field: "revision",
+            expected: "fixture-revision",
+            actual: "different-revision",
+          },
+        ],
+      },
+    });
+  });
+
   it("propagates embedding cancellation and emits operation-cancelled", async () => {
     const client = await createClient({
       dataSource: dataSources.inline(publicationPackage()),
