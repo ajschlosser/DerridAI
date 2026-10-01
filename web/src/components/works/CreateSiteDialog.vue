@@ -36,7 +36,7 @@ const dialog = ref<HTMLDialogElement | null>(null);
 const selected = ref<string[]>(props.initialWork ? [props.initialWork] : []);
 const title = ref(props.initialWork || "");
 const description = ref("");
-const exportFormat = ref<SiteExportFormat>("local-single-file");
+const exportFormat = ref<SiteExportFormat>("two-file");
 const selectedLanguages = ref<string[]>(props.languages.map((item) => item.code));
 const selectedProviderProfiles = ref<string[]>(props.providerProfiles.map((item) => item.id));
 
@@ -166,6 +166,13 @@ onMounted(async () => {
 
         <fieldset class="site-export-format">
           <legend>{{ i18n.t("site.create_export_format") }}</legend>
+          <label class="site-export-option">
+            <input v-model="exportFormat" type="radio" value="two-file" />
+            <span>
+              <strong>{{ i18n.t("site.create_format_two_file") }}</strong>
+              <small>{{ i18n.t("site.create_format_two_file_help") }}</small>
+            </span>
+          </label>
           <label class="site-export-option">
             <input v-model="exportFormat" type="radio" value="local-single-file" />
             <span>
@@ -322,9 +329,11 @@ onMounted(async () => {
           {{
             props.busy
               ? i18n.t("site.create_busy")
-              : exportFormat === "local-single-file"
-                ? i18n.t("site.create_action_local")
-                : i18n.t("site.create_action_nginx")
+              : exportFormat === "two-file"
+                ? i18n.t("site.create_action_two_file")
+                : exportFormat === "local-single-file"
+                  ? i18n.t("site.create_action_local")
+                  : i18n.t("site.create_action_nginx")
           }}
         </button>
       </footer>
