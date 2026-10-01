@@ -315,7 +315,7 @@ def complete_structured_json[T](
             raise
         except Exception as exc:  # noqa: BLE001 - caller validator defines its own error type
             last_error = exc
-            kind: StructuredFailureKind = "schema_invalid"
+            kind = "schema_invalid"
             failure_kinds.append(kind)
             metric("structured_output_failures")
             metric("structured_output_schema_invalid")
