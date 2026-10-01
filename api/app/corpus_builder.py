@@ -69,10 +69,6 @@ from .corpus_llm_helpers import (
     _validate_execution_budget as _validate_execution_budget,
 )
 from .corpus_manifest_workflow import ManifestWorkflowMixin
-from .structured_json import (
-    StructuredJsonMalformedError,
-    StructuredJsonTruncatedError,
-)
 
 # Compatibility exports: existing callers and integrations retain this interface.
 from .corpus_metadata import (
@@ -315,6 +311,10 @@ from .semantic_identity_store import alias_digest, build_registry, review_regist
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
+from .structured_json import (
+    StructuredJsonMalformedError,
+    StructuredJsonTruncatedError,
+)
 from .system_store import system_store
 from .text_noise import (
     DEFAULT_NOISE_THRESHOLD,
