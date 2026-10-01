@@ -516,6 +516,7 @@ describe("WorksView", () => {
       export_format: "two-file",
       record_profile: "complete",
       include_transformers: true,
+      include_vectors: true,
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
     wrapper.unmount();
@@ -542,6 +543,7 @@ describe("WorksView", () => {
       export_format: "two-file",
       record_profile: "complete",
       include_transformers: true,
+      include_vectors: true,
     });
     wrapper.unmount();
   });
@@ -567,7 +569,27 @@ describe("WorksView", () => {
       export_format: "nginx-docker",
       record_profile: "complete",
       include_transformers: true,
+      include_vectors: true,
     });
+    wrapper.unmount();
+  });
+
+  it("can omit publication vectors so each static-site browser builds its own index", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("input[name='site-vector-profile'][value='false']").setValue(true);
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith(
+      expect.objectContaining({
+        works: ["Glas"],
+        include_vectors: false,
+      }),
+    );
     wrapper.unmount();
   });
 

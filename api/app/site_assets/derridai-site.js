@@ -40,28 +40,75 @@
   if (!availableLocales.includes(locale)) locale = availableLocales[0] || "en-US";
   let theme = readLocal(themeKey) === "dark" ? "dark" : "light";
   let highContrast = readLocal(contrastKey) === "high";
-  // The compatibility-first browser profile is pinned so a local index can be reproduced and safely reused.
-  // Advanced readers may still choose another Transformers.js model or opt into WebGPU explicitly.
+  // Prefer a browser-compatible form of the model that produced the source collection. The publication keeps
+  // the original model identity even when vectors are omitted, so the browser can make the same first choice.
+  // Known runtime aliases encode vector-changing details explicitly; unknown Hugging Face IDs are tried as-is.
   const TRANSFORMERS_SUGGESTIONS = [
+    {
+      id: "Xenova/bge-m3",
+      aliases: ["bge-m3", "bge-m3:latest", "BAAI/bge-m3", "Xenova/bge-m3"],
+      dtype: "q8",
+      pooling: "cls",
+      normalize: true,
+      note: "site.runtime.transformers_model_bge_m3",
+    },
     {
       id: "Xenova/multilingual-e5-small",
       revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
       dtype: "q8",
+      pooling: "mean",
+      normalize: true,
       note: "site.runtime.transformers_model_multilingual_small",
       query_prefix: "query: ",
       document_prefix: "passage: ",
     },
-    { id: "Xenova/all-MiniLM-L6-v2", note: "site.runtime.transformers_model_english_small" },
+    {
+      id: "Xenova/all-MiniLM-L6-v2",
+      pooling: "mean",
+      normalize: true,
+      note: "site.runtime.transformers_model_english_small",
+    },
   ];
-  const DEFAULT_TRANSFORMERS_MODEL = TRANSFORMERS_SUGGESTIONS[0].id;
+  const FALLBACK_TRANSFORMERS_MODEL = "Xenova/multilingual-e5-small";
   const DEFAULT_TRANSFORMERS_DEVICE = "wasm";
   const MODEL_CACHE_NAME = "transformers-cache";
 
+  function sourceEmbeddingModel() {
+    return String(
+      publication.vector_index?.model || publication.source_collection?.embedding_model || "",
+    ).trim();
+  }
+
+  function suggestedProfileForModel(model) {
+    const normalized = String(model || "").trim().toLocaleLowerCase();
+    return TRANSFORMERS_SUGGESTIONS.find(
+      (item) =>
+        item.id.toLocaleLowerCase() === normalized ||
+        (item.aliases || []).some((alias) => alias.toLocaleLowerCase() === normalized),
+    );
+  }
+
+  function publicationBrowserProfile() {
+    const published = sourceEmbeddingModel();
+    const known = suggestedProfileForModel(published);
+    if (known) return known;
+    // A namespaced model id is already in the form Transformers.js expects. Try it before falling back.
+    if (published.includes("/") && !published.includes(":")) {
+      return { id: published, pooling: "mean", normalize: true };
+    }
+    return suggestedProfileForModel(FALLBACK_TRANSFORMERS_MODEL);
+  }
+
+  const DEFAULT_TRANSFORMERS_MODEL =
+    publicationBrowserProfile()?.id || FALLBACK_TRANSFORMERS_MODEL;
+
   function settingsForModel(model) {
-    const match = TRANSFORMERS_SUGGESTIONS.find((item) => item.id === model);
+    const match = suggestedProfileForModel(model);
     return {
       revision: match?.revision || "",
       dtype: match?.dtype || "",
+      pooling: match?.pooling || "mean",
+      normalize: match?.normalize !== false,
       query_prefix: match?.query_prefix || "",
       document_prefix: match?.document_prefix || "",
     };
@@ -82,6 +129,8 @@
         device,
         revision: raw.revision == null ? defaults.revision : String(raw.revision),
         dtype: raw.dtype == null ? defaults.dtype : String(raw.dtype),
+        pooling: raw.pooling == null ? defaults.pooling : String(raw.pooling),
+        normalize: raw.normalize == null ? defaults.normalize : Boolean(raw.normalize),
         query_prefix:
           raw.query_prefix == null ? defaults.query_prefix : String(raw.query_prefix),
         document_prefix:
@@ -94,6 +143,8 @@
         device: DEFAULT_TRANSFORMERS_DEVICE,
         revision: defaults.revision,
         dtype: defaults.dtype,
+        pooling: defaults.pooling,
+        normalize: defaults.normalize,
         query_prefix: defaults.query_prefix,
         document_prefix: defaults.document_prefix,
       };
@@ -695,8 +746,8 @@
         variant: [
           embeddingVariant(profile),
           profile.dtype ? `dtype=${profile.dtype}` : "",
-          "pooling=mean",
-          "normalize=true",
+          `pooling=${profile.pooling || "mean"}`,
+          `normalize=${profile.normalize !== false}`,
         ]
           .filter(Boolean)
           .join(";"),
@@ -708,8 +759,8 @@
         for (let start = 0; start < texts.length; start += 8) {
           if (options.signal?.aborted) throw new DOMException("Operation aborted.", "AbortError");
           const tensor = await extractor(texts.slice(start, start + 8), {
-            pooling: "mean",
-            normalize: true,
+            pooling: profile.pooling || "mean",
+            normalize: profile.normalize !== false,
           });
           vectors.push(...tensor.tolist());
         }
@@ -726,6 +777,8 @@
       device: localModel.device,
       revision: localModel.revision,
       dtype: localModel.dtype,
+      pooling: localModel.pooling,
+      normalize: localModel.normalize,
       query_prefix: localModel.query_prefix,
       document_prefix: localModel.document_prefix,
     };
@@ -1153,7 +1206,10 @@
         disabled: !capabilities.provider.embeddings,
       }),
     );
-    mode.value = semanticReady() ? "hybrid" : "keyword";
+    mode.value =
+      capabilities.publicationVectors?.available || capabilities.localIndex?.complete
+        ? "semantic"
+        : "keyword";
     const methods = methodStrip({
       text: mode.value !== "semantic",
       vector: mode.value !== "keyword",
@@ -1204,6 +1260,9 @@
       const stopProgress = progressListener(status);
       try {
         const searchedQuery = query.value;
+        // Highlighting is a lexical affordance. Semantic and hybrid ranking may return relevant Records that
+        // do not contain the query terms, so only explicit Keyword mode receives a highlight query.
+        const highlightQuery = mode.value === "keyword" ? searchedQuery : "";
         const filters = {};
         if (work.value) filters.work = work.value;
         if (field.value && value.value) filters[field.value] = value.value;
@@ -1229,7 +1288,7 @@
         if (!response.results.length) {
           results.append(node("div", { class: "empty", text: t("site.runtime.no_results") }));
         } else {
-          results.append(...response.results.map((item) => resultCard(item, searchedQuery)));
+          results.append(...response.results.map((item) => resultCard(item, highlightQuery)));
         }
       } catch (error) {
         status.className = "status error";
@@ -1260,6 +1319,7 @@
         node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_value") }), value),
       ),
       status,
+      browserSemanticIndexSection(),
     );
     return node("div", { class: "stack" }, panel, results);
   }
@@ -1377,6 +1437,8 @@
         device: device.value,
         revision: defaults.revision,
         dtype: defaults.dtype,
+        pooling: defaults.pooling,
+        normalize: defaults.normalize,
         query_prefix: defaults.query_prefix,
         document_prefix: defaults.document_prefix,
       };
@@ -1545,10 +1607,22 @@
     dialog.showModal();
     query.focus();
   }
+  // Search and Research surface the same one-click browser-index action as Models. The default local
+  // profile is already pinned and compatibility-first, so readers do not need to test/download a provider
+  // separately just because the publication was embedded with another model.
+  function browserSemanticIndexSection() {
+    const index = capabilities?.localIndex;
+    if (!index || index.usesPublishedVectors) return null;
+    // Search and Research use the already-active embedding provider. They should not rebuild the SDK client
+    // merely to start a derived index; doing so can replace the provider while the click handler is running.
+    // Keep the completed state visible so readers can see which local index semantic search is using.
+    return indexSection(null, "site.runtime.index_build_browser");
+  }
+
   // The local index holds vectors computed here with the reader's embedding provider. It is derived from the
   // published Records, kept only in this browser, and can be rebuilt or cleared at any time.
   let indexMessage = "";
-  function indexSection(beforeBuild = null) {
+  function indexSection(beforeBuild = null, initialBuildLabelKey = null) {
     const index = capabilities.localIndex;
     const outcome = node("div", { class: "status", role: "status", "aria-live": "polite" });
     outcome.textContent = indexMessage;
@@ -1578,13 +1652,18 @@
       : t("site.runtime.index_storage_memory");
     detail.textContent = index.complete
       ? t("site.runtime.index_ready", { count: index.indexed, storage: where })
-      : t("site.runtime.index_needed", {
-          published: publication.vector_index?.model || t("site.runtime.not_configured"),
-          model: index.model || localModel.model || t("site.runtime.not_configured"),
-          indexed: index.indexed,
-          total: index.total,
-          storage: where,
-        });
+      : t(
+          capabilities.publicationVectors?.available
+            ? "site.runtime.index_needed"
+            : "site.runtime.index_needed_no_published",
+          {
+            published: sourceEmbeddingModel() || t("site.runtime.not_configured"),
+            model: index.model || localModel.model || t("site.runtime.not_configured"),
+            indexed: index.indexed,
+            total: index.total,
+            storage: where,
+          },
+        );
 
     let controller = null;
     const build = node("button", {
@@ -1594,7 +1673,10 @@
         ? t("site.runtime.index_rebuild")
         : index.indexed
           ? t("site.runtime.index_resume")
-          : t(beforeBuild ? "site.runtime.index_build_browser" : "site.runtime.index_build"),
+          : t(
+              initialBuildLabelKey ||
+                (beforeBuild ? "site.runtime.index_build_browser" : "site.runtime.index_build"),
+            ),
     });
     const cancel = node("button", { type: "button", text: t("site.runtime.index_cancel") });
     cancel.hidden = true;
@@ -2051,6 +2133,7 @@
         question,
         ask,
         status,
+        browserSemanticIndexSection(),
         answer,
       ),
       node(

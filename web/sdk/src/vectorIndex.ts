@@ -217,6 +217,9 @@ export class IndexedDbVectorStore implements VectorIndexStore {
   ): Promise<void> {
     const db = await this.database();
     const tx = db.transaction(["vectors", "indexes"], "readwrite");
+    // Install completion handlers before awaiting individual requests: a fast IndexedDB implementation can
+    // otherwise complete the transaction before transactionDone() starts listening, leaving index builds hung.
+    const done = transactionDone(tx);
     const vectors = tx.objectStore("vectors");
     const prefix = `${indexKey(publicationId, fingerprint)}${SEPARATOR}`;
     for (const item of entries) vectors.put(item.vector, `${prefix}${item.recordId}`);
@@ -236,7 +239,7 @@ export class IndexedDbVectorStore implements VectorIndexStore {
       },
       key,
     );
-    await transactionDone(tx);
+    await done;
   }
 
   async summaries(publicationId: string): Promise<VectorIndexSummary[]> {
@@ -254,11 +257,12 @@ export class IndexedDbVectorStore implements VectorIndexStore {
         : (await this.summaries(publicationId)).map((summary) => summary.fingerprint);
     const db = await this.database();
     const tx = db.transaction(["vectors", "indexes"], "readwrite");
+    const done = transactionDone(tx);
     for (const print of targets) {
       tx.objectStore("vectors").delete(this.range(publicationId, print));
       tx.objectStore("indexes").delete(indexKey(publicationId, print));
     }
-    await transactionDone(tx);
+    await done;
   }
 }
 
