@@ -23,7 +23,7 @@ import threading
 import time
 import unicodedata
 import uuid
-from collections import Counter
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -209,7 +209,6 @@ from .corpus_reviewer_helpers import (
     _present_for_reviewer,
     _scrub_canonical_transport,
 )
-from .reviewer_context import current_reviewer
 from .corpus_reviewer_helpers import (
     _operation_from_build as _operation_from_build,
 )
@@ -294,19 +293,11 @@ from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
 from .rag import _citation_strings, chat_complete
 from .record_semantic_map import SemanticMapIndex
+from .reviewer_context import current_reviewer
 from .run_guidance import find_guidance_matches
 from .semantic_content_graph import (
     build_semantic_content_graph,
     semantic_content_graph_view,
-)
-from .semantic_map_projection import (
-    SEMANTIC_PROJECTION_VERSION,
-    semantic_map_source,
-    work_semantic_topology,
-    semantic_record_digest,
-    semantic_records_digest,
-    text_record_digest,
-    text_records_digest,
 )
 from .semantic_identity import SEMANTIC_IDENTITY_VERSION, ValueEquivalenceResult
 from .semantic_identity_registry import (
@@ -315,6 +306,15 @@ from .semantic_identity_registry import (
     registry_for_record,
 )
 from .semantic_identity_store import alias_digest, build_registry, review_registry
+from .semantic_map_projection import (
+    SEMANTIC_PROJECTION_VERSION,
+    semantic_map_source,
+    semantic_record_digest,
+    semantic_records_digest,
+    text_record_digest,
+    text_records_digest,
+    work_semantic_topology,
+)
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
