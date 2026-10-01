@@ -8,6 +8,16 @@ import { createRuntimeState } from "../../src/runtime/runtimeState";
 // these pin the commands themselves.
 function setup(overrides: Record<string, unknown> = {}) {
   const state = createRuntimeState() as unknown as Record<string, any>;
+  // createRuntimeState binds the shared Vue Works store, so reset its view state for test isolation.
+  Object.assign(state, {
+    worksSearch: "",
+    workOverview: "",
+    worksSort: "title-asc",
+    worksNeedsReview: false,
+    worksDbStatus: "",
+    worksAuthor: "",
+    worksView: "cards",
+  });
   const calls: string[] = [];
   const spies: Record<string, ReturnType<typeof vi.fn>> = {};
   let ids = 0;
