@@ -75,6 +75,30 @@ def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
     } <= tables
 
 
+
+def test_semantic_map_projection_survives_restart_without_becoming_corpus_state(tmp_path: Path):
+    path = tmp_path / "derridai-system.sqlite3"
+    repo = SQLiteSystemRepository(path)
+    repo.put_semantic_map_projection(
+        "semantic-record:build-1:r1:reviewer",
+        scope_kind="record",
+        scope_id="r1",
+        build_id="build-1",
+        generation="g1",
+        status="ready",
+        payload={"kind": "record_semantic_map", "record_id": "r1", "nodes": [], "edges": []},
+    )
+
+    restarted = SQLiteSystemRepository(path)
+    row = restarted.get_semantic_map_projection("semantic-record:build-1:r1:reviewer")
+    assert row is not None
+    assert row["generation"] == "g1"
+    assert row["status"] == "ready"
+    assert row["payload"]["record_id"] == "r1"
+
+    assert restarted.delete_semantic_map_projections_for_scope("record", "r1") == 1
+    assert restarted.get_semantic_map_projection("semantic-record:build-1:r1:reviewer") is None
+
 def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path: Path, monkeypatch):
     """A legacy derridai-system.json next to the database is ignored (and left untouched).
 
