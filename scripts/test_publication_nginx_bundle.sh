@@ -26,6 +26,10 @@ index=$(curl --fail --silent --show-error "http://127.0.0.1:${PORT}/")
 printf '%s' "$index" | grep -F "DerridAI Publication Acceptance" >/dev/null
 printf '%s' "$index" | grep -F 'src="./derridai-site.js"' >/dev/null
 
+runtime=$(curl --fail --silent --show-error "http://127.0.0.1:${PORT}/derridai-site.js")
+printf '%s' "$runtime" | grep -F "globalThis.__DERRIDAI_SITE_PACKAGE__=" >/dev/null
+printf '%s' "$runtime" | grep -F "createClient" >/dev/null
+
 ./stop.sh
 if docker container inspect "$CONTAINER" >/dev/null 2>&1; then
   echo "Publication container still exists after stop.sh." >&2
