@@ -26,7 +26,7 @@ SCHEMA_VERSION = "pdf-corpus-v3"
 
 
 
-SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v8"
+SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v9"
 
 
 
