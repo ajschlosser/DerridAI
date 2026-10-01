@@ -94,6 +94,34 @@ def test_call_contract_reports_requested_fields_and_prompt_size():
     }
 
 
+def test_structured_model_invocation_metrics_count_fallbacks_and_recovery():
+    rows = [
+        ev("call", field="discourse", elapsed_ms=100, ok=True, model_invocations=1, recovery_calls=0),
+        ev("call", field="quotation", elapsed_ms=200, ok=True, model_invocations=2, recovery_calls=0),
+        ev("call", field="indexing", elapsed_ms=300, ok=True, model_invocations=2, recovery_calls=1),
+    ]
+    invocations = compute(rows)["models"]["m"]["structured_model_invocations"]
+    assert invocations == {
+        "reported_call_events": 3,
+        "total": 5,
+        "p50_per_family": 2.0,
+        "p95_per_family": 2.0,
+        "recovery_calls": 1,
+    }
+
+
+def test_unreported_legacy_calls_are_not_guessed_as_physical_invocations():
+    rows = [
+        ev("call", field="discourse", elapsed_ms=100, ok=True),
+        ev("call", field="quotation", elapsed_ms=200, ok=True, model_invocations=2),
+    ]
+    invocations = compute(rows)["models"]["m"]["structured_model_invocations"]
+    assert invocations["reported_call_events"] == 1
+    assert invocations["total"] == 2
+    assert invocations["p50_per_family"] == 2.0
+    assert invocations["p95_per_family"] == 2.0
+
+
 def test_learning_curve_uses_whole_buckets_only():
     rows = [ev("corrected", confidence=0.5)] * 10 + [ev("accepted", confidence=0.5)] * 10 + [ev("accepted", confidence=0.5)] * 3
     curve = compute(rows)["models"]["m"]["learning_curve"]

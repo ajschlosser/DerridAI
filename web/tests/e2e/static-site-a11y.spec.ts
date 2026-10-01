@@ -647,19 +647,30 @@ test("the built-in browser model builds a semantic index in one compatibility-fi
   await mountProviderSite(page, { transformers_runtime: "files" });
 
   await page.getByRole("button", { name: "Models", exact: true }).click();
-  await expect(page.getByLabel("Embedding model")).toHaveValue("Xenova/multilingual-e5-small");
+  await expect(page.getByLabel("Embedding model")).toHaveValue("Xenova/bge-m3");
   await expect(page.getByLabel("Where to run the model")).toHaveValue("wasm");
   await expect(page.locator('[data-index="ready"]')).toContainText(
-    "Published vectors use bge-m3:latest; this browser uses Xenova/multilingual-e5-small",
+    "Published vectors use bge-m3:latest; this browser uses Xenova/bge-m3",
   );
 
   // Search exposes the same complete happy path. The reader does not need to visit Models or run a separate
   // provider test/download action just because the publication's BGE vectors cannot be mixed with E5.
   await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByLabel("Search mode")).toHaveValue("semantic");
   await expect(page.getByRole("button", { name: "Enable semantic search" })).toBeVisible();
   await page.getByRole("button", { name: "Enable semantic search" }).click();
   await expect(page.locator('[data-index="ready"]')).toContainText("Local index ready: 2 Records");
   await expect(page.locator('[data-index="ready"]')).toContainText("IndexedDB");
+
+  // Semantic is the default once a semantic index is available. Search-term highlighting remains a
+  // keyword-search affordance and is intentionally absent from semantic results.
+  await expect(page.getByLabel("Search mode")).toHaveValue("semantic");
+  await page.locator(".search-row input").fill("hospitality");
+  await page.locator(".search-row button").click();
+  await expect(page.locator(".result .snippet mark")).toHaveCount(0);
+  await page.getByLabel("Search mode").selectOption("keyword");
+  await page.locator(".search-row button").click();
+  await expect(page.locator(".result .snippet mark")).toHaveText(["Hospitality"]);
 
   const pipelineCall = await page.evaluate(
     () =>
@@ -675,10 +686,9 @@ test("the built-in browser model builds a semantic index in one compatibility-fi
   );
   expect(pipelineCall).toMatchObject({
     task: "feature-extraction",
-    model: "Xenova/multilingual-e5-small",
+    model: "Xenova/bge-m3",
     options: {
       device: "wasm",
-      revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
       dtype: "q8",
     },
   });
@@ -712,7 +722,7 @@ test("a different embedding model builds a local IndexedDB index before semantic
   ]);
 
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.getByLabel("Search mode")).toHaveValue("hybrid");
+  await expect(page.getByLabel("Search mode")).toHaveValue("semantic");
   await page.getByLabel("Search mode").selectOption("semantic");
   await page.locator(".search-row input").fill("hospitality");
   await page.locator(".search-row button").click();

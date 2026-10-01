@@ -66,7 +66,7 @@ def test_every_strategy_declares_typed_ports_and_complexity_consistent_with_its_
         # The primary ports are the single input/output type the registry summarises.
         assert input_ports(spec)[0].data_type == spec.input_type, spec.strategy_id
         assert output_ports(spec)[0].data_type == spec.output_type, spec.strategy_id
-        assert all(name in "nNkLqgPdS" for name in spec.complexity.variables), spec.strategy_id
+        assert all(name in "nNkLqgPdSC" for name in spec.complexity.variables), spec.strategy_id
 
 
 def test_built_in_pipelines_wire_without_new_input_errors_or_identity_changes() -> None:

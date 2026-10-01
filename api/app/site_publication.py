@@ -55,6 +55,7 @@ class SiteBundle:
     record_count: int
     work_count: int
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE
+    include_vectors: bool = True
 
 
 def _slug(value: str) -> str:
@@ -576,6 +577,7 @@ def build_local_site_file(
         record_count=core.record_count,
         work_count=core.work_count,
         record_profile=core.record_profile,
+        include_vectors=core.include_vectors,
     )
 
 
@@ -747,6 +749,7 @@ def build_nginx_site_bundle(
         locale=locale,
         languages=languages,
         record_profile=record_profile,
+        include_vectors=include_vectors,
         transformers_delivery="files",
     )
     files = _core_site_files(core)
@@ -778,4 +781,5 @@ def build_nginx_site_bundle(
         record_count=core.record_count,
         work_count=core.work_count,
         record_profile=core.record_profile,
+        include_vectors=core.include_vectors,
     )
