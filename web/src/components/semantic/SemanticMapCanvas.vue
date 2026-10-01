@@ -36,7 +36,7 @@ const densityScale: Record<SemanticMapDensity, number> = {
   wide: 1.25,
 };
 
-const MIN_SCREEN_TARGET = 28;
+const MIN_SCREEN_TARGET = 24;
 
 function targetSizeForZoom(zoom: number) {
   const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
