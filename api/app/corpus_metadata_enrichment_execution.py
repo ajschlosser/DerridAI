@@ -1802,30 +1802,47 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
             guidance_item = run_guidance.get(field) if isinstance(run_guidance.get(field), dict) else {}
-            required_placeholder = str(guidance_item.get("default_placeholder") or "").strip()
-            if bool(guidance_item.get("required")) and value in (None, "", []):
-                if required_placeholder:
-                    record[field] = required_placeholder
-                    field_status[field] = {
-                        "status": "unresolved",
-                        "method": "run_guidance",
-                        "confidence": None,
-                        "auto_populated": True,
-                        "autofilled": False,
-                        "value_source": "run_guidance",
-                        "verification_status": "pending_review",
-                        "proposed_value": None,
-                        "placeholder": True,
-                        "reason_code": "required_placeholder",
-                        "reason": "The run required a value, but the model could not establish one. Replace this placeholder during review.",
-                    }
-                    continue
+            # Builds created before cELF-native absence handling could persist a
+            # run-guidance fallback string as if it were scholarly metadata. Treat
+            # that legacy marker as absence as soon as the record is reconciled.
+            legacy_placeholder = str(guidance_item.get("default_placeholder") or "").strip()
+            if (
+                bool(guidance_item.get("required"))
+                and isinstance(value, str)
+                and (
+                    current.get("reason_code") == "required_placeholder"
+                    or (legacy_placeholder and value.strip() == legacy_placeholder)
+                )
+            ):
+                record[field] = None
+                value = None
             assessment_confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else None
             evidence_confidence = evidence_info.get("confidence") if isinstance(evidence_info.get("confidence"), (int, float)) else None
             confidence = float(assessment_confidence if assessment_confidence is not None else evidence_confidence) if (assessment_confidence is not None or evidence_confidence is not None) else None
             reason = str(assessment.get("reason") or evidence_info.get("reason") or "Model assessment.")
             needs_human = bool(assessment.get("needs_review"))
             outcome = str(assessment.get("outcome") or "")
+            if bool(guidance_item.get("required")) and value in (None, "", []):
+                suggested_absence = outcome == "no_supported_value"
+                field_status[field] = {
+                    "status": "unresolved",
+                    "method": "llm" if assessment else "run_guidance",
+                    "confidence": confidence,
+                    "auto_populated": False,
+                    "autofilled": False,
+                    "value_source": "llm" if assessment else "run_guidance",
+                    "verification_status": "pending_review",
+                    "proposed_value": None,
+                    "suggested_absence": suggested_absence,
+                    "reason_code": "required_no_supported_value" if suggested_absence else "required_value_missing",
+                    "reason": reason
+                    or (
+                        "The model found no supported value for this required run-guidance field; reviewer confirmation is required."
+                        if suggested_absence
+                        else "The run requires a reviewer decision because no supported value was established."
+                    ),
+                }
+                continue
             if field not in required_metadata_fields and value in (None, "", []) and not assessment:
                 # Backward compatibility for old persisted model output that had no
                 # assessment object at all. New structured output requires one.
