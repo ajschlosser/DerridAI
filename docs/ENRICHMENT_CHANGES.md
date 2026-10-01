@@ -1,8 +1,8 @@
 # Metadata Enrichment Latency Changes
 
 Status: active implementation plan  
-Branch: `task/enrichment-latency`  
-Baseline: `master` at `deb99aab48d23189cbccf4a9f70a667b40dd84df`
+Branch: `task/enrichment-candidate-routing`  
+Enrichment baseline: merged `master` at `d63e5df1c2b6251a47dd22b68b207ab5ca388db0` (PR #366)
 
 ## Goal
 
@@ -288,21 +288,26 @@ The first tranche is now in progress on this branch:
 - **Implemented:** automatic indexing now skips its generative family call when every indexing field already has a strong `derridai:memory` prefill (value-supported, present, confidence ≥ 0.88). The reviewed-memory assertions remain advisory/pending review, and an explicit indexing rerun always bypasses this router.
 - **Implemented:** reviewed-precedent retrieval is now field-scoped to the metadata families actually scheduled for the Record. Signal-skipped quotation/indexing families no longer contribute candidates to the semantic/CrossEncoder/MMR precedent packet, reducing retrieval work and prompt preparation together.
 - **Implemented:** the kept precedent cache now records only fields that were actually searched. An unscheduled family is left uncached, so opening its reviewer precedent panel later performs a live lookup instead of incorrectly treating “not searched” as “searched with zero matches.”
+- **Implemented on the follow-up branch:** indexing generation is now field-scoped rather than only family-scoped. Strong reviewed-memory values remove only the fields they resolve from the indexing response contract, prompt, reviewer-memory packet, and precedent retrieval; unresolved indexing fields still go to the model. Explicit human reruns restore the complete family contract.
+- **Implemented on the follow-up branch:** exact current-text NER spans may resolve only the stable direct-mention indexing semantics `derridai.indexing.persons` and `derridai.indexing.works_referenced`. They are stored as unreviewed `derridai:nlp` FieldAssertions with exact offsets/text digest/tagger provenance and no invented confidence. Topics, concepts, discourse attribution, and quotation relations are not promoted from raw tags.
+- **Implemented on the follow-up branch:** per-family execution ledger entries record `requested_fields`, so audits can distinguish a full-family model call from a candidate-reduced field contract.
 - **Tests updated:** focused ownership-failure, evidence-pipeline identity/default-assignment, and latency-metric coverage track these changes.
 
-The next implementation slice is broader deterministic/candidate-first indexing: use NLP/Document Intelligence and reviewed-memory candidates to reduce routine generation even when not every indexing field has a strong memory prefill. It should extend the existing FieldAssertion authority model rather than introduce a parallel candidate store.
+The current follow-up slice implements the first broader candidate-first indexing path through FieldAssertions. The next slice is validator-driven escalation and tighter one-attempt/model-budget behavior, plus benchmark work to measure whether the reduced field contracts translate into the required wall-clock reduction without worsening reviewer correction/rejection rates.
 
 ## Implementation sequence on this branch
 
-The first implementation tranche will deliberately stay small and independently reviewable:
+PR #366 established the first tranche. The follow-up branch proceeds in independently auditable layers:
 
-1. add this design/baseline document;
-2. use `repo.get_record` for the per-family live ownership check;
-3. make the direct-support-first cELF evidence-recovery pipeline the built-in default assignment;
-4. update focused tests for both changes;
-5. then implement instrumentation and the deterministic-first indexing/quotation routers in separate commits.
+1. allow metadata family prompts and structured response contracts to name only unresolved fields;
+2. remove strong reviewed-memory fields from automatic indexing calls while preserving complete explicit reruns;
+3. expose current structured NLP spans without changing their rebuildable/advisory status;
+4. promote only direct-mention indexing semantics through unreviewed `derridai:nlp` FieldAssertions with exact span provenance;
+5. scope precedent retrieval to the same unresolved field set and retain the requested field contract in the execution ledger;
+6. gate with focused provenance/routing tests and the full quality workflow;
+7. benchmark candidate-first versus the PR #366 baseline before expanding deterministic promotion or tightening model budgets further.
 
-Larger behavioral changes must be benchmarked against the current baseline before becoming default.
+Larger behavioral changes must be benchmarked against the merged enrichment baseline before becoming default.
 
 ## Acceptance target
 
