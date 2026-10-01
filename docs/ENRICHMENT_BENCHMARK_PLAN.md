@@ -95,7 +95,6 @@ The benchmark should expose descriptive metrics and acceptance gates; it must no
 
 The corrected evidence cascade should be benchmarked as three explicit arms where the fixture permits it: `evidence.recovery.cascade@1` (legacy recall behavior), `evidence.recovery.celf@1` (latency-oriented direct-support default from PR #366), and `evidence.recovery.cascade@2` (support-validated richer retrieval). Record both evidence-recovery wall time and useful suggestion coverage; do not infer success from fewer calls or fewer suggestions alone.
 
-
 ## Reproducibility contract
 
 A benchmark comparison is valid only when the two arms share the same fixed input identity.
