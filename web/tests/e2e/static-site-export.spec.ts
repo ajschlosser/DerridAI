@@ -26,8 +26,9 @@ test(
     await expect(page).toHaveTitle("DerridAI publication acceptance");
     await expect(page.getByRole("dialog", { name: "Welcome" })).toBeVisible();
     await page.getByRole("button", { name: "Skip tutorial" }).click();
+    await expect(page.getByRole("dialog")).not.toBeVisible();
 
-    await page.getByLabel("Search").fill("hospitality");
+    await page.getByRole("searchbox", { name: "Search" }).fill("hospitality");
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page.getByText("1 results")).toBeVisible();
     await expect(
