@@ -278,13 +278,20 @@ const semanticMapRecord = computed(
 );
 const semanticMapSources = ref<SemanticMapSource[]>([]);
 const semanticMapWorkProjection = ref<WorkSemanticMap | null>(null);
-const semanticMapWorkSources = computed<SemanticMapSource[]>(() => {
-  if (semanticMapWorkProjection.value) return semanticMapWorkProjection.value.sources;
-  // Legacy/local files without published build provenance keep the same visual
-  // map instead of falling into a "map unavailable" state.
-  return semanticMapSources.value.filter((source) => source.work === semanticMapWork.value);
-});
-const semanticMapWorkTopology = computed(() => semanticMapWorkProjection.value?.topology || null);
+const semanticMapLocalSources = computed<SemanticMapSource[]>(() =>
+  semanticMapSources.value.filter((source) => source.work === semanticMapWork.value),
+);
+const semanticMapUsesProjection = computed(
+  () => Boolean(semanticMapWorkProjection.value?.summary.records),
+);
+const semanticMapWorkSources = computed<SemanticMapSource[]>(() =>
+  semanticMapUsesProjection.value
+    ? semanticMapWorkProjection.value?.sources || []
+    : semanticMapLocalSources.value,
+);
+const semanticMapWorkTopology = computed(() =>
+  semanticMapUsesProjection.value ? semanticMapWorkProjection.value?.topology || null : null,
+);
 
 async function openWorkSemanticMap(work: string) {
   semanticMapWork.value = work;
