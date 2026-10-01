@@ -17,7 +17,7 @@ import UiDialog from "../components/ui/UiDialog.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
 import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
-import type { WorksFilters, WorksSort, WorksViewMode } from "../types/works";
+import type { WorksDbStatusKind, WorksFilters, WorksSort, WorksViewMode } from "../types/works";
 import type { SemanticMapSource } from "../domain/semanticMap";
 import { corpusBuildsApi } from "../api/corpus";
 import { semanticMapService } from "../services/semanticMap";
@@ -173,6 +173,11 @@ function selectWork(work: string) {
   works.setOverview(work);
 }
 
+function openWorkRecords(work: string) {
+  if (snapshot.value?.mode === "researcher") works.browseResearcher(work);
+  else works.searchRecords(work);
+}
+
 async function closeInspector() {
   const work = snapshot.value?.selectedWork || "";
   works.setOverview("");
@@ -186,7 +191,7 @@ async function closeInspector() {
 function applyView(patch: {
   sort?: WorksSort;
   needsReview?: boolean;
-  dbStatus?: string;
+  dbStatus?: WorksDbStatusKind | "";
   author?: string;
   viewMode?: WorksViewMode;
 }) {
@@ -404,12 +409,7 @@ onBeforeUnmount(() => {
             @review="works.reviewFlagged"
             @improve="works.autoImprove"
             @remove="works.removeWork"
-            @records="
-              (work) =>
-                snapshot.mode === 'admin'
-                  ? works.searchRecords(work)
-                  : works.browseResearcher(work)
-            "
+            @records="openWorkRecords"
             @flagged="(work) => works.searchRecords(work, true)"
             @semantic-map="openWorkSemanticMap"
           />
@@ -429,11 +429,7 @@ onBeforeUnmount(() => {
               @review="works.reviewFlagged(work.work)"
               @improve="works.autoImprove(work.work)"
               @remove="works.removeWork(work.work)"
-              @records="
-                snapshot.mode === 'admin'
-                  ? works.searchRecords(work.work)
-                  : works.browseResearcher(work.work)
-              "
+              @records="openWorkRecords(work.work)"
               @flagged="works.searchRecords(work.work, true)"
               @inspect="works.inspectMixed(work.work, $event)"
               @semantic-map="openWorkSemanticMap(work.work)"
