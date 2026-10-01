@@ -22,56 +22,56 @@ describe("work metadata helpers", () => {
   it(
     "discovers work metadata from stable FieldAssertion identities without surfacing discourse fields",
     () => {
-    const asserted = (fieldId: string, fieldName: string, value: unknown) => ({
-      assertion_id: `a-${fieldName}`,
-      field_id: fieldId,
-      field_name: fieldName,
-      value,
-      derivation_method: "model",
-      evaluation_status: "value_supported",
-      authority_status: "human_confirmed",
-      value_status: "present",
-    });
-    const record = {
-      work: "W",
-      document_author: "A",
-      publisher: "Press",
-      conceptual_tension: "hospitality / sovereignty",
-      speaker: "A",
-      field_assertions: {
-        "field-conceptual-tension": [
-          asserted(
-            "field-conceptual-tension",
-            "conceptual_tension",
-            "hospitality / sovereignty",
-          ),
-        ],
-        "derridai.speaker": [asserted("derridai.speaker", "speaker", "A")],
-      },
-      current_field_assertions: {
-        "field-conceptual-tension": "a-conceptual_tension",
-        "derridai.speaker": "a-speaker",
-      },
-    };
-    const rows = [mk(record), mk({ ...record })];
+      const asserted = (fieldId: string, fieldName: string, value: unknown) => ({
+        assertion_id: `a-${fieldName}`,
+        field_id: fieldId,
+        field_name: fieldName,
+        value,
+        derivation_method: "model",
+        evaluation_status: "value_supported",
+        authority_status: "human_confirmed",
+        value_status: "present",
+      });
+      const record = {
+        work: "W",
+        document_author: "A",
+        publisher: "Press",
+        conceptual_tension: "hospitality / sovereignty",
+        speaker: "A",
+        field_assertions: {
+          "field-conceptual-tension": [
+            asserted(
+              "field-conceptual-tension",
+              "conceptual_tension",
+              "hospitality / sovereignty",
+            ),
+          ],
+          "derridai.speaker": [asserted("derridai.speaker", "speaker", "A")],
+        },
+        current_field_assertions: {
+          "field-conceptual-tension": "a-conceptual_tension",
+          "derridai.speaker": "a-speaker",
+        },
+      };
+      const rows = [mk(record), mk({ ...record })];
 
-    const metadata = work.workMetadataPresentationRows(rows);
-    expect(metadata).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          field_id: "derridai.document.document_author",
-          field: "document_author",
-          value: "A",
-          empty: false,
-        }),
-        expect.objectContaining({
-          field_id: "field-conceptual-tension",
-          field: "conceptual_tension",
-          value: "hospitality / sovereignty",
-          empty: false,
-        }),
-      ]),
-    );
+      const metadata = work.workMetadataPresentationRows(rows);
+      expect(metadata).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            field_id: "derridai.document.document_author",
+            field: "document_author",
+            value: "A",
+            empty: false,
+          }),
+          expect.objectContaining({
+            field_id: "field-conceptual-tension",
+            field: "conceptual_tension",
+            value: "hospitality / sovereignty",
+            empty: false,
+          }),
+        ]),
+      );
       expect(metadata.some((item) => item.field === "speaker")).toBe(false);
     },
   );
