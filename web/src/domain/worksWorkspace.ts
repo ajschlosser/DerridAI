@@ -297,7 +297,7 @@ export function createWorksWorkspace(deps: Deps) {
     if (state.workOverview && !map.has(state.workOverview)) state.workOverview = "";
     const selectedItem = state.workOverview ? map.get(state.workOverview) : null;
     const needle = query.toLocaleLowerCase();
-    const described = [...map.values()].map((item) => describeAdminWork(item));
+    const described = [...map.values()].map((item) => describeAdminWork(item, { insights: true }));
     const filters = {
       needsReview: Boolean(state.worksNeedsReview),
       dbStatus: String(state.worksDbStatus || ""),

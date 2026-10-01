@@ -144,6 +144,66 @@ describe("metadata field cardinality", () => {
   });
 });
 
+describe("review autocomplete hygiene", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  it("uses exact field-local NLP spans and excludes POS/NER labels and foreign enums", () => {
+    const tagged = schema();
+    tagged.fields.push(
+      field({
+        name: "person_name",
+        label: "Person name",
+        type: "text",
+        group: "discourse",
+        pos_tags: ["PROPN"],
+        ner_tags: ["PERSON"],
+        review: true,
+      }) as never,
+    );
+    const reviewRecord = {
+      record_id: "r1",
+      text: "The passage names Jacques Derrida.",
+      person_name: "",
+      metadata_field_status: { person_name: { status: "unresolved" } },
+      metadata_incomplete_fields: ["person_name"],
+      metadata_review_fields: ["person_name"],
+      nlp_candidates: {
+        status: "ok",
+        engine: "spacy",
+        engine_version: "3.8.7",
+        model: "fr_core_news_lg",
+        language: "fr",
+        fields: {
+          person_name: [
+            { start: 18, end: 32, text: "Jacques Derrida", source: "ner", tag: "PERSON" },
+          ],
+        },
+      },
+    };
+    const w = mount(CorpusMetadataResolutionPanel, {
+      props: {
+        record: reviewRecord as never,
+        regionTypes: ["main_text"],
+        discourseRoles: ["assertion", "analysis"],
+        schema: tagged,
+        knownValues: {
+          person_name: ["PROPN", "PERSON", "analysis", "Jacques Derrida"],
+        },
+      },
+      attachTo: document.body,
+    });
+    const editor = w
+      .findAllComponents({ name: "CorpusMetadataFieldEditor" })
+      .find((item) => item.props("field") === "person_name")!;
+    expect(editor.props("options")).toContain("Jacques Derrida");
+    expect(editor.props("options")).not.toContain("PROPN");
+    expect(editor.props("options")).not.toContain("PERSON");
+    expect(editor.props("options")).not.toContain("analysis");
+    expect(w.text()).toContain("fr_core_news_lg");
+    w.unmount();
+  });
+});
+
 describe("the schema editor", () => {
   beforeEach(() => {
     setActivePinia(createPinia());

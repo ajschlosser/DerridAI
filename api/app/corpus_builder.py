@@ -277,7 +277,7 @@ from .metadata_schema import (
 )
 from .metadata_schema_store import SchemaStore
 from .models import WorkMetadataRequest, WorkMetadataSeed
-from .nlp_annotations import annotate_record
+from .nlp_annotations import annotate_record, annotation_run_summary
 from .operation_events import note_corpus_build, note_record_metadata
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
@@ -760,6 +760,14 @@ class PdfCorpusRepository:
         for part in ("assets", "builds", "publications"):
             (self.root / part).mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+        # Review paging is read-heavy. Keep a small, read-only parsed snapshot cache so
+        # changing pages does not JSON-decode and migrate the entire corpus on every
+        # GraphQL request. The SQLite file signature catches writers in another process;
+        # local writers also invalidate explicitly below.
+        self._review_records_cache: dict[
+            str, tuple[tuple[int, int], list[dict[str, Any]]]
+        ] = {}
+        self._review_records_cache_capacity = 4
 
     def asset_meta_path(self, asset_id: str) -> Path:
         return self.root / "assets" / f"{asset_id}.json"
@@ -1503,6 +1511,7 @@ class PdfCorpusRepository:
         if not target.is_dir():
             raise KeyError(build_id)
         shutil.rmtree(target)
+        self._invalidate_review_records_cache(build_id)
 
     def delete_asset_files(self, asset_id: str) -> None:
         """Remove a source asset's metadata, extracted blocks and stored bytes."""
@@ -1543,6 +1552,17 @@ class PdfCorpusRepository:
         items.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
         total = len(items)
         return {"items": items[offset:offset + limit], "total": total, "offset": offset, "limit": limit}
+
+    def _invalidate_review_records_cache(self, build_id: str) -> None:
+        self._review_records_cache.pop(str(build_id), None)
+
+    def _records_snapshot_signature(self, build_id: str) -> tuple[int, int]:
+        """Cheap cross-process identity for the interactive SQLite record store."""
+        try:
+            stat = self.build_records_db_path(build_id).stat()
+        except OSError:
+            return (0, 0)
+        return (int(stat.st_mtime_ns), int(stat.st_size))
 
     def save_records(self, build_id: str, records: list[dict[str, Any]]) -> None:
         """Atomically persist the record store.
@@ -1592,6 +1612,7 @@ class PdfCorpusRepository:
                 )
                 connection.commit()
             self._set_records_projection_state(build_id, dirty=False)
+            self._invalidate_review_records_cache(build_id)
 
     def update_record(self, build_id: str, record: dict[str, Any]) -> None:
         """Persist one validated record without rebuilding the whole JSONL file.
@@ -1622,6 +1643,7 @@ class PdfCorpusRepository:
                     (json.dumps(record, ensure_ascii=False), record_id),
                 )
                 connection.commit()
+            self._invalidate_review_records_cache(build_id)
 
     def refresh_records_projection(self, build_id: str) -> None:
         """Rebuild the JSONL publication projection from the transactional index."""
@@ -1649,22 +1671,49 @@ class PdfCorpusRepository:
                     pass
             self._set_records_projection_state(build_id, dirty=False)
 
-    def get_record(self, build_id: str, record_id: str) -> dict[str, Any]:
-        """Read one interactive record without parsing the complete corpus."""
+    def get_records(
+        self, build_id: str, record_ids: list[str] | tuple[str, ...]
+    ) -> list[dict[str, Any] | None]:
+        """Read selected interactive records with indexed SQLite lookups.
+
+        Review opens/prefetches only a handful of records. Reading those rows directly
+        avoids the historical O(corpus-size) deserialize/migration cost on every click.
+        Missing ids remain None and input order (including duplicates) is preserved.
+        """
         self.get_build(build_id)
+        requested = [str(record_id) for record_id in record_ids]
+        if not requested:
+            return []
+        unique_ids = list(dict.fromkeys(requested))
+        found: dict[str, str] = {}
         with self._lock:
             self._bootstrap_records_db(build_id)
             with self._records_db(build_id) as connection:
-                row = connection.execute(
-                    "SELECT payload FROM corpus_records WHERE record_id = ?",
-                    (str(record_id),),
-                ).fetchone()
-        if row is None:
+                # Review opens/prefetches only a few rows at a time. Fixed-shape indexed
+                # queries avoid dynamic SQL while preserving order/duplicate semantics below.
+                for record_id in unique_ids:
+                    row = connection.execute(
+                        "SELECT payload FROM corpus_records WHERE record_id = ?",
+                        (record_id,),
+                    ).fetchone()
+                    if row is not None:
+                        found[record_id] = str(row[0])
+        schema = self._record_schema(build_id)
+        decoded: dict[str, dict[str, Any]] = {
+            record_id: migrate_record_assertions(
+                _migrate_status_vocabulary(json.loads(payload)),
+                schema,
+            )
+            for record_id, payload in found.items()
+        }
+        return [decoded.get(record_id) for record_id in requested]
+
+    def get_record(self, build_id: str, record_id: str) -> dict[str, Any]:
+        """Read one interactive record without parsing the complete corpus."""
+        record = self.get_records(build_id, [str(record_id)])[0]
+        if record is None:
             raise KeyError(record_id)
-        return migrate_record_assertions(
-            _migrate_status_vocabulary(json.loads(row[0])),
-            self._record_schema(build_id),
-        )
+        return record
 
     def record_context(
         self, build_id: str, record_id: str, *, before: int = 6, after: int = 6, max_chars: int = 24000,
@@ -1767,11 +1816,31 @@ class PdfCorpusRepository:
         }
 
     def review_records(self, build_id: str) -> list[dict[str, Any]] | None:
-        """Every Record of a build in topology order, or ``None`` before segmentation stored any."""
+        """Read-only parsed snapshot for review paging, cached across HTTP requests.
+
+        The queue still evaluates the whole corpus for authoritative counts and filters,
+        but it no longer reparses/migrates every JSON payload for each page navigation.
+        """
         self.get_build(build_id)
         if not self.build_records_path(build_id).exists() and not self.build_records_db_path(build_id).exists():
             return None
-        return self.load_records(build_id)
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            signature = self._records_snapshot_signature(build_id)
+            cached = self._review_records_cache.get(str(build_id))
+            if cached is not None and cached[0] == signature:
+                # Refresh insertion order to approximate a tiny LRU without another dependency.
+                self._review_records_cache.pop(str(build_id), None)
+                self._review_records_cache[str(build_id)] = cached
+                return cached[1]
+        records = self.load_records(build_id)
+        with self._lock:
+            signature_after = self._records_snapshot_signature(build_id)
+            if signature_after == signature:
+                self._review_records_cache[str(build_id)] = (signature_after, records)
+                while len(self._review_records_cache) > self._review_records_cache_capacity:
+                    self._review_records_cache.pop(next(iter(self._review_records_cache)))
+        return records
 
     def publication_path(self, publication_id: str) -> Path:
         """Return the immutable publication path, preserving legacy JSONL snapshots."""
@@ -1832,8 +1901,14 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         """Refresh all text-bound linguistic projections without changing scholarly authority."""
         schema = self._schema_for(build_id)
         language = str(manifest.get("language") or "")
-        for record in records:
+        annotation_results = [
             annotate_record(record, schema, language=language)
+            for record in records
+        ]
+        linguistic_annotations = annotation_run_summary(annotation_results)
+        build = self.repo.get_build(build_id)
+        build["linguistic_annotations"] = linguistic_annotations
+        self.repo.save_build(build)
         try:
             analysis = analyze_document(
                 records,

@@ -110,15 +110,24 @@ const runtime = vi.hoisted(() => ({
   removeEntireWork: vi.fn(),
   browseResearcherWork: vi.fn(),
   decorateDisabledControls: vi.fn(),
-  listSemanticMapSources: vi.fn(() => ({ records: [] })),
+  listSemanticMapSources: vi.fn(() => ({
+    records: [{ id: "record-1", work: "Glas", concepts: [], topics: ["writing"], persons: [] }],
+    focusId: "record-1",
+  })),
   setTranslationDictionary: vi.fn(),
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
 
 const siteApi = vi.hoisted(() => ({
+  exportOptions: vi.fn(),
   exportSite: vi.fn(),
 }));
 vi.mock("../../src/api/sites", () => ({ sitesApi: siteApi }));
+vi.mock("../../src/api/corpus", () => ({
+  corpusBuildsApi: {
+    workSemanticMapRecords: vi.fn(async () => ({ records: [] })),
+  },
+}));
 
 import WorksView from "../../src/views/WorksView.vue";
 import { useI18nStore } from "../../src/stores/i18n";
@@ -176,6 +185,21 @@ describe("WorksView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setViewportWide(true);
+    siteApi.exportOptions.mockResolvedValue({
+      languages: [
+        { code: "en-US", name: "English", flag: "🇺🇸" },
+        { code: "fr-CA", name: "Français", flag: "🇨🇦" },
+      ],
+      provider_profiles: [
+        {
+          id: "openai-main",
+          name: "OpenAI-compatible lab",
+          type: "openai",
+          base_url: "https://models.example.edu/v1",
+          model: "gpt-oss:20b",
+        },
+      ],
+    });
     siteApi.exportSite.mockResolvedValue({
       blob: new Blob(["site"], { type: "application/zip" }),
       filename: "glas-site.zip",
@@ -357,7 +381,7 @@ describe("WorksView", () => {
     expect(dialog.attributes("open")).toBeDefined();
     expect(dialog.text()).toContain("Glas");
 
-    await dialog.get("input[type='checkbox']").setValue(true);
+    await dialog.get("[data-site-work='Glas']").setValue(true);
     await dialog.get("input[placeholder='Research collection']").setValue("Glas research site");
     await dialog.get("form").trigger("submit");
     await flushPromises();
@@ -368,9 +392,36 @@ describe("WorksView", () => {
       title: "Glas research site",
       description: "",
       locale: "en-US",
-      export_format: "local-single-file",
+      languages: ["en-US", "fr-CA"],
+      provider_profile_ids: ["openai-main"],
+      export_format: "two-file",
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("exports any selected subset of installed languages and provider profiles", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("[data-site-language='fr-CA']").setValue(false);
+    await dialog.get("[data-site-provider='openai-main']").setValue(false);
+    await dialog.get("input[placeholder='Research collection']").setValue("English-only Glas");
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith({
+      store: "derrida-primary",
+      works: ["Glas"],
+      title: "English-only Glas",
+      description: "",
+      locale: "en-US",
+      languages: ["en-US"],
+      provider_profile_ids: [],
+      export_format: "two-file",
+    });
     wrapper.unmount();
   });
 
@@ -379,7 +430,7 @@ describe("WorksView", () => {
     await chooseMenuItem(wrapper, "More actions", "Create site");
 
     const dialog = wrapper.get(".create-site-dialog");
-    await dialog.get("input[type='checkbox']").setValue(true);
+    await dialog.get("[data-site-work='Glas']").setValue(true);
     await dialog.get("input[value='nginx-docker']").setValue(true);
     await dialog.get("input[placeholder='Research collection']").setValue("Hosted Glas");
     await dialog.get("form").trigger("submit");
@@ -391,6 +442,8 @@ describe("WorksView", () => {
       title: "Hosted Glas",
       description: "",
       locale: "en-US",
+      languages: ["en-US", "fr-CA"],
+      provider_profile_ids: ["openai-main"],
       export_format: "nginx-docker",
     });
     wrapper.unmount();
@@ -452,6 +505,17 @@ describe("WorksView", () => {
       .find((button) => button.text().includes("Browse records"))!
       .trigger("click");
     expect(runtime.browseResearcherWork).toHaveBeenCalledWith("Glas");
+    wrapper.unmount();
+  });
+
+  it("opens the canonical semantic map when no persisted build is available", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "Actions for Glas", "Semantic map");
+    await flushPromises();
+
+    expect(wrapper.find(".works-semantic-map-dialog").attributes("open")).toBeDefined();
+    expect(wrapper.find(".semantic-map-frame").exists()).toBe(true);
+    expect(wrapper.text()).not.toContain("A semantic map is not available");
     wrapper.unmount();
   });
 });

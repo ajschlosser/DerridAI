@@ -139,6 +139,33 @@ describe("Corpus Builder review navigation", () => {
     expect(state.refreshRecords).toHaveBeenCalledWith(true, "");
   });
 
+  it("clears the previous-page selection before loading the next page", async () => {
+    const state = setup();
+    state.selectedRecordId.value = "r1";
+    state.selectedRecord.value = record("r1");
+
+    await state.navigation.nextPage();
+
+    expect(state.recordOffset.value).toBe(2);
+    expect(state.selectedRecordId.value).toBe("");
+    expect(state.selectedRecord.value).toBeNull();
+    expect(state.refreshRecords).toHaveBeenCalledWith();
+  });
+
+  it("clears the previous-page selection before loading the previous page", async () => {
+    const state = setup();
+    state.recordOffset.value = 2;
+    state.selectedRecordId.value = "r3";
+    state.selectedRecord.value = record("r3");
+
+    await state.navigation.previousPage();
+
+    expect(state.recordOffset.value).toBe(0);
+    expect(state.selectedRecordId.value).toBe("");
+    expect(state.selectedRecord.value).toBeNull();
+    expect(state.refreshRecords).toHaveBeenCalledWith();
+  });
+
   it("moves across local records before requesting another page", async () => {
     const state = setup();
 

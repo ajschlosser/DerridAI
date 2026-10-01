@@ -16,12 +16,11 @@ import * as runtime from "../runtime/runtime.js";
 import UiDialog from "../components/ui/UiDialog.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
-import CorpusSemanticGraphPanel from "../components/corpus-builder/CorpusSemanticGraphPanel.vue";
 import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
 import type { WorksFilters, WorksSort, WorksViewMode } from "../types/works";
 import type { SemanticMapSource } from "../domain/semanticMap";
 import { corpusBuildsApi } from "../api/corpus";
-import { sitesApi } from "../api/sites";
+import { sitesApi, type SiteExportFormat, type SiteExportOptions } from "../api/sites";
 
 const auth = useAuthStore();
 const i18n = useI18nStore();
@@ -37,9 +36,20 @@ const page = ref<HTMLElement | null>(null);
 const createSiteOpen = ref(false);
 const createSiteBusy = ref(false);
 const createSiteError = ref("");
+const createSiteLanguages = ref<SiteExportOptions["languages"]>([]);
+const createSiteProviderProfiles = ref<SiteExportOptions["provider_profiles"]>([]);
 
-function openCreateSite() {
+async function openCreateSite() {
   createSiteError.value = "";
+  try {
+    const options = await sitesApi.exportOptions();
+    createSiteLanguages.value = options.languages;
+    createSiteProviderProfiles.value = options.provider_profiles;
+  } catch (cause) {
+    createSiteLanguages.value = [...i18n.languages];
+    createSiteProviderProfiles.value = [];
+    createSiteError.value = cause instanceof Error ? cause.message : String(cause);
+  }
   createSiteOpen.value = true;
 }
 
@@ -53,7 +63,9 @@ async function createSite(payload: {
   title: string;
   description: string;
   works: string[];
-  export_format: "local-single-file" | "nginx-docker";
+  export_format: SiteExportFormat;
+  languages: string[];
+  provider_profile_ids: string[];
 }) {
   if (!snapshot.value?.activeStore || createSiteBusy.value) return;
   createSiteBusy.value = true;
@@ -64,7 +76,11 @@ async function createSite(payload: {
       works: payload.works,
       title: payload.title,
       description: payload.description,
-      locale: i18n.locale === "fr-CA" ? "fr-CA" : "en-US",
+      locale: payload.languages.includes(i18n.locale)
+        ? i18n.locale
+        : payload.languages[0] || "en-US",
+      languages: payload.languages,
+      provider_profile_ids: payload.provider_profile_ids,
       export_format: payload.export_format,
     });
     const url = URL.createObjectURL(download.blob);
@@ -206,8 +222,6 @@ function syncWide() {
 // --- semantic map dialog ----------------------------------------------------------------------------------------
 const semanticMapDialog = ref<HTMLDialogElement | null>(null);
 const semanticMapWork = ref("");
-const semanticMapBuildId = ref("");
-const semanticMapExtraBuilds = ref(0);
 const semanticMapLoading = ref(false);
 const semanticMapTab = ref<"graph" | "records" | "crossWorks">("graph");
 const semanticMapRecords = ref<Array<{ record_id: string; build_id: string }>>([]);
@@ -216,14 +230,13 @@ const semanticMapRecord = computed(
   () =>
     semanticMapRecords.value.find((item) => item.record_id === semanticMapRecordId.value) || null,
 );
-const semanticMapError = ref(false);
 const semanticMapSources = ref<SemanticMapSource[]>([]);
+const semanticMapFallbackSources = computed(() =>
+  semanticMapSources.value.filter((source) => source.work === semanticMapWork.value),
+);
 
 async function openWorkSemanticMap(work: string) {
   semanticMapWork.value = work;
-  semanticMapBuildId.value = "";
-  semanticMapExtraBuilds.value = 0;
-  semanticMapError.value = false;
   semanticMapLoading.value = true;
   semanticMapTab.value = "graph";
   semanticMapRecords.value = [];
@@ -232,21 +245,13 @@ async function openWorkSemanticMap(work: string) {
   semanticMapSources.value = allSources?.records || [];
   semanticMapDialog.value?.showModal();
   try {
-    void corpusBuildsApi
-      .workSemanticMapRecords(work)
-      .then((result) => {
-        if (semanticMapWork.value !== work) return;
-        semanticMapRecords.value = result.records;
-        semanticMapRecordId.value = result.records[0]?.record_id || "";
-      })
-      .catch(() => undefined);
-    const result = await corpusBuildsApi.workSemanticMapBuilds(work);
-    const [first, ...rest] = result.build_ids;
-    semanticMapBuildId.value = first || "";
-    semanticMapExtraBuilds.value = rest.length;
-    semanticMapError.value = !first;
+    const result = await corpusBuildsApi.workSemanticMapRecords(work);
+    if (semanticMapWork.value !== work) return;
+    semanticMapRecords.value = result.records;
+    semanticMapRecordId.value = result.records[0]?.record_id || "";
   } catch {
-    semanticMapError.value = true;
+    // The canonical runtime semantic map remains available when no persisted
+    // build or record-resolution endpoint is available.
   } finally {
     semanticMapLoading.value = false;
   }
@@ -506,6 +511,8 @@ onBeforeUnmount(() => {
       :works="snapshot.works"
       :store-name="snapshot.activeStore"
       :initial-work="snapshot.selectedWork"
+      :languages="createSiteLanguages"
+      :provider-profiles="createSiteProviderProfiles"
       :busy="createSiteBusy"
       :error="createSiteError"
       @cancel="closeCreateSite"
@@ -525,11 +532,7 @@ onBeforeUnmount(() => {
         </button>
       </header>
       <UiLoadingState v-if="semanticMapLoading" :label="i18n.t('ui.loading')" />
-      <p v-else-if="semanticMapError">{{ i18n.t("works.semantic_map_unavailable") }}</p>
-      <template v-else-if="semanticMapBuildId">
-        <p v-if="semanticMapExtraBuilds" class="note">
-          {{ i18n.tf("works.semantic_map_multiple_builds", { count: semanticMapExtraBuilds }) }}
-        </p>
+      <template v-else>
         <div class="works-semantic-tabs" role="tablist" :aria-label="i18n.t('works.semantic_map')">
           <button
             type="button"
@@ -572,7 +575,11 @@ onBeforeUnmount(() => {
           aria-labelledby="works-semantic-tab-graph"
           tabindex="0"
         >
-          <CorpusSemanticGraphPanel :build-id="semanticMapBuildId" />
+          <SemanticMapFrame
+            variant="page"
+            :sources="semanticMapFallbackSources"
+            :show-close="false"
+          />
         </div>
         <SemanticMapFrame
           v-if="semanticMapTab === 'crossWorks'"

@@ -92,13 +92,62 @@ const unresolved = computed(
       </details>
 
       <details
-        v-if="build.document_intelligence"
+        v-if="build.document_intelligence || build.linguistic_annotations"
         class="diagnostics-section"
         @toggle="track('intelligence', $event)"
       >
         <summary>{{ i18n.t("pdf_corpus.diagnostics.document_intelligence") }}</summary>
         <div v-if="opened.intelligence" class="diagnostics-content">
+          <section v-if="build.linguistic_annotations" class="linguistic-provenance">
+            <h4>{{ i18n.t("pdf_corpus.linguistic_analyzer_build") }}</h4>
+            <dl>
+              <div>
+                <dt>{{ i18n.t("pdf_corpus.linguistic_analyzer_library") }}</dt>
+                <dd>
+                  {{
+                    build.linguistic_annotations.engine === "spacy"
+                      ? "spaCy"
+                      : build.linguistic_annotations.engine || i18n.t("pdf_corpus.not_available")
+                  }}
+                  <template v-if="build.linguistic_annotations.engine_version">
+                    · v{{ build.linguistic_annotations.engine_version }}
+                  </template>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ i18n.t("pdf_corpus.linguistic_analyzer_models") }}</dt>
+                <dd>
+                  {{
+                    build.linguistic_annotations.models?.join(" · ") ||
+                    i18n.t("pdf_corpus.not_available")
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ i18n.t("pdf_corpus.linguistic_analyzer_languages") }}</dt>
+                <dd>
+                  {{
+                    build.linguistic_annotations.languages?.join(" · ") ||
+                    i18n.t("pdf_corpus.not_available")
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ i18n.t("pdf_corpus.linguistic_analyzer_records") }}</dt>
+                <dd>
+                  {{
+                    i18n.tf("pdf_corpus.linguistic_analyzer_records_value", {
+                      done: build.linguistic_annotations.records_annotated || 0,
+                      total: build.linguistic_annotations.records_total || 0,
+                    })
+                  }}
+                </dd>
+              </div>
+            </dl>
+            <p>{{ i18n.t("pdf_corpus.linguistic_analyzer_help") }}</p>
+          </section>
           <CorpusDocumentIntelligenceStatus
+            v-if="build.document_intelligence"
             :run="build.document_intelligence"
             :requested-provider="String(build.request?.document_nlp_provider || 'auto')"
           />
@@ -184,6 +233,42 @@ const unresolved = computed(
   display: grid;
   gap: var(--space-3);
   padding: var(--space-3);
+}
+.linguistic-provenance {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+}
+.linguistic-provenance h4,
+.linguistic-provenance p {
+  margin: 0;
+}
+.linguistic-provenance h4 {
+  font-size: var(--fs-sm);
+}
+.linguistic-provenance p {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.linguistic-provenance dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+.linguistic-provenance dt {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.linguistic-provenance dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-sm);
 }
 .provenance-strip {
   display: flex;

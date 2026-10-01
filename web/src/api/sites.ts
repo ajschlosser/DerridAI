@@ -1,15 +1,23 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { ApiError } from "./http";
+import { ApiError, apiRequest } from "./http";
+import type { LanguageInfo, ProviderProfile } from "./system";
 
-export type SiteExportFormat = "local-single-file" | "nginx-docker";
+export type SiteExportFormat = "two-file" | "local-single-file" | "nginx-docker";
 
 export interface SiteExportRequest {
   store: string;
   works: string[];
   title: string;
   description?: string;
-  locale: "en-US" | "fr-CA";
+  locale: string;
+  languages: string[];
+  provider_profile_ids: string[];
   export_format: SiteExportFormat;
+}
+
+export interface SiteExportOptions {
+  languages: LanguageInfo[];
+  provider_profiles: ProviderProfile[];
 }
 
 export interface SiteExportDownload {
@@ -26,6 +34,7 @@ function filenameFromDisposition(value: string | null): string {
 }
 
 export const sitesApi = {
+  exportOptions: () => apiRequest<SiteExportOptions>("/api/sites/export-options"),
   async exportSite(payload: SiteExportRequest): Promise<SiteExportDownload> {
     const response = await fetch("/api/sites/export", {
       method: "POST",
