@@ -35,9 +35,7 @@ const works = useWorksWorkspace();
 const { snapshot, error } = works;
 const loading = ref(true);
 const query = ref("");
-const revealed = ref(0);
 let queryTimer = 0;
-let revealToken = 0;
 const page = ref<HTMLElement | null>(null);
 const createSiteOpen = ref(false);
 const createSiteBusy = ref(false);
@@ -110,10 +108,25 @@ async function createSite(payload: {
 const fileSignature = computed(() =>
   shell.snapshot.files.map((file) => `${file.id}:${file.count}:${file.dirty}`).join("|"),
 );
-const visibleWorks = computed(() => (snapshot.value?.works || []).slice(0, revealed.value));
-const showSkeleton = computed(() =>
-  Boolean(snapshot.value?.mode === "admin" && snapshot.value.works.length && revealed.value === 0),
+const libraryPage = ref(1);
+const libraryPageSize = computed(() => (snapshot.value?.viewMode === "list" ? 100 : 48));
+const libraryPageCount = computed(() =>
+  Math.max(1, Math.ceil((snapshot.value?.works.length || 0) / libraryPageSize.value)),
 );
+const visibleWorks = computed(() => {
+  const items = snapshot.value?.works || [];
+  const start = (libraryPage.value - 1) * libraryPageSize.value;
+  return items.slice(start, start + libraryPageSize.value);
+});
+const showLibraryPagination = computed(
+  () => Boolean(snapshot.value?.works.length && libraryPageCount.value > 1),
+);
+function setLibraryPage(pageNumber: number) {
+  libraryPage.value = Math.min(libraryPageCount.value, Math.max(1, pageNumber));
+}
+function resetLibraryPage() {
+  libraryPage.value = 1;
+}
 /** Inspector commands, bound to the selected work; the persistent pane and the dialog share them. */
 function inspectorHandlers(work: string) {
   return {
@@ -134,34 +147,18 @@ const loadingDetail = computed(() =>
   auth.isResearcher ? i18n.t("works.checking_database") : i18n.t("works.checking_database"),
 );
 
-function startReveal() {
-  const token = ++revealToken;
-  const total = snapshot.value?.works.length || 0;
-  revealed.value = 0;
-  if (!total || snapshot.value?.mode !== "admin") {
-    revealed.value = total;
-    return;
-  }
-  const step = () => {
-    if (token !== revealToken) return;
-    revealed.value = Math.min(total, (revealed.value || 0) + 12);
-    if (revealed.value < total) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-}
-
 async function boot() {
   loading.value = !snapshot.value;
   await works.activate();
   query.value = snapshot.value?.query || "";
   loading.value = false;
-  startReveal();
+
 }
 
 function reload() {
   works.load();
   query.value = snapshot.value?.query || "";
-  startReveal();
+
 }
 
 function applyQuery(value: string) {
@@ -170,8 +167,8 @@ function applyQuery(value: string) {
   const delay = snapshot.value?.mode === "researcher" ? 150 : 180;
   queryTimer = window.setTimeout(() => {
     works.setQuery(value);
-    startReveal();
-    }, delay);
+    resetLibraryPage();
+  }, delay);
 }
 
 function selectWork(work: string) {
@@ -196,7 +193,7 @@ function applyView(patch: {
   viewMode?: WorksViewMode;
 }) {
   works.setView(patch);
-  startReveal();
+
 }
 function applyFilters(patch: Partial<WorksFilters>) {
   applyView(patch);
@@ -256,7 +253,7 @@ async function changeStore(name: string) {
   await works.setStore(name);
   query.value = snapshot.value?.query || "";
   loading.value = false;
-  startReveal();
+  resetLibraryPage();
 }
 
 watch(fileSignature, () => {
@@ -277,7 +274,6 @@ watch(
     reload();
   },
 );
-watch(visibleWorks, decorate);
 
 onMounted(() => {
   wideQuery = window.matchMedia?.("(min-width: 1100px)") ?? null;
@@ -392,16 +388,6 @@ onBeforeUnmount(() => {
           :class="{ list: snapshot.viewMode === 'list' }"
           :aria-label="i18n.t('nav.works')"
         >
-          <UiLoadingState
-            v-if="showSkeleton"
-            :label="
-              i18n.tf('works.loading_cards', {
-                count: snapshot.works.length.toLocaleString(i18n.locale),
-              })
-            "
-            variant="skeleton"
-            :skeleton-count="Math.min(4, snapshot.works.length)"
-          />
           <WorksLibraryList
             v-if="snapshot.viewMode === 'list'"
             :works="visibleWorks"
@@ -460,6 +446,34 @@ onBeforeUnmount(() => {
                   : i18n.t("research.no_works")
             }}
           </p>
+          <nav
+            v-if="showLibraryPagination"
+            class="works-library-pagination"
+            :aria-label="i18n.t('works.library_pagination')"
+          >
+            <UiButton
+              size="small"
+              variant="ghost"
+              :label="i18n.t('ui.previous')"
+              :disabled="libraryPage <= 1"
+              @click="setLibraryPage(libraryPage - 1)"
+            />
+            <span>
+              {{
+                i18n.tf("dynamic.page_of_pages", {
+                  page: libraryPage,
+                  pages: libraryPageCount,
+                })
+              }}
+            </span>
+            <UiButton
+              size="small"
+              variant="ghost"
+              :label="i18n.t('ui.next')"
+              :disabled="libraryPage >= libraryPageCount"
+              @click="setLibraryPage(libraryPage + 1)"
+            />
+          </nav>
         </section>
 
         <aside
@@ -650,6 +664,16 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: var(--space-4);
   color: var(--text-secondary);
+}
+.works-library-pagination {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  padding-block: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
 }
 .works-inspector-pane {
   position: sticky;
