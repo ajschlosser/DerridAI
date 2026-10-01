@@ -1,43 +1,51 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { onBeforeUnmount, ref } from "vue";
+import { followResource } from "../realtime/follow";
 import { corpusCaptureApi, type CorpusCapture } from "../api/corpus";
 
 /**
- * Keep one capture current while its background job runs: `GET /captures/{id}` is polled only
- * while `active_job` is set, and polling stops as soon as the job finishes or the owner unmounts.
+ * Keep one capture current while its background job runs: the job's realtime events trigger a
+ * `GET /captures/{id}` read (REST fallback only while the socket is down), and following stops as
+ * soon as the job finishes or the owner unmounts.
  * Callers refresh their own dependent data (candidates, source rows) from `onSettled`, so a
  * finished job never triggers a refetch of the whole Sources list.
  */
-export function useCapturePolling(
+export function useCaptureFollow(
   options: {
-    intervalMs?: number;
     onUpdate?: (capture: CorpusCapture) => void;
     onSettled?: (capture: CorpusCapture) => void;
   } = {},
 ) {
   const capture = ref<CorpusCapture | null>(null);
   const error = ref("");
-  const interval = options.intervalMs ?? 1500;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stopFollow: (() => void) | undefined;
+  let followedJob = "";
   let stopped = false;
 
   function clear() {
-    if (timer !== undefined) clearTimeout(timer);
-    timer = undefined;
+    stopFollow?.();
+    stopFollow = undefined;
+    followedJob = "";
   }
 
   function accept(next: CorpusCapture) {
     const wasActive = Boolean(capture.value?.active_job);
     capture.value = next;
     options.onUpdate?.(next);
-    if (next.active_job) schedule();
-    else if (wasActive) options.onSettled?.(next);
+    if (next.active_job) follow(next.active_job.id);
+    else clear();
+    if (!next.active_job && wasActive) options.onSettled?.(next);
   }
 
-  function schedule() {
+  function follow(jobId: string) {
+    if (stopped || followedJob === jobId) return;
     clear();
-    if (stopped) return;
-    timer = setTimeout(() => void load(), interval);
+    followedJob = jobId;
+    stopFollow = followResource({
+      topic: `job:${jobId}`,
+      refresh: () => load(),
+      isDone: () => !capture.value?.active_job,
+    });
   }
 
   async function load(captureId = capture.value?.capture_id) {
@@ -49,8 +57,7 @@ export function useCapturePolling(
       return next;
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : String(cause);
-      // A transient failure keeps polling a running job; a stopped one waits for the user.
-      if (capture.value?.active_job) schedule();
+      // A transient failure keeps following a running job; the next event or fallback read retries.
       return null;
     }
   }

@@ -18,6 +18,7 @@ import type {
   ResearchWorkspaceSnapshot,
 } from "../types/research";
 import * as runtime from "../runtime/runtime.js";
+import { followResource } from "../realtime/follow";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 
 const route = useRoute();
@@ -72,7 +73,8 @@ const settingsDrawer = ref<{
 } | null>(null);
 const runsDrawer = ref<{ open: () => void; close: () => void } | null>(null);
 const researchDraft = useResearchDraft();
-let pollTimer: number | undefined;
+// One realtime follower per live Research job; its events (or the socket-down fallback) refresh state.
+const jobFollowers = new Map<string, () => void>();
 let draftTimer: number | undefined;
 
 const selectedEvidence = computed(() => workspace.value?.selected_evidence || []);
@@ -368,8 +370,7 @@ async function runResearch() {
     starting.value = false;
   }
 }
-async function poll() {
-  pollTimer = undefined;
+async function refreshLiveJobs() {
   if (!isNativeResearch.value) return;
   try {
     if (canManageRuns.value) {
@@ -407,17 +408,35 @@ async function poll() {
       }
     }
   } catch (error) {
-    console.warn("Research polling failed", error);
+    console.warn("Research refresh failed", error);
   }
   schedulePoll();
 }
+const LIVE_STATUSES = ["queued", "running", "cancelling"];
 function schedulePoll(force = false) {
-  window.clearTimeout(pollTimer);
-  const active =
-    Boolean(
-      activeJob.value && ["queued", "running", "cancelling"].includes(activeJob.value.status),
-    ) || jobs.value.some((job) => ["queued", "running", "cancelling"].includes(job.status));
-  if ((force || active) && isNativeResearch.value) pollTimer = window.setTimeout(poll, 3000);
+  const live = new Set<string>();
+  if (isNativeResearch.value) {
+    for (const job of [activeJob.value, ...jobs.value])
+      if (job && LIVE_STATUSES.includes(job.status)) live.add(job.id);
+    // A just-started run is followed even before its first status is known.
+    if (force && activeJob.value) live.add(activeJob.value.id);
+  }
+  for (const [id, stop] of jobFollowers) {
+    if (live.has(id)) continue;
+    stop();
+    jobFollowers.delete(id);
+  }
+  for (const id of live) {
+    if (jobFollowers.has(id)) continue;
+    jobFollowers.set(
+      id,
+      followResource({ topic: `job:${id}`, refresh: refreshLiveJobs, minIntervalMs: 1000 }),
+    );
+  }
+}
+function stopJobFollowers() {
+  for (const stop of jobFollowers.values()) stop();
+  jobFollowers.clear();
 }
 async function openJob(job: ResearchJob) {
   try {
@@ -574,7 +593,7 @@ watch(
 watch(
   () => [route.name, route.query.job],
   ([name]) => {
-    window.clearTimeout(pollTimer);
+    stopJobFollowers();
     if (name === "rag") void loadWorkspace(true);
   },
 );
@@ -582,7 +601,7 @@ onMounted(() => {
   if (isNativeResearch.value) void loadWorkspace(true);
 });
 onBeforeUnmount(() => {
-  window.clearTimeout(pollTimer);
+  stopJobFollowers();
   window.clearTimeout(draftTimer);
   researchDraft.clear();
 });
