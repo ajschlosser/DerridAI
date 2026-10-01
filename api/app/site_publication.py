@@ -258,7 +258,8 @@ def build_site_bundle(
     """Create an SDK-backed static research site from one immutable publication snapshot.
 
     ``record_profile`` chooses how much Record metadata is packaged: ``complete`` keeps every public field,
-    including FieldAssertions; ``reader`` keeps only what the site reads and cites (see ``site_record_profile``).
+    including FieldAssertions; ``reader`` keeps every metadata value but omits the FieldAssertion layer
+    (see ``site_record_profile``).
     """
     record_profile = normalize_site_record_profile(record_profile)
     selected_works = list(dict.fromkeys(str(item).strip() for item in works if str(item).strip()))
@@ -337,9 +338,7 @@ def build_site_bundle(
     if not full_records:
         raise ValueError("No publication-valid records remain after validating the selected works.")
 
-    public_records = apply_record_profile(
-        full_records, record_profile, vector_contract.get("filter_fields") or []
-    )
+    public_records = apply_record_profile(full_records, record_profile)
     # The profile must never remove what cELF Core requires; fail rather than publish a broken Record.
     profile_errors = [
         error for record in public_records for error in validate_publication_record(record)
