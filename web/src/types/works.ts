@@ -64,6 +64,8 @@ export interface WorksLibraryItem {
   publisher: WorksBiblioValue;
   translator: WorksBiblioValue;
   status: WorksStatus;
+  /** Normalized deterministic bibliographic lookup text; not rendered directly. */
+  searchText?: string;
 }
 
 /** Full inspector payload for the currently selected work. */
