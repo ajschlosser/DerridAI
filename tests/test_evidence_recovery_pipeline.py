@@ -254,6 +254,9 @@ def test_cascade_v2_reranks_then_adjudicates_only_a_bounded_shortlist(monkeypatc
     assert result.entry["method"] == "llm-evidence-choice-v1"
     assert result.entry["block_ids"] == ["b2"], "IDs outside the shortlist must be rejected"
     assert result.entry["pipeline"]["celf_compliant"] is True
+    assert result.entry["score_details"][0]["cross_encoder_score"] == 0.81
+    assert "semantic_score" in result.entry["score_details"][0]
+    assert "mmr_score" in result.entry["score_details"][0]
     ran = _ran(traces)
     for stage in ("semantic", "rerank", "mmr", "llm_choice", "provenance", "select"):
         assert stage in ran
