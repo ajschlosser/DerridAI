@@ -12,5 +12,6 @@
     ".storybook/**/*.ts",
     "playwright*.config.ts",
     "vite.config.ts"
-  ]
+  ],
+  "exclude": ["tests/fixtures/sdk-consumer/**"]
 }
