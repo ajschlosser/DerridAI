@@ -3,12 +3,7 @@
 
 from __future__ import annotations
 
-from app.field_assertions import (
-    create_human_assertion,
-    create_memory_assertion,
-    current_assertion_by_name,
-    project_record_assertions,
-)
+from app import field_assertions as assertions
 from app.metadata_candidates import apply_indexing_nlp_candidates
 from app.metadata_schema import default_schema
 from app.nlp_annotations import text_digest
@@ -87,7 +82,7 @@ def test_safe_direct_ner_indexing_candidates_become_unreviewed_assertions():
     assert record["works_referenced"] == ["Of Grammatology"]
     assert "topics" not in record and "concepts" not in record
 
-    persons = current_assertion_by_name(record, "persons")
+    persons = assertions.current_assertion_by_name(record, "persons")
     assert persons is not None
     assert persons.derivation_method == "derridai:nlp"
     assert persons.evaluation_status == "value_supported"
@@ -123,7 +118,7 @@ def test_stale_nlp_projection_is_never_promoted():
 def test_nlp_candidates_do_not_overwrite_present_memory_or_human_values():
     schema = default_schema()
     record = _record()
-    create_memory_assertion(
+    assertions.create_memory_assertion(
         record,
         "persons",
         ["Derrida"],
@@ -132,19 +127,19 @@ def test_nlp_candidates_do_not_overwrite_present_memory_or_human_values():
         reason="Reviewed precedents agree.",
         evidence=[{"block_ids": ["b1"], "confidence": 0.9}],
     )
-    create_human_assertion(
+    assertions.create_human_assertion(
         record,
         "works_referenced",
         ["Glas"],
         schema=schema,
         reason="Reviewer selected this work.",
     )
-    project_record_assertions(record)
+    assertions.project_record_assertions(record)
 
     summary = apply_indexing_nlp_candidates(record, schema)
 
     assert summary["resolved_fields"] == []
     assert record["persons"] == ["Derrida"]
     assert record["works_referenced"] == ["Glas"]
-    assert current_assertion_by_name(record, "persons").derivation_method == "derridai:memory"
-    assert current_assertion_by_name(record, "works_referenced").authority_status == "human_confirmed"
+    assert assertions.current_assertion_by_name(record, "persons").derivation_method == "derridai:memory"
+    assert assertions.current_assertion_by_name(record, "works_referenced").authority_status == "human_confirmed"
