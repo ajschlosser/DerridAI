@@ -60,7 +60,10 @@ try {
   if (unexpected.length) {
     throw new Error(`Unexpected files in SDK tarball: ${unexpected.join(", ")}`);
   }
-  if (!packedFiles.includes("package/dist/index.js") || !packedFiles.includes("package/dist/index.d.ts")) {
+  if (
+    !packedFiles.includes("package/dist/index.js") ||
+    !packedFiles.includes("package/dist/index.d.ts")
+  ) {
     throw new Error("SDK tarball is missing its JavaScript or TypeScript declaration entry point.");
   }
 
