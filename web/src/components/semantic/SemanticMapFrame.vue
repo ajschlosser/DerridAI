@@ -7,11 +7,13 @@ import { useSemanticMapStore } from "../../stores/semanticMap";
 import {
   SEMANTIC_MAP_PLACEMENTS,
   buildSemanticMap,
+  layoutSemanticTopology,
   type SemanticMapGraph,
   type SemanticMapKind,
   type SemanticMapNode,
   type SemanticMapPlacement,
   type SemanticMapSource,
+  type SemanticMapTopology,
 } from "../../domain/semanticMap";
 import * as runtime from "../../runtime/runtime.js";
 import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
@@ -25,10 +27,11 @@ const props = withDefaults(
   defineProps<{
     variant: SemanticMapPlacement;
     sources?: SemanticMapSource[];
+    topology?: SemanticMapTopology | null;
     focusId?: string;
     showClose?: boolean;
   }>(),
-  { sources: () => [], focusId: "", showClose: true },
+  { sources: () => [], topology: null, focusId: "", showClose: true },
 );
 const emit = defineEmits<{ activate: [node: SemanticMapNode] }>();
 
@@ -48,7 +51,11 @@ const kindEnabled = ref<Record<SemanticMapKind, boolean>>({
   record: true,
 });
 
-const graph = computed(() => buildSemanticMap(props.sources, props.focusId));
+const graph = computed(() =>
+  props.topology
+    ? layoutSemanticTopology(props.topology)
+    : buildSemanticMap(props.sources, props.focusId),
+);
 
 const kindCounts = computed<Record<SemanticMapKind, number>>(() => {
   const counts: Record<SemanticMapKind, number> = { concept: 0, topic: 0, person: 0, record: 0 };
