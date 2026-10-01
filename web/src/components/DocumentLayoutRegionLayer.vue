@@ -194,6 +194,7 @@ function onKey(region: LayoutRegion, event: KeyboardEvent) {
     ref="layer"
     class="region-layer"
     :class="{ drawing, disabled }"
+    role="group"
     :aria-label="i18n.t('pdf_corpus.region_overlay')"
     @pointerdown="onLayerDown"
     @pointermove="onMove"
