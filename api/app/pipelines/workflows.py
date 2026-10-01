@@ -47,6 +47,8 @@ class PurposeAdapter:
     compile: Callable[[PipelineDefinition], Any]
     supported_strategies: frozenset[str]
     describe: Callable[[Any], dict[str, Any]] | None = None
+    # True when the adapter delivers stage inputs from the resolved wiring, so explicit bindings run.
+    honours_bindings: bool = False
 
 
 def _recovery_details(plan: Any) -> dict[str, Any]:
@@ -71,7 +73,9 @@ PURPOSE_ADAPTERS: dict[str, PurposeAdapter] = {
         frozenset({REVIEWER_EVIDENCE_CHOICE.strategy}),
     ),
     "vector_store_search": PurposeAdapter(
-        store_search.compile_store_search_pipeline, store_search.SUPPORTED_STRATEGIES
+        store_search.compile_store_search_pipeline,
+        store_search.SUPPORTED_STRATEGIES,
+        honours_bindings=True,
     ),
     "metadata_precedents": PurposeAdapter(
         metadata_precedents.compile_metadata_precedent_pipeline,
@@ -115,7 +119,11 @@ def runtime_support(pipeline: PipelineDefinition) -> dict[str, Any]:
         plan = adapter.compile(pipeline)
     except ValueError as exc:
         return {"supported": False, "adapter": None, "reason": str(exc)}
-    changed = bindings_changing_wiring(pipeline, strategy_registry, purpose_registry.get(pipeline.purpose))
+    changed = (
+        []
+        if adapter.honours_bindings
+        else bindings_changing_wiring(pipeline, strategy_registry, purpose_registry.get(pipeline.purpose))
+    )
     if changed:
         return {
             "supported": False,

@@ -10,6 +10,7 @@ from app.models import SearchRequest
 from app.pipelines import manager as manager_module
 from app.pipelines import store as pipeline_store_module
 from app.pipelines.defaults import built_in_assignment, built_in_pipeline
+from app.pipelines.models import InputBinding
 from app.pipelines.service import PipelineService, pipeline_hash
 from app.pipelines.store_search import (
     MODE_PIPELINES,
@@ -175,12 +176,12 @@ def test_named_pipeline_must_be_a_store_search_pipeline(monkeypatch, traces) -> 
             "may only follow semantic similarity",
         ),
         (
-            "similarity",
+            "mmr",
             lambda stages: [
-                stage.model_copy(update={"next": ["select", "select"]}) if stage.id == "dense" else stage
+                stage.model_copy(update={"next": ["mmr", "select"]}) if stage.id == "dense" else stage
                 for stage in stages
             ],
-            "Only the query stage may fan out",
+            "feeds nothing else",
         ),
         ("lexical", _with_config("lexical", {"min_score": 0.5}), "does not apply min_score"),
     ],
@@ -188,3 +189,47 @@ def test_named_pipeline_must_be_a_store_search_pipeline(monkeypatch, traces) -> 
 def test_unsupported_graphs_are_rejected(mode, stages, match) -> None:
     with pytest.raises(ValueError, match=match):
         compile_store_search_pipeline(_variant(mode, "store_search.bad", stages))
+
+
+def _rebound_hybrid(pipeline_id="store_search.rebound"):
+    """Hybrid search whose final selection is bound to the dense leg, bypassing fusion."""
+
+    def stages(source):
+        binding = InputBinding(source="stage", stage="dense", output="candidates")
+        return [
+            stage.model_copy(update={"inputs": {"candidates": [binding]}}) if stage.id == "select" else stage
+            for stage in source
+        ]
+
+    return _variant("hybrid", pipeline_id, stages)
+
+
+def test_explicit_input_binding_changes_what_a_stage_receives(monkeypatch) -> None:
+    from app.pipelines.store_search import StoreSearchRequest, execute_store_search
+
+    pipeline = _rebound_hybrid()
+    plan = compile_store_search_pipeline(pipeline)
+    assert "select" in plan.consumers["dense"]
+    assert "select" not in plan.consumers.get("fuse", [])
+
+    store = fake_store(embeddings=FakeEmbeddings())
+    request = StoreSearchRequest(store="db", query="stranger", n_results=3, where=None, fetch_k=12, lambda_mult=0.5)
+    rebound = execute_store_search(plan, store=store, request=request, resolved_hash=pipeline_hash(pipeline))
+    similarity = built_in_pipeline(*MODE_PIPELINES["similarity"])
+    baseline = execute_store_search(
+        compile_store_search_pipeline(similarity),
+        store=store,
+        request=request,
+        resolved_hash=pipeline_hash(similarity),
+    )
+    assert [row["id"] for row in rebound.results] == [row["id"] for row in baseline.results]
+    assert not any("hybrid_score" in row for row in rebound.results)
+    assert rebound.trace.warnings == ["rewired_inputs: select.candidates"]
+    assert baseline.trace.warnings == []
+
+
+def test_rebound_store_search_pipeline_is_reported_executable() -> None:
+    from app.pipelines.workflows import runtime_support
+
+    support = runtime_support(_rebound_hybrid())
+    assert support["supported"] is True
