@@ -1120,7 +1120,7 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             rows = conn.execute(
                 "SELECT record_id, build_id FROM record_build_provenance WHERE work=? "
                 "ORDER BY updated_at DESC, record_id LIMIT ?",
-                (work, max(1, min(int(limit), 500))),
+                (work, max(1, min(int(limit), 5000))),
             ).fetchall()
         return [{"record_id": str(row["record_id"]), "build_id": str(row["build_id"])} for row in rows]
 
