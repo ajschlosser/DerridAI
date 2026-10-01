@@ -1504,6 +1504,60 @@ class PdfCorpusRepository:
         build = self.get_build(build_id)
         return bool((build.get("records_projection") or {}).get("dirty"))
 
+    def semantic_projection_state(self, build_id: str) -> dict[str, Any]:
+        """Cheap generations used to validate derived semantic-map System Data."""
+        build = self.get_build(build_id)
+        state = build.get("semantic_projection")
+        if not isinstance(state, dict):
+            return {"revision": 0, "text_revision": 0}
+        return {
+            "revision": int(state.get("revision") or 0),
+            "text_revision": int(state.get("text_revision") or 0),
+            "semantic_digest": state.get("semantic_digest"),
+            "text_digest": state.get("text_digest"),
+            "updated_at": state.get("updated_at"),
+        }
+
+    def _update_semantic_projection_state(
+        self,
+        build_id: str,
+        *,
+        semantic_digest: str | None = None,
+        text_digest: str | None = None,
+        semantic_changed: bool | None = None,
+        text_changed: bool | None = None,
+    ) -> dict[str, Any]:
+        """Advance semantic generations on write, never on an interactive map read."""
+        build_path = self.build_path(build_id)
+        build = _json_read(build_path)
+        if not isinstance(build, dict):
+            raise KeyError(build_id)
+        state = dict(build.get("semantic_projection") or {})
+        if semantic_changed is None:
+            semantic_changed = semantic_digest is not None and semantic_digest != state.get("semantic_digest")
+        if text_changed is None:
+            text_changed = text_digest is not None and text_digest != state.get("text_digest")
+        if semantic_changed:
+            state["revision"] = int(state.get("revision") or 0) + 1
+        else:
+            state["revision"] = int(state.get("revision") or 0)
+        if text_changed:
+            state["text_revision"] = int(state.get("text_revision") or 0) + 1
+        else:
+            state["text_revision"] = int(state.get("text_revision") or 0)
+        if semantic_digest is not None:
+            state["semantic_digest"] = semantic_digest
+        elif semantic_changed:
+            state.pop("semantic_digest", None)
+        if text_digest is not None:
+            state["text_digest"] = text_digest
+        elif text_changed:
+            state.pop("text_digest", None)
+        state["updated_at"] = iso_now()
+        build["semantic_projection"] = state
+        _json_write(build_path, build)
+        return dict(state)
+
     def _records_db(self, build_id: str) -> sqlite3.Connection:
         path = self.build_records_db_path(build_id)
         path.parent.mkdir(parents=True, exist_ok=True)
