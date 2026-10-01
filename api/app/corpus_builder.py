@@ -292,12 +292,7 @@ from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
 from .rag import _citation_strings, chat_complete
-from .record_semantic_map import (
-    RECORD_SEMANTIC_MAP_VERSION,
-    SemanticIndex,
-    record_semantic_map,
-    semantic_node_neighborhood,
-)
+from .record_semantic_map import RECORD_SEMANTIC_MAP_VERSION, SemanticIndex
 from .reviewer_context import current_reviewer
 from .run_guidance import find_guidance_matches
 from .semantic_content_graph import (
@@ -2172,7 +2167,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         not persist checkpoints or mutate the build. Record- and node-centred
         exploration therefore remains read-only.
         """
-        records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
+        records = [
+            json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)
+        ]
         for row in records:
             _present_for_reviewer(row)
         analysis = self.document_intelligence(build_id)
@@ -2439,7 +2436,13 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         if not work:
             raise ValueError("A Work is required.")
         record_refs = system_store.list_records_for_work(work, limit=5000)
-        build_ids = sorted({str(item.get("build_id") or "") for item in record_refs if item.get("build_id")})
+        build_ids = sorted(
+            {
+                str(item.get("build_id") or "")
+                for item in record_refs
+                if item.get("build_id")
+            }
+        )
         generations = {
             build_id: self._semantic_projection_generation(build_id)
             for build_id in build_ids
@@ -2457,9 +2460,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             json.dumps(material, ensure_ascii=False, sort_keys=True).encode("utf-8")
         ).hexdigest()[:24]
         work_key = hashlib.sha256(work.casefold().encode("utf-8")).hexdigest()[:24]
-        projection_key = (
-            f"semantic-work:{work_key}:{self._semantic_reviewer_scope()}"
-        )
+        projection_key = f"semantic-work:{work_key}:{self._semantic_reviewer_scope()}"
         persisted = system_store.get_semantic_map_projection(projection_key)
         if (
             persisted
@@ -2515,12 +2516,16 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                             buckets[kind].append(
                                 (int(node.get("mention_count") or 0), label)
                             )
+
                     def labels(kind: str) -> list[str]:
                         ranked = sorted(
                             buckets[kind],
                             key=lambda item: (-item[0], item[1].casefold()),
                         )
-                        return list(dict.fromkeys(label for _count, label in ranked))[:24]
+                        return list(
+                            dict.fromkeys(label for _count, label in ranked)
+                        )[:24]
+
                     sources.append(
                         {
                             "id": record_id,
