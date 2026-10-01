@@ -27,6 +27,14 @@ DIRECT_NER_INDEXING_SEMANTICS: dict[str, frozenset[str]] = {
     "derridai.indexing.works_referenced": frozenset({"WORK_OF_ART", "LAW"}),
 }
 
+# Above these small direct-mention sets, semantic selection becomes useful again:
+# a long list of names/titles often contains incidental references that should not
+# bypass the conservative indexing model merely because the tagger recognized them.
+MAX_DIRECT_NER_VALUES: dict[str, int] = {
+    "derridai.indexing.persons": 4,
+    "derridai.indexing.works_referenced": 3,
+}
+
 
 def _available_for_candidate(record: dict[str, Any], field_name: str) -> bool:
     """Do not replace any selected present value or human-owned assertion."""
@@ -69,6 +77,7 @@ def apply_indexing_nlp_candidates(record: dict[str, Any], schema: Any) -> dict[s
     text_sha256 = str(nlp_data.get("text_sha256") or "")
     current_text = str(record.get("text") or "")
     resolved: list[str] = []
+    deferred: dict[str, str] = {}
     values_by_field: dict[str, list[str]] = {}
 
     for field in eligible_fields:
@@ -119,6 +128,13 @@ def apply_indexing_nlp_candidates(record: dict[str, Any], schema: Any) -> dict[s
             })
         if not values:
             continue
+        max_values = MAX_DIRECT_NER_VALUES[semantic_id]
+        if len(values) > max_values:
+            deferred[field.name] = (
+                f"{len(values)} direct NER candidates exceed the conservative "
+                f"candidate-only limit of {max_values}."
+            )
+            continue
 
         method = f"nlp:{engine}:{model or 'unversioned'}"
         create_nlp_assertion(
@@ -150,6 +166,7 @@ def apply_indexing_nlp_candidates(record: dict[str, Any], schema: Any) -> dict[s
         project_record_assertions(record)
     return {
         "resolved_fields": sorted(resolved),
+        "deferred_fields": deferred,
         "values": values_by_field,
         "engine": engine,
         "engine_version": engine_version,
