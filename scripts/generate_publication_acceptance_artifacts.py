@@ -66,6 +66,19 @@ def _language(code: str) -> dict:
     }
 
 
+def _provider_profiles() -> list[dict]:
+    return [
+        {
+            "id": "acceptance-provider",
+            "name": "Acceptance provider",
+            "type": "openai",
+            "base_url": "https://models.example.test/v1",
+            "model": "fixture-generation",
+            "has_api_key": False,
+        }
+    ]
+
+
 def generate(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     with (
@@ -76,7 +89,11 @@ def generate(output_dir: Path) -> None:
             return_value=[{"code": "en-US", "name": "English", "flag": "EN"}],
         ),
         patch.object(site_publication.system_store, "get_language", side_effect=_language),
-        patch.object(site_publication.system_store, "researcher_profiles", return_value=[]),
+        patch.object(
+            site_publication.system_store,
+            "researcher_profiles",
+            side_effect=_provider_profiles,
+        ),
     ):
         local = site_publication.build_local_site_file(
             store_name="acceptance-corpus",
@@ -94,9 +111,20 @@ def generate(output_dir: Path) -> None:
             locale="en-US",
             languages=["en-US"],
         )
+        local_provider = site_publication.build_local_site_file(
+            store_name="acceptance-corpus",
+            works=["Glas"],
+            title="DerridAI Provider Acceptance",
+            description="Generated direct-provider acceptance fixture.",
+            locale="en-US",
+            languages=["en-US"],
+            provider_profile_ids=["acceptance-provider"],
+        )
 
     local_path = output_dir / "local.html"
     local_path.write_bytes(local.payload)
+    local_provider_path = output_dir / "local-provider.html"
+    local_provider_path.write_bytes(local_provider.payload)
 
     nginx_zip = output_dir / "nginx.zip"
     nginx_zip.write_bytes(nginx.payload)
@@ -111,6 +139,7 @@ def generate(output_dir: Path) -> None:
 
     metadata = {
         "local": str(local_path),
+        "local_provider": str(local_provider_path),
         "nginx": str(nginx_dir),
         "publication_id": local.publication_id,
         "record_count": local.record_count,
