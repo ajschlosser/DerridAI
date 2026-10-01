@@ -12,6 +12,7 @@ declarations, and the empirical latency analysis is the check on them.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Literal
 
 from .models import (
     ComplexitySpec,
@@ -47,6 +48,19 @@ COMPLEXITY_ORDERS: tuple[tuple[int, str], ...] = (
 
 def _in(name: str, data_type: DataType, *, required: bool = True, multiple: bool = False) -> PortSpec:
     return PortSpec(name=name, data_type=data_type, required=required, multiple=multiple)
+
+
+def _tuning(name: str, *, minimum: float, maximum: float) -> PortSpec:
+    """An optional number input that may be fixed to a constant (a tuning knob)."""
+
+    return PortSpec(
+        name=name,
+        data_type="number",
+        required=False,
+        accepts_constant=True,
+        minimum=minimum,
+        maximum=maximum,
+    )
 
 
 QUERY_IN = _in("query", "query")
@@ -271,6 +285,9 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
             order=6,
             variables=("n", "q", "L"),
             driver="model_inference",
+            # Upper bound: Research scores every incoming candidate, but the evidence
+            # adapter scores only the head ``top_k`` (evidence.py), so the real count
+            # there is min(n, top_k). Declared as n so the worst case is never hidden.
             model_calls="n",
             cardinality=_cap("top_k"),
         ),
@@ -283,7 +300,11 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
     "validate.evidence_support": (
         [CANDIDATES_IN, _in("query", "query", required=False)],
         [_in("candidates", "candidate_set")],
-        _complexity("O(n·L)", "O(n)", order=3, variables=("n", "L")),
+        # Checked against evidence.py/_support_rows (read, not measured): the support
+        # score is deterministic token overlap, not model-assisted, but it re-scores
+        # *every* source unit in scope (``limit=len(blocks)``) and then looks the
+        # incoming candidates up, so the cost follows the scope size N, not n.
+        _complexity("O(N·L)", "O(N)", order=4, variables=("N", "L"), scope=True),
     ),
     "validate.citation_binding": (
         [ANSWER_IN],
@@ -293,6 +314,10 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
     "validate.provenance": (
         [CANDIDATES_IN],
         [_in("candidates", "candidate_set")],
+        # Checked, left unchanged: the Research gate looks each candidate up in storage
+        # (O(n)). The reviewer-evidence adapter's variant also builds a set of every
+        # source unit in scope first (O(N + n), in memory), but one strategy id carries
+        # one declaration and the Research reading is the dominant use.
         _complexity("O(n)", "O(n)", order=2, variables=("n",), driver="storage"),
     ),
     "select.mmr": (
@@ -310,7 +335,7 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
         ),
     ),
     "select.top_k": (
-        [CANDIDATES_IN],
+        [CANDIDATES_IN, _tuning("limit", minimum=1, maximum=1000)],
         [_in("candidates", "candidate_set")],
         _complexity(
             "O(n log n)", "O(n)", order=3, variables=("n",), cardinality=_cap("limit")
@@ -391,6 +416,26 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
         _llm_call("1"),
     ),
 }
+
+
+# Whether a strategy's stage may overlap with independent sibling branches.
+#   safe             pure retrieval/scoring over immutable inputs
+#   provider_limited calls a model or embedder; must respect per-provider limits
+#   exclusive        anything else (mutates state, order-dependent, unknown)
+# Overlap is an opt-in executor feature; this only declares what is permitted.
+Concurrency = Literal["safe", "provider_limited", "exclusive"]
+STRATEGY_CONCURRENCY: dict[str, Concurrency] = {
+    "retrieve.lexical_bm25": "safe",
+    "retrieve.store_keyword": "safe",
+    "retrieve.store_filter": "safe",
+    "retrieve.chroma_similarity": "provider_limited",
+}
+
+
+def strategy_concurrency(strategy_id: str) -> Concurrency:
+    """Declared concurrency of a strategy; undeclared strategies are ``exclusive``."""
+
+    return STRATEGY_CONCURRENCY.get(strategy_id, "exclusive")
 
 
 def with_contract(spec: StrategySpec) -> StrategySpec:

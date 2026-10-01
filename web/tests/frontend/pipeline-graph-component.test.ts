@@ -184,3 +184,46 @@ describe("PipelineGraphDiagram relation interactions", () => {
     expect(wrapper.find(".diagram-legend [data-kind='on_timeout']").exists()).toBe(true);
   });
 });
+
+describe("PipelineGraphDiagram edge type labels", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  const props = {
+    stages,
+    entryStageIds: ["retrieve"],
+    strategies,
+    title: "Pipeline",
+    description: "Test pipeline",
+  };
+
+  it("labels the data type of edges touching the focused stage, and only then", async () => {
+    const wrapper = mount(PipelineGraphDiagram, { props });
+    await flushPromises();
+    expect(wrapper.find(".diagram-edge-label").exists()).toBe(false);
+
+    await wrapper.findAll(".diagram-node")[0].trigger("focus");
+    const labels = wrapper.findAll(".diagram-edge-label");
+    expect(labels.map((label) => label.text())).toEqual(["Candidate set"]);
+
+    await wrapper.findAll(".diagram-node")[0].trigger("blur");
+    expect(wrapper.find(".diagram-edge-label").exists()).toBe(false);
+  });
+
+  it("draws an ordering-only edge distinctly and says it carries no data", async () => {
+    const wrapper = mount(PipelineGraphDiagram, {
+      props: { ...props, orderingEdges: [{ from: "retrieve", to: "validate" }] },
+    });
+    await flushPromises();
+    expect(wrapper.get(".diagram-edge").attributes("data-ordering")).toBe("true");
+    expect(wrapper.get(".diagram-legend").text()).toContain("Runs first (no data)");
+    await wrapper.findAll(".diagram-node")[1].trigger("focus");
+    expect(wrapper.get(".diagram-edge-label").text()).toBe("Runs first (no data)");
+  });
+
+  it("shows no ordering styling for ordinary edges", async () => {
+    const wrapper = mount(PipelineGraphDiagram, { props });
+    await flushPromises();
+    expect(wrapper.get(".diagram-edge").attributes("data-ordering")).toBeUndefined();
+    expect(wrapper.get(".diagram-legend").text()).not.toContain("no data");
+  });
+});

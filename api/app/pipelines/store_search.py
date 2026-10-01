@@ -22,17 +22,19 @@ from __future__ import annotations
 import time
 import uuid
 from collections import defaultdict, deque
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 from ..retrieval_selection import mmr_select
+from .contracts import strategy_concurrency
 from .models import PipelineDefinition, PipelineRunTrace, PipelineStageDefinition
 from .purposes import purpose_registry
 from .registry import reject_unhonoured_config, strategy_registry
 from .service import pipeline_hash
 from .trace_safety import trace_stage
-from .wiring import bindings_changing_wiring, resolve_wiring
+from .wiring import resolve_wiring, rewired_warnings
 
 SEARCH_FEATURE = "vector_store_search"
 SEARCH_PURPOSE = "vector_store_search"
@@ -53,6 +55,7 @@ SUPPORTED_STRATEGIES = frozenset({_QUERY, _DENSE, _LEXICAL, _KEYWORD, _FILTER, _
 _RETRIEVERS = frozenset({_DENSE, _LEXICAL, _KEYWORD, _FILTER})
 _LEG_TYPES = {_DENSE: "semantic", _LEXICAL: "lexical", _KEYWORD: "keyword", _FILTER: "filter"}
 # Declared capabilities, so rules follow what a consumer needs rather than which stage happens to be adjacent.
+_MAX_PARALLEL_BRANCHES = 4
 _NEEDS_EMBEDDINGS = frozenset({_MMR})  # consumers that need candidate embeddings
 _EMBEDDING_PRODUCERS = frozenset({_DENSE})
 _FALLBACK_EDGE = {"unavailable": "on_unavailable", "timed_out": "on_timeout", "failed": "on_error"}
@@ -68,6 +71,8 @@ class StoreSearchPlan:
     consumers: dict[str, list[str]]
     # Stages whose input is the run's own query rather than another stage's output.
     seeded: frozenset[str]
+    # Fixed numbers bound to tuning ports: stage id -> port name -> value.
+    constants: dict[str, dict[str, float]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -117,7 +122,7 @@ def compile_store_search_pipeline(pipeline: PipelineDefinition) -> StoreSearchPl
             raise ValueError(f"Stage {stage.id!r} has no next stage, so its results could never be returned.")
         if stage.strategy == _QUERY and stage.id != pipeline.entry_stage_ids[0]:
             raise ValueError("The query stage must be the entry stage.")
-    consumers, seeded = _resolve_delivery(pipeline, stages)
+    consumers, seeded, constants = _resolve_delivery(pipeline, stages)
     producers: dict[str, list[str]] = defaultdict(list)
     for source_id, targets in consumers.items():
         for target in targets:
@@ -135,13 +140,18 @@ def compile_store_search_pipeline(pipeline: PipelineDefinition) -> StoreSearchPl
                 )
     order = _topological_order(pipeline, stages, consumers)
     return StoreSearchPlan(
-        pipeline=pipeline, stages=stages, order=order, consumers=dict(consumers), seeded=frozenset(seeded)
+        pipeline=pipeline,
+        stages=stages,
+        order=order,
+        consumers=dict(consumers),
+        seeded=frozenset(seeded),
+        constants=constants,
     )
 
 
 def _resolve_delivery(
     pipeline: PipelineDefinition, stages: dict[str, PipelineStageDefinition]
-) -> tuple[dict[str, list[str]], set[str]]:
+) -> tuple[dict[str, list[str]], set[str], dict[str, dict[str, float]]]:
     """Who receives each stage's output, resolved by the shared wiring resolver.
 
     A ``next`` edge that only orders a producer ahead of an explicitly bound
@@ -155,17 +165,20 @@ def _resolve_delivery(
         raise ValueError("Store-search wiring is invalid: " + "; ".join(issue.message for issue in errors))
     consumers: dict[str, list[str]] = defaultdict(list)
     seeded: set[str] = set()
+    constants: dict[str, dict[str, float]] = {}
     for stage_id in stages:
         for row in wiring["stages"].get(stage_id, {}).get("inputs", []):
             for source in row["sources"]:
-                if source["kind"] == "run_input":
+                if source["kind"] == "constant":
+                    constants.setdefault(stage_id, {})[row["port"]] = float(source["value"])
+                elif source["kind"] == "run_input":
                     seeded.add(stage_id)
                 elif source["kind"] == "stage" and source["via"] in ("next", "explicit"):
                     if source["stage"] not in stages:
                         raise ValueError(f"Stage {stage_id!r} takes input from disabled stage {source['stage']!r}.")
                     if stage_id not in consumers[source["stage"]]:
                         consumers[source["stage"]].append(stage_id)
-    return consumers, seeded
+    return consumers, seeded, constants
 
 
 def _topological_order(
@@ -253,7 +266,8 @@ class _Runner:
                 return self._fuse(stage, inputs)
             if strategy == _MMR:
                 return self._mmr(stage, inputs)
-            limit = min(self.request.n_results, int(stage.config.get("limit", self.request.n_results)))
+            configured = self.plan.constants.get(stage.id, {}).get("limit", stage.config.get("limit", self.request.n_results))
+            limit = min(self.request.n_results, int(configured))
             return _single(stage, inputs)[:limit], {"parameters": {"limit": limit}}
         except _StageFailure:
             raise
@@ -330,7 +344,14 @@ def execute_store_search(
     resolved_hash: str,
     owner: str | None = None,
     collection_identity: dict[str, Any] | None = None,
+    parallel: bool = False,
 ) -> StoreSearchExecution:
+    """Run a compiled plan. ``parallel`` lets independent, concurrency-safe branches overlap.
+
+    Results, fallback routing and trace order never depend on completion order: each
+    overlapped batch is joined first and then processed in definition order.
+    """
+
     runner = _Runner(store, plan, request)
     identity = collection_identity or {}
     inputs: dict[str, list[tuple[str, Any]]] = defaultdict(list)
@@ -340,21 +361,44 @@ def execute_store_search(
     stage_traces = []
     results: list[dict[str, Any]] = []
     started_at = datetime.now(UTC)
+    attempts: dict[str, tuple[Any, ...]] = {}
+    overlapped = False
+
+    def _attempt(stage: PipelineStageDefinition, received: list[tuple[str, Any]]) -> tuple[Any, ...]:
+        begun = time.perf_counter()
+        try:
+            output, observation = runner.run(stage, received)
+        except _StageFailure as failure:
+            return begun, time.perf_counter(), None, {}, failure
+        return begun, time.perf_counter(), output, observation, None
+
     for stage_id in plan.order:
         if stage_id not in inputs:
             continue  # no edge routed here: this stage never runs
         stage = plan.stages[stage_id]
         received = inputs[stage_id]
-        begun = time.perf_counter()
+        if parallel and stage_id not in attempts:
+            # Independent branches: stages already holding their inputs whose strategy allows
+            # overlap. Nothing here consumes another batch member's output, because a consumer
+            # only receives input after its producer has been processed.
+            batch = [
+                plan.stages[other]
+                for other in plan.order
+                if other in inputs and other not in attempts and strategy_concurrency(plan.stages[other].strategy) != "exclusive"
+            ]
+            if stage in batch and len(batch) > 1:
+                with ThreadPoolExecutor(max_workers=min(len(batch), _MAX_PARALLEL_BRANCHES)) as pool:
+                    futures = {member.id: pool.submit(_attempt, member, list(inputs[member.id])) for member in batch}
+                    for member_id, future in futures.items():
+                        attempts[member_id] = future.result()
+                overlapped = True
         status, fallback_reason = "completed", None
-        observation: dict[str, Any] = {}
-        try:
-            output, observation = runner.run(stage, received)
-        except _StageFailure as failure:
-            status, output, fallback_reason = failure.status, None, str(failure.error)[:300]
+        begun, ended, output, observation, failed = attempts.get(stage_id) or _attempt(stage, received)
+        if failed is not None:
+            status, output, fallback_reason = failed.status, None, str(failed.error)[:300]
             edge = getattr(stage, _FALLBACK_EDGE[status])
             if edge is None:
-                raise failure.error from None
+                raise failed.error from None
             # A fallback edge replays what the failed stage received.
             inputs[edge].extend((stage.id, payload) for _source, payload in received)
         else:
@@ -372,7 +416,7 @@ def execute_store_search(
             trace_stage(
                 stage.id,
                 stage.strategy,
-                elapsed_seconds=time.perf_counter() - begun,
+                elapsed_seconds=ended - begun,
                 input_count=in_count if stage.strategy not in _RETRIEVERS | {_QUERY} else None,
                 output_count=len(output) if isinstance(output, list) else None,
                 parameters={
@@ -404,17 +448,10 @@ def execute_store_search(
         started_at=started_at,
         finished_at=finished_at,
         total_elapsed_ms=max(0, int((finished_at - started_at).total_seconds() * 1000)),
-        warnings=_rewired_warnings(plan.pipeline),
+        warnings=[*rewired_warnings(plan.pipeline), *(['branches_overlapped'] if overlapped else [])],
         stages=stage_traces,
     )
     return StoreSearchExecution(results=results, trace=trace)
-
-
-def _rewired_warnings(pipeline: PipelineDefinition) -> list[str]:
-    """Mark runs whose explicit bindings differ from the graph's own wiring."""
-
-    changed = bindings_changing_wiring(pipeline, strategy_registry, purpose_registry.get(pipeline.purpose))
-    return ["rewired_inputs: " + ", ".join(changed)[:280]] if changed else []
 
 
 def resolve_store_search_pipeline(

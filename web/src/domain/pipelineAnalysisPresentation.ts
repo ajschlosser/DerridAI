@@ -28,6 +28,7 @@ export function dataTypeGlyph(type: string): string {
     context_packet: "▣",
     model_output: "✎",
     evaluation: "✓",
+    number: "#",
     any: "∗",
   };
   return glyphs[type] ?? "∗";
@@ -57,6 +58,9 @@ export function sampleLabel(figure: PipelineLatencyFigure | undefined, t: Pipeli
 }
 
 export function sourceText(source: PipelineWiringSource, t: PipelineTranslator): string {
+  if (source.kind === "constant") {
+    return `${t("pipelines.ports_fixed_value", "Fixed value")} ${source.value ?? ""}`;
+  }
   if (source.kind === "run_input") {
     return `${t("pipelines.ports_run_input", "Workflow input")} “${source.name}”`;
   }

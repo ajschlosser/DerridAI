@@ -313,6 +313,7 @@ export function pipelineDataTypeLabel(value: string, t: PipelineTranslator) {
     context_packet: t("pipelines.data_type.context_packet_label", "Context packet"),
     model_output: t("pipelines.data_type.model_output_label", "Model output"),
     evaluation: t("pipelines.data_type.evaluation_label", "Evaluation"),
+    number: t("pipelines.data_type.number_label", "Number"),
     any: t("pipelines.data_type.any_label", "Any input"),
   };
   return labels[value] || value;

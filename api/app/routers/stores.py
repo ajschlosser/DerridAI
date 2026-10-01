@@ -461,6 +461,7 @@ def search(store_name: str, body: SearchRequest, request: Request) -> dict[str, 
             resolved_hash=resolved_hash,
             owner=user.username,
             collection_identity=_search_collection_identity(store_name),
+            parallel=settings.pipeline_parallel_branches,
         )
         identity = {
             "feature": SEARCH_FEATURE,

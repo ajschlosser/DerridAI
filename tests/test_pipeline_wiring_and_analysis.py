@@ -553,3 +553,5 @@ def test_an_edge_that_only_orders_a_binding_feeds_nothing_and_is_not_a_type_erro
     assert [s["stage"] for s in rerank["candidates"]["sources"]] == ["dense"]
     assert [s["stage"] for s in rerank["query"]["sources"]] == ["alt"]
     assert rerank["query"]["explicit"] is True
+    # The analysis names that edge so the diagram can draw it as carrying no data.
+    assert analysis["wiring"]["ordering_only_edges"] == [{"from": "alt", "to": "rerank"}]

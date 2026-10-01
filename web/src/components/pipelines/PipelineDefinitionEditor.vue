@@ -345,6 +345,7 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
           :show-inspector="false"
           :badges="badges"
           :flagged-stage-ids="flaggedStageIds"
+          :ordering-edges="analysis?.wiring.ordering_only_edges ?? []"
           @update:selected-stage-id="selectStageById"
         />
         <PipelineStageNavigator

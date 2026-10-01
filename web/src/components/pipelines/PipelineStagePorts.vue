@@ -90,6 +90,25 @@ function selected(row: PipelineWiringInput) {
   return explicit ? optionKey(explicit) : "";
 }
 
+/** The fixed number currently bound to a tuning port, or null. */
+function constantValue(row: PipelineWiringInput): number | null {
+  const source = row.explicit ? row.sources[0] : null;
+  return source?.kind === "constant" && typeof source.value === "number" ? source.value : null;
+}
+
+function constantRange(row: PipelineWiringInput) {
+  return i18n.tf("pipelines.ports_constant_range", "Between {min} and {max}.", {
+    min: String(row.minimum ?? "−∞"),
+    max: String(row.maximum ?? "∞"),
+  });
+}
+
+function setConstant(row: PipelineWiringInput, raw: string) {
+  const value = Number(raw);
+  if (raw.trim() === "" || !Number.isFinite(value)) return;
+  emit("bind", row.port, { kind: "constant", value });
+}
+
 function describeSources(row: PipelineWiringInput) {
   if (!row.sources.length) return t("pipelines.ports_none", "Nothing is connected.");
   return i18n.tf("pipelines.ports_currently", "Currently: {source}", {
@@ -99,6 +118,12 @@ function describeSources(row: PipelineWiringInput) {
 
 function choose(row: PipelineWiringInput, key: string) {
   if (!key) return emit("bind", row.port, null);
+  if (key === "constant") {
+    return emit("bind", row.port, {
+      kind: "constant",
+      value: constantValue(row) ?? row.minimum ?? 0,
+    });
+  }
   const found = choiceFromKey(key, row.options);
   if (found) emit("bind", row.port, found.choice);
 }
@@ -171,7 +196,31 @@ const hasExplicit = computed(() => props.wiring?.inputs.some((row) => row.explic
                   {{ optionLabel(option) }}
                 </option>
               </optgroup>
+              <optgroup
+                v-if="row.accepts_constant"
+                :label="t('pipelines.ports_group_constant', 'Fixed value')"
+              >
+                <option value="constant">
+                  {{ t("pipelines.ports_option_constant", "A fixed number") }}
+                </option>
+              </optgroup>
             </select>
+          </label>
+          <label v-if="row.accepts_constant && constantValue(row) !== null" class="port-source">
+            <span>{{ t("pipelines.ports_constant_value", "Value") }}</span>
+            <input
+              class="control"
+              type="number"
+              inputmode="decimal"
+              :min="row.minimum ?? undefined"
+              :max="row.maximum ?? undefined"
+              :value="constantValue(row) ?? ''"
+              :aria-describedby="`${uid}-${row.port}-range`"
+              @change="setConstant(row, ($event.target as HTMLInputElement).value)"
+            />
+            <small :id="`${uid}-${row.port}-range`" class="port-now">{{
+              constantRange(row)
+            }}</small>
           </label>
           <small :id="`${uid}-${row.port}-now`" class="port-now">{{ describeSources(row) }}</small>
         </li>

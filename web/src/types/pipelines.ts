@@ -62,12 +62,17 @@ export type PipelineDataType =
   | "context_packet"
   | "model_output"
   | "evaluation"
+  | "number"
   | "any";
 
 export type PipelinePort = {
   name: string;
   data_type: PipelineDataType;
   required: boolean;
+  /** A tuning port: it may be fixed to a number instead of wired. */
+  accepts_constant?: boolean;
+  minimum?: number | null;
+  maximum?: number | null;
   /** Merges several upstream sources (a union of candidate sets). */
   multiple: boolean;
 };
@@ -144,7 +149,8 @@ export type PipelineStrategy = {
 /** Where one stage input gets its value; absent ports are wired from the graph edges. */
 export type PipelineInputBinding =
   | { source: "stage"; stage: string; output?: string | null }
-  | { source: "run_input"; name: string };
+  | { source: "run_input"; name: string }
+  | { source: "constant"; value: number };
 
 export type PipelineStage = {
   id: string;
@@ -500,7 +506,9 @@ export type ResearchPipelineBenchmarkRun = {
 
 /** One place a stage input can come from, as resolved by the server. */
 export type PipelineWiringSource = {
-  kind: "stage" | "stage_input" | "run_input";
+  kind: "stage" | "stage_input" | "run_input" | "constant";
+  /** The fixed number, for a constant. */
+  value?: number | null;
   stage: string | null;
   output: string | null;
   name: string | null;
@@ -528,6 +536,9 @@ export type PipelineWiringInput = {
   data_type: PipelineDataType;
   required: boolean;
   multiple: boolean;
+  accepts_constant?: boolean;
+  minimum?: number | null;
+  maximum?: number | null;
   explicit: boolean;
   status: "bound" | "unbound" | "optional_unbound" | "mismatch";
   sources: PipelineWiringSource[];
@@ -633,6 +644,8 @@ export type PipelineAnalysis = {
   validation: PipelineValidation;
   wiring: {
     stages: Record<string, PipelineStageWiring>;
+    /** `next` edges that only run a producer first for an explicit binding; they carry no data. */
+    ordering_only_edges?: Array<{ from: string; to: string }>;
     run_inputs: Array<PipelineRunInput & { consumers: Array<{ stage: string; port: string }> }>;
   };
   complexity: { stages: PipelineComplexityStage[]; summary: PipelineComplexitySummary | null };
