@@ -201,6 +201,7 @@ describe("SemanticMapCanvas", () => {
     expect(decluttered.exists()).toBe(true);
     expect(decluttered.element.tagName).toBe("DIV");
     expect(decluttered.attributes("aria-hidden")).toBe("true");
+    expect(decluttered.attributes("data-relation-node")).toBeUndefined();
   });
 
   it("changes spacing within clusters without multiplying the whole map by the old wide factor", async () => {
