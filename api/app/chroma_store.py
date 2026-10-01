@@ -18,6 +18,7 @@ from typing import Any
 import chromadb
 import httpx
 
+from . import operation_events
 from .chroma_connection import (
     DEFAULT_DATABASE,
     DEFAULT_HTTP_URL,
@@ -28,7 +29,6 @@ from .chroma_connection import (
     parse_http_endpoint,
     public_http_config,
 )
-from . import operation_events
 from .config import APP_VERSION, settings
 from .retrieval_selection import cosine_similarity, distance_to_relevance
 
