@@ -17,7 +17,7 @@ except ModuleNotFoundError:
 from app import corpus_builder as cb
 from app import metadata_schema as ms
 from app.config import APP_VERSION
-from app.field_assertions import create_memory_assertion, current_assertion_by_name
+from app.field_assertions import create_memory_assertion, current_assertion_by_name, project_record_assertions
 
 
 def notes_schema():
@@ -168,6 +168,7 @@ def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path)
             evidence=[{"block_ids": ["b1"], "confidence": 0.9, "reason": "memory match"}],
         )
         record[field] = value
+    project_record_assertions(record)
 
     tasks, _, _ = m._prepare_metadata_tasks(
         record,
