@@ -77,3 +77,6 @@ def test_parse_json_object_rejects_non_object_garbage_as_malformed():
 def test_parse_json_object_requires_top_level_object():
     with pytest.raises(sj.StructuredJsonMalformedError):
         sj.parse_json_object("[1, 2, 3]")
+
+    with pytest.raises(sj.StructuredJsonMalformedError):
+        sj.parse_json_object('[{"answer": 1}]')
