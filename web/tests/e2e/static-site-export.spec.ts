@@ -83,7 +83,7 @@ test("single-file export preserves evidence when reader-configured providers are
     model: string,
     roles: Array<"embeddings" | "answers">,
   ) => {
-    await page.getByRole("button", { name: "Models" }).click();
+    await page.getByRole("button", { name: "Models", exact: true }).click();
     const form = page.getByRole("form", { name: "Add an endpoint" });
     await form.getByLabel("Name", { exact: true }).fill(name);
     await form.getByLabel("Endpoint URL").fill("https://models.example.test/v1");
