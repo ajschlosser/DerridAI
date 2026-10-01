@@ -24,6 +24,7 @@ from .reviewer_context import current_reviewer
 # What can happen to a value. PROPOSED and AUTOFILLED are the model's doing, CALL is one model request
 # (its cost), and the rest are human decisions.
 PROPOSED, AUTOFILLED, CALL = "proposed", "autofilled", "call"
+RECORD_RUN = "record_run"  # one Record through enrichment, merge, and durable persistence
 BLIND_LABEL = "blind_label"  # a person's value for a field whose model value they could not see
 RECHECK_SEAL, RECHECK = "recheck_seal", "recheck"  # a decision set aside to be asked again, and the second answer
 SUSPENDED, RESUMED = "suspended", "resumed"  # the autofill policy switching a model and field off, and back on
