@@ -42,6 +42,8 @@ class SiteExportRequest(BaseModel):
     # Copy the active collection's derived vectors into the publication. When false, Records and the source
     # embedding contract are still published so each browser can build its own local semantic index.
     include_vectors: bool = True
+    # nginx/Docker only: expose a same-origin /provider/ bridge to this OpenAI-compatible base URL.
+    provider_proxy_upstream: str | None = Field(default=None, max_length=2048)
 
 
 @router.get("/api/sites/export-options")
@@ -93,23 +95,30 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
     """Create a two-file, local single-file, or nginx/Docker research-site export."""
     require_admin(request)
     try:
+        provider_proxy_upstream = str(body.provider_proxy_upstream or "").strip() or None
+        if provider_proxy_upstream and body.export_format != "nginx-docker":
+            raise ValueError("Provider proxy upstream is available only for the nginx Docker export.")
+
+        common_kwargs = {
+            "store_name": body.store,
+            "works": body.works,
+            "title": body.title,
+            "description": body.description,
+            "locale": body.locale,
+            "languages": body.languages or [body.locale],
+            "include_transformers": body.include_transformers,
+            "include_vectors": body.include_vectors,
+            "record_profile": body.record_profile,
+        }
         if body.export_format == "two-file":
-            builder = build_site_bundle
+            bundle = build_site_bundle(**common_kwargs)
         elif body.export_format == "local-single-file":
-            builder = build_local_site_file
+            bundle = build_local_site_file(**common_kwargs)
         else:
-            builder = build_nginx_site_bundle
-        bundle = builder(
-            store_name=body.store,
-            works=body.works,
-            title=body.title,
-            description=body.description,
-            locale=body.locale,
-            languages=body.languages or [body.locale],
-            include_transformers=body.include_transformers,
-            include_vectors=body.include_vectors,
-            record_profile=body.record_profile,
-        )
+            bundle = build_nginx_site_bundle(
+                **common_kwargs,
+                provider_proxy_upstream=provider_proxy_upstream,
+            )
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except FileNotFoundError as exc:
