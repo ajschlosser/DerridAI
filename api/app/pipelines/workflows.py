@@ -64,6 +64,7 @@ PURPOSE_ADAPTERS: dict[str, PurposeAdapter] = {
         evidence_recovery.compile_recovery_pipeline,
         evidence_recovery.SUPPORTED_STRATEGIES,
         _recovery_details,
+        honours_bindings=True,
     ),
     "precedent_evidence_remap": PurposeAdapter(
         precedent_remap.compile_remap_pipeline, precedent_remap.SUPPORTED_STRATEGIES

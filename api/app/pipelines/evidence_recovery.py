@@ -23,7 +23,7 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -47,8 +47,11 @@ from ..evidence_suggestions import (
     validate_llm_choice,
 )
 from .models import PipelineDefinition, PipelineRunTrace, PipelineStageDefinition
+from .purposes import purpose_registry
+from .registry import strategy_registry
 from .service import pipeline_hash
 from .trace_safety import trace_stage
+from .wiring import resolve_wiring
 
 RECOVERY_FEATURE = "evidence_recovery"
 RECOVERY_PURPOSE = "evidence_recovery"
@@ -106,6 +109,9 @@ class RecoveryPlan:
     entry_stage_id: str
     celf_compliant: bool
     compliance_reason: str
+    # Stages whose candidate input an explicit binding takes from named producers
+    # instead of from whatever the cascade last produced.
+    bound_sources: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def selection_limit(self) -> int:
@@ -171,7 +177,13 @@ def compile_recovery_pipeline(pipeline: PipelineDefinition) -> RecoveryPlan:
             "Semantic and cross-encoder stages need the field-aware query stage as the entry stage."
         )
 
-    feeders = [stage for stage in stages.values() if provenance.id in stage.edge_targets()]
+    bound_sources = _bound_sources(pipeline, stages)
+    if select.id in bound_sources and bound_sources[select.id] != [provenance.id]:
+        raise ValueError("Only the provenance gate may feed top-K selection, including through input bindings.")
+    if provenance.id in bound_sources:
+        feeders = [stages[source] for source in bound_sources[provenance.id]]
+    else:
+        feeders = [stage for stage in stages.values() if provenance.id in stage.edge_targets()]
     loose = sorted(stage.id for stage in feeders if stage.strategy not in {_SUPPORT, _LLM})
     weak = sorted(
         stage.id
@@ -203,7 +215,33 @@ def compile_recovery_pipeline(pipeline: PipelineDefinition) -> RecoveryPlan:
         entry_stage_id=pipeline.entry_stage_ids[0],
         celf_compliant=compliant,
         compliance_reason=reason,
+        bound_sources=bound_sources,
     )
+
+
+def _bound_sources(pipeline: PipelineDefinition, stages: dict[str, PipelineStageDefinition]) -> dict[str, list[str]]:
+    """Explicit candidate-input bindings the cascade honours, resolved by the shared wiring.
+
+    Routing stays on ``next``/fallback edges; a binding only changes which producer's
+    output a stage receives. Bindings on secondary ports are not honoured and are rejected.
+    """
+
+    wiring = resolve_wiring(pipeline, strategy_registry, purpose_registry.get(pipeline.purpose))
+    errors = [issue for issue in wiring["issues"] if issue.level == "error"]
+    if errors:
+        raise ValueError("Evidence-recovery wiring is invalid: " + "; ".join(issue.message for issue in errors))
+    bound: dict[str, list[str]] = {}
+    for stage_id in stages:
+        for index, row in enumerate(wiring["stages"].get(stage_id, {}).get("inputs", [])):
+            if not row["explicit"]:
+                continue
+            if index > 0:
+                raise ValueError(
+                    f"Evidence recovery does not honour an explicit binding on input {row['port']!r} of {stage_id!r}."
+                )
+            if row["data_type"] == "candidate_set":
+                bound[stage_id] = [s["stage"] for s in row["sources"] if s["kind"] == "stage"]
+    return bound
 
 
 @dataclass
@@ -481,6 +519,8 @@ def execute_recovery_pipeline(
     rows: list[dict[str, Any]] = []
     selected: list[dict[str, Any]] = []
     winner: str | None = None
+    outputs: dict[str, list[dict[str, Any]]] = {}
+    produced_order: list[str] = []
     stage_id: str | None = plan.entry_stage_id
     for _ in range(len(plan.stages)):  # acyclic: each stage runs at most once
         if stage_id is None:
@@ -489,6 +529,11 @@ def execute_recovery_pipeline(
         begun = time.perf_counter()
         # Stages that read the record's source units report those; the rest
         # report the candidate set they were handed.
+        if stage.id in plan.bound_sources:
+            # The most recent bound producer that actually produced; none means nothing to pass on.
+            wanted = set(plan.bound_sources[stage.id])
+            latest = next((sid for sid in reversed(produced_order) if sid in wanted), None)
+            rows = outputs[latest] if latest else []
         input_count = len(blocks) if stage.strategy in {_LEXICAL, _SEMANTIC, _LLM} else len(rows)
         outcome = run.run(stage, rows)
         # Only a model that was asked and gave no valid answer makes the next stage an
@@ -500,6 +545,8 @@ def execute_recovery_pipeline(
             if stage.strategy in _METHODS:
                 winner = stage.strategy
             rows = outcome.rows
+            outputs[stage.id] = outcome.rows
+            produced_order.append(stage.id)
             if stage.strategy == _SELECT:
                 selected = outcome.rows
         elif outcome.status == "completed":
