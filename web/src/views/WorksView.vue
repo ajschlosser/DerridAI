@@ -20,7 +20,7 @@ import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSe
 import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
 import type { WorksDbStatusKind, WorksFilters, WorksSort, WorksViewMode } from "../types/works";
 import type { SemanticMapSource } from "../domain/semanticMap";
-import { corpusBuildsApi } from "../api/corpus";
+import { corpusBuildsApi, type WorkSemanticMap } from "../api/corpus";
 import { semanticMapService } from "../services/semanticMap";
 import {
   sitesApi,
@@ -277,9 +277,14 @@ const semanticMapRecord = computed(
     semanticMapRecords.value.find((item) => item.record_id === semanticMapRecordId.value) || null,
 );
 const semanticMapSources = ref<SemanticMapSource[]>([]);
-const semanticMapFallbackSources = computed(() =>
-  semanticMapSources.value.filter((source) => source.work === semanticMapWork.value),
-);
+const semanticMapWorkProjection = ref<WorkSemanticMap | null>(null);
+const semanticMapWorkSources = computed<SemanticMapSource[]>(() => {
+  const persisted = semanticMapWorkProjection.value?.sources || [];
+  if (persisted.length) return persisted;
+  // Legacy/local files without published build provenance keep the same visual
+  // map instead of falling into a "map unavailable" state.
+  return semanticMapSources.value.filter((source) => source.work === semanticMapWork.value);
+});
 
 async function openWorkSemanticMap(work: string) {
   semanticMapWork.value = work;
@@ -287,21 +292,28 @@ async function openWorkSemanticMap(work: string) {
   semanticMapTab.value = "graph";
   semanticMapRecords.value = [];
   semanticMapRecordId.value = "";
+  semanticMapWorkProjection.value = null;
   const allSources = semanticMapService.listSources();
   semanticMapSources.value = allSources.records;
   semanticMapDialog.value?.showModal();
   try {
-    const result = await corpusBuildsApi.workSemanticMapRecords(work);
+    const [mapResult, recordsResult] = await Promise.allSettled([
+      corpusBuildsApi.workSemanticMap(work),
+      corpusBuildsApi.workSemanticMapRecords(work),
+    ]);
     if (semanticMapWork.value !== work) return;
-    semanticMapRecords.value = result.records;
-    semanticMapRecordId.value = result.records[0]?.record_id || "";
-  } catch {
-    // The canonical runtime semantic map remains available when no persisted
-    // build or record-resolution endpoint is available.
+    if (mapResult.status === "fulfilled") {
+      semanticMapWorkProjection.value = mapResult.value;
+    }
+    if (recordsResult.status === "fulfilled") {
+      semanticMapRecords.value = recordsResult.value.records;
+      semanticMapRecordId.value = recordsResult.value.records[0]?.record_id || "";
+    }
   } finally {
     semanticMapLoading.value = false;
   }
 }
+
 function closeWorkSemanticMap() {
   semanticMapDialog.value?.close();
 }
@@ -642,7 +654,7 @@ onBeforeUnmount(() => {
         >
           <SemanticMapFrame
             variant="page"
-            :sources="semanticMapFallbackSources"
+            :sources="semanticMapWorkSources"
             :show-close="false"
           />
         </div>
