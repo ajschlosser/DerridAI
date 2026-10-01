@@ -116,6 +116,16 @@ def test_network_failures_are_reported_as_unavailable_not_as_server_errors() -> 
         cache.ensure_runtime(offline)
 
 
+def test_download_progress_reports_bytes_and_delete_clears_the_cache() -> None:
+    events: list[dict] = []
+    cache.ensure_runtime(_Opener(), on_progress=events.append)
+    assert events[-1]["status"] == "complete"
+    assert any(event.get("status") == "progress" and event["received_total"] > 0 for event in events)
+    assert cache.is_cached() is True
+    cache.delete_runtime()
+    assert cache.is_cached() is False
+
+
 def test_info_and_notice_describe_the_pinned_sources_without_downloading() -> None:
     info = cache.runtime_info()
     assert info["cached"] is False

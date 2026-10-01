@@ -30,6 +30,8 @@
   const embeddingSelectionKey = `derridai.site.provider.embedding.${publicationId}`;
   const generationSelectionKey = `derridai.site.provider.generation.${publicationId}`;
   const providersKey = `derridai.site.providers.${publicationId}`;
+  const localModelKey = `derridai.site.local-model.${publicationId}`;
+  const endpointsKey = `derridai.site.endpoints.${publicationId}`;
   const availableLocales = Object.keys(publication.strings || {});
   const languageMetadata = Array.isArray(publication.languages) ? publication.languages : [];
   const memoryStorage = new Map();
@@ -38,62 +40,94 @@
   if (!availableLocales.includes(locale)) locale = availableLocales[0] || "en-US";
   let theme = readLocal(themeKey) === "dark" ? "dark" : "light";
   let highContrast = readLocal(contrastKey) === "high";
-  const PROVIDER_ENGINES = ["ollama", "openai", "transformers"];
   // Suggestions only: small ONNX models that run in the browser. The reader chooses and may type any model id.
   const TRANSFORMERS_SUGGESTIONS = [
     { id: "Xenova/all-MiniLM-L6-v2", note: "site.runtime.transformers_model_english_small" },
-    { id: "Xenova/multilingual-e5-small", note: "site.runtime.transformers_model_multilingual_small" },
+    {
+      id: "Xenova/multilingual-e5-small",
+      note: "site.runtime.transformers_model_multilingual_small",
+      query_prefix: "query: ",
+      document_prefix: "passage: ",
+    },
   ];
+  const MODEL_CACHE_NAME = "transformers-cache";
 
-  // Providers are configured by the reader in this browser; nothing about them is part of the publication.
-  // Profiles saved by earlier versions had a single `type` (ollama|openai) and served Research generation.
-  function normalizeProfile(raw) {
-    if (!raw || typeof raw !== "object" || !raw.id || !raw.name || !raw.model) return null;
-    const engine = raw.engine || raw.type;
-    if (!PROVIDER_ENGINES.includes(engine)) return null;
-    const role = raw.role === "embedding" || raw.role === "generation" ? raw.role : "generation";
-    if (engine === "transformers" && role !== "embedding") return null;
-    if (engine !== "transformers" && !raw.base_url) return null;
+  function prefixesForModel(model) {
+    const match = TRANSFORMERS_SUGGESTIONS.find((item) => item.id === model);
+    return {
+      query_prefix: match?.query_prefix || "",
+      document_prefix: match?.document_prefix || "",
+    };
+  }
+
+  function loadLocalModel() {
+    try {
+      const raw = JSON.parse(readLocal(localModelKey) || "{}");
+      const model = String(raw.model || TRANSFORMERS_SUGGESTIONS[0].id);
+      const device = ["auto", "webgpu", "wasm"].includes(raw.device) ? raw.device : "auto";
+      const prefixes = prefixesForModel(model);
+      return {
+        model,
+        device,
+        query_prefix: raw.query_prefix == null ? prefixes.query_prefix : String(raw.query_prefix),
+        document_prefix:
+          raw.document_prefix == null ? prefixes.document_prefix : String(raw.document_prefix),
+      };
+    } catch {
+      return {
+        model: TRANSFORMERS_SUGGESTIONS[0].id,
+        device: "auto",
+        query_prefix: "",
+        document_prefix: "",
+      };
+    }
+  }
+
+  // Named OpenAI-compatible endpoints live only in this browser. Older provider profiles that used the
+  // OpenAI engine are read once so a saved endpoint is not lost.
+  function normalizeEndpoint(raw) {
+    if (!raw || typeof raw !== "object" || !raw.id || !raw.name || !raw.base_url) return null;
+    const engine = raw.engine || raw.type || "openai";
+    if (engine !== "openai") return null;
     return {
       id: String(raw.id),
       name: String(raw.name),
-      role,
-      engine,
-      base_url: String(raw.base_url || ""),
-      model: String(raw.model),
-      model_source: raw.model_source === "local" ? "local" : "hub",
-      query_prefix: String(raw.query_prefix || ""),
-      document_prefix: String(raw.document_prefix || ""),
-      temperature: Number(raw.temperature ?? 0),
+      base_url: String(raw.base_url),
+      model: String(raw.model || ""),
       remember_key: Boolean(raw.remember_key ?? raw.api_key),
       api_key: String(raw.api_key || ""),
     };
   }
 
-  function loadProviderProfiles() {
+  function loadEndpoints() {
     try {
-      const value = JSON.parse(readLocal(providersKey) || "[]");
-      return Array.isArray(value) ? value.map(normalizeProfile).filter(Boolean) : [];
+      const saved = JSON.parse(readLocal(endpointsKey) || "null");
+      if (Array.isArray(saved)) return saved.map(normalizeEndpoint).filter(Boolean);
+    } catch {
+      // Fall through to the older provider list.
+    }
+    try {
+      const legacy = JSON.parse(readLocal(providersKey) || "[]");
+      return Array.isArray(legacy) ? legacy.map(normalizeEndpoint).filter(Boolean) : [];
     } catch {
       return [];
     }
   }
 
-  let providerProfiles = loadProviderProfiles();
+  let localModel = loadLocalModel();
+  let endpoints = loadEndpoints();
   const sessionApiKeys = new Map();
-  providerProfiles.forEach((profile) => {
-    if (profile.remember_key && profile.api_key) sessionApiKeys.set(profile.id, profile.api_key);
+  endpoints.forEach((endpoint) => {
+    if (endpoint.remember_key && endpoint.api_key) sessionApiKeys.set(endpoint.id, endpoint.api_key);
   });
-  function profileOfRole(id, role) {
-    return providerProfiles.find((profile) => profile.id === id && profile.role === role)
-      ? id
-      : "";
+  let selectedEmbeddingId = readLocal(embeddingSelectionKey) || "";
+  if (selectedEmbeddingId && !endpoints.some((endpoint) => endpoint.id === selectedEmbeddingId)) {
+    selectedEmbeddingId = "";
   }
-  let selectedEmbeddingId = profileOfRole(readLocal(embeddingSelectionKey) || "", "embedding");
-  let selectedGenerationId = profileOfRole(
-    readLocal(generationSelectionKey) || readLocal(legacyProviderKey) || "",
-    "generation",
-  );
+  let selectedGenerationId = readLocal(generationSelectionKey) || readLocal(legacyProviderKey) || "";
+  if (selectedGenerationId && !endpoints.some((endpoint) => endpoint.id === selectedGenerationId)) {
+    selectedGenerationId = "";
+  }
   let view = "search";
   let client = null;
   let capabilities = null;
@@ -212,17 +246,23 @@
     }
   }
 
-  function saveProviderProfiles() {
-    // A key is written to this browser only when the reader chose to remember it for that provider.
+  function saveLocalModel() {
+    writeLocal(localModelKey, JSON.stringify(localModel));
+  }
+
+  function saveEndpoints() {
+    // A token is written to this browser only when the reader chose to store it for that endpoint.
     writeLocal(
-      providersKey,
+      endpointsKey,
       JSON.stringify(
-        providerProfiles.map((profile) => ({
-          ...profile,
-          api_key: profile.remember_key ? sessionApiKeys.get(profile.id) || "" : "",
+        endpoints.map((endpoint) => ({
+          ...endpoint,
+          api_key: endpoint.remember_key ? sessionApiKeys.get(endpoint.id) || "" : "",
         })),
       ),
     );
+    writeLocal(embeddingSelectionKey, selectedEmbeddingId);
+    writeLocal(generationSelectionKey, selectedGenerationId);
   }
 
   function t(key, vars = {}) {
@@ -391,9 +431,9 @@
     return raw;
   }
 
-  function providerHeaders(profile, apiKey) {
+  function providerHeaders(_profile, apiKey) {
     const headers = { "Content-Type": "application/json" };
-    if (profile?.engine === "openai" && apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
     return headers;
   }
 
@@ -471,35 +511,24 @@
     return {
       descriptor: () => ({
         id: profile.id,
-        type: profile.engine,
+        type: "openai",
         model,
         variant: embeddingVariant(profile),
       }),
       async embed(input, options = {}) {
         const base = providerBase(profile);
         const texts = prefixed(profile, input, options.purpose);
-        let vectors;
-        if (profile.engine === "ollama") {
-          const body = await providerJson(`${base}/api/embed`, {
-            method: "POST",
-            headers: providerHeaders(profile, apiKey),
-            body: JSON.stringify({ model, input: texts }),
-            signal: options.signal,
-          });
-          vectors = Array.isArray(body.embeddings) ? body.embeddings : [];
-        } else {
-          const body = await providerJson(`${base}/embeddings`, {
-            method: "POST",
-            headers: providerHeaders(profile, apiKey),
-            body: JSON.stringify({ model, input: texts }),
-            signal: options.signal,
-          });
-          vectors = Array.isArray(body.data)
-            ? [...body.data]
-                .sort((a, b) => Number(a?.index ?? 0) - Number(b?.index ?? 0))
-                .map((item) => item?.embedding)
-            : [];
-        }
+        const body = await providerJson(`${base}/embeddings`, {
+          method: "POST",
+          headers: providerHeaders(profile, apiKey),
+          body: JSON.stringify({ model, input: texts }),
+          signal: options.signal,
+        });
+        const vectors = Array.isArray(body.data)
+          ? [...body.data]
+              .sort((a, b) => Number(a?.index ?? 0) - Number(b?.index ?? 0))
+              .map((item) => item?.embedding)
+          : [];
         if (vectors.length !== texts.length || !vectors.every(Array.isArray)) {
           throw embeddingFailure();
         }
@@ -527,20 +556,25 @@
     return URL.createObjectURL(new Blob([bytes], { type }));
   }
 
-  // Transformers.js is optional: it is present only when the site was exported with it, either embedded in the
-  // site script ("inline") or served next to it by the deployment ("files").
+  // Transformers.js ships with every site, either embedded in the site script ("inline") or served next to
+  // it ("files"). The library downloads a chosen model once and keeps it in the browser Cache Storage.
   let transformersRuntime = null;
   let modelProgressListener = null;
+  let activeDevice = "";
   function loadTransformersRuntime() {
     if (transformersRuntime) return transformersRuntime;
     transformersRuntime = (async () => {
-      const delivery = publication.features?.transformers_runtime;
-      if (!delivery) {
-        throw providerError(t("site.runtime.transformers_not_included"), "runtime_missing");
-      }
+      const delivery = publication.features?.transformers_runtime || "inline";
       let engineUrl;
       let wasmPaths;
-      if (delivery === "inline") {
+      if (delivery === "files") {
+        const base = new URL("./vendor/transformers/", location.href).href;
+        engineUrl = `${base}transformers.min.js`;
+        wasmPaths = {
+          mjs: `${base}ort-wasm-simd-threaded.mjs`,
+          wasm: `${base}ort-wasm-simd-threaded.wasm`,
+        };
+      } else {
         const bundle = globalThis.__DERRIDAI_TRANSFORMERS_RUNTIME__;
         if (!bundle) {
           throw providerError(t("site.runtime.transformers_not_included"), "runtime_missing");
@@ -550,19 +584,16 @@
           mjs: blobUrl(base64Bytes(bundle.wasm_factory_b64), "text/javascript"),
           wasm: blobUrl(await gunzip(base64Bytes(bundle.wasm_gzip_b64)), "application/wasm"),
         };
-      } else {
-        const base = new URL("./vendor/transformers/", location.href).href;
-        engineUrl = `${base}transformers.min.js`;
-        wasmPaths = {
-          mjs: `${base}ort-wasm-simd-threaded.mjs`,
-          wasm: `${base}ort-wasm-simd-threaded.wasm`,
-        };
       }
       const runtime = await import(engineUrl);
-      runtime.env.useWasmCache = false;
-      runtime.env.backends.onnx.wasm.wasmPaths = wasmPaths;
-      // Single-threaded WebAssembly needs no SharedArrayBuffer or cross-origin isolation headers.
-      runtime.env.backends.onnx.wasm.numThreads = 1;
+      runtime.env.allowRemoteModels = true;
+      runtime.env.allowLocalModels = false;
+      runtime.env.useBrowserCache = true;
+      if (runtime.env.backends?.onnx?.wasm) {
+        runtime.env.backends.onnx.wasm.wasmPaths = wasmPaths;
+        // Single-threaded WebAssembly needs no SharedArrayBuffer or cross-origin isolation headers.
+        runtime.env.backends.onnx.wasm.numThreads = 1;
+      }
       return runtime;
     })();
     transformersRuntime.catch(() => {
@@ -571,40 +602,57 @@
     return transformersRuntime;
   }
 
-  function modelFilesBase(profile) {
-    const raw =
-      String(profile.base_url || "").trim() || String(publication.features?.transformers_local_models || "");
-    if (!raw) throw providerError(t("site.runtime.transformers_local_missing"), "invalid_endpoint");
-    return new URL(raw.endsWith("/") ? raw : `${raw}/`, location.href).href;
+  async function resolveDevice(preference) {
+    if (preference === "wasm") return "wasm";
+    const gpu = globalThis.navigator?.gpu;
+    if (!gpu) return "wasm";
+    try {
+      const adapter = await gpu.requestAdapter();
+      if (adapter) return "webgpu";
+    } catch {
+      // WebGPU can be present but blocked; WebAssembly still runs the same model.
+    }
+    return "wasm";
   }
 
   const transformersExtractors = new Map();
   function transformersExtractor(profile) {
-    const key = `${profile.model}|${profile.model_source}|${profile.base_url}`;
+    const key = `${profile.model}|${profile.device || "auto"}`;
     if (!transformersExtractors.has(key)) {
       const loading = (async () => {
         const runtime = await loadTransformersRuntime();
-        if (profile.model_source === "local") {
-          // Served model files are read like a hub mirror: <base>/<model>/<file>.
-          runtime.env.allowRemoteModels = true;
-          runtime.env.allowLocalModels = false;
-          runtime.env.remoteHost = modelFilesBase(profile);
-          runtime.env.remotePathTemplate = "{model}/";
-        } else {
-          runtime.env.allowRemoteModels = true;
-          runtime.env.allowLocalModels = false;
-          runtime.env.remoteHost = "https://huggingface.co/";
-          runtime.env.remotePathTemplate = "{model}/resolve/{revision}/";
+        const device = await resolveDevice(profile.device || "auto");
+        activeDevice = device;
+        try {
+          return await runtime.pipeline("feature-extraction", profile.model, {
+            device,
+            progress_callback: (progress) => modelProgressListener?.(progress),
+          });
+        } catch (error) {
+          if (device === "wasm") throw error;
+          activeDevice = "wasm";
+          return runtime.pipeline("feature-extraction", profile.model, {
+            device: "wasm",
+            progress_callback: (progress) => modelProgressListener?.(progress),
+          });
         }
-        return runtime.pipeline("feature-extraction", profile.model, {
-          device: "wasm",
-          progress_callback: (progress) => modelProgressListener?.(progress),
-        });
       })();
       loading.catch(() => transformersExtractors.delete(key));
       transformersExtractors.set(key, loading);
     }
     return transformersExtractors.get(key);
+  }
+
+  async function deleteModelCache() {
+    transformersExtractors.clear();
+    activeDevice = "";
+    if (typeof caches === "undefined") return;
+    const names = await caches.keys();
+    await Promise.all(
+      names
+        .filter((name) => name === MODEL_CACHE_NAME || name.toLowerCase().includes("transformers"))
+        .map((name) => caches.delete(name)),
+    );
   }
 
   function transformersEmbeddingProvider(profile) {
@@ -635,11 +683,19 @@
     };
   }
 
+  function localEmbeddingProfile() {
+    return {
+      id: "transformers-local",
+      model: localModel.model,
+      device: localModel.device,
+      query_prefix: localModel.query_prefix,
+      document_prefix: localModel.document_prefix,
+    };
+  }
+
   function embeddingProviderFor(profile, apiKey) {
-    if (!profile) return undefined;
-    return profile.engine === "transformers"
-      ? transformersEmbeddingProvider(profile)
-      : directEmbeddingProvider(profile, apiKey);
+    if (!profile) return transformersEmbeddingProvider(localEmbeddingProfile());
+    return directEmbeddingProvider(profile, apiKey);
   }
 
   function directGenerationProvider(profile, apiKey) {
@@ -647,26 +703,9 @@
     const model = String(profile.model || "").trim();
     if (!model) return undefined;
     return {
-      descriptor: () => ({ id: profile.id, type: profile.engine, model }),
+      descriptor: () => ({ id: profile.id, type: "openai", model }),
       async generate(request, options = {}) {
         const base = providerBase(profile);
-        if (profile.engine === "ollama") {
-          const body = await providerJson(`${base}/api/chat`, {
-            method: "POST",
-            headers: providerHeaders(profile, apiKey),
-            body: JSON.stringify({
-              model,
-              stream: false,
-              messages: [{ role: "user", content: request.prompt }],
-              options: { temperature: Number(profile.temperature ?? 0) },
-            }),
-            signal: options.signal,
-          });
-          return {
-            text: String(body.message?.content || body.response || ""),
-            provider: this.descriptor(),
-          };
-        }
         const body = await providerJson(`${base}/chat/completions`, {
           method: "POST",
           headers: providerHeaders(profile, apiKey),
@@ -687,8 +726,7 @@
 
   const EMBEDDING_NAME_HINT = /embed|bge|e5|minilm|gte|nomic|mxbai|arctic|snowflake|sentence/i;
 
-  // Lists what the endpoint reports. Servers rarely say whether a model embeds or generates, so the reader
-  // chooses the role; names that look like embedding models are only sorted first for the embedding role.
+  // Lists what an OpenAI-compatible endpoint reports. The reader chooses which model to use.
   async function discoverModels(profile, apiKey) {
     let base;
     try {
@@ -701,23 +739,31 @@
         models: [],
       };
     }
-    const endpoint = profile.engine === "ollama" ? `${base}/api/tags` : `${base}/models`;
+    const endpoint = `${base}/models`;
     try {
       const body = await providerJson(endpoint, {
         method: "GET",
-        headers: profile.engine === "openai" && apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
         cache: "no-store",
       });
-      const names =
-        profile.engine === "ollama"
-          ? (body.models || []).map((item) => item?.name || item?.model).filter(Boolean)
-          : (body.data || []).map((item) => item?.id).filter(Boolean);
-      const unique = [...new Set(names)].sort((a, b) => a.localeCompare(b));
+      const models = (body.data || [])
+        .map((item) => ({
+          name: String(item?.id || ""),
+          detail: [item?.owned_by].filter(Boolean).join(" · "),
+        }))
+        .filter((item) => item.name);
+      const unique = [];
+      const seen = new Set();
+      for (const model of models.sort((a, b) => a.name.localeCompare(b.name))) {
+        if (seen.has(model.name)) continue;
+        seen.add(model.name);
+        unique.push(model);
+      }
       const wantsEmbedding = profile.role === "embedding";
       unique.sort(
         (a, b) =>
-          Number(EMBEDDING_NAME_HINT.test(b) === wantsEmbedding) -
-          Number(EMBEDDING_NAME_HINT.test(a) === wantsEmbedding),
+          Number(EMBEDDING_NAME_HINT.test(b.name) === wantsEmbedding) -
+          Number(EMBEDDING_NAME_HINT.test(a.name) === wantsEmbedding),
       );
       return { ok: true, code: "ready", message: t("site.runtime.provider_ready"), models: unique };
     } catch (error) {
@@ -728,10 +774,6 @@
           ok: false,
           code: "cors_blocked",
           message: t("site.runtime.provider_cors_blocked", { origin }),
-          remediation:
-            profile.engine === "ollama" && location.origin !== "null"
-              ? `OLLAMA_ORIGINS="${location.origin}" ollama serve`
-              : "",
           models: [],
         };
       }
@@ -771,11 +813,12 @@
 
   async function rebuildClient() {
     const host = globalThis.__DERRIDAI_HOST_CAPABILITIES__ || {};
-    const embeddingProfile = providerProfiles.find((profile) => profile.id === selectedEmbeddingId);
-    const generationProfile = providerProfiles.find((profile) => profile.id === selectedGenerationId);
-    const embeddings = embeddingProfile
-      ? embeddingProviderFor(embeddingProfile, sessionApiKeys.get(embeddingProfile.id) || "")
-      : host.embeddings;
+    const embeddingProfile = endpoints.find((endpoint) => endpoint.id === selectedEmbeddingId);
+    const generationProfile = endpoints.find((endpoint) => endpoint.id === selectedGenerationId);
+    const embeddings = embeddingProviderFor(
+      embeddingProfile,
+      embeddingProfile ? sessionApiKeys.get(embeddingProfile.id) || "" : "",
+    );
     const generation = generationProfile
       ? directGenerationProvider(generationProfile, sessionApiKeys.get(generationProfile.id) || "")
       : host.generation;
@@ -1214,30 +1257,13 @@
     );
   }
 
-  function engineLabel(engine) {
-    if (engine === "openai") return t("site.runtime.provider_openai");
-    if (engine === "ollama") return t("site.runtime.provider_ollama");
-    return t("site.runtime.provider_transformers");
+  function endpointById(id) {
+    return endpoints.find((endpoint) => endpoint.id === id) || null;
   }
 
-  function profileSummary(profile) {
-    if (!profile) return "";
-    const where =
-      profile.engine === "transformers"
-        ? profile.model_source === "local"
-          ? t("site.runtime.transformers_source_local")
-          : t("site.runtime.transformers_source_hub")
-        : profile.base_url;
-    return t("site.runtime.provider_summary", {
-      type: engineLabel(profile.engine),
-      model: profile.model,
-      endpoint: where,
-    });
-  }
-
-  async function applyProviderSelection(status) {
-    writeLocal(embeddingSelectionKey, selectedEmbeddingId);
-    writeLocal(generationSelectionKey, selectedGenerationId);
+  async function applyModelSelection(status) {
+    saveLocalModel();
+    saveEndpoints();
     status.className = "status";
     status.textContent = t("site.runtime.provider_applying");
     try {
@@ -1251,101 +1277,228 @@
     }
   }
 
-  function providerCard(role) {
-    const embedding = role === "embedding";
-    const profiles = providerProfiles.filter((profile) => profile.role === role);
-    const selectedId = embedding ? selectedEmbeddingId : selectedGenerationId;
-    const headingId = `provider-${role}-heading`;
-    const select = node(
-      "select",
-      { class: "control", "aria-label": t(`site.runtime.provider_${role}_select`) },
-      node("option", { value: "", text: t(`site.runtime.provider_${role}_none`) }),
-      ...profiles.map((profile) =>
-        node("option", { value: profile.id, text: `${profile.name} · ${engineLabel(profile.engine)}` }),
+  function watchModelProgress(status) {
+    modelProgressListener = (info) => {
+      if (info?.status === "progress" && info.file) {
+        status.className = "status";
+        status.textContent = t("site.runtime.model_download", {
+          file: String(info.file).split("/").pop(),
+          percent: Math.round(Number(info.progress) || 0),
+        });
+      }
+    };
+  }
+
+  function localModelSection() {
+    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
+    const progress = node("progress", {
+      value: 0,
+      max: 100,
+      hidden: true,
+      "aria-label": t("site.runtime.model_download_label"),
+    });
+    const model = node("input", {
+      class: "control",
+      value: localModel.model,
+      list: "local-model-options",
+      autocomplete: "off",
+      "aria-label": t("site.runtime.local_model"),
+    });
+    const options = node(
+      "datalist",
+      { id: "local-model-options" },
+      ...TRANSFORMERS_SUGGESTIONS.map((item) =>
+        node("option", { value: item.id, label: t(item.note) }),
       ),
     );
-    select.value = selectedId;
-    const key = node("input", {
-      class: "control",
-      type: "password",
-      autocomplete: "off",
-      placeholder: t("site.runtime.api_key_session"),
-      "aria-label": t("site.runtime.api_key"),
-    });
-    const summary = node("div", { class: "provider-summary" });
-    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
-    const keyField = node(
-      "label",
-      { class: "field" },
-      node("span", { text: t("site.runtime.api_key") }),
-      key,
+    const device = node(
+      "select",
+      { class: "control", "aria-label": t("site.runtime.local_device") },
+      node("option", { value: "auto", text: t("site.runtime.local_device_auto") }),
+      node("option", { value: "webgpu", text: t("site.runtime.local_device_webgpu") }),
+      node("option", { value: "wasm", text: t("site.runtime.local_device_wasm") }),
     );
+    device.value = localModel.device;
+    const deviceNote = node("div", {
+      class: "meta",
+      text: activeDevice
+        ? t("site.runtime.local_device_active", {
+            device: t(
+              activeDevice === "webgpu"
+                ? "site.runtime.local_device_webgpu"
+                : "site.runtime.local_device_wasm",
+            ),
+          })
+        : t("site.runtime.local_model_help"),
+    });
 
-    function refresh() {
-      const profile = profiles.find((item) => item.id === select.value);
-      summary.replaceChildren(
-        node("strong", { text: profile ? profile.name : t(`site.runtime.provider_${role}_none`) }),
-        node("div", {
-          class: "meta",
-          text: profile ? profileSummary(profile) : t(`site.runtime.provider_${role}_none_help`),
-        }),
-      );
-      keyField.hidden = !profile || profile.engine === "transformers";
-      key.value = profile ? sessionApiKeys.get(profile.id) || "" : "";
+    function rememberDraft() {
+      const next = String(model.value || "").trim();
+      const prefixes = prefixesForModel(next);
+      localModel = {
+        model: next,
+        device: device.value,
+        query_prefix: prefixes.query_prefix,
+        document_prefix: prefixes.document_prefix,
+      };
+      saveLocalModel();
     }
-    refresh();
-    select.addEventListener("change", refresh);
+    model.addEventListener("change", rememberDraft);
+    device.addEventListener("change", rememberDraft);
 
-    const use = node("button", {
+    const download = node("button", {
       class: "primary",
       type: "button",
-      text: t("site.runtime.apply_provider"),
+      text: t("site.runtime.download_model"),
       on: {
         click: async () => {
-          const id = select.value;
-          if (id) {
-            sessionApiKeys.set(id, key.value);
-            saveProviderProfiles();
+          rememberDraft();
+          if (!localModel.model) {
+            status.className = "status warning";
+            status.textContent = t("site.runtime.provider_model_required");
+            return;
           }
-          if (embedding) selectedEmbeddingId = id;
-          else selectedGenerationId = id;
-          await applyProviderSelection(status);
+          download.disabled = true;
+          progress.hidden = false;
+          progress.value = 0;
+          status.className = "status";
+          status.textContent = t("site.runtime.model_download_start", { model: localModel.model });
+          watchModelProgress(status);
+          modelProgressListener = (info) => {
+            if (info?.status === "progress") {
+              const percent = Math.round(Number(info.progress) || 0);
+              progress.value = percent;
+              progress.hidden = false;
+              status.textContent = t("site.runtime.model_download", {
+                file: String(info.file || localModel.model).split("/").pop(),
+                percent,
+              });
+            }
+          };
+          try {
+            const result = await testTransformers(localEmbeddingProfile());
+            status.className = result.ok ? "status success" : "status error";
+            status.textContent = result.message;
+            if (result.ok && activeDevice) {
+              deviceNote.textContent = t("site.runtime.local_device_active", {
+                device: t(
+                  activeDevice === "webgpu"
+                    ? "site.runtime.local_device_webgpu"
+                    : "site.runtime.local_device_wasm",
+                ),
+              });
+            }
+          } finally {
+            modelProgressListener = null;
+            progress.hidden = true;
+            download.disabled = false;
+          }
         },
       },
     });
-    const remove = node("button", {
-      class: "danger",
+    const removeCache = node("button", {
       type: "button",
-      text: t("site.runtime.delete_provider"),
+      class: "danger",
+      text: t("site.runtime.delete_model_cache"),
       on: {
         click: async () => {
-          const profile = profiles.find((item) => item.id === select.value);
-          if (!profile) return;
-          if (!window.confirm(t("site.runtime.delete_provider_confirm", { name: profile.name }))) return;
-          providerProfiles = providerProfiles.filter((item) => item.id !== profile.id);
-          sessionApiKeys.delete(profile.id);
-          if (selectedEmbeddingId === profile.id) selectedEmbeddingId = "";
-          if (selectedGenerationId === profile.id) selectedGenerationId = "";
-          saveProviderProfiles();
-          await applyProviderSelection(status);
+          if (!window.confirm(t("site.runtime.delete_model_cache_confirm"))) return;
+          await deleteModelCache();
+          status.className = "status";
+          status.textContent = t("site.runtime.model_cache_cleared");
+          deviceNote.textContent = t("site.runtime.local_model_help");
         },
       },
     });
 
     return node(
       "section",
-      { class: "card stack", "aria-labelledby": headingId },
-      node("h3", { id: headingId, text: t(`site.runtime.provider_${role}_heading`) }),
-      node("p", { class: "muted", text: t(`site.runtime.provider_${role}_help`) }),
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_profile") }), select),
-      summary,
-      keyField,
-      node("div", { class: "chips" }, use, remove),
+      { class: "card stack", "aria-labelledby": "local-model-heading" },
+      node("h3", { id: "local-model-heading", text: t("site.runtime.local_model_heading") }),
+      node("p", { class: "muted", text: t("site.runtime.local_model_help") }),
+      node("label", { class: "field" }, node("span", { text: t("site.runtime.local_model") }), model, options),
+      node("label", { class: "field" }, node("span", { text: t("site.runtime.local_device") }), device),
+      deviceNote,
+      progress,
+      node("div", { class: "chips" }, download, removeCache),
       status,
-      embedding ? indexSection() : null,
+      selectedEmbeddingId ? null : indexSection(),
     );
   }
 
+  function openModelList(models, current, onChoose) {
+    const dialog = node("dialog", { "aria-labelledby": "model-list-title" });
+    const query = node("input", {
+      class: "control",
+      type: "search",
+      autocomplete: "off",
+      "aria-label": t("site.runtime.filter_models"),
+    });
+    const count = node("p", { class: "meta", role: "status", "aria-live": "polite" });
+    const list = node("ul", { class: "stack", style: "list-style:none;margin:0;padding:0" });
+
+    function paint() {
+      const needle = String(query.value || "").trim().toLocaleLowerCase();
+      const shown = models.filter((item) => item.name.toLocaleLowerCase().includes(needle));
+      count.textContent = t("site.runtime.models_match", { count: shown.length });
+      list.replaceChildren(
+        ...(shown.length
+          ? shown.map((item) =>
+              node(
+                "li",
+                {},
+                node(
+                  "button",
+                  {
+                    type: "button",
+                    "aria-current": item.name === current ? "true" : null,
+                    on: {
+                      click: () => {
+                        onChoose(item.name);
+                        dialog.close();
+                      },
+                    },
+                  },
+                  node("strong", { text: item.name }),
+                  item.detail ? node("small", { class: "muted", text: item.detail }) : null,
+                  node("span", {
+                    text:
+                      item.name === current
+                        ? t("site.runtime.model_in_use")
+                        : t("site.runtime.use_model"),
+                  }),
+                ),
+              ),
+            )
+          : [node("p", { text: t("site.runtime.no_models_match") })]),
+      );
+    }
+    query.addEventListener("input", paint);
+    paint();
+    dialog.append(
+      node(
+        "div",
+        { class: "dialog-head" },
+        node("h2", { id: "model-list-title", text: t("site.runtime.models_dialog_title") }),
+        node("button", {
+          type: "button",
+          text: t("site.runtime.close"),
+          on: { click: () => dialog.close() },
+        }),
+      ),
+      node(
+        "div",
+        { class: "dialog-body stack" },
+        node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_models") }), query),
+        count,
+        list,
+      ),
+    );
+    dialog.addEventListener("close", () => dialog.remove());
+    document.body.append(dialog);
+    dialog.showModal();
+    query.focus();
+  }
   // The local index holds vectors computed here with the reader's embedding provider. It is derived from the
   // published Records, kept only in this browser, and can be rebuilt or cleared at any time.
   let indexMessage = "";
@@ -1456,37 +1609,18 @@
     return box;
   }
 
-  function providerForm() {
+  function endpointForm() {
     const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
-    const runtimeIncluded = Boolean(publication.features?.transformers_runtime);
     const name = node("input", {
       class: "control",
       required: true,
       autocomplete: "off",
-      placeholder: t("site.runtime.provider_name_placeholder"),
+      placeholder: t("site.runtime.endpoint_name_placeholder"),
     });
-    const role = node(
-      "select",
-      { class: "control" },
-      node("option", { value: "embedding", text: t("site.runtime.role_embedding") }),
-      node("option", { value: "generation", text: t("site.runtime.role_generation") }),
-    );
-    const engine = node(
-      "select",
-      { class: "control" },
-      node("option", { value: "ollama", text: t("site.runtime.provider_ollama") }),
-      node("option", { value: "openai", text: t("site.runtime.provider_openai") }),
-      node("option", {
-        value: "transformers",
-        text: runtimeIncluded
-          ? t("site.runtime.provider_transformers")
-          : t("site.runtime.provider_transformers_unavailable"),
-        disabled: !runtimeIncluded,
-      }),
-    );
     const endpoint = node("input", {
       class: "control",
       type: "url",
+      required: true,
       autocomplete: "url",
       placeholder: t("site.runtime.provider_url_placeholder"),
     });
@@ -1494,37 +1628,20 @@
       class: "control",
       type: "password",
       autocomplete: "off",
-      placeholder: t("site.runtime.api_key_optional"),
+      placeholder: t("site.runtime.api_token_optional"),
     });
     const remember = node("input", { type: "checkbox" });
     const model = node("input", {
       class: "control",
       required: true,
       autocomplete: "off",
-      list: "provider-model-options",
+      list: "endpoint-model-options",
       placeholder: t("site.runtime.provider_model_placeholder"),
     });
-    const modelOptions = node("datalist", { id: "provider-model-options" });
-    const load = node("button", { type: "button", text: t("site.runtime.load_models") });
-    const source = node(
-      "select",
-      { class: "control" },
-      node("option", { value: "hub", text: t("site.runtime.transformers_source_hub") }),
-      node("option", { value: "local", text: t("site.runtime.transformers_source_local") }),
-    );
-    const filesUrl = node("input", {
-      class: "control",
-      autocomplete: "off",
-      placeholder: publication.features?.transformers_local_models
-        ? t("site.runtime.transformers_files_placeholder_default", {
-            path: publication.features.transformers_local_models,
-          })
-        : t("site.runtime.transformers_files_placeholder"),
-    });
-    const queryPrefix = node("input", { class: "control", autocomplete: "off" });
-    const documentPrefix = node("input", { class: "control", autocomplete: "off" });
-    const test = node("button", { type: "button", text: t("site.runtime.test_provider") });
-    const save = node("button", { class: "primary", type: "submit", text: t("site.runtime.save_provider") });
+    const modelOptions = node("datalist", { id: "endpoint-model-options" });
+    const forEmbeddings = node("input", { type: "checkbox" });
+    const forAnswers = node("input", { type: "checkbox", checked: true });
+    let discovered = [];
 
     const field = (label, control, help) =>
       node(
@@ -1534,180 +1651,188 @@
         control,
         help ? node("small", { class: "muted", text: help }) : null,
       );
-    const urlGroup = node(
-      "div",
-      { class: "stack" },
-      field(t("site.runtime.provider_url"), endpoint),
-      field(t("site.runtime.api_key"), key, t("site.runtime.api_key_help")),
-      node("label", { class: "toggle" }, remember, node("span", { text: t("site.runtime.remember_key") })),
-    );
-    const transformersGroup = node(
-      "div",
-      { class: "stack" },
-      field(t("site.runtime.transformers_model_source"), source, t("site.runtime.transformers_model_help")),
-      field(t("site.runtime.transformers_files_url"), filesUrl),
-    );
-    const prefixGroup = node(
-      "details",
-      { class: "stack" },
-      node("summary", { text: t("site.runtime.advanced") }),
-      node("p", { class: "muted", text: t("site.runtime.prefix_help") }),
-      field(t("site.runtime.query_prefix"), queryPrefix),
-      field(t("site.runtime.document_prefix"), documentPrefix),
-    );
-    const loadRow = node("div", { class: "chips" }, load);
 
-    function syncForm() {
-      if (role.value === "generation" && engine.value === "transformers") engine.value = "ollama";
-      const transformers = engine.value === "transformers";
-      const transformersOption = [...engine.options].find((item) => item.value === "transformers");
-      transformersOption.disabled = !runtimeIncluded || role.value === "generation";
-      urlGroup.hidden = transformers;
-      loadRow.hidden = transformers;
-      transformersGroup.hidden = !transformers;
-      filesUrl.closest("label").hidden = !transformers || source.value !== "local";
-      prefixGroup.hidden = role.value !== "embedding";
-      endpoint.required = !transformers;
-      modelOptions.replaceChildren(
-        ...(transformers && role.value === "embedding"
-          ? TRANSFORMERS_SUGGESTIONS.map((item) =>
-              node("option", { value: item.id, label: t(item.note) }),
-            )
-          : []),
-      );
-    }
-    for (const control of [role, engine, source]) control.addEventListener("change", syncForm);
-    syncForm();
-
-    function candidate() {
-      const transformers = engine.value === "transformers";
-      let base = "";
-      if (!transformers) {
-        try {
-          base = new URL(String(endpoint.value || "").trim()).href.replace(/\/$/, "");
-        } catch {
-          base = String(endpoint.value || "").trim();
-        }
-      } else if (source.value === "local") {
-        base = String(filesUrl.value || "").trim();
+    function draft() {
+      let base = String(endpoint.value || "").trim();
+      try {
+        base = new URL(base).href.replace(/\/$/, "");
+      } catch {
+        base = base.replace(/\/$/, "");
       }
       return {
-        id: `provider-${globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Date.now()}`,
+        id: `endpoint-${globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Date.now()}`,
         name: String(name.value || "").trim(),
-        role: role.value,
-        engine: engine.value,
         base_url: base,
         model: String(model.value || "").trim(),
-        model_source: transformers && source.value === "local" ? "local" : "hub",
-        query_prefix: role.value === "embedding" ? queryPrefix.value : "",
-        document_prefix: role.value === "embedding" ? documentPrefix.value : "",
-        remember_key: !transformers && remember.checked && Boolean(key.value),
+        remember_key: remember.checked && Boolean(key.value),
       };
     }
 
-    function showResult(result) {
-      status.className = result.ok ? "status success" : "status error";
-      status.replaceChildren(node("span", { text: result.message }));
-      if (result.remediation) {
-        status.append(node("code", { class: "provider-command", text: result.remediation }));
-      }
-    }
-
-    load.addEventListener("click", async () => {
-      const draft = candidate();
-      status.className = "status";
-      status.textContent = t("site.runtime.testing_provider");
-      const result = await discoverModels(draft, key.value);
-      showResult(result);
-      if (result.ok) {
-        modelOptions.replaceChildren(...result.models.map((item) => node("option", { value: item })));
-        status.textContent = t("site.runtime.models_loaded", { count: result.models.length });
-        if (!result.models.length) status.className = "status warning";
-        model.focus();
-      }
+    const discover = node("button", {
+      type: "button",
+      text: t("site.runtime.discover_models"),
+      on: {
+        click: async () => {
+          const candidate = draft();
+          status.className = "status";
+          status.textContent = t("site.runtime.discovering");
+          const result = await discoverModels({ ...candidate, role: "generation" }, key.value);
+          if (!result.ok) {
+            status.className = "status error";
+            status.textContent = result.message;
+            return;
+          }
+          discovered = result.models;
+          modelOptions.replaceChildren(
+            ...discovered.map((item) => node("option", { value: item.name })),
+          );
+          status.className = discovered.length ? "status success" : "status warning";
+          status.textContent = t("site.runtime.models_loaded", { count: discovered.length });
+          openModelList(discovered, model.value, (chosen) => {
+            model.value = chosen;
+            model.focus();
+          });
+        },
+      },
     });
-
-    test.addEventListener("click", async () => {
-      const draft = candidate();
-      if (!draft.model) {
-        status.className = "status warning";
-        status.textContent = t("site.runtime.provider_model_required");
-        return;
-      }
-      status.className = "status";
-      status.textContent = t("site.runtime.testing_provider");
-      modelProgressListener = (info) => {
-        if (info?.status === "progress" && info.file) {
-          status.textContent = t("site.runtime.model_download", {
-            file: String(info.file).split("/").pop(),
-            percent: Math.round(Number(info.progress) || 0),
-          });
-        }
-      };
-      try {
-        if (draft.engine === "transformers") {
-          showResult(await testTransformers(draft));
-          return;
-        }
-        const result = await discoverModels(draft, key.value);
-        if (result.ok && !result.models.includes(draft.model)) {
-          showResult({
-            ok: false,
-            message: t("site.runtime.provider_model_missing", { model: draft.model }),
-          });
-          return;
-        }
-        showResult(result);
-      } finally {
-        modelProgressListener = null;
-      }
+    const save = node("button", {
+      class: "primary",
+      type: "submit",
+      text: t("site.runtime.save_provider"),
     });
 
     const form = node(
       "form",
       { class: "provider-form", "aria-labelledby": "provider-add-heading" },
-      node("h3", { id: "provider-add-heading", text: t("site.runtime.add_provider") }),
+      node("h3", { id: "provider-add-heading", text: t("site.runtime.add_endpoint") }),
       node("p", { class: "muted", text: t("site.runtime.provider_local_help") }),
-      field(t("site.runtime.provider_name"), name),
-      field(t("site.runtime.provider_role"), role),
-      field(t("site.runtime.provider_engine"), engine),
-      urlGroup,
-      transformersGroup,
+      field(t("site.runtime.endpoint_name"), name),
+      field(t("site.runtime.provider_url"), endpoint),
+      field(t("site.runtime.api_token"), key, t("site.runtime.api_token_help")),
+      node("label", { class: "toggle" }, remember, node("span", { text: t("site.runtime.store_token") })),
       field(t("site.runtime.provider_model"), model),
       modelOptions,
-      loadRow,
-      prefixGroup,
-      node("div", { class: "chips" }, test, save),
+      node("div", { class: "chips" }, discover),
+      node(
+        "label",
+        { class: "toggle" },
+        forEmbeddings,
+        node("span", { text: t("site.runtime.use_for_embeddings") }),
+      ),
+      node(
+        "label",
+        { class: "toggle" },
+        forAnswers,
+        node("span", { text: t("site.runtime.use_for_answers") }),
+      ),
+      node("div", { class: "chips" }, save),
       status,
     );
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const profile = normalizeProfile(candidate());
-      if (!profile) {
+      const profile = normalizeEndpoint(draft());
+      if (!profile || !profile.model) {
         status.className = "status error";
-        status.textContent = t("site.runtime.provider_endpoint_invalid");
+        status.textContent = profile
+          ? t("site.runtime.provider_model_required")
+          : t("site.runtime.provider_endpoint_invalid");
         return;
       }
-      if (profile.engine !== "transformers") {
-        try {
-          providerBase(profile);
-        } catch (error) {
-          status.className = "status error";
-          status.textContent = error instanceof Error ? error.message : String(error);
-          return;
-        }
+      try {
+        providerBase(profile);
+      } catch (error) {
+        status.className = "status error";
+        status.textContent = error instanceof Error ? error.message : String(error);
+        return;
       }
       sessionApiKeys.set(profile.id, key.value);
-      providerProfiles = [...providerProfiles, profile];
-      saveProviderProfiles();
-      if (profile.role === "embedding") selectedEmbeddingId = profile.id;
-      else selectedGenerationId = profile.id;
-      await applyProviderSelection(status);
+      endpoints = [...endpoints, profile];
+      if (forEmbeddings.checked) selectedEmbeddingId = profile.id;
+      if (forAnswers.checked) selectedGenerationId = profile.id;
+      await applyModelSelection(status);
     });
     return form;
   }
 
   function providersView() {
+    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
+    const embeddingSelect = node(
+      "select",
+      { class: "control", "aria-label": t("site.runtime.provider_embedding_select") },
+      node("option", { value: "", text: t("site.runtime.local_model_heading") }),
+      ...endpoints.map((endpoint) =>
+        node("option", { value: endpoint.id, text: `${endpoint.name} · ${endpoint.model}` }),
+      ),
+    );
+    embeddingSelect.value = selectedEmbeddingId;
+    const generationSelect = node(
+      "select",
+      { class: "control", "aria-label": t("site.runtime.provider_generation_select") },
+      node("option", { value: "", text: t("site.runtime.provider_generation_none") }),
+      ...endpoints.map((endpoint) =>
+        node("option", { value: endpoint.id, text: `${endpoint.name} · ${endpoint.model}` }),
+      ),
+    );
+    generationSelect.value = selectedGenerationId;
+    const summary = node("div", { class: "provider-summary meta" });
+
+    function refreshSummary() {
+      const embedding = endpointById(embeddingSelect.value);
+      const generation = endpointById(generationSelect.value);
+      summary.textContent = [
+        embedding
+          ? t("site.runtime.embedding_uses_endpoint", {
+              name: embedding.name,
+              model: embedding.model,
+            })
+          : t("site.runtime.embedding_uses_browser"),
+        generation
+          ? t("site.runtime.generation_uses_endpoint", {
+              name: generation.name,
+              model: generation.model,
+            })
+          : t("site.runtime.provider_generation_none_help"),
+      ].join(" ");
+    }
+    refreshSummary();
+    embeddingSelect.addEventListener("change", refreshSummary);
+    generationSelect.addEventListener("change", refreshSummary);
+
+    const apply = node("button", {
+      class: "primary",
+      type: "button",
+      text: t("site.runtime.apply_provider"),
+      on: {
+        click: async () => {
+          selectedEmbeddingId = embeddingSelect.value;
+          selectedGenerationId = generationSelect.value;
+          await applyModelSelection(status);
+        },
+      },
+    });
+    const remove = node("button", {
+      class: "danger",
+      type: "button",
+      text: t("site.runtime.delete_endpoint"),
+      on: {
+        click: async () => {
+          const id = generationSelect.value || embeddingSelect.value;
+          const endpoint = endpointById(id);
+          if (!endpoint) {
+            status.className = "status warning";
+            status.textContent = t("site.runtime.endpoint_select_required");
+            return;
+          }
+          if (!window.confirm(t("site.runtime.delete_endpoint_confirm", { name: endpoint.name }))) return;
+          endpoints = endpoints.filter((item) => item.id !== endpoint.id);
+          sessionApiKeys.delete(endpoint.id);
+          if (selectedEmbeddingId === endpoint.id) selectedEmbeddingId = "";
+          if (selectedGenerationId === endpoint.id) selectedGenerationId = "";
+          await applyModelSelection(status);
+        },
+      },
+    });
+
     return node(
       "section",
       {
@@ -1717,10 +1842,33 @@
       },
       node("h2", { id: "provider-heading", text: t("site.runtime.providers") }),
       node("p", { class: "muted", text: t("site.runtime.providers_intro") }),
-      node("div", { class: "grid" }, providerCard("embedding"), providerCard("generation")),
-      providerForm(),
+      localModelSection(),
+      node(
+        "section",
+        { class: "card stack", "aria-labelledby": "endpoints-heading" },
+        node("h3", { id: "endpoints-heading", text: t("site.runtime.endpoints_heading") }),
+        node("p", { class: "muted", text: t("site.runtime.endpoints_help") }),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.provider_embedding_heading") }),
+          embeddingSelect,
+        ),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.provider_generation_heading") }),
+          generationSelect,
+        ),
+        summary,
+        node("div", { class: "chips" }, apply, remove),
+        status,
+        selectedEmbeddingId ? indexSection() : null,
+      ),
+      endpointForm(),
     );
   }
+
 
   function researchView() {
     const question = node("textarea", {

@@ -43,6 +43,7 @@ const createSiteBusy = ref(false);
 const createSiteError = ref("");
 const createSiteLanguages = ref<SiteExportOptions["languages"]>([]);
 const createSiteTransformers = ref<SiteExportOptions["transformers_runtime"] | undefined>();
+const createSiteProgress = ref<{ file: string; received: number; total: number } | null>(null);
 
 async function openCreateSite() {
   createSiteError.value = "";
@@ -63,6 +64,59 @@ function closeCreateSite() {
   createSiteError.value = "";
 }
 
+async function refreshTransformersRuntime() {
+  const options = await sitesApi.exportOptions();
+  createSiteTransformers.value = options.transformers_runtime;
+}
+
+async function runTransformersDownload() {
+  createSiteProgress.value = {
+    file: "Transformers.js",
+    received: 0,
+    total: createSiteTransformers.value?.download_bytes || 1,
+  };
+  try {
+    await sitesApi.downloadTransformersRuntime((event) => {
+      if (event.status === "error") return;
+      createSiteProgress.value = {
+        file: event.file || "Transformers.js",
+        received: Number(event.received_total || event.received || 0),
+        total: Number(event.total || createSiteTransformers.value?.download_bytes || 1),
+      };
+    });
+    await refreshTransformersRuntime();
+  } finally {
+    createSiteProgress.value = null;
+  }
+}
+
+async function downloadTransformersRuntime() {
+  if (createSiteBusy.value || createSiteTransformers.value?.cached) return;
+  createSiteBusy.value = true;
+  createSiteError.value = "";
+  try {
+    await runTransformersDownload();
+  } catch (cause) {
+    createSiteError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    createSiteBusy.value = false;
+  }
+}
+
+async function deleteTransformersRuntime() {
+  if (createSiteBusy.value) return;
+  createSiteBusy.value = true;
+  createSiteError.value = "";
+  try {
+    const result = await sitesApi.deleteTransformersRuntime();
+    createSiteTransformers.value = result.transformers_runtime;
+  } catch (cause) {
+    createSiteError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    createSiteBusy.value = false;
+  }
+}
+
 async function createSite(payload: {
   title: string;
   description: string;
@@ -76,6 +130,7 @@ async function createSite(payload: {
   createSiteBusy.value = true;
   createSiteError.value = "";
   try {
+    if (!createSiteTransformers.value?.cached) await runTransformersDownload();
     const download = await sitesApi.exportSite({
       store: snapshot.value.activeStore,
       works: payload.works,
@@ -520,10 +575,13 @@ onBeforeUnmount(() => {
       :initial-work="snapshot.selectedWork"
       :languages="createSiteLanguages"
       :transformers-runtime="createSiteTransformers"
+      :download-progress="createSiteProgress"
       :busy="createSiteBusy"
       :error="createSiteError"
       @cancel="closeCreateSite"
       @create="createSite"
+      @delete-runtime="deleteTransformersRuntime"
+      @download-runtime="downloadTransformersRuntime"
     />
 
     <dialog

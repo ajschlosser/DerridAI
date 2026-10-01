@@ -7,6 +7,7 @@ import { createMemoryHistory, createRouter } from "vue-router";
 
 import { chromaApi } from "../../src/api/chroma";
 import { pipelinesApi } from "../../src/api/pipelines";
+import { analysisFixture } from "../../src/components/pipelines/fixtures/pipelineAnalysisFixture";
 import SystemDataPipelines from "../../src/components/system-data/SystemDataPipelines.vue";
 import { pipelineKey } from "../../src/domain/pipelinePresentation";
 import {
@@ -233,6 +234,11 @@ describe("System Data Pipeline Studio", () => {
     useI18nStore().dictionary = {};
     vi.restoreAllMocks();
     vi.spyOn(pipelinesApi, "catalog").mockResolvedValue(structuredClone(catalog));
+    vi.spyOn(pipelinesApi, "analyze").mockResolvedValue(analysisFixture());
+    vi.spyOn(pipelinesApi, "strategyLatency").mockResolvedValue({
+      strategies: {},
+      sampled_run_count: 0,
+    });
     vi.spyOn(pipelinesApi, "runs").mockResolvedValue({
       runs: [structuredClone(trace)],
       limit: 30,
@@ -460,6 +466,63 @@ describe("System Data Pipeline Studio", () => {
     const idInput = wrapper.find('.pipeline-editor input[autocomplete="off"]');
     expect((idInput.element as HTMLInputElement).value).toBe("research.current.custom");
     expect(wrapper.text()).toContain("Stages");
+  });
+
+  it("analyzes a cloned draft at once and shows how it performs", async () => {
+    const { wrapper } = await mountStudio();
+    const clone = wrapper
+      .findAll(".detail-actions button")
+      .find((item) => item.text().includes("Clone & edit"));
+    await clone!.trigger("click");
+    await flushPromises();
+
+    expect(pipelinesApi.analyze).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain("How this pipeline performs");
+    expect(wrapper.text()).toContain("Typical");
+  });
+
+  it("builds a pipeline from scratch: choose a workflow, get a valid first stage, then analyze it", async () => {
+    vi.spyOn(pipelinesApi, "newDraft").mockResolvedValue({
+      pipeline: {
+        pipeline_id: "custom.research",
+        version: 1,
+        name: "Untitled pipeline",
+        purpose: "research",
+        status: "draft",
+        entry_stage_ids: ["passthrough"],
+        stages: [
+          {
+            id: "passthrough",
+            strategy: "query.passthrough",
+            enabled: true,
+            config: {},
+            next: [],
+          },
+        ],
+      },
+    });
+    const { wrapper } = await mountStudio();
+
+    await wrapper.get(".pipeline-definitions-actions button").trigger("click");
+    await flushPromises();
+    const radio = document.body.querySelector<HTMLInputElement>('input[value="research"]')!;
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change"));
+    await flushPromises();
+    const start = [...document.body.querySelectorAll<HTMLButtonElement>("footer button")].find(
+      (button) => /Start building/.test(button.textContent ?? ""),
+    )!;
+    start.click();
+    await flushPromises();
+
+    expect(pipelinesApi.newDraft).toHaveBeenCalledWith("research");
+    expect(wrapper.get("#pipeline-editor-title").text()).toBe("New pipeline");
+    expect(pipelinesApi.analyze).toHaveBeenCalledTimes(1);
+    // A pipeline in progress blocks starting another one over it.
+    expect(
+      wrapper.get(".pipeline-definitions-actions button").attributes("disabled"),
+    ).toBeDefined();
+    wrapper.unmount();
   });
 
   it("asks the server for the next version when cloning a saved custom pipeline", async () => {

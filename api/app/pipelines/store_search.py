@@ -28,9 +28,11 @@ from typing import Any
 
 from ..retrieval_selection import mmr_select
 from .models import PipelineDefinition, PipelineRunTrace, PipelineStageDefinition
-from .registry import reject_unhonoured_config
+from .purposes import purpose_registry
+from .registry import reject_unhonoured_config, strategy_registry
 from .service import pipeline_hash
 from .trace_safety import trace_stage
+from .wiring import bindings_changing_wiring, resolve_wiring
 
 SEARCH_FEATURE = "vector_store_search"
 SEARCH_PURPOSE = "vector_store_search"
@@ -50,6 +52,9 @@ _SELECT = "select.top_k"
 SUPPORTED_STRATEGIES = frozenset({_QUERY, _DENSE, _LEXICAL, _KEYWORD, _FILTER, _RRF, _MMR, _SELECT})
 _RETRIEVERS = frozenset({_DENSE, _LEXICAL, _KEYWORD, _FILTER})
 _LEG_TYPES = {_DENSE: "semantic", _LEXICAL: "lexical", _KEYWORD: "keyword", _FILTER: "filter"}
+# Declared capabilities, so rules follow what a consumer needs rather than which stage happens to be adjacent.
+_NEEDS_EMBEDDINGS = frozenset({_MMR})  # consumers that need candidate embeddings
+_EMBEDDING_PRODUCERS = frozenset({_DENSE})
 _FALLBACK_EDGE = {"unavailable": "on_unavailable", "timed_out": "on_timeout", "failed": "on_error"}
 
 
@@ -58,6 +63,11 @@ class StoreSearchPlan:
     pipeline: PipelineDefinition
     stages: dict[str, PipelineStageDefinition]
     order: list[str]
+    # Data delivery resolved from the pipeline's wiring (graph edges plus explicit
+    # input bindings), not from ``next`` alone: producer -> consuming stages.
+    consumers: dict[str, list[str]]
+    # Stages whose input is the run's own query rather than another stage's output.
+    seeded: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -107,37 +117,76 @@ def compile_store_search_pipeline(pipeline: PipelineDefinition) -> StoreSearchPl
             raise ValueError(f"Stage {stage.id!r} has no next stage, so its results could never be returned.")
         if stage.strategy == _QUERY and stage.id != pipeline.entry_stage_ids[0]:
             raise ValueError("The query stage must be the entry stage.")
-        if stage.strategy != _QUERY and len(stage.next) > 1:
-            raise ValueError(f"Only the query stage may fan out; {stage.id!r} has several next stages.")
-    incoming: dict[str, list[PipelineStageDefinition]] = defaultdict(list)
+    consumers, seeded = _resolve_delivery(pipeline, stages)
+    producers: dict[str, list[str]] = defaultdict(list)
+    for source_id, targets in consumers.items():
+        for target in targets:
+            producers[target].append(source_id)
     for stage in stages.values():
-        for target in stage.edge_targets():
-            incoming[target].append(stage)
-    for stage in stages.values():
-        if stage.strategy == _MMR:
-            sources = incoming[stage.id]
-            if not sources or any(source.strategy != _DENSE or source.next != [stage.id] for source in sources):
+        if stage.strategy in _NEEDS_EMBEDDINGS:
+            sources = producers[stage.id]
+            if not sources or any(
+                stages[source].strategy not in _EMBEDDING_PRODUCERS or consumers[source] != [stage.id]
+                for source in sources
+            ):
                 raise ValueError(
-                    "MMR needs query and candidate embeddings, so it may only follow semantic similarity."
+                    "MMR needs query and candidate embeddings, so it may only follow semantic similarity "
+                    "that feeds nothing else."
                 )
-    order = _topological_order(pipeline, stages)
-    return StoreSearchPlan(pipeline=pipeline, stages=stages, order=order)
+    order = _topological_order(pipeline, stages, consumers)
+    return StoreSearchPlan(
+        pipeline=pipeline, stages=stages, order=order, consumers=dict(consumers), seeded=frozenset(seeded)
+    )
 
 
-def _topological_order(pipeline: PipelineDefinition, stages: dict[str, PipelineStageDefinition]) -> list[str]:
+def _resolve_delivery(
+    pipeline: PipelineDefinition, stages: dict[str, PipelineStageDefinition]
+) -> tuple[dict[str, list[str]], set[str]]:
+    """Who receives each stage's output, resolved by the shared wiring resolver.
+
+    A ``next`` edge that only orders a producer ahead of an explicitly bound
+    consumer delivers nothing; the binding decides. Fallback edges are routed by
+    the executor itself and are not data delivery here.
+    """
+
+    wiring = resolve_wiring(pipeline, strategy_registry, purpose_registry.get(pipeline.purpose))
+    errors = [issue for issue in wiring["issues"] if issue.level == "error"]
+    if errors:
+        raise ValueError("Store-search wiring is invalid: " + "; ".join(issue.message for issue in errors))
+    consumers: dict[str, list[str]] = defaultdict(list)
+    seeded: set[str] = set()
+    for stage_id in stages:
+        for row in wiring["stages"].get(stage_id, {}).get("inputs", []):
+            for source in row["sources"]:
+                if source["kind"] == "run_input":
+                    seeded.add(stage_id)
+                elif source["kind"] == "stage" and source["via"] in ("next", "explicit"):
+                    if source["stage"] not in stages:
+                        raise ValueError(f"Stage {stage_id!r} takes input from disabled stage {source['stage']!r}.")
+                    if stage_id not in consumers[source["stage"]]:
+                        consumers[source["stage"]].append(stage_id)
+    return consumers, seeded
+
+
+def _topological_order(
+    pipeline: PipelineDefinition,
+    stages: dict[str, PipelineStageDefinition],
+    consumers: dict[str, list[str]],
+) -> list[str]:
     """Kahn order with definition order as the tie-break, so fused branches keep a stable order."""
 
     position = {stage.id: index for index, stage in enumerate(pipeline.stages)}
     indegree = {stage_id: 0 for stage_id in stages}
-    for stage in stages.values():
-        for target in set(stage.edge_targets()):
+    edges = {sid: set(stage.edge_targets()) | set(consumers.get(sid, ())) for sid, stage in stages.items()}
+    for targets in edges.values():
+        for target in targets:
             indegree[target] += 1
     ready = deque(sorted((sid for sid, degree in indegree.items() if degree == 0), key=position.get))
     order: list[str] = []
     while ready:
         stage_id = ready.popleft()
         order.append(stage_id)
-        for target in sorted(set(stages[stage_id].edge_targets()), key=position.get):
+        for target in sorted(edges[stage_id], key=position.get):
             indegree[target] -= 1
             if indegree[target] == 0:
                 ready.append(target)
@@ -157,12 +206,14 @@ def _candidate_depth(stage: PipelineStageDefinition, plan: StoreSearchPlan, requ
 
     if "fetch_k" in stage.config:
         return int(stage.config["fetch_k"])
-    consumer = plan.stages[stage.next[0]].strategy if stage.next else None
-    if consumer == _MMR:
-        return max(request.n_results, request.fetch_k)
-    if consumer == _RRF:
-        return min(max(request.n_results * 4, 32), 400)
-    return request.n_results
+    depths = [request.n_results]
+    for consumer in plan.consumers.get(stage.id, ()):
+        strategy = plan.stages[consumer].strategy
+        if strategy == _MMR:
+            depths.append(max(request.n_results, request.fetch_k))
+        elif strategy == _RRF:
+            depths.append(min(max(request.n_results * 4, 32), 400))
+    return max(depths)
 
 
 class _Runner:
@@ -178,7 +229,7 @@ class _Runner:
                 return self.request.query.strip(), {}
             if strategy == _DENSE:
                 depth = _candidate_depth(stage, self.plan, self.request)
-                if stage.next and self.plan.stages[stage.next[0]].strategy == _MMR:
+                if any(self.plan.stages[c].strategy in _NEEDS_EMBEDDINGS for c in self.plan.consumers.get(stage.id, ())):
                     rows = self.store.mmr_candidates(self.request.store, self.request.query, depth, self.request.where)
                 else:
                     rows = self.store.search(self.request.store, self.request.query, depth, self.request.where)
@@ -283,7 +334,9 @@ def execute_store_search(
     runner = _Runner(store, plan, request)
     identity = collection_identity or {}
     inputs: dict[str, list[tuple[str, Any]]] = defaultdict(list)
-    inputs[plan.order[0]].append(("__request__", None))
+    for seeded_id in plan.order:
+        if seeded_id in plan.seeded:
+            inputs[seeded_id].append(("__request__", None))
     stage_traces = []
     results: list[dict[str, Any]] = []
     started_at = datetime.now(UTC)
@@ -307,7 +360,7 @@ def execute_store_search(
         else:
             produced = bool(output)
             if produced:
-                for target in stage.next:
+                for target in plan.consumers.get(stage.id, ()):
                     inputs[target].append((stage.id, output))
             elif stage.on_empty:
                 fallback_reason = "No results." if stage.strategy != _QUERY else "The query is empty."
@@ -351,9 +404,17 @@ def execute_store_search(
         started_at=started_at,
         finished_at=finished_at,
         total_elapsed_ms=max(0, int((finished_at - started_at).total_seconds() * 1000)),
+        warnings=_rewired_warnings(plan.pipeline),
         stages=stage_traces,
     )
     return StoreSearchExecution(results=results, trace=trace)
+
+
+def _rewired_warnings(pipeline: PipelineDefinition) -> list[str]:
+    """Mark runs whose explicit bindings differ from the graph's own wiring."""
+
+    changed = bindings_changing_wiring(pipeline, strategy_registry, purpose_registry.get(pipeline.purpose))
+    return ["rewired_inputs: " + ", ".join(changed)[:280]] if changed else []
 
 
 def resolve_store_search_pipeline(

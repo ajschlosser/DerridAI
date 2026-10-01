@@ -16,6 +16,7 @@ import type {
   PipelineDefinition,
   PipelinePurpose,
   PipelineStrategy,
+  PipelineStrategyLatency,
   PipelineWorkflowVocabulary,
 } from "../../types/pipelines";
 
@@ -26,6 +27,8 @@ const props = defineProps<{
   vocabulary: PipelineWorkflowVocabulary;
   selectedStrategyId: string;
   filters: StrategyFilters;
+  /** Observed latency per strategy from recent runs, when available. */
+  strategyLatency?: Record<string, PipelineStrategyLatency> | null;
 }>();
 const emit = defineEmits<{
   selectStrategy: [id: string];
@@ -128,6 +131,7 @@ const selected = computed(
         :usage="usage.get(selected.strategy_id) || { pipelines: [], categories: [] }"
         :purposes="purposes"
         :vocabulary="vocabulary"
+        :latency="strategyLatency?.[selected.strategy_id] ?? null"
         @open-pipeline="emit('openPipeline', $event)"
       />
     </div>

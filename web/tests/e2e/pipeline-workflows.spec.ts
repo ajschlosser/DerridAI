@@ -26,6 +26,16 @@ const stories = [
   ["pipelines-comparison-result--benchmark-with-drift-warning", ".comparison-result"],
   ["pipelines-benchmark-case-list--default", ".case-list"],
   ["pipelines-studio-help-dialog--open", "[role=dialog]"],
+  ["pipelines-data-type-chip--all-types", ".type-chip"],
+  ["pipelines-stage-inputs-and-outputs--connected", ".ports"],
+  ["pipelines-stage-inputs-and-outputs--not-connected", ".ports"],
+  ["pipelines-stage-inputs-and-outputs--wrong-type", ".ports"],
+  ["pipelines-stage-palette--after-retrieval", "[role=dialog]"],
+  ["pipelines-new-pipeline-dialog--workflow-chosen", "[role=dialog]"],
+  ["pipelines-analysis-panel--partly-measured", ".analysis"],
+  ["pipelines-analysis-panel--never-run", ".analysis"],
+  ["pipelines-definition-editor--with-analysis", ".pipeline-editor"],
+  ["pipelines-strategy-inspector--with-observed-latency", ".strategy-inspector"],
 ] as const;
 
 for (const scheme of ["light", "dark"] as const) {
@@ -115,4 +125,55 @@ test("the graph and the stage list select the same stage", async ({ page }) => {
   await page.locator(".diagram-node", { hasText: "support" }).click();
   await expect(page.locator(".stage-inspector-editor h4")).toHaveText("support");
   await expect(page.locator(".stage-row[aria-current=true]")).toContainText("support");
+});
+
+test("the diagram lens switches what each stage shows, from the keyboard", async ({ page }) => {
+  await page.goto("/iframe.html?id=pipelines-definition-editor--with-analysis&viewMode=story");
+  const lens = page.getByRole("group", { name: "What the diagram shows on each stage" });
+  const latency = lens.getByRole("button", { name: "Latency" });
+  await expect(latency).toHaveAttribute("aria-pressed", "false");
+  await latency.focus();
+  await page.keyboard.press("Enter");
+  await expect(latency).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".diagram-node", { hasText: "≈ 400 ms" })).toBeVisible();
+  await lens.getByRole("button", { name: "Complexity" }).click();
+  await expect(page.locator(".diagram-node", { hasText: "O(q + d·log N + k)" })).toBeVisible();
+});
+
+test("an input's source is chosen from a list of what can legitimately feed it", async ({
+  page,
+}) => {
+  await page.goto("/iframe.html?id=pipelines-definition-editor--with-analysis&viewMode=story");
+  await page.locator(".stage-row", { hasText: "b" }).first().click();
+  const ports = page.locator(".ports");
+  await expect(ports).toContainText("Currently: a → candidates");
+  const source = ports.getByLabel("Source").first();
+  await expect(source.locator("option")).toHaveCount(2);
+  await expect(source.locator("optgroup")).toHaveAttribute("label", "Earlier stages");
+});
+
+test("the stage palette offers only stages that fit, and can show the rest with a reason", async ({
+  page,
+}) => {
+  await page.goto("/iframe.html?id=pipelines-stage-palette--after-retrieval&viewMode=story");
+  const dialog = page.getByRole("dialog", { name: "Add a stage" });
+  await expect(dialog.locator("strong", { hasText: "Cross-encoder reranker" })).toBeVisible();
+  await expect(dialog.locator("strong", { hasText: "Research answer generation" })).toHaveCount(0);
+  await dialog.getByLabel("Only stages that fit this position").uncheck();
+  await expect(dialog.locator("strong", { hasText: "Research answer generation" })).toBeVisible();
+  await expect(dialog).toContainText("Takes Context packet, but dense provides Candidate set.");
+});
+
+test("analysis tabs move with the arrow keys and show complexity in plain terms", async ({
+  page,
+}) => {
+  await page.goto("/iframe.html?id=pipelines-analysis-panel--partly-measured&viewMode=story");
+  const latency = page.getByRole("tab", { name: "Latency" });
+  await latency.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Complexity" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.locator(".complexity")).toContainText("Grows with the collection");
 });

@@ -1,16 +1,17 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-"""Optional in-browser embedding runtime for published sites, fetched on first use and cached.
+"""In-browser embedding runtime packaged into every published site, fetched on first use and cached.
 
-DerridAI does not ship Transformers.js. When an administrator chooses to include it in a site export, the
-pinned files below are downloaded once from a fixed HTTPS source, verified by size and SHA-256, and kept in
-the data directory for later exports. Nothing is downloaded when a corpus is built or when a site is
-exported without the runtime.
+DerridAI does not ship Transformers.js in the application image. The first site export downloads the pinned
+files below once from a fixed HTTPS source, verifies each file's size and SHA-256, and keeps them in the
+data directory. Later exports reuse that cache. An administrator can delete it; the next export downloads
+it again. Model weights are never downloaded here.
 """
 
 from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import threading
 import urllib.request
 from collections.abc import Callable
@@ -103,7 +104,22 @@ def is_cached() -> bool:
     return True
 
 
-def _download(item: dict[str, Any], target: Path, opener: Callable[..., Any]) -> None:
+def delete_runtime() -> None:
+    """Remove the cached runtime so the next export downloads it again."""
+    directory = runtime_dir()
+    with _lock:
+        if directory.exists():
+            shutil.rmtree(directory)
+
+
+def _download(
+    item: dict[str, Any],
+    target: Path,
+    opener: Callable[..., Any],
+    on_progress: Callable[[dict[str, Any]], None] | None,
+    received_before: int,
+    total_bytes: int,
+) -> None:
     """Stream one artifact to ``target`` with size and digest checks; nothing partial survives."""
     if not str(item["url"]).startswith("https://"):
         raise RuntimeUnavailableError(f"{item['filename']} must be downloaded over HTTPS.")
@@ -127,6 +143,17 @@ def _download(item: dict[str, Any], target: Path, opener: Callable[..., Any]) ->
                     )
                 digest.update(chunk)
                 handle.write(chunk)
+                if on_progress:
+                    on_progress(
+                        {
+                            "status": "progress",
+                            "file": item["filename"],
+                            "received": total,
+                            "file_total": limit,
+                            "received_total": received_before + total,
+                            "total": total_bytes,
+                        }
+                    )
         if total != limit:
             raise RuntimeUnavailableError(f"{item['filename']} is {total} bytes, expected {limit}.")
         if digest.hexdigest() != item["sha256"]:
@@ -140,16 +167,24 @@ def _download(item: dict[str, Any], target: Path, opener: Callable[..., Any]) ->
         part.unlink(missing_ok=True)
 
 
-def ensure_runtime(opener: Callable[..., Any] = urllib.request.urlopen) -> dict[str, bytes]:
+def ensure_runtime(
+    opener: Callable[..., Any] = urllib.request.urlopen,
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, bytes]:
     """Return the pinned runtime files by role, downloading any that are missing or fail verification."""
     directory = runtime_dir()
+    total_bytes = sum(int(item["size"]) for item in ARTIFACTS)
     with _lock:
         directory.mkdir(parents=True, exist_ok=True)
+        received_before = 0
         for item in ARTIFACTS:
             target = directory / item["filename"]
             if not _verified(target, item):
                 target.unlink(missing_ok=True)
-                _download(item, target, opener)
+                _download(item, target, opener, on_progress, received_before, total_bytes)
+            received_before += int(item["size"])
+        if on_progress:
+            on_progress({"status": "complete", "received_total": total_bytes, "total": total_bytes})
         return {str(item["role"]): (directory / item["filename"]).read_bytes() for item in ARTIFACTS}
 
 
@@ -173,7 +208,7 @@ def notice_text() -> str:
 
 
 def runtime_info() -> dict[str, Any]:
-    """Describe the optional runtime for the export dialog without downloading anything."""
+    """Describe the cached runtime for the export dialog without downloading anything."""
     return {
         "version": TRANSFORMERS_VERSION,
         "cached": is_cached(),

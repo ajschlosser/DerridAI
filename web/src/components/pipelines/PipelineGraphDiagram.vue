@@ -18,10 +18,12 @@ import {
   type PipelineEdgeKind,
 } from "../../domain/pipelineGraph";
 import {
+  pipelineDataTypeLabel,
   pipelineRunStatusLabel,
   pipelineStageFamilyLabel,
   pipelineStrategyLabel,
 } from "../../domain/pipelinePresentation";
+import type { StageBadge } from "../../domain/pipelineAnalysisPresentation";
 import { findTerm, pipelinePhaseSequence, termLabel } from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
 import type {
@@ -51,8 +53,18 @@ const props = withDefaults(
     showInspector?: boolean;
     /** Put the stage inspector under the graph, for narrow panes. */
     stackInspector?: boolean;
+    /** A short per-stage badge for the active lens (latency, complexity). */
+    badges?: Record<string, StageBadge>;
+    /** Stages whose inputs the server could not wire. */
+    flaggedStageIds?: string[];
   }>(),
-  { selectedStageId: undefined, showInspector: true, stackInspector: false },
+  {
+    selectedStageId: undefined,
+    showInspector: true,
+    stackInspector: false,
+    badges: () => ({}),
+    flaggedStageIds: () => [],
+  },
 );
 const emit = defineEmits<{ "update:selectedStageId": [id: string] }>();
 
@@ -152,6 +164,16 @@ function edgeLabel(kind: PipelineEdgeKind) {
   return labels[kind];
 }
 
+const flagged = computed(() => new Set(props.flaggedStageIds));
+
+function nodeLabel(node: { id: string; strategy: string }) {
+  const parts = [`${node.id}: ${labelFor(node.strategy)}`];
+  if (flagged.value.has(node.id))
+    parts.push(t("pipelines.node_input_missing", "Input not satisfied"));
+  else if (props.badges[node.id]) parts.push(props.badges[node.id].text);
+  return parts.join(", ");
+}
+
 function strategyFor(strategyId: string) {
   return props.strategies.find((item) => item.strategy_id === strategyId) || null;
 }
@@ -207,6 +229,21 @@ function infoRows(node: (typeof nodes.value)[number]): TooltipInfoboxRow[] {
     { label: t("pipelines.status", "Status"), value: statusLabel(node) },
     { label: t("pipelines.term_strategy", "Strategy"), value: labelFor(node.strategy) },
   ];
+  const spec = strategyFor(node.strategy);
+  if (spec?.inputs?.length)
+    rows.push({
+      label: t("pipelines.palette_takes", "Takes"),
+      value: spec.inputs
+        .map((port) => `${port.name} (${pipelineDataTypeLabel(port.data_type, t)})`)
+        .join(", "),
+    });
+  if (spec?.outputs?.length)
+    rows.push({
+      label: t("pipelines.palette_gives", "Gives"),
+      value: spec.outputs
+        .map((port) => `${port.name} (${pipelineDataTypeLabel(port.data_type, t)})`)
+        .join(", "),
+    });
   if (effectNoteFor(node.strategy))
     rows.push({
       label: t("pipelines.scholarly_effect", "Scholarly effect"),
@@ -396,10 +433,11 @@ function chooseDensity(next: PipelineDiagramDensity) {
               :x="node.x"
               :y="node.y"
               :zoom="zoom"
-              :accessible-label="`${node.id}: ${labelFor(node.strategy)}`"
+              :accessible-label="nodeLabel(node)"
               :aria-pressed="selected?.id === node.id"
               :data-status="node.executionStatus || undefined"
               :data-presence="node.presence"
+              :data-wiring="flagged.has(node.id) ? 'problem' : undefined"
               :style="{
                 width: `${PIPELINE_NODE_WIDTH}px`,
                 height: `${PIPELINE_NODE_HEIGHT}px`,
@@ -421,6 +459,16 @@ function chooseDensity(next: PipelineDiagramDensity) {
                 </span>
                 <strong>{{ node.id }}</strong>
                 <span>{{ labelFor(node.strategy) }}</span>
+                <span v-if="flagged.has(node.id)" class="node-badge" data-tone="danger">
+                  {{ t("pipelines.node_input_missing", "Input not satisfied") }}
+                </span>
+                <span
+                  v-else-if="badges[node.id]"
+                  class="node-badge"
+                  :data-tone="badges[node.id].tone"
+                >
+                  {{ badges[node.id].text }}
+                </span>
               </UiRelationCardNode>
             </UiRelationNodeShell>
             <UiTooltipInfobox
@@ -578,6 +626,25 @@ function chooseDensity(next: PipelineDiagramDensity) {
 .diagram-node :deep(.ui-relation-card-node span),
 .diagram-node :deep(.ui-relation-card-node strong) {
   white-space: nowrap;
+}
+.diagram-node[data-wiring="problem"] {
+  --relation-node-border: var(--tone-danger-border);
+}
+.node-badge {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-badge[data-tone="warn"] {
+  color: var(--tone-warn-fg);
+}
+.node-badge[data-tone="danger"] {
+  color: var(--tone-danger-fg);
 }
 .diagram-node.selected {
   --relation-node-border: var(--border-interactive);

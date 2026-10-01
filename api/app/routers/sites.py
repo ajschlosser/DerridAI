@@ -1,10 +1,13 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+import json
+import queue
+import threading
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..http_auth import require_admin
@@ -13,7 +16,12 @@ from ..site_publication import (
     build_nginx_site_bundle,
     build_site_bundle,
 )
-from ..site_runtime_cache import RuntimeUnavailableError, runtime_info
+from ..site_runtime_cache import (
+    RuntimeUnavailableError,
+    delete_runtime,
+    ensure_runtime,
+    runtime_info,
+)
 from ..system_store import system_store
 
 router = APIRouter(tags=["sites"])
@@ -29,8 +37,8 @@ class SiteExportRequest(BaseModel):
     export_format: Literal["two-file", "local-single-file", "nginx-docker"] = "two-file"
     # "reader" packages only the Record metadata a site reads and cites; it omits FieldAssertions.
     record_profile: Literal["complete", "reader"] = "complete"
-    # Packages the optional in-browser Transformers.js runtime (no model weights, no provider settings).
-    include_transformers: bool = False
+    # Accepted for older clients. Every export includes Transformers.js; model weights are never packaged.
+    include_transformers: bool = True
 
 
 @router.get("/api/sites/export-options")
@@ -41,6 +49,40 @@ def site_export_options(request: Request) -> dict[str, object]:
         "languages": system_store.list_languages(),
         "transformers_runtime": runtime_info(),
     }
+
+
+@router.post("/api/sites/transformers-runtime")
+def download_transformers_runtime(request: Request) -> StreamingResponse:
+    """Download the pinned Transformers.js runtime, reporting byte progress as newline-delimited JSON."""
+    require_admin(request)
+
+    def generate():
+        events: queue.Queue[dict[str, object] | None] = queue.Queue()
+
+        def worker() -> None:
+            try:
+                ensure_runtime(on_progress=events.put)
+            except Exception as exc:  # noqa: BLE001 - surfaced to the administrator as a download failure
+                events.put({"status": "error", "detail": str(exc)})
+            finally:
+                events.put(None)
+
+        threading.Thread(target=worker, daemon=True).start()
+        while True:
+            item = events.get()
+            if item is None:
+                break
+            yield (json.dumps(item) + "\n").encode("utf-8")
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
+
+
+@router.delete("/api/sites/transformers-runtime")
+def delete_transformers_runtime(request: Request) -> dict[str, object]:
+    """Delete the cached Transformers.js runtime so the next export downloads it again."""
+    require_admin(request)
+    delete_runtime()
+    return {"transformers_runtime": runtime_info()}
 
 
 @router.post("/api/sites/export")
@@ -71,7 +113,7 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
     except RuntimeUnavailableError as exc:
         raise HTTPException(
             status_code=502,
-            detail=f"The Transformers.js runtime could not be downloaded; export without it or retry. {exc}",
+            detail=f"The Transformers.js runtime could not be downloaded. Retry the download, then create the site. {exc}",
         ) from exc
     return Response(
         content=bundle.payload,
@@ -86,6 +128,6 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
             "X-DerridAI-Record-Count": str(bundle.record_count),
             "X-DerridAI-Work-Count": str(bundle.work_count),
             "X-DerridAI-Record-Profile": bundle.record_profile,
-            "X-DerridAI-Transformers-Runtime": "included" if body.include_transformers else "omitted",
+            "X-DerridAI-Transformers-Runtime": "included",
         },
     )

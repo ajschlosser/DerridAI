@@ -17,6 +17,12 @@
         "source_provenance",
         "citation_binding"
       ],
+      "run_inputs": [
+        {
+          "name": "query",
+          "data_type": "query"
+        }
+      ],
       "label_key": "pipelines.purpose.research.label",
       "description_key": "pipelines.purpose.research.description",
       "consumer_key": "pipelines.purpose.research.consumer",
@@ -83,6 +89,12 @@
         "source_provenance",
         "reviewer_approval"
       ],
+      "run_inputs": [
+        {
+          "name": "query",
+          "data_type": "query"
+        }
+      ],
       "label_key": "pipelines.purpose.evidence_suggestion.label",
       "description_key": "pipelines.purpose.evidence_suggestion.description",
       "consumer_key": "pipelines.purpose.evidence_suggestion.consumer",
@@ -148,6 +160,12 @@
         "source_provenance",
         "reviewer_approval"
       ],
+      "run_inputs": [
+        {
+          "name": "query",
+          "data_type": "query"
+        }
+      ],
       "label_key": "pipelines.purpose.evidence_recovery.label",
       "description_key": "pipelines.purpose.evidence_recovery.description",
       "consumer_key": "pipelines.purpose.evidence_recovery.consumer",
@@ -212,6 +230,12 @@
       "required_guarantees": [
         "source_provenance",
         "reviewer_approval"
+      ],
+      "run_inputs": [
+        {
+          "name": "query",
+          "data_type": "query"
+        }
       ],
       "label_key": "pipelines.purpose.precedent_evidence_remap.label",
       "description_key": "pipelines.purpose.precedent_evidence_remap.description",
@@ -279,6 +303,12 @@
         "source_provenance",
         "reviewer_approval"
       ],
+      "run_inputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet"
+        }
+      ],
       "label_key": "pipelines.purpose.corpus_reviewer_evidence_choice.label",
       "description_key": "pipelines.purpose.corpus_reviewer_evidence_choice.description",
       "consumer_key": "pipelines.purpose.corpus_reviewer_evidence_choice.consumer",
@@ -342,6 +372,12 @@
       "override_allowed": true,
       "required_guarantees": [
         "access_outside_pipeline"
+      ],
+      "run_inputs": [
+        {
+          "name": "query",
+          "data_type": "query"
+        }
       ],
       "label_key": "pipelines.purpose.vector_store_search.label",
       "description_key": "pipelines.purpose.vector_store_search.description",
@@ -407,6 +443,12 @@
       "required_guarantees": [
         "reviewed_precedents_only"
       ],
+      "run_inputs": [
+        {
+          "name": "query",
+          "data_type": "query"
+        }
+      ],
       "label_key": "pipelines.purpose.metadata_precedents.label",
       "description_key": "pipelines.purpose.metadata_precedents.description",
       "consumer_key": "pipelines.purpose.metadata_precedents.consumer",
@@ -470,6 +512,12 @@
       "override_allowed": true,
       "required_guarantees": [
         "reviewed_precedents_only"
+      ],
+      "run_inputs": [
+        {
+          "name": "query",
+          "data_type": "query"
+        }
       ],
       "label_key": "pipelines.purpose.metadata_prefill.label",
       "description_key": "pipelines.purpose.metadata_prefill.description",
@@ -536,6 +584,12 @@
         "backend_validation",
         "reviewer_approval"
       ],
+      "run_inputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet"
+        }
+      ],
       "label_key": "pipelines.purpose.corpus_metadata_enrichment.label",
       "description_key": "pipelines.purpose.corpus_metadata_enrichment.description",
       "consumer_key": "pipelines.purpose.corpus_metadata_enrichment.consumer",
@@ -599,6 +653,12 @@
       "override_allowed": false,
       "required_guarantees": [
         "eligible_memory_only"
+      ],
+      "run_inputs": [
+        {
+          "name": "query",
+          "data_type": "query"
+        }
       ],
       "label_key": "pipelines.purpose.claim_memory.label",
       "description_key": "pipelines.purpose.claim_memory.description",
@@ -664,6 +724,12 @@
       "required_guarantees": [
         "eligible_memory_only"
       ],
+      "run_inputs": [
+        {
+          "name": "query",
+          "data_type": "query"
+        }
+      ],
       "label_key": "pipelines.purpose.response_memory.label",
       "description_key": "pipelines.purpose.response_memory.description",
       "consumer_key": "pipelines.purpose.response_memory.consumer",
@@ -727,6 +793,12 @@
       "override_allowed": true,
       "required_guarantees": [
         "backend_validation"
+      ],
+      "run_inputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet"
+        }
       ],
       "label_key": "pipelines.purpose.corpus_document_manifest.label",
       "description_key": "pipelines.purpose.corpus_document_manifest.description",
@@ -793,6 +865,12 @@
         "backend_validation",
         "text_conservation"
       ],
+      "run_inputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet"
+        }
+      ],
       "label_key": "pipelines.purpose.corpus_segmentation.label",
       "description_key": "pipelines.purpose.corpus_segmentation.description",
       "consumer_key": "pipelines.purpose.corpus_segmentation.consumer",
@@ -857,6 +935,12 @@
       "required_guarantees": [
         "backend_validation",
         "reviewer_approval"
+      ],
+      "run_inputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet"
+        }
       ],
       "label_key": "pipelines.purpose.corpus_text_touchup.label",
       "description_key": "pipelines.purpose.corpus_text_touchup.description",
@@ -1204,6 +1288,166 @@
         "label_key": "pipelines.effect_note.evaluation.label",
         "description_key": "pipelines.effect_note.evaluation.description"
       }
+    ],
+    "cost_drivers": [
+      {
+        "id": "cpu",
+        "label": "Computation",
+        "description": "Plain in-process computation.",
+        "label_key": "pipelines.cost_driver.cpu.label",
+        "description_key": "pipelines.cost_driver.cpu.description"
+      },
+      {
+        "id": "storage",
+        "label": "Storage reads",
+        "description": "Reads from the database or vector store.",
+        "label_key": "pipelines.cost_driver.storage.label",
+        "description_key": "pipelines.cost_driver.storage.description"
+      },
+      {
+        "id": "embedding",
+        "label": "Embedding",
+        "description": "Embeds text with the embedding model.",
+        "label_key": "pipelines.cost_driver.embedding.label",
+        "description_key": "pipelines.cost_driver.embedding.description"
+      },
+      {
+        "id": "model_inference",
+        "label": "Model scoring",
+        "description": "Runs a local model over many items, such as a cross-encoder.",
+        "label_key": "pipelines.cost_driver.model_inference.label",
+        "description_key": "pipelines.cost_driver.model_inference.description"
+      },
+      {
+        "id": "llm_generation",
+        "label": "Language-model generation",
+        "description": "Waits on a language model to read a prompt and write an answer.",
+        "label_key": "pipelines.cost_driver.llm_generation.label",
+        "description_key": "pipelines.cost_driver.llm_generation.description"
+      }
+    ],
+    "complexity_variables": [
+      {
+        "id": "n",
+        "label": "n",
+        "description": "Candidates arriving at the stage.",
+        "label_key": "pipelines.complexity_variable.n.label",
+        "description_key": "pipelines.complexity_variable.n.description"
+      },
+      {
+        "id": "N",
+        "label": "N",
+        "description": "Items in the collection or Record scope the stage searches.",
+        "label_key": "pipelines.complexity_variable.N.label",
+        "description_key": "pipelines.complexity_variable.N.description"
+      },
+      {
+        "id": "k",
+        "label": "k",
+        "description": "Items the stage keeps or returns.",
+        "label_key": "pipelines.complexity_variable.k.label",
+        "description_key": "pipelines.complexity_variable.k.description"
+      },
+      {
+        "id": "L",
+        "label": "L",
+        "description": "Text length of one item, in tokens.",
+        "label_key": "pipelines.complexity_variable.L.label",
+        "description_key": "pipelines.complexity_variable.L.description"
+      },
+      {
+        "id": "q",
+        "label": "q",
+        "description": "Query length, in tokens.",
+        "label_key": "pipelines.complexity_variable.q.label",
+        "description_key": "pipelines.complexity_variable.q.description"
+      },
+      {
+        "id": "g",
+        "label": "g",
+        "description": "Tokens a model generates.",
+        "label_key": "pipelines.complexity_variable.g.label",
+        "description_key": "pipelines.complexity_variable.g.description"
+      },
+      {
+        "id": "P",
+        "label": "P",
+        "description": "Prompt length, in tokens.",
+        "label_key": "pipelines.complexity_variable.P.label",
+        "description_key": "pipelines.complexity_variable.P.description"
+      },
+      {
+        "id": "d",
+        "label": "d",
+        "description": "Embedding dimension.",
+        "label_key": "pipelines.complexity_variable.d.label",
+        "description_key": "pipelines.complexity_variable.d.description"
+      },
+      {
+        "id": "S",
+        "label": "S",
+        "description": "Source units in the current Record.",
+        "label_key": "pipelines.complexity_variable.S.label",
+        "description_key": "pipelines.complexity_variable.S.description"
+      }
+    ],
+    "complexity_orders": [
+      {
+        "id": "constant",
+        "label": "Constant",
+        "description": "Does not grow with input size.",
+        "label_key": "pipelines.complexity_order.constant.label",
+        "description_key": "pipelines.complexity_order.constant.description"
+      },
+      {
+        "id": "sublinear",
+        "label": "Sublinear",
+        "description": "Grows more slowly than the collection, for example an index lookup.",
+        "label_key": "pipelines.complexity_order.sublinear.label",
+        "description_key": "pipelines.complexity_order.sublinear.description"
+      },
+      {
+        "id": "linear_in_candidates",
+        "label": "Linear in candidates",
+        "description": "Grows in step with the candidates it receives.",
+        "label_key": "pipelines.complexity_order.linear_in_candidates.label",
+        "description_key": "pipelines.complexity_order.linear_in_candidates.description"
+      },
+      {
+        "id": "linearithmic",
+        "label": "Sorting-like",
+        "description": "Grows a little faster than the candidates it receives, as sorting does.",
+        "label_key": "pipelines.complexity_order.linearithmic.label",
+        "description_key": "pipelines.complexity_order.linearithmic.description"
+      },
+      {
+        "id": "linear_in_scope",
+        "label": "Scans the collection",
+        "description": "Reads the whole collection or Record scope, so it grows with corpus size.",
+        "label_key": "pipelines.complexity_order.linear_in_scope.label",
+        "description_key": "pipelines.complexity_order.linear_in_scope.description"
+      },
+      {
+        "id": "superlinear",
+        "label": "Superlinear in candidates",
+        "description": "Grows faster than the candidates it receives.",
+        "label_key": "pipelines.complexity_order.superlinear.label",
+        "description_key": "pipelines.complexity_order.superlinear.description"
+      },
+      {
+        "id": "model_inference",
+        "label": "One model pass per item",
+        "description": "Runs a model over every candidate.",
+        "label_key": "pipelines.complexity_order.model_inference.label",
+        "description_key": "pipelines.complexity_order.model_inference.description"
+      },
+      {
+        "id": "generation",
+        "label": "Generation",
+        "description": "Waits on a language model; time depends on prompt and answer length.",
+        "label_key": "pipelines.complexity_order.generation.label",
+        "description_key": "pipelines.complexity_order.generation.description"
+      }
     ]
   },
   "strategies": [
@@ -1220,6 +1464,40 @@
       "invokes_llm": false,
       "capabilities": [],
       "config_schema": {},
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "any",
+          "required": false,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(N·L + k log k)",
+        "space": "O(N)",
+        "variables": [
+          "N",
+          "L",
+          "k"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": true,
+        "order": 4,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
+        }
+      },
       "label_key": "pipelines.strategy.fallback_metadata_precedents_lexical.label",
       "description_key": "pipelines.strategy.fallback_metadata_precedents_lexical.description",
       "phase": "find",
@@ -1238,6 +1516,38 @@
       "invokes_llm": false,
       "capabilities": [],
       "config_schema": {},
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n)",
+        "space": "O(n)",
+        "variables": [
+          "n"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 2,
+        "cardinality": {
+          "rule": "same",
+          "config_key": null,
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.filter_metadata_scope.label",
       "description_key": "pipelines.strategy.filter_metadata_scope.description",
       "phase": "find",
@@ -1270,6 +1580,38 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n log n)",
+        "space": "O(n)",
+        "variables": [
+          "n"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 3,
+        "cardinality": {
+          "rule": "sum_inputs",
+          "config_key": null,
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.fusion_metadata_hybrid.label",
       "description_key": "pipelines.strategy.fusion_metadata_hybrid.description",
       "phase": "rank",
@@ -1295,6 +1637,38 @@
             "minimum": 1,
             "maximum": 1000
           }
+        }
+      },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n log n)",
+        "space": "O(n)",
+        "variables": [
+          "n"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 3,
+        "cardinality": {
+          "rule": "sum_inputs",
+          "config_key": null,
+          "default": null
         }
       },
       "label_key": "pipelines.strategy.fusion_rrf.label",
@@ -1334,6 +1708,39 @@
             "maximum": 4,
             "default": 2
           }
+        }
+      },
+      "inputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "answer",
+          "data_type": "model_output",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(P + g)",
+        "space": "O(P + g)",
+        "variables": [
+          "P",
+          "g"
+        ],
+        "driver": "llm_generation",
+        "model_calls": "attempts",
+        "scales_with_scope": false,
+        "order": 7,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
         }
       },
       "label_key": "pipelines.strategy.llm_boundary_classification.label",
@@ -1376,6 +1783,40 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "any",
+          "required": false,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(S·L + g)",
+        "space": "O(S·L)",
+        "variables": [
+          "S",
+          "L",
+          "g"
+        ],
+        "driver": "llm_generation",
+        "model_calls": "attempts",
+        "scales_with_scope": false,
+        "order": 7,
+        "cardinality": {
+          "rule": "pool",
+          "config_key": null,
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.llm_closed_choice_evidence.label",
       "description_key": "pipelines.strategy.llm_closed_choice_evidence.description",
       "phase": "generate",
@@ -1415,6 +1856,39 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "answer",
+          "data_type": "model_output",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(P + g)",
+        "space": "O(P + g)",
+        "variables": [
+          "P",
+          "g"
+        ],
+        "driver": "llm_generation",
+        "model_calls": "attempts",
+        "scales_with_scope": false,
+        "order": 7,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
+        }
+      },
       "label_key": "pipelines.strategy.llm_document_manifest.label",
       "description_key": "pipelines.strategy.llm_document_manifest.description",
       "phase": "generate",
@@ -1435,6 +1909,45 @@
         "chat_model"
       ],
       "config_schema": {},
+      "inputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet",
+          "required": true,
+          "multiple": false
+        },
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "answer",
+          "data_type": "model_output",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(P + g)",
+        "space": "O(P + g)",
+        "variables": [
+          "P",
+          "g"
+        ],
+        "driver": "llm_generation",
+        "model_calls": "1",
+        "scales_with_scope": false,
+        "order": 7,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
+        }
+      },
       "label_key": "pipelines.strategy.llm_generate_answer.label",
       "description_key": "pipelines.strategy.llm_generate_answer.description",
       "phase": "generate",
@@ -1455,6 +1968,45 @@
         "chat_model"
       ],
       "config_schema": {},
+      "inputs": [
+        {
+          "name": "answer",
+          "data_type": "model_output",
+          "required": true,
+          "multiple": false
+        },
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "evaluation",
+          "data_type": "evaluation",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(P + g)",
+        "space": "O(P + g)",
+        "variables": [
+          "P",
+          "g"
+        ],
+        "driver": "llm_generation",
+        "model_calls": "1",
+        "scales_with_scope": false,
+        "order": 7,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
+        }
+      },
       "label_key": "pipelines.strategy.llm_grade_rag.label",
       "description_key": "pipelines.strategy.llm_grade_rag.description",
       "phase": "evaluate",
@@ -1492,6 +2044,39 @@
             "maximum": 4,
             "default": 2
           }
+        }
+      },
+      "inputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "answer",
+          "data_type": "model_output",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(P + g)",
+        "space": "O(P + g)",
+        "variables": [
+          "P",
+          "g"
+        ],
+        "driver": "llm_generation",
+        "model_calls": "attempts",
+        "scales_with_scope": false,
+        "order": 7,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
         }
       },
       "label_key": "pipelines.strategy.llm_reviewer_evidence_choice.label",
@@ -1533,6 +2118,39 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "answer",
+          "data_type": "model_output",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(P + g)",
+        "space": "O(P + g)",
+        "variables": [
+          "P",
+          "g"
+        ],
+        "driver": "llm_generation",
+        "model_calls": "attempts",
+        "scales_with_scope": false,
+        "order": 7,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
+        }
+      },
       "label_key": "pipelines.strategy.llm_structured_metadata.label",
       "description_key": "pipelines.strategy.llm_structured_metadata.description",
       "phase": "generate",
@@ -1572,6 +2190,39 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "answer",
+          "data_type": "model_output",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(P + g)",
+        "space": "O(P + g)",
+        "variables": [
+          "P",
+          "g"
+        ],
+        "driver": "llm_generation",
+        "model_calls": "attempts",
+        "scales_with_scope": false,
+        "order": 7,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
+        }
+      },
       "label_key": "pipelines.strategy.llm_text_touchup.label",
       "description_key": "pipelines.strategy.llm_text_touchup.description",
       "phase": "generate",
@@ -1595,6 +2246,38 @@
           "method": {
             "type": "string"
           }
+        }
+      },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n)",
+        "space": "O(n)",
+        "variables": [
+          "n"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 2,
+        "cardinality": {
+          "rule": "same",
+          "config_key": null,
+          "default": null
         }
       },
       "label_key": "pipelines.strategy.normalize_collection_relevance.label",
@@ -1629,6 +2312,39 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n·L)",
+        "space": "O(n·L)",
+        "variables": [
+          "n",
+          "L"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 2,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
+        }
+      },
       "label_key": "pipelines.strategy.pack_evidence_context.label",
       "description_key": "pipelines.strategy.pack_evidence_context.description",
       "phase": "select",
@@ -1656,6 +2372,39 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "context",
+          "data_type": "context_packet",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n·L)",
+        "space": "O(n·L)",
+        "variables": [
+          "n",
+          "L"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 2,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
+        }
+      },
       "label_key": "pipelines.strategy.pack_metadata_precedents.label",
       "description_key": "pipelines.strategy.pack_metadata_precedents.description",
       "phase": "select",
@@ -1674,6 +2423,38 @@
       "invokes_llm": false,
       "capabilities": [],
       "config_schema": {},
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(q)",
+        "space": "O(q)",
+        "variables": [
+          "q"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 2,
+        "cardinality": {
+          "rule": "same",
+          "config_key": null,
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.query_evidence_field.label",
       "description_key": "pipelines.strategy.query_evidence_field.description",
       "phase": "prepare",
@@ -1692,6 +2473,36 @@
       "invokes_llm": false,
       "capabilities": [],
       "config_schema": {},
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(1)",
+        "space": "O(1)",
+        "variables": [],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 0,
+        "cardinality": {
+          "rule": "same",
+          "config_key": null,
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.query_passthrough.label",
       "description_key": "pipelines.strategy.query_passthrough.description",
       "phase": "prepare",
@@ -1719,6 +2530,39 @@
             "minimum": 64,
             "maximum": 8192
           }
+        }
+      },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(q + g)",
+        "space": "O(q + g)",
+        "variables": [
+          "q",
+          "g"
+        ],
+        "driver": "llm_generation",
+        "model_calls": "1",
+        "scales_with_scope": false,
+        "order": 7,
+        "cardinality": {
+          "rule": "same",
+          "config_key": null,
+          "default": null
         }
       },
       "label_key": "pipelines.strategy.query_research_decompose.label",
@@ -1763,6 +2607,46 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        },
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n·(q + L)²)",
+        "space": "O(n)",
+        "variables": [
+          "n",
+          "q",
+          "L"
+        ],
+        "driver": "model_inference",
+        "model_calls": "n",
+        "scales_with_scope": false,
+        "order": 6,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "top_k",
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.rerank_cross_encoder.label",
       "description_key": "pipelines.strategy.rerank_cross_encoder.description",
       "phase": "rank",
@@ -1781,6 +2665,45 @@
       "invokes_llm": false,
       "capabilities": [],
       "config_schema": {},
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        },
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n·L + n log n)",
+        "space": "O(n)",
+        "variables": [
+          "n",
+          "L"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 3,
+        "cardinality": {
+          "rule": "same",
+          "config_key": null,
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.rerank_lexical_fallback.label",
       "description_key": "pipelines.strategy.rerank_lexical_fallback.description",
       "phase": "rank",
@@ -1809,6 +2732,41 @@
             "minimum": 1,
             "maximum": 5000
           }
+        }
+      },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(q + d·log N + k)",
+        "space": "O(k·d)",
+        "variables": [
+          "q",
+          "d",
+          "N",
+          "k"
+        ],
+        "driver": "embedding",
+        "model_calls": "1",
+        "scales_with_scope": true,
+        "order": 1,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "fetch_k",
+          "default": null
         }
       },
       "label_key": "pipelines.strategy.retrieve_chroma_similarity.label",
@@ -1846,6 +2804,41 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(q + d·log N + k)",
+        "space": "O(k·d)",
+        "variables": [
+          "q",
+          "d",
+          "N",
+          "k"
+        ],
+        "driver": "embedding",
+        "model_calls": "1",
+        "scales_with_scope": true,
+        "order": 1,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "fetch_k",
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.retrieve_claim_memory.label",
       "description_key": "pipelines.strategy.retrieve_claim_memory.description",
       "phase": "find",
@@ -1878,6 +2871,39 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(N·L)",
+        "space": "O(N)",
+        "variables": [
+          "N",
+          "L"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": true,
+        "order": 4,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "fetch_k",
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.retrieve_lexical_bm25.label",
       "description_key": "pipelines.strategy.retrieve_lexical_bm25.description",
       "phase": "find",
@@ -1903,6 +2929,39 @@
             "minimum": 1,
             "maximum": 500
           }
+        }
+      },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "any",
+          "required": false,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(N·L)",
+        "space": "O(N)",
+        "variables": [
+          "N",
+          "L"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": true,
+        "order": 4,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "fetch_k",
+          "default": null
         }
       },
       "label_key": "pipelines.strategy.retrieve_memory_lexical_fallback.label",
@@ -1933,6 +2992,41 @@
             "minimum": 1,
             "maximum": 500
           }
+        }
+      },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(q + d·log N + k)",
+        "space": "O(k·d)",
+        "variables": [
+          "q",
+          "d",
+          "N",
+          "k"
+        ],
+        "driver": "embedding",
+        "model_calls": "1",
+        "scales_with_scope": true,
+        "order": 1,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "fetch_k",
+          "default": null
         }
       },
       "label_key": "pipelines.strategy.retrieve_metadata_exemplars.label",
@@ -1970,6 +3064,41 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(q + d·log N + k)",
+        "space": "O(k·d)",
+        "variables": [
+          "q",
+          "d",
+          "N",
+          "k"
+        ],
+        "driver": "embedding",
+        "model_calls": "1",
+        "scales_with_scope": true,
+        "order": 1,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "fetch_k",
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.retrieve_response_memory.label",
       "description_key": "pipelines.strategy.retrieve_response_memory.description",
       "phase": "find",
@@ -1988,6 +3117,38 @@
       "invokes_llm": false,
       "capabilities": [],
       "config_schema": {},
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(k)",
+        "space": "O(k)",
+        "variables": [
+          "k"
+        ],
+        "driver": "storage",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 2,
+        "cardinality": {
+          "rule": "pool",
+          "config_key": null,
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.retrieve_selected_evidence.label",
       "description_key": "pipelines.strategy.retrieve_selected_evidence.description",
       "phase": "find",
@@ -2022,6 +3183,39 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(N·d)",
+        "space": "O(N·d)",
+        "variables": [
+          "N",
+          "d"
+        ],
+        "driver": "embedding",
+        "model_calls": "1",
+        "scales_with_scope": true,
+        "order": 4,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "fetch_k",
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.retrieve_source_cosine.label",
       "description_key": "pipelines.strategy.retrieve_source_cosine.description",
       "phase": "find",
@@ -2047,6 +3241,38 @@
             "minimum": 1,
             "maximum": 5000
           }
+        }
+      },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(N)",
+        "space": "O(N)",
+        "variables": [
+          "N"
+        ],
+        "driver": "storage",
+        "model_calls": "0",
+        "scales_with_scope": true,
+        "order": 4,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "fetch_k",
+          "default": null
         }
       },
       "label_key": "pipelines.strategy.retrieve_store_filter.label",
@@ -2076,6 +3302,39 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(N·L)",
+        "space": "O(N)",
+        "variables": [
+          "N",
+          "L"
+        ],
+        "driver": "storage",
+        "model_calls": "0",
+        "scales_with_scope": true,
+        "order": 4,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "fetch_k",
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.retrieve_store_keyword.label",
       "description_key": "pipelines.strategy.retrieve_store_keyword.description",
       "phase": "find",
@@ -2101,6 +3360,39 @@
             "minimum": 0,
             "maximum": 1
           }
+        }
+      },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(N·L)",
+        "space": "O(N)",
+        "variables": [
+          "N",
+          "L"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": true,
+        "order": 4,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "fetch_k",
+          "default": null
         }
       },
       "label_key": "pipelines.strategy.retrieve_token_overlap.label",
@@ -2135,6 +3427,38 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n log n)",
+        "space": "O(n)",
+        "variables": [
+          "n"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 3,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "limit",
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.select_memory_hints.label",
       "description_key": "pipelines.strategy.select_memory_hints.description",
       "phase": "select",
@@ -2153,6 +3477,38 @@
       "invokes_llm": false,
       "capabilities": [],
       "config_schema": {},
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n log n)",
+        "space": "O(n)",
+        "variables": [
+          "n"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 3,
+        "cardinality": {
+          "rule": "same",
+          "config_key": null,
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.select_metadata_quotas.label",
       "description_key": "pipelines.strategy.select_metadata_quotas.description",
       "phase": "select",
@@ -2190,6 +3546,40 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n·k²·d)",
+        "space": "O(n·d)",
+        "variables": [
+          "n",
+          "k",
+          "d"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 5,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "limit",
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.select_mmr.label",
       "description_key": "pipelines.strategy.select_mmr.description",
       "phase": "select",
@@ -2215,6 +3605,39 @@
             "minimum": 1,
             "maximum": 500
           }
+        }
+      },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n·k)",
+        "space": "O(n)",
+        "variables": [
+          "n",
+          "k"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 3,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "limit",
+          "default": null
         }
       },
       "label_key": "pipelines.strategy.select_source_diversity.label",
@@ -2244,6 +3667,38 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n log n)",
+        "space": "O(n)",
+        "variables": [
+          "n"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 3,
+        "cardinality": {
+          "rule": "config_cap",
+          "config_key": "limit",
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.select_top_k.label",
       "description_key": "pipelines.strategy.select_top_k.description",
       "phase": "select",
@@ -2262,6 +3717,38 @@
       "invokes_llm": false,
       "capabilities": [],
       "config_schema": {},
+      "inputs": [
+        {
+          "name": "answer",
+          "data_type": "model_output",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "answer",
+          "data_type": "model_output",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(g)",
+        "space": "O(g)",
+        "variables": [
+          "g"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 2,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
+        }
+      },
       "label_key": "pipelines.strategy.validate_citation_binding.label",
       "description_key": "pipelines.strategy.validate_citation_binding.description",
       "phase": "validate",
@@ -2291,6 +3778,45 @@
           }
         }
       },
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        },
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": false,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n·L)",
+        "space": "O(n)",
+        "variables": [
+          "n",
+          "L"
+        ],
+        "driver": "cpu",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 3,
+        "cardinality": {
+          "rule": "same",
+          "config_key": null,
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.validate_evidence_support.label",
       "description_key": "pipelines.strategy.validate_evidence_support.description",
       "phase": "validate",
@@ -2309,6 +3835,38 @@
       "invokes_llm": false,
       "capabilities": [],
       "config_schema": {},
+      "inputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "candidates",
+          "data_type": "candidate_set",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "complexity": {
+        "time": "O(n)",
+        "space": "O(n)",
+        "variables": [
+          "n"
+        ],
+        "driver": "storage",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 2,
+        "cardinality": {
+          "rule": "same",
+          "config_key": null,
+          "default": null
+        }
+      },
       "label_key": "pipelines.strategy.validate_provenance.label",
       "description_key": "pipelines.strategy.validate_provenance.description",
       "phase": "validate",

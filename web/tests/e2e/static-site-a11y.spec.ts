@@ -67,7 +67,7 @@ function strings() {
     "site.runtime.tutorial_methods_body": "About know what the site is using.",
     "site.runtime.tutorial_research_title": "Ask Research questions",
     "site.runtime.tutorial_research_body": "About ask research questions.",
-    "site.runtime.tutorial_provider_title": "Optional language-model provider",
+    "site.runtime.tutorial_provider_title": "Models in this browser",
     "site.runtime.tutorial_provider_body": "About optional language-model provider.",
     "site.runtime.tutorial_evidence_title": "Evidence and citations",
     "site.runtime.tutorial_evidence_body": "About evidence and citations.",
@@ -345,7 +345,7 @@ test("guided tour spotlights each real element, switches views, and restores the
   await page.keyboard.press("ArrowRight");
 
   for (const name of [
-    "Optional language-model provider",
+    "Models in this browser",
     "Evidence and citations",
     "Your annotations",
     "Language and accessibility",
@@ -564,20 +564,28 @@ async function mountProviderSite(page: Page, extraFeatures: Record<string, unkno
   return { embedRequests };
 }
 
-async function addProvider(
+async function addEndpoint(
   page: Page,
   options: { name: string; role: "embedding" | "generation"; model: string },
 ) {
-  await page.getByRole("button", { name: "Providers" }).click();
-  const form = page.getByRole("form", { name: "Add a provider" });
+  await page.getByRole("button", { name: "Models", exact: true }).click();
+  const form = page.getByRole("form", { name: "Add an endpoint" });
   await form.getByLabel("Name", { exact: true }).fill(options.name);
-  await form.getByLabel("Used for").selectOption(options.role);
-  await form.getByLabel("Engine").selectOption("openai");
   await form.getByLabel("Endpoint URL").fill("https://models.example.test/v1");
-  await form.getByRole("button", { name: "Load models" }).click();
+  await form.getByRole("button", { name: "Discover models" }).click();
+  const models = page.getByRole("dialog", { name: "Models reported by the endpoint" });
+  await expect(models).toBeVisible();
+  await models.getByRole("button", { name: "Close" }).click();
   await expect(form.getByRole("status")).toContainText("3 models found");
   await form.getByLabel("Model", { exact: true }).fill(options.model);
-  await form.getByRole("button", { name: "Save provider" }).click();
+  if (options.role === "embedding") {
+    await form.getByLabel("Use for embeddings").check();
+    await form.getByLabel("Use for Research answers").uncheck();
+  } else {
+    await form.getByLabel("Use for embeddings").uncheck();
+    await form.getByLabel("Use for Research answers").check();
+  }
+  await form.getByRole("button", { name: "Save endpoint" }).click();
 }
 
 test("a provider the reader configures powers vector + LLM Research with method disclosure", async ({
@@ -585,15 +593,15 @@ test("a provider the reader configures powers vector + LLM Research with method 
 }) => {
   await mountProviderSite(page);
   // Nothing was exported, so nothing is configured until the reader sets it up.
-  await page.getByRole("button", { name: "Providers" }).click();
+  await page.getByRole("button", { name: "Models", exact: true }).click();
   await expect(page.getByLabel("Embedding provider")).toHaveValue("");
   await expect(page.getByLabel("Generation provider")).toHaveValue("");
 
   // The exact model that embedded the publication uses its published vectors: no local index needed.
-  await addProvider(page, { name: "Embedder", role: "embedding", model: "bge-m3:latest" });
-  await expect(page.getByLabel("Embedding provider")).toHaveValue(/provider-/);
+  await addEndpoint(page, { name: "Embedder", role: "embedding", model: "bge-m3:latest" });
+  await expect(page.getByLabel("Embedding provider")).toHaveValue(/endpoint-/);
   await expect(page.locator('[data-index="ready"]')).toContainText("published vectors are used");
-  await addProvider(page, { name: "Writer", role: "generation", model: "gpt-oss:20b" });
+  await addEndpoint(page, { name: "Writer", role: "generation", model: "gpt-oss:20b" });
 
   await page.getByRole("button", { name: "Research" }).click();
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");
@@ -612,7 +620,7 @@ test("a different embedding model builds a local IndexedDB index before semantic
   page,
 }) => {
   const { embedRequests } = await mountProviderSite(page);
-  await addProvider(page, { name: "Tiny", role: "embedding", model: "tiny-embed" });
+  await addEndpoint(page, { name: "Tiny", role: "embedding", model: "tiny-embed" });
   await expect(page.locator('[data-index="ready"]')).toContainText("0 of 2 Records embedded");
 
   // Without an index the semantic request falls back to keywords and says why.
@@ -623,7 +631,7 @@ test("a different embedding model builds a local IndexedDB index before semantic
   await expect(page.getByRole("status").filter({ hasText: "needs a local index" })).toBeVisible();
   expect(embedRequests).toEqual([]);
 
-  await page.getByRole("button", { name: "Providers" }).click();
+  await page.getByRole("button", { name: "Models", exact: true }).click();
   await page.getByRole("button", { name: "Build local index" }).click();
   await expect(page.locator('[data-index="ready"]')).toContainText("Local index ready: 2 Records");
   await expect(page.locator('[data-index="ready"]')).toContainText("IndexedDB");
@@ -660,11 +668,12 @@ test("a different embedding model builds a local IndexedDB index before semantic
   await scan(page);
 });
 
-test("Transformers.js is offered only when the site includes its runtime", async ({ page }) => {
+test("embeddings run in the browser with WebGPU or WebAssembly", async ({ page }) => {
   await mountProviderSite(page);
-  await page.getByRole("button", { name: "Providers" }).click();
-  const engine = page.getByRole("form", { name: "Add a provider" }).getByLabel("Engine");
-  const option = engine.locator('option[value="transformers"]');
-  await expect(option).toHaveAttribute("disabled", "");
-  await expect(option).toContainText("not included");
+  await page.getByRole("button", { name: "Models", exact: true }).click();
+  const device = page.getByLabel("Where to run the model");
+  await expect(device).toContainText("WebGPU");
+  await expect(device).toContainText("WebAssembly");
+  await expect(page.getByRole("button", { name: "Download model" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete cached model" })).toBeVisible();
 });
