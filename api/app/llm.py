@@ -818,19 +818,10 @@ def _propose_openai(
 ) -> dict[str, Any]:
     url = (base_url or settings.openai_compat_base_url).rstrip("/")
     key = api_key if api_key is not None else settings.openai_compat_api_key
-    headers = {
-        "Content-Type": "application/json",
-    }
+    headers = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = f"Bearer {key}"
 
-    body: dict[str, Any] = {
-        "model": selected_model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "response_format": {"type": "json_object"},
-    }
     extra = dict(tuning.extra_options or {})
     for unsupported in {
         "num_ctx",
@@ -840,20 +831,15 @@ def _propose_openai(
     }:
         extra.pop(unsupported, None)
 
-    if tuning.seed is not None:
-        body["seed"] = tuning.seed
-    if tuning.top_p is not None:
-        body["top_p"] = tuning.top_p
-    if tuning.stop:
-        body["stop"] = tuning.stop
-    body.update(extra)
-
     timeout = httpx.Timeout(
         connect=settings.openai_connect_timeout_seconds,
         read=settings.openai_timeout_seconds,
         write=settings.openai_timeout_seconds,
         pool=settings.openai_connect_timeout_seconds,
     )
+    user_prompt = str(messages[-1].get("content") or "") if messages else ""
+    prefix_messages = [dict(item) for item in messages[:-1]]
+    last_effective_options: dict[str, Any] = {}
 
     def stream_request(payload: dict[str, Any]) -> tuple[int, str, str, str | None]:
         streaming = dict(payload)
@@ -897,135 +883,172 @@ def _propose_openai(
                         chunks.append(str(piece))
         return 200, "".join(chunks).strip(), "", finish_reason
 
-    finish_reason: str | None = None
-    try:
-        if cancelled is not None:
-            status_code, content, detail, finish_reason = stream_request(body)
-            if status_code == 400 and "response_format" in body:
-                fallback = dict(body)
-                fallback.pop("response_format", None)
-                status_code, content, detail, finish_reason = stream_request(fallback)
-                body = fallback
-            if status_code in {400, 422}:
-                # Some OpenAI-compatible local routers implement Chat Completions
-                # but not SSE streaming. Fall back to a normal request so those
-                # endpoints remain usable; cancellation then completes at the
-                # next safe checkpoint instead of interrupting mid-request.
-                fallback_body = dict(body)
-                fallback_body.pop("stream", None)
-                with httpx.Client(timeout=timeout) as client:
-                    response = client.post(
-                        f"{url}/chat/completions",
-                        headers=headers,
-                        json=fallback_body,
-                    )
-                if response.status_code < 400:
-                    payload = response.json()
-                    choices = payload.get("choices") or []
-                    message_payload = choices[0].get("message") if choices else {}
-                    finish_reason = (
-                        str(choices[0].get("finish_reason"))
-                        if choices and choices[0].get("finish_reason") is not None
-                        else None
-                    )
-                    content = (message_payload or {}).get("content") or ""
-                    if isinstance(content, list):
-                        content = "".join(
-                            str(item.get("text") or "")
-                            for item in content
-                            if isinstance(item, dict)
-                        )
-                    if cancelled and cancelled():
-                        raise InterruptedError("LLM review cancelled.")
-                    status_code = 200
-            if status_code >= 400:
-                message = f"OpenAI-compatible endpoint returned HTTP {status_code}."
-                if detail:
-                    message += f" {detail}"
-                raise TouchupFailure(502, message)
-        else:
-            def do_request(payload: dict[str, Any]) -> httpx.Response:
-                with httpx.Client(timeout=timeout) as client:
-                    return client.post(
-                        f"{url}/chat/completions",
-                        headers=headers,
-                        json=payload,
-                    )
-            response = do_request(body)
-            if response.status_code == 400 and "response_format" in body:
-                fallback = dict(body)
-                fallback.pop("response_format", None)
-                response = do_request(fallback)
-                body = fallback
-            if response.status_code >= 400:
-                detail = _response_detail(response)
-                message = f"OpenAI-compatible endpoint returned HTTP {response.status_code}."
-                if detail:
-                    message += f" {detail}"
-                raise TouchupFailure(502, message)
-            try:
-                payload = response.json()
-            except json.JSONDecodeError as exc:
-                raise TouchupFailure(
-                    502,
-                    "OpenAI-compatible endpoint returned a non-JSON API response.",
-                    response.text[:1500],
-                ) from exc
-            choices = payload.get("choices") or []
-            message = choices[0].get("message") if choices else {}
-            finish_reason = (
-                str(choices[0].get("finish_reason"))
-                if choices and choices[0].get("finish_reason") is not None
-                else None
-            )
-            content = (message or {}).get("content") or ""
-            if isinstance(content, list):
-                content = "".join(
-                    str(item.get("text") or "")
-                    for item in content
-                    if isinstance(item, dict)
-                )
-            content = str(content).strip()
-    except InterruptedError:
-        raise
-    except TouchupFailure:
-        raise
-    except httpx.ConnectError as exc:
-        raise TouchupFailure(
-            503,
-            f"Cannot connect to OpenAI-compatible endpoint at {url}.",
-        ) from exc
-    except httpx.TimeoutException as exc:
-        raise TouchupFailure(
-            504,
-            f"OpenAI-compatible endpoint did not finish within "
-            f"{settings.openai_timeout_seconds:g} seconds.",
-        ) from exc
-    except Exception as exc:
-        logger.exception("Unexpected network failure while calling OpenAI-compatible endpoint")
-        raise TouchupFailure(
-            502,
-            "Unexpected error while contacting OpenAI-compatible endpoint.",
-            str(exc),
-        ) from exc
+    def request_once(attempt: StructuredAttemptContext) -> str:
+        nonlocal last_effective_options
+        body: dict[str, Any] = {
+            "model": selected_model,
+            "messages": [
+                *prefix_messages,
+                {"role": "user", "content": attempt.prompt},
+            ],
+            "temperature": temperature,
+            "max_tokens": attempt.max_tokens,
+            "response_format": {"type": "json_object"},
+        }
+        if tuning.seed is not None:
+            body["seed"] = tuning.seed
+        if tuning.top_p is not None:
+            body["top_p"] = tuning.top_p
+        if tuning.stop:
+            body["stop"] = tuning.stop
+        body.update(extra)
 
-    return _parse_proposal(
-        content=str(content).strip(),
-        finish_reason=finish_reason,
-        record=record,
-        field_list=field_list,
-        selected_model=selected_model,
-        provider="openai",
-        context=context,
-        effective_options={
+        content = ""
+        finish_reason: str | None = None
+        try:
+            if cancelled is not None:
+                status_code, content, detail, finish_reason = stream_request(body)
+                if status_code == 400 and "response_format" in body:
+                    fallback = dict(body)
+                    fallback.pop("response_format", None)
+                    status_code, content, detail, finish_reason = stream_request(fallback)
+                    body = fallback
+                if status_code in {400, 422}:
+                    fallback_body = dict(body)
+                    fallback_body.pop("stream", None)
+                    with httpx.Client(timeout=timeout) as client:
+                        response = client.post(
+                            f"{url}/chat/completions",
+                            headers=headers,
+                            json=fallback_body,
+                        )
+                    if response.status_code < 400:
+                        payload = response.json()
+                        choices = payload.get("choices") or []
+                        message_payload = choices[0].get("message") if choices else {}
+                        finish_reason = (
+                            str(choices[0].get("finish_reason"))
+                            if choices and choices[0].get("finish_reason") is not None
+                            else None
+                        )
+                        content = (message_payload or {}).get("content") or ""
+                        if isinstance(content, list):
+                            content = "".join(
+                                str(item.get("text") or "")
+                                for item in content
+                                if isinstance(item, dict)
+                            )
+                        if cancelled and cancelled():
+                            raise InterruptedError("LLM review cancelled.")
+                        status_code = 200
+                if status_code >= 400:
+                    message = f"OpenAI-compatible endpoint returned HTTP {status_code}."
+                    if detail:
+                        message += f" {detail}"
+                    raise TouchupFailure(502, message)
+            else:
+                def do_request(payload: dict[str, Any]) -> httpx.Response:
+                    with httpx.Client(timeout=timeout) as client:
+                        return client.post(
+                            f"{url}/chat/completions",
+                            headers=headers,
+                            json=payload,
+                        )
+
+                response = do_request(body)
+                if response.status_code == 400 and "response_format" in body:
+                    fallback = dict(body)
+                    fallback.pop("response_format", None)
+                    response = do_request(fallback)
+                    body = fallback
+                if response.status_code >= 400:
+                    detail = _response_detail(response)
+                    message = f"OpenAI-compatible endpoint returned HTTP {response.status_code}."
+                    if detail:
+                        message += f" {detail}"
+                    raise TouchupFailure(502, message)
+                try:
+                    payload = response.json()
+                except json.JSONDecodeError as exc:
+                    raise TouchupFailure(
+                        502,
+                        "OpenAI-compatible endpoint returned a non-JSON API response.",
+                        response.text[:1500],
+                    ) from exc
+                choices = payload.get("choices") or []
+                message = choices[0].get("message") if choices else {}
+                finish_reason = (
+                    str(choices[0].get("finish_reason"))
+                    if choices and choices[0].get("finish_reason") is not None
+                    else None
+                )
+                content = (message or {}).get("content") or ""
+                if isinstance(content, list):
+                    content = "".join(
+                        str(item.get("text") or "")
+                        for item in content
+                        if isinstance(item, dict)
+                    )
+        except InterruptedError:
+            raise
+        except TouchupFailure:
+            raise
+        except httpx.ConnectError as exc:
+            raise TouchupFailure(
+                503,
+                f"Cannot connect to OpenAI-compatible endpoint at {url}.",
+            ) from exc
+        except httpx.TimeoutException as exc:
+            raise TouchupFailure(
+                504,
+                f"OpenAI-compatible endpoint did not finish within "
+                f"{settings.openai_timeout_seconds:g} seconds.",
+            ) from exc
+        except Exception as exc:
+            logger.exception("Unexpected network failure while calling OpenAI-compatible endpoint")
+            raise TouchupFailure(
+                502,
+                "Unexpected error while contacting OpenAI-compatible endpoint.",
+                str(exc),
+            ) from exc
+
+        last_effective_options = {
             "base_url": url,
             "temperature": body.get("temperature"),
             "max_tokens": body.get("max_tokens"),
             "top_p": body.get("top_p"),
             "seed": body.get("seed"),
-        },
-    )
+        }
+        if finish_reason_is_truncated(finish_reason):
+            raise StructuredJsonTruncatedError(
+                f"LLM structured response was cut off by provider finish reason {finish_reason!r}.",
+                diagnostic=str(content or "")[:2000],
+                finish_reason=finish_reason,
+            )
+        return str(content or "").strip()
 
+    def validate(parsed: dict[str, Any]) -> dict[str, Any]:
+        return _normalize_proposal(
+            parsed,
+            record=record,
+            field_list=field_list,
+            selected_model=selected_model,
+            provider="openai",
+            context=context,
+            effective_options=dict(last_effective_options),
+        )
+
+    try:
+        return complete_structured_json(
+            request_once,
+            prompt=user_prompt,
+            validate=validate,
+            attempts=2,
+            max_tokens=max_tokens,
+            max_token_cap=max(max_tokens, 8192),
+        )
+    except StructuredCompletionError as exc:
+        raise _touchup_failure_from_structured(exc) from exc
 
 
 def warmup_model(
