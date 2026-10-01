@@ -273,6 +273,7 @@ var DerridAI = (function(exports) {
     async put(publicationId, fingerprint, descriptor, entries) {
       const db = await this.database();
       const tx = db.transaction(["vectors", "indexes"], "readwrite");
+      const done = transactionDone(tx);
       const vectors = tx.objectStore("vectors");
       const prefix = `${indexKey(publicationId, fingerprint)}${SEPARATOR}`;
       for (const item of entries) vectors.put(item.vector, `${prefix}${item.recordId}`);
@@ -292,7 +293,7 @@ var DerridAI = (function(exports) {
         },
         key
       );
-      await transactionDone(tx);
+      await done;
     }
     async summaries(publicationId) {
       const db = await this.database();
@@ -305,11 +306,12 @@ var DerridAI = (function(exports) {
       const targets = fingerprint !== void 0 ? [fingerprint] : (await this.summaries(publicationId)).map((summary) => summary.fingerprint);
       const db = await this.database();
       const tx = db.transaction(["vectors", "indexes"], "readwrite");
+      const done = transactionDone(tx);
       for (const print of targets) {
         tx.objectStore("vectors").delete(this.range(publicationId, print));
         tx.objectStore("indexes").delete(indexKey(publicationId, print));
       }
-      await transactionDone(tx);
+      await done;
     }
   }
   class FallbackVectorStore {
@@ -1404,7 +1406,7 @@ ${evidence}`;
         annotations: this.manifest.features?.local_annotations !== false,
         research: this.manifest.features?.research !== false,
         publicationVectors: {
-          available: Boolean(this.manifest.vector_index?.dimension),
+          available: Boolean(this.manifest.features?.semantic_search && this.manifest.vector_index?.dimension),
           model: this.manifest.vector_index?.model,
           dimension: this.manifest.vector_index?.dimension
         },
