@@ -25,9 +25,6 @@ async function importTestRuntime() {
   runtimeInstance += 1;
   const fakeTransformers = `
     // synthetic runtime ${runtimeInstance}
-    import { ortMarker } from "onnxruntime-web/webgpu";
-    import { ortMarker as ortCommonMarker } from "onnxruntime-common";
-
     export const env = {
       allowLocalModels: true,
       allowRemoteModels: false,
@@ -45,8 +42,6 @@ async function importTestRuntime() {
       calls: [],
       fetched: [],
       env,
-      ortMarker,
-      ortCommonMarker,
       pipelineOptions: null,
     };
 
@@ -81,12 +76,12 @@ async function importTestRuntime() {
   `;
 
   const assets = {
-    "runtime/transformers.web.min.js": asset(fakeTransformers, "text/javascript"),
-    "runtime/ort.webgpu.bundle.min.mjs": asset(
-      'export const ortMarker = "embedded-ort";',
+    "runtime/transformers.min.js": asset(fakeTransformers, "text/javascript"),
+    "runtime/ort-wasm-simd-threaded.mjs": asset(
+      "export default async function createWasm() { return {}; }",
       "text/javascript",
     ),
-    "runtime/ort-wasm-simd-threaded.jsep.wasm": asset(
+    "runtime/ort-wasm-simd-threaded.wasm": asset(
       new Uint8Array([0, 97, 115, 109]),
       "application/wasm",
     ),
@@ -102,7 +97,7 @@ async function importTestRuntime() {
     },
     runtime: {
       transformers: { version: "test" },
-      onnxJavaScript: { version: "test" },
+      onnxWasmFactory: { version: "test" },
       onnxWasm: { version: "test" },
     },
     model: {
@@ -178,14 +173,12 @@ describe("self-contained browser embedder runtime", () => {
                 wasm: {
                   numThreads: number;
                   proxy: boolean;
-                  wasmBinary: Uint8Array;
-                  wasmPaths?: unknown;
+                  wasmBinary?: Uint8Array;
+                  wasmPaths: { mjs: string; wasm: string };
                 };
               };
             };
           };
-          ortMarker: string;
-          ortCommonMarker: string;
           pipelineOptions: {
             task: string;
             model: string;
@@ -207,8 +200,6 @@ describe("self-contained browser embedder runtime", () => {
       normalize: true,
     });
     expect(state.fetched[0].config).toEqual({ model_type: "bert" });
-    expect(state.ortMarker).toBe("embedded-ort");
-    expect(state.ortCommonMarker).toBe("embedded-ort");
     expect(state.pipelineOptions).toMatchObject({
       task: "feature-extraction",
       model: "Xenova/multilingual-e5-small",
@@ -225,8 +216,9 @@ describe("self-contained browser embedder runtime", () => {
     expect(state.env.useWasmCache).toBe(false);
     expect(state.env.backends.onnx.wasm.numThreads).toBe(1);
     expect(state.env.backends.onnx.wasm.proxy).toBe(false);
-    expect(state.env.backends.onnx.wasm.wasmBinary).toBeInstanceOf(Uint8Array);
-    expect(state.env.backends.onnx.wasm.wasmPaths).toBeUndefined();
+    expect(state.env.backends.onnx.wasm.wasmBinary).toBeUndefined();
+    expect(state.env.backends.onnx.wasm.wasmPaths.mjs).toMatch(/^(blob:|data:)/);
+    expect(state.env.backends.onnx.wasm.wasmPaths.wasm).toMatch(/^(blob:|data:)/);
 
     await embedder.dispose();
   });
