@@ -302,8 +302,12 @@ async function openWorkSemanticMap(work: string) {
   semanticMapDialog.value?.showModal();
 
   try {
+    const projectionRequest =
+      typeof corpusBuildsApi.workSemanticMap === "function"
+        ? corpusBuildsApi.workSemanticMap(work)
+        : Promise.reject(new Error("Work semantic map endpoint unavailable"));
     const [projectionResult, recordsResult] = await Promise.allSettled([
-      corpusBuildsApi.workSemanticMap(work),
+      projectionRequest,
       corpusBuildsApi.workSemanticMapRecords(work),
     ]);
     if (semanticMapWork.value !== work) return;
