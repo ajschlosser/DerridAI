@@ -11,9 +11,15 @@ import httpx
 
 from .config import settings
 from .models import OllamaTouchupOptions
+from .structured_completion import (
+    StructuredAttemptContext,
+    StructuredCompletionError,
+    complete_structured_json,
+)
 from .structured_json import (
     StructuredJsonMalformedError,
     StructuredJsonTruncatedError,
+    finish_reason_is_truncated,
     parse_json_object,
 )
 
@@ -377,10 +383,9 @@ def llm_status(
     return ollama_status(base_url=base_url)
 
 
-def _parse_proposal(
+def _normalize_proposal(
+    parsed: dict[str, Any],
     *,
-    content: str,
-    finish_reason: str | None = None,
     record: dict[str, Any],
     field_list: list[str],
     selected_model: str,
@@ -388,8 +393,6 @@ def _parse_proposal(
     context: dict[str, Any],
     effective_options: dict[str, Any],
 ) -> dict[str, Any]:
-    parsed = _extract_json(content, finish_reason=finish_reason)
-
     changes = parsed.get("changes") or {}
     rationale = parsed.get("rationale") or {}
     warnings = parsed.get("warnings") or []
@@ -431,6 +434,30 @@ def _parse_proposal(
         "context_truncated": bool(context.get("_text_truncated")),
         "effective_options": effective_options,
     }
+
+
+def _parse_proposal(
+    *,
+    content: str,
+    finish_reason: str | None = None,
+    record: dict[str, Any],
+    field_list: list[str],
+    selected_model: str,
+    provider: str,
+    context: dict[str, Any],
+    effective_options: dict[str, Any],
+) -> dict[str, Any]:
+    """Compatibility parser for callers that already have one raw response."""
+
+    return _normalize_proposal(
+        _extract_json(content, finish_reason=finish_reason),
+        record=record,
+        field_list=field_list,
+        selected_model=selected_model,
+        provider=provider,
+        context=context,
+        effective_options=effective_options,
+    )
 
 
 def propose_touchup(
