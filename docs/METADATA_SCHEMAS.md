@@ -107,7 +107,7 @@ The generic `discourse_role` vocabulary remains cross-domain for compatibility. 
 
 Schema fields can provide deterministic autocomplete for Universal POS tags and the supported NER tag vocabulary. These tags are prompt/search guidance about what linguistic forms to notice; they do not themselves populate metadata, prove that a value applies, or replace evidence requirements.
 
-The built-in Fiction and Non-fiction profiles include curated POS/NER hints where surface-form candidate generation is useful, while interpretive classifications such as point of view or claim type rely on passage-level evaluation rather than token labels.
+The built-in Fiction and Non-fiction profiles include curated POS/NER hints where surface-form candidate generation is useful, while interpretive classifications such as point of view or claim type rely on passage-level evaluation rather than token labels. Non-fiction `evidence_types` and `evidence_items` likewise rely on passage-level evaluation: raw noun/name/number candidates are not offered as possible values because evidence kind and concrete evidentiary support are semantic relations, not token classes.
 
 ## Reviewed-precedent retrieval
 
