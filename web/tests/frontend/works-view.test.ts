@@ -424,7 +424,9 @@ describe("WorksView", () => {
     expect(runtime.setWorksView).toHaveBeenCalledWith({ sort: "records-desc" });
     await wrapper.get(".works-toolbar-views .ui-button-wrap:last-child button").trigger("click");
     expect(runtime.setWorksView).toHaveBeenCalledWith({ viewMode: "list" });
-    const filters = wrapper.findAll("button").find((button) => button.text().includes("Filters"))!;
+    const filters = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Filters"))!;
     await filters.trigger("click");
     await wrapper.get("#works-filter-panel input[type='checkbox']").setValue(true);
     expect(runtime.setWorksView).toHaveBeenCalledWith({ needsReview: true });
@@ -459,33 +461,33 @@ describe("WorksView", () => {
   it(
     "paginates large card libraries instead of revealing all cards by animation frame",
     async () => {
-    const items = Array.from({ length: 50 }, (_, index) =>
-      workItem({ work: `Work ${String(index + 1).padStart(2, "0")}` }),
-    );
-    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
-      adminSnapshot({
-        works: items,
-        scopeWorks: items.map((item) => ({
-          work: item.work,
-          count: item.count,
-          authors: item.authors,
-          year_label: item.year_label,
-        })),
-        totalWorks: items.length,
-        visibleWorks: items.length,
-      }),
-    );
-    const wrapper = await mountWorks();
+      const items = Array.from({ length: 50 }, (_, index) =>
+        workItem({ work: `Work ${String(index + 1).padStart(2, "0")}` }),
+      );
+      runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+        adminSnapshot({
+          works: items,
+          scopeWorks: items.map((item) => ({
+            work: item.work,
+            count: item.count,
+            authors: item.authors,
+            year_label: item.year_label,
+          })),
+          totalWorks: items.length,
+          visibleWorks: items.length,
+        }),
+      );
+      const wrapper = await mountWorks();
 
-    expect(wrapper.findAll(".works-card")).toHaveLength(48);
-    expect(wrapper.get(".works-library-pagination").text()).toContain("Page 1 / 2");
-    const next = wrapper
-      .get(".works-library-pagination")
-      .findAll("button")
-      .find((button) => button.text().includes("Next"))!;
-    await next.trigger("click");
-    expect(wrapper.findAll(".works-card")).toHaveLength(2);
-    expect(wrapper.get(".works-library-pagination").text()).toContain("Page 2 / 2");
+      expect(wrapper.findAll(".works-card")).toHaveLength(48);
+      expect(wrapper.get(".works-library-pagination").text()).toContain("Page 1 / 2");
+      const next = wrapper
+        .get(".works-library-pagination")
+        .findAll("button")
+        .find((button) => button.text().includes("Next"))!;
+      await next.trigger("click");
+      expect(wrapper.findAll(".works-card")).toHaveLength(2);
+      expect(wrapper.get(".works-library-pagination").text()).toContain("Page 2 / 2");
       wrapper.unmount();
     },
   );
