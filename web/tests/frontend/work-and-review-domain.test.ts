@@ -19,7 +19,9 @@ const rowsets = [
 ];
 
 describe("work metadata helpers", () => {
-  it("discovers work metadata from stable FieldAssertion identities without surfacing discourse fields", () => {
+  it(
+    "discovers work metadata from stable FieldAssertion identities without surfacing discourse fields",
+    () => {
     const asserted = (fieldId: string, fieldName: string, value: unknown) => ({
       assertion_id: `a-${fieldName}`,
       field_id: fieldId,
@@ -70,8 +72,9 @@ describe("work metadata helpers", () => {
         }),
       ]),
     );
-    expect(metadata.some((item) => item.field === "speaker")).toBe(false);
-  });
+      expect(metadata.some((item) => item.field === "speaker")).toBe(false);
+    },
+  );
 
   it("summarizes a work's rows", () => {
     for (const rows of rowsets) {
