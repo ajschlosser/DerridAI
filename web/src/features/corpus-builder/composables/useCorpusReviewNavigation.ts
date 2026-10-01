@@ -189,18 +189,27 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     await openQueue("source");
   }
 
+  async function changePage(offset: number) {
+    // A page change is a visible queue-context change. Do not preserve the Record
+    // selected on the previous page: refreshRecords would otherwise issue a second
+    // full-Record request for an item that is no longer visible before the user can
+    // interact with the destination page.
+    options.selectedRecordId.value = "";
+    options.selectedRecord.value = null;
+    options.recordOffset.value = offset;
+    await options.refreshRecords();
+  }
+
   async function previousPage() {
     if (options.recordOffset.value <= 0) return;
-    options.recordOffset.value = Math.max(0, options.recordOffset.value - options.pageSize);
-    await options.refreshRecords();
+    await changePage(Math.max(0, options.recordOffset.value - options.pageSize));
   }
 
   async function nextPage() {
     if (options.recordOffset.value + options.pageSize >= options.recordTotal.value) {
       return;
     }
-    options.recordOffset.value += options.pageSize;
-    await options.refreshRecords();
+    await changePage(options.recordOffset.value + options.pageSize);
   }
 
   return {
