@@ -591,23 +591,34 @@ class MetadataEnrichmentExecutionMixin:
             )
         )
         def base_context_for(group_fields: list[str]) -> str:
-            # Each LLM family receives only precedents for fields it can actually
-            # return. This preserves the global exemplar budget while avoiding
-            # repeated prompt-prefill cost from unrelated metadata families.
+            # Each LLM family receives only precedent/convention context for fields
+            # it can actually return. This preserves the global exemplar budget
+            # while avoiding repeated prompt-prefill cost from resolved or unrelated
+            # metadata fields.
             relevant_examples = {
                 field: compatible
                 for field in group_fields
                 if field in editorial_examples
                 and (compatible := prompt_compatible_examples(field, editorial_examples[field]))
             }
+            relevant_conventions = {
+                field: payload
+                for field, payload in prompt_editorial_context.items()
+                if field in group_fields
+            }
+            relevant_human_fields = {
+                field: record.get(field)
+                for field in human_locked_fields
+                if field in group_fields
+            }
             return f"""Document manifest: {json.dumps(manifest, ensure_ascii=False)}
 When document_author is present in the manifest, use it as source-document authorship context. Do not substitute a default author when it is absent, and do not infer that document_author is the speaker or position holder without evidence in this record.
-Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(prompt_editorial_context, ensure_ascii=False)}
+Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(relevant_conventions, ensure_ascii=False)}
 Relevant human-confirmed examples for fields in THIS metadata family (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps(relevant_examples, ensure_ascii=False)}
 If a retrieved example has kind="correction", its value is the human-supported classification and rejected_value is a known prior model mistake. Treat rejected_value as a negative precedent only; never copy or prefer it because it appears in the example.
 If an example has a "match" object, the reviewed values of the listed fields on that example's record equal this record's reviewed values; examples without it were not compared on those fields and are analogous by text only.
 How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps(prompt_pass_learning, ensure_ascii=False)}
-Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({field: record.get(field) for field in human_locked_fields}, ensure_ascii=False)}
+Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps(relevant_human_fields, ensure_ascii=False)}
 Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
 {_nlp_hint_line(record, group_fields)}Current source block IDs: {source_id_json}
 {labelled_blocks}CURRENT REVIEWED RECORD TEXT:
@@ -619,22 +630,48 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         region_type = str(record.get("region_type") or "")
         obvious_apparatus = region_type in {"bibliography", "index", "copyright", "front_matter", "back_matter"} or record.get("primary_text") is False
         quote_signal = _has_quotation_signal(record, source_text)
-        # One task per group of the build's schema: the prompt is assembled from the schema and the answer's shape is generated from it.
+        requested_families = request.get("families")
+        explicitly_requested = (
+            {str(value) for value in requested_families}
+            if isinstance(requested_families, list) and requested_families
+            else None
+        )
+        routing_skip_reasons: dict[str, str] = {}
+        # One task per group of the build's schema. Automatic indexing may narrow
+        # the contract to fields not already resolved by strong reviewed-memory
+        # candidates; an explicit human rerun always requests the full family.
         all_task_specs: dict[str, tuple[str, str, type[BaseModel], int, str]] = {}
+        model_fields_by_family: dict[str, list[str]] = {}
         run_guidance = request.get("run_guidance") if isinstance(request.get("run_guidance"), dict) else {}
         guidance_matches = record.get("metadata_guidance_matches")
         if not isinstance(guidance_matches, dict):
             guidance_matches = find_guidance_matches(source_text, run_guidance)
         for group in schema.groups:
-            group_fields = [field.name for field in schema.fields_in(group.key)]
+            schema_group_fields = list(schema.fields_in(group.key))
+            model_fields = list(schema_group_fields)
+            if explicitly_requested is None and group.key == "indexing":
+                model_fields = [
+                    field
+                    for field in schema_group_fields
+                    if not _field_has_strong_memory_prefill(record, field.name)
+                ]
+            model_field_names = [field.name for field in model_fields]
+            model_fields_by_family[group.key] = model_field_names
+            group_fields = list(model_field_names)
             if group.key == CORE_GROUP:
                 group_fields = [*CORE_FIELDS, *group_fields]
+            scoped_contract = (
+                model_field_names
+                if len(model_field_names) != len(schema_group_fields)
+                else None
+            )
             prompt = build_group_prompt(
                 schema,
                 group.key,
                 base_context=base_context_for(group_fields),
                 allowed_region_types=allowed_region_types,
                 allowed_discourse_roles=allowed_discourse_roles,
+                field_names=scoped_contract,
             )
             if evidence_mode(request) == "backfill":
                 prompt += (
@@ -645,7 +682,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             if guidance_prompt:
                 prompt = prompt + "\n\n" + guidance_prompt
             remembered: dict[str, Any] = {}
-            for field in schema.fields_in(group.key):
+            for field in model_fields:
                 cached = adjudication_suggestions(
                     record_id=str(record.get("record_id") or ""),
                     text=source_text,
@@ -671,13 +708,16 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             all_task_specs[group.key] = (
                 group.key,
                 prompt,
-                response_model_for(schema, group.key, region_types=allowed_region_types, roles=allowed_discourse_roles),
+                response_model_for(
+                    schema,
+                    group.key,
+                    region_types=allowed_region_types,
+                    roles=allowed_discourse_roles,
+                    field_names=scoped_contract,
+                ),
                 int(limits.get(f"{group.key}_num_predict") or limits["indexing_num_predict"]),
                 f"derridai_record_{group.key}",
             )
-        requested_families = request.get("families")
-        routing_skip_reasons: dict[str, str] = {}
-
         if isinstance(requested_families, list) and requested_families:
             # Explicit human reruns bypass automatic routing, but only for the
             # selected family/families. This prevents a text correction from
@@ -704,7 +744,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 if name == "indexing" and not semantic_indexing:
                     routing_skip_reasons[name] = "Semantic indexing is disabled for this enrichment run."
                     continue
-                if name == "indexing" and _family_has_strong_memory_prefill(record, schema, name):
+                if name == "indexing" and not model_fields_by_family.get(name):
                     routing_skip_reasons[name] = (
                         "All indexing fields already have strong reviewed-memory prefills; "
                         "the advisory values are surfaced directly for review."
