@@ -1,7 +1,7 @@
 # Metadata Enrichment Benchmark and Tuning Plan
 
-Branch: `task/enrichment-benchmark-tuning`  
-Baseline: `master` at `37096de7cb104c3fd4fd0f4c91f50b5504842de3`  
+Branch: `task/enrichment-benchmark-tuning-v2`  
+Baseline: `master` at `48eb1f1aad40aadd40f1f161ea41a469a36f0d2d`  
 Predecessors: merged PR #366 and merged PR #369
 
 ## Purpose
@@ -140,9 +140,9 @@ Status: **implemented on this branch; pending full CI**.
 
 Real Corpus Builder runs exposed two failures that would otherwise contaminate both latency and quality measurements.
 
-**Truncated structured JSON.** A local model can reach its output limit after a long discourse response. PR #374 now classifies structurally incomplete/token-limited output explicitly and repairs only malformed-but-complete JSON. Metadata enrichment keeps that safety rule: it does **not** close or invent missing JSON structure. When the active one-attempt metadata pipeline returns a classified truncation, the family receives one exceptional recovery turn through the same pipeline graph with bounded additional output headroom and a prompt that requires a fresh complete object with concise reasons. Normal Records still use one routine attempt.
+**Truncated structured JSON.** A local model can reach its output limit after a long discourse response. The shared structured-completion policy merged in PR #380 classifies structurally incomplete/token-limited output explicitly and repairs only malformed-but-complete JSON. Metadata enrichment keeps that safety rule: it does **not** close or invent missing JSON structure. When the active one-attempt metadata pipeline returns a classified truncation, the family receives one exceptional recovery turn through the same pipeline graph with a 4096-token minimum and the existing 8192-token ceiling, plus a prompt that requires a fresh complete object with concise reasons. Normal Records still use one routine attempt.
 
-**Assessment/value contradictions.** A model can return an assessment such as `outcome=supported_value` while leaving the corresponding metadata value null, sometimes placing the intended classification only in the assessment reason. The schema validator continues to downgrade that field to `uncertain` rather than treating it as supported truth. Before sending this mechanical contradiction to a human, automatic enrichment now gets one bounded consistency-repair turn. The repair explicitly requires `supported_value` to have a non-empty metadata value and asks the model to re-evaluate the affected fields from the current Record.
+**Assessment/value contradictions.** A model can return an assessment such as `outcome=supported_value` while leaving the corresponding metadata value null, sometimes placing the intended classification only in the assessment reason. The schema validator continues to downgrade that field to `uncertain` rather than treating it as supported truth. Before sending this mechanical contradiction to a human, automatic enrichment gets one bounded consistency-repair turn. If that repair is still mechanically contradictory, it gets one final consistency turn; after that, any residual contradiction remains `uncertain` and reviewable rather than being coerced into a value.
 
 Both paths are recorded in the family execution ledger and enrichment ledger. The benchmark must report their frequency and extra model invocations. Frequent recovery is a signal to adjust prompt/contract/output budgets or model choice; it must not be hidden inside average latency.
 
@@ -270,11 +270,11 @@ Default project target:
 
 - PR #366 merged: first latency-reduction tranche.
 - PR #369 merged: field-scoped candidate-first indexing, scoped prompt/retrieval context, richer cost telemetry, and validation-driven one-attempt escalation.
-- Created `task/enrichment-benchmark-tuning` from current `master`.
+- Rebased the work conceptually onto current `master` as `task/enrichment-benchmark-tuning-v2` after PR #380 centralized structured-completion retry/classification behavior.
 - Implemented Phase A Record wall-clock instrumentation and actual structured-model invocation/recovery counts.
-- Integrated the structured-JSON classification introduced by merged PR #374; incomplete JSON remains a classified failure rather than being syntactically “completed” by DerridAI.
-- Added one exceptional metadata-family recovery turn for classified truncation with bounded output headroom.
-- Added one bounded consistency-repair turn for assessment/value contradictions such as `supported_value` with an empty metadata value.
+- Integrated the shared structured-completion policy from merged PR #380; incomplete JSON remains a classified failure rather than being syntactically “completed” by DerridAI.
+- Added one exceptional metadata-family recovery turn for classified truncation with a 4096-token minimum and 8192-token ceiling.
+- Added one consistency-repair turn for assessment/value contradictions such as `supported_value` with an empty metadata value, plus one final repair only when the first repair remains contradictory.
 - Tightened built-in metadata prompts so assessment reasons stay concise and cannot substitute for the metadata value itself.
 - Implemented the Phase B immutable enrichment benchmark fixture and compatibility gate; the fixture stores only hashes/identities for source text and bindings and strips provider credentials/endpoints.
 - Implemented Phase C result artifact and declared-tolerance comparison (raw values, deltas, per-gate status, no overall winner).
@@ -287,3 +287,5 @@ Default project target:
 - Do not make the benchmark runner write canonical review decisions.
 - Do not use a different model/provider between comparison arms unless the benchmark explicitly studies models rather than enrichment architecture.
 - Do not treat LLM call latency alone as total enrichment latency.
+- Do not infer a missing metadata value from an assessment reason; the model must return a value consistent with its assessment or explicitly return no-supported-value/uncertain.
+- Do not syntactically close truncated JSON and treat it as scholarly output; regenerate it under the bounded structured-completion policy.
