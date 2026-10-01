@@ -416,7 +416,7 @@ export function createWorksWorkspace(deps: Deps) {
         sourceFileCount: 0,
         totalReview: 0,
         authors: [
-          ...new Set(
+          ...new Set<string>(
             all
               .map((item: Any) => String(item.document_author || "").trim())
               .filter(Boolean),
@@ -472,7 +472,7 @@ export function createWorksWorkspace(deps: Deps) {
       indexFreshness: summarizeIndexFreshness(described),
       sourceFileCount: new Set(described.flatMap((item: Any) => item.files)).size,
       totalReview: described.reduce((sum: number, item: Any) => sum + item.review, 0),
-      authors: [...new Set(described.flatMap((item: Any) => item.authors as string[]))].sort(
+      authors: [...new Set<string>(described.flatMap((item: Any) => item.authors as string[]))].sort(
         (a, b) => a.localeCompare(b),
       ),
       populateDisabledReason: hasProfiles
