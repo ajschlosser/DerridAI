@@ -227,12 +227,23 @@ def test_hot_record_map_reads_do_not_reload_or_rewalk_the_build(
     first = manager.record_semantic_map(build_id, "r1")
     assert first["record_id"] == "r1"
     assert store.semantic_map_state(build_id)["dirty"] is False
+    # The first request builds the shared graph/index substrate, not every bounded
+    # Record map in the build.
+    assert store.get_semantic_map_projection(
+        "record",
+        "r2",
+        build_id,
+        audience="",
+    ) is None
 
     def unexpected_full_load(_build_id):
         raise AssertionError("hot semantic-map read reloaded the complete build")
 
+    # Simulate a process restart: the shared traversal substrate must hydrate from
+    # System Data, then materialize only r2 without reparsing the corpus.
+    restarted = cb.PdfCorpusBuildManager(repo)
     monkeypatch.setattr(repo, "load_records", unexpected_full_load)
-    second = manager.record_semantic_map(build_id, "r2")
+    second = restarted.record_semantic_map(build_id, "r2")
     assert second["record_id"] == "r2"
 
     projection = store.get_semantic_map_projection(
