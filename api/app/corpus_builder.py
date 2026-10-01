@@ -283,7 +283,11 @@ from .metadata_schema import (
 from .metadata_schema_store import SchemaStore
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record, annotation_run_summary
-from .operation_events import note_corpus_build, note_record_metadata, note_resource_changed
+from .operation_events import (
+    note_corpus_build,
+    note_record_metadata,
+    note_resource_changed,
+)
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
