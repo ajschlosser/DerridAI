@@ -166,7 +166,11 @@ function clearFilters() {
       />
     </div>
 
-    <div v-if="activeFilterCount" class="works-filter-chips" :aria-label="i18n.t('works.active_filters')">
+    <div
+      v-if="activeFilterCount"
+      class="works-filter-chips"
+      :aria-label="i18n.t('works.active_filters')"
+    >
       <button
         v-if="admin && props.filters.needsReview"
         type="button"
