@@ -35,6 +35,7 @@ const emit = defineEmits<{
       works: string[];
       languages: string[];
       include_transformers: boolean;
+      include_vectors: boolean;
       export_format: SiteExportFormat;
       record_profile: SiteRecordProfile;
     },
@@ -48,6 +49,7 @@ const title = ref(props.initialWork || "");
 const description = ref("");
 const exportFormat = ref<SiteExportFormat>("two-file");
 const recordProfile = ref<SiteRecordProfile>("complete");
+const includeVectors = ref(true);
 const selectedLanguages = ref<string[]>(props.languages.map((item) => item.code));
 
 const selectedCount = computed(() => selected.value.length);
@@ -96,6 +98,7 @@ function submit() {
     works: [...selected.value],
     languages: [...selectedLanguages.value],
     include_transformers: true,
+    include_vectors: includeVectors.value,
     export_format: exportFormat.value,
     record_profile: recordProfile.value,
   });
@@ -211,6 +214,35 @@ onMounted(async () => {
               <small class="site-celf-status" data-celf="reader">
                 {{ i18n.t("site.create_profile_reader_celf") }}
               </small>
+            </span>
+          </label>
+        </fieldset>
+
+        <fieldset class="site-export-format site-vector-profile">
+          <legend>{{ i18n.t("site.create_vectors") }}</legend>
+          <p class="site-choice-help">{{ i18n.t("site.create_vectors_help") }}</p>
+          <label class="site-export-option">
+            <input
+              v-model="includeVectors"
+              type="radio"
+              name="site-vector-profile"
+              :value="true"
+            />
+            <span>
+              <strong>{{ i18n.t("site.create_vectors_include") }}</strong>
+              <small>{{ i18n.t("site.create_vectors_include_help") }}</small>
+            </span>
+          </label>
+          <label class="site-export-option">
+            <input
+              v-model="includeVectors"
+              type="radio"
+              name="site-vector-profile"
+              :value="false"
+            />
+            <span>
+              <strong>{{ i18n.t("site.create_vectors_browser") }}</strong>
+              <small>{{ i18n.t("site.create_vectors_browser_help") }}</small>
             </span>
           </label>
         </fieldset>
