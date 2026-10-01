@@ -17,7 +17,11 @@ except ModuleNotFoundError:
 from app import corpus_builder as cb
 from app import metadata_schema as ms
 from app.config import APP_VERSION
-from app.field_assertions import create_memory_assertion, current_assertion_by_name, project_record_assertions
+from app.field_assertions import (
+    create_memory_assertion,
+    current_assertion_by_name,
+    project_record_assertions,
+)
 
 
 def notes_schema():
