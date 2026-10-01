@@ -52,8 +52,7 @@ async function importTestRuntime() {
 
     export async function pipeline(task, model, options) {
       state.pipelineOptions = { task, model, ...options };
-      const configUrl =
-        env.remoteHost + model + "/resolve/" + options.revision + "/config.json";
+      const configUrl = env.remoteHost + model + "/resolve/main/config.json";
       const response = await env.fetch(configUrl);
       if (!response.ok) throw new Error("Embedded config was not available.");
       state.fetched.push({
