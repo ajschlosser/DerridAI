@@ -73,6 +73,7 @@ jobs:
       contract: ${{ steps.filter.outputs.contract }}
       format: ${{ steps.filter.outputs.format }}
       publication: ${{ steps.filter.outputs.publication }}
+      sdk: ${{ steps.filter.outputs.sdk }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -90,6 +91,7 @@ jobs:
             echo "contract=true" >> "$GITHUB_OUTPUT"
             echo "format=true" >> "$GITHUB_OUTPUT"
             echo "publication=true" >> "$GITHUB_OUTPUT"
+            echo "sdk=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -98,6 +100,7 @@ jobs:
           contract=false
           format=false
           publication=false
+          sdk=false
           while IFS= read -r path; do
             case "$path" in
               .github/workflows/frontend.yml|scripts/*)
@@ -105,6 +108,9 @@ jobs:
                 frontend=true
                 contract=true
                 format=true
+                ;;
+              web/sdk/*|web/vite.sdk*.ts|web/scripts/check-sdk-consumer.mjs|web/tests/fixtures/sdk-consumer/*|api/app/site_assets/derridai-sdk.js|web/package.json|web/package-lock.json)
+                sdk=true
                 ;;
               api/*)
                 backend=true
@@ -140,7 +146,11 @@ jobs:
             esac
 
             case "$path" in
-              api/app/site_publication.py|api/app/routers/sites.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|web/sdk/*|web/vite.sdk*.ts|web/playwright.publication.config.ts|web/tests/e2e/static-site-*.spec.ts|web/tests/fixtures/sdk-consumer/*|web/scripts/check-sdk-consumer.mjs|scripts/build_publication_acceptance_fixtures.py|scripts/check_publication_artifacts.sh|.github/workflows/frontend.yml)
+              .github/workflows/frontend.yml)
+                sdk=true
+                publication=true
+                ;;
+              api/app/site_publication.py|api/app/routers/sites.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|web/sdk/*|web/vite.sdk*.ts|web/playwright.publication.config.ts|web/tests/e2e/static-site-*.spec.ts|web/tests/fixtures/sdk-consumer/*|web/scripts/check-sdk-consumer.mjs|scripts/build_publication_acceptance_fixtures.py|scripts/check_publication_artifacts.sh)
                 publication=true
                 ;;
             esac
@@ -151,6 +161,7 @@ jobs:
           echo "contract=$contract" >> "$GITHUB_OUTPUT"
           echo "format=$format" >> "$GITHUB_OUTPUT"
           echo "publication=$publication" >> "$GITHUB_OUTPUT"
+          echo "sdk=$sdk" >> "$GITHUB_OUTPUT"
 
   format-check:
     needs: changes
@@ -274,8 +285,11 @@ jobs:
         run: npm run typecheck:tests
       - name: Unit/component tests
         run: npm run test:unit
+      - name: SDK generation and package acceptance
+        if: needs.changes.outputs.sdk == 'true'
+        run: npm run build:sdk:check && npm run check:sdk:package
       - name: Production build
-        run: npm run build:ci
+        run: npx vite build
       - name: Storybook build
         run: npm run build-storybook
       - name: Upload production build
