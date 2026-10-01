@@ -246,15 +246,15 @@ Each call should receive only relevant source units, precedents, neighboring con
 
 Default project target:
 
-| Dimension                        | Gate                                  |
-| -------------------------------- | ------------------------------------- |
-| Record wall-clock p50            | <= 50% of baseline                    |
-| Record wall-clock p95            | materially lower than baseline        |
-| Human/deterministic overwrites   | 0                                     |
-| Unsupported evidence suggestions | no increase                           |
-| Source/citation binding failures | no increase                           |
-| Proposal coverage                | no material degradation               |
-| Reviewer correction/rejection    | no material degradation               |
+| Dimension                        | Gate                                   |
+| -------------------------------- | -------------------------------------- |
+| Record wall-clock p50            | <= 50% of baseline                     |
+| Record wall-clock p95            | materially lower than baseline         |
+| Human/deterministic overwrites   | 0                                      |
+| Unsupported evidence suggestions | no increase                            |
+| Source/citation binding failures | no increase                            |
+| Proposal coverage                | no material degradation                |
+| Reviewer correction/rejection    | no material degradation                |
 | Autofill precision               | no material degradation where measured |
 
 “Material” tolerances must be declared in the benchmark case/report rather than chosen after seeing the result.
