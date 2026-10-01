@@ -160,10 +160,15 @@ describe("SemanticMapCanvas", () => {
       return { left, top };
     };
     const before = read();
+    const layerStyle = wrapper.get("[data-semantic-map-layer]").attributes("style") || "";
+    const zoom = Number(layerStyle.match(/scale\\(([\\d.]+)\\)/)?.[1] || "1");
     await node.trigger("pointerdown", { button: 0, clientX: 10, clientY: 10, pointerId: 2 });
     await node.trigger("pointermove", { clientX: 30, clientY: 20, pointerId: 2 });
     await node.trigger("pointerup", { pointerId: 2 });
-    expect(read()).toEqual({ left: before.left + 20, top: before.top + 10 });
+    expect(read()).toEqual({
+      left: before.left + 20 / zoom,
+      top: before.top + 10 / zoom,
+    });
 
     const afterDrag = read();
     await node.trigger("keydown", { key: "ArrowRight", altKey: true });
