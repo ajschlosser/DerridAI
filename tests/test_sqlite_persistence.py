@@ -75,6 +75,58 @@ def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
     } <= tables
 
 
+def test_semantic_map_projections_are_versioned_rebuildable_system_data(tmp_path: Path):
+    repo = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
+
+    initial = repo.semantic_map_state("build-1")
+    assert initial["generation"] == 1
+    assert initial["dirty"] is True
+
+    repo.put_semantic_map_projections([
+        {
+            "scope_type": "record",
+            "scope_id": "r1",
+            "build_id": "build-1",
+            "generation": 1,
+            "audience": "reviewer-a",
+            "work": "Of Grammatology",
+            "payload": {"record_id": "r1", "nodes": []},
+        },
+        {
+            "scope_type": "work",
+            "scope_id": "Of Grammatology",
+            "build_id": "build-1",
+            "generation": 1,
+            "audience": "reviewer-a",
+            "work": "Of Grammatology",
+            "payload": {"work": "Of Grammatology", "sources": []},
+        },
+    ])
+    assert repo.mark_semantic_map_clean("build-1", 1) is True
+    ready = repo.semantic_map_state("build-1")
+    assert ready["dirty"] is False
+
+    record = repo.get_semantic_map_projection(
+        "record", "r1", "build-1", audience="reviewer-a"
+    )
+    assert record is not None
+    assert record["payload"]["record_id"] == "r1"
+    # Blind-review projections are isolated by audience.
+    assert repo.get_semantic_map_projection(
+        "record", "r1", "build-1", audience="reviewer-b"
+    ) is None
+
+    generation = repo.mark_semantic_map_dirty("build-1", reason="record_updated:r1")
+    assert generation == 2
+    dirty = repo.semantic_map_state("build-1")
+    assert dirty["dirty"] is True and dirty["generation"] == 2
+    # The old snapshot remains available as stale System Data until replaced.
+    stale = repo.get_semantic_map_projection(
+        "record", "r1", "build-1", audience="reviewer-a"
+    )
+    assert stale is not None and stale["generation"] == 1
+
+
 def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path: Path, monkeypatch):
     """A legacy derridai-system.json next to the database is ignored (and left untouched).
 
