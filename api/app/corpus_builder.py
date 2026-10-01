@@ -2523,6 +2523,116 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             source="generated",
         )
 
+    def work_semantic_map(self, work: str) -> dict[str, Any]:
+        """Saved source projection for the existing work-level visual map.
+
+        The browser keeps the current layout/rendering behavior, but its inputs
+        come from one durable work projection instead of repeatedly scanning the
+        runtime's loaded records.
+        """
+        work = str(work or "").strip()
+        refs = system_store.list_records_for_work(work, limit=500) if work else []
+        build_ids = list(dict.fromkeys(str(row.get("build_id") or "") for row in refs))
+        build_generations: dict[str, str] = {}
+        for build_id in build_ids:
+            if not build_id:
+                continue
+            try:
+                build_generations[build_id] = self._semantic_generation(build_id)
+            except KeyError:
+                build_generations[build_id] = "missing"
+        material = {
+            "version": SEMANTIC_PROJECTION_VERSION,
+            "work": work,
+            "records": [
+                (
+                    str(row.get("record_id") or ""),
+                    str(row.get("build_id") or ""),
+                    build_generations.get(str(row.get("build_id") or ""), "missing"),
+                )
+                for row in refs
+            ],
+        }
+        generation = hashlib.sha256(
+            json.dumps(material, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+        saved = system_store.get_semantic_map_projection(
+            scope_type="work_semantic_map",
+            scope_id=work,
+        )
+        payload = self._projection_payload(saved, generation)
+        if payload is not None:
+            return self._with_projection_meta(payload, generation=generation, source="saved")
+
+        lock = self._semantic_projection_lock(f"work:{work}")
+        with lock:
+            saved = system_store.get_semantic_map_projection(
+                scope_type="work_semantic_map",
+                scope_id=work,
+            )
+            payload = self._projection_payload(saved, generation)
+            if payload is not None:
+                return self._with_projection_meta(payload, generation=generation, source="saved")
+            system_store.put_semantic_map_projection(
+                scope_type="work_semantic_map",
+                scope_id=work,
+                generation=generation,
+                status="building",
+            )
+            try:
+                records_by_build: defaultdict[str, list[str]] = defaultdict(list)
+                for row in refs:
+                    build_id = str(row.get("build_id") or "")
+                    record_id = str(row.get("record_id") or "")
+                    if build_id and record_id:
+                        records_by_build[build_id].append(record_id)
+                sources: list[dict[str, Any]] = []
+                for build_id, record_ids in records_by_build.items():
+                    try:
+                        rows = self.repo.get_records(build_id, record_ids)
+                    except KeyError:
+                        continue
+                    for record in rows:
+                        if not isinstance(record, dict):
+                            continue
+                        presented = json.loads(json.dumps(record))
+                        _present_for_reviewer(presented)
+                        source = semantic_map_source(presented)
+                        if not source.get("work"):
+                            source["work"] = work
+                        sources.append(source)
+                payload = {
+                    "version": SEMANTIC_PROJECTION_VERSION,
+                    "kind": "work_semantic_map",
+                    "work": work,
+                    "sources": sources,
+                    "summary": {
+                        "records": len(refs),
+                        "mapped_records": len(sources),
+                    },
+                    "epistemic_note": (
+                        "This work map is a derived co-occurrence view for navigation; "
+                        "spatial proximity is not documentary evidence or a scholarly assertion."
+                    ),
+                }
+                system_store.put_semantic_map_projection(
+                    scope_type="work_semantic_map",
+                    scope_id=work,
+                    generation=generation,
+                    status="ready",
+                    payload=payload,
+                )
+            except Exception as exc:
+                system_store.put_semantic_map_projection(
+                    scope_type="work_semantic_map",
+                    scope_id=work,
+                    generation=generation,
+                    status="failed",
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+                raise
+        return self._with_projection_meta(payload, generation=generation, source="generated")
+
     def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
         """Rebuild the semantic-content graph against the current Record revisions.
 
