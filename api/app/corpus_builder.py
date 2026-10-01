@@ -2309,52 +2309,79 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
     def _current_semantic_graph(
         self, build_id: str
     ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
-        """Return the current graph, reviewer-presented Records, and annotation run.
-
-        The derived graph may use the bounded in-process cache, but this helper does
-        not persist checkpoints or mutate the build. Record- and node-centred
-        exploration therefore remains read-only.
-        """
-        records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
-        for row in records:
-            _present_for_reviewer(row)
-        analysis = self.document_intelligence(build_id)
-        graph_analysis = (
-            {"profile": analysis.get("profile"), "status": "stale"}
-            if analysis.get("stale")
-            else analysis
-        )
-        key = (
-            _semantic_records_digest(records),
-            analysis.get("text_sha256"),
-            analysis.get("provider"),
-            analysis.get("provider_version"),
-            analysis.get("version"),
-            len(analysis.get("entities") or []),
-            len(analysis.get("entity_clusters") or []),
-            len(analysis.get("characters") or []),
-            bool(analysis.get("stale")),
-            str(analysis.get("profile") or ""),
-            alias_digest(self.repo, build_id),
-            SEMANTIC_IDENTITY_VERSION,
-        )
+        """Hydrate one current graph/index and reuse it for every map read."""
+        generation = self._semantic_generation(build_id)
         cached = self._semantic_graph_cache.get(build_id)
-        if cached is not None and cached[0] == key:
-            return cached[1], records, analysis
-        schema = self._schema_for(build_id)
-        graph = build_semantic_content_graph(
-            records,
-            graph_analysis,
-            schema=schema,
-            # Reviewer-presented records: a value sealed for blind review names no identity.
-            registry=build_registry(self.repo, build_id, schema=schema, records=records),
-        )
-        with self._lock:
-            self._semantic_graph_cache.pop(build_id, None)
-            self._semantic_graph_cache[build_id] = (key, graph)
-            while len(self._semantic_graph_cache) > 4:
-                self._semantic_graph_cache.pop(next(iter(self._semantic_graph_cache)))
-        return graph, records, analysis
+        if cached is not None and cached[0] == generation:
+            return cached[1], cached[2], cached[3]
+
+        lock = self._semantic_projection_lock(f"graph:{build_id}")
+        with lock:
+            cached = self._semantic_graph_cache.get(build_id)
+            if cached is not None and cached[0] == generation:
+                return cached[1], cached[2], cached[3]
+
+            records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
+            for row in records:
+                _present_for_reviewer(row)
+            analysis = self.document_intelligence(build_id)
+            graph_analysis = (
+                {"profile": analysis.get("profile"), "status": "stale"}
+                if analysis.get("stale")
+                else analysis
+            )
+
+            saved = system_store.get_semantic_map_projection(
+                scope_type="semantic_graph",
+                scope_id=build_id,
+            )
+            graph = self._projection_payload(saved, generation)
+            if graph is None:
+                system_store.put_semantic_map_projection(
+                    scope_type="semantic_graph",
+                    scope_id=build_id,
+                    generation=generation,
+                    status="building",
+                )
+                try:
+                    schema = self._schema_for(build_id)
+                    graph = build_semantic_content_graph(
+                        records,
+                        graph_analysis,
+                        schema=schema,
+                        # Reviewer-presented records: a value sealed for blind review names no identity.
+                        registry=build_registry(self.repo, build_id, schema=schema, records=records),
+                    )
+                    system_store.put_semantic_map_projection(
+                        scope_type="semantic_graph",
+                        scope_id=build_id,
+                        generation=generation,
+                        status="ready",
+                        payload=graph,
+                    )
+                except Exception as exc:
+                    system_store.put_semantic_map_projection(
+                        scope_type="semantic_graph",
+                        scope_id=build_id,
+                        generation=generation,
+                        status="failed",
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                    raise
+
+            index = SemanticMapIndex(graph, records)
+            with self._lock:
+                self._semantic_graph_cache.pop(build_id, None)
+                self._semantic_graph_cache[build_id] = (
+                    generation,
+                    graph,
+                    records,
+                    analysis,
+                    index,
+                )
+                while len(self._semantic_graph_cache) > 4:
+                    self._semantic_graph_cache.pop(next(iter(self._semantic_graph_cache)))
+            return graph, records, analysis
 
     def record_semantic_map(self, build_id: str, record_id: str) -> dict[str, Any]:
         """Semantic map centred on one Record, with its links to other Records."""
