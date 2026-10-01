@@ -489,6 +489,29 @@ class _Run:
                 self.value,
                 limit=self.plan.selection_limit,
             )
+            if rows:
+                upstream = {
+                    str(row.get("block_id") or ""): row
+                    for row in rows
+                    if str(row.get("block_id") or "")
+                }
+                ranking_keys = (
+                    "semantic_score",
+                    "cross_encoder_score",
+                    "mmr_score",
+                    "support_score",
+                )
+                picks = [
+                    {
+                        **pick,
+                        **{
+                            key: upstream[str(pick.get("block_id") or "")][key]
+                            for key in ranking_keys
+                            if key in upstream.get(str(pick.get("block_id") or ""), {})
+                        },
+                    }
+                    for pick in picks
+                ]
         except LookupError as exc:
             return _Outcome("unavailable", [], str(exc)[:300], {"parameters": parameters})
         except Exception as exc:  # noqa: BLE001 - the graph's fallback edges decide what follows
