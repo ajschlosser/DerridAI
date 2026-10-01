@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 from app import metadata_schema as ms
 from app.corpus_metadata import (
     ATTRIBUTION_EVIDENCE_FIELDS,
