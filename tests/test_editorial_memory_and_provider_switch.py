@@ -94,6 +94,38 @@ def test_editorial_memory_retrieves_only_human_confirmed_examples(tmp_path:Path)
     assert 'discourse_role' not in (memory.get('pass_learning') or {}).get('prior_pass', {}).get('inferred_conventions', {})
 
 
+
+def test_editorial_memory_field_filter_limits_precedents_to_scheduled_fields(tmp_path:Path):
+    rows=[
+        {
+            'record_id':'r1',
+            'text':'Derrida reports Heidegger on sovereignty.',
+            'discourse_role':'reported_position',
+            'position_holder':'Heidegger',
+            'metadata_field_status':{
+                'discourse_role':{'status':'human_confirmed'},
+                'position_holder':{'status':'human_confirmed'},
+            },
+        },
+        {
+            'record_id':'r2',
+            'text':'Heidegger is presented as holding a proposition.',
+            'metadata_field_status':{},
+        },
+    ]
+    repo,build=make_build(tmp_path,rows)
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    memory=manager._editorial_memory(
+        build['build_id'],
+        rows[1],
+        exclude_record_id='r2',
+        field_filter={'discourse_role'},
+    )
+    assert set(memory['examples']) <= {'discourse_role'}
+    assert set(memory['conventions']) <= {'discourse_role'}
+
+
+
 def test_provider_profile_switch_is_secret_safe_and_audited(tmp_path:Path):
     """Changing provider mid-build updates the model, hides the key, and logs the change.
 

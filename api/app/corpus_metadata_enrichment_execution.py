@@ -49,7 +49,12 @@ from .corpus_reviewer_helpers import (
     _scrub_sealed_field,
 )
 from .corpus_segmentation import _apply_manifest_metadata
-from .document_intelligence import prompt_hints as document_intelligence_prompt_hints
+from .document_intelligence import (
+    current_quotations as document_intelligence_quotations,
+)
+from .document_intelligence import (
+    prompt_hints as document_intelligence_prompt_hints,
+)
 from .enrichment_ledger import (
     AUTOFILLED,
     CALL,
@@ -92,6 +97,38 @@ from .source_embeddings import SourceEmbeddingProjection
 
 logger = logging.getLogger(__name__)
 
+
+def _has_quotation_signal(record: dict[str, Any], source_text: str) -> bool:
+    """Cheap routing predicate for whether quotation interpretation may be useful."""
+    return (
+        bool(document_intelligence_quotations(record))
+        or any(token in source_text for token in ('“', '”', '"', '«', '»', '‘', '’'))
+        or bool(re.search(r"\b(?:quotes?|writes?|says?|according to|cites?)\b", source_text, re.I))
+    )
+
+
+def _family_has_strong_memory_prefill(
+    record: dict[str, Any], schema: MetadataSchema, group_key: str,
+) -> bool:
+    """Whether every schema field in a family already has a strong memory proposal."""
+    fields = [field.name for field in schema.fields_in(group_key)]
+    if not fields:
+        return False
+    for field_name in fields:
+        assertion = current_assertion_by_name(record, field_name)
+        if (
+            assertion is None
+            or assertion.derivation_method != "derridai:memory"
+            or assertion.evaluation_status != "value_supported"
+            or assertion.value_status != "present"
+            or assertion.value in (None, "", [])
+            or not isinstance(assertion.confidence, (int, float))
+            or float(assertion.confidence) < 0.88
+        ):
+            return False
+    return True
+
+
 class MetadataEnrichmentExecutionMixin:
     """Mixin members declared here exist on PdfCorpusBuildManager, not on this mixin itself.
 
@@ -110,7 +147,7 @@ class MetadataEnrichmentExecutionMixin:
         def _editable_fields(self, build_id: str) -> set[str]: ...
         def _precedent_embedder(self) -> Any: ...
         def _chat_json(self, request: dict[str, Any], prompt: str, *, response_model: type[BaseModel], max_tokens: int = ..., schema_name: str = ..., attempts: int = ..., build_id: str = ..., roles: tuple[str, ...] = ..., escalated: bool = ...) -> dict[str, Any]: ...
-        def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True, use_progressive: bool = True) -> dict[str, Any]: ...
+        def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True, use_progressive: bool = True, field_filter: set[str] | None = None) -> dict[str, Any]: ...
         def _increment_metric(self, build_id: str, key: str, amount: int = 1) -> None: ...
         def _latest_runtime_request(self, build_id: str, fallback: dict[str, Any]) -> dict[str, Any]: ...
         def _note_suspension(self, model: str, field: str, suspended: bool, reviews: int, accepted: int, build_id: str, run_id: str) -> None: ...
@@ -164,23 +201,25 @@ class MetadataEnrichmentExecutionMixin:
     ) -> None:
         """Keep this pass's precedent retrieval on the record for Record Review.
 
-        The retrieval already ran for the prompt; keeping references to it (and ranking this
-        record's own blocks against each precedent's evidence) spares the reviewer a second
-        search. It is advisory: if it cannot be kept, the panel searches live instead.
+        The retrieval already ran for the prompt, so keep only its precedent references.
+        Evidence remapping onto this Record is reviewer-only assistance and is deferred until
+        the precedents panel is opened. If the refs cannot be kept, the panel searches live.
         """
         examples = editorial_memory.get("examples") if isinstance(editorial_memory, dict) else None
         telemetry = editorial_memory.get("progressive_retrieval") if isinstance(editorial_memory, dict) else None
         try:
             examples = examples if isinstance(examples, dict) else {}
-            blocks = self._blocks_for(build_id) if any(examples.values()) else {}
+            requested_fields = editorial_memory.get("requested_fields")
+            fields = (
+                [str(field) for field in requested_fields if str(field)]
+                if isinstance(requested_fields, list)
+                else sorted(self._editable_fields(build_id))
+            )
             record[PRECEDENTS_CACHE_KEY] = build_precedents_cache(
-                sorted(self._editable_fields(build_id)),
+                fields,
                 examples,
                 telemetry if isinstance(telemetry, dict) else {},
-                record,
-                blocks,
                 computed_at=iso_now(),
-                embed=self._precedent_embedder(),
             )
         except Exception as exc:  # noqa: BLE001 - advisory; Record Review falls back to a live search
             record.pop(PRECEDENTS_CACHE_KEY, None)
@@ -225,6 +264,32 @@ class MetadataEnrichmentExecutionMixin:
         schema = self._schema_for(build_id)
         _apply_manifest_metadata(record, manifest)
         apply_metadata_constraints(record, schema)
+        source_text_for_routing = str(record.get("text") or "")
+        requested_families = request.get("families")
+        explicit_families = (
+            {str(value) for value in requested_families}
+            if isinstance(requested_families, list) and requested_families
+            else None
+        )
+        enrichment_mode = str(
+            request.get("enrichment_mode") if "enrichment_mode" in request else "deep"
+        )
+        semantic_indexing = bool(request.get("semantic_indexing")) or enrichment_mode == "deep"
+        quotation_signal = _has_quotation_signal(record, source_text_for_routing)
+        precedent_fields: set[str] = set()
+        for group in schema.groups:
+            if explicit_families is not None and group.key not in explicit_families:
+                continue
+            if explicit_families is None:
+                if group.key == "quotation" and not quotation_signal:
+                    continue
+                if group.key == "indexing" and not semantic_indexing:
+                    continue
+                if group.key == "indexing" and _family_has_strong_memory_prefill(record, schema, group.key):
+                    continue
+            precedent_fields.update(field.name for field in schema.fields_in(group.key))
+            if group.key == CORE_GROUP:
+                precedent_fields.update(CORE_FIELDS)
         editorial_memory = self._editorial_memory(
             build_id,
             record,
@@ -234,6 +299,7 @@ class MetadataEnrichmentExecutionMixin:
                 "progressive_metadata_rag" not in off
                 and "reviewer_conventions" not in off
             ),
+            field_filter=precedent_fields,
         ) if build_id else {"conventions": {}, "examples": {}}
         if build_id and "reviewer_conventions" not in off:
             self._keep_precedent_retrieval(build_id, record, editorial_memory)
@@ -549,7 +615,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         semantic_indexing = bool(request.get("semantic_indexing")) or enrichment_mode == "deep"
         region_type = str(record.get("region_type") or "")
         obvious_apparatus = region_type in {"bibliography", "index", "copyright", "front_matter", "back_matter"} or record.get("primary_text") is False
-        quote_signal = any(token in source_text for token in ('“', '”', '"', '«', '»', '‘', '’')) or bool(re.search(r"\b(?:quotes?|writes?|says?|according to|cites?)\b", source_text, re.I))
+        quote_signal = _has_quotation_signal(record, source_text)
         # One task per group of the build's schema: the prompt is assembled from the schema and the answer's shape is generated from it.
         all_task_specs: dict[str, tuple[str, str, type[BaseModel], int, str]] = {}
         run_guidance = request.get("run_guidance") if isinstance(request.get("run_guidance"), dict) else {}
@@ -607,8 +673,10 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 f"derridai_record_{group.key}",
             )
         requested_families = request.get("families")
+        routing_skip_reasons: dict[str, str] = {}
+
         if isinstance(requested_families, list) and requested_families:
-            # Explicit human reruns bypass Fast-mode routing, but only for the
+            # Explicit human reruns bypass automatic routing, but only for the
             # selected family/families. This prevents a text correction from
             # needlessly repeating every expensive metadata task.
             requested = {str(value) for value in requested_families}
@@ -619,27 +687,46 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             # deterministic region/primary-text rules and is therefore always
             # scheduled unless the family is already human-owned. This catches
             # bad or unreviewed main-text page ranges while also supplying the
-            # high-value discourse_role proposal. Quotation and indexing keep their
-            # routing; any group a schema adds runs every time.
+            # high-value discourse_role proposal. Quotation is signal-routed in
+            # both Fast and Deep modes. Indexing is skipped when it is disabled
+            # or when every indexing field already has a strong, source-span-bound
+            # reviewed-memory prefill. Any custom group keeps its existing behavior.
             for name, spec in all_task_specs.items():
-                if name == "quotation" and not (enrichment_mode == "deep" or quote_signal):
+                if name == "quotation" and not quote_signal:
+                    routing_skip_reasons[name] = (
+                        "No quotation punctuation, attribution language, or current "
+                        "Document Intelligence quotation required this model family."
+                    )
                     continue
                 if name == "indexing" and not semantic_indexing:
+                    routing_skip_reasons[name] = "Semantic indexing is disabled for this enrichment run."
+                    continue
+                if name == "indexing" and _family_has_strong_memory_prefill(record, schema, name):
+                    routing_skip_reasons[name] = (
+                        "All indexing fields already have strong reviewed-memory prefills; "
+                        "the advisory values are surfaced directly for review."
+                    )
                     continue
                 tasks.append(spec)
         selected_names = {item[0] for item in tasks}
-        # Normal Fast-mode routing settles unneeded families as skipped. An
-        # explicit selective rerun must leave every unselected family's prior
-        # terminal state and normalized metadata untouched.
+        # Automatic routing settles unneeded families as skipped. An explicit
+        # selective rerun must leave every unselected family's prior terminal
+        # state and normalized metadata untouched.
         if not (isinstance(requested_families, list) and requested_families):
             for skipped_family in set(all_task_specs) - selected_names:
+                reason = routing_skip_reasons.get(
+                    skipped_family,
+                    "Skipped by automatic enrichment routing.",
+                )
                 record.setdefault("metadata_stage_status", {})[skipped_family] = "skipped"
                 record.setdefault("metadata_execution_ledger", {})[skipped_family] = {
-                    "state": "skipped", "finished_at": iso_now(),
-                    "error": "Skipped by fast enrichment routing; no strong signal required this LLM family.",
+                    "state": "skipped",
+                    "finished_at": iso_now(),
+                    "error": reason,
+                    "reason_code": "automatic_routing_skip",
                 }
                 if stage_callback:
-                    stage_callback(record, skipped_family, "skipped", "Fast enrichment routing")
+                    stage_callback(record, skipped_family, "skipped", reason)
         return tasks, source_ids, obvious_apparatus
 
 
@@ -680,8 +767,18 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         for task_name, prompt, response_model, max_tokens, schema_name in tasks:
             if build_id:
                 try:
-                    live_rows = self.repo.load_records(build_id)
-                    live_record = next((row for row in live_rows if str(row.get("record_id") or "") == str(record.get("record_id") or "")), None)
+                    # Ownership is a Record-local concurrency check. Reading the
+                    # complete corpus before every metadata family turns a safety
+                    # invariant into O(records × families) repository I/O.
+                    live_record = self.repo.get_record(
+                        build_id, str(record.get("record_id") or "")
+                    )
+                except KeyError:
+                    # Preserve the legacy direct-call behavior used by unit-level
+                    # enrichment and pre-persistence callers: the old load+scan
+                    # path simply produced no live row and continued. Production
+                    # scheduled enrichment persists Records before this point.
+                    live_record = None
                 except Exception as exc:
                     reason = (
                         f"Could not verify live reviewer ownership before {task_name} metadata enrichment: {exc}"

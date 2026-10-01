@@ -106,7 +106,9 @@ def test_both_built_ins_execute_and_report_their_compliance() -> None:
     assert celf_validation.valid and not celf_validation.issues
     assert cascade_validation.valid
     assert [issue.code for issue in cascade_validation.issues] == ["evidence_recovery_not_celf_compliant"]
-    assert built_in_assignment(RECOVERY_FEATURE) is not None
+    assignment = built_in_assignment(RECOVERY_FEATURE)
+    assert assignment is not None
+    assert (assignment.pipeline_id, assignment.pipeline_version) == CELF
 
 
 def test_existing_built_ins_still_validate_under_fallback_type_rule() -> None:

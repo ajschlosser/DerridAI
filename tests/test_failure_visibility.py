@@ -89,7 +89,11 @@ def test_metadata_family_stops_when_live_reviewer_ownership_cannot_be_read(tmp_p
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     build = make_build(repo)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
-    monkeypatch.setattr(repo, "load_records", lambda _build_id: (_ for _ in ()).throw(OSError("records unavailable")))
+    monkeypatch.setattr(
+        repo,
+        "get_record",
+        lambda _build_id, _record_id: (_ for _ in ()).throw(OSError("record unavailable")),
+    )
     called = {"chat": False}
     monkeypatch.setattr(manager, "_chat_json", lambda *args, **kwargs: called.__setitem__("chat", True))
 

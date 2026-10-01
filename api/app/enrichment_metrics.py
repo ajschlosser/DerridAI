@@ -60,6 +60,20 @@ def _median(values: list[float]) -> float | None:
     return round(ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2, 2)
 
 
+def _percentile(values: list[float], quantile: float) -> float | None:
+    """Linearly interpolated percentile for small enrichment-latency samples."""
+    if not values:
+        return None
+    ordered = sorted(float(value) for value in values)
+    if len(ordered) == 1:
+        return round(ordered[0], 2)
+    position = max(0.0, min(1.0, quantile)) * (len(ordered) - 1)
+    lower = int(position)
+    upper = min(len(ordered) - 1, lower + 1)
+    fraction = position - lower
+    return round(ordered[lower] + (ordered[upper] - ordered[lower]) * fraction, 2)
+
+
 def review_seconds(reviews: list[dict[str, Any]]) -> float | None:
     """Median active time between consecutive decisions in one build.
 
@@ -140,8 +154,15 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
     # 8. Grounding: did the value cite a source block that exists?
     grounded = sum(1 for e in proposals if e.get("grounded"))
 
-    # 9. Cost of a value a person kept.
-    elapsed = sum(int(e.get("elapsed_ms") or 0) for e in calls)
+    # 9. Cost/latency of model work. Call events are already emitted per
+    # metadata family, so the same metrics also become family-specific through
+    # the existing by_field aggregation below.
+    call_elapsed = [
+        float(e.get("elapsed_ms") or 0)
+        for e in calls
+        if isinstance(e.get("elapsed_ms"), (int, float))
+    ]
+    elapsed = sum(call_elapsed)
 
     # 10. Learning curve: acceptance in successive groups of reviews.
     curve = []
@@ -201,6 +222,12 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         "ungrounded_rate": _rate(len(proposals) - grounded, len(proposals)),  # 8
         "calls": len(calls),
         "failed_calls": sum(1 for e in calls if not e.get("ok")),
+        "call_latency_ms": {
+            "p50": _percentile(call_elapsed, 0.50),
+            "p95": _percentile(call_elapsed, 0.95),
+            "max": round(max(call_elapsed), 2) if call_elapsed else None,
+            "total": round(elapsed, 2),
+        },
         "ms_per_call": _rate(elapsed, len(calls)),  # 9
         "ms_per_accepted_field": _rate(elapsed, len(accepted)),  # 9
         "learning_curve": curve,  # 10
