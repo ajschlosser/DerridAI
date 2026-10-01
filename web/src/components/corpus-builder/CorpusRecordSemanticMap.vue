@@ -447,10 +447,7 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
       {{
         currentMap || currentNeighborhood
           ? i18n.t("ui.loading")
-          : i18n.t(
-              "pdf_corpus.semantic_map_calculating",
-              "Calculating and saving semantic map…",
-            )
+          : i18n.t("pdf_corpus.semantic_map_calculating", "Calculating and saving semantic map…")
       }}
     </p>
     <p v-else-if="error" class="semantic-map-status error" role="alert">{{ error }}</p>
