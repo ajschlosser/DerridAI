@@ -54,9 +54,8 @@ test("single-file export works directly from file://", async ({ page }) => {
       "The evidence packet is available below. No answer-generation capability is currently available.",
     ),
   ).toBeVisible();
-  await expect(
-    page.getByText("Hospitality exceeds the economy of conditional exchange."),
-  ).toBeVisible();
+  const evidenceRegion = page.getByRole("region", { name: "Evidence" });
+  await expect(evidenceRegion.getByRole("button", { name: /\[E1\] Glas/ })).toBeVisible();
 
   expect(networkRequests).toEqual([]);
 });
