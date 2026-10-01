@@ -155,6 +155,7 @@ const emit = defineEmits<{
   resolveMetadataMany: [changes: Record<string, unknown>];
   confirmNoMetadataValue: [field: string];
   metadataDirty: [dirty: boolean];
+  metadataComplete: [];
   llmTouchup: [text: string];
   navigateRecord: [recordId: string];
   selectEvidence: [field: string];
@@ -272,9 +273,9 @@ function openFieldEvidence(field: string) {
   emit("selectEvidence", field);
   setTab("evidence");
 }
-/** Every pending field is decided: hand the keyboard to the record decision, so Enter accepts. */
+/** Every pending field is decided; the parent owns queue-aware navigation. */
 function handleMetadataComplete() {
-  void nextTick(() => dock.value?.focusAccept());
+  emit("metadataComplete");
 }
 onMounted(() => {
   priorActive.value = document.activeElement as HTMLElement | null;

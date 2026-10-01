@@ -166,6 +166,17 @@ const resolvedValue = computed(() => {
  * scalar. One-item arrays are losslessly compatible; multiple values require an
  * explicit reviewer decision instead of being silently joined into one string.
  */
+const suggestedAbsence = computed(() => {
+  const status = props.status || {};
+  return (
+    !hasValue(resolvedValue.value) &&
+    (status.suggested_absence === true ||
+      status.evaluation_status === "no_supported_value" ||
+      status.reason_code === "no_supported_value" ||
+      status.reason_code === "required_no_supported_value")
+  );
+});
+
 const scalarCardinalityConflict = computed(() => {
   const value = unwrapMetadataValue(resolvedValue.value);
   return !isMultiCombobox.value && Array.isArray(value) && value.length > 1;
@@ -437,10 +448,14 @@ const traceRows = computed(() => {
     <div v-if="!editing" class="field-row">
       <span :id="labelId" class="field-label">{{ fieldLabel }}</span>
       <span class="field-current"
-        >{{ display(resolvedValue) }}
-        <template v-if="autoResolved"
+        >{{ suggestedAbsence ? i18n.t("pdf_corpus.no_value_short") : display(resolvedValue) }}
+        <template v-if="autoResolved || suggestedAbsence"
           ><span class="auto-star" aria-hidden="true">★</span
-          ><span class="sr-only">{{ i18n.t("pdf_corpus.auto_filled_marker") }}</span></template
+          ><span class="sr-only">{{
+            suggestedAbsence
+              ? i18n.t("pdf_corpus.model_suggested_short")
+              : i18n.t("pdf_corpus.auto_filled_marker")
+          }}</span></template
         ></span
       >
       <span class="field-row-aside">
@@ -729,7 +744,12 @@ const traceRows = computed(() => {
         {{ i18n.t("pdf_corpus.select_text_first") }}
       </p>
       <div class="field-meta">
-        <span v-if="isLlm && hasValue(resolvedValue)" class="proposal">{{
+        <span v-if="suggestedAbsence" class="proposal">
+          <span class="auto-star" aria-hidden="true">★</span>
+          {{ i18n.t("pdf_corpus.no_value_short") }} ·
+          {{ i18n.t("pdf_corpus.model_suggested_short") }}
+        </span>
+        <span v-else-if="isLlm && hasValue(resolvedValue)" class="proposal">{{
           autoResolved
             ? i18n.t("pdf_corpus.llm_value_auto_resolved")
             : i18n.t("pdf_corpus.llm_suggestion_prefilled")

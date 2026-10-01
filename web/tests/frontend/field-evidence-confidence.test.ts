@@ -13,13 +13,13 @@ describe("FieldEvidenceList confidence semantics", () => {
     i18n.locale = "en-US";
   });
 
-  function render(confidence: number | null | undefined) {
+  function render(confidence: number | null | undefined, blockIds: string[] = ["b-1"]) {
     return mount(FieldEvidenceList, {
       global: { plugins: [createPinia()] },
       props: {
         fields: ["speaker"],
         evidence: {
-          speaker: { block_ids: ["b-1"], confidence },
+          speaker: { block_ids: blockIds, confidence },
         },
       },
     });
@@ -33,5 +33,11 @@ describe("FieldEvidenceList confidence semantics", () => {
 
   it("renders an explicitly reported zero confidence as zero", () => {
     expect(render(0).text()).toContain("0%");
+  });
+
+  it("does not show an evidence score when no evidence span is bound", () => {
+    const text = render(0.92, []).text();
+    expect(text).toContain("No evidence yet");
+    expect(text).not.toContain("92%");
   });
 });

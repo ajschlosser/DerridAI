@@ -57,10 +57,11 @@ def format_group_guidance(
         if instructions:
             details.append(f"User guidance: {instructions}")
         if raw.get("required"):
-            placeholder = str(raw.get("default_placeholder") or "").strip()
             details.append(
-                "REQUIRED FOR THIS RUN: return a supported value when possible."
-                + (f" If no supported value can be established, use the exact fallback placeholder `{placeholder}` and mark the result unresolved." if placeholder else " If no supported value can be established, mark the result unresolved.")
+                "REQUIRED FOR THIS RUN: evaluate this field and return a supported value when possible. "
+                "If the source supports that no value applies, return null/empty with "
+                "outcome=no_supported_value. If the field cannot be determined, return null/empty "
+                "with outcome=uncertain. Never invent or copy placeholder text for a missing value."
             )
         if terms:
             details.append(

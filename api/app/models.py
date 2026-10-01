@@ -702,7 +702,8 @@ class PdfCorpusFieldRunGuidance(BaseModel):
     instructions: str = Field(default="", max_length=1200)
     look_for: list[str] = Field(default_factory=list, max_length=40)
     required: bool = False
-    default_placeholder: str = Field(default="[not established in source]", max_length=200)
+    # Legacy compatibility only. Missing values are represented by cELF evaluation/value state, never text placeholders.
+    default_placeholder: str = Field(default="", max_length=200)
 
     @field_validator("instructions", mode="before")
     @classmethod
