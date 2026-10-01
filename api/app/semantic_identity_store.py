@@ -198,6 +198,18 @@ def retire_alias_set(repo: Any, build_id: str, alias_set_id: str, *, reviewer: s
     raise KeyError(alias_set_id)
 
 
+def alias_signature(repo: Any, build_id: str) -> tuple[int, int]:
+    """Cheap freshness token for reviewed aliases used by hot derived projections."""
+    path = _path(repo, build_id)
+    if path is None:
+        return (0, 0)
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return (0, 0)
+    return (int(stat.st_mtime_ns), int(stat.st_size))
+
+
 def alias_digest(repo: Any, build_id: str) -> str:
     """Changes whenever the active reviewed alias sets change (for derived-projection freshness)."""
     try:
