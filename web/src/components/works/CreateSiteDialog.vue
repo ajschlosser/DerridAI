@@ -2,8 +2,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
-import type { LanguageInfo, ProviderProfile } from "../../api/system";
-import type { SiteExportFormat, SiteRecordProfile } from "../../api/sites";
+import type { LanguageInfo } from "../../api/system";
+import type { SiteExportFormat, SiteRecordProfile, SiteTransformersRuntime } from "../../api/sites";
 import type { WorksItem } from "../../types/works";
 import AppIcon from "../AppIcon.vue";
 
@@ -12,7 +12,7 @@ const props = defineProps<{
   storeName: string;
   initialWork?: string;
   languages: LanguageInfo[];
-  providerProfiles: ProviderProfile[];
+  transformersRuntime?: SiteTransformersRuntime;
   busy?: boolean;
   error?: string;
 }>();
@@ -25,7 +25,7 @@ const emit = defineEmits<{
       description: string;
       works: string[];
       languages: string[];
-      provider_profile_ids: string[];
+      include_transformers: boolean;
       export_format: SiteExportFormat;
       record_profile: SiteRecordProfile;
     },
@@ -40,7 +40,7 @@ const description = ref("");
 const exportFormat = ref<SiteExportFormat>("two-file");
 const recordProfile = ref<SiteRecordProfile>("complete");
 const selectedLanguages = ref<string[]>(props.languages.map((item) => item.code));
-const selectedProviderProfiles = ref<string[]>(props.providerProfiles.map((item) => item.id));
+const includeTransformers = ref(false);
 
 const selectedCount = computed(() => selected.value.length);
 const canCreate = computed(() =>
@@ -76,18 +76,8 @@ function clearLanguages() {
   selectedLanguages.value = [];
 }
 
-function toggleProvider(id: string, checked: boolean) {
-  selectedProviderProfiles.value = checked
-    ? [...new Set([...selectedProviderProfiles.value, id])]
-    : selectedProviderProfiles.value.filter((item) => item !== id);
-}
-
-function selectAllProviders() {
-  selectedProviderProfiles.value = props.providerProfiles.map((item) => item.id);
-}
-
-function clearProviders() {
-  selectedProviderProfiles.value = [];
+function formatMegabytes(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1);
 }
 
 function submit() {
@@ -97,7 +87,7 @@ function submit() {
     description: description.value.trim(),
     works: [...selected.value],
     languages: [...selectedLanguages.value],
-    provider_profile_ids: [...selectedProviderProfiles.value],
+    include_transformers: includeTransformers.value && Boolean(props.transformersRuntime),
     export_format: exportFormat.value,
     record_profile: recordProfile.value,
   });
@@ -256,52 +246,41 @@ onMounted(async () => {
           </p>
         </fieldset>
 
-        <fieldset class="site-choice-picker">
-          <legend>{{ i18n.t("site.create_provider_profiles") }}</legend>
-          <p class="site-choice-help">{{ i18n.t("site.create_provider_profiles_help") }}</p>
-          <div v-if="props.providerProfiles.length" class="site-work-picker-toolbar">
+        <fieldset class="site-choice-picker" data-site-transformers>
+          <legend>{{ i18n.t("site.create_transformers") }}</legend>
+          <p class="site-choice-help">{{ i18n.t("site.create_transformers_help") }}</p>
+          <label class="site-export-option">
+            <input
+              v-model="includeTransformers"
+              type="checkbox"
+              :disabled="!props.transformersRuntime"
+            />
             <span>
-              {{
-                i18n.tf("site.create_providers_selected", {
-                  count: selectedProviderProfiles.length,
-                })
-              }}
-            </span>
-            <div>
-              <button type="button" class="btn small" @click="selectAllProviders">
-                {{ i18n.t("site.create_select_all") }}
-              </button>
-              <button type="button" class="btn small" @click="clearProviders">
-                {{ i18n.t("site.create_clear") }}
-              </button>
-            </div>
-          </div>
-          <div v-if="props.providerProfiles.length" class="site-choice-list">
-            <label
-              v-for="profile in props.providerProfiles"
-              :key="profile.id"
-              class="site-work-option"
-            >
-              <input
-                type="checkbox"
-                :checked="selectedProviderProfiles.includes(profile.id)"
-                :data-site-provider="profile.id"
-                @change="toggleProvider(profile.id, ($event.target as HTMLInputElement).checked)"
-              />
-              <span>
-                <strong>{{ profile.name || profile.id }}</strong>
-                <small>
-                  {{
-                    profile.type === "openai"
-                      ? i18n.t("site.create_provider_openai")
-                      : i18n.t("site.create_provider_ollama")
-                  }}
-                  <template v-if="profile.model"> · {{ profile.model }}</template>
+              <strong>{{ i18n.t("site.create_transformers_option") }}</strong>
+              <template v-if="props.transformersRuntime">
+                <small v-if="exportFormat === 'nginx-docker'">
+                  {{ i18n.t("site.create_transformers_help_files") }}
                 </small>
-              </span>
-            </label>
-          </div>
-          <p v-else class="site-choice-help">{{ i18n.t("site.create_no_provider_profiles") }}</p>
+                <small v-else>
+                  {{
+                    i18n.tf("site.create_transformers_help_inline", {
+                      size: formatMegabytes(props.transformersRuntime.inline_bytes),
+                    })
+                  }}
+                </small>
+                <small data-transformers-source>
+                  {{
+                    props.transformersRuntime.cached
+                      ? i18n.t("site.create_transformers_cached")
+                      : i18n.tf("site.create_transformers_download", {
+                          size: formatMegabytes(props.transformersRuntime.download_bytes),
+                        })
+                  }}
+                </small>
+              </template>
+              <small v-else>{{ i18n.t("site.create_transformers_unavailable") }}</small>
+            </span>
+          </label>
         </fieldset>
 
         <fieldset class="site-work-picker">

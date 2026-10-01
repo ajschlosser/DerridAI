@@ -190,15 +190,12 @@ describe("WorksView", () => {
         { code: "en-US", name: "English", flag: "🇺🇸" },
         { code: "fr-CA", name: "Français", flag: "🇨🇦" },
       ],
-      provider_profiles: [
-        {
-          id: "openai-main",
-          name: "OpenAI-compatible lab",
-          type: "openai",
-          base_url: "https://models.example.edu/v1",
-          model: "gpt-oss:20b",
-        },
-      ],
+      transformers_runtime: {
+        version: "4.3.0",
+        cached: false,
+        download_bytes: 14_871_000,
+        inline_bytes: 5_700_000,
+      },
     });
     siteApi.exportSite.mockResolvedValue({
       blob: new Blob(["site"], { type: "application/zip" }),
@@ -393,22 +390,22 @@ describe("WorksView", () => {
       description: "",
       locale: "en-US",
       languages: ["en-US", "fr-CA"],
-      provider_profile_ids: ["openai-main"],
       export_format: "two-file",
       record_profile: "complete",
+      include_transformers: false,
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
     wrapper.unmount();
   });
 
-  it("exports any selected subset of installed languages and provider profiles", async () => {
+  it("exports any selected subset of installed languages and can include the Transformers.js runtime", async () => {
     const wrapper = await mountWorks();
     await chooseMenuItem(wrapper, "More actions", "Create site");
 
     const dialog = wrapper.get(".create-site-dialog");
     await dialog.get("[data-site-work='Glas']").setValue(true);
     await dialog.get("[data-site-language='fr-CA']").setValue(false);
-    await dialog.get("[data-site-provider='openai-main']").setValue(false);
+    await dialog.get("[data-site-transformers] input[type='checkbox']").setValue(true);
     await dialog.get("input[placeholder='Research collection']").setValue("English-only Glas");
     await dialog.get("form").trigger("submit");
     await flushPromises();
@@ -420,9 +417,9 @@ describe("WorksView", () => {
       description: "",
       locale: "en-US",
       languages: ["en-US"],
-      provider_profile_ids: [],
       export_format: "two-file",
       record_profile: "complete",
+      include_transformers: true,
     });
     wrapper.unmount();
   });
@@ -445,10 +442,43 @@ describe("WorksView", () => {
       description: "",
       locale: "en-US",
       languages: ["en-US", "fr-CA"],
-      provider_profile_ids: ["openai-main"],
       export_format: "nginx-docker",
       record_profile: "complete",
+      include_transformers: false,
     });
+    wrapper.unmount();
+  });
+
+  it("says the runtime is downloaded once on first use, then cached", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+    const section = wrapper.get(".create-site-dialog [data-site-transformers]");
+    expect(section.get("[data-transformers-source]").text()).toContain("not bundled with DerridAI");
+    expect(section.get("[data-transformers-source]").text()).toContain("14.2 MB");
+    wrapper.unmount();
+
+    siteApi.exportOptions.mockResolvedValue({
+      languages: [{ code: "en-US", name: "English", flag: "🇺🇸" }],
+      transformers_runtime: {
+        version: "4.3.0",
+        cached: true,
+        download_bytes: 14_871_000,
+        inline_bytes: 5_700_000,
+      },
+    });
+    const cached = await mountWorks();
+    await chooseMenuItem(cached, "More actions", "Create site");
+    expect(cached.get("[data-transformers-source]").text()).toContain("Already downloaded");
+    cached.unmount();
+  });
+
+  it("describes where the runtime goes for the single-container format", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+    const dialog = wrapper.get(".create-site-dialog");
+    expect(dialog.get("[data-site-transformers]").text()).toContain("5.4 MB");
+    await dialog.get("input[value='nginx-docker']").setValue(true);
+    expect(dialog.get("[data-site-transformers]").text()).toContain("separate files");
     wrapper.unmount();
   });
 

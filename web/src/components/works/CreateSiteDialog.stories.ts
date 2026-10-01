@@ -50,15 +50,12 @@ const meta = {
       { code: "en-US", name: "English", flag: "🇺🇸" },
       { code: "fr-CA", name: "Français", flag: "🇨🇦" },
     ],
-    providerProfiles: [
-      {
-        id: "openai-main",
-        name: "OpenAI-compatible lab",
-        type: "openai",
-        base_url: "https://models.example.edu/v1",
-        model: "gpt-oss:20b",
-      },
-    ],
+    transformersRuntime: {
+      version: "4.3.0",
+      cached: false,
+      download_bytes: 14_871_000,
+      inline_bytes: 5_700_000,
+    },
     busy: false,
     error: "",
   },
@@ -68,6 +65,21 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+export const RuntimeCached: Story = {
+  args: {
+    transformersRuntime: {
+      version: "4.3.0",
+      cached: true,
+      download_bytes: 14_871_000,
+      inline_bytes: 5_700_000,
+    },
+  },
+};
+
+export const RuntimeInfoUnavailable: Story = {
+  args: { transformersRuntime: undefined },
+};
 
 export const Busy: Story = {
   args: { busy: true },

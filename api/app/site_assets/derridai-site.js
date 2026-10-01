@@ -26,49 +26,74 @@
   const themeKey = `derridai.site.theme.${publicationId}`;
   const contrastKey = `derridai.site.contrast.${publicationId}`;
   const tutorialKey = `derridai.site.tutorial.${publicationId}`;
-  const providerKey = `derridai.site.provider.${publicationId}`;
-  const customProvidersKey = `derridai.site.providers.${publicationId}`;
+  const legacyProviderKey = `derridai.site.provider.${publicationId}`;
+  const embeddingSelectionKey = `derridai.site.provider.embedding.${publicationId}`;
+  const generationSelectionKey = `derridai.site.provider.generation.${publicationId}`;
+  const providersKey = `derridai.site.providers.${publicationId}`;
   const availableLocales = Object.keys(publication.strings || {});
   const languageMetadata = Array.isArray(publication.languages) ? publication.languages : [];
-  const exportedProviderProfiles = Array.isArray(publication.provider_profiles)
-    ? publication.provider_profiles
-    : [];
   const memoryStorage = new Map();
 
   let locale = readLocal(localeKey) || publication.locale || availableLocales[0] || "en-US";
   if (!availableLocales.includes(locale)) locale = availableLocales[0] || "en-US";
   let theme = readLocal(themeKey) === "dark" ? "dark" : "light";
   let highContrast = readLocal(contrastKey) === "high";
-  let selectedProviderId = readLocal(providerKey) || "";
-  function loadCustomProviderProfiles() {
+  const PROVIDER_ENGINES = ["ollama", "openai", "transformers"];
+  // Suggestions only: small ONNX models that run in the browser. The reader chooses and may type any model id.
+  const TRANSFORMERS_SUGGESTIONS = [
+    { id: "Xenova/all-MiniLM-L6-v2", note: "site.runtime.transformers_model_english_small" },
+    { id: "Xenova/multilingual-e5-small", note: "site.runtime.transformers_model_multilingual_small" },
+  ];
+
+  // Providers are configured by the reader in this browser; nothing about them is part of the publication.
+  // Profiles saved by earlier versions had a single `type` (ollama|openai) and served Research generation.
+  function normalizeProfile(raw) {
+    if (!raw || typeof raw !== "object" || !raw.id || !raw.name || !raw.model) return null;
+    const engine = raw.engine || raw.type;
+    if (!PROVIDER_ENGINES.includes(engine)) return null;
+    const role = raw.role === "embedding" || raw.role === "generation" ? raw.role : "generation";
+    if (engine === "transformers" && role !== "embedding") return null;
+    if (engine !== "transformers" && !raw.base_url) return null;
+    return {
+      id: String(raw.id),
+      name: String(raw.name),
+      role,
+      engine,
+      base_url: String(raw.base_url || ""),
+      model: String(raw.model),
+      model_source: raw.model_source === "local" ? "local" : "hub",
+      query_prefix: String(raw.query_prefix || ""),
+      document_prefix: String(raw.document_prefix || ""),
+      temperature: Number(raw.temperature ?? 0),
+      remember_key: Boolean(raw.remember_key ?? raw.api_key),
+      api_key: String(raw.api_key || ""),
+    };
+  }
+
+  function loadProviderProfiles() {
     try {
-      const value = JSON.parse(readLocal(customProvidersKey) || "[]");
-      return Array.isArray(value)
-        ? value.filter(
-            (profile) =>
-              profile &&
-              typeof profile === "object" &&
-              profile.id &&
-              profile.name &&
-              profile.base_url &&
-              profile.model &&
-              (profile.type === "openai" || profile.type === "ollama"),
-          )
-        : [];
+      const value = JSON.parse(readLocal(providersKey) || "[]");
+      return Array.isArray(value) ? value.map(normalizeProfile).filter(Boolean) : [];
     } catch {
       return [];
     }
   }
 
-  let customProviderProfiles = loadCustomProviderProfiles();
-  let providerProfiles = [...exportedProviderProfiles, ...customProviderProfiles];
-  if (!providerProfiles.some((profile) => profile.id === selectedProviderId)) {
-    selectedProviderId = "";
-  }
+  let providerProfiles = loadProviderProfiles();
   const sessionApiKeys = new Map();
-  customProviderProfiles.forEach((profile) => {
-    if (profile.api_key) sessionApiKeys.set(profile.id, String(profile.api_key));
+  providerProfiles.forEach((profile) => {
+    if (profile.remember_key && profile.api_key) sessionApiKeys.set(profile.id, profile.api_key);
   });
+  function profileOfRole(id, role) {
+    return providerProfiles.find((profile) => profile.id === id && profile.role === role)
+      ? id
+      : "";
+  }
+  let selectedEmbeddingId = profileOfRole(readLocal(embeddingSelectionKey) || "", "embedding");
+  let selectedGenerationId = profileOfRole(
+    readLocal(generationSelectionKey) || readLocal(legacyProviderKey) || "",
+    "generation",
+  );
   let view = "search";
   let client = null;
   let capabilities = null;
@@ -163,6 +188,7 @@
     .tour-hint{padding-block:0;font-size:.875rem}
     .tutorial-progress{font-weight:800;color:var(--muted);font-size:.875rem}.tutorial-copy{margin:0;font-size:1.02rem}
     .footer{margin-top:3rem;border-top:1px solid var(--border);padding:1.2rem 0 2.5rem;color:var(--muted);font-size:.875rem}
+    [hidden]{display:none!important}progress{width:100%;height:1rem;accent-color:var(--accent)}
     .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
     @media(max-width:760px){.research-layout{grid-template-columns:1fr}.search-row{grid-template-columns:1fr}.top{position:static}.top-inner,.main{width:min(100% - 1rem,1180px)}.main{scroll-margin-top:1rem}.header-controls{width:100%}}
     @media(forced-colors:active){.tour-spot{outline:4px solid Highlight}mark{background:Mark;color:MarkText;forced-color-adjust:none}button,.control,.panel,.card,.method-badge,.toggle{forced-color-adjust:auto}.method-badge[data-active="true"]{outline:2px solid CanvasText}}
@@ -186,8 +212,17 @@
     }
   }
 
-  function saveCustomProviderProfiles() {
-    writeLocal(customProvidersKey, JSON.stringify(customProviderProfiles));
+  function saveProviderProfiles() {
+    // A key is written to this browser only when the reader chose to remember it for that provider.
+    writeLocal(
+      providersKey,
+      JSON.stringify(
+        providerProfiles.map((profile) => ({
+          ...profile,
+          api_key: profile.remember_key ? sessionApiKeys.get(profile.id) || "" : "",
+        })),
+      ),
+    );
   }
 
   function t(key, vars = {}) {
@@ -288,6 +323,12 @@
     if (warning.code === "embedding_provider_unavailable") {
       return t("site.runtime.sdk_embedding_unavailable");
     }
+    if (warning.code === "local_index_required") {
+      return t("site.runtime.local_index_required", {
+        indexed: warning.details?.indexed ?? 0,
+        total: warning.details?.total ?? 0,
+      });
+    }
     if (warning.code === "embedding_contract_mismatch") {
       return t("site.runtime.sdk_embedding_contract_mismatch");
     }
@@ -299,10 +340,6 @@
 
   function warningText(warnings) {
     return (warnings || []).map(localizedWarning).filter(Boolean).join(" ");
-  }
-
-  function profileById(id) {
-    return providerProfiles.find((profile) => String(profile.id) === String(id)) || null;
   }
 
   function providerError(message, code, status = 0) {
@@ -356,7 +393,7 @@
 
   function providerHeaders(profile, apiKey) {
     const headers = { "Content-Type": "application/json" };
-    if (profile?.type === "openai" && apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    if (profile?.engine === "openai" && apiKey) headers.Authorization = `Bearer ${apiKey}`;
     return headers;
   }
 
@@ -410,40 +447,199 @@
     }
   }
 
+  function embeddingVariant(profile) {
+    return [
+      profile.query_prefix ? `query-prefix=${profile.query_prefix}` : "",
+      profile.document_prefix ? `document-prefix=${profile.document_prefix}` : "",
+    ]
+      .filter(Boolean)
+      .join(";");
+  }
+
+  function prefixed(profile, input, purpose) {
+    const prefix = purpose === "query" ? profile.query_prefix : profile.document_prefix;
+    return prefix ? input.map((text) => `${prefix}${text}`) : input;
+  }
+
+  function embeddingFailure() {
+    return providerError(t("site.runtime.embedding_failed"), "embedding_failed");
+  }
+
   function directEmbeddingProvider(profile, apiKey) {
-    if (!profile) return undefined;
-    const embeddingModel = String(publication.vector_index?.model || "").trim();
-    if (!embeddingModel) return undefined;
+    const model = String(profile.model || "").trim();
+    if (!model) return undefined;
     return {
       descriptor: () => ({
         id: profile.id,
-        type: profile.type,
-        model: embeddingModel,
+        type: profile.engine,
+        model,
+        variant: embeddingVariant(profile),
       }),
       async embed(input, options = {}) {
         const base = providerBase(profile);
-        if (profile.type === "ollama") {
+        const texts = prefixed(profile, input, options.purpose);
+        let vectors;
+        if (profile.engine === "ollama") {
           const body = await providerJson(`${base}/api/embed`, {
             method: "POST",
             headers: providerHeaders(profile, apiKey),
-            body: JSON.stringify({ model: embeddingModel, input }),
+            body: JSON.stringify({ model, input: texts }),
             signal: options.signal,
           });
-          const vectors = Array.isArray(body.embeddings) ? body.embeddings : [];
-          return { vectors, provider: this.descriptor() };
+          vectors = Array.isArray(body.embeddings) ? body.embeddings : [];
+        } else {
+          const body = await providerJson(`${base}/embeddings`, {
+            method: "POST",
+            headers: providerHeaders(profile, apiKey),
+            body: JSON.stringify({ model, input: texts }),
+            signal: options.signal,
+          });
+          vectors = Array.isArray(body.data)
+            ? [...body.data]
+                .sort((a, b) => Number(a?.index ?? 0) - Number(b?.index ?? 0))
+                .map((item) => item?.embedding)
+            : [];
         }
-        const body = await providerJson(`${base}/embeddings`, {
-          method: "POST",
-          headers: providerHeaders(profile, apiKey),
-          body: JSON.stringify({ model: embeddingModel, input }),
-          signal: options.signal,
-        });
-        const vectors = Array.isArray(body.data)
-          ? body.data.map((item) => item?.embedding).filter(Array.isArray)
-          : [];
+        if (vectors.length !== texts.length || !vectors.every(Array.isArray)) {
+          throw embeddingFailure();
+        }
         return { vectors, provider: this.descriptor() };
       },
     };
+  }
+
+  function base64Bytes(value) {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  async function gunzip(bytes) {
+    if (typeof DecompressionStream !== "function") {
+      throw providerError(t("site.runtime.transformers_unsupported_browser"), "unsupported");
+    }
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  function blobUrl(bytes, type) {
+    return URL.createObjectURL(new Blob([bytes], { type }));
+  }
+
+  // Transformers.js is optional: it is present only when the site was exported with it, either embedded in the
+  // site script ("inline") or served next to it by the deployment ("files").
+  let transformersRuntime = null;
+  let modelProgressListener = null;
+  function loadTransformersRuntime() {
+    if (transformersRuntime) return transformersRuntime;
+    transformersRuntime = (async () => {
+      const delivery = publication.features?.transformers_runtime;
+      if (!delivery) {
+        throw providerError(t("site.runtime.transformers_not_included"), "runtime_missing");
+      }
+      let engineUrl;
+      let wasmPaths;
+      if (delivery === "inline") {
+        const bundle = globalThis.__DERRIDAI_TRANSFORMERS_RUNTIME__;
+        if (!bundle) {
+          throw providerError(t("site.runtime.transformers_not_included"), "runtime_missing");
+        }
+        engineUrl = blobUrl(base64Bytes(bundle.engine_b64), "text/javascript");
+        wasmPaths = {
+          mjs: blobUrl(base64Bytes(bundle.wasm_factory_b64), "text/javascript"),
+          wasm: blobUrl(await gunzip(base64Bytes(bundle.wasm_gzip_b64)), "application/wasm"),
+        };
+      } else {
+        const base = new URL("./vendor/transformers/", location.href).href;
+        engineUrl = `${base}transformers.min.js`;
+        wasmPaths = {
+          mjs: `${base}ort-wasm-simd-threaded.mjs`,
+          wasm: `${base}ort-wasm-simd-threaded.wasm`,
+        };
+      }
+      const runtime = await import(engineUrl);
+      runtime.env.useWasmCache = false;
+      runtime.env.backends.onnx.wasm.wasmPaths = wasmPaths;
+      // Single-threaded WebAssembly needs no SharedArrayBuffer or cross-origin isolation headers.
+      runtime.env.backends.onnx.wasm.numThreads = 1;
+      return runtime;
+    })();
+    transformersRuntime.catch(() => {
+      transformersRuntime = null;
+    });
+    return transformersRuntime;
+  }
+
+  function modelFilesBase(profile) {
+    const raw =
+      String(profile.base_url || "").trim() || String(publication.features?.transformers_local_models || "");
+    if (!raw) throw providerError(t("site.runtime.transformers_local_missing"), "invalid_endpoint");
+    return new URL(raw.endsWith("/") ? raw : `${raw}/`, location.href).href;
+  }
+
+  const transformersExtractors = new Map();
+  function transformersExtractor(profile) {
+    const key = `${profile.model}|${profile.model_source}|${profile.base_url}`;
+    if (!transformersExtractors.has(key)) {
+      const loading = (async () => {
+        const runtime = await loadTransformersRuntime();
+        if (profile.model_source === "local") {
+          // Served model files are read like a hub mirror: <base>/<model>/<file>.
+          runtime.env.allowRemoteModels = true;
+          runtime.env.allowLocalModels = false;
+          runtime.env.remoteHost = modelFilesBase(profile);
+          runtime.env.remotePathTemplate = "{model}/";
+        } else {
+          runtime.env.allowRemoteModels = true;
+          runtime.env.allowLocalModels = false;
+          runtime.env.remoteHost = "https://huggingface.co/";
+          runtime.env.remotePathTemplate = "{model}/resolve/{revision}/";
+        }
+        return runtime.pipeline("feature-extraction", profile.model, {
+          device: "wasm",
+          progress_callback: (progress) => modelProgressListener?.(progress),
+        });
+      })();
+      loading.catch(() => transformersExtractors.delete(key));
+      transformersExtractors.set(key, loading);
+    }
+    return transformersExtractors.get(key);
+  }
+
+  function transformersEmbeddingProvider(profile) {
+    const model = String(profile.model || "").trim();
+    if (!model) return undefined;
+    return {
+      descriptor: () => ({
+        id: profile.id,
+        type: "transformers",
+        model,
+        variant: embeddingVariant(profile),
+      }),
+      async embed(input, options = {}) {
+        const extractor = await transformersExtractor(profile);
+        const texts = prefixed(profile, input, options.purpose);
+        const vectors = [];
+        for (let start = 0; start < texts.length; start += 8) {
+          if (options.signal?.aborted) throw new DOMException("Operation aborted.", "AbortError");
+          const tensor = await extractor(texts.slice(start, start + 8), {
+            pooling: "mean",
+            normalize: true,
+          });
+          vectors.push(...tensor.tolist());
+        }
+        if (vectors.length !== texts.length) throw embeddingFailure();
+        return { vectors, provider: this.descriptor() };
+      },
+    };
+  }
+
+  function embeddingProviderFor(profile, apiKey) {
+    if (!profile) return undefined;
+    return profile.engine === "transformers"
+      ? transformersEmbeddingProvider(profile)
+      : directEmbeddingProvider(profile, apiKey);
   }
 
   function directGenerationProvider(profile, apiKey) {
@@ -451,10 +647,10 @@
     const model = String(profile.model || "").trim();
     if (!model) return undefined;
     return {
-      descriptor: () => ({ id: profile.id, type: profile.type, model }),
+      descriptor: () => ({ id: profile.id, type: profile.engine, model }),
       async generate(request, options = {}) {
         const base = providerBase(profile);
-        if (profile.type === "ollama") {
+        if (profile.engine === "ollama") {
           const body = await providerJson(`${base}/api/chat`, {
             method: "POST",
             headers: providerHeaders(profile, apiKey),
@@ -489,7 +685,11 @@
     };
   }
 
-  async function testProvider(profile, apiKey) {
+  const EMBEDDING_NAME_HINT = /embed|bge|e5|minilm|gte|nomic|mxbai|arctic|snowflake|sentence/i;
+
+  // Lists what the endpoint reports. Servers rarely say whether a model embeds or generates, so the reader
+  // chooses the role; names that look like embedding models are only sorted first for the embedding role.
+  async function discoverModels(profile, apiKey) {
     let base;
     try {
       base = providerBase(profile);
@@ -498,27 +698,28 @@
         ok: false,
         code: error?.code || "invalid_endpoint",
         message: error instanceof Error ? error.message : String(error),
+        models: [],
       };
     }
-    const endpoint = profile.type === "ollama" ? `${base}/api/tags` : `${base}/models`;
+    const endpoint = profile.engine === "ollama" ? `${base}/api/tags` : `${base}/models`;
     try {
       const body = await providerJson(endpoint, {
         method: "GET",
-        headers: profile.type === "openai" && apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        headers: profile.engine === "openai" && apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
         cache: "no-store",
       });
-      const names = profile.type === "ollama"
-        ? (body.models || []).flatMap((item) => [item?.name, item?.model]).filter(Boolean)
-        : (body.data || []).map((item) => item?.id).filter(Boolean);
-      const required = String(profile.model || "");
-      if (required && names.length && !names.includes(required)) {
-        return {
-          ok: false,
-          code: "model_not_found",
-          message: t("site.runtime.provider_model_missing", { model: required }),
-        };
-      }
-      return { ok: true, code: "ready", message: t("site.runtime.provider_ready") };
+      const names =
+        profile.engine === "ollama"
+          ? (body.models || []).map((item) => item?.name || item?.model).filter(Boolean)
+          : (body.data || []).map((item) => item?.id).filter(Boolean);
+      const unique = [...new Set(names)].sort((a, b) => a.localeCompare(b));
+      const wantsEmbedding = profile.role === "embedding";
+      unique.sort(
+        (a, b) =>
+          Number(EMBEDDING_NAME_HINT.test(b) === wantsEmbedding) -
+          Number(EMBEDDING_NAME_HINT.test(a) === wantsEmbedding),
+      );
+      return { ok: true, code: "ready", message: t("site.runtime.provider_ready"), models: unique };
     } catch (error) {
       if (error?.code === "network" && (await noCorsReachabilityProbe(endpoint))) {
         const origin =
@@ -528,11 +729,36 @@
           code: "cors_blocked",
           message: t("site.runtime.provider_cors_blocked", { origin }),
           remediation:
-            profile.type === "ollama" && location.origin !== "null"
+            profile.engine === "ollama" && location.origin !== "null"
               ? `OLLAMA_ORIGINS="${location.origin}" ollama serve`
               : "",
+          models: [],
         };
       }
+      return {
+        ok: false,
+        code: error?.code || "provider_error",
+        message: t("site.runtime.provider_test_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+        models: [],
+      };
+    }
+  }
+
+  // Loads the model (downloading it the first time) and embeds a probe string.
+  async function testTransformers(profile) {
+    try {
+      const provider = transformersEmbeddingProvider(profile);
+      const result = await provider.embed([t("site.runtime.transformers_probe")], {
+        purpose: "query",
+      });
+      return {
+        ok: true,
+        code: "ready",
+        message: t("site.runtime.transformers_ready", { dimension: result.vectors[0].length }),
+      };
+    } catch (error) {
       return {
         ok: false,
         code: error?.code || "provider_error",
@@ -545,13 +771,13 @@
 
   async function rebuildClient() {
     const host = globalThis.__DERRIDAI_HOST_CAPABILITIES__ || {};
-    const profile = profileById(selectedProviderId);
-    const apiKey = sessionApiKeys.get(selectedProviderId) || "";
-    const embeddings = profile
-      ? directEmbeddingProvider(profile, apiKey)
+    const embeddingProfile = providerProfiles.find((profile) => profile.id === selectedEmbeddingId);
+    const generationProfile = providerProfiles.find((profile) => profile.id === selectedGenerationId);
+    const embeddings = embeddingProfile
+      ? embeddingProviderFor(embeddingProfile, sessionApiKeys.get(embeddingProfile.id) || "")
       : host.embeddings;
-    const generation = profile
-      ? directGenerationProvider(profile, apiKey)
+    const generation = generationProfile
+      ? directGenerationProvider(generationProfile, sessionApiKeys.get(generationProfile.id) || "")
       : host.generation;
     client = await sdk.createClient({
       dataSource: sdk.dataSources.inline(publicationPackage),
@@ -561,6 +787,12 @@
       locale,
     });
     capabilities = await client.capabilities();
+  }
+
+  // Semantic and hybrid search need vectors in the same space as the query: the publication's own, or a
+  // local index built with the reader's embedding provider.
+  function semanticReady() {
+    return Boolean(capabilities?.provider.embeddings && capabilities.localIndex?.complete);
   }
 
   function methodBadge(labelKey, active) {
@@ -840,7 +1072,7 @@
         disabled: !capabilities.provider.embeddings,
       }),
     );
-    mode.value = capabilities.provider.embeddings ? "hybrid" : "keyword";
+    mode.value = semanticReady() ? "hybrid" : "keyword";
     const methods = methodStrip({
       text: mode.value !== "semantic",
       vector: mode.value !== "keyword",
@@ -982,217 +1214,512 @@
     );
   }
 
-  function providerPanel() {
-    const panel = node("section", {
-      class: "panel provider-panel",
-      "data-tour": "provider",
-      "aria-labelledby": "provider-heading",
-    });
-    panel.append(node("h3", { id: "provider-heading", text: t("site.runtime.provider_settings") }));
+  function engineLabel(engine) {
+    if (engine === "openai") return t("site.runtime.provider_openai");
+    if (engine === "ollama") return t("site.runtime.provider_ollama");
+    return t("site.runtime.provider_transformers");
+  }
 
+  function profileSummary(profile) {
+    if (!profile) return "";
+    const where =
+      profile.engine === "transformers"
+        ? profile.model_source === "local"
+          ? t("site.runtime.transformers_source_local")
+          : t("site.runtime.transformers_source_hub")
+        : profile.base_url;
+    return t("site.runtime.provider_summary", {
+      type: engineLabel(profile.engine),
+      model: profile.model,
+      endpoint: where,
+    });
+  }
+
+  async function applyProviderSelection(status) {
+    writeLocal(embeddingSelectionKey, selectedEmbeddingId);
+    writeLocal(generationSelectionKey, selectedGenerationId);
+    status.className = "status";
+    status.textContent = t("site.runtime.provider_applying");
+    try {
+      await rebuildClient();
+      await render();
+    } catch (error) {
+      status.className = "status error";
+      status.textContent = t("site.runtime.provider_apply_failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  function providerCard(role) {
+    const embedding = role === "embedding";
+    const profiles = providerProfiles.filter((profile) => profile.role === role);
+    const selectedId = embedding ? selectedEmbeddingId : selectedGenerationId;
+    const headingId = `provider-${role}-heading`;
     const select = node(
       "select",
-      { class: "control", "aria-label": t("site.runtime.provider_profile") },
-      node("option", { value: "", text: t("site.runtime.provider_none") }),
-      ...providerProfiles.map((profile) =>
-        node("option", {
-          value: profile.id,
-          text: `${profile.name || profile.id} · ${profile.type === "openai" ? t("site.runtime.provider_openai") : t("site.runtime.provider_ollama")}`,
-        }),
+      { class: "control", "aria-label": t(`site.runtime.provider_${role}_select`) },
+      node("option", { value: "", text: t(`site.runtime.provider_${role}_none`) }),
+      ...profiles.map((profile) =>
+        node("option", { value: profile.id, text: `${profile.name} · ${engineLabel(profile.engine)}` }),
       ),
     );
-    select.value = selectedProviderId;
+    select.value = selectedId;
     const key = node("input", {
       class: "control",
       type: "password",
       autocomplete: "off",
-      value: sessionApiKeys.get(selectedProviderId) || "",
       placeholder: t("site.runtime.api_key_session"),
       "aria-label": t("site.runtime.api_key"),
-      "aria-describedby": "provider-key-help",
     });
     const summary = node("div", { class: "provider-summary" });
     const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
-    const customForm = node("form", { class: "provider-form" });
-    const customName = node("input", {
-      class: "control",
-      required: true,
-      autocomplete: "organization",
-      placeholder: t("site.runtime.provider_name_placeholder"),
-      "aria-label": t("site.runtime.provider_name"),
-    });
-    const customEndpoint = node("input", {
-      class: "control",
-      required: true,
-      type: "url",
-      autocomplete: "url",
-      placeholder: t("site.runtime.provider_url_placeholder"),
-      "aria-label": t("site.runtime.provider_url"),
-    });
-    const customType = node(
-      "select",
-      { class: "control", "aria-label": t("site.runtime.provider_type") },
-      node("option", { value: "openai", text: t("site.runtime.provider_openai") }),
-      node("option", { value: "ollama", text: t("site.runtime.provider_ollama") }),
+    const keyField = node(
+      "label",
+      { class: "field" },
+      node("span", { text: t("site.runtime.api_key") }),
+      key,
     );
-    const customModel = node("input", {
-      class: "control",
-      required: true,
-      autocomplete: "off",
-      placeholder: t("site.runtime.provider_model_placeholder"),
-      "aria-label": t("site.runtime.provider_model"),
-    });
-    const customKey = node("input", {
-      class: "control",
-      type: "password",
-      autocomplete: "off",
-      placeholder: t("site.runtime.api_key_session"),
-      "aria-label": t("site.runtime.api_key"),
-    });
-    const addCustom = node("button", {
-      class: "primary",
-      type: "submit",
-      text: t("site.runtime.save_provider"),
-    });
-    customForm.append(
-      node("h4", { text: t("site.runtime.add_provider") }),
-      node("p", { class: "muted", text: t("site.runtime.provider_local_help") }),
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_name") }), customName),
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_url") }), customEndpoint),
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_type") }), customType),
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_model") }), customModel),
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.api_key") }), customKey),
-      addCustom,
-    );
-    customForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const name = String(customName.value || "").trim();
-      const baseUrl = String(customEndpoint.value || "").trim();
-      const model = String(customModel.value || "").trim();
-      if (!name || !baseUrl || !model) return;
-      let parsed;
-      try {
-        parsed = new URL(baseUrl);
-      } catch {
-        status.className = "status error";
-        status.textContent = t("site.runtime.provider_endpoint_invalid");
-        return;
-      }
-      const id = `local-${globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Date.now()}`;
-      const profile = {
-        id,
-        name,
-        type: customType.value,
-        base_url: parsed.href.replace(/\/$/, ""),
-        model,
-        api_key: String(customKey.value || ""),
-      };
-      customProviderProfiles = [...customProviderProfiles, profile];
-      providerProfiles = [...exportedProviderProfiles, ...customProviderProfiles];
-      saveCustomProviderProfiles();
-      selectedProviderId = id;
-      writeLocal(providerKey, id);
-      status.className = "status success";
-      status.textContent = t("site.runtime.provider_saved");
-      await render();
-    });
 
-    function refreshSummary() {
-      const profile = profileById(select.value);
+    function refresh() {
+      const profile = profiles.find((item) => item.id === select.value);
       summary.replaceChildren(
-        node("strong", {
-          text: profile ? String(profile.name || profile.id) : t("site.runtime.provider_none"),
-        }),
+        node("strong", { text: profile ? profile.name : t(`site.runtime.provider_${role}_none`) }),
         node("div", {
           class: "meta",
-          text: profile
-            ? t("site.runtime.provider_summary", {
-                type: profile.type === "openai" ? t("site.runtime.provider_openai") : t("site.runtime.provider_ollama"),
-                model: profile.model || t("site.runtime.not_configured"),
-                endpoint: profile.base_url || t("site.runtime.not_configured"),
-              })
-            : t("site.runtime.provider_none_help"),
+          text: profile ? profileSummary(profile) : t(`site.runtime.provider_${role}_none_help`),
         }),
       );
+      keyField.hidden = !profile || profile.engine === "transformers";
+      key.value = profile ? sessionApiKeys.get(profile.id) || "" : "";
     }
-    refreshSummary();
-    select.addEventListener("change", () => {
-      key.value = sessionApiKeys.get(select.value) || "";
-      refreshSummary();
-    });
+    refresh();
+    select.addEventListener("change", refresh);
 
-    const apply = node("button", {
+    const use = node("button", {
       class: "primary",
       type: "button",
       text: t("site.runtime.apply_provider"),
       on: {
         click: async () => {
-          selectedProviderId = select.value;
-          if (selectedProviderId) sessionApiKeys.set(selectedProviderId, key.value);
-          writeLocal(providerKey, selectedProviderId);
-          status.className = "status";
-          status.textContent = t("site.runtime.provider_applying");
-          try {
-            await rebuildClient();
-            status.className = "status success";
-            status.textContent = t("site.runtime.provider_applied");
-            await render();
-          } catch (error) {
-            status.className = "status error";
-            status.textContent = t("site.runtime.provider_apply_failed", {
-              error: error instanceof Error ? error.message : String(error),
-            });
+          const id = select.value;
+          if (id) {
+            sessionApiKeys.set(id, key.value);
+            saveProviderProfiles();
           }
+          if (embedding) selectedEmbeddingId = id;
+          else selectedGenerationId = id;
+          await applyProviderSelection(status);
         },
       },
     });
-
-    const test = node("button", {
+    const remove = node("button", {
+      class: "danger",
       type: "button",
-      text: t("site.runtime.test_provider"),
+      text: t("site.runtime.delete_provider"),
       on: {
         click: async () => {
-          const profile = profileById(select.value);
-          if (!profile) {
-            status.className = "status warning";
-            status.textContent = t("site.runtime.provider_select_required");
-            return;
-          }
-          status.className = "status";
-          status.textContent = t("site.runtime.testing_provider");
-          if (select.value) sessionApiKeys.set(select.value, key.value);
-          const result = await testProvider(profile, key.value);
-          status.className = result.ok ? "status success" : "status error";
-          status.replaceChildren(node("span", { text: result.message }));
-          if (result.remediation) {
-            status.append(
-              node("code", {
-                class: "provider-command",
-                text: result.remediation,
-              }),
-            );
-          }
+          const profile = profiles.find((item) => item.id === select.value);
+          if (!profile) return;
+          if (!window.confirm(t("site.runtime.delete_provider_confirm", { name: profile.name }))) return;
+          providerProfiles = providerProfiles.filter((item) => item.id !== profile.id);
+          sessionApiKeys.delete(profile.id);
+          if (selectedEmbeddingId === profile.id) selectedEmbeddingId = "";
+          if (selectedGenerationId === profile.id) selectedGenerationId = "";
+          saveProviderProfiles();
+          await applyProviderSelection(status);
         },
       },
     });
 
-    panel.append(
-      !providerProfiles.length
-        ? node("p", { class: "muted", text: t("site.runtime.no_exported_providers") })
-        : null,
+    return node(
+      "section",
+      { class: "card stack", "aria-labelledby": headingId },
+      node("h3", { id: headingId, text: t(`site.runtime.provider_${role}_heading`) }),
+      node("p", { class: "muted", text: t(`site.runtime.provider_${role}_help`) }),
       node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_profile") }), select),
       summary,
-      node("label", { class: "field" }, node("span", { text: t("site.runtime.api_key") }), key),
-      node("small", {
-        id: "provider-key-help",
-        class: "muted",
-        text: t("site.runtime.api_key_help"),
-      }),
-      node("div", { class: "chips" }, apply, test),
+      keyField,
+      node("div", { class: "chips" }, use, remove),
       status,
-      customForm,
+      embedding ? indexSection() : null,
     );
-    return panel;
+  }
+
+  // The local index holds vectors computed here with the reader's embedding provider. It is derived from the
+  // published Records, kept only in this browser, and can be rebuilt or cleared at any time.
+  let indexMessage = "";
+  function indexSection() {
+    const index = capabilities.localIndex;
+    const outcome = node("div", { class: "status", role: "status", "aria-live": "polite" });
+    outcome.textContent = indexMessage;
+    indexMessage = "";
+    const box = node("div", { class: "provider-summary stack", "data-index": index ? "ready" : "none" });
+    const heading = node("strong", { text: t("site.runtime.index_heading") });
+    const detail = node("div", { class: "meta", role: "status", "aria-live": "polite" });
+    const progress = node("progress", {
+      value: 0,
+      max: 1,
+      hidden: true,
+      "aria-label": t("site.runtime.index_progress_label"),
+    });
+    progress.hidden = true;
+    const actions = node("div", { class: "chips" });
+    box.append(heading, detail, progress, actions, outcome);
+    if (!index) {
+      detail.textContent = t("site.runtime.index_no_provider");
+      return box;
+    }
+    if (index.usesPublishedVectors) {
+      detail.textContent = t("site.runtime.index_published", { model: index.model || "" });
+      return box;
+    }
+    const where = index.persistent
+      ? t("site.runtime.index_storage_indexeddb")
+      : t("site.runtime.index_storage_memory");
+    detail.textContent = index.complete
+      ? t("site.runtime.index_ready", { count: index.indexed, storage: where })
+      : t("site.runtime.index_needed", { indexed: index.indexed, total: index.total, storage: where });
+
+    let controller = null;
+    const build = node("button", {
+      class: index.complete ? "" : "primary",
+      type: "button",
+      text: index.complete
+        ? t("site.runtime.index_rebuild")
+        : index.indexed
+          ? t("site.runtime.index_resume")
+          : t("site.runtime.index_build"),
+    });
+    const cancel = node("button", { type: "button", text: t("site.runtime.index_cancel") });
+    cancel.hidden = true;
+    const clear = node("button", {
+      class: "danger",
+      type: "button",
+      text: t("site.runtime.index_clear"),
+      disabled: !index.indexed,
+    });
+    actions.append(build, cancel, clear);
+
+    build.addEventListener("click", async () => {
+      controller = new AbortController();
+      build.disabled = true;
+      clear.disabled = true;
+      cancel.hidden = false;
+      progress.hidden = false;
+      progress.max = Math.max(1, index.total);
+      progress.value = index.indexed;
+      const stopEvents = client.events.subscribe((event) => {
+        if (event.type !== "index-progress") return;
+        progress.max = Math.max(1, event.total);
+        progress.value = event.indexed;
+        detail.textContent = t("site.runtime.index_progress", {
+          indexed: event.indexed,
+          total: event.total,
+        });
+      });
+      modelProgressListener = (info) => {
+        if (info?.status === "progress" && info.file) {
+          detail.textContent = t("site.runtime.model_download", {
+            file: String(info.file).split("/").pop(),
+            percent: Math.round(Number(info.progress) || 0),
+          });
+        }
+      };
+      let message = "";
+      try {
+        await client.index.build({ signal: controller.signal });
+        message = t("site.runtime.index_done");
+      } catch (error) {
+        message =
+          error?.name === "AbortError"
+            ? t("site.runtime.index_cancelled")
+            : t("site.runtime.index_failed", {
+                error: error instanceof Error ? error.message : String(error),
+              });
+      } finally {
+        stopEvents();
+        modelProgressListener = null;
+        controller = null;
+      }
+      capabilities = await client.capabilities();
+      indexMessage = message;
+      await render();
+    });
+    cancel.addEventListener("click", () => controller?.abort());
+    clear.addEventListener("click", async () => {
+      if (!window.confirm(t("site.runtime.index_clear_confirm"))) return;
+      await client.index.clear();
+      capabilities = await client.capabilities();
+      await render();
+    });
+    return box;
+  }
+
+  function providerForm() {
+    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
+    const runtimeIncluded = Boolean(publication.features?.transformers_runtime);
+    const name = node("input", {
+      class: "control",
+      required: true,
+      autocomplete: "off",
+      placeholder: t("site.runtime.provider_name_placeholder"),
+    });
+    const role = node(
+      "select",
+      { class: "control" },
+      node("option", { value: "embedding", text: t("site.runtime.role_embedding") }),
+      node("option", { value: "generation", text: t("site.runtime.role_generation") }),
+    );
+    const engine = node(
+      "select",
+      { class: "control" },
+      node("option", { value: "ollama", text: t("site.runtime.provider_ollama") }),
+      node("option", { value: "openai", text: t("site.runtime.provider_openai") }),
+      node("option", {
+        value: "transformers",
+        text: runtimeIncluded
+          ? t("site.runtime.provider_transformers")
+          : t("site.runtime.provider_transformers_unavailable"),
+        disabled: !runtimeIncluded,
+      }),
+    );
+    const endpoint = node("input", {
+      class: "control",
+      type: "url",
+      autocomplete: "url",
+      placeholder: t("site.runtime.provider_url_placeholder"),
+    });
+    const key = node("input", {
+      class: "control",
+      type: "password",
+      autocomplete: "off",
+      placeholder: t("site.runtime.api_key_optional"),
+    });
+    const remember = node("input", { type: "checkbox" });
+    const model = node("input", {
+      class: "control",
+      required: true,
+      autocomplete: "off",
+      list: "provider-model-options",
+      placeholder: t("site.runtime.provider_model_placeholder"),
+    });
+    const modelOptions = node("datalist", { id: "provider-model-options" });
+    const load = node("button", { type: "button", text: t("site.runtime.load_models") });
+    const source = node(
+      "select",
+      { class: "control" },
+      node("option", { value: "hub", text: t("site.runtime.transformers_source_hub") }),
+      node("option", { value: "local", text: t("site.runtime.transformers_source_local") }),
+    );
+    const filesUrl = node("input", {
+      class: "control",
+      autocomplete: "off",
+      placeholder: publication.features?.transformers_local_models
+        ? t("site.runtime.transformers_files_placeholder_default", {
+            path: publication.features.transformers_local_models,
+          })
+        : t("site.runtime.transformers_files_placeholder"),
+    });
+    const queryPrefix = node("input", { class: "control", autocomplete: "off" });
+    const documentPrefix = node("input", { class: "control", autocomplete: "off" });
+    const test = node("button", { type: "button", text: t("site.runtime.test_provider") });
+    const save = node("button", { class: "primary", type: "submit", text: t("site.runtime.save_provider") });
+
+    const field = (label, control, help) =>
+      node(
+        "label",
+        { class: "field" },
+        node("span", { text: label }),
+        control,
+        help ? node("small", { class: "muted", text: help }) : null,
+      );
+    const urlGroup = node(
+      "div",
+      { class: "stack" },
+      field(t("site.runtime.provider_url"), endpoint),
+      field(t("site.runtime.api_key"), key, t("site.runtime.api_key_help")),
+      node("label", { class: "toggle" }, remember, node("span", { text: t("site.runtime.remember_key") })),
+    );
+    const transformersGroup = node(
+      "div",
+      { class: "stack" },
+      field(t("site.runtime.transformers_model_source"), source, t("site.runtime.transformers_model_help")),
+      field(t("site.runtime.transformers_files_url"), filesUrl),
+    );
+    const prefixGroup = node(
+      "details",
+      { class: "stack" },
+      node("summary", { text: t("site.runtime.advanced") }),
+      node("p", { class: "muted", text: t("site.runtime.prefix_help") }),
+      field(t("site.runtime.query_prefix"), queryPrefix),
+      field(t("site.runtime.document_prefix"), documentPrefix),
+    );
+    const loadRow = node("div", { class: "chips" }, load);
+
+    function syncForm() {
+      if (role.value === "generation" && engine.value === "transformers") engine.value = "ollama";
+      const transformers = engine.value === "transformers";
+      const transformersOption = [...engine.options].find((item) => item.value === "transformers");
+      transformersOption.disabled = !runtimeIncluded || role.value === "generation";
+      urlGroup.hidden = transformers;
+      loadRow.hidden = transformers;
+      transformersGroup.hidden = !transformers;
+      filesUrl.closest("label").hidden = !transformers || source.value !== "local";
+      prefixGroup.hidden = role.value !== "embedding";
+      endpoint.required = !transformers;
+      modelOptions.replaceChildren(
+        ...(transformers && role.value === "embedding"
+          ? TRANSFORMERS_SUGGESTIONS.map((item) =>
+              node("option", { value: item.id, label: t(item.note) }),
+            )
+          : []),
+      );
+    }
+    for (const control of [role, engine, source]) control.addEventListener("change", syncForm);
+    syncForm();
+
+    function candidate() {
+      const transformers = engine.value === "transformers";
+      let base = "";
+      if (!transformers) {
+        try {
+          base = new URL(String(endpoint.value || "").trim()).href.replace(/\/$/, "");
+        } catch {
+          base = String(endpoint.value || "").trim();
+        }
+      } else if (source.value === "local") {
+        base = String(filesUrl.value || "").trim();
+      }
+      return {
+        id: `provider-${globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Date.now()}`,
+        name: String(name.value || "").trim(),
+        role: role.value,
+        engine: engine.value,
+        base_url: base,
+        model: String(model.value || "").trim(),
+        model_source: transformers && source.value === "local" ? "local" : "hub",
+        query_prefix: role.value === "embedding" ? queryPrefix.value : "",
+        document_prefix: role.value === "embedding" ? documentPrefix.value : "",
+        remember_key: !transformers && remember.checked && Boolean(key.value),
+      };
+    }
+
+    function showResult(result) {
+      status.className = result.ok ? "status success" : "status error";
+      status.replaceChildren(node("span", { text: result.message }));
+      if (result.remediation) {
+        status.append(node("code", { class: "provider-command", text: result.remediation }));
+      }
+    }
+
+    load.addEventListener("click", async () => {
+      const draft = candidate();
+      status.className = "status";
+      status.textContent = t("site.runtime.testing_provider");
+      const result = await discoverModels(draft, key.value);
+      showResult(result);
+      if (result.ok) {
+        modelOptions.replaceChildren(...result.models.map((item) => node("option", { value: item })));
+        status.textContent = t("site.runtime.models_loaded", { count: result.models.length });
+        if (!result.models.length) status.className = "status warning";
+        model.focus();
+      }
+    });
+
+    test.addEventListener("click", async () => {
+      const draft = candidate();
+      if (!draft.model) {
+        status.className = "status warning";
+        status.textContent = t("site.runtime.provider_model_required");
+        return;
+      }
+      status.className = "status";
+      status.textContent = t("site.runtime.testing_provider");
+      modelProgressListener = (info) => {
+        if (info?.status === "progress" && info.file) {
+          status.textContent = t("site.runtime.model_download", {
+            file: String(info.file).split("/").pop(),
+            percent: Math.round(Number(info.progress) || 0),
+          });
+        }
+      };
+      try {
+        if (draft.engine === "transformers") {
+          showResult(await testTransformers(draft));
+          return;
+        }
+        const result = await discoverModels(draft, key.value);
+        if (result.ok && !result.models.includes(draft.model)) {
+          showResult({
+            ok: false,
+            message: t("site.runtime.provider_model_missing", { model: draft.model }),
+          });
+          return;
+        }
+        showResult(result);
+      } finally {
+        modelProgressListener = null;
+      }
+    });
+
+    const form = node(
+      "form",
+      { class: "provider-form", "aria-labelledby": "provider-add-heading" },
+      node("h3", { id: "provider-add-heading", text: t("site.runtime.add_provider") }),
+      node("p", { class: "muted", text: t("site.runtime.provider_local_help") }),
+      field(t("site.runtime.provider_name"), name),
+      field(t("site.runtime.provider_role"), role),
+      field(t("site.runtime.provider_engine"), engine),
+      urlGroup,
+      transformersGroup,
+      field(t("site.runtime.provider_model"), model),
+      modelOptions,
+      loadRow,
+      prefixGroup,
+      node("div", { class: "chips" }, test, save),
+      status,
+    );
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const profile = normalizeProfile(candidate());
+      if (!profile) {
+        status.className = "status error";
+        status.textContent = t("site.runtime.provider_endpoint_invalid");
+        return;
+      }
+      if (profile.engine !== "transformers") {
+        try {
+          providerBase(profile);
+        } catch (error) {
+          status.className = "status error";
+          status.textContent = error instanceof Error ? error.message : String(error);
+          return;
+        }
+      }
+      sessionApiKeys.set(profile.id, key.value);
+      providerProfiles = [...providerProfiles, profile];
+      saveProviderProfiles();
+      if (profile.role === "embedding") selectedEmbeddingId = profile.id;
+      else selectedGenerationId = profile.id;
+      await applyProviderSelection(status);
+    });
+    return form;
+  }
+
+  function providersView() {
+    return node(
+      "section",
+      {
+        class: "panel stack provider-panel",
+        "data-tour": "provider",
+        "aria-labelledby": "provider-heading",
+      },
+      node("h2", { id: "provider-heading", text: t("site.runtime.providers") }),
+      node("p", { class: "muted", text: t("site.runtime.providers_intro") }),
+      node("div", { class: "grid" }, providerCard("embedding"), providerCard("generation")),
+      providerForm(),
+    );
   }
 
   function researchView() {
@@ -1208,7 +1735,7 @@
     });
     const methods = methodStrip({
       text: true,
-      vector: Boolean(capabilities.provider.embeddings),
+      vector: semanticReady(),
       llm: Boolean(capabilities.provider.generation),
     });
     const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
@@ -1221,11 +1748,11 @@
       ask.disabled = true;
       methods.update({
         text: true,
-        vector: Boolean(capabilities.provider.embeddings),
+        vector: semanticReady(),
         llm: Boolean(capabilities.provider.generation),
       });
       status.className = "status";
-      status.textContent = capabilities.provider.embeddings
+      status.textContent = semanticReady()
         ? t("site.runtime.activity_research_hybrid")
         : t("site.runtime.activity_research_text");
       answer.textContent = "";
@@ -1235,7 +1762,7 @@
         const response = await client.research({
           question: q,
           retrieval: {
-            mode: capabilities.provider.embeddings ? "hybrid" : "keyword",
+            mode: semanticReady() ? "hybrid" : "keyword",
             limit: 24,
             evidenceLimit: 10,
             mmrLambda: 0.72,
@@ -1312,7 +1839,6 @@
       node(
         "aside",
         { class: "stack", "aria-label": t("site.runtime.research_tools") },
-        providerPanel(),
         node(
           "section",
           { class: "panel stack", "data-tour": "evidence", "aria-labelledby": "evidence-heading" },
@@ -1398,7 +1924,7 @@
     { id: "filters", view: "search", target: "filters" },
     { id: "methods", view: "search", target: "methods" },
     { id: "research", view: "research", target: "research" },
-    { id: "provider", view: "research", target: "provider" },
+    { id: "provider", view: "providers", target: "provider" },
     { id: "evidence", view: "research", target: "evidence" },
     { id: "notes", view: "notes", target: "notes" },
     { id: "controls", target: "controls" },
@@ -1707,6 +2233,7 @@
           navButton("site.runtime.search", "search"),
           navButton("site.runtime.works", "works"),
           navButton("site.runtime.research", "research"),
+          navButton("site.runtime.providers", "providers"),
           navButton("site.runtime.annotations", "notes"),
         ),
         headerControls(),
@@ -1728,6 +2255,7 @@
     if (view === "search") main.append(searchView());
     else if (view === "works") main.append(worksView());
     else if (view === "research") main.append(researchView());
+    else if (view === "providers") main.append(providersView());
     else if (view === "notes") main.append(await notesView());
 
     const recordCount = (publication.works || []).reduce(

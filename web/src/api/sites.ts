@@ -1,6 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { ApiError, apiRequest } from "./http";
-import type { LanguageInfo, ProviderProfile } from "./system";
+import type { LanguageInfo } from "./system";
 
 export type SiteExportFormat = "two-file" | "local-single-file" | "nginx-docker";
 
@@ -14,14 +14,25 @@ export interface SiteExportRequest {
   description?: string;
   locale: string;
   languages: string[];
-  provider_profile_ids: string[];
   export_format: SiteExportFormat;
   record_profile: SiteRecordProfile;
+  /** Package the optional in-browser Transformers.js runtime (no model weights). */
+  include_transformers: boolean;
+}
+
+export interface SiteTransformersRuntime {
+  version: string;
+  /** True once DerridAI has downloaded and verified the runtime on this server. */
+  cached: boolean;
+  /** One-time download size when it is not cached yet. */
+  download_bytes: number;
+  /** Size added to a single-file or two-file site when the runtime is embedded. */
+  inline_bytes: number;
 }
 
 export interface SiteExportOptions {
   languages: LanguageInfo[];
-  provider_profiles: ProviderProfile[];
+  transformers_runtime: SiteTransformersRuntime;
 }
 
 export interface SiteExportDownload {

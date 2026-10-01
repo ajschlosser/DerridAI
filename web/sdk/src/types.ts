@@ -108,7 +108,14 @@ export interface ProviderDescriptor {
   type?: string;
   model?: string;
   revision?: string;
+  /** Anything besides the model that changes the vectors (for example text prefixes). */
+  variant?: string;
   [key: string]: unknown;
+}
+
+export interface EmbedOptions extends OperationOptions {
+  /** Retrieval models often embed queries and documents differently. */
+  purpose?: "query" | "document";
 }
 
 export interface EmbeddingResult {
@@ -118,7 +125,7 @@ export interface EmbeddingResult {
 
 export interface EmbeddingProvider {
   descriptor(): ProviderDescriptor;
-  embed(input: string[], options?: OperationOptions): Promise<EmbeddingResult>;
+  embed(input: string[], options?: EmbedOptions): Promise<EmbeddingResult>;
 }
 
 export interface GenerationRequest {
@@ -135,6 +142,49 @@ export interface GenerationResult {
 export interface GenerationProvider {
   descriptor(): ProviderDescriptor;
   generate(request: GenerationRequest, options?: OperationOptions): Promise<GenerationResult>;
+}
+
+export interface VectorIndexSummary {
+  publicationId: string;
+  fingerprint: string;
+  model: string;
+  provider: string;
+  dimension: number;
+  count: number;
+  updatedAt: string;
+}
+
+/** Persistent store for vectors computed in this client; derived data that can be rebuilt. */
+export interface VectorIndexStore {
+  readonly persistent: boolean;
+  ids(publicationId: string, fingerprint: string): Promise<Set<string>>;
+  load(
+    publicationId: string,
+    fingerprint: string,
+  ): Promise<{ dimension: number; vectors: Map<string, Float32Array> } | null>;
+  put(
+    publicationId: string,
+    fingerprint: string,
+    descriptor: ProviderDescriptor,
+    entries: { recordId: string; vector: Float32Array }[],
+  ): Promise<void>;
+  summaries(publicationId: string): Promise<VectorIndexSummary[]>;
+  clear(publicationId: string, fingerprint?: string): Promise<void>;
+}
+
+export interface LocalIndexStatus {
+  /** Whether the supplied embedding model is exactly the one that embedded the publication. */
+  usesPublishedVectors: boolean;
+  /** True once every embeddable Record has a locally computed vector for the current model. */
+  complete: boolean;
+  indexed: number;
+  total: number;
+  persistent: boolean;
+  model?: string;
+}
+
+export interface LocalIndexBuildOptions extends OperationOptions {
+  batchSize?: number;
 }
 
 export interface ClientStorage {
@@ -161,7 +211,8 @@ export interface SearchWarning {
     | "semantic_unavailable"
     | "embedding_provider_unavailable"
     | "embedding_contract_mismatch"
-    | "embedding_dimension_mismatch";
+    | "embedding_dimension_mismatch"
+    | "local_index_required";
   message: string;
   details?: Record<string, unknown>;
 }
@@ -277,6 +328,7 @@ export type ClientEvent =
       total: number;
     }
   | { type: "embedding-start"; runId: string }
+  | { type: "index-progress"; runId: string; indexed: number; total: number }
   | { type: "retrieval-complete"; runId: string; resultCount: number }
   | { type: "generation-start"; runId: string }
   | { type: "generation-complete"; runId: string }
@@ -287,6 +339,8 @@ export interface DerridAIClientOptions {
   storage?: ClientStorage;
   embeddings?: EmbeddingProvider;
   generation?: GenerationProvider;
+  /** Where locally computed vectors live. Defaults to IndexedDB, or memory when it is unavailable. */
+  vectorIndex?: VectorIndexStore;
   locale?: string;
   cache?: {
     recordChunks?: number;

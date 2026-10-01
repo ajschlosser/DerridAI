@@ -3,13 +3,17 @@
 import { AnnotationStore } from "./annotations";
 import { citationForEvidence, formatCitation } from "./citations";
 import { EventBus } from "./events";
+import { LocalVectorIndex } from "./localIndex";
 import { RecordRepository } from "./repository";
 import { ResearchEngine } from "./research";
 import { SearchEngine } from "./search";
 import { BrowserStorage } from "./storage";
+import { defaultVectorStore } from "./vectorIndex";
 import type {
   DerridAIClientOptions,
   EvidenceRef,
+  LocalIndexBuildOptions,
+  LocalIndexStatus,
   PublicationManifest,
   ResearchRequest,
   ResearchResponse,
@@ -44,7 +48,16 @@ export class DerridAIClient {
     stats: () => ReturnType<RecordRepository["stats"]>;
   };
 
+  /** Locally computed vectors for embedding models other than the one the publication shipped with. */
+  readonly index: {
+    status: () => Promise<LocalIndexStatus | null>;
+    build: (options?: LocalIndexBuildOptions) => Promise<LocalIndexStatus>;
+    clear: () => Promise<void>;
+  };
+
   private readonly repository: RecordRepository;
+  private readonly localIndex: LocalVectorIndex;
+  private readonly embeddings?: DerridAIClientOptions["embeddings"];
   private readonly searchEngine: SearchEngine;
   private readonly researchEngine: ResearchEngine;
   private readonly hasEmbeddings: boolean;
@@ -58,7 +71,14 @@ export class DerridAIClient {
   ) {
     this.events = events;
     this.repository = repository;
+    this.embeddings = options.embeddings;
     this.hasEmbeddings = Boolean(options.embeddings);
+    this.localIndex = new LocalVectorIndex(
+      manifest,
+      repository,
+      options.vectorIndex ?? defaultVectorStore(),
+      events,
+    );
     this.hasGeneration = Boolean(options.generation);
     const locale = options.locale ?? manifest.locale ?? "en-US";
     this.searchEngine = new SearchEngine(
@@ -67,6 +87,7 @@ export class DerridAIClient {
       this.events,
       options.embeddings,
       locale,
+      this.localIndex,
     );
     this.researchEngine = new ResearchEngine(
       manifest,
@@ -81,6 +102,22 @@ export class DerridAIClient {
     };
     this.records = {
       get: (recordId, operation = {}) => this.repository.get(recordId, operation.signal),
+    };
+    this.index = {
+      status: async () => (this.embeddings ? this.localIndex.status(this.embeddings) : null),
+      build: async (operation = {}) => {
+        if (!this.embeddings) throw new Error("No embedding provider is configured.");
+        const id = runId("index");
+        try {
+          return await this.localIndex.build(this.embeddings, id, operation);
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            this.events.emit({ type: "operation-cancelled", runId: id });
+          }
+          throw error;
+        }
+      },
+      clear: () => this.localIndex.clear(this.embeddings),
     };
     this.cache = {
       clear: () => this.repository.clear(),
@@ -137,6 +174,7 @@ export class DerridAIClient {
       embeddings: boolean;
       generation: boolean;
     };
+    localIndex: LocalIndexStatus | null;
   }> {
     return {
       browse: this.manifest.features?.browse !== false,
@@ -153,6 +191,7 @@ export class DerridAIClient {
         embeddings: this.hasEmbeddings,
         generation: this.hasGeneration,
       },
+      localIndex: this.embeddings ? await this.localIndex.status(this.embeddings) : null,
     };
   }
 }

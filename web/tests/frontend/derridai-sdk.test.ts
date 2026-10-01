@@ -5,6 +5,7 @@ import {
   createClient,
   dataSources,
   MemoryStorage,
+  vectorIndex,
   type GenerationRequest,
   type PublicationRecord,
 } from "../../sdk/src";
@@ -167,11 +168,12 @@ describe("DerridAI SDK", () => {
     expect(generationRequests[0]?.prompt).toContain("Position holder: Hegel");
   });
 
-  it("falls back to keyword retrieval when the host embedding contract is incompatible", async () => {
+  it("falls back to keyword retrieval when the embedding model needs a local index that is not built", async () => {
     const embed = vi.fn(async () => ({ vectors: [[1, 0]] }));
     const client = await createClient({
       dataSource: dataSources.inline(publicationPackage()),
       storage: new MemoryStorage(),
+      vectorIndex: vectorIndex.memory(),
       embeddings: {
         descriptor: () => ({ type: "host", model: "other-model" }),
         embed,
@@ -184,7 +186,7 @@ describe("DerridAI SDK", () => {
     });
 
     expect(response.modeUsed).toBe("keyword");
-    expect(response.warnings[0].code).toBe("embedding_contract_mismatch");
+    expect(response.warnings[0].code).toBe("local_index_required");
     expect(embed).not.toHaveBeenCalled();
   });
 
