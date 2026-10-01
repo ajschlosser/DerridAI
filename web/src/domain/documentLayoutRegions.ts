@@ -268,10 +268,10 @@ export function regionFromRect(
   page: number,
   existing: LayoutRegion[],
 ): LayoutRegion {
-  let x0 = clamp01(Math.min(rect.x0, rect.x1));
-  let y0 = clamp01(Math.min(rect.y0, rect.y1));
-  let x1 = clamp01(Math.max(rect.x0, rect.x1));
-  let y1 = clamp01(Math.max(rect.y0, rect.y1));
+  const x0 = clamp01(Math.min(rect.x0, rect.x1));
+  const y0 = clamp01(Math.min(rect.y0, rect.y1));
+  const x1 = clamp01(Math.max(rect.x0, rect.x1));
+  const y1 = clamp01(Math.max(rect.y0, rect.y1));
   const width = x1 - x0;
   const height = y1 - y0;
   let role: LayoutRole = "infobox";
