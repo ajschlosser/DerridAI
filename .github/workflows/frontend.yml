@@ -322,6 +322,9 @@ jobs:
       - name: Build SDK browser artifact from source
         working-directory: web
         run: npm run build:sdk
+      - name: Verify committed SDK browser artifact is current
+        working-directory: web
+        run: git diff --exit-code -- ../api/app/site_assets/derridai-sdk.js
       - name: Generate real publication artifacts
         run: python scripts/generate_publication_acceptance_artifacts.py "$DERRIDAI_PUBLICATION_ARTIFACT_DIR"
       - name: Exercise single-file export from file URL
