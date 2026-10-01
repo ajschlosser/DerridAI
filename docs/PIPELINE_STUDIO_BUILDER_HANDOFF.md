@@ -82,9 +82,9 @@ Invariants that must survive everything below: purposes still own which strategi
 
 ## 5. Step 4 — Smaller follow-ups
 
-- **Stale ordering edge on reset.** `setInputBinding(..., null)` in `web/src/domain/pipelineBindings.ts` removes the binding but leaves any `next` edge that was added only to order a producer, which then fails as `incompatible_stage_types` (see `ordering_only_edges` in `wiring.py`). Record, at binding time, that the edge was added for ordering (for example by returning it from the helper and storing it in editor state) and remove it on reset when nothing else uses it. Do not guess from the graph alone.
+- **Stale ordering edge on reset.** _(Done: PR on `feature/studio-builder-followups`.)_ `setInputBinding(..., null)` in `web/src/domain/pipelineBindings.ts` removes the binding but leaves any `next` edge that was added only to order a producer, which then fails as `incompatible_stage_types` (see `ordering_only_edges` in `wiring.py`). Record, at binding time, that the edge was added for ordering (for example by returning it from the helper and storing it in editor state) and remove it on reset when nothing else uses it. Do not guess from the graph alone.
 - **Edge type labels on the diagram.** Show the data type carried by each `next` edge in `PipelineGraphDiagram.vue`, and mark ordering-only edges distinctly. Keep it readable at the compact density; the diagram is relation-viewport based and edges are SVG paths without labels today, so decide on a hover/focus affordance before adding permanent text.
-- **Live validation message friendliness.** While a stage ID is being retyped the draft is briefly invalid and `/analyze` returns 422; the panel then shows the raw error while keeping the last analysis. Consider showing "The draft is incomplete" for 422s.
+- **Live validation message friendliness.** _(Done: PR on `feature/studio-builder-followups`.)_ While a stage ID is being retyped the draft is briefly invalid and `/analyze` returns 422; the panel then shows the raw error while keeping the last analysis. Consider showing "The draft is incomplete" for 422s.
 - **Do not** add a changelog entry now; it belongs to the release cut.
 
 ## 6. Working notes and gotchas
