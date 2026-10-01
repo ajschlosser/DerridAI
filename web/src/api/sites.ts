@@ -2,7 +2,7 @@
 import { ApiError, apiRequest } from "./http";
 import type { LanguageInfo, ProviderProfile } from "./system";
 
-export type SiteExportFormat = "local-single-file" | "nginx-docker";
+export type SiteExportFormat = "two-file" | "local-single-file" | "nginx-docker";
 
 export interface SiteExportRequest {
   store: string;
