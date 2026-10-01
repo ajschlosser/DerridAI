@@ -75,4 +75,62 @@ describe("works workspace commands", () => {
     workspace.reviewFlaggedWork("Unknown work");
     expect(spies.openTouchup).toHaveBeenLastCalledWith([]);
   });
+
+  it("populates metadata insights for every admin work", () => {
+    const item = (work: string, topic: string) => ({
+      work,
+      count: 1,
+      review: 0,
+      files: new Set([`${work}.jsonl`]),
+      authors: new Set(["Author"]),
+      years: new Set(["2020"]),
+      rows: [{ record: { work, topics: [topic], document_author: "Author" } }],
+    });
+    const { workspace } = setup({
+      isResearcher: () => false,
+      recordStores: () => [],
+      providerProfiles: () => [],
+      dbUnavailableReason: () => "",
+      hasCorpusDb: () => false,
+      canUse: () => true,
+      allAnnotations: () => [],
+      workDbStatus: () => ({ kind: "absent", label: "Not synced" }),
+      worksBiblioValue: () => ({
+        field_label: "Publisher",
+        value: "",
+        mixed: false,
+        unique_count: 0,
+      }),
+      label: (field: string) => field,
+      display: (value: unknown) => String(value ?? ""),
+      tr: (key: string, fallback = "") => fallback || key,
+      workInsightMetrics: (rows: Array<{ record: { topics?: string[] } }>) => [
+        {
+          id: "topics",
+          field: "topics",
+          title: "Topics",
+          heading: "Top topics",
+          type: "bars",
+          values: [{ key: rows[0]?.record.topics?.[0] || "", value: 1 }],
+        },
+      ],
+      workIndex: () =>
+        new Map([
+          ["Glas", item("Glas", "hospitality")],
+          ["Margins", item("Margins", "ethics")],
+        ]),
+    });
+
+    const snapshot = workspace.getWorksWorkspaceSnapshot() as {
+      works: Array<{ work: string; insights: Array<{ field: string; values: unknown[] }> }>;
+    };
+
+    expect(snapshot.works).toHaveLength(2);
+    expect(
+      snapshot.works.map((work) => work.insights.find((item) => item.field === "topics")?.values),
+    ).toEqual([
+      [{ key: "hospitality", value: 1, other: false }],
+      [{ key: "ethics", value: 1, other: false }],
+    ]);
+  });
 });
