@@ -413,6 +413,58 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
+  it("shows active filters as removable chips outside the filter panel", async () => {
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({
+        filters: {
+          needsReview: true,
+          dbStatus: "changed",
+          author: "Jacques Derrida",
+        },
+      }),
+    );
+    const wrapper = await mountWorks();
+    const chips = wrapper.findAll(".works-filter-chip");
+    expect(chips.map((chip) => chip.text())).toEqual(
+      expect.arrayContaining(["Only works needing review×Remove", "Pending changes×Remove", "Jacques Derrida×Remove"]),
+    );
+
+    await chips.find((chip) => chip.text().includes("Jacques Derrida"))!.trigger("click");
+    expect(runtime.setWorksView).toHaveBeenCalledWith({ author: "" });
+    wrapper.unmount();
+  });
+
+  it("paginates large card libraries instead of revealing all cards by animation frame", async () => {
+    const items = Array.from({ length: 50 }, (_, index) =>
+      workItem({ work: `Work ${String(index + 1).padStart(2, "0")}` }),
+    );
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({
+        works: items,
+        scopeWorks: items.map((item) => ({
+          work: item.work,
+          count: item.count,
+          authors: item.authors,
+          year_label: item.year_label,
+        })),
+        totalWorks: items.length,
+        visibleWorks: items.length,
+      }),
+    );
+    const wrapper = await mountWorks();
+
+    expect(wrapper.findAll(".works-card")).toHaveLength(48);
+    expect(wrapper.get(".works-library-pagination").text()).toContain("Page 1 / 2");
+    const next = wrapper
+      .get(".works-library-pagination")
+      .findAll("button")
+      .find((button) => button.text().includes("Next"))!;
+    await next.trigger("click");
+    expect(wrapper.findAll(".works-card")).toHaveLength(2);
+    expect(wrapper.get(".works-library-pagination").text()).toContain("Page 2 / 2");
+    wrapper.unmount();
+  });
+
   it("renders List mode as a semantic dense table rather than compressed cards", async () => {
     runtime.getWorksWorkspaceSnapshot.mockReturnValue(adminSnapshot({ viewMode: "list" }));
     const wrapper = await mountWorks();
