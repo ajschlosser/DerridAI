@@ -105,10 +105,9 @@ def test_safe_direct_ner_indexing_candidates_become_unreviewed_assertions():
         "engine_version": "3.8.7",
         "model": "en_core_web_lg",
     }]
-    status = record["metadata_field_status"]["persons"]
-    assert status["candidate_only"] is True
-    assert status["verification_status"] == "pending_review"
-    assert status["reason_code"] == "direct_ner_indexing_candidate"
+    assert persons.legacy_metadata["candidate_only"] is True
+    assert persons.legacy_metadata["verification_status"] == "pending_review"
+    assert persons.legacy_metadata["reason_code"] == "direct_ner_indexing_candidate"
 
 
 def test_stale_nlp_projection_is_never_promoted():
