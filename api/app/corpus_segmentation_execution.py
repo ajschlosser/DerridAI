@@ -68,7 +68,9 @@ class BuildSegmentationExecutionMixin:
         payload = {
             "prompt": SEGMENTATION_PROMPT_VERSION,
             "left_id": left.get("block_id"), "left_text": left.get("text"),
+            "left_thread_language": left.get("thread_language"),
             "right_id": right.get("block_id"), "right_text": right.get("text"),
+            "right_thread_language": right.get("thread_language"),
             "document_context": _manifest_prompt_context(manifest or {}),
             "provider": request.get("provider"), "model": request.get("model"),
             "temperature": generation.temperature, "top_p": generation.top_p,
@@ -115,9 +117,17 @@ class BuildSegmentationExecutionMixin:
         for c in batch:
             i=int(c["index"])
             left,right=blocks[i],blocks[i+1]
+            left_language = str(
+                left.get("thread_language") or manifest.get("language") or ""
+            ).strip()
+            right_language = str(
+                right.get("thread_language") or manifest.get("language") or ""
+            ).strip()
             items.append(
                 f"TRANSITION {left['block_id']} -> {right['block_id']}\n"
                 f"Signals: {', '.join(c.get('signals') or [])}\n"
+                f"Language context: left={left_language or 'unknown'}, "
+                f"right={right_language or 'unknown'}\n"
                 f"LEFT:\n{str(left.get('text') or '')[-3200:]}\nRIGHT:\n{str(right.get('text') or '')[:3200]}"
             )
         context = _manifest_prompt_context(manifest)
