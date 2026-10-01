@@ -118,8 +118,8 @@ function balancedTerms(
     for (const bucket of buckets) {
       if (out.length >= MAX_TERMS_PER_RECORD) break;
       const label = bucket.values[bucket.index];
-      if (!label) continue;
       bucket.index += 1;
+      if (!label) continue;
       out.push({ kind: bucket.kind, label });
     }
   }
