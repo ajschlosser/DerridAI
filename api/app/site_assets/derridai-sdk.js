@@ -581,7 +581,7 @@ ${evidence}`;
           modeRequested,
           "keyword",
           [],
-          candidates.length,
+          candidateSet.records.length,
           candidateSet.chunksLoaded,
           semanticAvailable,
           deduped.duplicatesRemoved,
@@ -599,7 +599,7 @@ ${evidence}`;
               "This publication has no compatible semantic vectors; keyword results were returned."
             )
           ],
-          candidates.length,
+          candidateSet.records.length,
           candidateSet.chunksLoaded,
           false,
           deduped.duplicatesRemoved,
@@ -617,7 +617,7 @@ ${evidence}`;
               "No embedding capability was supplied; keyword results were returned."
             )
           ],
-          candidates.length,
+          candidateSet.records.length,
           candidateSet.chunksLoaded,
           true,
           deduped.duplicatesRemoved,
@@ -641,7 +641,7 @@ ${evidence}`;
               { mismatches: descriptorMismatches }
             )
           ],
-          candidates.length,
+          candidateSet.records.length,
           candidateSet.chunksLoaded,
           true,
           deduped.duplicatesRemoved,
@@ -670,7 +670,7 @@ ${evidence}`;
                   { mismatches: resultMismatches }
                 )
               ],
-              candidates.length,
+              candidateSet.records.length,
               candidateSet.chunksLoaded,
               true,
               deduped.duplicatesRemoved,
@@ -690,7 +690,7 @@ ${evidence}`;
               error instanceof Error ? error.message : "Embedding generation failed; keyword results were returned."
             )
           ],
-          candidates.length,
+          candidateSet.records.length,
           candidateSet.chunksLoaded,
           true,
           deduped.duplicatesRemoved,
@@ -710,7 +710,7 @@ ${evidence}`;
               { expected: expectedDimension, actual: vector.length }
             )
           ],
-          candidates.length,
+          candidateSet.records.length,
           candidateSet.chunksLoaded,
           true,
           deduped.duplicatesRemoved,
@@ -732,7 +732,7 @@ ${evidence}`;
           modeRequested,
           "semantic",
           [],
-          candidates.length,
+          candidateSet.records.length,
           candidateSet.chunksLoaded,
           true,
           deduped.duplicatesRemoved,
@@ -763,7 +763,7 @@ ${evidence}`;
         modeRequested,
         "hybrid",
         [],
-        candidates.length,
+        candidateSet.records.length,
         candidateSet.chunksLoaded,
         true,
         deduped.duplicatesRemoved,
