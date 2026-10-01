@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
-from app import field_assertions as assertions
-from app.metadata_candidates import apply_indexing_nlp_candidates
-from app.metadata_schema import default_schema
-from app.nlp_annotations import text_digest
+from app import (
+    field_assertions as assertions,
+    metadata_candidates,
+    metadata_schema,
+    nlp_annotations,
+)
 
 
 TEXT = "Rousseau discusses Of Grammatology and hospitality."
@@ -23,7 +25,7 @@ def _record() -> dict:
             "engine": "spacy",
             "engine_version": "3.8.7",
             "model": "en_core_web_lg",
-            "text_sha256": text_digest(TEXT),
+            "text_sha256": nlp_annotations.text_digest(TEXT),
             "fields": {
                 "persons": [
                     {
@@ -75,7 +77,7 @@ def _record() -> dict:
 
 def test_safe_direct_ner_indexing_candidates_become_unreviewed_assertions():
     record = _record()
-    summary = apply_indexing_nlp_candidates(record, default_schema())
+    summary = metadata_candidates.apply_indexing_nlp_candidates(record, metadata_schema.default_schema())
 
     assert summary["resolved_fields"] == ["persons", "works_referenced"]
     assert record["persons"] == ["Rousseau"]
@@ -95,7 +97,7 @@ def test_safe_direct_ner_indexing_candidates_become_unreviewed_assertions():
         "text": "Rousseau",
         "tag": "PERSON",
         "source": "ner",
-        "text_sha256": text_digest(TEXT),
+        "text_sha256": nlp_annotations.text_digest(TEXT),
         "engine": "spacy",
         "engine_version": "3.8.7",
         "model": "en_core_web_lg",
@@ -118,7 +120,7 @@ def test_crowded_direct_ner_set_is_deferred_to_semantic_indexing():
             "engine": "spacy",
             "engine_version": "3.8.7",
             "model": "en_core_web_lg",
-            "text_sha256": text_digest(text),
+            "text_sha256": nlp_annotations.text_digest(text),
             "fields": {
                 "persons": [
                     {
@@ -134,7 +136,7 @@ def test_crowded_direct_ner_set_is_deferred_to_semantic_indexing():
         },
     }
 
-    summary = apply_indexing_nlp_candidates(record, default_schema())
+    summary = metadata_candidates.apply_indexing_nlp_candidates(record, metadata_schema.default_schema())
 
     assert summary["resolved_fields"] == []
     assert "persons" not in record
@@ -144,7 +146,7 @@ def test_crowded_direct_ner_set_is_deferred_to_semantic_indexing():
 def test_stale_nlp_projection_is_never_promoted():
     record = _record()
     record["text"] += " Revised."
-    summary = apply_indexing_nlp_candidates(record, default_schema())
+    summary = metadata_candidates.apply_indexing_nlp_candidates(record, metadata_schema.default_schema())
 
     assert summary["resolved_fields"] == []
     assert "persons" not in record
@@ -152,7 +154,7 @@ def test_stale_nlp_projection_is_never_promoted():
 
 
 def test_nlp_candidates_do_not_overwrite_present_memory_or_human_values():
-    schema = default_schema()
+    schema = metadata_schema.default_schema()
     record = _record()
     assertions.create_memory_assertion(
         record,
@@ -172,7 +174,7 @@ def test_nlp_candidates_do_not_overwrite_present_memory_or_human_values():
     )
     assertions.project_record_assertions(record)
 
-    summary = apply_indexing_nlp_candidates(record, schema)
+    summary = metadata_candidates.apply_indexing_nlp_candidates(record, schema)
 
     assert summary["resolved_fields"] == []
     assert record["persons"] == ["Derrida"]
