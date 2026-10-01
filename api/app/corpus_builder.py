@@ -1761,6 +1761,10 @@ class PdfCorpusRepository:
         encoded = [self._encode_migrated(record, schema, signature) for record in records]
         records = [record for record, _payload in encoded]
         payloads = [payload for _record, payload in encoded]
+        # Full-corpus hashing belongs on the write path. Interactive semantic-map
+        # reads consult only the resulting generation counters.
+        semantic_digest = semantic_records_digest(records)
+        text_digest = text_records_digest(records)
         path = self.build_records_path(build_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
@@ -1796,6 +1800,11 @@ class PdfCorpusRepository:
                 )
                 connection.commit()
             self._set_records_projection_state(build_id, dirty=False)
+            self._update_semantic_projection_state(
+                build_id,
+                semantic_digest=semantic_digest,
+                text_digest=text_digest,
+            )
             self._invalidate_review_records_cache(build_id)
 
     def _patch_review_records_cache(
