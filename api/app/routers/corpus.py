@@ -763,6 +763,42 @@ def get_work_semantic_map_records(work: str) -> dict[str, Any]:
     return {"records": system_store.list_records_for_work(work)}
 
 
+@router.get("/api/works/{work}/semantic-map")
+def get_work_semantic_map(work: str) -> dict[str, Any]:
+    """Persisted visual Work map projected from the canonical semantic graph.
+
+    The first request after an invalidation materializes System Data. Subsequent
+    requests are indexed reads and do not rescan corpus Records or relationships.
+    """
+    rows = system_store.list_records_for_work(work, limit=500)
+    build_ids = list(dict.fromkeys(str(row.get("build_id") or "") for row in rows if row.get("build_id")))
+    sources: list[dict[str, Any]] = []
+    generations: dict[str, int] = {}
+    for build_id in build_ids:
+        try:
+            payload = pdf_corpus_builds.work_semantic_map(build_id, work)
+            generations[build_id] = int(system_store.semantic_map_state(build_id).get("generation") or 0)
+        except KeyError:
+            continue
+        for source in payload.get("sources") or []:
+            if isinstance(source, dict):
+                sources.append(source)
+
+    deduped: dict[str, dict[str, Any]] = {}
+    for source in sources:
+        record_id = str(source.get("id") or "")
+        key = record_id or json.dumps(source, sort_keys=True, ensure_ascii=False)
+        deduped.setdefault(key, source)
+    return {
+        "state": "ready",
+        "kind": "work_semantic_map_sources",
+        "work": work,
+        "sources": list(deduped.values()),
+        "record_count": len(deduped),
+        "build_generations": generations,
+    }
+
+
 @router.get("/api/pdf/corpus-builds/{build_id}/semantic-content-graph/nodes/{node_id}")
 def get_pdf_corpus_semantic_graph_node(build_id: str, node_id: str) -> dict[str, Any]:
     """One semantic-graph node with its relations and Records, for graph walking."""
