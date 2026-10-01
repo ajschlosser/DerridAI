@@ -70,6 +70,7 @@ from .field_assertions import (
     reopen_assertion,
 )
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
+from .metadata_candidates import apply_indexing_nlp_candidates
 from .metadata_precedents_cache import CACHE_KEY as PRECEDENTS_CACHE_KEY
 from .metadata_precedents_cache import build_precedents_cache
 from .metadata_schema import (
@@ -120,6 +121,25 @@ def _field_has_strong_memory_prefill(record: dict[str, Any], field_name: str) ->
         and float(assertion.confidence) >= 0.88
     )
 
+
+def _field_resolved_before_indexing_model(record: dict[str, Any], field_name: str) -> bool:
+    """Whether a higher-priority candidate makes indexing generation redundant.
+
+    Human/structural authority always wins. Reviewed-memory values require the
+    existing conservative similarity threshold. derridai:nlp values are eligible
+    only because metadata_candidates already restricts promotion to direct-mention
+    indexing semantics and binds the exact current-text spans.
+    """
+    assertion = current_assertion_by_name(record, field_name)
+    if assertion is None or assertion.value_status != "present" or assertion.value in (None, "", []):
+        return False
+    if assertion.authority_status in {"human_confirmed", "human_override"}:
+        return True
+    if assertion.derivation_method in {"deterministic", "inherited"}:
+        return True
+    if assertion.derivation_method == "derridai:nlp":
+        return assertion.evaluation_status == "value_supported"
+    return _field_has_strong_memory_prefill(record, field_name)
 
 def _family_has_strong_memory_prefill(
     record: dict[str, Any], schema: MetadataSchema, group_key: str,
@@ -279,6 +299,11 @@ class MetadataEnrichmentExecutionMixin:
         )
         semantic_indexing = bool(request.get("semantic_indexing")) or enrichment_mode == "deep"
         quotation_signal = _has_quotation_signal(record, source_text_for_routing)
+        if explicit_families is None and semantic_indexing:
+            # NLP is a derived candidate source, not authority. Only the narrow
+            # direct-mention indexing resolver may promote it into unreviewed
+            # FieldAssertions before retrieval/model routing.
+            apply_indexing_nlp_candidates(record, schema)
         precedent_fields: set[str] = set()
         for group in schema.groups:
             if explicit_families is not None and group.key not in explicit_families:
@@ -288,7 +313,15 @@ class MetadataEnrichmentExecutionMixin:
                     continue
                 if group.key == "indexing" and not semantic_indexing:
                     continue
-                if group.key == "indexing" and _family_has_strong_memory_prefill(record, schema, group.key):
+                if group.key == "indexing":
+                    unresolved_indexing = {
+                        field.name
+                        for field in schema.fields_in(group.key)
+                        if not _field_resolved_before_indexing_model(record, field.name)
+                    }
+                    if not unresolved_indexing:
+                        continue
+                    precedent_fields.update(unresolved_indexing)
                     continue
             precedent_fields.update(field.name for field in schema.fields_in(group.key))
             if group.key == CORE_GROUP:
@@ -653,7 +686,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 model_fields = [
                     field
                     for field in schema_group_fields
-                    if not _field_has_strong_memory_prefill(record, field.name)
+                    if not _field_resolved_before_indexing_model(record, field.name)
                 ]
             model_field_names = [field.name for field in model_fields]
             model_fields_by_family[group.key] = model_field_names
