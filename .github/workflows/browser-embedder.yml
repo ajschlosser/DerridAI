@@ -8,6 +8,7 @@ on:
       - "web/scripts/build-browser-embedder.mjs"
       - "web/scripts/smoke-browser-embedder.mjs"
       - "web/tests/frontend/browserEmbedderBundle.test.ts"
+      - "web/package.json"
       - "web/package-lock.json"
       - ".github/workflows/browser-embedder.yml"
   push:
@@ -17,6 +18,7 @@ on:
       - "web/scripts/build-browser-embedder.mjs"
       - "web/scripts/smoke-browser-embedder.mjs"
       - "web/tests/frontend/browserEmbedderBundle.test.ts"
+      - "web/package.json"
       - "web/package-lock.json"
       - ".github/workflows/browser-embedder.yml"
 
