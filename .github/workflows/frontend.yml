@@ -100,14 +100,7 @@ jobs:
           publication=false
           while IFS= read -r path; do
             case "$path" in
-              .github/workflows/frontend.yml)
-                backend=true
-                frontend=true
-                contract=true
-                format=true
-                publication=true
-                ;;
-              scripts/*)
+              .github/workflows/frontend.yml|scripts/*)
                 backend=true
                 frontend=true
                 contract=true
@@ -131,20 +124,9 @@ jobs:
               web/*)
                 frontend=true
                 format=true
-                case "$path" in
-                  web/sdk/*|web/tests/publication/*|web/playwright.publication.config.ts|web/vite.sdk.config.ts|web/vite.sdk.package.config.ts|web/package.json)
-                    publication=true
-                    ;;
-                esac
                 ;;
               README.md|CONTRIBUTING.md|AGENTS.md|docs/*|.prettierignore|.editorconfig)
                 format=true
-                ;;
-            esac
-
-            case "$path" in
-              api/app/site_publication.py|api/app/site_record_profile.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|api/app/locales/*.py|api/app/routers/sites.py|tests/test_site_publication.py|tests/test_site_record_profile.py|scripts/generate_publication_acceptance_artifacts.py|scripts/test_publication_nginx_bundle.sh)
-                publication=true
                 ;;
             esac
 
@@ -154,6 +136,12 @@ jobs:
             case "$path" in
               *.md|*.json|*.yml|*.yaml|*.js|*.mjs|*.cjs|*.ts|*.tsx|*.vue|*.css|*.scss|*.html)
                 format=true
+                ;;
+            esac
+
+            case "$path" in
+              api/app/site_publication.py|api/app/routers/sites.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|web/sdk/*|web/vite.sdk*.ts|web/playwright.publication.config.ts|web/tests/e2e/static-site-*.spec.ts|web/tests/fixtures/sdk-consumer/*|web/scripts/check-sdk-consumer.mjs|scripts/build_publication_acceptance_fixtures.py|scripts/check_publication_artifacts.sh|.github/workflows/frontend.yml)
+                publication=true
                 ;;
             esac
           done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
@@ -191,7 +179,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff==0.16.8
-      - run: ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py scripts/generate_publication_acceptance_artifacts.py
+      - run: ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 
   backend-types:
     needs: changes
@@ -286,56 +274,6 @@ jobs:
         run: npm run build:ci
       - name: Storybook build
         run: npm run build-storybook
-
-  publication-artifacts:
-    needs: changes
-    if: needs.changes.outputs.publication == 'true'
-    name: publication-artifacts
-    runs-on: ubuntu-latest
-    env:
-      DERRIDAI_PUBLICATION_ARTIFACT_DIR: ${{ runner.temp }}/derridai-publication-artifacts
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Restore Playwright Chromium cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
-      - name: Install publication generator dependencies
-        run: |
-          grep -vE '^sentence-transformers' api/requirements.txt > /tmp/derridai-publication-requirements.txt
-          pip install -r /tmp/derridai-publication-requirements.txt
-      - name: Install frontend dependencies
-        working-directory: web
-        run: npm ci --no-audit --no-fund
-      - name: Install Playwright Chromium
-        working-directory: web
-        run: npx playwright install --with-deps chromium
-      - name: Build SDK browser artifact from source
-        working-directory: web
-        run: npm run build:sdk
-      - name: Verify committed SDK browser artifact is current
-        working-directory: web
-        run: git diff --exit-code -- ../api/app/site_assets/derridai-sdk.js
-      - name: Generate real publication artifacts
-        run: python scripts/generate_publication_acceptance_artifacts.py "$DERRIDAI_PUBLICATION_ARTIFACT_DIR"
-      - name: Exercise single-file export from file URL
-        working-directory: web
-        run: npm run test:e2e:publication
-      - name: Build, start, probe, and stop nginx export
-        run: |
-          DERRIDAI_SITE_PORT=18080 \
-          DERRIDAI_SITE_IMAGE=derridai-publication-acceptance-${GITHUB_RUN_ID} \
-          DERRIDAI_SITE_CONTAINER=derridai-publication-acceptance-${GITHUB_RUN_ID} \
-          sh scripts/test_publication_nginx_bundle.sh "$DERRIDAI_PUBLICATION_ARTIFACT_DIR/nginx"
 
   frontend-legacy:
     needs: changes
@@ -443,6 +381,43 @@ jobs:
       - name: Corpus Builder WCAG 2.2 AA sweep
         run: npm run test:e2e:a11y
 
+  publication-artifacts:
+    needs: changes
+    if: needs.changes.outputs.publication == 'true'
+    name: publication-artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install publication acceptance dependencies
+        run: |
+          grep -vE '^sentence-transformers' api/requirements.txt > /tmp/derridai-publication-requirements.txt
+          pip install -r /tmp/derridai-publication-requirements.txt
+          cd web
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          npm run build:sdk
+      - name: Generate real publication artifacts
+        run: python scripts/build_publication_acceptance_fixtures.py .tmp/publication-acceptance
+      - name: Exercise single-file publication from file protocol
+        working-directory: web
+        env:
+          DERRIDAI_PUBLICATION_FIXTURE_DIR: ../.tmp/publication-acceptance
+        run: npx playwright test -c playwright.publication.config.ts
+      - name: Build and run generated nginx publication
+        env:
+          DERRIDAI_SITE_PORT: "18080"
+          DERRIDAI_SITE_IMAGE: derridai-publication-acceptance-${{ github.run_id }}
+          DERRIDAI_SITE_CONTAINER: derridai-publication-acceptance-${{ github.run_id }}
+        run: sh scripts/check_publication_artifacts.sh .tmp/publication-acceptance
+
   # Preserve the historical required-check name while allowing unrelated
   # backend-only changes to skip all frontend compute.
   frontend:
@@ -454,10 +429,10 @@ jobs:
       - api-contract
       - frontend-lint
       - frontend-static
-      - publication-artifacts
       - frontend-legacy
       - frontend-e2e
       - frontend-a11y
+      - publication-artifacts
     runs-on: ubuntu-latest
     steps:
       - name: Verify frontend gates
@@ -469,11 +444,11 @@ jobs:
           CONTRACT_RESULT: ${{ needs.api-contract.result }}
           LINT_RESULT: ${{ needs.frontend-lint.result }}
           STATIC_RESULT: ${{ needs.frontend-static.result }}
-          PUBLICATION_CHANGED: ${{ needs.changes.outputs.publication }}
-          PUBLICATION_RESULT: ${{ needs.publication-artifacts.result }}
           LEGACY_RESULT: ${{ needs.frontend-legacy.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           A11Y_RESULT: ${{ needs.frontend-a11y.result }}
+          PUBLICATION_CHANGED: ${{ needs.changes.outputs.publication }}
+          PUBLICATION_RESULT: ${{ needs.publication-artifacts.result }}
         run: |
           if [ "$FORMAT_CHANGED" = "true" ] && [ "$FORMAT_RESULT" != "success" ]; then
             echo "The repository formatting gate did not succeed: $FORMAT_RESULT"

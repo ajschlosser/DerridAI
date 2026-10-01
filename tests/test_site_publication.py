@@ -489,3 +489,25 @@ def test_nginx_export_contains_one_container_deployment_and_executable_scripts(
     assert "docker rm -f" in stop
     assert start_mode & 0o111
     assert stop_mode & 0o111
+
+
+def test_every_translation_key_used_by_the_site_runtime_exists_in_both_locales() -> None:
+    import re
+    from pathlib import Path
+
+    from app.locales.en_us import EN_US
+    from app.locales.fr_ca import FR_CA
+
+    source = (Path(site_publication.__file__).parent / "site_assets" / "derridai-site.js").read_text("utf-8")
+    used = set(re.findall(r"""t\(["'](site\.runtime\.[a-z_0-9]+)["']""", source))
+    tour_start = source.index("const TOUR_STEPS")
+    tour_end = source.index("];", tour_start)
+    tour_ids = re.findall(r"""\bid:\s*["']([a-z_0-9]+)["']""", source[tour_start:tour_end])
+    used.update(
+        f"site.runtime.tutorial_{step_id}_{suffix}"
+        for step_id in tour_ids
+        for suffix in ("title", "body")
+    )
+    assert used
+    assert sorted(used - set(EN_US)) == []
+    assert sorted(used - set(FR_CA)) == []

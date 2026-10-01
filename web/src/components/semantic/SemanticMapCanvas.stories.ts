@@ -16,6 +16,16 @@ const graph = buildSemanticMap(
   "r1",
 );
 
+const denseDisconnected = buildSemanticMap(
+  Array.from({ length: 10 }, (_, index) => ({
+    id: `record-${index}`,
+    work: `Work ${index}`,
+    concepts: [`concept ${index} alpha`, `concept ${index} beta`],
+    topics: [`topic ${index}`],
+    persons: [`Person ${index}`],
+  })),
+);
+
 const meta = {
   title: "Corpus/Semantic map canvas",
   component: SemanticMapCanvas,
@@ -23,4 +33,11 @@ const meta = {
 } satisfies Meta<typeof SemanticMapCanvas>;
 export default meta;
 type Story = StoryObj<typeof meta>;
+
 export const Draggable: Story = {};
+export const DenseDisconnected: Story = {
+  args: { graph: denseDisconnected },
+};
+export const DenseDisconnectedWide: Story = {
+  args: { graph: denseDisconnected, density: "wide" },
+};
