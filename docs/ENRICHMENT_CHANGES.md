@@ -62,12 +62,13 @@ Each family prompt can repeat substantial shared context: manifest information, 
 
 ### LLM retry/escalation
 
-The built-in `corpus.metadata_enrichment.current@1` pipeline uses:
+The active built-in `corpus.metadata_enrichment.current@2` pipeline now uses:
 
-- primary provider, two attempts;
-- on failure/timeout, review provider, two attempts.
+- one primary-provider attempt;
+- conservative syntax-level JSON repair plus the schema-derived Pydantic contract;
+- on validation/provider failure or timeout, one review-provider attempt when configured.
 
-A single troublesome metadata family can therefore spend up to four generations.
+The historical `corpus.metadata_enrichment.current@1` two-primary-plus-two-review chain remains available as a disabled built-in for reproducibility. Pipeline Studio clones can still choose a larger attempt budget explicitly.
 
 ### Reviewed-precedent retrieval
 
@@ -291,9 +292,11 @@ The first tranche is now in progress on this branch:
 - **Implemented on the follow-up branch:** indexing generation is now field-scoped rather than only family-scoped. Strong reviewed-memory values remove only the fields they resolve from the indexing response contract, prompt, reviewer-memory packet, and precedent retrieval; unresolved indexing fields still go to the model. Explicit human reruns restore the complete family contract.
 - **Implemented on the follow-up branch:** exact current-text NER spans may resolve only the stable direct-mention indexing semantics `derridai.indexing.persons` and `derridai.indexing.works_referenced`. They are stored as unreviewed `derridai:nlp` FieldAssertions with exact offsets/text digest/tagger provenance and no invented confidence. Topics, concepts, discourse attribution, and quotation relations are not promoted from raw tags.
 - **Implemented on the follow-up branch:** per-family execution ledger entries record `requested_fields`, so audits can distinguish a full-family model call from a candidate-reduced field contract.
+- **Implemented on the follow-up branch:** the active metadata-enrichment pipeline is now `corpus.metadata_enrichment.current@2`: one primary attempt followed by at most one review-provider attempt after structured-output validation/provider failure. The old 2+2 chain is retained as disabled version 1 for reproducibility, and Pipeline Studio remains the explicit override point.
+- **Implemented on the follow-up branch:** call telemetry now records requested-field count and prompt character count, and enrichment metrics expose their p50/p95/totals alongside family latency so candidate reduction can be measured rather than inferred.
 - **Tests updated:** focused ownership-failure, evidence-pipeline identity/default-assignment, and latency-metric coverage track these changes.
 
-The current follow-up slice implements the first broader candidate-first indexing path through FieldAssertions. The next slice is validator-driven escalation and tighter one-attempt/model-budget behavior, plus benchmark work to measure whether the reduced field contracts translate into the required wall-clock reduction without worsening reviewer correction/rejection rates.
+The current follow-up slice implements candidate-first indexing and validation-driven one-attempt escalation. The remaining performance work is benchmark-led: compare the new requested-field/prompt-size/call-latency telemetry against the PR #366 baseline, then reduce per-family output ceilings only where observed valid structured outputs show sufficient headroom. Any further deterministic promotion should be gated by reviewer correction/rejection data rather than by tagger confidence alone.
 
 ## Implementation sequence on this branch
 
@@ -305,7 +308,8 @@ PR #366 established the first tranche. The follow-up branch proceeds in independ
 4. promote only direct-mention indexing semantics through unreviewed `derridai:nlp` FieldAssertions with exact span provenance;
 5. scope precedent retrieval to the same unresolved field set and retain the requested field contract in the execution ledger;
 6. gate with focused provenance/routing tests and the full quality workflow;
-7. benchmark candidate-first versus the PR #366 baseline before expanding deterministic promotion or tightening model budgets further.
+7. switch the default metadata-enrichment pipeline to one validated primary attempt plus at most one review-provider escalation, while preserving the 2+2 chain as a historical built-in;
+8. benchmark candidate-first plus one-attempt escalation versus the PR #366 baseline before tightening output budgets or expanding deterministic promotion further.
 
 Larger behavioral changes must be benchmarked against the merged enrichment baseline before becoming default.
 
