@@ -25,6 +25,8 @@ async function importTestRuntime() {
   runtimeInstance += 1;
   const fakeTransformers = `
     // synthetic runtime ${runtimeInstance}
+    import { ortMarker } from "onnxruntime-web/webgpu";
+
     export const env = {
       allowLocalModels: true,
       allowRemoteModels: false,
@@ -42,6 +44,7 @@ async function importTestRuntime() {
       calls: [],
       fetched: [],
       env,
+      ortMarker,
       pipelineOptions: null,
     };
 
@@ -78,6 +81,10 @@ async function importTestRuntime() {
 
   const assets = {
     "runtime/transformers.web.min.js": asset(fakeTransformers, "text/javascript"),
+    "runtime/ort.webgpu.bundle.min.mjs": asset(
+      'export const ortMarker = "embedded-ort";',
+      "text/javascript",
+    ),
     "runtime/ort-wasm-simd-threaded.jsep.wasm": asset(
       new Uint8Array([0, 97, 115, 109]),
       "application/wasm",
@@ -94,7 +101,8 @@ async function importTestRuntime() {
     },
     runtime: {
       transformers: { version: "test" },
-      onnxWasm: {},
+      onnxJavaScript: { version: "test" },
+      onnxWasm: { version: "test" },
     },
     model: {
       id: "Xenova/multilingual-e5-small",
@@ -175,6 +183,7 @@ describe("self-contained browser embedder runtime", () => {
               };
             };
           };
+          ortMarker: string;
           pipelineOptions: {
             task: string;
             model: string;
@@ -196,6 +205,7 @@ describe("self-contained browser embedder runtime", () => {
       normalize: true,
     });
     expect(state.fetched[0].config).toEqual({ model_type: "bert" });
+    expect(state.ortMarker).toBe("embedded-ort");
     expect(state.pipelineOptions).toMatchObject({
       task: "feature-extraction",
       model: "Xenova/multilingual-e5-small",
