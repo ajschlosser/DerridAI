@@ -331,6 +331,7 @@ class SystemStore:
         payload: dict[str, Any],
         *,
         work: str | None = None,
+        audience: str = "",
     ) -> None:
         with self._lock:
             self.repository.put_semantic_map_projection(
@@ -340,6 +341,7 @@ class SystemStore:
                 generation,
                 payload,
                 work=work,
+                audience=audience,
             )
 
     def get_semantic_map_projection(
@@ -347,20 +349,29 @@ class SystemStore:
         scope_type: str,
         scope_id: str,
         build_id: str,
+        *,
+        audience: str = "",
     ) -> dict[str, Any] | None:
         with self._lock:
-            return self.repository.get_semantic_map_projection(scope_type, scope_id, build_id)
+            return self.repository.get_semantic_map_projection(
+                scope_type,
+                scope_id,
+                build_id,
+                audience=audience,
+            )
 
     def list_semantic_map_projections_for_work(
         self,
         work: str,
         *,
         scope_type: str = "work",
+        audience: str = "",
     ) -> list[dict[str, Any]]:
         with self._lock:
             return self.repository.list_semantic_map_projections_for_work(
                 work,
                 scope_type=scope_type,
+                audience=audience,
             )
 
     def embedding_defaults(self) -> dict[str, Any]:
