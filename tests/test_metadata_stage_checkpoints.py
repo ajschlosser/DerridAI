@@ -77,6 +77,96 @@ def _metadata_result(schema_name:str):
     return {"metadata":{"topics":["hospitality"]},"review_reason":""}
 
 
+def test_metadata_stage_checkpoint_updates_only_target_record_and_counters(tmp_path, monkeypatch):
+    """A family checkpoint must not deserialize/rewrite the complete corpus.
+
+    The build-level counters are initialized once by the scheduler. Each callback then
+    moves exactly one family between queued/running/terminal buckets while persisting
+    only that Record through the SQLite-backed targeted repository path.
+    """
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _install_minimal_build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    record = {
+        "record_id": "r1",
+        "record_revision": 1,
+        "text": "Derrida discusses hospitality.",
+        "text_length": 30,
+        "source_asset_id": "asset-elephant",
+        "source_block_ids": ["b1"],
+        "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}],
+        "metadata_stage_status": {
+            "discourse": "queued",
+            "quotation": "queued",
+            "indexing": "queued",
+        },
+        "metadata_execution_ledger": {},
+        "metadata_enrichment_state": "queued",
+    }
+    repo.save_records(build["build_id"], [record])
+    build = repo.get_build(build["build_id"])
+    build.update({
+        "metadata_tasks_total": 3,
+        "metadata_tasks_completed": 0,
+        "metadata_tasks_failed": 0,
+        "metadata_tasks_skipped": 0,
+        "metadata_tasks_running": 0,
+        "metadata_tasks_queued": 3,
+        "metadata_active_tasks": [],
+    })
+    repo.save_build(build)
+
+    # A checkpoint is Record-local. Any regression to the previous full-corpus
+    # path should fail this test immediately.
+    monkeypatch.setattr(
+        repo,
+        "load_records",
+        lambda _build_id: (_ for _ in ()).throw(AssertionError("full-corpus read is not allowed")),
+    )
+
+    running = dict(record)
+    running["metadata_stage_status"] = dict(record["metadata_stage_status"])
+    running["metadata_stage_status"]["discourse"] = "running"
+    running["metadata_execution_ledger"] = {
+        "discourse": {"state": "running", "started_at": "2026-01-01T00:00:00+00:00"}
+    }
+    manager._persist_build_metadata_stage(
+        build["build_id"], 3, running, "discourse", "running", None,
+    )
+
+    stored = repo.get_record(build["build_id"], "r1")
+    after_running = repo.get_build(build["build_id"])
+    assert stored["metadata_stage_status"]["discourse"] == "running"
+    assert after_running["metadata_tasks_queued"] == 2
+    assert after_running["metadata_tasks_running"] == 1
+    assert after_running["metadata_tasks_completed"] == 0
+    assert after_running["metadata_active_tasks"] == [{
+        "record_id": "r1",
+        "task": "discourse",
+        "started_at": "2026-01-01T00:00:00+00:00",
+    }]
+
+    complete = dict(stored)
+    complete["metadata_stage_status"] = dict(stored["metadata_stage_status"])
+    complete["metadata_stage_status"]["discourse"] = "complete"
+    complete["metadata_execution_ledger"] = dict(stored["metadata_execution_ledger"])
+    complete["metadata_execution_ledger"]["discourse"] = {
+        **complete["metadata_execution_ledger"]["discourse"],
+        "state": "complete",
+    }
+    manager._persist_build_metadata_stage(
+        build["build_id"], 3, complete, "discourse", "complete", None,
+    )
+
+    stored = repo.get_record(build["build_id"], "r1")
+    after_complete = repo.get_build(build["build_id"])
+    assert stored["metadata_stage_status"]["discourse"] == "complete"
+    assert after_complete["metadata_tasks_queued"] == 2
+    assert after_complete["metadata_tasks_running"] == 0
+    assert after_complete["metadata_tasks_completed"] == 1
+    assert after_complete["metadata_active_tasks"] == []
+
+
 def test_metadata_families_checkpoint_independently_and_record_execution_ledger(tmp_path,monkeypatch):
     """Each family runs in order, reports events, and leaves an execution ledger.
 
