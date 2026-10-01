@@ -2438,7 +2438,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         work = str(work or "").strip()
         if not work:
             raise ValueError("A Work is required.")
-        record_refs = system_store.list_records_for_work(work, limit=500)
+        record_refs = system_store.list_records_for_work(work, limit=5000)
         build_ids = sorted({str(item.get("build_id") or "") for item in record_refs if item.get("build_id")})
         generations = {
             build_id: self._semantic_projection_generation(build_id)
