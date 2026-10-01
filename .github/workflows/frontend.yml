@@ -100,12 +100,18 @@ jobs:
           publication=false
           while IFS= read -r path; do
             case "$path" in
-              .github/workflows/frontend.yml|scripts/*)
+              .github/workflows/frontend.yml)
                 backend=true
                 frontend=true
                 contract=true
                 format=true
                 publication=true
+                ;;
+              scripts/*)
+                backend=true
+                frontend=true
+                contract=true
+                format=true
                 ;;
               api/*)
                 backend=true
@@ -131,16 +137,13 @@ jobs:
                     ;;
                 esac
                 ;;
-              api/app/site_publication.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|api/app/routers/sites.py|tests/test_site_publication.py)
-                publication=true
-                ;;
               README.md|CONTRIBUTING.md|AGENTS.md|docs/*|.prettierignore|.editorconfig)
                 format=true
                 ;;
             esac
 
             case "$path" in
-              api/app/site_publication.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|api/app/routers/sites.py|tests/test_site_publication.py)
+              api/app/site_publication.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|api/app/routers/sites.py|tests/test_site_publication.py|scripts/generate_publication_acceptance_artifacts.py|scripts/test_publication_nginx_bundle.sh)
                 publication=true
                 ;;
             esac
@@ -188,7 +191,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff==0.16.8
-      - run: ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
+      - run: ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py scripts/generate_publication_acceptance_artifacts.py
 
   backend-types:
     needs: changes
