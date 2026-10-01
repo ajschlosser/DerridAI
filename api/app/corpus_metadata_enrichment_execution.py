@@ -141,17 +141,6 @@ def _field_resolved_before_indexing_model(record: dict[str, Any], field_name: st
         return assertion.evaluation_status == "value_supported"
     return _field_has_strong_memory_prefill(record, field_name)
 
-def _family_has_strong_memory_prefill(
-    record: dict[str, Any], schema: MetadataSchema, group_key: str,
-) -> bool:
-    """Whether every schema field in a family already has a strong memory proposal."""
-    fields = [field.name for field in schema.fields_in(group_key)]
-    return bool(fields) and all(
-        _field_has_strong_memory_prefill(record, field_name)
-        for field_name in fields
-    )
-
-
 class MetadataEnrichmentExecutionMixin:
     """Mixin members declared here exist on PdfCorpusBuildManager, not on this mixin itself.
 
