@@ -168,8 +168,15 @@ def _is_truncated_structured_output(exc: Exception) -> bool:
 
 
 def _recovery_token_budget(max_tokens: int) -> int:
-    """Give one exceptional malformed-output repair more room than the normal call."""
-    return min(8192, max(max_tokens + 1024, int(max_tokens * 1.5)))
+    """Give one exceptional truncated-output repair enough room to finish.
+
+    The ordinary family budget remains deliberately tight for latency. A response
+    already proven to be truncated is different: repeating it with only a small
+    increment can deterministically reproduce the same failure on compact local
+    models. The exceptional recovery therefore gets a 4096-token floor while
+    remaining bounded by the existing 8192-token corpus ceiling.
+    """
+    return min(8192, max(4096, max_tokens + 2048, int(max_tokens * 2)))
 
 
 class MetadataEnrichmentExecutionMixin:
@@ -1032,6 +1039,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             started_clock = time.monotonic()
             recovery_kind: str | None = None
             recovery_fields: list[str] = []
+            recovery_calls = 0
             recovery_max_tokens: int | None = None
             residual_contradictions: list[str] = []
             try:
@@ -1073,6 +1081,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                         response_contract=schema_name,
                         providers=_provider_roles(active_request),
                     )
+                    recovery_calls += 1
 
                 if recovery_kind is None:
                     recovery_fields = _structured_output_contradiction_fields(result)
@@ -1101,6 +1110,37 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                             response_contract=schema_name,
                             providers=_provider_roles(active_request),
                         )
+                        recovery_calls += 1
+                        residual_contradictions = _structured_output_contradiction_fields(result)
+                        if residual_contradictions:
+                            final_repair_prompt = (
+                                prompt
+                                + "\n\nFINAL STRUCTURED OUTPUT CONSISTENCY REPAIR: the prior "
+                                "repair still contradicted metadata and assessment outcome for: "
+                                + ", ".join(residual_contradictions)
+                                + ". For each named field, choose exactly one consistent state: "
+                                "(1) return a non-null/non-empty metadata value with "
+                                "outcome=supported_value, (2) return null/empty with "
+                                "outcome=no_supported_value when absence is supported, or "
+                                "(3) return null/empty with outcome=uncertain and "
+                                "needs_review=true when the value cannot be determined. "
+                                "Do not place a missing proposed value only in reason text. "
+                                "Return the complete family JSON object; reasons must be one "
+                                "short sentence."
+                            )
+                            result = session.run(
+                                self._structured_metadata_invoker(
+                                    counted_request,
+                                    final_repair_prompt,
+                                    response_model,
+                                    max_tokens,
+                                    schema_name,
+                                    build_id,
+                                ),
+                                response_contract=schema_name,
+                                providers=_provider_roles(active_request),
+                            )
+                            recovery_calls += 1
 
                 residual_contradictions = _structured_output_contradiction_fields(result)
                 persisted_stage_results[task_name] = result
@@ -1116,7 +1156,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "error": None,
                     "recovery_kind": recovery_kind,
                     "recovery_fields": recovery_fields,
-                    "recovery_calls": 1 if recovery_kind else 0,
+                    "recovery_calls": recovery_calls,
                     "recovery_max_output_tokens": recovery_max_tokens,
                     "residual_contradiction_fields": residual_contradictions,
                     "model_invocations": model_invocations,
@@ -1172,7 +1212,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "error": str(exc)[:1200],
                     "recovery_kind": recovery_kind,
                     "recovery_fields": recovery_fields,
-                    "recovery_calls": 1 if recovery_kind else 0,
+                    "recovery_calls": recovery_calls,
                     "recovery_max_output_tokens": recovery_max_tokens,
                     "model_invocations": model_invocations,
                 }
