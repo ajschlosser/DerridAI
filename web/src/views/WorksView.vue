@@ -118,8 +118,8 @@ const visibleWorks = computed(() => {
   const start = (libraryPage.value - 1) * libraryPageSize.value;
   return items.slice(start, start + libraryPageSize.value);
 });
-const showLibraryPagination = computed(
-  () => Boolean(snapshot.value?.works.length && libraryPageCount.value > 1),
+const showLibraryPagination = computed(() =>
+  Boolean(snapshot.value?.works.length && libraryPageCount.value > 1),
 );
 function setLibraryPage(pageNumber: number) {
   libraryPage.value = Math.min(libraryPageCount.value, Math.max(1, pageNumber));
