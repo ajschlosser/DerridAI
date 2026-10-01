@@ -25,7 +25,7 @@ const meta = {
       unknownRecords: 0,
       unavailableRecords: 0,
     },
-    storesEmptyLabel: "No corpus Chroma collections",
+    storesEmptyLabel: "No search indexes available",
     dbUnavailableReason: "",
     canSyncAll: true,
     syncAllDisabledReason: "",
