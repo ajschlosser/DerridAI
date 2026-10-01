@@ -143,7 +143,11 @@ def apply_unit_policy(
             and str(block.get("type") or "paragraph") in DIVISIBLE
             and str(block.get("locator_kind") or "") != "time"
         )
-        parts = divide(text, resolved) if divisible else [text]
+        block_policy = resolved
+        thread_language = str(block.get("thread_language") or "").strip()
+        if thread_language and resolved["mode"] in {"sentence", "auto"}:
+            block_policy = {**resolved, "language": thread_language}
+        parts = divide(text, block_policy) if divisible else [text]
         if len(parts) <= 1:
             out.append(dict(block))
             remap[index] = [str(block.get("block_id"))]
