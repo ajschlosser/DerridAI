@@ -551,6 +551,7 @@ def _values_json(field: SchemaField) -> str:
 def build_group_prompt(
     schema: MetadataSchema, group_key: str, *, base_context: str,
     allowed_region_types: list[str] | None = None, allowed_discourse_roles: list[str] | None = None,
+    field_names: set[str] | list[str] | tuple[str, ...] | None = None,
 ) -> str:
     """The prompt for one group, in the same shape DerridAI has always used:
 
@@ -558,7 +559,12 @@ def build_group_prompt(
     remarks, the shared context block, then the evidence and assessment instructions.
     """
     group = schema.group(group_key)
-    fields = schema.fields_in(group_key)
+    requested_fields = {str(name) for name in field_names} if field_names is not None else None
+    fields = [
+        field
+        for field in schema.fields_in(group_key)
+        if requested_fields is None or field.name in requested_fields
+    ]
     region_types = allowed_region_types or REGION_TYPES
     roles = allowed_discourse_roles or DISCOURSE_ROLES
     lines: list[str] = []
@@ -784,7 +790,14 @@ def _annotation(field: SchemaField) -> Any:
     return str | None
 
 
-def response_model_for(schema: MetadataSchema, group_key: str, *, region_types: list[str] | None = None, roles: list[str] | None = None) -> type[BaseModel]:
+def response_model_for(
+    schema: MetadataSchema,
+    group_key: str,
+    *,
+    region_types: list[str] | None = None,
+    roles: list[str] | None = None,
+    field_names: set[str] | list[str] | tuple[str, ...] | None = None,
+) -> type[BaseModel]:
     """The JSON shape the model must return for one group.
 
     Metadata keys are required (null/[] when unsupported), and every field the
@@ -796,7 +809,12 @@ def response_model_for(schema: MetadataSchema, group_key: str, *, region_types: 
         props["region_type"] = (Literal[tuple(region_types or REGION_TYPES)] | None, ...)
         props["primary_text"] = (bool | None, ...)
         props["discourse_role"] = (Literal[tuple(roles or DISCOURSE_ROLES)] | None, ...)
-    group_fields = schema.fields_in(group_key)
+    requested_fields = {str(name) for name in field_names} if field_names is not None else None
+    group_fields = [
+        field
+        for field in schema.fields_in(group_key)
+        if requested_fields is None or field.name in requested_fields
+    ]
     for field in group_fields:
         props[field.name] = (_annotation(field), ...)
     metadata = create_model(f"{group_key.title()}Metadata", __config__=ConfigDict(extra="forbid"), **props)
