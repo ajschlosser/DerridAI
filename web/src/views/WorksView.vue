@@ -125,6 +125,7 @@ async function createSite(payload: {
   record_profile: SiteRecordProfile;
   languages: string[];
   include_transformers: boolean;
+  include_vectors: boolean;
 }) {
   if (!snapshot.value?.activeStore || createSiteBusy.value) return;
   createSiteBusy.value = true;
@@ -141,6 +142,7 @@ async function createSite(payload: {
         : payload.languages[0] || "en-US",
       languages: payload.languages,
       include_transformers: payload.include_transformers,
+      include_vectors: payload.include_vectors,
       export_format: payload.export_format,
       record_profile: payload.record_profile,
     });
