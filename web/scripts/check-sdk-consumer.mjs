@@ -17,11 +17,10 @@ function run(command, args, options = {}) {
 }
 
 try {
-  const packJson = execFileSync(
-    "npm",
-    ["pack", "./sdk", "--json", "--pack-destination", temp],
-    { cwd: webRoot, encoding: "utf8" },
-  );
+  const packJson = execFileSync("npm", ["pack", "./sdk", "--json", "--pack-destination", temp], {
+    cwd: webRoot,
+    encoding: "utf8",
+  });
   const packed = JSON.parse(packJson);
   const tarball = resolve(temp, packed[0].filename);
 
@@ -37,7 +36,11 @@ try {
     tarball,
   ]);
 
-  run(resolve(webRoot, "node_modules/.bin/tsc"), ["--noEmit", "-p", resolve(fixture, "tsconfig.json")]);
+  run(resolve(webRoot, "node_modules/.bin/tsc"), [
+    "--noEmit",
+    "-p",
+    resolve(fixture, "tsconfig.json"),
+  ]);
   run(resolve(webRoot, "node_modules/.bin/vite"), [
     "build",
     fixture,
