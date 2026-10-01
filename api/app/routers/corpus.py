@@ -780,6 +780,7 @@ def get_record_semantic_map(record_id: str) -> dict[str, Any]:
             "version": 1,
             "kind": "record_semantic_map",
             "record_id": record_id,
+            "build_id": "",
             "record_revision": 0,
             "record_text_sha256": "",
             "layers": {
@@ -809,7 +810,10 @@ def get_record_semantic_map(record_id: str) -> dict[str, Any]:
             ),
         }
     try:
-        return pdf_corpus_builds.record_semantic_map(build_id, record_id)
+        return {
+            **pdf_corpus_builds.record_semantic_map(build_id, record_id),
+            "build_id": build_id,
+        }
     except KeyError:
         return {
             "version": 1,
