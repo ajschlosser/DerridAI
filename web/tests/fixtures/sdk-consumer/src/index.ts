@@ -117,5 +117,6 @@ if (!research.answer?.includes("[E1]") || research.evidencePacket.evidence[0]?.r
   throw new Error("Installed SDK failed its external-consumer Research smoke test.");
 }
 
-document.querySelector("#app")?.replaceChildren("DerridAI SDK consumer OK");
-console.log("derridai-sdk-consumer-ok");
+if (typeof document !== "undefined") {
+  document.querySelector("#app")?.replaceChildren("DerridAI SDK consumer OK");
+}
