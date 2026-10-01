@@ -125,10 +125,10 @@ def test_pos_candidates_drop_function_word_only_runs(monkeypatch):
             ])
 
     monkeypatch.setattr(nlp, "load_pipeline", lambda language: (lambda text: StopDoc()))
-    schema = NS(fields=[NS(name="label", pos_tags=["DET", "NOUN"], ner_tags=[])])
+    schema = NS(fields=[NS(name="label", pos_tags=["DET"], ner_tags=[])])
     record = {"text": "the argument", "region_language": ["English"]}
     result = nlp.annotate_record(record, schema)
-    assert [item["text"] for item in result["fields"]["label"]] == ["argument"]
+    assert "label" not in result["fields"]
 
 
 def test_annotation_run_summary_names_spacy_model_and_language(fake_pipeline, monkeypatch):
