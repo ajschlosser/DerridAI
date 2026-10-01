@@ -142,9 +142,23 @@ def parse_json_object(
             finish_reason=finish_reason,
         )
 
-    candidate, structurally_incomplete = _object_candidate(value)
+    # Strict parse of the whole response wins. This also prevents a valid
+    # top-level array such as [{"value": 1}] from being silently converted into
+    # its first nested object merely because the contract expects an object.
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        parsed = None
+    else:
+        if not isinstance(parsed, dict):
+            raise StructuredJsonMalformedError(
+                "LLM structured response was not a JSON object.",
+                diagnostic=value[:2000],
+                finish_reason=finish_reason,
+            )
+        return parsed
 
-    # Strict parse always wins and preserves valid JSON byte-for-byte semantically.
+    candidate, structurally_incomplete = _object_candidate(value)
     try:
         parsed = json.loads(candidate)
     except json.JSONDecodeError as strict_error:
