@@ -21,10 +21,10 @@ Goal: pages show server changes immediately, with one mechanism and no HTTP poll
 
 ## Remaining work (separate PRs, each based on master)
 
-1. **System Data / Settings pages** (`components/system-data/*`, Vector Stores, Metadata Memory, Operations panel): add keys (for example `vector_collections`, `metadata_exemplars`, `response_library`, `pipelines`, `backups`), emit from the owning stores, migrate views, remove their refresh buttons and now-unused locale keys in `enUsDefaults.json`, `api/app/locales/en_us.py` and `fr_ca.py`.
+1. **System Data / Settings pages**: done for Vector Stores (`vector_collections`, emitted by decorated `ChromaStore` mutations), Metadata Memory and System Data Metadata examples (`metadata_exemplars`), Response Library and System Data Saved responses (`response_library`, also emitted by retention deletes), and the Storage overview. Intentionally left: the Databases and Advanced inspectors (raw tables of arbitrary SQLite stores, no write hook) keep **Refresh**; backups are a command with no listing. Follow-ups: widen `response_library` to the `page.faq` capability (needs a capability-only audience in `broker.audience_allows`, which today requires an owner for non-admins), and switch the Overview pipeline count to `useDataQuery("pipelines")` once the Pipeline Studio change is on master.
 2. **Remove the remaining HTTP pollers**: `ResearchView.vue` (3s `setTimeout` loop; move to `job:<id>` events), `composables/useCapturePolling.ts` (captures: add a `captures` key), `CorpusModelActivity.vue` (`setInterval`; confirm whether it is only a clock like `OperationsPanel.vue`).
 3. **Reader-facing pages** (Search, Record, Compare): do not replace content under a reader. Show a "newer data available" banner driven by the same invalidation (decision recorded with the user: banner, not silent replace; confirm if unsure).
-4. **Ratchet**: a Vitest check that forbids new `setInterval`/`setTimeout` polling and manual `refresh` handlers outside `realtime/` (model on the hex-colour ratchet).
+4. ~~Ratchet~~ Done: `web/tests/frontend/realtime-polling-ratchet.test.ts` forbids new `setInterval` and new manual refresh controls; shrink its allow-lists as pages migrate.
 5. **Docs**: update `docs/USER_GUIDE.md` where it mentions refreshing; add a release note when cutting a release.
 
 ## Gotchas

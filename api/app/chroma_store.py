@@ -1,6 +1,7 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+import functools
 import gc
 import hashlib
 import json
@@ -27,6 +28,7 @@ from .chroma_connection import (
     parse_http_endpoint,
     public_http_config,
 )
+from . import operation_events
 from .config import APP_VERSION, settings
 from .retrieval_selection import cosine_similarity, distance_to_relevance
 
@@ -348,6 +350,30 @@ class Embeddings:
         if len(vectors) != len(texts) or any(not isinstance(vector, list) for vector in vectors):
             raise RuntimeError("The provider returned an unexpected number of embeddings.")
         return [list(map(float, vector)) for vector in vectors]
+
+
+def _notes_collection_change(*extra_resources: str):
+    """Tell realtime clients that the vector-collection listing may be stale (key only, no values).
+
+    ``extra_resources`` are noted too. A mutation addressed to the Response Library cache
+    collection also notes ``response_library``.
+    """
+
+    def decorate(method):
+        @functools.wraps(method)
+        def wrapper(self, *args, **kwargs):
+            result = method(self, *args, **kwargs)
+            operation_events.note_resource_changed("vector_collections")
+            for resource in extra_resources:
+                operation_events.note_resource_changed(resource)
+            target = args[0] if args else kwargs.get("name", kwargs.get("store"))
+            if target == "_response_cache":
+                operation_events.note_resource_changed("response_library")
+            return result
+
+        return wrapper
+
+    return decorate
 
 
 class ChromaStore:
@@ -837,6 +863,7 @@ class ChromaStore:
             "build_history": history[-20:],
         }
 
+    @_notes_collection_change()
     def set_protection(self, name: str, protected: bool) -> dict[str, Any]:
         collection = self._collection(name)
         metadata = dict(collection.metadata or {})
@@ -844,6 +871,7 @@ class ChromaStore:
         collection.modify(metadata=metadata)
         return self._public_store(collection)
 
+    @_notes_collection_change()
     def begin_sync(
         self,
         name: str,
@@ -871,6 +899,7 @@ class ChromaStore:
         collection.modify(metadata=metadata)
         return {"build_id": build_id, "store": self._public_store(collection)}
 
+    @_notes_collection_change()
     def set_build_status(self, name: str, status: str) -> dict[str, Any]:
         allowed = {"empty", "queued", "building", "validating", "ready", "stale", "failed"}
         normalized = str(status or "").strip().lower()
@@ -882,6 +911,7 @@ class ChromaStore:
         collection.modify(metadata=metadata)
         return self._public_store(collection)
 
+    @_notes_collection_change()
     def finish_sync(self, name: str, *, status: str = "ready") -> dict[str, Any]:
         collection = self._collection(name)
         metadata = dict(collection.metadata or {})
@@ -915,6 +945,7 @@ class ChromaStore:
         collection.modify(metadata=metadata)
         return self._public_store(collection)
 
+    @_notes_collection_change()
     def fail_sync(self, name: str, message: str | None = None) -> dict[str, Any]:
         collection = self._collection(name)
         metadata = dict(collection.metadata or {})
@@ -1136,6 +1167,7 @@ class ChromaStore:
             "last_build_error": metadata.get("__derridai_last_build_error"),
         }
 
+    @_notes_collection_change()
     def set_language_tags(
         self,
         name: str,
@@ -1161,6 +1193,7 @@ class ChromaStore:
         return self._public_store(collection)
 
 
+    @_notes_collection_change()
     def set_embedding(
         self,
         name: str,
@@ -1218,6 +1251,7 @@ class ChromaStore:
             self.client.get_collection(name=self._storage_name(name))
         )
 
+    @_notes_collection_change()
     def create_store(
         self,
         name: str,
@@ -1349,6 +1383,7 @@ class ChromaStore:
             raise
         return self._public_store(col)
 
+    @_notes_collection_change()
     def delete_store(self, name: str, *, force: bool = False) -> None:
         collection = self._collection(name)
         if self._manifest_spec(collection).get("protected") and not force:
@@ -1360,6 +1395,7 @@ class ChromaStore:
     def _collection(self, name: str):
         return self.client.get_collection(name=self._storage_name(name))
 
+    @_notes_collection_change()
     def upsert_many(
         self,
         store: str,
@@ -1494,6 +1530,7 @@ class ChromaStore:
         storage_id = str(raw_id)
         return f"{id_prefix}::{storage_id}" if id_prefix else storage_id
 
+    @_notes_collection_change()
     def sync_language_children(
         self,
         source_name: str,
@@ -1618,6 +1655,7 @@ class ChromaStore:
         )
         return {**result, "language_sync": language_sync}
 
+    @_notes_collection_change()
     def update_existing(
         self,
         store: str,
@@ -1856,6 +1894,7 @@ class ChromaStore:
                 codes.add(normalized)
         return codes
 
+    @_notes_collection_change()
     def derive_language_stores(
         self,
         source_name: str,
@@ -2111,6 +2150,7 @@ class ChromaStore:
             "exists": True,
         }
 
+    @_notes_collection_change("response_library")
     def ensure_response_cache(self) -> dict[str, Any]:
         try:
             collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
@@ -2132,6 +2172,7 @@ class ChromaStore:
                 },
             )
 
+    @_notes_collection_change("response_library")
     def cache_rag_response(
         self,
         *,
@@ -2197,6 +2238,7 @@ class ChromaStore:
             "count": payload.get("count"),
         }
 
+    @_notes_collection_change("response_library")
     def update_response_cache_grade(
         self,
         response_record_id: str,
@@ -2456,6 +2498,7 @@ class ChromaStore:
         metas.clear()
         embeddings.clear()
 
+    @_notes_collection_change("response_library")
     def restore_logical_backup(
         self,
         root: Path,
@@ -2534,6 +2577,7 @@ class ChromaStore:
             restored.append(self._public_store(collection))
         return {"collections": restored, "count": len(restored)}
 
+    @_notes_collection_change("response_library")
     def nuke(self) -> dict[str, Any]:
         names: list[str] = []
         mode = self.mode
@@ -2692,6 +2736,7 @@ class ChromaStore:
         records = self._decode_result(payload, include_updates=include_updates)
         return records[0] if records else None
 
+    @_notes_collection_change()
     def patch_existing(
         self,
         store: str,
@@ -2729,9 +2774,11 @@ class ChromaStore:
             embedding_field=embedding_field,
         )
 
+    @_notes_collection_change()
     def delete_record(self, store: str, chroma_id: str) -> None:
         self._collection(store).delete(ids=[chroma_id])
 
+    @_notes_collection_change()
     def delete_record_with_language_sync(self, store: str, chroma_id: str) -> dict[str, Any]:
         collection = self._collection(store)
         _, role, _ = self._language_spec(collection)
@@ -2745,6 +2792,7 @@ class ChromaStore:
 
     UNTITLED_WORK = "(Untitled work)"
 
+    @_notes_collection_change()
     def delete_work_with_language_sync(self, store: str, work: str) -> dict[str, Any]:
         """Delete every record whose decoded ``work`` metadata equals ``work``.
 

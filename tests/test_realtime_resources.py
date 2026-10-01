@@ -124,3 +124,20 @@ def test_frontend_resource_keys_match_the_server_registry():
     match = re.search(r"DATA_RESOURCES = \[([^\]]*)\] as const", source)
     assert match, "web/src/realtime/resourceKeys.ts must declare DATA_RESOURCES"
     assert set(re.findall(r'"([a-z_]+)"', match.group(1))) == set(DATA_RESOURCES)
+
+
+def test_vector_store_mutations_note_collections_changed():
+    from app.chroma_store import ChromaStore
+
+    class _Collection:
+        metadata: dict = {}
+
+        def modify(self, metadata):
+            self.metadata = metadata
+
+    store = ChromaStore.__new__(ChromaStore)
+    store._collection = lambda name: _Collection()  # type: ignore[method-assign]
+    store._public_store = lambda collection: {}  # type: ignore[method-assign]
+    operation_events.drain()
+    store.set_protection("x", True)
+    assert "vector_collections" in operation_events.drain().resources

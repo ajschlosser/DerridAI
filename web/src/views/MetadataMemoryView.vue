@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { metadataMemoryApi, type MetadataMemoryPayload } from "../api/metadataMemory";
 import MetadataMemoryRelations from "../components/metadata-memory/MetadataMemoryRelations.vue";
@@ -9,6 +9,7 @@ import AppIcon from "../components/AppIcon.vue";
 import UiButton from "../components/ui/UiButton.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UiTooltip from "../components/ui/UiTooltip.vue";
+import { useDataQuery } from "../realtime/dataQuery";
 import { useI18nStore } from "../stores/i18n";
 
 const i18n = useI18nStore();
@@ -16,7 +17,6 @@ const route = useRoute();
 const router = useRouter();
 const pageSize = 50;
 const searchDebounceMs = 300;
-const loading = ref(false);
 const error = ref("");
 const offset = ref(Math.max(0, Number(route.query.offset) || 0));
 const query = ref(String(route.query.q || ""));
@@ -36,8 +36,6 @@ const payload = ref<MetadataMemoryPayload>({
   available: true,
   error: "",
 });
-// Only the newest request may update the page, so slow earlier responses cannot overwrite it.
-let requestSeq = 0;
 let searchTimer: number | undefined;
 let applyingRouteState = false;
 
@@ -76,28 +74,46 @@ const activeFilters = computed(() => {
   return chips;
 });
 
-async function load() {
-  const seq = ++requestSeq;
-  loading.value = true;
-  error.value = "";
-  try {
-    const next = await metadataMemoryApi.list({
-      limit: pageSize,
-      offset: offset.value,
-      field: field.value,
-      kind: kind.value,
-      build_id: buildId.value,
-      language: language.value,
-      q: query.value.trim(),
-    });
-    if (seq !== requestSeq) return;
+function snapshot() {
+  return {
+    limit: pageSize,
+    offset: offset.value,
+    field: field.value,
+    kind: kind.value,
+    build_id: buildId.value,
+    language: language.value,
+    q: query.value.trim(),
+  };
+}
+// The applied filters are the query key; realtime invalidation of `metadata_exemplars` refetches
+// the current page without touching them.
+const applied = ref(snapshot());
+const memoryQuery = useDataQuery(
+  "metadata_exemplars",
+  () => metadataMemoryApi.list(applied.value),
+  {
+    detail: () => [applied.value],
+  },
+);
+const loading = computed(() => memoryQuery.isFetching.value);
+watch(
+  () => memoryQuery.data.value,
+  (next) => {
+    if (!next) return;
     payload.value = next;
-    if (!next.available && next.error) error.value = next.error;
-  } catch (exc) {
-    if (seq === requestSeq) error.value = exc instanceof Error ? exc.message : String(exc);
-  } finally {
-    if (seq === requestSeq) loading.value = false;
-  }
+    error.value = !next.available && next.error ? next.error : "";
+  },
+);
+watch(
+  () => memoryQuery.error.value,
+  (failure) => {
+    if (failure) error.value = failure instanceof Error ? failure.message : String(failure);
+  },
+);
+async function load() {
+  const next = snapshot();
+  if (JSON.stringify(next) === JSON.stringify(applied.value)) await memoryQuery.refetch();
+  else applied.value = next;
 }
 
 function syncRoute(nextOffset = offset.value, push = false) {
@@ -195,7 +211,6 @@ watch(
   },
 );
 onBeforeUnmount(() => window.clearTimeout(searchTimer));
-onMounted(() => void load());
 </script>
 
 <template>
@@ -206,9 +221,6 @@ onMounted(() => void load());
       title-id="metadata-memory-title"
       :description="i18n.t('metadata_memory.help')"
     >
-      <template #actions>
-        <UiButton :label="i18n.t('metadata_memory.refresh')" :disabled="loading" @click="load" />
-      </template>
     </UiPageHeader>
 
     <p class="memory-contract">

@@ -9,6 +9,7 @@ import { vectorBrowseReads, type VectorBrowseRow } from "../features/vector-stor
 import { useAuthStore } from "../stores/auth";
 import { useVectorStore } from "../stores/workspace";
 import { corpusState } from "../state/workspaceState";
+import { useDataQuery } from "../realtime/dataQuery";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
@@ -175,15 +176,56 @@ function syncHealthIntoRuntime(next: ChromaHealth) {
   runtimeState.health = { ...(runtimeState.health || {}), chroma: next, chroma_path: next.path };
 }
 
-async function load(options: { details?: boolean } = {}) {
-  loading.value = !collections.value.length;
-  error.value = "";
-  try {
-    const [nextHealth, stores, providers] = await Promise.all([
+// Collections, health and provider profiles are one server-state read. Realtime invalidation of
+// `vector_collections` (and every local mutation, through load()) refetches it; applyStores then
+// reconciles view state from the result.
+const storesQuery = useDataQuery(
+  "vector_collections",
+  async () => {
+    const [health, stores, providers] = await Promise.all([
       chromaApi.health(),
       chromaApi.collections(),
       systemApi.researcherProviders().catch(() => ({ profiles: [] })),
     ]);
+    return { health, stores, providers };
+  },
+  { enabled: () => !auth.isResearcher },
+);
+watch(
+  () => storesQuery.data.value,
+  (data) => {
+    if (data) void applyStores(data);
+  },
+  { immediate: true },
+);
+watch(
+  () => storesQuery.error.value,
+  (failure) => {
+    if (!failure) return;
+    error.value = errorText(failure);
+    loading.value = false;
+  },
+);
+
+async function load(options: { details?: boolean } = {}) {
+  skipDetails = options.details === false;
+  await storesQuery.refetch();
+}
+let skipDetails = false;
+function errorText(exc: unknown) {
+  return exc instanceof Error ? exc.message : String(exc);
+}
+
+async function applyStores(data: {
+  health: ChromaHealth;
+  stores: VectorCollection[];
+  providers: { profiles?: ProviderProfile[] };
+}) {
+  const details = !skipDetails;
+  skipDetails = false;
+  error.value = "";
+  try {
+    const { health: nextHealth, stores, providers } = data;
     providerProfiles.value = providers.profiles || [];
     syncHealthIntoRuntime(nextHealth);
     const corpusStores = stores.filter((store) => !store.metadata?.derridai_system_collection);
@@ -213,7 +255,7 @@ async function load(options: { details?: boolean } = {}) {
             >
           )[current.value.retrieval_mode || ""] || "hybrid";
     }
-    if (options.details !== false && current.value && tab.value === "data") await loadData();
+    if (details && current.value && tab.value === "data") await loadData();
     if (workspace.vectorAutoCreateRequested && !corpusStores.length) {
       workspace.vectorAutoCreateRequested = false;
       openCreate();
@@ -485,7 +527,6 @@ onMounted(async () => {
     return;
   }
   window.addEventListener("derridai:vector-stores-changed", onStoresChanged);
-  await load();
 });
 onBeforeUnmount(() => {
   window.clearTimeout(filterTimer);
@@ -538,7 +579,6 @@ onBeforeUnmount(() => {
           :filter="filter"
           @update:filter="filter = $event"
           @select="selectCollection"
-          @refresh="load()"
           @create="openCreate"
         />
         <article class="vector-store-main">

@@ -1,6 +1,9 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { VueQueryPlugin } from "@tanstack/vue-query";
+import { queryClient } from "../../src/realtime/dataQuery";
+import { dataKey } from "../../src/realtime/resourceKeys";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,7 +15,6 @@ const dictionary = {
   "section.system": "System",
   "metadata_memory.title": "Metadata memory",
   "metadata_memory.help": "Inspect reviewed precedents.",
-  "metadata_memory.refresh": "Refresh",
   "metadata_memory.authority_title": "Authority:",
   "metadata_memory.authority_help": "Reviewed corpus metadata remains authoritative.",
   "metadata_memory.summary": "Metadata memory summary",
@@ -73,7 +75,7 @@ async function mountView(query: Record<string, string> = {}) {
   await router.isReady();
   const wrapper = mount(MetadataMemoryView, {
     attachTo: document.body,
-    global: { plugins: [router], stubs: { RouterLink } },
+    global: { plugins: [router, [VueQueryPlugin, { queryClient }]], stubs: { RouterLink } },
   });
   return { wrapper, router };
 }
@@ -82,6 +84,7 @@ describe("Metadata memory page", () => {
   afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     setActivePinia(createPinia());
+    queryClient.clear();
     vi.restoreAllMocks();
     useI18nStore().dictionary = dictionary;
     vi.spyOn(metadataMemoryApi, "list").mockResolvedValue({
@@ -127,6 +130,19 @@ describe("Metadata memory page", () => {
       authoritative_source: "reviewed corpus metadata and evidence",
       available: true,
       error: "",
+    });
+  });
+
+  it("refetches the current page on a metadata_exemplars invalidation and has no Refresh button", async () => {
+    const { wrapper } = await mountView({ field: "position_holder" });
+    await flushPromises();
+    expect(wrapper.findAll("button").some((b) => b.text() === "Refresh")).toBe(false);
+    const before = vi.mocked(metadataMemoryApi.list).mock.calls.length;
+    await queryClient.invalidateQueries({ queryKey: dataKey("metadata_exemplars") });
+    await flushPromises();
+    expect(vi.mocked(metadataMemoryApi.list).mock.calls.length).toBe(before + 1);
+    expect(vi.mocked(metadataMemoryApi.list).mock.calls.at(-1)?.[0]).toMatchObject({
+      field: "position_holder",
     });
   });
 
