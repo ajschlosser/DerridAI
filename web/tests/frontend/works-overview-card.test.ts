@@ -68,6 +68,45 @@ describe("WorksOverviewCard", () => {
     expect(wrapper.text()).not.toContain("Populate metadata with LLM");
   });
 
+  it("shows populated metadata by default and lets administrators reveal empty fields", async () => {
+    const wrapper = mount(WorksOverviewCard, {
+      props: {
+        work: workItem({
+          metadata: [
+            {
+              field_id: "derridai.document.document_author",
+              field: "document_author",
+              field_label: "Document author",
+              value: "Jacques Derrida",
+              mixed: false,
+              unique_count: 0,
+              empty: false,
+            },
+            {
+              field_id: "derridai.document.publisher",
+              field: "publisher",
+              field_label: "Publisher",
+              value: "—",
+              mixed: false,
+              unique_count: 0,
+              empty: true,
+            },
+          ],
+        }),
+        mode: "admin",
+      },
+    });
+
+    expect(wrapper.get(".works-inspector-metadata").text()).toContain("Jacques Derrida");
+    expect(wrapper.get(".works-inspector-metadata").text()).not.toContain("Publisher");
+    const toggle = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Show empty fields"))!;
+    await toggle.trigger("click");
+    expect(wrapper.get(".works-inspector-metadata").text()).toContain("Publisher");
+    expect(wrapper.get(".works-inspector-metadata").text()).toContain("—");
+  });
+
   it("names the cover image from the work title", () => {
     const wrapper = mount(WorksOverviewCard, {
       props: {
