@@ -12,6 +12,7 @@ export DERRIDAI_SITE_CONTAINER="$CONTAINER"
 
 cleanup() {
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  docker image rm -f "$IMAGE" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
@@ -31,4 +32,5 @@ if docker container inspect "$CONTAINER" >/dev/null 2>&1; then
   exit 1
 fi
 
+docker image rm -f "$IMAGE" >/dev/null 2>&1 || true
 trap - EXIT INT TERM
