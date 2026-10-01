@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from .. import operation_events
 from .models import PipelineAssignment, PipelineDefinition
 from .storage import PipelineDatabase, dump_json, load_json
 
@@ -107,6 +108,7 @@ class PipelineDefinitionStore:
                     ),
                 )
                 conn.commit()
+                operation_events.note_resource_changed("pipelines")
             except sqlite3.IntegrityError as exc:
                 raise ValueError(
                     f"Pipeline {definition.pipeline_id}@{definition.version} already exists; "
@@ -193,6 +195,7 @@ class PipelineDefinitionStore:
                 ),
             )
             conn.commit()
+            operation_events.note_resource_changed("pipelines")
         return assignment
 
     def delete_assignment(
@@ -208,6 +211,7 @@ class PipelineDefinitionStore:
                 (str(feature), str(scope), str(scope_id or "")),
             )
             conn.commit()
+            operation_events.note_resource_changed("pipelines")
             return bool(cursor.rowcount)
 
     def snapshot(self) -> dict[str, list[dict]]:
@@ -242,4 +246,5 @@ class PipelineDefinitionStore:
             conn.execute("DELETE FROM pipeline_assignments")
             conn.execute("DELETE FROM pipeline_definitions")
             conn.commit()
+            operation_events.note_resource_changed("pipelines")
         return counts

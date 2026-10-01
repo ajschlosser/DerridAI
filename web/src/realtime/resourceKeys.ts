@@ -1,7 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 // The closed list of server data resources a page can follow for invalidation. It must equal
 // `DATA_RESOURCES` in api/app/realtime/resources.py (tests/test_realtime_resources.py reads this file). Add a key here and there before using it.
-export const DATA_RESOURCES = ["users", "roles"] as const;
+export const DATA_RESOURCES = ["users", "roles", "pipelines", "pipeline_runs"] as const;
 export type DataResource = (typeof DATA_RESOURCES)[number];
 
 /** Every server-state query key is `["data", <resource>, ...detail]`; see useDataQuery. */

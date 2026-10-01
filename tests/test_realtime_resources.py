@@ -124,3 +124,16 @@ def test_frontend_resource_keys_match_the_server_registry():
     match = re.search(r"DATA_RESOURCES = \[([^\]]*)\] as const", source)
     assert match, "web/src/realtime/resourceKeys.ts must declare DATA_RESOURCES"
     assert set(re.findall(r'"([a-z_]+)"', match.group(1))) == set(DATA_RESOURCES)
+
+
+def test_pipeline_store_writes_note_their_resources(tmp_path):
+    from app.pipelines.store import PipelineStore
+
+    store = PipelineStore(tmp_path / "p.db")
+    operation_events.drain()
+    store.clear_all()
+    drained = operation_events.drain()
+    assert {"pipelines", "pipeline_runs"} <= set(drained.resources)
+
+    assert store.delete_assignment("research") is False
+    assert "pipelines" in operation_events.drain().resources

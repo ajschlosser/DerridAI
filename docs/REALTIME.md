@@ -104,13 +104,13 @@ Job summaries contain only bounded, text-free fields (status, stage, a truncated
 
 ### Topics and authorization
 
-| Topic                                | Who may subscribe                                                                                                          |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `jobs`                               | Administrators (all jobs); roles with `rag.jobs.own` or `rag.run` (their own Research jobs only)                           |
-| `job:<id>`                           | Administrators; a non-administrator only for their own Research (RAG) job. Anything else is 4404.                          |
-| `corpus-builds`, `corpus-build:<id>` | Administrators only (Corpus Builder is an administrator workspace)                                                         |
-| `activity:<kind>`                    | Administrators only. `<kind>` must be one of `ACTIVITY_KINDS` (currently `gutenberg`); anything else is 4404.              |
-| `data:<resource>`                    | Per the resource registry; `users` and `roles` are administrators only (their REST routes are too). Unknown keys are 4404. |
+| Topic                                | Who may subscribe                                                                                                                                        |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jobs`                               | Administrators (all jobs); roles with `rag.jobs.own` or `rag.run` (their own Research jobs only)                                                         |
+| `job:<id>`                           | Administrators; a non-administrator only for their own Research (RAG) job. Anything else is 4404.                                                        |
+| `corpus-builds`, `corpus-build:<id>` | Administrators only (Corpus Builder is an administrator workspace)                                                                                       |
+| `activity:<kind>`                    | Administrators only. `<kind>` must be one of `ACTIVITY_KINDS` (currently `gutenberg`); anything else is 4404.                                            |
+| `data:<resource>`                    | Per the resource registry; `users`, `roles`, `pipelines` and `pipeline_runs` are administrators only (their REST routes are too). Unknown keys are 4404. |
 
 Each topic is authorized independently at subscribe time; every event is also filtered by its audience at delivery (owner, administrator-only, capability). Another user's job is indistinguishable from a missing one. A role with no available topic is refused with 4403.
 
