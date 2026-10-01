@@ -276,7 +276,8 @@ export function createWorksWorkspace(deps: Deps) {
       }
     }
     if (!freshness.totalRecords) freshness.state = "empty";
-    else if (freshness.unavailableRecords === freshness.totalRecords) freshness.state = "unavailable";
+    else if (freshness.unavailableRecords === freshness.totalRecords)
+      freshness.state = "unavailable";
     else if (freshness.changedRecords || freshness.absentRecords) freshness.state = "stale";
     else if (
       freshness.presentRecords ||
@@ -472,9 +473,9 @@ export function createWorksWorkspace(deps: Deps) {
       indexFreshness: summarizeIndexFreshness(described),
       sourceFileCount: new Set(described.flatMap((item: Any) => item.files)).size,
       totalReview: described.reduce((sum: number, item: Any) => sum + item.review, 0),
-      authors: [...new Set<string>(described.flatMap((item: Any) => item.authors as string[]))].sort(
-        (a, b) => a.localeCompare(b),
-      ),
+      authors: [
+        ...new Set<string>(described.flatMap((item: Any) => item.authors as string[])),
+      ].sort((a, b) => a.localeCompare(b)),
       populateDisabledReason: hasProfiles
         ? tr("works.no_works_to_populate")
         : tr("works.no_provider_profiles_help"),
