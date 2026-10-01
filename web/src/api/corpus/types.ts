@@ -380,6 +380,8 @@ export interface RecordSemanticMap {
   version: number;
   kind: "record_semantic_map" | string;
   record_id: string;
+  /** Present when a published Record resolves back to its source build. */
+  build_id?: string;
   record_revision: number;
   record_text_sha256: string;
   layers: {
