@@ -61,7 +61,8 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const labelId = `${useId()}-label`;
-const editing = ref(Boolean(props.open));
+// A pre-filled value always stays in its control; there is no read-only summary with an Edit link.
+const editing = ref(true);
 const dirty = ref(false);
 const draft = ref<unknown>("");
 const confidence = computed(() =>
@@ -220,9 +221,6 @@ watch(
       dirty.value = false;
       revising.value = false;
       draft.value = editableValue();
-    } else if (!dirty.value) {
-      // A pending field that has just been decided folds back into its one-line summary.
-      editing.value = false;
     }
   },
 );
@@ -278,18 +276,11 @@ function save() {
   dirty.value = false;
   emit("dirty", false);
   // A pending field stays open until the saved record says it is decided; an optional edit closes at once.
-  editing.value = Boolean(props.open);
-}
-function startEdit() {
-  editing.value = true;
-  dirty.value = false;
-  draft.value = editableValue();
 }
 function cancelEdit() {
   dirty.value = false;
   revising.value = false;
   draft.value = editableValue();
-  editing.value = false;
   emit("dirty", false);
 }
 /** Ctrl/Cmd+Enter confirms from anywhere in the field, including inside its value control. */
@@ -310,7 +301,6 @@ function saveWithSelection() {
   liveSelection.value = "";
   dirty.value = false;
   emit("dirty", false);
-  editing.value = Boolean(props.open);
 }
 function markDirty() {
   dirty.value = true;
@@ -429,25 +419,6 @@ const verificationStatus = computed(() => String(props.status?.verification_stat
 const autoResolved = computed(
   () => verificationStatus.value === "auto_resolved" || props.status?.autofilled === true,
 );
-/**
- * A model-populated value nobody has confirmed is open for review as it arrives; the reviewer should not have to
- * click Edit to change it. Auto-filled and human-decided values stay folded to one line.
- */
-const modelValueAwaitingReview = computed(
-  () =>
-    isLlm.value &&
-    !autoResolved.value &&
-    props.status?.method !== "human" &&
-    props.status?.value_source !== "human" &&
-    hasValue(resolvedValue.value),
-);
-watch(
-  modelValueAwaitingReview,
-  (value) => {
-    if (value && !dirty.value) editing.value = true;
-  },
-  { immediate: true },
-);
 /** Who or what proposed the current value, in words, including whether metadata memory shaped the model's answer. */
 const sourceLabel = computed(() => {
   const status = props.status || {};
@@ -519,42 +490,8 @@ const traceRows = computed(() => {
     :aria-labelledby="labelId"
     @keydown="onKeydown"
   >
-    <!-- A decided field is one line: what it is, its value, where the value came from. -->
-    <div v-if="!editing" class="field-row">
-      <span :id="labelId" class="field-label">{{ fieldLabel }}</span>
-      <span class="field-current"
-        >{{ suggestedAbsence ? i18n.t("pdf_corpus.no_value_short") : display(resolvedValue) }}
-        <template v-if="autoResolved || suggestedAbsence"
-          ><span class="auto-star" aria-hidden="true">★</span
-          ><span class="sr-only">{{
-            suggestedAbsence
-              ? i18n.t("pdf_corpus.model_suggested_short")
-              : i18n.t("pdf_corpus.auto_filled_marker")
-          }}</span></template
-        ></span
-      >
-      <span class="field-row-aside">
-        <span v-if="saved" class="saved" role="status"
-          ><AppIcon name="check" />{{ i18n.t("pdf_corpus.field_saved_short") }}</span
-        ><CorpusFieldOwnershipBadge
-          :status="String(status?.status || '')"
-          :method="String(status?.method || '')"
-          :derivation="String(status?.derivation_method || '')"
-          :source="String(status?.value_source || '')"
-          :verification="String(status?.verification_status || '')"
-          :audit="Boolean(status?.audit_sample)"
-        /><button
-          type="button"
-          class="btn small quiet field-edit"
-          :disabled="busy"
-          :aria-label="i18n.tf('pdf_corpus.edit_field', { field: fieldLabel })"
-          @click="startEdit"
-        >
-          {{ i18n.t("ui.edit") }}
-        </button>
-      </span>
-    </div>
-    <header v-else class="field-head">
+    <!-- Every field keeps its value in an editable control; the header says what it is and where the value came from. -->
+    <header class="field-head">
       <div class="field-title">
         <b :id="labelId" class="field-label">{{ fieldLabel }}</b
         ><span v-if="requiredToAccept" class="field-required">{{
@@ -564,6 +501,9 @@ const traceRows = computed(() => {
       <span class="field-head-aside">
         <span v-if="saved" class="saved" role="status"
           ><AppIcon name="check" />{{ i18n.t("pdf_corpus.field_saved_short") }}</span
+        ><template v-if="autoResolved"
+          ><span class="auto-star" aria-hidden="true">★</span
+          ><span class="sr-only">{{ i18n.t("pdf_corpus.auto_filled_marker") }}</span></template
         ><CorpusFieldOwnershipBadge
           :status="String(status?.status || '')"
           :method="String(status?.method || '')"
@@ -752,7 +692,7 @@ const traceRows = computed(() => {
             {{ i18n.t("pdf_corpus.no_value_short") }}
           </button>
         </UiTooltip>
-        <button v-if="!open" type="button" class="btn small quiet" @click="cancelEdit">
+        <button v-if="dirty" type="button" class="btn small quiet" @click="cancelEdit">
           {{ i18n.t("ui.cancel") }}
         </button>
       </div>

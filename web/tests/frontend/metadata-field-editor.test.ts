@@ -310,28 +310,24 @@ describe("CorpusMetadataFieldEditor memory hints", () => {
     expect(wrapper.find(".memory-hints").exists()).toBe(false);
   });
 
-  it("opens an unreviewed model value for editing without an Edit click, and folds a human one", async () => {
-    const model = mount(CorpusMetadataFieldEditor, {
-      props: {
-        field: "stance",
-        value: "affirm",
-        control: "enum",
-        options: stanceOptions,
-        status: { status: "model_inferred", method: "llm", confidence: 0.6 },
-      },
-    });
-    expect(model.find("select").exists()).toBe(true);
-    const human = mount(CorpusMetadataFieldEditor, {
-      props: {
-        field: "stance",
-        value: "affirm",
-        control: "enum",
-        options: stanceOptions,
-        status: { status: "confirmed", method: "human", value_source: "human" },
-      },
-    });
-    expect(human.find("select").exists()).toBe(false);
-    model.unmount();
-    human.unmount();
+  it("keeps every pre-filled value in its control, with no read-only summary or Edit link", () => {
+    for (const status of [
+      { status: "model_inferred", method: "llm", confidence: 0.6 },
+      { status: "model_inferred", method: "llm", autofilled: true },
+      { status: "confirmed", method: "human", value_source: "human" },
+    ]) {
+      const wrapper = mount(CorpusMetadataFieldEditor, {
+        props: {
+          field: "stance",
+          value: "affirm",
+          control: "enum",
+          options: stanceOptions,
+          status,
+        },
+      });
+      expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("affirm");
+      expect(wrapper.find(".field-edit").exists()).toBe(false);
+      wrapper.unmount();
+    }
   });
 });

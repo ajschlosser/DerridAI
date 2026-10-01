@@ -45,7 +45,7 @@ describe("adjudicating a record's metadata", () => {
     wrapper.unmount();
   });
 
-  it("keeps a decided field in place, folded to one line, instead of moving it to another list", async () => {
+  it("keeps a decided field in place, editable, instead of moving it to another list", async () => {
     const wrapper = mountPanel();
     const before = cards(wrapper);
     await wrapper.setProps({
@@ -59,7 +59,9 @@ describe("adjudicating a record's metadata", () => {
       }),
     });
     expect(cards(wrapper)).toEqual(before);
-    expect(wrapper.get('[data-field="stance"]').attributes("data-mode")).toBe("view");
+    // A decided field keeps its control; it is never swapped for text with an Edit link.
+    expect(wrapper.get('[data-field="stance"]').attributes("data-mode")).toBe("edit");
+    expect(wrapper.find('[data-field="stance"] .field-edit').exists()).toBe(false);
     expect(wrapper.find(".settled-metadata [data-field='stance']").exists()).toBe(false);
     wrapper.unmount();
   });
@@ -182,15 +184,16 @@ describe("a field's decision controls", () => {
     wrapper.unmount();
   });
 
-  it("closes an optional edit on Cancel without saving", async () => {
+  it("reverts an unsaved change on Cancel without saving", async () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
       props: { field: "speaker", value: "Jacques Derrida", control: "text", status: {} },
     });
-    await wrapper.get(".field-edit").trigger("click");
-    expect(wrapper.find("textarea").exists()).toBe(true);
+    const field = wrapper.get("textarea");
+    expect((field.element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
+    await field.setValue("Someone else");
     const cancel = wrapper.findAll("button").find((b) => b.text() === "Cancel")!;
     await cancel.trigger("click");
-    expect(wrapper.find("textarea").exists()).toBe(false);
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
     expect(wrapper.emitted("save")).toBeUndefined();
     wrapper.unmount();
   });

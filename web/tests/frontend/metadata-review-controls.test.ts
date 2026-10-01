@@ -73,7 +73,7 @@ describe("field editor decision controls", () => {
       },
     });
     expect(wrapper.get(".auto-star").text()).toBe("★");
-    expect(wrapper.get(".field-current").text()).toContain("Auto-filled");
+    expect(wrapper.get(".field-head").text()).toContain("Auto-filled");
   });
 
   it("cites the reviewer's own knowledge from the one confirm button", async () => {
@@ -111,7 +111,6 @@ describe("field editor decision controls", () => {
         },
       },
     });
-    expect(wrapper.find("input, textarea").exists()).toBe(false);
     const matrix = wrapper.get(".trace-matrix");
     expect(matrix.text()).toContain("metadata memory");
     expect(matrix.text()).toContain("80%");
