@@ -111,6 +111,7 @@ const runtime = vi.hoisted(() => ({
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
 
 const siteApi = vi.hoisted(() => ({
+  exportOptions: vi.fn(),
   exportSite: vi.fn(),
 }));
 vi.mock("../../src/api/sites", () => ({ sitesApi: siteApi }));
@@ -150,6 +151,21 @@ async function mountWorks() {
 describe("WorksView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    siteApi.exportOptions.mockResolvedValue({
+      languages: [
+        { code: "en-US", name: "English", flag: "🇺🇸" },
+        { code: "fr-CA", name: "Français", flag: "🇨🇦" },
+      ],
+      provider_profiles: [
+        {
+          id: "openai-main",
+          name: "OpenAI-compatible lab",
+          type: "openai",
+          base_url: "https://models.example.edu/v1",
+          model: "gpt-oss:20b",
+        },
+      ],
+    });
     siteApi.exportSite.mockResolvedValue({
       blob: new Blob(["site"], { type: "application/zip" }),
       filename: "glas-site.zip",
@@ -221,7 +237,7 @@ describe("WorksView", () => {
     expect(dialog.attributes("open")).toBeDefined();
     expect(dialog.text()).toContain("Glas");
 
-    await dialog.get("input[type='checkbox']").setValue(true);
+    await dialog.get("[data-site-work='Glas']").setValue(true);
     await dialog.get("input[placeholder='Research collection']").setValue("Glas research site");
     await dialog.get("form").trigger("submit");
     await flushPromises();
@@ -232,9 +248,37 @@ describe("WorksView", () => {
       title: "Glas research site",
       description: "",
       locale: "en-US",
-      export_format: "local-single-file",
+      languages: ["en-US", "fr-CA"],
+      provider_profile_ids: ["openai-main"],
+      export_format: "two-file",
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("exports any selected subset of installed languages and provider profiles", async () => {
+    const wrapper = await mountWorks();
+    await wrapper.get("#createSite").trigger("click");
+    await flushPromises();
+
+    const dialog = wrapper.get(".create-site-dialog");
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("[data-site-language='fr-CA']").setValue(false);
+    await dialog.get("[data-site-provider='openai-main']").setValue(false);
+    await dialog.get("input[placeholder='Research collection']").setValue("English-only Glas");
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith({
+      store: "derrida-primary",
+      works: ["Glas"],
+      title: "English-only Glas",
+      description: "",
+      locale: "en-US",
+      languages: ["en-US"],
+      provider_profile_ids: [],
+      export_format: "two-file",
+    });
     wrapper.unmount();
   });
 
@@ -244,7 +288,7 @@ describe("WorksView", () => {
     await flushPromises();
 
     const dialog = wrapper.get(".create-site-dialog");
-    await dialog.get("input[type='checkbox']").setValue(true);
+    await dialog.get("[data-site-work='Glas']").setValue(true);
     await dialog.get("input[value='nginx-docker']").setValue(true);
     await dialog.get("input[placeholder='Research collection']").setValue("Hosted Glas");
     await dialog.get("form").trigger("submit");
@@ -256,6 +300,8 @@ describe("WorksView", () => {
       title: "Hosted Glas",
       description: "",
       locale: "en-US",
+      languages: ["en-US", "fr-CA"],
+      provider_profile_ids: ["openai-main"],
       export_format: "nginx-docker",
     });
     wrapper.unmount();

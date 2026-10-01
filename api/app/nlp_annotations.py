@@ -24,6 +24,7 @@ import hashlib
 import logging
 import os
 import threading
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 from .semantic_identity import SEMANTIC_IDENTITY_VERSION, entity_name_key, lexical_key
@@ -66,6 +67,14 @@ _lock = threading.Lock()
 _pipelines: dict[str, Any] = {}
 _loaded_names: dict[str, str] = {}
 _missing: set[str] = set()
+
+
+def _engine_version() -> str:
+    """Installed spaCy library version used for deterministic linguistic annotation."""
+    try:
+        return version("spacy")
+    except PackageNotFoundError:
+        return ""
 
 
 def _model_name(language: str) -> str | None:
@@ -170,22 +179,40 @@ def _entity_matches(tag: str, label: str) -> bool:
 
 
 def _pos_runs(doc: Any, wanted: set[str]) -> list[dict[str, Any]]:
-    """Maximal runs of adjacent tokens whose universal POS is wanted (e.g. PROPN PROPN)."""
+    """Maximal runs of adjacent tokens whose universal POS is wanted.
+
+    The all_stop marker lets candidate consumers reject function-word-only runs while
+    preserving exact source spans. Minimal token objects without is_stop remain usable.
+    """
     runs: list[dict[str, Any]] = []
     start = end = None
     tags: list[str] = []
+    all_stop = True
     for token in doc:
         if token.pos_ in wanted:
             if start is None:
                 start = token.idx
+                all_stop = True
             end = token.idx + len(token.text)
             tags.append(token.pos_)
+            all_stop = all_stop and bool(getattr(token, "is_stop", False))
         elif start is not None:
-            runs.append({"start": start, "end": end, "tag": "+".join(dict.fromkeys(tags))})
+            runs.append({
+                "start": start,
+                "end": end,
+                "tag": "+".join(dict.fromkeys(tags)),
+                "all_stop": all_stop,
+            })
             start = end = None
             tags = []
+            all_stop = True
     if start is not None:
-        runs.append({"start": start, "end": end, "tag": "+".join(dict.fromkeys(tags))})
+        runs.append({
+            "start": start,
+            "end": end,
+            "tag": "+".join(dict.fromkeys(tags)),
+            "all_stop": all_stop,
+        })
     return runs
 
 
@@ -201,9 +228,14 @@ def field_candidates(doc: Any, text: str, *, pos_tags: list[str], ner_tags: list
                 }
     if pos_tags:
         for run in _pos_runs(doc, set(pos_tags)):
+            if run.pop("all_stop", False):
+                continue
             key = (run["start"], run["end"])
             if key not in found:
-                found[key] = {**run, "text": text[run["start"]:run["end"]], "source": "pos"}
+                surface = text[run["start"]:run["end"]]
+                if not surface.strip() or not any(char.isalpha() for char in surface):
+                    continue
+                found[key] = {**run, "text": surface, "source": "pos"}
     ordered = sorted(found.values(), key=lambda item: item["start"])
     return ordered[:MAX_CANDIDATES_PER_FIELD]
 
@@ -220,6 +252,8 @@ def record_terms(doc: Any, text: str) -> list[dict[str, Any]]:
     covered = [(start, end) for start, end in found]
     for tag in TERM_POS_TAGS:
         for run in _pos_runs(doc, {tag}):
+            if run.pop("all_stop", False):
+                continue
             key = (run["start"], run["end"])
             surface = text[run["start"]:run["end"]]
             # Named entities already describe these characters more specifically.
@@ -267,8 +301,15 @@ def annotate_record(record: dict[str, Any], schema: Any, *, language: str = "") 
     languages = record.get("region_language") if isinstance(record.get("region_language"), list) else []
     code = language_code(language) or next((c for c in (language_code(v) for v in languages) if c), "")
     result: dict[str, Any] = {
-        "version": ANNOTATION_VERSION, "status": "skipped", "language": code, "model": "", "fields": {},
-        "terms": [], "text_sha256": text_digest(text),
+        "version": ANNOTATION_VERSION,
+        "status": "skipped",
+        "engine": "spacy",
+        "engine_version": _engine_version(),
+        "language": code,
+        "model": "",
+        "fields": {},
+        "terms": [],
+        "text_sha256": text_digest(text),
     }
     if not text.strip():
         record["nlp_candidates"] = result
@@ -293,6 +334,46 @@ def annotate_record(record: dict[str, Any], schema: Any, *, language: str = "") 
     result["terms"] = record_terms(doc, bounded)
     record["nlp_candidates"] = result
     return result
+
+
+def annotation_run_summary(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build-level audit summary for record-local spaCy annotation."""
+    statuses = [str(result.get("status") or "") for result in results]
+    ok = [result for result in results if result.get("status") == "ok"]
+    unavailable = [result for result in results if result.get("status") == "unavailable"]
+    models = sorted({
+        str(result.get("model") or "").strip()
+        for result in ok
+        if str(result.get("model") or "").strip()
+    })
+    languages = sorted({
+        str(result.get("language") or "").strip()
+        for result in results
+        if str(result.get("language") or "").strip()
+    })
+    engine_versions = sorted({
+        str(result.get("engine_version") or "").strip()
+        for result in results
+        if str(result.get("engine_version") or "").strip()
+    })
+    if ok:
+        status = "ok"
+    elif unavailable:
+        status = "unavailable"
+    elif statuses:
+        status = "skipped"
+    else:
+        status = "not_run"
+    return {
+        "status": status,
+        "engine": "spacy",
+        "engine_version": engine_versions[0] if len(engine_versions) == 1 else "",
+        "models": models,
+        "languages": languages,
+        "records_total": len(results),
+        "records_annotated": len(ok),
+        "records_unavailable": len(unavailable),
+    }
 
 
 def current_terms(record: dict[str, Any]) -> list[dict[str, Any]] | None:

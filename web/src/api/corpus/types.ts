@@ -594,6 +594,16 @@ export interface CorpusBuild {
   schema?: MetadataSchema | null;
   schema_id?: string;
   schema_name?: string;
+  linguistic_annotations?: {
+    status?: string;
+    engine?: string;
+    engine_version?: string;
+    models?: string[];
+    languages?: string[];
+    records_total?: number;
+    records_annotated?: number;
+    records_unavailable?: number;
+  };
   document_intelligence?: {
     status?: string;
     profile?: string;

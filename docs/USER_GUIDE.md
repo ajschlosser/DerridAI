@@ -323,21 +323,25 @@ Users can clear `updates` for one record or for every loaded record. Clearing hi
 
 ## Create a static research site
 
-The administrator **Works** page includes **Create site** when a corpus database is selected. Choose any number of indexed works, give the site a title and optional description, then choose an export format.
+The administrator **Works** page includes **Create site** when a corpus database is selected. Choose any number of indexed works, give the site a title and optional description, then choose an export format. **Two-file static site** is the standard and default export. The export dialog also lets you include **all or any subset of the interface languages currently installed in DerridAI** and **all or any subset of the researcher LLM provider profiles**. At least one language is required. Provider profile endpoints and model names may be exported; API keys and other provider secrets are never embedded in a published site.
+
+The generated reference site is fully internationalized from the selected DerridAI dictionaries. Its language menu contains only the languages included in that export. Publication is blocked if any selected language is missing a required static-site translation; DerridAI does not silently fall back to English for a selected language. Locale direction is applied at runtime for both left-to-right and right-to-left scripts.
+
+### Two-file static site
+
+Choose **Two-file static site** for the standard DerridAI publication. The ZIP contains exactly `index.html` and `derridai-site.js`. The JavaScript file contains the immutable publication package, progressive work chunks, the framework-neutral DerridAI browser SDK, and the reference interface. The same two files can be opened locally or served unchanged by an ordinary static HTTP/HTTPS host. No DerridAI application server is required.
 
 ### Single HTML file
 
 Choose **Single HTML file** for direct local use. DerridAI downloads one `.html` file containing the immutable publication package, the DerridAI SDK, and the reference interface. Open the file directly from disk in a modern browser.
 
-This mode is intentionally network-independent. Its Content Security Policy sets `connect-src 'none'`, the reference site uses the SDK's inline publication data source, and no model-provider endpoint or API key is configured in the browser. Keyword search, Record browsing, filtering, local annotations, citations, and evidence retrieval therefore do not depend on HTTP or CORS. Semantic query embedding and generated answers require a host-supplied embedding or generation capability; the standalone local file does not reintroduce direct Ollama/OpenAI-compatible browser requests to provide them.
+The document remains self-contained for corpus browsing and research logic, but its Content Security Policy now permits direct `http:` and `https:` connections when you choose an exported provider profile. Keyword search, Record browsing, filtering, local annotations, citations, and evidence retrieval remain local. Semantic query embedding and LLM answer generation can call the selected browser-accessible Ollama or OpenAI-compatible endpoint. The visitor enters any required API key in the Research panel; the key stays in memory for the current tab and is never written into the publication or browser storage. Normal browser CORS and mixed-content rules still apply to those external calls.
 
 ### nginx Docker bundle
 
 Choose **nginx Docker bundle** when the site will be served over HTTP. The ZIP contains:
 
 - `index.html`
-- `derridai-publication.js`
-- `derridai-sdk.js`
 - `derridai-site.js`
 - `Dockerfile`
 - `nginx.conf`
@@ -345,7 +349,7 @@ Choose **nginx Docker bundle** when the site will be served over HTTP. The ZIP c
 - `stop.sh`
 - `README.txt`
 
-The Dockerfile uses a single `nginx:1.27-alpine` image and copies only the static publication files. There is no DerridAI API container, Node runtime, Python runtime, reverse proxy to the application, or Docker Compose dependency.
+The Dockerfile uses a single `nginx:1.27-alpine` image and copies only two Web assets: `index.html` and `derridai-site.js`. The JavaScript file contains the publication package, the reusable DerridAI browser SDK, and the reference interface. There is no DerridAI API container, Node runtime, Python runtime, reverse proxy to the application, or Docker Compose dependency.
 
 After extracting the ZIP:
 
@@ -361,15 +365,25 @@ serves the site at `http://localhost:8080` by default. Stop and remove the conta
 
 Set `DERRIDAI_SITE_PORT` to choose another host port. `DERRIDAI_SITE_IMAGE` and `DERRIDAI_SITE_CONTAINER` optionally override the generated image and container names. The nginx configuration also exposes `/healthz` for container health checks.
 
+### Reference-site accessibility, appearance, and tutorial
+
+The reference site provides light and dark themes plus a high-contrast mode. Theme, contrast, and language controls are keyboard operable and persist locally when browser storage is available. The interface includes a skip-to-content link, visible focus treatment, semantic page landmarks, labelled form controls, native modal dialogs, live status regions for asynchronous operations, reduced reliance on color alone, responsive layouts, and forced-colors support. The static-site accessibility regression suite runs axe against WCAG 2.2 A/AA rules in light, dark, and high-contrast states.
+
+On first use, an accessible tutorial dialog explains browsing, Record inspection, keyword/semantic/hybrid search, Research, provider selection, annotations, language, themes, and accessibility controls. Visitors can move backward or forward, finish the tutorial, or choose **Skip tutorial**; finishing or skipping is remembered locally. The **Tutorial** button in the header opens it again at any time.
+
+Every search and Research screen includes a persistent method disclosure showing whether the current operation uses **Text search**, **Vector search (embeddings)**, and/or **LLM answer generation**. As an operation runs, the live status message also names embedding and generation stages. If semantic retrieval falls back to text search or generation is unavailable, the final status states that explicitly rather than silently changing methods.
+
+The Research panel lists the safe provider profiles selected at export time. Choosing an OpenAI-compatible or Ollama profile configures both generation and, when the publication has a compatible embedding contract, query embedding through that endpoint. **Test connection** verifies browser reachability/model discovery before use. Provider failures never erase locally retrieved evidence; Research can still return the auditable evidence packet when generation is unavailable.
+
 ### Publication architecture
 
 Both export formats use the same immutable publication snapshot. Authoritative published Records remain structurally separate from vectors. Records and vectors are grouped by work and decoded only when an SDK operation needs them, and the SDK yields to the browser between substantial chunks so large publications do not have to be materialized synchronously at startup.
 
 The **DerridAI SDK** owns publication access, Record loading, metadata filtering, lexical/semantic/hybrid retrieval, embedding-contract validation, MMR diversification, evidence-packet construction, deterministic citation formatting, local annotations, progress events, cancellation, and Research orchestration. The SDK does not render the site DOM and does not depend on Vue, React, Pinia, Vue Router, or the DerridAI application server.
 
-AI execution is transport-neutral. A host application may inject embedding and generation capabilities as JavaScript objects. The host may implement those capabilities through a same-origin server, Electron/Tauri bridge, native messaging, another application SDK, or another appropriate mechanism. The DerridAI SDK itself does not need an Ollama/OpenAI endpoint URL, API key, or CORS configuration.
+AI execution inside the SDK remains transport-neutral. A custom host application may inject embedding and generation capabilities as JavaScript objects. The generated reference site additionally provides a thin browser adapter for the provider profiles explicitly selected during export, so it can call browser-accessible Ollama or OpenAI-compatible endpoints without changing the SDK contract.
 
-Without a host embedding capability, the reference site continues to provide keyword search and metadata filtering. Without a host generation capability, **Research still performs retrieval and returns the auditable evidence packet**; it simply does not synthesize an answer.
+Without a compatible embedding capability, the reference site continues to provide keyword search and metadata filtering and labels the fallback. Without a generation capability, **Research still performs retrieval and returns the auditable evidence packet**; it simply does not synthesize an answer.
 
 ### Bring your own Web application
 

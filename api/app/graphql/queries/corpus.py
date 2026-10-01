@@ -63,9 +63,8 @@ class CorpusBuildReview:
     async def rows(self, info: Info, record_ids: list[str]) -> list[CorpusQueueRow | None]:
         context = require_admin(info)
         try:
-            records = await self._records(info)
             presented = await run_in_threadpool(
-                corpus_queries.records_by_ids, context.access, records, self.build_id, record_ids,
+                corpus_queries.stored_records_by_ids, context.access, self.build_id, record_ids,
             )
         except Exception as exc:
             raise translate(exc) from exc
@@ -75,9 +74,8 @@ class CorpusBuildReview:
     async def record(self, info: Info, record_id: str) -> CorpusRecord:
         context = require_admin(info)
         try:
-            records = await self._records(info)
             presented = await run_in_threadpool(
-                corpus_queries.record_by_id, context.access, records, self.build_id, record_id,
+                corpus_queries.stored_record_by_id, context.access, self.build_id, record_id,
             )
         except Exception as exc:
             raise translate(exc) from exc
@@ -87,9 +85,8 @@ class CorpusBuildReview:
     async def records(self, info: Info, record_ids: list[str]) -> list[CorpusRecord | None]:
         context = require_admin(info)
         try:
-            records = await self._records(info)
             presented = await run_in_threadpool(
-                corpus_queries.records_by_ids, context.access, records, self.build_id, record_ids,
+                corpus_queries.stored_records_by_ids, context.access, self.build_id, record_ids,
             )
         except Exception as exc:
             raise translate(exc) from exc

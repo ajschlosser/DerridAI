@@ -129,6 +129,22 @@ describe("useCorpusReviewRecords", () => {
     corpusReviewReads.texts.mockResolvedValue([]);
   });
 
+  it("loads the selected Record before starting the build-wide metadata facet scan", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));
+    corpusReviewReads.records.mockResolvedValue([record("r1")]);
+    corpusReviewReads.metadataFacets.mockResolvedValue({ speaker: ["Derrida"] });
+
+    await state.reviewRecords.refreshRecords(true);
+
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(1);
+    expect(corpusReviewReads.metadataFacets).toHaveBeenCalledTimes(1);
+    expect(corpusReviewReads.records.mock.invocationCallOrder[0]).toBeLessThan(
+      corpusReviewReads.metadataFacets.mock.invocationCallOrder[0],
+    );
+    expect(state.selectedRecord.value?.record_id).toBe("r1");
+  });
+
   it("drops a stale cache entry and refetches when the row's revision has moved on", async () => {
     const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1", 1)]));

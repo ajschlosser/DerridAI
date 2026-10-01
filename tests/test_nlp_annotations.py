@@ -18,8 +18,8 @@ class Ent:
 
 
 class Tok:
-    def __init__(self, text, pos, idx):
-        self.text, self.pos_, self.idx = text, pos, idx
+    def __init__(self, text, pos, idx, *, is_stop=False):
+        self.text, self.pos_, self.idx, self.is_stop = text, pos, idx, is_stop
 
 
 def _doc(text):
@@ -111,3 +111,36 @@ def test_real_spacy_pipeline_when_installed():
     result = nlp.annotate_record(record, SCHEMA)
     names = {c["text"] for c in result["fields"]["position_holder"]}
     assert {"Rousseau", "Hobbes"} <= names
+
+
+
+def test_pos_candidates_drop_function_word_only_runs(monkeypatch):
+    class StopDoc:
+        ents = []
+
+        def __iter__(self):
+            return iter([
+                Tok("the", "DET", 0, is_stop=True),
+                Tok("argument", "NOUN", 4, is_stop=False),
+            ])
+
+    monkeypatch.setattr(nlp, "load_pipeline", lambda language: (lambda text: StopDoc()))
+    schema = NS(fields=[NS(name="label", pos_tags=["DET"], ner_tags=[])])
+    record = {"text": "the argument", "region_language": ["English"]}
+    result = nlp.annotate_record(record, schema)
+    assert "label" not in result["fields"]
+
+
+def test_annotation_run_summary_names_spacy_model_and_language(fake_pipeline, monkeypatch):
+    monkeypatch.setattr(nlp, "_engine_version", lambda: "3.8.7")
+    records = [
+        {"text": TEXT, "region_language": ["Français"]},
+        {"text": TEXT, "region_language": ["Français"]},
+    ]
+    results = [nlp.annotate_record(record, SCHEMA) for record in records]
+    summary = nlp.annotation_run_summary(results)
+    assert summary["status"] == "ok"
+    assert summary["engine"] == "spacy"
+    assert summary["engine_version"] == "3.8.7"
+    assert summary["languages"] == ["fr"]
+    assert summary["records_annotated"] == 2
