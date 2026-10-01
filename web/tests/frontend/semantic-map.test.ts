@@ -161,7 +161,7 @@ describe("SemanticMapCanvas", () => {
     };
     const before = read();
     const layerStyle = wrapper.get("[data-semantic-map-layer]").attributes("style") || "";
-    const zoom = Number(layerStyle.match(/scale\\(([\\d.]+)\\)/)?.[1] || "1");
+    const zoom = Number(layerStyle.match(/scale\(([\d.]+)\)/)?.[1] || "1");
     await node.trigger("pointerdown", { button: 0, clientX: 10, clientY: 10, pointerId: 2 });
     await node.trigger("pointermove", { clientX: 30, clientY: 20, pointerId: 2 });
     await node.trigger("pointerup", { pointerId: 2 });
