@@ -482,7 +482,14 @@
           "invalid_endpoint",
         );
       }
-      return new URL(raw, location.origin).href.replace(/\/$/, "");
+      const sameOrigin = new URL(raw, location.origin);
+      if (sameOrigin.origin !== location.origin) {
+        throw providerError(
+          t("site.runtime.provider_endpoint_invalid"),
+          "invalid_endpoint",
+        );
+      }
+      return sameOrigin.href.replace(/\/$/, "");
     }
 
     let parsed;
