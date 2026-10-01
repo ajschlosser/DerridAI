@@ -50,6 +50,17 @@ def test_grounding_and_cost_per_accepted_field():
     assert m["ungrounded_rate"] == 0.5 and m["ms_per_accepted_field"] == 4000 and m["failed_calls"] == 1
 
 
+def test_call_latency_reports_p50_p95_total_and_family_slices():
+    rows = [
+        ev("call", field="discourse", elapsed_ms=100, ok=True),
+        ev("call", field="discourse", elapsed_ms=300, ok=True),
+        ev("call", field="quotation", elapsed_ms=900, ok=True),
+    ]
+    m = compute(rows)["models"]["m"]
+    assert m["call_latency_ms"] == {"p50": 300.0, "p95": 840.0, "max": 900.0, "total": 1300.0}
+    assert m["by_field"]["discourse"]["call_latency_ms"]["p50"] == 200.0
+
+
 def test_learning_curve_uses_whole_buckets_only():
     rows = [ev("corrected", confidence=0.5)] * 10 + [ev("accepted", confidence=0.5)] * 10 + [ev("accepted", confidence=0.5)] * 3
     curve = compute(rows)["models"]["m"]["learning_curve"]
