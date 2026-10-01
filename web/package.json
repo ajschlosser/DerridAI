@@ -31,7 +31,8 @@
     "codegen:check": "graphql-codegen --config codegen.ts --check",
     "build:sdk": "tsc --noEmit -p sdk/tsconfig.json && vite build --config vite.sdk.config.ts",
     "build:sdk:package": "tsc -p sdk/tsconfig.build.json && vite build --config vite.sdk.package.config.ts",
-    "check:sdk:package": "npm run build:sdk:package && node -e \"import('./sdk/dist/index.js').then((m) => { if (typeof m.createClient !== 'function') process.exit(1); })\" && npm pack ./sdk --dry-run >/dev/null",
+    "check:sdk:package": "npm run build:sdk:package && node -e \"import('./sdk/dist/index.js').then((m) => { if (typeof m.createClient !== 'function') process.exit(1); })\" && npm pack ./sdk --dry-run >/dev/null && npm run check:sdk:consumer",
+    "check:sdk:consumer": "node scripts/check-sdk-consumer.mjs",
     "build:sdk:check": "npm run build:sdk && git diff --exit-code -- ../api/app/site_assets/derridai-sdk.js",
     "pack:sdk": "npm run build:sdk:package && npm pack ./sdk"
   },
