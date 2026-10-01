@@ -27,7 +27,7 @@ from .nlp_annotations import current_terms
 from .semantic_content_graph import _slug, document_entity_node_id
 from .semantic_identity import text_key
 
-RECORD_SEMANTIC_MAP_VERSION = 1
+RECORD_SEMANTIC_MAP_VERSION = 2
 MAX_LOCAL_NODES = 80
 MAX_NEIGHBOR_NODES = 40
 MAX_LINKED_RECORDS = 24
@@ -58,6 +58,9 @@ def _normalize(value: Any) -> str:
 
 
 def _preview(record: dict[str, Any]) -> str:
+    persisted = record.get("_semantic_preview")
+    if isinstance(persisted, str):
+        return persisted
     text = _normalize(record.get("text"))
     return text if len(text) <= PREVIEW_CHARS else text[: PREVIEW_CHARS - 1].rstrip() + "…"
 
@@ -78,8 +81,13 @@ def _node_ref(node: dict[str, Any]) -> dict[str, Any]:
     return {"id": node["id"], "label": node.get("label") or "", "type": node.get("type") or ""}
 
 
-class _SemanticIndex:
-    """The build graph plus Record term occurrences, indexed for traversal."""
+class SemanticIndex:
+    """The build graph plus Record term occurrences, indexed once for traversal.
+
+    The index is deliberately serializable so a process restart can hydrate the
+    derived navigation projection without loading, hashing, and walking the full
+    corpus again. It is never authoritative scholarly data.
+    """
 
     def __init__(self, graph: dict[str, Any], records: list[dict[str, Any]]) -> None:
         self.graph = graph
@@ -102,6 +110,121 @@ class _SemanticIndex:
         self.term_mentions: dict[str, list[dict[str, Any]]] = {}
         self.term_state: dict[str, str] = {}
         self._fold_in_terms()
+        self._build_traversal_indexes()
+
+    @classmethod
+    def from_snapshot(cls, snapshot: dict[str, Any]) -> "SemanticIndex":
+        """Hydrate a previously materialized derived index without corpus reads."""
+        if int(snapshot.get("version") or 0) != RECORD_SEMANTIC_MAP_VERSION:
+            raise ValueError("Semantic map index version mismatch")
+        self = cls.__new__(cls)
+        self.graph = {"node_aliases": dict(snapshot.get("node_aliases") or {})}
+        self.records = [row for row in snapshot.get("records") or [] if isinstance(row, dict)]
+        self.record_by_id = {
+            str(row["record_id"]): row for row in self.records if str(row.get("record_id") or "")
+        }
+        self.record_order = {record_id: index for index, record_id in enumerate(self.record_by_id)}
+        self.nodes = {
+            str(node["id"]): {
+                **node,
+                "record_ids": list(node.get("record_ids") or []),
+                "aliases": list(node.get("aliases") or []),
+            }
+            for node in snapshot.get("nodes") or []
+            if isinstance(node, dict) and node.get("id")
+        }
+        self.edges = [edge for edge in snapshot.get("edges") or [] if isinstance(edge, dict)]
+        self.edges_by_node = defaultdict(list)
+        for edge in self.edges:
+            self.edges_by_node[str(edge.get("source") or "")].append(edge)
+            self.edges_by_node[str(edge.get("target") or "")].append(edge)
+        raw_mentions = snapshot.get("term_mentions") or {}
+        self.term_mentions = {
+            str(record_id): [item for item in mentions or [] if isinstance(item, dict)]
+            for record_id, mentions in raw_mentions.items()
+        } if isinstance(raw_mentions, dict) else {}
+        raw_state = snapshot.get("term_state") or {}
+        self.term_state = {
+            str(record_id): str(state)
+            for record_id, state in raw_state.items()
+        } if isinstance(raw_state, dict) else {}
+        self._build_traversal_indexes()
+        return self
+
+    def snapshot(self) -> dict[str, Any]:
+        """Serialize only what hot semantic-map reads need.
+
+        Full Record text is intentionally excluded. The projection retains a short
+        preview, text identity, revision, and the local document-intelligence layer.
+        """
+        records = []
+        for record_id in self.record_by_id:
+            record = self.record_by_id[record_id]
+            text = str(record.get("text") or "")
+            records.append(
+                {
+                    "record_id": record_id,
+                    "record_revision": int(record.get("record_revision") or 0),
+                    "_semantic_text_sha256": str(
+                        record.get("_semantic_text_sha256") or _sha256(text)
+                    ),
+                    "_semantic_text_length": int(
+                        record.get("_semantic_text_length")
+                        if record.get("_semantic_text_length") is not None
+                        else len(text)
+                    ),
+                    "_semantic_preview": _preview(record),
+                    "document_intelligence": record.get("document_intelligence"),
+                }
+            )
+        return {
+            "version": RECORD_SEMANTIC_MAP_VERSION,
+            "node_aliases": dict(self.graph.get("node_aliases") or {}),
+            "records": records,
+            "nodes": list(self.nodes.values()),
+            "edges": self.edges,
+            "term_mentions": self.term_mentions,
+            "term_state": self.term_state,
+        }
+
+    def _build_traversal_indexes(self) -> None:
+        """Materialize adjacency once instead of rescanning all nodes/edges per read."""
+        self.record_edges_by_id: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+        self.node_ids_by_record: defaultdict[str, set[str]] = defaultdict(set)
+        for node_id, node in self.nodes.items():
+            for record_id in node.get("record_ids") or []:
+                value = str(record_id or "")
+                if value in self.record_order:
+                    self.node_ids_by_record[value].add(node_id)
+        for edge in self.edges:
+            source = str(edge.get("source") or "")
+            target = str(edge.get("target") or "")
+            for record_id in edge.get("record_ids") or []:
+                value = str(record_id or "")
+                if value not in self.record_order:
+                    continue
+                self.record_edges_by_id[value].append(edge)
+                if source in self.nodes:
+                    self.node_ids_by_record[value].add(source)
+                if target in self.nodes:
+                    self.node_ids_by_record[value].add(target)
+        self.records_by_node: dict[str, list[str]] = {}
+        for node_id, node in self.nodes.items():
+            found = {
+                str(value)
+                for value in node.get("record_ids") or []
+                if str(value or "") in self.record_order
+            }
+            for edge in self.edges_by_node.get(node_id, []):
+                found.update(
+                    str(value)
+                    for value in edge.get("record_ids") or []
+                    if str(value or "") in self.record_order
+                )
+            self.records_by_node[node_id] = sorted(
+                found,
+                key=lambda value: self.record_order[value],
+            )
 
     def _fold_in_terms(self) -> None:
         # Graph nodes are ordered by mention count, so an ambiguous label resolves to
@@ -190,13 +313,7 @@ class _SemanticIndex:
 
     def _records_for_node(self, node_id: str) -> list[str]:
         """Every Record in which the node occurs or takes part in a relation."""
-        found = set(self.nodes[node_id].get("record_ids") or [])
-        for edge in self.edges_by_node.get(node_id, []):
-            found.update(str(value) for value in edge.get("record_ids") or [] if value)
-        return sorted(
-            (value for value in found if value in self.record_order),
-            key=lambda value: self.record_order[value],
-        )
+        return self.records_by_node.get(node_id, [])
 
     def _idf(self, document_frequency: int) -> float:
         total = max(1, len(self.record_order))
@@ -214,7 +331,8 @@ class _SemanticIndex:
             layer["status"] = "unavailable"
         if not isinstance(local, dict):
             return layer, []
-        if analysis.get("stale") or local.get("record_text_sha256") != _sha256(str(record.get("text") or "")):
+        current_sha = str(record.get("_semantic_text_sha256") or _sha256(str(record.get("text") or "")))
+        if analysis.get("stale") or local.get("record_text_sha256") != current_sha:
             layer["status"] = "stale"
             return layer, []
         layer["status"] = str(local.get("status") or "ok")
@@ -260,7 +378,11 @@ class _SemanticIndex:
             raise KeyError(record_id)
         document_layer, document_mentions = self._document_layer(record, analysis)
         term_mentions = self.term_mentions.get(record_id, [])
-        text_length = len(str(record.get("text") or ""))
+        text_length = int(
+            record.get("_semantic_text_length")
+            if record.get("_semantic_text_length") is not None
+            else len(str(record.get("text") or ""))
+        )
         mentions = sorted(
             (
                 item
@@ -270,10 +392,8 @@ class _SemanticIndex:
             key=lambda item: (item["start"], -item["end"], item["layer"]),
         )
 
-        record_edges = [edge for edge in self.edges if record_id in (edge.get("record_ids") or [])]
-        local_ids: set[str] = {
-            node_id for node_id, node in self.nodes.items() if record_id in node["record_ids"]
-        }
+        record_edges = list(self.record_edges_by_id.get(record_id, []))
+        local_ids: set[str] = set(self.node_ids_by_record.get(record_id, set()))
         for edge in record_edges:
             local_ids.update({str(edge["source"]), str(edge["target"])})
         local_ids.update(item["node_id"] for item in mentions if item.get("node_id"))
@@ -386,7 +506,9 @@ class _SemanticIndex:
             "kind": "record_semantic_map",
             "record_id": record_id,
             "record_revision": int(record.get("record_revision") or 0),
-            "record_text_sha256": _sha256(str(record.get("text") or "")),
+            "record_text_sha256": str(
+                record.get("_semantic_text_sha256") or _sha256(str(record.get("text") or ""))
+            ),
             "layers": {
                 "document_intelligence": document_layer,
                 "terms": {"status": self.term_state.get(record_id, "missing")},
@@ -448,7 +570,7 @@ def record_semantic_map(
     analysis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Bounded semantic map centred on one Record; raises KeyError for an unknown Record."""
-    return _SemanticIndex(graph, records).record_map(record_id, analysis if isinstance(analysis, dict) else {})
+    return SemanticIndex(graph, records).record_map(record_id, analysis if isinstance(analysis, dict) else {})
 
 
 def semantic_node_neighborhood(
@@ -457,4 +579,4 @@ def semantic_node_neighborhood(
     node_id: str,
 ) -> dict[str, Any]:
     """One node, its adjacent relations, and the Records it occurs in; KeyError if unknown."""
-    return _SemanticIndex(graph, records).node_neighborhood(node_id)
+    return SemanticIndex(graph, records).node_neighborhood(node_id)
