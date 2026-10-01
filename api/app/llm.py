@@ -460,6 +460,42 @@ def _parse_proposal(
     )
 
 
+def _touchup_failure_from_structured(error: StructuredCompletionError) -> TouchupFailure:
+    """Translate the shared error taxonomy into the touchup API contract."""
+
+    last = error.last_error
+    if isinstance(last, TouchupFailure) and error.kind in {"timeout", "transport"}:
+        return last
+    if error.kind == "truncated":
+        return TouchupFailure(
+            502,
+            "The model response was cut off before a complete JSON object could be validated.",
+            diagnostic=error.diagnostic,
+            kind="truncated",
+            truncated=True,
+        )
+    if error.kind == "malformed":
+        return TouchupFailure(
+            502,
+            "The model response remained malformed JSON after bounded retry.",
+            diagnostic=error.diagnostic,
+            kind="malformed",
+        )
+    if error.kind == "schema_invalid":
+        return TouchupFailure(
+            502,
+            f"The model response did not satisfy the structured response contract: {last}",
+            diagnostic=error.diagnostic,
+            kind="schema_invalid",
+        )
+    return TouchupFailure(
+        502,
+        "The model did not return a usable structured response.",
+        diagnostic=error.diagnostic,
+        kind=error.kind,
+    )
+
+
 def propose_touchup(
     record: dict[str, Any],
     fields: list[str],
