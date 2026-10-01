@@ -43,6 +43,72 @@ def test_the_built_in_schema_prompts_require_complete_assessments():
     assert "even when the corresponding metadata list is empty" in indexing
 
 
+def test_group_prompt_and_response_contract_can_be_scoped_to_unresolved_fields():
+    schema = ms.default_schema()
+    scoped_prompt = ms.build_group_prompt(
+        schema,
+        "indexing",
+        base_context=CONTEXT,
+        field_names={"topics", "concepts"},
+    )
+    assert "- topics " in scoped_prompt
+    assert "- concepts " in scoped_prompt
+    assert "- persons " not in scoped_prompt
+    assert "- works_referenced " not in scoped_prompt
+    assert "topics and concepts" in scoped_prompt
+
+    model = ms.response_model_for(
+        schema,
+        "indexing",
+        field_names={"topics", "concepts"},
+    )
+    parsed = model.model_validate({
+        "metadata": {"topics": ["hospitality"], "concepts": ["sovereignty"]},
+        "field_assessments": {
+            "topics": {
+                "confidence": 0.9,
+                "needs_review": False,
+                "reason": "Explicit subject matter.",
+                "outcome": "supported_value",
+            },
+            "concepts": {
+                "confidence": 0.85,
+                "needs_review": False,
+                "reason": "Explicit conceptual vocabulary.",
+                "outcome": "supported_value",
+            },
+        },
+        "review_reason": "",
+    })
+    assert parsed.metadata.model_dump() == {
+        "topics": ["hospitality"],
+        "concepts": ["sovereignty"],
+    }
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "metadata": {
+                "topics": ["hospitality"],
+                "concepts": ["sovereignty"],
+                "persons": ["Derrida"],
+            },
+            "field_assessments": {
+                "topics": {
+                    "confidence": 0.9,
+                    "needs_review": False,
+                    "reason": "Explicit.",
+                    "outcome": "supported_value",
+                },
+                "concepts": {
+                    "confidence": 0.85,
+                    "needs_review": False,
+                    "reason": "Explicit.",
+                    "outcome": "supported_value",
+                },
+            },
+            "review_reason": "",
+        })
+
+
 def test_response_consistency_degrades_assessment_value_contradictions_to_review():
     schema = ms.default_schema()
     model = ms.response_model_for(schema, "discourse")
