@@ -182,7 +182,8 @@ jobs:
             exit 0
           fi
 
-          git diff --name-only -z "$BASE_SHA" "$HEAD_SHA" -- \
+          # Deleted files cannot be formatted; exclude them before passing paths to Prettier.
+          git diff --name-only --diff-filter=ACMRTUXB -z "$BASE_SHA" "$HEAD_SHA" -- \
             '*.md' '*.json' '*.yml' '*.yaml' '*.js' '*.mjs' '*.cjs' \
             '*.ts' '*.tsx' '*.vue' '*.css' '*.scss' '*.html' \
             | xargs -0 --no-run-if-empty ./web/node_modules/.bin/prettier \
