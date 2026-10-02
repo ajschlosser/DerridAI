@@ -157,9 +157,7 @@ class ConcurrencyCoordinator:
         """
 
         identity = self._identity(resource, key)
-        bounded = self._limit(limit)
-        with self._condition:
-            bounded = int(self._limits.get(identity, bounded))
+        requested_limit = self._limit(limit)
         started = time.monotonic()
         notified_wait = False
 
@@ -175,6 +173,11 @@ class ConcurrencyCoordinator:
 
                 wait_snapshot: CapacitySnapshot | None = None
                 with self._condition:
+                    # A configured process-wide limit may change while this caller waits
+                    # (for example when an administrator lowers the Ollama runtime cap).
+                    # Re-read it for every admission decision instead of capturing a stale
+                    # value when the wait began.
+                    bounded = int(self._limits.get(identity, requested_limit))
                     active = int(self._active.get(identity, 0))
                     if active < bounded:
                         self._active[identity] = active + 1
