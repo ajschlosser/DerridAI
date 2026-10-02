@@ -779,6 +779,7 @@ const scenarios: Scenario[] = [
   // Works dialogs.
   {
     name: "dialog-works-populate-all",
+    contains: ["Populate metadata with LLM"],
     nav: "Works",
     load: true,
     target: "dialog",

@@ -19,6 +19,7 @@ import MessageDialogHost from "./components/MessageDialogHost.vue";
 import RemoveWorkDialog from "./components/RemoveWorkDialog.vue";
 import SeparateWorksDialog from "./components/SeparateWorksDialog.vue";
 import WorkMetadataEditorDialog from "./components/WorkMetadataEditorDialog.vue";
+import WorkMetadataLlmDialog from "./components/WorkMetadataLlmDialog.vue";
 import MixedWorkValuesDialog from "./components/MixedWorkValuesDialog.vue";
 import LlmReviewWorkspace from "./components/LlmReviewWorkspace.vue";
 import SemanticMapHost from "./components/semantic/SemanticMapHost.vue";
@@ -749,6 +750,7 @@ watch(
   <MixedWorkValuesDialog />
   <RemoveWorkDialog />
   <WorkMetadataEditorDialog />
+  <WorkMetadataLlmDialog />
   <SeparateWorksDialog />
 </template>
 

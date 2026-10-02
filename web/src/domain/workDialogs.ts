@@ -3,6 +3,7 @@
 import { openMessageDialog } from "../composables/messageDialog";
 import { openMixedWorkValuesDialog as openMixedWorkValues } from "../composables/mixedWorkValuesDialog";
 import { openWorkMetadataEditorDialog } from "../composables/workMetadataEditor";
+import { openWorkMetadataLlmDialog as openWorkMetadataLlm } from "../composables/workMetadataLlmDialog";
 import { openRemoveWorkDialog } from "../composables/removeWorkDialog";
 import { openSeparateWorksDialog } from "../composables/separateWorksDialog";
 import { esc, icon } from "./html";
@@ -232,66 +233,41 @@ export function createWorkDialogs(deps: Deps) {
     const sourceScopeSummary = [...sourceScopeCounts]
       .map(([sourceType, count]) => `${count} ${sourceTypeLabel(sourceType)}`)
       .join(" · ");
-    const profiles = providerProfiles();
-    const selectedId = state.appConfig.default_provider_profile || profiles[0]?.id || "";
-    const dialog = document.createElement("dialog");
-    dialog.className = "workflow-dialog work-metadata-llm-dialog";
-    const sample = sourceScopes
-      .slice(0, 6)
-      .map(
-        (scope: Any) =>
-          `<span>${esc(scope.work)} · ${esc(sourceTypeLabel(scope.sourceType))}</span>`,
-      )
-      .join("");
-    dialog.innerHTML = `<div class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon">${icon("spark")}</span><div><p>${esc(tr("works.metadata_workflow_kicker", "Source-aware metadata enrichment"))}</p><h2>${esc(tr("works.populate_metadata_llm", "Populate metadata with LLM"))}</h2><span>${esc(tr("works.populate_metadata_help", "DerridAI partitions mixed works by source type, uses appropriate public metadata sources, asks the selected LLM to identify reliable matches, then returns proposed metadata changes for review. Nothing is applied automatically."))}</span></div></div><button class="icon-btn workflow-close" data-close title="${esc(tr("ui.close", "Close"))}">×</button></div>
-    <ol class="workflow-steps"><li class="active"><span>1</span><b>${esc(tr("works.step_scope", "Works"))}</b></li><li class="active"><span>2</span><b>${esc(tr("works.step_provider", "Provider profile"))}</b></li><li><span>3</span><b>${esc(tr("works.step_review", "Review proposals"))}</b></li></ol>
-    <div class="workflow-form"><section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.lookup_scope", "Lookup scope"))}</b><span>${esc(trf("works.lookup_scope_help", "Retrieve metadata for {count} source group(s).", { count: sourceScopes.length.toLocaleString() }))}</span></div><div class="work-metadata-scope"><strong>${esc(sourceScopeSummary)}</strong><div class="work-metadata-sample">${sample}${sourceScopes.length > 6 ? `<span>+${sourceScopes.length - 6}</span>` : ""}</div><small>${esc(tr("works.metadata_fields_help", "Only fields applicable to each source type are proposed. Source-derived metadata is preserved, and every change remains subject to review."))}</small></div></section>
-    <section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.provider_profile", "Provider profile"))}</b><span>${esc(tr("works.provider_profile_help", "Uses the same configured provider profiles as RAG, PDF tools, and LLM review."))}</span></div><div class="workflow-provider-area">${workflowProviderSelectHtml(selectedId)}<button type="button" class="btn small" id="manageWorkProviders">${esc(tr("language.manage_providers", "Manage provider profiles"))}</button></div></section>
-    <section class="workflow-review-strip"><span class="workflow-summary-icon">${icon("history")}</span><span><b>${esc(tr("works.background_operation", "Background operation"))}</b><small>${esc(tr("works.background_operation_help", "You can leave the Works page. Open the completed operation to review and apply proposed changes."))}</small></span><span><b>${esc(tr("works.catalog_source", "Catalogue source"))}</b><small>Open Library · Google Books · Crossref</small></span></section></div>
-    <div class="workflow-actions"><button class="btn" data-close>${esc(tr("ui.cancel", "Cancel"))}</button><button class="btn primary" id="startWorkMetadata" ${profiles.length ? "" : `disabled data-disabled-reason="${esc(tr("works.no_provider_profiles_help", "Create an LLM provider profile before populating work metadata."))}"`}>${icon("spark")}${esc(tr("works.start_metadata_lookup", "Start background lookup"))}</button></div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    decorateDisabledControls(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    dialog.querySelector("#workMetadataProvider")?.addEventListener("change", (event: Any) => {
-      const profile = providerProfile(event.target.value);
-      const summary = dialog.querySelector("#workMetadataProviderSummary");
-      if (summary) summary.innerHTML = workflowProviderSummaryHtml(profile);
-    });
-    dialog.querySelector("#manageWorkProviders")?.addEventListener("click", async () => {
-      const ok = await openMessageDialog({
-        title: tr("works.leave_metadata_title"),
-        message: tr("works.leave_metadata_help"),
-        confirmLabel: tr("works.open_providers"),
-        cancelLabel: tr("ui.cancel"),
-      });
-      if (!ok) return;
-      close();
-      navigateTo("providers");
-    });
-    dialog.querySelector("#startWorkMetadata")?.addEventListener("click", async () => {
-      const profileId = dialog.querySelector("#workMetadataProvider")?.value || selectedId;
-      const profile = providerProfile(profileId);
-      if (!profile) return toast(tr("works.provider_required"), { tone: "warning" });
-      const config = providerRequestConfig(profile, { textReview: false });
-      if (!config?.model) return toast(tr("works.provider_model_required"), { tone: "warning" });
-      const payload = sourceScopes.map((scope: Any) => ({
-        work: scope.work,
-        source_type_scope: scope.sourceType,
-        current_metadata: {
-          ...representativeWorkMetadata(scope.rows),
-          source_type: scope.sourceType,
-          source_types: [scope.sourceType],
-        },
-      }));
-      const button = dialog.querySelector("#startWorkMetadata");
-      button.disabled = true;
-      button.textContent = tr("works.starting_metadata_lookup");
-      try {
+    const sample = sourceScopes.slice(0, 6).map((scope: Any) => ({
+      work: String(scope.work),
+      sourceTypeLabel: sourceTypeLabel(scope.sourceType),
+    }));
+    openWorkMetadataLlm({
+      scopeCount: sourceScopes.length,
+      scopeSummary: sourceScopeSummary,
+      sample,
+      profiles: providerProfiles(),
+      defaultProfileId: state.appConfig.default_provider_profile || "",
+      manageProviders: async () => {
+        const ok = await openMessageDialog({
+          title: tr("works.leave_metadata_title"),
+          message: tr("works.leave_metadata_help"),
+          confirmLabel: tr("works.open_providers"),
+          cancelLabel: tr("ui.cancel"),
+        });
+        if (ok) navigateTo("providers");
+        return ok;
+      },
+      start: async (profileId: string) => {
+        const profile = providerProfile(profileId);
+        if (!profile) return void toast(tr("works.provider_required"), { tone: "warning" });
+        const config = providerRequestConfig(profile, { textReview: false });
+        if (!config?.model)
+          return void toast(tr("works.provider_model_required"), { tone: "warning" });
+        const payload = sourceScopes.map((scope: Any) => ({
+          work: scope.work,
+          source_type_scope: scope.sourceType,
+          current_metadata: {
+            ...representativeWorkMetadata(scope.rows),
+            source_type: scope.sourceType,
+            source_types: [scope.sourceType],
+          },
+        }));
         const job = await api("/api/jobs/llm-tool", {
           method: "POST",
           body: JSON.stringify({
@@ -318,28 +294,17 @@ export function createWorkDialogs(deps: Deps) {
         state.jobs = [job, ...state.jobs.filter((existing: Any) => existing.id !== job.id)];
         syncJobProgressToasts();
         startJobPolling();
-        close();
         toast(
           trf(
             "works.metadata_lookup_started",
             "Metadata lookup started for {count} source group(s).",
-            {
-              count: sourceScopes.length,
-            },
+            { count: sourceScopes.length },
           ),
           { tone: "success" },
         );
         if (state.view === "home")
           window.dispatchEvent(new CustomEvent("derridai:dashboard-refresh"));
-      } catch (error: Any) {
-        button.disabled = false;
-        button.innerHTML = `${icon("spark")}${esc(tr("works.start_metadata_lookup"))}`;
-        openMessageDialog({
-          title: tr("works.metadata_lookup_failed"),
-          message: error.message || String(error),
-          tone: "danger",
-        });
-      }
+      },
     });
   }
   function openWorkMetadataProposalResult(job: Any) {
