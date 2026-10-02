@@ -14,6 +14,7 @@ from .concurrency import (
     provider_capacity_key,
     provider_limit,
 )
+from .config import settings
 from .job_state import JobPayloadList, PersistentJobStateMixin, iso_now, store_job_error
 from .llm import TouchupFailure, propose_touchup
 from .models import LLMJobCreate
@@ -146,26 +147,75 @@ class LLMJobManager(PersistentJobStateMixin):
             return None
 
     def _run(self, job_id: str, body: LLMJobCreate) -> None:
-        permit = self._acquire_provider_slot(job_id, body)
-        if permit is None:
+        provider_permit = self._acquire_provider_slot(job_id, body)
+        if provider_permit is None:
             with self._lock:
                 job = self._jobs[job_id]
                 job["status"] = "cancelled"
                 job["finished_at"] = iso_now()
             self._persist_job(job_id)
             return
+
+        ollama_permit: CapacityPermit | None = None
         try:
             with self._lock:
                 job = self._jobs.get(job_id)
                 if job is not None:
                     job.setdefault("scheduling", {})["provider_wait_ms"] = int(
-                        round(permit.waited_seconds * 1000)
+                        round(provider_permit.waited_seconds * 1000)
                     )
-                    job["scheduling"]["active_when_started"] = permit.active_when_acquired
-                    job["scheduling"]["limit"] = permit.limit
+                    job["scheduling"]["active_when_started"] = provider_permit.active_when_acquired
+                    job["scheduling"]["limit"] = provider_permit.limit
+
+            if body.provider == "ollama":
+                ollama_limit = capacity_coordinator.configured_limit(
+                    "ollama_runtime",
+                    "global",
+                    fallback=max(1, int(settings.rag_ollama_max_concurrent)),
+                )
+
+                def cancelled() -> bool:
+                    return self._is_cancel_requested(job_id)
+
+                def waiting(snapshot) -> None:  # noqa: ANN001 - operational callback
+                    with self._lock:
+                        job = self._jobs.get(job_id)
+                        if job is not None:
+                            job["stage_detail"] = (
+                                f"Waiting for Ollama slot "
+                                f"({snapshot.active}/{snapshot.limit} active)"
+                            )
+
+                try:
+                    ollama_permit = capacity_coordinator.acquire(
+                        "ollama_runtime",
+                        "global",
+                        ollama_limit,
+                        cancelled=cancelled,
+                        on_wait=waiting,
+                    )
+                except CapacityCancelled:
+                    with self._lock:
+                        job = self._jobs[job_id]
+                        job["status"] = "cancelled"
+                        job["finished_at"] = iso_now()
+                    return
+                with self._lock:
+                    job = self._jobs.get(job_id)
+                    if job is not None:
+                        job.setdefault("scheduling", {})["ollama_wait_ms"] = int(
+                            round(ollama_permit.waited_seconds * 1000)
+                        )
+                        job["scheduling"]["ollama_active_when_started"] = (
+                            ollama_permit.active_when_acquired
+                        )
+                        job["scheduling"]["ollama_limit"] = ollama_permit.limit
+
             self._run_with_provider_slot(job_id, body)
         finally:
-            permit.release()
+            if ollama_permit is not None:
+                ollama_permit.release()
+            provider_permit.release()
             self._persist_job(job_id)
 
     def _run_with_provider_slot(self, job_id: str, body: LLMJobCreate) -> None:
