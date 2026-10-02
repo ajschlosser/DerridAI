@@ -15,6 +15,7 @@ import { useI18nStore } from "./stores/i18n";
 import AuthScreen from "./components/AuthScreen.vue";
 import CommandSearch from "./components/CommandSearch.vue";
 import AppNotifications from "./components/AppNotifications.vue";
+import MessageDialogHost from "./components/MessageDialogHost.vue";
 import LlmReviewWorkspace from "./components/LlmReviewWorkspace.vue";
 import SemanticMapHost from "./components/semantic/SemanticMapHost.vue";
 import SidebarBrand from "./components/shell/SidebarBrand.vue";
@@ -740,6 +741,7 @@ watch(
   />
   <LlmReviewWorkspace />
   <AppNotifications />
+  <MessageDialogHost />
 </template>
 
 <style scoped>

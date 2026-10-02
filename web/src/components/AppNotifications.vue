@@ -3,13 +3,23 @@
 import { useNotifications } from "../composables/notifications";
 import { useI18nStore } from "../stores/i18n";
 
-const { notifications, dismiss } = useNotifications();
+const { notifications, dismiss, pause, resume } = useNotifications();
 const i18n = useI18nStore();
 </script>
 
 <template>
   <section class="notifications" aria-live="polite" aria-atomic="true">
-    <div v-for="item in notifications" :key="item.id" class="notification" :data-tone="item.tone">
+    <div
+      v-for="item in notifications"
+      :key="item.id"
+      class="notification"
+      :data-tone="item.tone"
+      tabindex="0"
+      @pointerenter="pause(item.id)"
+      @pointerleave="resume(item.id)"
+      @focusin="pause(item.id)"
+      @focusout="resume(item.id)"
+    >
       <span>{{ item.message }}</span>
       <button
         type="button"
@@ -45,6 +55,11 @@ const i18n = useI18nStore();
   box-shadow: var(--shadow-overlay);
   font-size: var(--fs-sm);
   line-height: var(--lh-normal);
+  user-select: text;
+}
+.notification:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 /* Long values (a citation, a link) wrap rather than widen the notification. */
 .notification span {
