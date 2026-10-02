@@ -70,7 +70,11 @@ const issueQueueActive = computed(() =>
         ></progress>
       </div>
 
-      <div class="review-status-shortcuts" role="group" :aria-label="i18n.t('pdf_corpus.review_queue')">
+      <div
+        class="review-status-shortcuts"
+        role="group"
+        :aria-label="i18n.t('pdf_corpus.review_queue')"
+      >
         <button
           type="button"
           data-queue-shortcut="issues"
