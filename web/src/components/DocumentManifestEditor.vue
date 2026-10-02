@@ -16,8 +16,17 @@ const props = withDefaults(
     disabled?: boolean;
     affectedRecords?: number;
     showReanalyze?: boolean;
+    showImpactHeader?: boolean;
+    showStructureFields?: boolean;
   }>(),
-  { manifest: () => ({}), disabled: false, affectedRecords: 0, showReanalyze: true },
+  {
+    manifest: () => ({}),
+    disabled: false,
+    affectedRecords: 0,
+    showReanalyze: true,
+    showImpactHeader: true,
+    showStructureFields: true,
+  },
 );
 const emit = defineEmits<{ save: [changes: Record<string, unknown>]; reanalyze: [] }>();
 const i18n = useI18nStore();
@@ -116,13 +125,19 @@ const groups = computed<GroupDef[]>(() => [
   },
 ]);
 const visibleGroups = computed(() =>
-  groups.value.map((group) => {
-    if (group.key !== "structure" || hasPages(props.mediaKind)) return group;
-    return {
-      ...group,
-      description: "",
-      fields: group.fields.filter((field) => field.key === "notes"),
-    };
+  groups.value.flatMap((group) => {
+    // Setup already has a dedicated Document structure step. The pre-Build
+    // document-metadata workspace can therefore omit these fields instead of
+    // presenting two competing places to configure the same source structure.
+    if (group.key === "structure" && !props.showStructureFields) return [];
+    if (group.key !== "structure" || hasPages(props.mediaKind)) return [group];
+    return [
+      {
+        ...group,
+        description: "",
+        fields: group.fields.filter((field) => field.key === "notes"),
+      },
+    ];
   }),
 );
 const fieldKeys = computed(() =>
@@ -235,7 +250,11 @@ function reset() {
     :aria-label="i18n.t('pdf_corpus.document_manifest')"
     @submit.prevent="save"
   >
-    <section class="manifest-impact" aria-labelledby="manifest-impact-title">
+    <section
+      v-if="props.showImpactHeader"
+      class="manifest-impact"
+      aria-labelledby="manifest-impact-title"
+    >
       <div>
         <span class="eyebrow">{{ i18n.t("pdf_corpus.document_defaults") }}</span>
         <h3 id="manifest-impact-title">

@@ -39,7 +39,7 @@ const schemaSummary = computed(() => {
     <details class="setup-section setup-disclosure" open>
       <summary>
         <span>
-          <b>{{ i18n.t("schemas.title") }}</b>
+          <b>{{ i18n.t("pdf_corpus.setup.record_metadata_schema") }}</b>
           <small>{{ schemaSummary }}</small>
         </span>
       </summary>
