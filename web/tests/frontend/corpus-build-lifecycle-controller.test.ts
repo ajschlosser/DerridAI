@@ -207,11 +207,15 @@ describe("Corpus Builder lifecycle controller", () => {
   it("sends the explicit SourceUnit topology policy with a new build", async () => {
     corpusBuilderApi.createBuild.mockResolvedValue(build("build-new"));
     corpusBuilderApi.listBuilds.mockResolvedValue({ items: [build("build-new")], total: 1 });
-    const state = setup("", {}, {
-      mode: "source_units",
-      source_units_per_record: 1,
-      records_per_page: 4,
-    });
+    const state = setup(
+      "",
+      {},
+      {
+        mode: "source_units",
+        source_units_per_record: 1,
+        records_per_page: 4,
+      },
+    );
 
     await state.controller.startBuild();
 
