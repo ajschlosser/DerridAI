@@ -180,7 +180,7 @@ describe("Corpus Builder setup and launch controls", () => {
     expect(wrapper.get(".execution-settings-shell").attributes("open")).toBeDefined();
 
     await wrapper.get("#corpus-concurrency").setValue("99");
-    expect(lastEmission(wrapper, "update:maxConcurrentRequests")[0]).toBe(16);
+    expect(lastEmission(wrapper, "update:maxConcurrentRequests")[0]).toBe(64);
     await wrapper.get("#corpus-timeout-manifest").setValue("5");
     const timeout = lastEmission(wrapper, "update:stageTimeouts")[0] as Record<string, number>;
     expect(timeout.manifest).toBe(30);
