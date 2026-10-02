@@ -32,10 +32,10 @@ const runtime = vi.hoisted(() => ({
   setUrlSyncHook: vi.fn(),
   pauseRuntime: vi.fn(),
   navigateView: vi.fn(),
-  triggerBack: vi.fn(),
-  triggerForward: vi.fn(),
+  syncFromLocation: vi.fn(),
+  viewForPath: vi.fn(),
   toggleSidebar: vi.fn(),
-  state: {},
+  state: {} as Record<string, unknown>,
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({
   ...runtime,
@@ -407,5 +407,86 @@ describe("sidebar at sign-in", () => {
     expect(toggle.attributes("aria-label")).toBeTruthy();
     expect(toggle.attributes("aria-pressed")).toBe("false");
     expect(wrapper.get(".shell-nav-search input").attributes("type")).toBe("search");
+  });
+});
+
+describe("router and runtime stay in agreement", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    runtime.getNavItems.mockReturnValue(NAV);
+    runtime.getShellSnapshot.mockReturnValue({});
+    runtime.bootstrapRuntime.mockReturnValue(new Promise(() => {}));
+    runtime.viewForPath.mockReturnValue(undefined);
+    delete runtime.state.view; // mutate in place: the App module holds the same object
+  });
+
+  type UrlSyncHook = (href: string, options: { replace?: boolean }) => void;
+  const installedHook = () => runtime.setUrlSyncHook.mock.calls.at(-1)?.[0] as UrlSyncHook;
+
+  it("resyncs the runtime from the router when a navigation it requested is refused", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { wrapper, router } = await signIn();
+    router.beforeEach((to) => (to.path === "/search" ? false : true));
+
+    installedHook()("/search", {});
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(runtime.syncFromLocation).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+    wrapper.unmount();
+  });
+
+  it("does not resync when the requested navigation succeeds", async () => {
+    const { wrapper, router } = await signIn();
+
+    installedHook()("/search", {});
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/search");
+    expect(runtime.syncFromLocation).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("follows the router when a route change lands on a different runtime view", async () => {
+    const { wrapper, router } = await signIn();
+    runtime.state.view = "home";
+    runtime.viewForPath.mockImplementation((path: string) =>
+      path === "/search" ? "global" : "home",
+    );
+
+    await router.push("/search");
+    expect(runtime.syncFromLocation).toHaveBeenCalledTimes(1);
+
+    runtime.state.view = "global";
+    await router.push("/search?q=again");
+    expect(runtime.syncFromLocation).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("lets a sidebar click resync a runtime view that has drifted from the URL", async () => {
+    const { wrapper } = await signIn();
+    runtime.state.view = "global"; // runtime drifted; the URL is still "/"
+
+    await pageButtons(wrapper)
+      .find((b) => b.text() === "Home")
+      ?.trigger("click");
+
+    expect(runtime.navigateView).toHaveBeenCalledWith("home", "/");
+    wrapper.unmount();
+  });
+
+  it("ignores a click on the destination the runtime and router already agree on", async () => {
+    const { wrapper } = await signIn();
+    runtime.state.view = "home";
+
+    await pageButtons(wrapper)
+      .find((b) => b.text() === "Home")
+      ?.trigger("click");
+
+    expect(runtime.navigateView).not.toHaveBeenCalled();
+    wrapper.unmount();
   });
 });

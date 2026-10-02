@@ -26,10 +26,10 @@ export const pauseRuntime = (...args: Parameters<typeof runtime.pauseRuntime>) =
   runtime.pauseRuntime(...args);
 export const navigateView = (...args: Parameters<typeof runtime.navigateView>) =>
   runtime.navigateView(...args);
-export const triggerBack = (...args: Parameters<typeof runtime.triggerBack>) =>
-  runtime.triggerBack(...args);
-export const triggerForward = (...args: Parameters<typeof runtime.triggerForward>) =>
-  runtime.triggerForward(...args);
+export const syncFromLocation = (...args: Parameters<typeof runtime.syncFromLocation>) =>
+  runtime.syncFromLocation(...args);
+export const viewForPath = (...args: Parameters<typeof runtime.viewForPath>) =>
+  runtime.viewForPath(...args);
 export const triggerImport = (...args: Parameters<typeof runtime.triggerImport>) =>
   runtime.triggerImport(...args);
 export const triggerOperations = (...args: Parameters<typeof runtime.triggerOperations>) =>

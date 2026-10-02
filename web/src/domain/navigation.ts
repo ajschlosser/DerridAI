@@ -49,7 +49,7 @@ export const pathViewMap: Record<string, string> = {
   "/pipelines": "responsecache",
 };
 
-function viewFromPath(path: string): string | undefined {
+export function viewFromPath(path: string): string | undefined {
   if (path.startsWith("/settings/")) return "config";
   if (path.startsWith("/system-data/")) return "responsecache";
   return pathViewMap[path];
@@ -70,9 +70,6 @@ export function createNavigation(deps: Deps) {
   function getUrlSyncHook() {
     return urlSyncHook;
   }
-  function viewLabel(view: Any) {
-    return viewConfig.find((item: Any) => item.id === view)?.label || view;
-  }
   function navSnapshot() {
     const file = activeFile();
     return {
@@ -89,24 +86,6 @@ export function createNavigation(deps: Deps) {
       // rather than only restoring the page shell.
       urlState: cloneAuditValue(currentTableUrlState(state.view)),
     };
-  }
-  function sameSnapshot(a: Any, b: Any) {
-    if (!a || !b) return false;
-    return JSON.stringify(a) === JSON.stringify(b);
-  }
-  function applyNavSnapshot(target: Any) {
-    if (!target) return;
-    if (target.activeFileId && state.files.some((file: Any) => file.id === target.activeFileId))
-      state.activeFileId = target.activeFileId;
-    state.view = target.view || "home";
-    if (state.activeFileId && Number.isFinite(+target.selectedIndex))
-      state.selected[state.activeFileId] = +target.selectedIndex;
-    if (target.activeStore !== undefined) state.activeStore = target.activeStore || "";
-    if (target.storeWork !== undefined) state.storeWork = target.storeWork || "";
-    if (Number.isFinite(+target.storePage)) state.storePage = Math.max(1, +target.storePage);
-    if (target.storeBrowseMode) state.storeBrowseMode = target.storeBrowseMode;
-    if (Number.isFinite(+target.pdfPage)) state.pdf.page = Math.max(1, +target.pdfPage);
-    if (target.urlState) applyCompressedTableUrlState(target.urlState, state.view);
   }
   function setUrlSyncHook(hook: Any) {
     urlSyncHook = typeof hook === "function" ? hook : null;
@@ -355,15 +334,6 @@ export function createNavigation(deps: Deps) {
     // Research performs an authoritative store refresh on entry. Do not redirect
     // from this legacy navigation bridge using the cached hasCorpusDb() value; a
     // newly created/restored collection may not have reached shell state yet.
-    const before = navSnapshot();
-    if (push) {
-      const last = state.navHistory[state.navHistory.length - 1];
-      if (!sameSnapshot(last, before)) {
-        state.navHistory.push(before);
-        if (state.navHistory.length > 50) state.navHistory.shift();
-      }
-      state.navForward = [];
-    }
     if (fileId && state.files.some((file: Any) => file.id === fileId)) state.activeFileId = fileId;
     if (index !== null && state.activeFileId) state.selected[state.activeFileId] = Number(index);
     if (state.view === "vector" && view !== "vector") {
@@ -378,42 +348,8 @@ export function createNavigation(deps: Deps) {
     shell();
     renderView();
   }
-  function goBack() {
-    while (state.navHistory.length) {
-      const target = state.navHistory.pop();
-      if (!target) continue;
-      if (target.activeFileId && !state.files.some((file: Any) => file.id === target.activeFileId))
-        continue;
-      state.navForward.push(navSnapshot());
-      if (state.navForward.length > 50) state.navForward.shift();
-      applyNavSnapshot(target);
-      persistPrefs();
-      syncUrl({ replace: true });
-      shell();
-      renderView();
-      return;
-    }
-  }
-  function goForward() {
-    while (state.navForward.length) {
-      const target = state.navForward.pop();
-      if (!target) continue;
-      if (target.activeFileId && !state.files.some((file: Any) => file.id === target.activeFileId))
-        continue;
-      state.navHistory.push(navSnapshot());
-      applyNavSnapshot(target);
-      persistPrefs();
-      syncUrl({ replace: true });
-      shell();
-      renderView();
-      return;
-    }
-  }
   return {
-    viewLabel,
     navSnapshot,
-    sameSnapshot,
-    applyNavSnapshot,
     setUrlSyncHook,
     currentTableUrlState,
     applyCompressedTableUrlState,
@@ -421,7 +357,5 @@ export function createNavigation(deps: Deps) {
     syncUrl,
     applyUrlState,
     navigateTo,
-    goBack,
-    goForward,
   };
 }
