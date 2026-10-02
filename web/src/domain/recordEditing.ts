@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
 // Applying, clearing and restoring per-record edits, and the change history behind them. Moved verbatim from the legacy
 // runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -19,7 +20,6 @@ type Helper =
   | "renderView"
   | "sameValue"
   | "shell"
-  | "toast"
   | "tr"
   | "trf"
   | "uid";
@@ -36,7 +36,6 @@ export function createRecordEditing(deps: Deps) {
     renderView,
     sameValue,
     shell,
-    toast,
     tr,
     trf,
     uid,
@@ -93,7 +92,7 @@ export function createRecordEditing(deps: Deps) {
     const record = file?.records?.[index];
     const count = Array.isArray(record?.updates) ? record.updates.length : 0;
     if (!record || !count) {
-      toast(tr("runtime.toast.no_updates_history"));
+      toast(tr("runtime.toast.no_updates_history"), { tone: "warning" });
       return false;
     }
     if (
@@ -119,7 +118,7 @@ export function createRecordEditing(deps: Deps) {
     const rows = allRows().filter(
       (row: Any) => Array.isArray(row.record.updates) && row.record.updates.length,
     );
-    if (!rows.length) return toast(tr("runtime.toast.no_loaded_updates"));
+    if (!rows.length) return toast(tr("runtime.toast.no_loaded_updates"), { tone: "warning" });
     if (
       !confirmed &&
       !(await openMessageDialog({
@@ -140,7 +139,9 @@ export function createRecordEditing(deps: Deps) {
     for (const file of files) persistFile(file);
     shell();
     renderView();
-    toast(trf("dynamic.cleared_history_records", { count: rows.length.toLocaleString() }));
+    toast(trf("dynamic.cleared_history_records", { count: rows.length.toLocaleString() }), {
+      tone: "success",
+    });
   }
   function historyVersionChanges(previous: Any, current: Any) {
     const keys = new Set([...Object.keys(previous || {}), ...Object.keys(current || {})]);

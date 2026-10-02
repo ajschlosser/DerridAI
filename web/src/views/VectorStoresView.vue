@@ -411,7 +411,7 @@ async function saveLanguages() {
 async function saveEmbedding() {
   if (!activeName.value || contractLocked.value) return;
   if (embeddingProvider.value.startsWith("profile:") && !embeddingModel.value.trim())
-    return toast(i18n.t("vector.embedding_model_required"), { tone: "warn" });
+    return toast(i18n.t("vector.embedding_model_required"), { tone: "warning" });
   try {
     await chromaApi.setEmbedding(activeName.value, {
       embedding_provider: embeddingProvider.value,
@@ -474,7 +474,7 @@ async function confirmAction() {
 
 function syncActive() {
   const file = runtimeState.files?.find((item) => item.id === runtimeState.activeFileId);
-  if (!file) return toast(i18n.t("vector.load_jsonl_first"), { tone: "warn" });
+  if (!file) return toast(i18n.t("vector.load_jsonl_first"), { tone: "warning" });
   void runtime
     .upsertRows(
       file.records.map((record: unknown, index: number) => ({ file, record, index })),
@@ -486,7 +486,7 @@ function syncAll() {
   const rows = (runtimeState.files || []).flatMap((file) =>
     file.records.map((record, index) => ({ file, record, index })),
   );
-  if (!rows.length) return toast(i18n.t("vector.load_jsonl_any_first"), { tone: "warn" });
+  if (!rows.length) return toast(i18n.t("vector.load_jsonl_any_first"), { tone: "warning" });
   void runtime.upsertRows(rows, "records").then(() => load());
 }
 

@@ -8,6 +8,7 @@ import { isActiveJobStatus, jobIdsToPruneFromDock } from "./operationsDock";
 import { FALLBACK_POLL_MS, realtime as defaultRealtime } from "../realtime";
 import type { RealtimeClient } from "../realtime/client";
 import { TERMINAL_JOB_STATUSES, type JobEvent } from "../realtime/protocol";
+import { toast } from "../composables/notifications";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -33,8 +34,8 @@ type Helper =
   | "reviewItemFromKey"
   | "reviewKey"
   | "shell"
-  | "toast"
   | "touchupRecordPayload"
+  | "tr"
   | "trf"
   | "updateDbStatusElements"
   | "updateOperationStackCount";
@@ -63,8 +64,8 @@ export function createJobsWorkspace(deps: Deps) {
     reviewItemFromKey,
     reviewKey,
     shell,
-    toast,
     touchupRecordPayload,
+    tr,
     trf,
     updateDbStatusElements,
     updateOperationStackCount,
@@ -236,6 +237,7 @@ export function createJobsWorkspace(deps: Deps) {
         trf("operations.remove_failed", {
           message: (error as Error).message,
         }),
+        { tone: "danger" },
       );
     }
   }
@@ -255,6 +257,7 @@ export function createJobsWorkspace(deps: Deps) {
         trf("operations.clear_failed", {
           message: (error as Error).message,
         }),
+        { tone: "danger" },
       );
     }
   }
@@ -320,22 +323,29 @@ export function createJobsWorkspace(deps: Deps) {
         if (state.view === "home") refreshOperationsPanelOnly();
         if (state.view === "rag") refreshRagProgressPanel();
       }
-      const cancellationMessage =
+      const cancellationDetail = tr(
         updated.type === "llm" || updated.type === "llm_tool"
-          ? "interrupting the active model stream"
+          ? "runtime.toast.cancel_detail_llm"
           : updated.type === "rag"
-            ? "interrupting model streaming or stopping at the next vector/rerank checkpoint"
+            ? "runtime.toast.cancel_detail_rag"
             : updated.type === "upsert"
-              ? "finishing the current Chroma batch, then stopping"
-              : "stopping at the next safe checkpoint";
+              ? "runtime.toast.cancel_detail_upsert"
+              : "runtime.toast.cancel_detail_default",
+      );
       toast(
         updated.status === "cancelled"
-          ? `${jobLabel(updated)} cancelled`
-          : `Cancellation requested for ${jobLabel(updated)} · ${cancellationMessage}.`,
+          ? trf("runtime.toast.job_cancelled", { label: jobLabel(updated) })
+          : trf("runtime.toast.cancellation_requested", {
+              label: jobLabel(updated),
+              detail: cancellationDetail,
+            }),
+        { tone: "info" },
       );
       return updated;
     } catch (error) {
-      toast(trf("runtime.toast.cancel_failed", { detail: (error as Error).message }));
+      toast(trf("runtime.toast.cancel_failed", { detail: (error as Error).message }), {
+        tone: "danger",
+      });
       return null;
     }
   }
@@ -375,6 +385,7 @@ export function createJobsWorkspace(deps: Deps) {
         mode === "auto" ? "runtime.toast.auto_improve_started" : "runtime.toast.llm_review_started",
         { count: items.length },
       ),
+      { tone: "success" },
     );
     return job;
   }
@@ -439,14 +450,29 @@ export function createJobsWorkspace(deps: Deps) {
         }
         {
           const providerSummary = jobProviderSummary(job);
-          const unit =
+          const unit = tr(
             job.type === "rag"
-              ? " stages"
+              ? "runtime.toast.unit_stages"
               : job.type === "llm_tool" && (job.tool || job.mode) === "work_metadata"
-                ? " works"
-                : " records";
+                ? "dynamic.works"
+                : "dynamic.records",
+          );
           toast(
-            `${jobLabel(job)}${providerSummary ? ` · ${providerSummary}` : ""} ${job.status}: ${job.completed}/${job.total}${unit}`,
+            trf("runtime.toast.job_progress", {
+              label: `${jobLabel(job)}${providerSummary ? ` · ${providerSummary}` : ""}`,
+              status: tr(`operations.status.${job.status}`, job.status),
+              completed: job.completed,
+              total: job.total,
+              unit,
+            }),
+            {
+              tone:
+                job.status === "failed"
+                  ? "danger"
+                  : job.status === "completed"
+                    ? "success"
+                    : "info",
+            },
           );
         }
         const liveKey =

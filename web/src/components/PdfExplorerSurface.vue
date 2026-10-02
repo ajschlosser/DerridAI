@@ -367,7 +367,7 @@ function linkCurrentPdf() {
   }
   const item = runtime.lookupRecord(key);
   if (item) runtime.linkPdfPage(item.file, item.index, state.pdf.page);
-  else runtime.toast(copy.value.chooseAutocomplete);
+  else toast(copy.value.chooseAutocomplete, { tone: "warning" });
 }
 
 // Some runtime code (unlinking a record, applying LLM cleanup results) still asks the PDF Explorer to refresh this

@@ -132,7 +132,7 @@ async function remove(record: DataRow) {
         ? Math.max(0, page.value.offset - page.value.limit)
         : page.value.offset;
     await load(offset);
-    toast(t("runtime.system_response_deleted", "Saved response deleted."));
+    toast(t("runtime.system_response_deleted", "Saved response deleted."), { tone: "success" });
   } catch (cause) {
     toast(cause instanceof Error ? cause.message : String(cause), { tone: "danger" });
   }
@@ -154,7 +154,7 @@ async function clearAll() {
   try {
     await systemApi.clearResponseCache();
     await load(0);
-    toast(t("runtime.response_cache_cleared", "Saved responses cleared."));
+    toast(t("runtime.response_cache_cleared", "Saved responses cleared."), { tone: "success" });
   } catch (cause) {
     toast(cause instanceof Error ? cause.message : String(cause), { tone: "danger" });
   }

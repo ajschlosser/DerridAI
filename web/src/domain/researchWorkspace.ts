@@ -14,6 +14,7 @@ import {
 } from "./researchPayloads";
 import { bindCopy } from "../i18n/bindCopy";
 import { englishDefault } from "../i18n/englishDefault";
+import { toast } from "../composables/notifications";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -46,7 +47,6 @@ type Helper =
   | "shellRefreshHook"
   | "startJobPolling"
   | "syncJobProgressToasts"
-  | "toast"
   | "tr"
   | "trf"
   | "uid";
@@ -78,7 +78,6 @@ export function createResearchWorkspace(deps: Deps) {
     shellRefreshHook,
     startJobPolling,
     syncJobProgressToasts,
-    toast,
     trf,
     uid,
   } = deps;

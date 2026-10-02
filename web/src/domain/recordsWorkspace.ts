@@ -6,6 +6,7 @@
 import { sortRows } from "./recordValues";
 import { describeRecordsFile } from "./recordsFiles";
 import { TABLE_DEFAULTS } from "./runtimeConstants";
+import { toast } from "../composables/notifications";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -47,7 +48,6 @@ type Helper =
   | "shell"
   | "syncUrl"
   | "tableAvailableFields"
-  | "toast"
   | "toggleSort"
   | "toggleWorkspaceEvidence"
   | "tr"
@@ -91,7 +91,6 @@ export function createRecordsWorkspace(deps: Deps) {
     shell,
     syncUrl,
     tableAvailableFields,
-    toast,
     toggleSort,
     toggleWorkspaceEvidence,
     tr,
@@ -119,7 +118,7 @@ export function createRecordsWorkspace(deps: Deps) {
   function copyRecordsListJson(index: Any) {
     const f = activeFile();
     const record = f?.records?.[index];
-    if (record) copyJsonToClipboard(record, record.record_id || "record");
+    if (record) copyJsonToClipboard(record, record.record_id || tr("dynamic.record_one"));
   }
   function getRecordsListShareHref() {
     const path = urlFromState();
@@ -256,7 +255,7 @@ export function createRecordsWorkspace(deps: Deps) {
       return Promise.resolve(
         canUse("editLocalRecords")
           ? openOcrCleanupDialog()
-          : toast(tr("runtime.toast.cannot_edit_records")),
+          : toast(tr("runtime.toast.cannot_edit_records"), { tone: "warning" }),
       );
     if (!f) return Promise.resolve();
     if (name === "reviewSelected") return Promise.resolve(openTouchup(selectedReviewItems()));

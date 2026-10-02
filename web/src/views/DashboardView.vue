@@ -279,7 +279,7 @@ async function goSearch() {
       } else {
         runtime.navigateTo("global");
         toast(i18n.t("research.no_database"), {
-          tone: "warn",
+          tone: "warning",
         });
       }
       return;

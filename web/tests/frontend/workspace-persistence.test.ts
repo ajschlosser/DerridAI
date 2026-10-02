@@ -21,7 +21,6 @@ describe("workspace preference persistence", () => {
       invalidateCorpusCache: vi.fn(),
       restoreCurrentPdfAsset: vi.fn(),
       serializableFile: vi.fn(),
-      toast: vi.fn(),
       trf: vi.fn((key: string) => key),
     });
 

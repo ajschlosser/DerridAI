@@ -5,6 +5,7 @@
 // helpers are passed in as dependencies.
 import { apiRequest } from "../api/http";
 import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -36,7 +37,6 @@ type Helper =
   | "shell"
   | "stableJsonlFileIdentity"
   | "syncUrl"
-  | "toast"
   | "tr"
   | "trf"
   | "updateSystemCard";
@@ -67,7 +67,6 @@ export function createAppLifecycle(deps: Deps) {
     shell,
     stableJsonlFileIdentity,
     syncUrl,
-    toast,
     tr,
     trf,
     updateSystemCard,
@@ -145,7 +144,8 @@ export function createAppLifecycle(deps: Deps) {
     return warmupProviderProfile(state.appConfig.default_provider_profile);
   }
   async function importFiles(fileList: Any) {
-    if (isResearcher()) return toast(tr("runtime.toast.researcher_cannot_load"));
+    if (isResearcher())
+      return toast(tr("runtime.toast.researcher_cannot_load"), { tone: "warning" });
     const shareParams = new URLSearchParams(location.search);
     const requestedFileId = shareParams.get("file");
     const requestedUrlState = shareParams.get("ts");
@@ -168,7 +168,7 @@ export function createAppLifecycle(deps: Deps) {
           text = decoded.text;
           name = decoded.filename || name.replace(/\.zst$/i, "");
         } catch (error: Any) {
-          toast(error.message);
+          toast(error.message, { tone: "danger" });
           errors += 1;
           continue;
         }
@@ -213,13 +213,14 @@ export function createAppLifecycle(deps: Deps) {
     renderView();
     syncUrl({ replace: true });
     if (alreadyOpen && alreadyOpen === [...fileList].length && !errors) {
-      toast(trf("dynamic.already_loaded", { count: total }));
+      toast(trf("dynamic.already_loaded", { count: total }), { tone: "warning" });
       return;
     }
     toast(
       errors
         ? trf("dynamic.loaded_records_issues", { count: total, issues: errors })
         : trf("dynamic.loaded_records", { count: total }),
+      { tone: errors ? "warning" : "success" },
     );
   }
   async function closeFile(id: Any) {

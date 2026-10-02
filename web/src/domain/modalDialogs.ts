@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
 // The clipboard helper (the message dialog itself is `MessageDialogHost.vue`). The
 // runtime's state object and helpers are passed in as dependencies.
@@ -11,17 +12,17 @@ type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Fn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /** The helpers that still live in the legacy runtime. */
-type Helper = "toast" | "trf";
+type Helper = "trf";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 export function createModalDialogs(deps: Deps) {
-  const { toast, trf } = deps;
+  const { trf } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
   const document: Any = globalThis.document;
   async function copyJsonToClipboard(value: Any, labelText = "record") {
     const text = JSON.stringify(value, null, 2);
     try {
       await navigator.clipboard.writeText(text);
-      toast(trf("runtime.toast.json_copied", { label: labelText }));
+      toast(trf("runtime.toast.json_copied", { label: labelText }), { tone: "success" });
     } catch (error: Any) {
       const area = document.createElement("textarea");
       area.value = text;
@@ -31,7 +32,7 @@ export function createModalDialogs(deps: Deps) {
       area.select();
       try {
         document.execCommand("copy");
-        toast(trf("runtime.toast.json_copied", { label: labelText }));
+        toast(trf("runtime.toast.json_copied", { label: labelText }), { tone: "success" });
       } catch {
         openMessageDialog({ title: "Could not copy", message: error.message, tone: "danger" });
       } finally {

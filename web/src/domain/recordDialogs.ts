@@ -11,6 +11,7 @@ import {
 } from "./recordDialogMarkup";
 import { createRecordDialogCopy } from "./recordDialogCopy";
 import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
 // The dialogs for editing, merging, subsetting and cleaning records and for the upsert queue, drawn as HTML strings. Moved
 // verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -63,7 +64,6 @@ type Helper =
   | "selectedReviewItems"
   | "shell"
   | "showAppModal"
-  | "toast"
   | "tr"
   | "trf"
   | "uid"
@@ -196,7 +196,6 @@ export function createRecordDialogs(deps: Deps) {
     selectedReviewItems,
     shell,
     showAppModal,
-    toast,
     tr,
     trf,
     uid,
@@ -206,7 +205,7 @@ export function createRecordDialogs(deps: Deps) {
   // The legacy code queries the page freely; untyped, as it was written.
   const document: Any = globalThis.document;
   function openMergeDialog() {
-    if (state.files.length < 2) return toast(copy.mergeNeedTwo);
+    if (state.files.length < 2) return toast(copy.mergeNeedTwo, { tone: "warning" });
     const dialog = document.createElement("dialog");
     dialog.className = "merge-dialog";
     dialog.innerHTML = mergeDialogHtml(state.files, { tr, trf });
@@ -226,7 +225,7 @@ export function createRecordDialogs(deps: Deps) {
         (x) => x.dataset.mergeFile,
       );
       const files = state.files.filter((file: Any) => ids.includes(file.id));
-      if (!files.length) return toast(copy.selectFile);
+      if (!files.length) return toast(copy.selectFile, { tone: "warning" });
       const firstIndex = Math.min(...files.map((file: Any) => state.files.indexOf(file)));
       const name = (
         dialog.querySelector("#mergeName").value.trim() || "derridai-merged.jsonl"
@@ -288,11 +287,11 @@ export function createRecordDialogs(deps: Deps) {
       persistPrefs();
       close();
       navigateTo("list", { fileId: merged.id });
-      toast(copy.merged(files.length, records.length.toLocaleString()));
+      toast(copy.merged(files.length, records.length.toLocaleString()), { tone: "success" });
     };
   }
   function openBulkFieldEditor({ rows = null, title = copy.bulkEditTitle } = {}) {
-    if (!state.files.length) return toast(copy.loadFirst);
+    if (!state.files.length) return toast(copy.loadFirst, { tone: "warning" });
     const dialog = document.createElement("dialog");
     dialog.className = "bulk-field-dialog";
     const fields = recordFields().filter(
@@ -360,16 +359,16 @@ export function createRecordDialogs(deps: Deps) {
 
     dialog.querySelector("#applyBulkField").onclick = async () => {
       const target = currentRows();
-      if (!target.length) return toast(copy.noScope);
+      if (!target.length) return toast(copy.noScope, { tone: "warning" });
       const field = dialog.querySelector("#bulkFieldName").value;
       let value;
       try {
         value = parseBulkFieldValue(field, dialog.querySelector("#bulkFieldValue").value, target);
       } catch (error: Any) {
-        return toast(error.message);
+        return toast(error.message, { tone: "danger" });
       }
       const changing = target.filter((row: Any) => !sameValue(row.record?.[field], value));
-      if (!changing.length) return toast(copy.alreadyValue);
+      if (!changing.length) return toast(copy.alreadyValue, { tone: "warning" });
       if (
         !(await openMessageDialog({
           title: copy.bulkTitle,
@@ -398,11 +397,12 @@ export function createRecordDialogs(deps: Deps) {
       renderView();
       toast(
         copy.bulkUpdated(field, changing.length.toLocaleString(), fieldChanges.toLocaleString()),
+        { tone: "success" },
       );
     };
   }
   function openOcrCleanupDialog() {
-    if (!state.files.length) return toast(copy.loadFirst);
+    if (!state.files.length) return toast(copy.loadFirst, { tone: "warning" });
     const dialog = document.createElement("dialog");
     const selected = selectedReviewItems();
     const active = activeFile();
@@ -446,7 +446,7 @@ export function createRecordDialogs(deps: Deps) {
               index: item.index,
             }));
           else rows = allRows();
-          if (!rows.length) return toast(copy.noScopeOcr);
+          if (!rows.length) return toast(copy.noScopeOcr, { tone: "warning" });
           close();
           if (
             await openMessageDialog({
@@ -518,12 +518,14 @@ export function createRecordDialogs(deps: Deps) {
       dialog.remove();
       shell();
       renderView();
-      count ? toast(copy.saved(count), { tone: "success" }) : toast(copy.noChanges);
+      count
+        ? toast(copy.saved(count), { tone: "success" })
+        : toast(copy.noChanges, { tone: "warning" });
     };
   }
   function openStoreRecordEditor(record: Any) {
     const chromaId = record._chroma_id;
-    if (!chromaId) return toast(tr("record.no_storage_id"));
+    if (!chromaId) return toast(tr("record.no_storage_id"), { tone: "warning" });
     const dialog = document.createElement("dialog");
     const editable = Object.keys(record).filter(
       (k) =>
@@ -603,7 +605,7 @@ export function createRecordDialogs(deps: Deps) {
     const record = file?.records?.[index];
     if (!record) return;
     let versions = recordHistoryVersions(record);
-    if (versions.length <= 1) return toast(copy.noHistory);
+    if (versions.length <= 1) return toast(copy.noHistory, { tone: "warning" });
     let cursor = versions.length - 1;
     const dialog = document.createElement("dialog");
     dialog.className = "record-history-dialog";
@@ -659,13 +661,13 @@ export function createRecordDialogs(deps: Deps) {
       dialog.querySelector("#historyRestore").onclick = async () => {
         if (isCurrent) return;
         const count = restoreRecordHistoryVersion(file, index, version);
-        if (!count) return toast(copy.nothingToRestore);
+        if (!count) return toast(copy.nothingToRestore, { tone: "warning" });
         versions = recordHistoryVersions(file.records[index]);
         cursor = versions.length - 1;
         shell();
         renderView();
         render();
-        toast(copy.restoredFields(count, version.label));
+        toast(copy.restoredFields(count, version.label), { tone: "success" });
       };
       dialog.querySelector("#historyUndoAll").onclick = async () => {
         const original = versions[0];
@@ -679,20 +681,20 @@ export function createRecordDialogs(deps: Deps) {
         )
           return;
         const count = restoreRecordHistoryVersion(file, index, original);
-        if (!count) return toast(copy.alreadyOriginal);
+        if (!count) return toast(copy.alreadyOriginal, { tone: "warning" });
         versions = recordHistoryVersions(file.records[index]);
         cursor = versions.length - 1;
         shell();
         renderView();
         render();
-        toast(copy.restoredOriginal(count));
+        toast(copy.restoredOriginal(count), { tone: "success" });
       };
       dialog.querySelector("#historyClear").onclick = async () => {
         if (!(await clearRecordUpdates(file, index))) return;
         close();
         shell();
         renderView();
-        toast(copy.historyCleared);
+        toast(copy.historyCleared, { tone: "success" });
       };
       decorateDisabledControls(dialog);
     };
@@ -707,7 +709,7 @@ export function createRecordDialogs(deps: Deps) {
         message: dbUnavailableReason(),
         confirmLabel: "OK",
       });
-    if (!state.activeStore) return toast(copy.selectCollection);
+    if (!state.activeStore) return toast(copy.selectCollection, { tone: "warning" });
     if (allRows().length) await refreshPresenceForRows(allRows());
     const _rows = pendingUpsertRows();
     const dialog = document.createElement("dialog");
@@ -781,7 +783,7 @@ export function createRecordDialogs(deps: Deps) {
         const chosen = currentRows.filter((row: Any) =>
           selected.has(localRecordKey(row.file, row.index)),
         );
-        if (!chosen.length) return toast(copy.selectQueued);
+        if (!chosen.length) return toast(copy.selectQueued, { tone: "warning" });
         close();
         await upsertRows(chosen, "queued records");
         shell();

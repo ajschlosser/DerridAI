@@ -8,6 +8,7 @@ import {
   workMetadataSourceGroups,
   workSourceType,
 } from "./workMetadata";
+import { toast } from "../composables/notifications";
 
 // The dialogs for a work's metadata and for removing or separating works, drawn as HTML strings. Moved verbatim from the
 // legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -43,7 +44,6 @@ type Helper =
   | "showAppModal"
   | "startJobPolling"
   | "syncJobProgressToasts"
-  | "toast"
   | "tr"
   | "trf"
   | "uid"
@@ -113,7 +113,6 @@ export function createWorkDialogs(deps: Deps) {
     showAppModal,
     startJobPolling,
     syncJobProgressToasts,
-    toast,
     tr,
     trf,
     uid,
@@ -140,7 +139,7 @@ export function createWorkDialogs(deps: Deps) {
     dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
   }
   function openWorkMetadataEditor(work: Any, rows: Any) {
-    if (!rows?.length) return toast(tr("works.no_records_found"));
+    if (!rows?.length) return toast(tr("works.no_records_found"), { tone: "warning" });
     const available = [
       ...new Set([
         ...WORK_METADATA_FIELDS,
@@ -180,7 +179,7 @@ export function createWorkDialogs(deps: Deps) {
       const selected = [...dialog.querySelectorAll("[data-work-meta-apply]:checked")].map(
         (box) => box.dataset.workMetaApply,
       );
-      if (!selected.length) return toast(tr("works.select_field_to_apply"));
+      if (!selected.length) return toast(tr("works.select_field_to_apply"), { tone: "warning" });
       const changes: Any = {};
       try {
         for (const field of selected) {
@@ -188,7 +187,7 @@ export function createWorkDialogs(deps: Deps) {
           changes[field] = parseWorkMetadataValue(field, control, rows);
         }
       } catch (error: Any) {
-        return toast(error.message);
+        return toast(error.message, { tone: "danger" });
       }
       if (
         !(await openMessageDialog({
@@ -239,7 +238,7 @@ export function createWorkDialogs(deps: Deps) {
   }
   function openWorkMetadataLlmDialog(items: Any) {
     const works = (items || []).filter((item: Any) => item?.work && item?.rows?.length);
-    if (!works.length) return toast(tr("works.no_work_metadata_rows"));
+    if (!works.length) return toast(tr("works.no_work_metadata_rows"), { tone: "warning" });
     const sourceScopes = works.flatMap((item: Any) =>
       workMetadataSourceGroups(item).map((scope) => ({ ...scope, work: item.work })),
     );
@@ -299,9 +298,9 @@ export function createWorkDialogs(deps: Deps) {
     dialog.querySelector("#startWorkMetadata")?.addEventListener("click", async () => {
       const profileId = dialog.querySelector("#workMetadataProvider")?.value || selectedId;
       const profile = providerProfile(profileId);
-      if (!profile) return toast(tr("works.provider_required"));
+      if (!profile) return toast(tr("works.provider_required"), { tone: "warning" });
       const config = providerRequestConfig(profile, { textReview: false });
-      if (!config?.model) return toast(tr("works.provider_model_required"));
+      if (!config?.model) return toast(tr("works.provider_model_required"), { tone: "warning" });
       const payload = sourceScopes.map((scope: Any) => ({
         work: scope.work,
         source_type_scope: scope.sourceType,
@@ -350,6 +349,7 @@ export function createWorkDialogs(deps: Deps) {
               count: sourceScopes.length,
             },
           ),
+          { tone: "success" },
         );
         if (state.view === "home")
           window.dispatchEvent(new CustomEvent("derridai:dashboard-refresh"));
@@ -422,7 +422,7 @@ export function createWorkDialogs(deps: Deps) {
       const selected = [...dialog.querySelectorAll("[data-work-proposal-select]:checked")]
         .map((box) => Number(box.dataset.workProposalSelect))
         .filter((index) => flattened[index]);
-      if (!selected.length) return toast(tr("works.select_metadata_changes"));
+      if (!selected.length) return toast(tr("works.select_metadata_changes"), { tone: "warning" });
       const grouped = new Map();
       try {
         for (const index of selected) {
@@ -437,7 +437,7 @@ export function createWorkDialogs(deps: Deps) {
           group.rationale[entry.field] = entry.rationale;
         }
       } catch (error: Any) {
-        return toast(error.message);
+        return toast(error.message, { tone: "danger" });
       }
       const _recordCount = [...grouped.values()].reduce(
         (sum, group) => sum + group.item.rows.length,
@@ -516,7 +516,8 @@ export function createWorkDialogs(deps: Deps) {
         (input) => input.dataset.removeWorkFile,
       );
       const removeDb = Boolean(dialog.querySelector("#removeWorkDb")?.checked && dbStore);
-      if (!fileIds.length && !removeDb) return toast(tr("works.select_file_or_chroma"));
+      if (!fileIds.length && !removeDb)
+        return toast(tr("works.select_file_or_chroma"), { tone: "warning" });
       const button = dialog.querySelector("#confirmRemoveWork");
       button.disabled = true;
       button.textContent = tr("works.removing");
@@ -573,6 +574,7 @@ export function createWorkDialogs(deps: Deps) {
                 })
               : "",
           }),
+          { tone: "success" },
         );
       } catch (error: Any) {
         button.disabled = false;
@@ -594,7 +596,7 @@ export function createWorkDialogs(deps: Deps) {
       );
       return works.size > 1;
     });
-    if (!eligible.length) return toast(tr("works.no_multi_work_jsonl"));
+    if (!eligible.length) return toast(tr("works.no_multi_work_jsonl"), { tone: "warning" });
     const dialog = document.createElement("dialog");
     dialog.className = "work-separate-dialog";
     const options = eligible
@@ -638,7 +640,7 @@ export function createWorkDialogs(deps: Deps) {
       const selected = [...dialog.querySelectorAll("[data-separate-work]:checked")].map(
         (box) => box.dataset.separateWork,
       );
-      if (!selected.length) return toast(tr("works.select_at_least_one"));
+      if (!selected.length) return toast(tr("works.select_at_least_one"), { tone: "warning" });
       const selectedSet = new Set(selected);
       const created = [];
       for (const work of selected) {

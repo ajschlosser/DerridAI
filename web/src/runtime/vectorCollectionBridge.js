@@ -1,3 +1,4 @@
+import { toast } from "../composables/notifications";
 import { openMessageDialog } from "../composables/messageDialog";
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
@@ -14,7 +15,6 @@ export function createVectorCollectionBridge({
   refreshStores,
   persistPrefs,
   upsertRows,
-  toast,
   decorateDisabledControls,
   showAppModal,
 }) {
@@ -163,11 +163,11 @@ export function createVectorCollectionBridge({
     const runPreflight = async (button) => {
       persistFields();
       if (precomputedMissing()) {
-        toast(tr("vector.precomputed_missing_embeddings"));
+        toast(tr("vector.precomputed_missing_embeddings"), { tone: "warning" });
         return false;
       }
       if ((form.provider === "ollama" || form.provider.startsWith("profile:")) && !form.model) {
-        toast(tr("vector.embedding_model_required"));
+        toast(tr("vector.embedding_model_required"), { tone: "warning" });
         return false;
       }
       button.disabled = true;
@@ -211,7 +211,8 @@ export function createVectorCollectionBridge({
       });
       dialog.querySelector("#wizardNext")?.addEventListener("click", async (event) => {
         persistFields();
-        if (step === 0 && !form.name) return toast(tr("vector.collection_name_required"));
+        if (step === 0 && !form.name)
+          return toast(tr("vector.collection_name_required"), { tone: "warning" });
         if (step === 0) {
           step = 1;
           render();
@@ -255,8 +256,9 @@ export function createVectorCollectionBridge({
       );
       dialog.querySelector("#wizardCreate")?.addEventListener("click", async () => {
         persistFields();
-        if (!form.name) return toast(tr("vector.collection_name_required"));
-        if (precomputedMissing()) return toast(tr("vector.precomputed_missing_embeddings"));
+        if (!form.name) return toast(tr("vector.collection_name_required"), { tone: "warning" });
+        if (precomputedMissing())
+          return toast(tr("vector.precomputed_missing_embeddings"), { tone: "warning" });
         const button = dialog.querySelector("#wizardCreate");
         button.disabled = true;
         button.textContent = tr("vector.creating_collection");
