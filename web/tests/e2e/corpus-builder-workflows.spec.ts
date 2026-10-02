@@ -158,7 +158,9 @@ test.describe("Corpus Builder composed workflow", () => {
     const editor = page.locator(".manifest-editor");
     await expect(editor).toContainText("Of Grammatology");
     await expect(editor.getByRole("button", { name: /reanalyze/i })).toHaveCount(0);
-    await expect(editor.locator('input.control[type="text"]').first()).toHaveValue("Of Grammatology");
+    await expect(editor.locator('input.control[type="text"]').first()).toHaveValue(
+      "Of Grammatology",
+    );
     await expectNoHorizontalOverflow(editor);
     await expectWcag2AA(page, ".manifest-editor");
   });
