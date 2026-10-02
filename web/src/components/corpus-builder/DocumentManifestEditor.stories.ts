@@ -1,12 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import DocumentManifestEditor from "../DocumentManifestEditor.vue";
+import CorpusSetupDocumentMetadata from "./CorpusSetupDocumentMetadata.vue";
 
 const meta = {
   title: "Corpus Builder/Setup/Early Manifest",
-  component: DocumentManifestEditor,
+  component: CorpusSetupDocumentMetadata,
   args: {
     mediaKind: "text",
-    showReanalyze: false,
+    missingRequiredCount: 0,
+    reviewerOverrideCount: 0,
     manifest: {
       title: "Of Grammatology",
       document_author: "Jacques Derrida",
@@ -33,7 +34,7 @@ const meta = {
       },
     },
   },
-} satisfies Meta<typeof DocumentManifestEditor>;
+} satisfies Meta<typeof CorpusSetupDocumentMetadata>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
