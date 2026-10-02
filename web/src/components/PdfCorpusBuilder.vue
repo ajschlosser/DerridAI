@@ -697,7 +697,11 @@ const fixProgress = computed(() => {
   };
 });
 function beginQueueRemediation(code: string) {
-  const total = Math.max(1, publicationBlockerCount(code));
+  const total = publicationBlockerCount(code);
+  if (total <= 0) {
+    fixContext.value = null;
+    return;
+  }
   fixContext.value = {
     code,
     label: remediationLabel(code),
