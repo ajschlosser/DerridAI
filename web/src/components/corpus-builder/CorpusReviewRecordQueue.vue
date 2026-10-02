@@ -77,6 +77,9 @@ function shortRecordId(recordId: string) {
 }
 function recordStateLabel(record: CorpusQueueRow) {
   const state = record.review_state || "ready";
+  if (state === "preparing") {
+    return i18n.t("pdf_corpus.record_state.enriching", "Enriching");
+  }
   return i18n.t(
     `pdf_corpus.record_state.${state}`,
     state === "ready" ? "Ready" : state.replace(/_/g, " "),
@@ -92,9 +95,7 @@ function recordStateIcon(record: CorpusQueueRow) {
       ? "close"
       : state === "metadata" || state === "topology" || state === "source"
         ? "warning"
-        : state === "preparing"
-          ? "refresh"
-          : "";
+        : "";
 }
 
 function extraIssueKinds(record: CorpusQueueRow) {
@@ -162,7 +163,11 @@ function recordSelectionChanged(recordId: string, event: Event) {
         @click="emit('selectRecord', record)"
       >
         <span class="record-state-icon" :data-state="record.review_state" aria-hidden="true">
-          <AppIcon v-if="recordStateIcon(record)" :name="recordStateIcon(record)" />
+          <span
+            v-if="record.review_state === 'preparing'"
+            class="spinner record-processing-spinner"
+          ></span>
+          <AppIcon v-else-if="recordStateIcon(record)" :name="recordStateIcon(record)" />
         </span>
         <span class="record-row-main">
           <span class="record-row-head">
@@ -438,6 +443,17 @@ function recordSelectionChanged(recordId: string, event: Event) {
 .record-state-icon svg {
   inline-size: 0.75rem;
   block-size: 0.75rem;
+}
+.record-state-icon[data-state="preparing"] {
+  border-color: transparent;
+}
+.record-processing-spinner {
+  inline-size: 0.9rem;
+  block-size: 0.9rem;
+  margin: 0;
+  border-width: 2px;
+  border-color: var(--border-subtle);
+  border-top-color: var(--ui-accent);
 }
 .record-state-icon[data-state="accepted"] {
   border-color: var(--tone-ok-border);
