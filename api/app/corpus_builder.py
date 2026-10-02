@@ -2040,31 +2040,50 @@ class PdfCorpusRepository:
                     "SELECT payload FROM corpus_records WHERE ordinal > ? ORDER BY ordinal ASC LIMIT ?",
                     (ordinal, after),
                 ).fetchall()
-        budget = [max(0, int(max_chars))]
+        total_budget = max(0, int(max_chars))
+        before_budget = total_budget // 2 if previous and following else total_budget
+        after_budget = total_budget - before_budget if previous else total_budget
+        truncated = False
 
-        def slim(payload: str) -> dict[str, Any] | None:
+        def slim(payload: str, budget: int, *, preceding: bool) -> tuple[dict[str, Any] | None, int]:
+            nonlocal truncated
             record = json.loads(payload)
             text = str(record.get("text") or "")
-            if budget[0] <= 0:
-                return None
-            budget[0] -= len(text)
+            if budget <= 0:
+                truncated = True
+                return None, budget
+            length = min(len(text), budget)
+            start = len(text) - length if preceding else 0
+            truncated = truncated or length < len(text)
             return {
                 "record_id": record.get("record_id"),
-                "text": text,
+                "record_revision": record.get("record_revision"),
+                "source_document_id": record.get("source_document_id"),
+                "text": text[start:start + length],
                 "text_length": len(text),
+                "text_truncated": length < len(text),
+                "record_character_start": start,
+                "record_character_end": start + length,
                 "page_start": record.get("page_start"),
                 "page_end": record.get("page_end"),
                 "review_disposition": record.get("review_disposition"),
-            }
+            }, budget - length
 
-        # Nearest first, so the budget is spent where context matters most.
-        near_before = [item for item in (slim(r[0]) for r in previous) if item]
-        near_after = [item for item in (slim(r[0]) for r in following) if item]
+        # Reserve both sides and keep the text closest to the selected Record.
+        near_before, near_after = [], []
+        for payload, in previous:
+            item, before_budget = slim(payload, before_budget, preceding=True)
+            if item:
+                near_before.append(item)
+        for payload, in following:
+            item, after_budget = slim(payload, after_budget, preceding=False)
+            if item:
+                near_after.append(item)
         return {
             "record_id": record_id,
             "before": list(reversed(near_before)),  # document order, farthest first
             "after": near_after,
-            "truncated": len(near_before) < len(previous) or len(near_after) < len(following),
+            "truncated": truncated,
         }
 
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
@@ -3708,44 +3727,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 inline, full = _citation_strings(record)
                 record["inline_citation"] = inline
                 record["full_citation"] = full
-            # Source-unit embeddings are a shared, rebuildable projection. Build
-            # them after the active source-unit topology is known and before any
-            # consumer (metadata memory or local evidence retrieval) asks for vectors.
-            source_projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
-            try:
-                provider, model = source_projection.store.default_embedding_spec()
-                source_embedding_projection = source_projection.sync(
-                    str(asset.get("asset_id") or build_id),
-                    source_blocks,
-                    provider=provider,
-                    model=model,
-                    prune=True,
-                )
-            except Exception as exc:  # derived state must not block canonical topology
-                source_embedding_projection = {
-                    "status": "unavailable",
-                    "error": f"{type(exc).__name__}: {exc}"[:300],
-                }
-                self._append_warning(
-                    build_id,
-                    "Source-unit semantic indexing is unavailable; canonical source and records remain intact. "
-                    + str(source_embedding_projection["error"]),
-                )
-            current_build = self.repo.get_build(build_id)
-            current_build["source_unit_embedding_projection"] = source_embedding_projection
-            self.repo.save_build(current_build)
-            # Pre-fill from reviewed precedents matched on each record's source spans (advisory).
-            memory_prefill = (
-                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema))
-                if bool(request.get("memory_prefill", True))
-                else {"status": "disabled"}
-            )
-            if memory_prefill.get("status") == "unavailable":
-                self._append_warning(
-                    build_id,
-                    "Metadata memory could not pre-fill fields (embedding provider or vector store unavailable). "
-                    "The build continues without it: " + str(memory_prefill.get("error") or ""),
-                )
             # Validate topology before spending time on metadata enrichment.
             # At this point all source-derived text and boundaries are deterministic;
             # any failure is therefore an implementation/topology problem, not an
@@ -3770,7 +3751,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         f"{found['params'].get('limit')}-character ceiling; split it during review."
                     )
             current_build = self.repo.get_build(build_id)
-            current_build["memory_prefill"] = memory_prefill
             current_build["topology_validation"] = topology_validation
             current_build["topology_quality"] = topology_quality
             current_build["record_sizing_policy"] = sizing_policy
@@ -3812,6 +3792,43 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             # Persist deterministic records before any metadata call. A provider
             # failure can therefore never discard successful segmentation work.
             self.repo.save_records(build_id, records)
+            self._update(build_id, record_count=len(records), boundary_count=len(boundaries))
+            # Canonical topology is readable before optional derived work; review
+            # remains locked until preparation and enrichment scheduling complete.
+            source_projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
+            try:
+                provider, model = source_projection.store.default_embedding_spec()
+                source_embedding_projection = source_projection.sync(
+                    str(asset.get("asset_id") or build_id), source_blocks,
+                    provider=provider, model=model, prune=True,
+                )
+            except Exception as exc:
+                source_embedding_projection = {
+                    "status": "unavailable", "error": f"{type(exc).__name__}: {exc}"[:300],
+                }
+                self._append_warning(
+                    build_id,
+                    "Source-unit semantic indexing is unavailable; canonical source and records remain intact. "
+                    + str(source_embedding_projection["error"]),
+                )
+            current_build = self.repo.get_build(build_id)
+            current_build["source_unit_embedding_projection"] = source_embedding_projection
+            self.repo.save_build(current_build)
+            memory_prefill = (
+                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema))
+                if bool(request.get("memory_prefill", True))
+                else {"status": "disabled"}
+            )
+            if memory_prefill.get("status") == "unavailable":
+                self._append_warning(
+                    build_id,
+                    "Metadata memory could not pre-fill fields (embedding provider or vector store unavailable). "
+                    "The build continues without it: " + str(memory_prefill.get("error") or ""),
+                )
+            current_build = self.repo.get_build(build_id)
+            current_build["memory_prefill"] = memory_prefill
+            self.repo.save_build(current_build)
+        self.repo.save_records(build_id, records)
         guidance = request.get("run_guidance") if isinstance(request.get("run_guidance"), dict) else {}
         for record in records:
             matches = find_guidance_matches(str(record.get("text") or ""), guidance)
@@ -3826,6 +3843,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         self._update(
             build_id,
             stage="document_intelligence",
+            record_count=len(records),
             progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.40),
         )
         self._run_document_intelligence(build_id, records, manifest, request)

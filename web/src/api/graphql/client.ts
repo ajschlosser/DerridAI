@@ -57,8 +57,42 @@ export function isAbortError(error: unknown): boolean {
 
 const READ_CACHE_TTL_MS = 1500;
 const readCache = new Map<string, { expiresAt: number; value: unknown }>();
-const pendingReads = new Map<string, Promise<unknown>>();
+interface PendingRead {
+  promise: Promise<unknown>;
+  controller: AbortController;
+  consumers: number;
+}
+const pendingReads = new Map<string, PendingRead>();
 let cacheEpoch = 0;
+
+function consume<TResult>(read: PendingRead, signal?: AbortSignal): Promise<TResult> {
+  read.consumers += 1;
+  return new Promise<TResult>((resolve, reject) => {
+    let settled = false;
+    function release() {
+      if (settled) return false;
+      settled = true;
+      signal?.removeEventListener("abort", abort);
+      read.consumers -= 1;
+      return true;
+    }
+    function abort() {
+      if (!release()) return;
+      reject(new DOMException("aborted", "AbortError"));
+      if (!read.consumers) read.controller.abort();
+    }
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+    read.promise.then(
+      (value) => {
+        if (release()) resolve(clone(value) as TResult);
+      },
+      (error: unknown) => {
+        if (release()) reject(error);
+      },
+    );
+  });
+}
 
 function clone<T>(value: T): T {
   if (typeof structuredClone === "function") return structuredClone(value);
@@ -80,29 +114,41 @@ export function execute<TResult, TVariables>(
   const query = document.toString();
   const operationName = operationNameOf(query);
   const key = `${operationName}:${JSON.stringify(variables)}`;
+  if (options.signal?.aborted) return Promise.reject(new DOMException("aborted", "AbortError"));
   const cached = readCache.get(key);
   if (cached && cached.expiresAt > Date.now())
     return Promise.resolve(clone(cached.value) as TResult);
   const pending = pendingReads.get(key);
-  if (pending) return pending.then((value) => clone(value) as TResult);
+  if (pending && !pending.controller.signal.aborted)
+    return consume<TResult>(pending, options.signal);
 
   const requestEpoch = cacheEpoch;
+  const controller = new AbortController();
   const request = apiRequest<GraphQLResponse<TResult>>(GRAPHQL_ENDPOINT, {
     method: "POST",
     body: JSON.stringify({ query, variables, operationName }),
-    signal: options.signal,
+    signal: controller.signal,
   })
     .then((response) => {
       if (response.errors?.length) throw new GraphQLRequestError(operationName, response.errors);
       if (response.data == null) throw new GraphQLRequestError(operationName, []);
       const value = response.data;
-      if (requestEpoch === cacheEpoch)
+      if (requestEpoch === cacheEpoch && !controller.signal.aborted) {
         readCache.set(key, { expiresAt: Date.now() + READ_CACHE_TTL_MS, value: clone(value) });
+        for (const [cachedKey, entry] of readCache)
+          if (entry.expiresAt <= Date.now()) readCache.delete(cachedKey);
+        while (readCache.size > 128) {
+          const oldest = readCache.keys().next().value;
+          if (oldest === undefined) break;
+          readCache.delete(oldest);
+        }
+      }
       return value;
     })
     .finally(() => {
-      if (pendingReads.get(key) === request) pendingReads.delete(key);
+      if (pendingReads.get(key)?.promise === request) pendingReads.delete(key);
     });
-  pendingReads.set(key, request);
-  return request.then((value) => clone(value));
+  const read: PendingRead = { promise: request, controller, consumers: 0 };
+  pendingReads.set(key, read);
+  return consume<TResult>(read, options.signal);
 }

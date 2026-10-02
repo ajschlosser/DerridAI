@@ -31,7 +31,9 @@ export function createLatestRequest(): LatestRequest {
   }
 
   function cancel() {
+    ticketNumber += 1;
     controller?.abort();
+    controller = null;
   }
 
   return { start, cancel };

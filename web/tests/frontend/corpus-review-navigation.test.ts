@@ -7,7 +7,7 @@ function record(id: string) {
   return { record_id: id } as any;
 }
 
-function setup() {
+function setup(beforeNavigate?: () => Promise<boolean>) {
   const currentBuild = ref<any | null>({
     validation: {
       metadata_schema_errors: [{ record_id: "validation-record" }],
@@ -59,6 +59,7 @@ function setup() {
     pageSize: 2,
     refreshRecords,
     selectRecord,
+    beforeNavigate,
   });
 
   return {
@@ -82,6 +83,39 @@ function setup() {
 }
 
 describe("Corpus Builder review navigation", () => {
+  it("leaves selection, page and filters unchanged when draft navigation is declined", async () => {
+    const beforeNavigate = vi.fn().mockResolvedValue(false);
+    const state = setup(beforeNavigate);
+    await state.navigation.nextPage();
+    await state.navigation.openMetadataIssueQueue();
+    await state.navigation.focusQueueMove(1);
+    await state.navigation.advanceFrom("r1");
+    expect(state.recordOffset.value).toBe(0);
+    expect(state.reviewQueue.value).toBe("all");
+    expect(state.selectedRecordId.value).toBe("r1");
+    expect(state.refreshRecords).not.toHaveBeenCalled();
+    expect(state.selectRecord).not.toHaveBeenCalled();
+    expect(beforeNavigate).toHaveBeenCalledTimes(4);
+  });
+  it("advances to the next page before considering a previous Record", async () => {
+    const state = setup();
+    await state.navigation.advanceFrom("r2");
+    expect(state.recordOffset.value).toBe(2);
+    expect(state.refreshRecords).toHaveBeenCalled();
+    expect(state.selectRecord).not.toHaveBeenCalled();
+  });
+
+  it("backfills a removed last row without skipping the next matching Record", async () => {
+    const state = setup();
+    state.queueRows.value = [record("r1")];
+    state.refreshRecords.mockImplementation(async () => {
+      state.queueRows.value = [record("r1"), record("r3")];
+    });
+    await state.navigation.advanceFrom("r2", 1);
+    expect(state.recordOffset.value).toBe(0);
+    expect(state.selectRecord).toHaveBeenCalledWith(record("r3"));
+  });
+
   it("records focus history with the page offset used to reach each record", async () => {
     const state = setup();
 

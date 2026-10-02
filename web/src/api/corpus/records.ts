@@ -39,7 +39,7 @@ export const corpusRecordsApi = {
       },
     ),
   /** Text of the records around one record, in document order (read-only context). */
-  recordContext: (buildId: string, recordId: string, before = 12, after = 12) =>
+  recordContext: (buildId: string, recordId: string, before = 3, after = 3) =>
     apiRequest<RecordContext>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/context?before=${before}&after=${after}`,
     ),

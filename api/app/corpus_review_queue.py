@@ -19,6 +19,7 @@ from .corpus_review_state import (
     _queue_counts,
 )
 from .corpus_reviewer_helpers import _present_for_reviewer
+from .field_assertions import _NON_ASSERTION_FIELDS, _operational_key
 from .metadata_values import is_placeholder
 from .reviewer_context import current_reviewer
 
@@ -138,6 +139,10 @@ def _compute_observed_metadata_values(records: list[dict[str, Any]]) -> dict[str
         record = copy.deepcopy(raw)
         _present_for_reviewer(record)
         for field, value in record.items():
+            if field in _NON_ASSERTION_FIELDS or (
+                _operational_key(field) and field not in (record.get("metadata_field_status") or {})
+            ):
+                continue
             if field not in metadata_values and not isinstance(value, (str, list, tuple)):
                 continue
             metadata_values.setdefault(field, set())
@@ -155,7 +160,7 @@ def _compute_observed_metadata_values(records: list[dict[str, Any]]) -> dict[str
         field_status = record.get("metadata_field_status")
         if isinstance(field_status, dict):
             for field, status in field_status.items():
-                if not isinstance(status, dict):
+                if field in _NON_ASSERTION_FIELDS or not isinstance(status, dict):
                     continue
                 for candidate_key in ("proposed_value", "llm_value"):
                     candidate = status.get(candidate_key)

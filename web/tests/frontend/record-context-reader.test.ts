@@ -83,6 +83,31 @@ describe("RecordContextReader", () => {
     expect(wrapper.get(".ctx-focus").text()).toBe("Focus text.");
   });
 
+  it("discards an in-flight response when context is switched off", async () => {
+    let resolve!: (value: unknown) => void;
+    corpusBuilderApi.recordContext.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    const wrapper = mountReader();
+    await wrapper.setProps({ showContext: false });
+    resolve({ record_id: "r3", before: [item("r2", "Obsolete.")], after: [] });
+    await flushPromises();
+    expect(wrapper.find(".ctx-item").exists()).toBe(false);
+    expect(wrapper.get(".ctx-focus").text()).toBe("Focus text.");
+    wrapper.unmount();
+  });
+
+  it("invalidates context when the authoritative text changes", async () => {
+    const wrapper = mountReader();
+    await flushPromises();
+    await wrapper.setProps({ text: "Reviewed text." });
+    await flushPromises();
+    expect(corpusBuilderApi.recordContext).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
   it("keeps the record readable and says so when context cannot be loaded", async () => {
     corpusBuilderApi.recordContext.mockRejectedValueOnce(new Error("boom"));
     const wrapper = mountReader();

@@ -309,6 +309,7 @@ describe("PdfCorpusBuilder characterization", () => {
 
     await exposed.saveTextFromFocus("Edited immediately", false);
 
+    expect(corpusReviewReads.queuePage).toHaveBeenCalledTimes(1);
     expect(exposed.selectedRecord.text).toBe("Edited immediately");
     expect(exposed.selectedRecord.record_revision).toBe(2);
     await new Promise((resolve) => setTimeout(resolve, 0));

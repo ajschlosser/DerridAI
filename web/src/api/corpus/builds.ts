@@ -2,6 +2,7 @@
 import { apiRequest } from "../http";
 import type {
   CorpusBuild,
+  CorpusBuildResume,
   CorpusLlmTraceEntry,
   DocumentIntelligenceRun,
   RecordSemanticMap,
@@ -189,7 +190,7 @@ export const corpusBuildsApi = {
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/settle-metadata`,
       { method: "POST" },
     ),
-  resume: (buildId: string, payload: Record<string, unknown>) =>
+  resume: (buildId: string, payload: CorpusBuildResume = {}) =>
     apiRequest<CorpusBuild>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/resume`,
       {
