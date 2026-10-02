@@ -171,7 +171,7 @@ describe("Corpus Builder setup and launch controls", () => {
     const inputs = wrapper.findAll('input.control[type="text"]');
     expect(inputs[0].element.value).toBe("Detected title");
     await inputs[0].setValue("Reviewed title");
-    await buttonByText(wrapper, "Save manifest changes").trigger("click");
+    await wrapper.get('button[type="submit"]').trigger("click");
     expect(wrapper.emitted("save")?.[0]?.[0]).toEqual({ title: "Reviewed title" });
   });
 
