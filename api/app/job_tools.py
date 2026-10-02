@@ -13,6 +13,7 @@ from .concurrency import (
     provider_capacity_key,
     provider_limit,
 )
+from .config import settings
 from .content_policy_generation import generate_policy_for_installed_language
 from .i18n_translation import (
     LanguageTranslationError,
@@ -492,6 +493,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
             self._persist_job(job_id)
             return
 
+        ollama_permit = None
         try:
             with self._lock:
                 job = self._jobs.get(job_id)
@@ -501,6 +503,54 @@ class LLMToolJobManager(PersistentJobStateMixin):
                     )
                     job["scheduling"]["active_when_started"] = permit.active_when_acquired
                     job["scheduling"]["limit"] = permit.limit
+
+            payload = self._payload(body)
+            if payload is not None and payload.provider == "ollama":
+                ollama_limit = capacity_coordinator.configured_limit(
+                    "ollama_runtime",
+                    "global",
+                    fallback=max(1, int(settings.rag_ollama_max_concurrent)),
+                )
+
+                def ollama_cancelled() -> bool:
+                    with self._lock:
+                        return bool(self._jobs.get(job_id, {}).get("cancel_requested"))
+
+                def ollama_waiting(snapshot) -> None:  # noqa: ANN001 - operational callback
+                    with self._lock:
+                        job = self._jobs.get(job_id)
+                        if job is not None:
+                            job["stage_detail"] = (
+                                f"Waiting for Ollama slot "
+                                f"({snapshot.active}/{snapshot.limit} active)"
+                            )
+
+                try:
+                    ollama_permit = capacity_coordinator.acquire(
+                        "ollama_runtime",
+                        "global",
+                        ollama_limit,
+                        cancelled=ollama_cancelled,
+                        on_wait=ollama_waiting,
+                    )
+                except CapacityCancelled:
+                    with self._lock:
+                        job = self._jobs.get(job_id)
+                        if job is not None:
+                            job["status"] = "cancelled"
+                            job["finished_at"] = iso_now()
+                    return
+                with self._lock:
+                    job = self._jobs.get(job_id)
+                    if job is not None:
+                        job.setdefault("scheduling", {})["ollama_wait_ms"] = int(
+                            round(ollama_permit.waited_seconds * 1000)
+                        )
+                        job["scheduling"]["ollama_active_when_started"] = (
+                            ollama_permit.active_when_acquired
+                        )
+                        job["scheduling"]["ollama_limit"] = ollama_permit.limit
+
             with self._lock:
                 job = self._jobs[job_id]
                 if job["cancel_requested"]:
@@ -583,6 +633,8 @@ class LLMToolJobManager(PersistentJobStateMixin):
                     job["stage_detail"] = details["message"]
                     job["finished_at"] = iso_now()
         finally:
+            if ollama_permit is not None:
+                ollama_permit.release()
             permit.release()
             with self._lock:
                 self._threads.pop(job_id, None)
