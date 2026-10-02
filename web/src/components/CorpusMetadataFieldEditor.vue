@@ -510,7 +510,7 @@ const traceRows = computed(() => {
       <div class="field-title">
         <b :id="labelId" class="field-label">{{ fieldLabel }}</b
         ><span v-if="open" class="field-review-state">{{
-          i18n.t("pdf_corpus.pending_review")
+          i18n.t("pdf_corpus.verification.pending")
         }}</span
         ><span v-if="requiredToAccept" class="field-required">{{
           i18n.t("pdf_corpus.required_to_accept")
