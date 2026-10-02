@@ -19,7 +19,7 @@ The Build workspace should answer, in order:
 ## Planned changes
 
 - Keep `CorpusBuildPrimaryStatus` as the canonical live-build state instead of adding another status card.
-- During progressive enrichment, show record-level operational counts together: Ready for review, Enriching, and Needs attention.
+- During progressive enrichment, show record-level operational counts together: Ready for review, Enriching, Preparing, and Needs attention.
 - Make Review the primary handoff as soon as reviewable Records exist; keep Pause/Cancel secondary.
 - Keep publication readiness as the next action after automated processing settles.
 - Treat manifest review, segmentation review, stopped builds, and other intervention states as actionable exceptions.
@@ -45,9 +45,9 @@ The Build workspace should answer, in order:
 - [x] Rebalance Build actions around progressive Review handoff.
 - [x] Collapse activity and diagnostics into secondary Run details.
 - [x] Extend unit/Storybook/E2E coverage.
-- [ ] Run and fix all frontend quality gates.
+- [x] Run and fix all frontend quality gates.
 - [x] Correct processing semantics: only active task Records are Enriching; queued Records remain Preparing with the original icon.
-- [ ] Record final validation and remaining follow-up work here.
+- [x] Record final validation and remaining follow-up work here.
 
 ## Implementation notes
 
@@ -66,3 +66,28 @@ The Build workspace should answer, in order:
 - Changing corpus publication-readiness rules.
 - Adding new backend states or API fields.
 - Redesigning the Review or Publish workspaces again in this PR.
+
+
+## Final validation
+
+Validated on the final implementation state before this documentation-only closeout:
+
+- format-check: pass
+- frontend lint: pass
+- frontend static/type checks: pass
+- production frontend build: pass
+- frontend unit shards 1/2 and 2/2: pass
+- frontend E2E shards 1/2 and 2/2: pass
+- frontend legacy regression shards 1/2 and 2/2: pass
+- dedicated Corpus Builder WCAG 2.2 AA sweep: pass
+- aggregate frontend gate: pass
+
+The active-processing semantics are covered at unit, Storybook/browser, and accessibility levels:
+
+- queued backend `preparing` Record → **Preparing**, original refresh icon, no animation
+- Record present in `metadata_active_tasks` → **Enriching**, animated spinner
+- Build handoff → separate Ready / Enriching / Preparing / Needs attention counts
+
+## Follow-up
+
+The next UX pass should be cross-cutting rather than another workspace rewrite: keyboard shortcuts, selection/focus persistence, normalized loading/empty/error states, narrow-screen behavior, and consistency of action placement across Setup, Build, Review, and Publish.
