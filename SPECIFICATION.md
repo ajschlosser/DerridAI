@@ -81,6 +81,8 @@ This specification proceeds from durable documentary information to derived comp
 
 Names such as **SourceSpan**, **FieldAssertion**, and **EvidenceRef** denote conceptual roles. A conforming implementation is not required to use the same class names, tables, or programming language. Conformance requires the distinctions and relationships specified here.
 
+Unless a named interchange, serialization, or adapter profile states otherwise, normative clauses constrain recoverable semantics rather than an implementation's native field names or storage shape. Monospaced property names and token values in conceptual sections name cELF reference terms; a native encoding MAY differ when the mapping is lossless and the applicable reference profile can be emitted.
+
 Normative requirements use the terms in §2.1. Text marked **NOTE (informative)** or _Informative_ explains those requirements and does not add requirements. Examples are informative unless a clause states otherwise.
 
 Conformance requirements have stable identifiers of the form `<area>-ID-<nnn>`. Each identifier is defined in the clause that carries it and restated in Appendix B. Where the wording differs, the clause governs. A profile claim is assessed against the catalogue entries assigned to that profile. Other provisions that use normative terms remain binding in the clause where they appear.
@@ -134,25 +136,76 @@ Authoritative documentary and scholarly state MUST remain distinguishable from d
 
 The cELF Core profile establishes a documentary provenance spine rather than a complete source-to-claim pipeline:
 
-`SourceDocument -> SourceSpan(s) -> Record [-> RecordRevision]`
+```text
+SourceDocument
+      │
+      └── contains / locates ──> SourceSpan(s)
+                                     │
+                                     │ derive
+                                     ▼
+                                   Record
+                                     │
+                         ┌───────────┴───────────┐
+                         │                       │
+                    0..* ▼                  0..* ▼
+                 RecordRevision          FieldAssertion
+                         │                       ▲
+                         └───────────────────────┘
+                          FieldAssertion may be
+                       about Record or revision
+```
 
-A FieldAssertion attaches to the applicable Record or RecordRevision state; it is not a mandatory next step in a linear chain.
+The diagram is a provenance spine, not a required storage layout. RecordRevision is optional, and FieldAssertion attaches to the applicable Record or RecordRevision state rather than forming a mandatory next step in a linear chain.
 
-Additional profiles extend that spine into an auditable provenance graph. The principal typed relations are:
+Additional profiles extend that spine into an auditable provenance graph:
 
-`EvidenceAcquisitionRun --selects/produces--> EvidenceRef(s)`
+```text
+                          ResearchRun
+                (coordinates applicable branches)
 
-`RetrievalRun --may participate in--> EvidenceAcquisitionRun`
+RetrievalRun(s) ───────────────┐
+human selection ───────────────┤
+direct reference ──────────────┤
+deterministic lookup ──────────┤
+model-assisted location ───────┤
+import / other method ─────────┘
+                               ▼
+                    EvidenceAcquisitionRun
+                               │
+                       selects / produces
+                               ▼
+                         EvidenceRef(s)
+                           │       ▲
+              ordered into │       │ bound by
+                           ▼       │
+                     EvidencePacket│
+                           │       │
+                       used by     │
+                           ▼       │
+                      GenerationRun│
+                           │       │
+                       produces    │
+                           ▼       │
+                     GeneratedClaim
+                           │
+                          has
+                           ▼
+                     SupportBinding
+                           │
+                           └───────────────> EvidenceRef(s)
 
-`EvidenceRef(s) --ordered into--> EvidencePacket --used by--> GenerationRun --produces--> GeneratedClaim`
+EvidenceRef resolves back to documentary authority:
 
-`GeneratedClaim --has--> SupportBinding --binds to--> EvidenceRef(s)`
+  base `record`      -> Record [@ RecordRevision] -> SourceSpan(s) -> SourceDocument
+  base `source_span` -> SourceSpan(s) ---------------------------> SourceDocument
+  namespaced kind     -> exact documentary material --------------> SourceDocument
+```
 
-Human selection, direct reference, deterministic lookup, model-assisted location, import, and other declared non-retrieval methods MAY also participate in an EvidenceAcquisitionRun without a RetrievalRun.
+RetrievalRun is therefore one possible contributor to EvidenceAcquisitionRun, not its synonym. Human selection, direct reference, deterministic lookup, model-assisted location, import, and other declared non-retrieval methods MAY participate in an EvidenceAcquisitionRun without a RetrievalRun. ResearchRun coordinates or references the applicable acquisition, evidence, generation, validation, and evaluation state; it does not replace those objects or their typed relations.
 
 This graph distinguishes three questions that MUST NOT be collapsed: where documentary material comes from; how material entered a research operation as evidence; and which evidence is represented as supporting a particular generated claim. GenerationRun records generation provenance and EvidenceAcquisitionRun records acquisition provenance; neither object is required to traverse the direct support relation from a GeneratedClaim to its EvidenceRef.
 
-The principal reverse support-audit paths are:
+For the cELF 1.0 base locator kinds, the principal reverse support-audit paths are:
 
 `GeneratedClaim -> SupportBinding -> EvidenceRef(record) -> RecordRevision -> SourceSpan -> SourceDocument`
 
@@ -160,7 +213,7 @@ or:
 
 `GeneratedClaim -> SupportBinding -> EvidenceRef(source_span) -> SourceSpan -> SourceDocument`
 
-A system MUST NOT claim full claim traceability merely because a human-readable citation is present when the internal evidence-to-source relationship cannot be resolved. Reproducible Research conformance additionally requires enough retained run state to reconstruct the applicable acquisition and generation branches of the provenance graph.
+A namespaced locator kind MUST preserve an equivalent unambiguous path from EvidenceRef to exact documentary material and ultimately to one SourceDocument. A system MUST NOT claim full claim traceability merely because a human-readable citation is present when the internal evidence-to-source relationship cannot be resolved. Reproducible Research conformance additionally requires enough retained run state to reconstruct the applicable acquisition and generation branches of the provenance graph.
 
 #### Research normalization
 
@@ -487,11 +540,11 @@ Evidence is a contextual role played by identified documentary material in a par
 
 An **EvidenceRef** is the cELF semantic locator for exact source material used to support, contextualize, contrast with, quote, attribute, or otherwise bear on a downstream claim. It does not have to be a standalone database row: a packet entry or SupportBinding MAY embed the equivalent locator fields directly.
 
-Every EvidenceRef semantic locator MUST declare exactly one authoritative `locator_kind`: `record` or `source_span`. **[EVID-ID-001]**
+Every EvidenceRef MUST designate exactly one authoritative documentary locator. cELF 1.0 defines two base locator kinds for reference interchange: `record` and `source_span`. An implementation MAY define additional namespaced locator kinds if they preserve unambiguous documentary resolution, resolve to exactly one SourceDocument, and declare their mapping semantics. An EvidenceRef MAY also carry derived, cached, display, or convenience locators, but those MUST remain distinguishable from the authoritative locator and MUST NOT create competing source identities. **[EVID-ID-001]**
 
-A record-backed locator (`locator_kind: record`) MUST identify `record_id`. It MAY additionally identify `publication_id`, `corpus_id`, or another namespace needed to resolve the Record. If its meaning depends on mutable Record text or reviewed state, it MUST identify the applicable `record_revision`. **[EVID-ID-002]** When the evidence is a strict subset of the Record, it SHOULD contain exact Record-relative offsets or another reproducible locator. The SourceDocument resolved through the Record MUST remain identifiable.
+For the cELF 1.0 base `record` locator, the authoritative locator MUST identify the logical Record. The reference interchange represents that identity as `record_id` and MAY additionally use `publication_id`, `corpus_id`, or another namespace needed to resolve the Record. If its meaning depends on mutable Record text or reviewed state, it MUST identify the applicable RecordRevision. **[EVID-ID-002]** When the evidence is a strict subset of the Record, it SHOULD contain exact Record-relative offsets or another reproducible locator. The SourceDocument resolved through the Record MUST remain identifiable.
 
-A direct-source locator (`locator_kind: source_span`) MUST identify one `source_document_id` and one or more SourceSpans. Every SourceSpan in that locator MUST identify the same SourceDocument. **[EVID-ID-003]** It does not require a Record or RecordRevision. If the material is later associated with a Record, that association MUST NOT silently change the authoritative locator.
+For the cELF 1.0 base `source_span` locator, the authoritative locator MUST identify one SourceDocument and one or more SourceSpans within that SourceDocument. The reference interchange represents the document identity as `source_document_id`. Every SourceSpan in that locator MUST identify the same SourceDocument. **[EVID-ID-003]** It does not require a Record or RecordRevision. If the material is later associated with a Record, that association MUST NOT silently change the authoritative locator.
 
 A locator MAY include a quote hash or content digest for integrity checking. A run-local label such as `E0` MUST NOT replace the durable documentary identity represented by its Record/RecordRevision or SourceDocument/SourceSpan locator. **[EVID-ID-004]**
 
@@ -581,7 +634,7 @@ For Core conformance, the principal documentary provenance spine is:
 
 with FieldAssertions attached to the applicable Record or RecordRevision state when materialized.
 
-For a GeneratedClaim represented as evidentially supported, a Claim-Binding conforming implementation MUST identify the applicable SupportBinding and EvidenceRef. The direct support-audit paths are:
+For a GeneratedClaim represented as evidentially supported, a Claim-Binding conforming implementation MUST identify the applicable SupportBinding and EvidenceRef. For the cELF 1.0 base locator kinds, the direct support-audit paths are:
 
 `GeneratedClaim -> SupportBinding -> EvidenceRef(record) -> RecordRevision -> SourceSpan -> SourceDocument`
 
@@ -589,7 +642,7 @@ or:
 
 `GeneratedClaim -> SupportBinding -> EvidenceRef(source_span) -> SourceSpan -> SourceDocument`
 
-A record-backed EvidenceRef MUST resolve through the applicable Record or RecordRevision to its SourceDocument and SourceSpan at the precision claimed by the implementation. A direct-source EvidenceRef MUST resolve directly to its declared SourceSpan or SourceSpans and SourceDocument. A supported claim MUST therefore resolve through SupportBinding and EvidenceRef to the authoritative Record/RecordRevision or SourceSpan and SourceDocument. **[CLM-ID-005]**
+A record-backed EvidenceRef MUST resolve through the applicable Record or RecordRevision to its SourceDocument and SourceSpan at the precision claimed by the implementation. A direct-source EvidenceRef MUST resolve directly to its declared SourceSpan or SourceSpans and SourceDocument. A namespaced locator kind MUST provide an equivalent reproducible resolution to exact documentary material and one SourceDocument. A supported claim MUST therefore resolve through SupportBinding and EvidenceRef to authoritative documentary material and ultimately to its SourceDocument. **[CLM-ID-005]**
 
 Generation provenance is a separate branch:
 
@@ -877,11 +930,11 @@ A GenerationRun SHOULD be exportable as an Activity. It SHOULD identify, where k
 
 #### Claim-to-evidence provenance
 
-Where Claim-Binding is implemented, the exported graph SHOULD preserve:
+Where Claim-Binding is implemented, the exported graph SHOULD preserve the applicable claim-to-source path. For the base record-backed locator, a typical path is:
 
 `GeneratedClaim -> SupportBinding -> EvidenceRef -> RecordRevision -> SourceSpan -> SourceDocument.`
 
-A consumer SHOULD be able to begin with a generated claim and identify the documentary material represented as supporting it.
+Direct-source and namespaced locator kinds SHOULD preserve equivalent source resolution. A consumer SHOULD be able to begin with a generated claim and identify the exact documentary material represented as supporting it and the SourceDocument to which that material belongs.
 
 #### Citation provenance
 
@@ -1108,7 +1161,7 @@ The central cardinality rules are:
 1. A SourceSpan belongs to exactly one SourceDocument.
 2. A Record belongs to exactly one SourceDocument and derives from one or more SourceSpans, all from that same SourceDocument.
 3. A Record may have zero or more explicitly materialized RecordRevisions; authoritative text and other evidence-affecting changes MUST advance the applicable revision identifier.
-4. An EvidenceRef semantic locator has exactly one authoritative locator mode: record-backed or direct-source-span-backed. Both modes resolve to exactly one SourceDocument; the locator MAY be named or embedded in another retained object.
+4. An EvidenceRef has exactly one authoritative documentary locator. cELF 1.0 defines record-backed and direct-source-span-backed base locator kinds for reference interchange; extensions MAY define additional namespaced kinds when they preserve unambiguous resolution to exactly one SourceDocument and do not create competing authoritative source identities.
 5. An EvidenceAcquisitionRun represents one bounded acquisition operation and may associate zero or more EvidenceRefs. It may reference zero or more RetrievalRuns and implementation-specific operational traces.
 6. An EvidencePacket contains ordered composite entries that carry or refer to EvidenceRef locators; those packet entries are not independent cELF objects.
 7. A GenerationRun uses zero or one EvidencePacket and produces zero or more GeneratedClaims.
@@ -1139,22 +1192,22 @@ ResearchRun --------------- references acquisition/evidence/generation/validatio
 
 ### Normative Object Glossary
 
-| Object                     | Identity and persistence                                                                     | Cardinality and owning profile                                                                                                                                                            |
-| -------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **SourceDocument**         | Stable documentary representation; durable                                                   | 1 SourceDocument -> 0..\* SourceSpans and Records. Profile: Core                                                                                                                          |
-| **SourceSpan**             | Reproducible region within one SourceDocument; durable locator                               | Exactly 1 SourceDocument; may contribute to 0..\* Records/EvidenceRefs. Profile: Core                                                                                                     |
-| **Record**                 | Logical research unit; durable                                                               | Exactly 1 SourceDocument; 1..\* SourceSpans; 0..\* RecordRevisions. Profile: Core                                                                                                         |
-| **RecordRevision**         | Specific state of one Record; durable/versioned                                              | Exactly 1 Record; 0..\* EvidenceRefs may reference it. Profile: Core                                                                                                                      |
-| **FieldAssertion**         | Assertion about one stable field identity/value in Record context; durable when retained     | Belongs to a Record or RecordRevision context; native encoding may vary if required epistemic dimensions remain recoverable. Profile: Core                                                |
-| **CorpusPublication**      | Immutable corpus snapshot identity; durable/immutable                                        | Publishes 1..\* Records or immutable Record locators. Profile: Publication                                                                                                                |
-| **RetrievalRun**           | One computational retrieval operation; run/audit state                                       | May record 0..\* result diagnostics; may be referenced by 0..\* EvidenceAcquisitionRuns. Profile: Retrieval                                                                               |
-| **EvidenceAcquisitionRun** | One bounded mechanism-neutral evidence-acquisition operation; run/audit-retainable           | Associates 0..\* EvidenceRef locators; may reference 0..\* RetrievalRuns and implementation-specific operational traces. Profile: Reproducible Research                                   |
-| **EvidenceRef**            | Exact evidentiary locator semantics; durable for audit                                       | Exactly 1 locator_kind; resolves to exactly 1 SourceDocument; may be named or embedded. Profile: Evidence                                                                                 |
-| **EvidencePacket**         | Exact or deterministically reproducible ordered model context; run-specific/audit-retainable | 0..\* composite entries carrying/referring to EvidenceRef locators. Profile: Evidence                                                                                                     |
-| **GenerationRun**          | One AI generation operation; run-specific/audit-retainable                                   | Uses 0..1 EvidencePacket; produces 0..\* GeneratedClaims. Profile: Claim-Binding                                                                                                          |
-| **GeneratedClaim**         | Identifiable claim within generated output; run-specific/audit-retainable                    | Exactly 1 GenerationRun; 0..\* SupportBindings. Profile: Claim-Binding                                                                                                                    |
-| **SupportBinding**         | Claim-scoped evidentiary relation; run-specific/audit-retainable                             | Exactly 1 GeneratedClaim; 1..\* named or embedded EvidenceRef locators. Profile: Claim-Binding                                                                                            |
-| **ResearchRun**            | Coherent retained research-operation audit view; run/audit state                             | May be one object or a resolvable composition of durable run records; references acquisition, evidence, generation, validation, and advisory-memory state. Profile: Reproducible Research |
+| Object                     | Identity and persistence                                                                     | Cardinality and owning profile                                                                                                                                                                                                             |
+| -------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **SourceDocument**         | Stable documentary representation; durable                                                   | 1 SourceDocument -> 0..\* SourceSpans and Records. Profile: Core                                                                                                                                                                           |
+| **SourceSpan**             | Reproducible region within one SourceDocument; durable locator                               | Exactly 1 SourceDocument; may contribute to 0..\* Records/EvidenceRefs. Profile: Core                                                                                                                                                      |
+| **Record**                 | Logical research unit; durable                                                               | Exactly 1 SourceDocument; 1..\* SourceSpans; 0..\* RecordRevisions. Profile: Core                                                                                                                                                          |
+| **RecordRevision**         | Specific state of one Record; durable/versioned                                              | Exactly 1 Record; 0..\* EvidenceRefs may reference it. Profile: Core                                                                                                                                                                       |
+| **FieldAssertion**         | Assertion about one stable field identity/value in Record context; durable when retained     | Belongs to a Record or RecordRevision context; native encoding may vary if required epistemic dimensions remain recoverable. Profile: Core                                                                                                 |
+| **CorpusPublication**      | Immutable corpus snapshot identity; durable/immutable                                        | Publishes 1..\* Records or immutable Record locators. Profile: Publication                                                                                                                                                                 |
+| **RetrievalRun**           | One computational retrieval operation; run/audit state                                       | May record 0..\* result diagnostics; may be referenced by 0..\* EvidenceAcquisitionRuns. Profile: Retrieval                                                                                                                                |
+| **EvidenceAcquisitionRun** | One bounded mechanism-neutral evidence-acquisition operation; run/audit-retainable           | Associates 0..\* EvidenceRef locators; may reference 0..\* RetrievalRuns and implementation-specific operational traces. Profile: Reproducible Research                                                                                    |
+| **EvidenceRef**            | Exact evidentiary locator semantics; durable for audit                                       | Exactly 1 authoritative documentary locator; resolves to exactly 1 SourceDocument; cELF 1.0 reference interchange defines `record` and `source_span` as base locator kinds and permits conforming namespaced extensions. Profile: Evidence |
+| **EvidencePacket**         | Exact or deterministically reproducible ordered model context; run-specific/audit-retainable | 0..\* composite entries carrying/referring to EvidenceRef locators. Profile: Evidence                                                                                                                                                      |
+| **GenerationRun**          | One AI generation operation; run-specific/audit-retainable                                   | Uses 0..1 EvidencePacket; produces 0..\* GeneratedClaims. Profile: Claim-Binding                                                                                                                                                           |
+| **GeneratedClaim**         | Identifiable claim within generated output; run-specific/audit-retainable                    | Exactly 1 GenerationRun; 0..\* SupportBindings. Profile: Claim-Binding                                                                                                                                                                     |
+| **SupportBinding**         | Claim-scoped evidentiary relation; run-specific/audit-retainable                             | Exactly 1 GeneratedClaim; 1..\* named or embedded EvidenceRef locators. Profile: Claim-Binding                                                                                                                                             |
+| **ResearchRun**            | Coherent retained research-operation audit view; run/audit state                             | May be one object or a resolvable composition of durable run records; references acquisition, evidence, generation, validation, and advisory-memory state. Profile: Reproducible Research                                                  |
 
 cELF intentionally does **not** define first-class semantic objects for extraction units, generic relations, metadata schemas, generic transformations, storage projections, collection manifests, retrieval hits or candidates, packet items, transport RecordRefs, validation results, grade results, or implementation-specific pipeline traces. Implementations MAY use such artifacts. Their semantics are governed by the relevant cELF identity, provenance, evidence, or interoperability rules rather than by additional object classes.
 
@@ -1229,25 +1282,25 @@ The catalogue covers requirements that protect identity, provenance, evidence, c
 
 #### Evidence requirements
 
-| Requirement              | Normative statement                                                                                                                                                                                                                                                                            | Test class          |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| **EVID-ID-001 MUST**     | Every EvidenceRef semantic locator, whether named or embedded, declares exactly one authoritative locator kind: `record` or `source_span`.                                                                                                                                                     | schema+semantic     |
-| **EVID-ID-002 MUST**     | A record-backed EvidenceRef identifies the applicable RecordRevision whenever its locator depends on mutable Record text.                                                                                                                                                                      | semantic            |
-| **EVID-ID-003 MUST**     | A direct-source EvidenceRef contains one SourceDocument identity and one or more SourceSpans, all from that SourceDocument.                                                                                                                                                                    | schema+semantic     |
-| **EVID-ID-004 MUST NOT** | A run-local EvidenceRef ID does not replace its authoritative documentary identity.                                                                                                                                                                                                            | semantic            |
-| **EVID-ID-005 MUST**     | If supplied evidence text is truncated, truncation MUST be declared and the authoritative EvidenceRef MUST remain unchanged. Each packet entry SHOULD retain the exact supplied text or enough information to reproduce it deterministically. Truncation does not change EvidenceRef identity. | schema+semantic     |
-| **EVID-ID-006 MUST**     | A language model MUST NOT be treated as authoritative for citation facts that can be generated from structured corpus data. Citation formatting MUST NOT change underlying source identity. Missing citation facts SHOULD be reported as incomplete rather than invented.                      | semantic+behavioral |
+| Requirement              | Normative statement                                                                                                                                                                                                                                                                                                                                                                  | Test class          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| **EVID-ID-001 MUST**     | Every EvidenceRef, whether named or embedded, designates exactly one authoritative documentary locator. cELF 1.0 reference interchange defines `record` and `source_span` as base locator kinds; additional namespaced kinds are permitted only when they preserve unambiguous resolution to exactly one SourceDocument and do not create competing authoritative source identities. | schema+semantic     |
+| **EVID-ID-002 MUST**     | A record-backed EvidenceRef identifies the applicable RecordRevision whenever its locator depends on mutable Record text.                                                                                                                                                                                                                                                            | semantic            |
+| **EVID-ID-003 MUST**     | A direct-source EvidenceRef contains one SourceDocument identity and one or more SourceSpans, all from that SourceDocument.                                                                                                                                                                                                                                                          | schema+semantic     |
+| **EVID-ID-004 MUST NOT** | A run-local EvidenceRef ID does not replace its authoritative documentary identity.                                                                                                                                                                                                                                                                                                  | semantic            |
+| **EVID-ID-005 MUST**     | If supplied evidence text is truncated, truncation MUST be declared and the authoritative EvidenceRef MUST remain unchanged. Each packet entry SHOULD retain the exact supplied text or enough information to reproduce it deterministically. Truncation does not change EvidenceRef identity.                                                                                       | schema+semantic     |
+| **EVID-ID-006 MUST**     | A language model MUST NOT be treated as authoritative for citation facts that can be generated from structured corpus data. Citation formatting MUST NOT change underlying source identity. Missing citation facts SHOULD be reported as incomplete rather than invented.                                                                                                            | semantic+behavioral |
 
 #### Claim-Binding requirements
 
-| Requirement             | Normative statement                                                                                                                                                                       | Test class          |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| **CLM-ID-001 MUST**     | Claim-Binding implementations retain or reproducibly derive the GenerationRun identity and GeneratedClaims needed to establish claim provenance.                                          | semantic+audit      |
-| **CLM-ID-002 MUST**     | Claims represented as supported have explicit SupportBindings to one or more named or embedded EvidenceRef semantic locators.                                                             | schema+semantic     |
-| **CLM-ID-003 MUST NOT** | Evidence is not described as supporting a claim merely because it appeared in model context.                                                                                              | behavioral+audit    |
-| **CLM-ID-004 MUST NOT** | Unknown evidence markers do not resolve silently to unrelated sources, and machine claim/evidence relations are not lost merely because markers are rendered as human-readable citations. | semantic            |
-| **CLM-ID-005 MUST**     | A supported claim resolves through SupportBinding and EvidenceRef to the authoritative Record/RecordRevision or SourceSpan and SourceDocument.                                            | semantic            |
-| **CLM-ID-006 MUST NOT** | A failed exact-quotation check is not silently treated as successful support.                                                                                                             | semantic+behavioral |
+| Requirement             | Normative statement                                                                                                                                                                                                                       | Test class          |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| **CLM-ID-001 MUST**     | Claim-Binding implementations retain or reproducibly derive the GenerationRun identity and GeneratedClaims needed to establish claim provenance.                                                                                          | semantic+audit      |
+| **CLM-ID-002 MUST**     | Claims represented as supported have explicit SupportBindings to one or more named or embedded EvidenceRef semantic locators.                                                                                                             | schema+semantic     |
+| **CLM-ID-003 MUST NOT** | Evidence is not described as supporting a claim merely because it appeared in model context.                                                                                                                                              | behavioral+audit    |
+| **CLM-ID-004 MUST NOT** | Unknown evidence markers do not resolve silently to unrelated sources, and machine claim/evidence relations are not lost merely because markers are rendered as human-readable citations.                                                 | semantic            |
+| **CLM-ID-005 MUST**     | A supported claim resolves through SupportBinding and EvidenceRef to authoritative documentary material and ultimately to exactly one SourceDocument; base and namespaced locator kinds preserve an unambiguous reproducible source path. | semantic            |
+| **CLM-ID-006 MUST NOT** | A failed exact-quotation check is not silently treated as successful support.                                                                                                                                                             | semantic+behavioral |
 
 #### Reproducible Research requirements
 
@@ -1336,7 +1389,7 @@ Base FieldAssertion values include:
 - `evaluation_status`: `not_evaluated`, `value_supported`, `no_supported_value`, `evaluation_failed`;
 - `authority_status`: `unreviewed`, `human_confirmed`, `human_override`, `disputed`;
 - `value_status`: `present`, `confirmed_absent`, `invalid`, `unresolved`;
-- EvidenceRef `locator_kind`: `record`, `source_span`.
+- EvidenceRef `locator_kind` in `celf-reference-json-v1`: base values `record`, `source_span`; this vocabulary is open to namespaced extension values that satisfy **[EVID-ID-001]**.
 
 ### Canonical Conceptual Schemas
 
