@@ -51,7 +51,7 @@ SourceDocument
 
 In questo modo un claim generato può essere auditato all'indietro fino a supporto, evidenza, revisione del record, segmento di fonte e documento sorgente. Embedding, rank di retrieval, score di reranking, cache, stato UI e altri valori specifici dell'operazione restano stato derivato; non diventano proprietà intrinseche del record sorgente.
 
-Vedere [SPECIFICATION.md](SPECIFICATION.md) per la specifica normativa cELF 1.0 e il white paper DerridAI non normativo.
+Vedere [SPECIFICATION.md](SPECIFICATION.md) per la specifica normativa cELF 1.0.
 
 ## Architettura
 
@@ -265,7 +265,7 @@ Per copertura browser, Storybook, parità CI e regole di contribuzione vedere [C
 
 - [Guida utente](docs/USER_GUIDE.md) — funzioni e workflow
 - [Architettura](docs/ARCHITECTURE.md) — runtime, autorità, persistenza e flusso dati
-- [Specifica cELF 1.0](SPECIFICATION.md) — modello normativo e white paper dell'implementazione di riferimento
+- [Specifica cELF 1.0](SPECIFICATION.md) — modello normativo e requisiti di conformità
 - [Contesto del progetto](docs/PROJECT_CONTEXT.md) — motivazione accademica e capacità implementate/previste
 - [GraphQL](docs/GRAPHQL.md) — facciata di lettura cELF
 - [Realtime](docs/REALTIME.md) — protocollo WebSocket e risincronizzazione

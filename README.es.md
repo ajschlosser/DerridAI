@@ -51,7 +51,7 @@ SourceDocument
 
 Así, una afirmación generada puede auditarse hacia atrás hasta su soporte, evidencia, revisión de registro, tramo de fuente y documento fuente. Embeddings, rango de recuperación, scores de reranking, cachés, estado de UI y otros valores específicos de una operación permanecen como estado derivado; no se convierten en propiedades intrínsecas del registro fuente.
 
-Consulte [SPECIFICATION.md](SPECIFICATION.md) para la especificación normativa cELF 1.0 y el white paper no normativo de DerridAI.
+Consulte [SPECIFICATION.md](SPECIFICATION.md) para la especificación normativa cELF 1.0.
 
 ## Arquitectura
 
@@ -265,7 +265,7 @@ Para cobertura del navegador, Storybook, paridad con CI y reglas de contribució
 
 - [Guía del usuario](docs/USER_GUIDE.md) — funciones y flujos de trabajo
 - [Arquitectura](docs/ARCHITECTURE.md) — límites de ejecución, autoridad, persistencia y flujo
-- [Especificación cELF 1.0](SPECIFICATION.md) — modelo normativo y white paper de la implementación de referencia
+- [Especificación cELF 1.0](SPECIFICATION.md) — modelo normativo y requisitos de conformidad
 - [Contexto del proyecto](docs/PROJECT_CONTEXT.md) — justificación académica y capacidades implementadas/intencionadas
 - [GraphQL](docs/GRAPHQL.md) — fachada de consultas cELF de solo lectura
 - [Realtime](docs/REALTIME.md) — protocolo WebSocket y resincronización
