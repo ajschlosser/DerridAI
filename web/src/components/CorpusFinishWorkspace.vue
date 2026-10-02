@@ -91,6 +91,9 @@ function stateIcon(attention: boolean) {
   return attention ? "warning" : "check";
 }
 const noPublishable = computed(() => Boolean(readiness.value.no_publishable_records));
+const publishReady = computed(
+  () => Boolean(readiness.value.can_publish) && blockers.value.length === 0,
+);
 const ACTIONABLE_NEXT = [
   "review_records",
   "resolve_document_metadata",
@@ -160,30 +163,32 @@ function fixBlocker(code?: string) {
     <section
       v-else-if="!noPublishable"
       class="publish-decision"
-      :data-state="blockers.length ? 'blocked' : 'ready'"
+      :data-state="publishReady ? 'ready' : 'blocked'"
       aria-labelledby="publish-decision-title"
     >
       <div class="publish-decision-copy">
-        <span class="readiness-state" :data-tone="blockers.length ? 'attention' : 'ok'">
-          <AppIcon :name="stateIcon(Boolean(blockers.length))" />
+        <span class="readiness-state" :data-tone="publishReady ? 'ok' : 'attention'">
+          <AppIcon :name="stateIcon(!publishReady)" />
           {{
-            blockers.length
-              ? i18n.t("pdf_corpus.attention_required")
-              : i18n.t("pdf_corpus.complete")
+            publishReady
+              ? i18n.t("pdf_corpus.complete")
+              : i18n.t("pdf_corpus.attention_required")
           }}
         </span>
         <h3 id="publish-decision-title">
           {{
-            blockers.length
-              ? i18n.tf("pdf_corpus.view_publication_blockers", { count: blockers.length })
-              : i18n.t("pdf_corpus.publish.status_ready")
+            publishReady
+              ? i18n.t("pdf_corpus.publish.status_ready")
+              : blockers.length
+                ? i18n.tf("pdf_corpus.view_publication_blockers", { count: blockers.length })
+                : i18n.t("pdf_corpus.inspect_remaining_work")
           }}
         </h3>
         <p>
           {{
-            blockers.length
-              ? i18n.t("pdf_corpus.publication_waiting_help")
-              : i18n.t("pdf_corpus.publication_ready_help")
+            publishReady
+              ? i18n.t("pdf_corpus.publication_ready_help")
+              : i18n.t("pdf_corpus.publication_waiting_help")
           }}
         </p>
       </div>
@@ -343,7 +348,7 @@ function fixBlocker(code?: string) {
             }}
           </small>
         </span>
-        <span class="readiness-details-affordance">{{ i18n.t("pdf_corpus.inspect") }}</span>
+        <span class="readiness-details-affordance">{{ i18n.t("pdf_corpus.review_details") }}</span>
       </summary>
       <div class="publication-readiness-list">
       <section
