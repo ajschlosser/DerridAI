@@ -94,6 +94,18 @@ const noPublishable = computed(() => Boolean(readiness.value.no_publishable_reco
 const publishReady = computed(
   () => Boolean(readiness.value.can_publish) && blockers.value.length === 0,
 );
+const publishDecisionTone = computed(() => (publishReady.value ? "ok" : "attention"));
+const publishDecisionTitle = computed(() => {
+  if (publishReady.value) return i18n.t("pdf_corpus.publish.status_ready");
+  if (blockers.value.length)
+    return i18n.tf("pdf_corpus.view_publication_blockers", { count: blockers.value.length });
+  return i18n.t("pdf_corpus.inspect_remaining_work");
+});
+const publishDecisionHelp = computed(() =>
+  publishReady.value
+    ? i18n.t("pdf_corpus.publication_ready_help")
+    : i18n.t("pdf_corpus.publication_waiting_help"),
+);
 const ACTIONABLE_NEXT = [
   "review_records",
   "resolve_document_metadata",
@@ -167,30 +179,12 @@ function fixBlocker(code?: string) {
       aria-labelledby="publish-decision-title"
     >
       <div class="publish-decision-copy">
-        <span class="readiness-state" :data-tone="publishReady ? 'ok' : 'attention'">
+        <span class="readiness-state" :data-tone="publishDecisionTone">
           <AppIcon :name="stateIcon(!publishReady)" />
-          {{
-            publishReady
-              ? i18n.t("pdf_corpus.complete")
-              : i18n.t("pdf_corpus.attention_required")
-          }}
+          {{ publishReady ? i18n.t("pdf_corpus.complete") : i18n.t("pdf_corpus.attention_required") }}
         </span>
-        <h3 id="publish-decision-title">
-          {{
-            publishReady
-              ? i18n.t("pdf_corpus.publish.status_ready")
-              : blockers.length
-                ? i18n.tf("pdf_corpus.view_publication_blockers", { count: blockers.length })
-                : i18n.t("pdf_corpus.inspect_remaining_work")
-          }}
-        </h3>
-        <p>
-          {{
-            publishReady
-              ? i18n.t("pdf_corpus.publication_ready_help")
-              : i18n.t("pdf_corpus.publication_waiting_help")
-          }}
-        </p>
+        <h3 id="publish-decision-title">{{ publishDecisionTitle }}</h3>
+        <p>{{ publishDecisionHelp }}</p>
       </div>
       <div class="publication-primary finish-primary">
         <UiButton variant="primary" :disabled="busy" @click="act">
@@ -340,13 +334,7 @@ function fixBlocker(code?: string) {
       <summary>
         <span>
           <b>{{ i18n.t("pdf_corpus.publish.readiness_title") }}</b>
-          <small>
-            {{
-              publishReady
-                ? i18n.t("pdf_corpus.publication_ready_help")
-                : i18n.t("pdf_corpus.publication_waiting_help")
-            }}
-          </small>
+          <small>{{ publishDecisionHelp }}</small>
         </span>
         <span class="readiness-details-affordance">{{ i18n.t("pdf_corpus.review_details") }}</span>
       </summary>
