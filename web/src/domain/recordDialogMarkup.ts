@@ -8,58 +8,6 @@ type Trf = (key: string, fallback: string, values?: Record<string, unknown>) => 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
-export function bulkFieldEditorHtml(
-  input: {
-    title: string;
-    fixedRows: Any;
-    defaultScope: string;
-    selectedCount: number;
-    activeCount: number;
-    currentWork: string;
-    allCount: number;
-    fieldOptions: string;
-  },
-  deps: { tr: Tr; trf: Trf },
-): string {
-  const { tr, trf } = { ...deps, ...bindCopy(deps.tr, deps.trf) };
-  const {
-    title,
-    fixedRows,
-    defaultScope,
-    selectedCount,
-    activeCount,
-    currentWork,
-    allCount,
-    fieldOptions,
-  } = input;
-  const scope = fixedRows
-    ? `<div class="info">${esc(trf("records.bulk.in_operation", { count: fixedRows.length.toLocaleString() }))}</div>`
-    : `<div class="field"><label>${esc(tr("records.bulk.target"))}</label><select class="control" id="bulkFieldScope"><option value="selected" ${defaultScope === "selected" ? "selected" : ""} ${selectedCount ? "" : "disabled"}>${esc(trf("records.bulk.selected", { count: selectedCount.toLocaleString() }))}</option><option value="active" ${defaultScope === "active" ? "selected" : ""}>${esc(trf("records.bulk.active", { count: activeCount.toLocaleString() }))}</option>${currentWork ? `<option value="work">${esc(trf("records.bulk.work", { work: currentWork }))}</option>` : ""}<option value="all">${esc(trf("records.bulk.all", { count: allCount.toLocaleString() }))}</option></select></div>`;
-  return `<div class="dh"><div><h2 class="dialog-title">${esc(title)}</h2><div class="dialog-subtitle">${esc(tr("records.bulk.subtitle"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db bulk-field-body">
-    ${scope}
-    <div class="field"><label>${esc(tr("works.field"))}</label><select class="control" id="bulkFieldName">${fieldOptions}</select></div>
-    <div class="field"><label>${esc(tr("records.bulk.new_value"))}</label><textarea id="bulkFieldValue" spellcheck="false" placeholder="${esc(tr("records.bulk.placeholder"))}"></textarea><div class="note" id="bulkFieldHint"></div></div>
-    <label class="check-item"><input type="checkbox" id="bulkFieldOnlyDifferent" checked><span>${esc(tr("records.bulk.only_different"))}</span></label>
-  </div>
-  <div class="da"><button class="btn" data-close>${esc(tr("common.cancel"))}</button><button class="btn primary" id="applyBulkField">${icon("check")}${esc(tr("records.bulk.apply"))}</button></div>`;
-}
-
-export function ocrCleanupDialogHtml(
-  input: {
-    active: Any;
-    selectedCount: number;
-    reviewCount: number;
-    allCount: number;
-    fileCount: number;
-  },
-  deps: { tr: Tr; trf: Trf },
-): string {
-  const { tr, trf } = { ...deps, ...bindCopy(deps.tr, deps.trf) };
-  const { active, selectedCount, reviewCount, allCount, fileCount } = input;
-  return `<div class="dh"><div><h2 class="dialog-title">${esc(tr("ui.clean_ocr"))}</h2><div class="dialog-subtitle">${esc(tr("records.ocr.subtitle"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db ocr-clean-options"><button class="scope-card" data-scope="active" ${active ? "" : "disabled"}><b>${esc(tr("records.ocr.active_tab"))}</b><span>${active ? esc(trf("records.ocr.active_meta", { count: active.records.length.toLocaleString(), name: active.name })) : esc(tr("records.ocr.no_tab"))}</span></button><button class="scope-card" data-scope="selected" ${selectedCount ? "" : "disabled"}><b>${esc(tr("records.ocr.selected"))}</b><span>${esc(trf("records.ocr.selected_meta", { count: selectedCount.toLocaleString() }))}</span></button><button class="scope-card" data-scope="review"><b>${esc(tr("records.ocr.review"))}</b><span>${esc(trf("records.ocr.review_meta", { count: reviewCount.toLocaleString() }))}</span></button><button class="scope-card" data-scope="all"><b>${esc(tr("records.ocr.all"))}</b><span>${esc(trf("records.ocr.all_meta", { count: allCount.toLocaleString(), tabs: fileCount }))}</span></button></div><div class="da"><button class="btn" data-close>${esc(tr("common.cancel"))}</button></div>`;
-}
-
 export function recordEditorHtml(input: { subtitle: string; groups: string }, tr: Tr): string {
   return `<form><div class="dh"><div><h2 class="dialog-title">${esc(tr("record.edit"))}</h2><div class="dialog-subtitle">${esc(input.subtitle)}</div></div><button class="btn icon-only" type="button" data-close>${icon("close")}</button></div><div class="db editor-body">${input.groups}</div><div class="da"><div class="llm-footer-note">${esc(tr("records.editor.local_note"))}</div><button class="btn" type="button" data-close>${esc(tr("common.cancel"))}</button><button class="btn primary">${icon("check")}${esc(tr("records.editor.save"))}</button></div></form>`;
 }
