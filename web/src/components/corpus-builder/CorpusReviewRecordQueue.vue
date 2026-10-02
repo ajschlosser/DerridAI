@@ -392,7 +392,13 @@ function recordSelectionChanged(recordId: string, event: Event) {
   cursor: pointer;
 }
 .record-row:hover {
-  background: var(--surface-subtle);
+  background: var(--surface-hover);
+}
+.record-row:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: -3px;
 }
 .record-row.active {
   background: var(--surface-selected);

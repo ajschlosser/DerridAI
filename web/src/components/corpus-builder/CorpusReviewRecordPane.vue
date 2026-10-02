@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import UiButton from "../ui/UiButton.vue";
 // Copyright 2026 Aaron John Schlosser, PhD.
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { CorpusRecord } from "../../api/corpus";
 import { recordIssueKinds } from "../../domain/corpusReview";
 import { useI18nStore } from "../../stores/i18n";
@@ -10,7 +10,7 @@ import MovableRecordModal from "./MovableRecordModal.vue";
 import RecordContextReader from "./RecordContextReader.vue";
 
 /** The central Record reader for Review: Record text, text editing and the per-Record notices. */
-defineProps<{
+const props = defineProps<{
   record: CorpusRecord | null;
   buildId: string;
   visible: boolean;
@@ -38,6 +38,33 @@ const textDraft = defineModel<string>("textDraft", { required: true });
 const showContext = defineModel<boolean>("showContext", { required: true });
 const resolveSource = defineModel<boolean>("resolveSource", { required: true });
 const i18n = useI18nStore();
+function shortRecordId(recordId: string) {
+  const match = /^.+?[-_.:](\d+)$/.exec(recordId);
+  return match ? `#${Number(match[1])}` : recordId;
+}
+const recordLocator = computed(() => {
+  const record = props.record;
+  if (!record) return "";
+  const start = record.page_start;
+  const end = record.page_end;
+  if (start == null || start === "") return "";
+  const pages = end != null && end !== "" && end !== start ? `${start}–${end}` : String(start);
+  return `${i18n.t("pdf_corpus.page_abbrev")} ${pages}`;
+});
+const recordHeading = computed(() => {
+  const record = props.record;
+  if (!record) return "";
+  return [shortRecordId(String(record.record_id || "")), recordLocator.value]
+    .filter(Boolean)
+    .join(" · ");
+});
+const recordCitation = computed(() => String(props.record?.inline_citation || "").trim());
+const showRecordId = computed(() => Boolean(props.record?.record_id));
+const recordLengthLabel = computed(() =>
+  props.record
+    ? `${props.record.text_length.toLocaleString()} ${i18n.t("pdf_corpus.characters")}`
+    : "",
+);
 const root = ref<HTMLElement | null>(null);
 onMounted(() => emit("rootChange", root.value));
 onBeforeUnmount(() => emit("rootChange", null));
@@ -61,11 +88,12 @@ onBeforeUnmount(() => emit("rootChange", null));
           >
             {{ i18n.t("pdf_corpus.show_queue") }}</button
           ><span class="eyebrow">{{ i18n.t("pdf_corpus.proposed_record") }}</span>
-          <h3 id="review-record-title">{{ record.record_id }}</h3>
-          <p>
-            {{ record.inline_citation }}
-            · {{ record.text_length.toLocaleString() }} {{ i18n.t("pdf_corpus.characters")
-            }}{{ activitySummary }}
+          <h3 id="review-record-title">{{ recordHeading }}</h3>
+          <p class="record-meta">
+            <span v-if="recordCitation" class="record-citation">{{ recordCitation }}</span>
+            <code v-if="showRecordId" class="record-id">{{ record.record_id }}</code>
+            <span>{{ recordLengthLabel }}</span
+            >{{ activitySummary }}
             <span v-if="record.text_review_status === 'human_corrected'" class="human-corrected">{{
               i18n.t("pdf_corpus.human_corrected")
             }}</span
@@ -254,6 +282,29 @@ onBeforeUnmount(() => emit("rootChange", null));
   margin: 2px 0 0;
   font-size: 0.8125rem;
   color: var(--text-secondary);
+}
+.record-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  align-items: center;
+}
+.record-citation {
+  color: var(--text-primary);
+  font-weight: var(--fw-semibold);
+}
+.record-id {
+  max-width: min(30rem, 52vw);
+  padding: 1px 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .record-primary-text {
   flex: 1;
