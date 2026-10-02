@@ -399,3 +399,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 - Expanded Corpus concurrency from the old 1–16 operation clamp to the provider contract's full 1–64 range in Pydantic validation, worker scheduling, settings controls, provider payloads, draft restoration, and tests.
 - Corpus build GET responses now attach live, non-persisted provider/Ollama capacity snapshots. The metadata live-status component displays active provider slots over the configured limit.
 - Shared capacity limits are re-read while callers wait, so lowering the Ollama runtime cap takes effect for already-queued callers; a focused test covers this transition.
+
+### 2026-10-01 / integration checkpoint
+
+- Opened draft PR #408 to run the repository quality gates while implementation continues.
+- Master advanced after branch creation through PR #405. Merged current `master@12c6cbfeb5b68c0d5117dd2263f3d624aa188ab5` into this branch; the upstream navigation/runtime-retirement changes did not overlap the concurrency files.
+- GitHub Actions quality gates are now running against the merged head.
