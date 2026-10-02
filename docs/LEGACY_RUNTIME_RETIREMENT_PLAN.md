@@ -198,7 +198,8 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] `recordDialogs`: OCR cleanup (`OcrCleanupDialog.vue` + `composables/ocrCleanupDialog.ts`; scope resolution and the confirmation stay in the forwarder's `choose` callback; `ocrCleanupDialogHtml` and baseline `dialog-ocr-cleanup` retired)
   - [x] `recordDialogs`: record history browser (`RecordHistoryDialog.vue` + `composables/recordHistoryDialog.ts`; the component owns the version cursor, the forwarder supplies live `versions`, and `restore` / `restoreOriginal` / `clear` callbacks that do the restore, confirmation, refresh and toasts; `recordHistoryDialogHtml` deleted. Disabled-reason hints are `title`s now, not `decorateDisabledControls`)
   - [x] `recordDialogs`: record editor and store record editor (one `RecordFieldEditorDialog.vue` + `composables/recordFieldEditorDialog.ts`; the pure field-kind/parse rules live in `domain/recordEditorFields.ts`; the forwarders supply `save`, which diffs against the record and applies or PATCHes. `fieldEditor`/`parseEditor`, `recordDialogMarkup.ts` and baseline `record-edit-sheet` retired. The on/off label of a boolean now uses `ui.on`/`ui.off` instead of hard-coded English "Enabled/Disabled")
-  - [ ] remaining `recordDialogs` (upsert queue, still DOM-built in `openUpsertQueue`), then `jobDialogs`
+  - [x] `recordDialogs`: upsert queue (`UpsertQueueDialog.vue` + `composables/upsertQueueDialog.ts`; the forwarder supplies plain-data `items()` (re-read after a removal), `remove` and `sync`. The change list is a disclosure button with `aria-expanded`; unchecked state now survives removing a record). `recordDialogs` is now fully ported
+  - [ ] `jobDialogs` (`domain/jobDialogs.ts`, 1,113 lines; next)
 - [ ] Step 4 state slices and deletion
 
 Notes for the next session:

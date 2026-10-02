@@ -1,6 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
-import { esc, icon } from "./html";
 import { recordEditorField } from "./recordEditorFields";
 import { createRecordDialogCopy } from "./recordDialogCopy";
 import { openBulkFieldEditorDialog } from "../composables/bulkFieldEditorDialog";
@@ -12,6 +11,7 @@ import {
   openRecordFieldEditorDialog,
   type RecordEditorSection,
 } from "../composables/recordFieldEditorDialog";
+import { openUpsertQueueDialog } from "../composables/upsertQueueDialog";
 import { openRecordHistoryDialog } from "../composables/recordHistoryDialog";
 
 // The dialogs for editing, merging, subsetting and cleaning records and for the upsert queue, drawn as HTML strings. Moved
@@ -61,7 +61,6 @@ type Helper =
   | "selectedRecord"
   | "selectedReviewItems"
   | "shell"
-  | "showAppModal"
   | "tr"
   | "trf"
   | "uid"
@@ -190,15 +189,12 @@ export function createRecordDialogs(deps: Deps) {
     selectedRecord,
     selectedReviewItems,
     shell,
-    showAppModal,
     tr,
     trf,
     uid,
     upsertRows,
   } = deps;
   const copy = createRecordDialogCopy(tr, trf);
-  // The legacy code queries the page freely; untyped, as it was written.
-  const document: Any = globalThis.document;
   function openMergeDialog() {
     if (state.files.length < 2) return toast(copy.mergeNeedTwo, { tone: "warning" });
     openMergeFilesDialog({
@@ -579,89 +575,43 @@ export function createRecordDialogs(deps: Deps) {
       });
     if (!state.activeStore) return toast(copy.selectCollection, { tone: "warning" });
     if (allRows().length) await refreshPresenceForRows(allRows());
-    const _rows = pendingUpsertRows();
-    const dialog = document.createElement("dialog");
-    dialog.className = "queue-dialog wide-queue-dialog";
-
-    const render = () => {
-      const currentRows = pendingUpsertRows();
-      dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("vector.unsynced_changes"))}</h2><div class="dialog-subtitle">${esc(state.activeStore)} · ${currentRows.length} ${esc(tr("dynamic.records"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-    <div class="db">
-      <div class="queue-explainer"><b>${esc(tr("vector.unsynced_changes_what"))}</b><p>${esc(tr("vector.unsynced_changes_help"))}</p></div><div class="queue-bulk-actions">${currentRows.length ? `<button class="btn small" id="queueSelectAll">${esc(tr("ui.select_all"))}</button><button class="btn small" id="queueSelectNone">${esc(tr("ui.clear_selection"))}</button>` : ""}</div>
-      <div class="upsert-queue-list">${
-        currentRows
-          .map((row: Any) => {
-            const info = recordDbStatus(row.file, row.index, row.record);
-            const key = localRecordKey(row.file, row.index);
-            const changes = pendingChangesForRow(row);
-            return `<section class="upsert-queue-card">
-          <div class="upsert-queue-head">
-            <label class="upsert-queue-item"><input type="checkbox" data-upsert-key="${esc(key)}" checked><span><b>${esc(row.record.record_id || `Record ${row.index + 1}`)}</b><small>${esc(row.record.work || row.file.name)} · ${esc(row.file.name)}</small></span><span class="db-status ${info.kind}"><i></i>${esc(info.label)}</span></label>
-            <div class="tools"><button class="btn small" data-review-queue="${esc(key)}">${esc(trf("records.upsert.review_n", { count: changes.length }))}</button><button class="btn small danger" data-remove-queue="${esc(key)}">${esc(tr("records.upsert.remove"))}</button></div>
-          </div>
-          <div class="queue-change-list hidden" data-queue-changes="${esc(key)}">${changes.map((change: Any) => `<div class="queue-change-row"><b>${esc(label(change.field_name || "field"))}</b><span>${esc(change.source || tr("jobs.preview.manual"))}${change.timestamp ? ` · ${esc(formatTimestamp(change.timestamp))}` : ""}</span><details><summary>${esc(tr("records.upsert.values"))}</summary><div class="queue-change-values"><pre>${esc(jsonPretty(change.old_value))}</pre><span>→</span><pre>${esc(jsonPretty(change.new_value))}</pre></div></details></div>`).join("")}</div>
-        </section>`;
-          })
-          .join("") || `<div class="llm-empty">${esc(tr("vector.no_unsynced_changes"))}</div>`
-      }</div>
-    </div>
-      <div class="da"><button class="btn" data-close>${esc(tr("common.close"))}</button>${currentRows.length ? `<button class="btn primary" id="upsertQueued">${icon("database")}${esc(tr("vector.sync_selected"))}</button>` : ""}</div>`;
-
-      const close = () => {
-        dialog.close();
-        dialog.remove();
+    const itemFor = (row: Any) => {
+      const info = recordDbStatus(row.file, row.index, row.record);
+      return {
+        key: String(localRecordKey(row.file, row.index)),
+        recordId: String(row.record.record_id || `Record ${row.index + 1}`),
+        source: `${row.record.work || row.file.name} · ${row.file.name}`,
+        status: { kind: String(info.kind), label: String(info.label) },
+        changes: pendingChangesForRow(row).map((change: Any) => ({
+          field: String(label(change.field_name || "field")),
+          source: String(change.source || tr("jobs.preview.manual")),
+          when: change.timestamp ? String(formatTimestamp(change.timestamp)) : "",
+          oldValue: String(jsonPretty(change.old_value)),
+          newValue: String(jsonPretty(change.new_value)),
+        })),
       };
-      dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-      dialog
-        .querySelector("#queueSelectAll")
-        ?.addEventListener("click", () =>
-          dialog.querySelectorAll("[data-upsert-key]").forEach((box: Any) => (box.checked = true)),
+    };
+    const rowByKey = (key: string) =>
+      pendingUpsertRows().find((row: Any) => String(localRecordKey(row.file, row.index)) === key);
+    openUpsertQueueDialog({
+      store: String(state.activeStore),
+      items: () => pendingUpsertRows().map(itemFor),
+      remove: (key) => {
+        const row = rowByKey(key);
+        if (!row) return;
+        removeFromUpsertQueue(row);
+        shell();
+      },
+      sync: async (keys) => {
+        const wanted = new Set(keys);
+        const chosen = pendingUpsertRows().filter((row: Any) =>
+          wanted.has(String(localRecordKey(row.file, row.index))),
         );
-      dialog
-        .querySelector("#queueSelectNone")
-        ?.addEventListener("click", () =>
-          dialog.querySelectorAll("[data-upsert-key]").forEach((box: Any) => (box.checked = false)),
-        );
-      dialog.querySelectorAll("[data-review-queue]").forEach(
-        (button: Any) =>
-          (button.onclick = () => {
-            const panel = dialog.querySelector(
-              `[data-queue-changes="${CSS.escape(button.dataset.reviewQueue)}"]`,
-            );
-            panel?.classList.toggle("hidden");
-          }),
-      );
-      dialog.querySelectorAll("[data-remove-queue]").forEach(
-        (button: Any) =>
-          (button.onclick = () => {
-            const row = currentRows.find(
-              (item: Any) => localRecordKey(item.file, item.index) === button.dataset.removeQueue,
-            );
-            if (row) {
-              removeFromUpsertQueue(row);
-              render();
-              shell();
-            }
-          }),
-      );
-      dialog.querySelector("#upsertQueued")?.addEventListener("click", async () => {
-        const selected = new Set(
-          [...dialog.querySelectorAll("[data-upsert-key]:checked")].map((x) => x.dataset.upsertKey),
-        );
-        const chosen = currentRows.filter((row: Any) =>
-          selected.has(localRecordKey(row.file, row.index)),
-        );
-        if (!chosen.length) return toast(copy.selectQueued, { tone: "warning" });
-        close();
         await upsertRows(chosen, "queued records");
         shell();
         renderView();
-      });
-    };
-
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    render();
+      },
+    });
   }
   return {
     openMergeDialog,
