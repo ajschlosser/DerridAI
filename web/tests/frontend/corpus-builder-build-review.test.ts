@@ -93,7 +93,8 @@ describe("Corpus Builder build, review, and finish states", () => {
         canResume: false,
         hasRecordTopology: true,
         readyCount: 8,
-        preparingCount: 95,
+        enrichingCount: 3,
+        preparingCount: 92,
         attentionCount: 9,
       },
     });
@@ -107,7 +108,8 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.get('[aria-current="step"]').text()).toContain("Enrich");
     const handoff = wrapper.get(".primary-status-handoff");
     expect(handoff.get('[data-flow-state="ready"] dd').text()).toBe("8");
-    expect(handoff.get('[data-flow-state="enriching"] dd').text()).toBe("95");
+    expect(handoff.get('[data-flow-state="enriching"] dd').text()).toBe("3");
+    expect(handoff.get('[data-flow-state="preparing"] dd').text()).toBe("92");
     expect(handoff.get('[data-flow-state="attention"] dd').text()).toBe("9");
     expect(buttonByText(wrapper, "Review 8 ready Records").exists()).toBe(true);
     expect(wrapper.get(".primary-status-review-help").text()).toContain(
@@ -129,7 +131,8 @@ describe("Corpus Builder build, review, and finish states", () => {
         canResume: false,
         hasRecordTopology: true,
         readyCount: 0,
-        preparingCount: 18,
+        enrichingCount: 2,
+        preparingCount: 16,
         attentionCount: 2,
       },
     });
