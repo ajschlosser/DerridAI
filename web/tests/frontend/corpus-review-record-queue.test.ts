@@ -97,9 +97,20 @@ describe("Corpus Builder review record queue", () => {
     });
   });
 
-  it("shows actively processing records as Enriching with a spinner instead of a refresh icon", () => {
+  it("keeps queued Records as Preparing with the original refresh icon", () => {
     const wrapper = mountQueue({
       rows: [row({ review_state: "preparing" })],
+    });
+
+    expect(wrapper.get(".record-row-status").text()).toBe("Preparing");
+    expect(wrapper.find(".record-processing-spinner").exists()).toBe(false);
+    expect(wrapper.find(".record-state-icon svg").exists()).toBe(true);
+  });
+
+  it("shows only actively processing Records as Enriching with a spinner", () => {
+    const wrapper = mountQueue({
+      rows: [row({ review_state: "preparing" })],
+      activeProcessingRecordIds: new Set(["record-1"]),
     });
 
     expect(wrapper.get(".record-row-status").text()).toBe("Enriching");
