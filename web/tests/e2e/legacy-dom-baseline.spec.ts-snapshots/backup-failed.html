@@ -2379,16 +2379,28 @@
 </div>
 </div>
 </dialog>
-<section class="notifications" aria-live="polite" aria-atomic="true">
-<div class="notification" data-tone="info" tabindex="0">
-<span>Loaded 3 records</span>
+<section class="notifications" aria-label="Notifications" aria-live="polite" aria-atomic="false" aria-relevant="additions">
+<div class="notification" data-tone="success" tabindex="0">
+<span class="notification-icon" aria-hidden="true">✓</span>
+<span class="sr-only">Success:</span>
+<span class="notification-message">Loaded 3 records</span>
 <button type="button" aria-label="Dismiss notification"> × </button>
 </div>
-<div class="notification" data-tone="info" tabindex="0">
-<span>Full backup created · 0.0 MB</span>
+<div class="notification" data-tone="success" tabindex="0">
+<span class="notification-icon" aria-hidden="true">✓</span>
+<span class="sr-only">Success:</span>
+<span class="notification-message">Full backup created · 0.0 MB</span>
 <button type="button" aria-label="Dismiss notification"> × </button>
 </div>
 </section>
 <dialog class="message-dialog info" role="alertdialog" aria-labelledby="message-dialog-title" aria-describedby="message-dialog-body">
+</dialog>
+<dialog class="mixed-values-dialog" aria-labelledby="mixedValuesTitle">
+</dialog>
+<dialog class="message-dialog danger remove-work-dialog" aria-labelledby="removeWorkTitle">
+</dialog>
+<dialog class="work-metadata-dialog" aria-labelledby="workMetadataTitle">
+</dialog>
+<dialog class="work-separate-dialog" aria-labelledby="separateWorksTitle">
 </dialog>
 </div>

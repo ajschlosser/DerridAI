@@ -1,5 +1,10 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
+import { openMessageDialog } from "../composables/messageDialog";
+import { openMixedWorkValuesDialog as openMixedWorkValues } from "../composables/mixedWorkValuesDialog";
+import { openWorkMetadataEditorDialog } from "../composables/workMetadataEditor";
+import { openRemoveWorkDialog } from "../composables/removeWorkDialog";
+import { openSeparateWorksDialog } from "../composables/separateWorksDialog";
 import { esc, icon } from "./html";
 import {
   canonicalWorkSourceType,
@@ -7,6 +12,7 @@ import {
   workMetadataSourceGroups,
   workSourceType,
 } from "./workMetadata";
+import { toast } from "../composables/notifications";
 
 // The dialogs for a work's metadata and for removing or separating works, drawn as HTML strings. Moved verbatim from the
 // legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -27,7 +33,6 @@ type Helper =
   | "jobLabel"
   | "label"
   | "navigateTo"
-  | "openMessageModal"
   | "parseProposedMetadataValue"
   | "parseWorkMetadataValue"
   | "persistFileNow"
@@ -43,13 +48,12 @@ type Helper =
   | "showAppModal"
   | "startJobPolling"
   | "syncJobProgressToasts"
-  | "toast"
   | "tr"
   | "trf"
   | "uid"
   | "uniqueWorkValues"
   | "workIndex"
-  | "workMetadataControl"
+  | "workMetadataControlSpec"
   | "workflowProviderSelectHtml"
   | "workflowProviderSummaryHtml";
 type Deps = { state: Loose; corpusCache: Loose } & Record<Helper, Fn>;
@@ -99,7 +103,6 @@ export function createWorkDialogs(deps: Deps) {
     jobLabel,
     label,
     navigateTo,
-    openMessageModal,
     parseProposedMetadataValue,
     parseWorkMetadataValue,
     persistFileNow,
@@ -114,13 +117,12 @@ export function createWorkDialogs(deps: Deps) {
     showAppModal,
     startJobPolling,
     syncJobProgressToasts,
-    toast,
     tr,
     trf,
     uid,
     uniqueWorkValues,
     workIndex,
-    workMetadataControl,
+    workMetadataControlSpec,
     workflowProviderSelectHtml,
     workflowProviderSummaryHtml,
   } = deps;
@@ -128,20 +130,19 @@ export function createWorkDialogs(deps: Deps) {
   const document: Any = globalThis.document;
   function openMixedWorkValuesDialog(work: Any, field: Any, rows: Any) {
     const values = uniqueWorkValues(rows, field);
-    const dialog = document.createElement("dialog");
-    dialog.className = "mixed-values-dialog";
-    dialog.setAttribute("aria-labelledby", "mixedValuesTitle");
-    dialog.innerHTML = `<div class="dh"><div><span class="section-label">${esc(tr("works.metadata_variants"))}</span><h2 class="dialog-title" id="mixedValuesTitle">${esc(label(field))}</h2><div class="dialog-subtitle">${esc(work)} · ${values.length.toLocaleString()} ${esc(tr("works.unique_values"))} · ${rows.length.toLocaleString()} ${esc(tr("dynamic.records"))}</div></div><button class="btn icon-only" type="button" data-close aria-label="${esc(tr("ui.close"))}">${icon("close")}</button></div><div class="db mixed-values-body"><p class="note">${esc(tr("works.mixed_values_help"))}</p><div class="mixed-values-list">${values.map((entry: Any, index: Any) => `<article class="mixed-value-row"><span class="mixed-value-rank">${index + 1}</span><div class="mixed-value-copy"><b>${esc(entry.value == null || entry.value === "" ? tr("ui.unset") : display(entry.value))}</b><small>${esc([...entry.files].slice(0, 3).join(" · "))}${entry.files.size > 3 ? ` · +${entry.files.size - 3}` : ""}</small></div><span class="mixed-value-count">${entry.count.toLocaleString()} <small>${esc(entry.count === 1 ? tr("dynamic.record_one") : tr("dynamic.records"))}</small></span></article>`).join("")}</div></div><div class="da"><button class="btn primary" type="button" data-close>${esc(tr("ui.done"))}</button></div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
+    openMixedWorkValues({
+      work: String(work),
+      fieldLabel: label(field),
+      recordCount: rows.length,
+      values: values.map((entry: Any) => ({
+        text: entry.value == null || entry.value === "" ? null : String(display(entry.value)),
+        files: [...entry.files].map(String),
+        count: entry.count,
+      })),
+    });
   }
   function openWorkMetadataEditor(work: Any, rows: Any) {
-    if (!rows?.length) return toast(tr("works.no_records_found"));
+    if (!rows?.length) return toast(tr("works.no_records_found"), { tone: "warning" });
     const available = [
       ...new Set([
         ...WORK_METADATA_FIELDS,
@@ -154,93 +155,68 @@ export function createWorkDialogs(deps: Deps) {
         ),
       ]),
     ].filter((field) => field !== "updates");
-    const dialog = document.createElement("dialog");
-    dialog.className = "work-metadata-dialog";
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("works.edit_work_metadata"))}</h2><div class="dialog-subtitle">${esc(work)} · ${esc(trf("works.associated_records_files", { records: rows.length.toLocaleString(), files: new Set(rows.map((row: Any) => row.file.name)).size }))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db work-metadata-body"><div class="info">${trf("works.edit_metadata_apply_help", {
-    apply: `<b>${esc(tr("common.apply"))}</b>`,
-    work: "<code>work</code>",
-    updates: "<code>updates</code>",
-  })}</div><div class="work-meta-table">${available.map((field) => workMetadataControl(field, rows)).join("")}</div></div>
-  <div class="da"><button class="btn" data-close>${esc(tr("ui.cancel"))}</button><button class="btn primary" id="applyWorkMetadata">${esc(trf("works.apply_selected_to_records", { count: rows.length.toLocaleString() }))}</button></div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    dialog
-      .querySelectorAll("[data-inspect-mixed-field]")
-      .forEach(
-        (button: Any) =>
-          (button.onclick = () =>
-            openMixedWorkValuesDialog(work, button.dataset.inspectMixedField, rows)),
-      );
-    dialog.querySelector("#applyWorkMetadata").onclick = async () => {
-      const selected = [...dialog.querySelectorAll("[data-work-meta-apply]:checked")].map(
-        (box) => box.dataset.workMetaApply,
-      );
-      if (!selected.length) return toast(tr("works.select_field_to_apply"));
-      const changes: Any = {};
-      try {
-        for (const field of selected) {
-          const control = dialog.querySelector(`[data-work-meta-value="${CSS.escape(field)}"]`);
-          changes[field] = parseWorkMetadataValue(field, control, rows);
+    openWorkMetadataEditorDialog({
+      work: String(work),
+      recordCount: rows.length,
+      fileCount: new Set(rows.map((row: Any) => row.file.name)).size,
+      fields: available.map((field) => workMetadataControlSpec(field, rows)),
+      inspectMixed: (field) => openMixedWorkValuesDialog(work, field, rows),
+      apply: async ({ values }) => {
+        const selected = Object.keys(values);
+        const changes: Any = {};
+        try {
+          for (const field of selected)
+            changes[field] = parseWorkMetadataValue(field, { value: values[field] }, rows);
+        } catch (error: Any) {
+          toast(error.message, { tone: "danger" });
+          return false;
         }
-      } catch (error: Any) {
-        return toast(error.message);
-      }
-      if (
-        !(await openMessageModal({
-          title: tr("works.apply_metadata_confirm"),
-          message: trf("works.apply_fields_to_records", {
-            fields: selected.length,
-            records: rows.length,
-            work,
+        if (
+          !(await openMessageDialog({
+            title: tr("works.apply_metadata_confirm"),
+            message: trf("works.apply_fields_to_records", {
+              fields: selected.length,
+              records: rows.length,
+              work,
+            }),
+            confirmLabel: tr("works.apply_metadata"),
+            cancelLabel: tr("ui.cancel"),
+          }))
+        )
+          return false;
+        const batchId = uid();
+        let changedRecords = 0,
+          fieldChanges = 0;
+        const touchedFiles = new Set();
+        for (const row of rows) {
+          const count = applyRecordChanges(row.file, row.index, changes, {
+            source: "work_metadata",
+            batchId,
+            reason: `Bulk work metadata update for ${work}`,
+          });
+          if (count) {
+            changedRecords++;
+            fieldChanges += count;
+            touchedFiles.add(row.file);
+          }
+        }
+        for (const file of touchedFiles) await persistFileNow(file);
+        shell();
+        renderView();
+        toast(
+          trf("works.metadata_applied", {
+            records: changedRecords.toLocaleString(),
+            fields: fieldChanges.toLocaleString(),
           }),
-          confirmLabel: tr("works.apply_metadata"),
-          cancelLabel: tr("ui.cancel"),
-        }))
-      )
-        return;
-      const applyButton = dialog.querySelector("#applyWorkMetadata");
-      if (applyButton) {
-        applyButton.disabled = true;
-        applyButton.textContent = tr("works.applying_metadata");
-      }
-      const batchId = uid();
-      let changedRecords = 0,
-        fieldChanges = 0;
-      const touchedFiles = new Set();
-      for (const row of rows) {
-        const count = applyRecordChanges(row.file, row.index, changes, {
-          source: "work_metadata",
-          batchId,
-          reason: `Bulk work metadata update for ${work}`,
-        });
-        if (count) {
-          changedRecords++;
-          fieldChanges += count;
-          touchedFiles.add(row.file);
-        }
-      }
-      for (const file of touchedFiles) await persistFileNow(file);
-      close();
-      shell();
-      renderView();
-      toast(
-        trf("works.metadata_applied", {
-          records: changedRecords.toLocaleString(),
-          fields: fieldChanges.toLocaleString(),
-        }),
-        { tone: "success" },
-      );
-    };
+          { tone: "success" },
+        );
+        return true;
+      },
+    });
   }
   function openWorkMetadataLlmDialog(items: Any) {
     const works = (items || []).filter((item: Any) => item?.work && item?.rows?.length);
-    if (!works.length) return toast(tr("works.no_work_metadata_rows"));
+    if (!works.length) return toast(tr("works.no_work_metadata_rows"), { tone: "warning" });
     const sourceScopes = works.flatMap((item: Any) =>
       workMetadataSourceGroups(item).map((scope) => ({ ...scope, work: item.work })),
     );
@@ -287,7 +263,7 @@ export function createWorkDialogs(deps: Deps) {
       if (summary) summary.innerHTML = workflowProviderSummaryHtml(profile);
     });
     dialog.querySelector("#manageWorkProviders")?.addEventListener("click", async () => {
-      const ok = await openMessageModal({
+      const ok = await openMessageDialog({
         title: tr("works.leave_metadata_title"),
         message: tr("works.leave_metadata_help"),
         confirmLabel: tr("works.open_providers"),
@@ -300,9 +276,9 @@ export function createWorkDialogs(deps: Deps) {
     dialog.querySelector("#startWorkMetadata")?.addEventListener("click", async () => {
       const profileId = dialog.querySelector("#workMetadataProvider")?.value || selectedId;
       const profile = providerProfile(profileId);
-      if (!profile) return toast(tr("works.provider_required"));
+      if (!profile) return toast(tr("works.provider_required"), { tone: "warning" });
       const config = providerRequestConfig(profile, { textReview: false });
-      if (!config?.model) return toast(tr("works.provider_model_required"));
+      if (!config?.model) return toast(tr("works.provider_model_required"), { tone: "warning" });
       const payload = sourceScopes.map((scope: Any) => ({
         work: scope.work,
         source_type_scope: scope.sourceType,
@@ -351,13 +327,14 @@ export function createWorkDialogs(deps: Deps) {
               count: sourceScopes.length,
             },
           ),
+          { tone: "success" },
         );
         if (state.view === "home")
           window.dispatchEvent(new CustomEvent("derridai:dashboard-refresh"));
       } catch (error: Any) {
         button.disabled = false;
         button.innerHTML = `${icon("spark")}${esc(tr("works.start_metadata_lookup"))}`;
-        openMessageModal({
+        openMessageDialog({
           title: tr("works.metadata_lookup_failed"),
           message: error.message || String(error),
           tone: "danger",
@@ -423,7 +400,7 @@ export function createWorkDialogs(deps: Deps) {
       const selected = [...dialog.querySelectorAll("[data-work-proposal-select]:checked")]
         .map((box) => Number(box.dataset.workProposalSelect))
         .filter((index) => flattened[index]);
-      if (!selected.length) return toast(tr("works.select_metadata_changes"));
+      if (!selected.length) return toast(tr("works.select_metadata_changes"), { tone: "warning" });
       const grouped = new Map();
       try {
         for (const index of selected) {
@@ -438,7 +415,7 @@ export function createWorkDialogs(deps: Deps) {
           group.rationale[entry.field] = entry.rationale;
         }
       } catch (error: Any) {
-        return toast(error.message);
+        return toast(error.message, { tone: "danger" });
       }
       const _recordCount = [...grouped.values()].reduce(
         (sum, group) => sum + group.item.rows.length,
@@ -494,37 +471,18 @@ export function createWorkDialogs(deps: Deps) {
   async function openRemoveWorkModal(work: Any, rows: Any) {
     const fileCounts = new Map();
     for (const row of rows) fileCounts.set(row.file, (fileCounts.get(row.file) || 0) + 1);
-    const dialog = document.createElement("dialog");
-    dialog.className = "message-dialog danger remove-work-dialog";
     const dbStore =
       state.activeStore && recordStores().some((store: Any) => store.name === state.activeStore)
         ? state.activeStore
         : "";
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("works.remove_entire"))}</h2><div class="dialog-subtitle">${esc(work)} · ${esc(tr("works.destructive_operation"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-    <div class="db remove-work-body"><div class="info warn">${esc(tr("works.remove_help"))}</div>
-    <div class="remove-work-files">${[...fileCounts].map(([file, count]) => `<label class="check-item"><input type="checkbox" data-remove-work-file="${esc(file.id)}" checked><span><b>${esc(file.name)}</b><small>${esc(trf("works.matching_records", { count: count.toLocaleString() }))}</small></span></label>`).join("")}</div>
-    <label class="check-item"><input type="checkbox" id="removeWorkDb" ${dbStore ? "" : `disabled data-disabled-reason="${esc(tr("works.select_or_create_db"))}" title="${esc(tr("works.select_or_create_db"))}"`}><span><b>${esc(tr("works.also_remove_chroma"))}</b><small>${dbStore ? esc(dbStore) : esc(tr("works.select_collection"))}</small></span></label></div>
-    <div class="da"><button class="btn" data-close>${esc(tr("ui.cancel"))}</button><button class="btn danger" id="confirmRemoveWork">${esc(tr("works.remove_work"))}</button></div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    dialog.querySelector("#confirmRemoveWork").onclick = async () => {
-      const fileIds = [...dialog.querySelectorAll("[data-remove-work-file]:checked")].map(
-        (input) => input.dataset.removeWorkFile,
-      );
-      const removeDb = Boolean(dialog.querySelector("#removeWorkDb")?.checked && dbStore);
-      if (!fileIds.length && !removeDb) return toast(tr("works.select_file_or_chroma"));
-      const button = dialog.querySelector("#confirmRemoveWork");
-      button.disabled = true;
-      button.textContent = tr("works.removing");
-      let localDeleted = 0,
-        dbDeleted = 0,
-        mirrored = 0;
-      try {
+    openRemoveWorkDialog({
+      work: String(work),
+      files: [...fileCounts].map(([file, count]) => ({ id: file.id, name: file.name, count })),
+      dbStore,
+      confirm: async ({ fileIds, removeDb }) => {
+        let localDeleted = 0,
+          dbDeleted = 0,
+          mirrored = 0;
         for (const fileId of fileIds) {
           const file = state.files.find((item: Any) => item.id === fileId);
           if (!file) continue;
@@ -555,7 +513,6 @@ export function createWorkDialogs(deps: Deps) {
           if (state.storePresenceIds[dbStore]) state.storePresenceIds[dbStore] = {};
           await refreshStores();
         }
-        close();
         persistPrefs();
         shell();
         renderView();
@@ -574,19 +531,14 @@ export function createWorkDialogs(deps: Deps) {
                 })
               : "",
           }),
+          { tone: "success" },
         );
-      } catch (error: Any) {
-        button.disabled = false;
-        button.textContent = tr("works.remove_work");
-        openMessageModal({
-          title: tr("works.remove_failed"),
-          message: error.message,
-          tone: "danger",
-        });
-      }
-    };
+      },
+    });
   }
   async function openSeparateWorksModal() {
+    const workKey = (record: Any) =>
+      String(record?.work || record?.document_title || "").trim() || tr("works.untitled");
     const eligible = state.files.filter((file: Any) => {
       const works = new Set(
         file.records
@@ -595,100 +547,77 @@ export function createWorkDialogs(deps: Deps) {
       );
       return works.size > 1;
     });
-    if (!eligible.length) return toast(tr("works.no_multi_work_jsonl"));
-    const dialog = document.createElement("dialog");
-    dialog.className = "work-separate-dialog";
-    const options = eligible
-      .map(
-        (file: Any) =>
-          `<option value="${esc(file.id)}">${esc(file.name)} · ${file.records.length.toLocaleString()} ${esc(tr("dynamic.records"))}</option>`,
-      )
-      .join("");
-    dialog.innerHTML = `<div class="dh"><div><span class="section-label">${esc(tr("works.jsonl_organization"))}</span><h2 class="dialog-title">${esc(tr("works.separate_works_title"))}</h2><div class="dialog-subtitle">${esc(tr("works.separate_works_help"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db separate-works-body"><div class="field"><label>${esc(tr("works.source_jsonl"))}</label><select class="control" id="separateWorksSource">${options}</select></div><div id="separateWorksList" class="separate-works-list"></div><label class="check-item"><input type="checkbox" id="separateWorksRemove"><span>${esc(tr("works.remove_separated"))}</span></label><div class="info">${esc(tr("works.separate_nondestructive_help"))}</div></div><div class="da"><button class="btn" data-close>${esc(tr("ui.cancel"))}</button><button class="btn primary" id="separateWorksCreate">${esc(tr("works.separate_selected"))}</button></div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    const source = () =>
-      state.files.find(
-        (file: Any) => file.id === dialog.querySelector("#separateWorksSource").value,
-      );
-    const renderList = () => {
-      const file = source();
-      const groups = new Map();
-      for (const record of file?.records || []) {
-        const work =
-          String(record?.work || record?.document_title || "").trim() || tr("works.untitled");
-        if (!groups.has(work)) groups.set(work, []);
-        groups.get(work).push(record);
-      }
-      dialog.querySelector("#separateWorksList").innerHTML = [...groups.entries()]
-        .map(
-          ([work, records]) =>
-            `<label class="separate-work-row"><input type="checkbox" data-separate-work="${esc(work)}" ${work === tr("works.untitled") ? "" : "checked"}><span><b>${esc(work)}</b><small>${records.length.toLocaleString()} ${esc(tr("dynamic.records"))}</small></span></label>`,
-        )
-        .join("");
-    };
-    dialog.querySelector("#separateWorksSource").addEventListener("change", renderList);
-    renderList();
-    dialog.querySelector("#separateWorksCreate").onclick = async () => {
-      const file = source();
-      const selected = [...dialog.querySelectorAll("[data-separate-work]:checked")].map(
-        (box) => box.dataset.separateWork,
-      );
-      if (!selected.length) return toast(tr("works.select_at_least_one"));
-      const selectedSet = new Set(selected);
-      const created = [];
-      for (const work of selected) {
-        const records = file.records
-          .filter(
-            (record: Any) =>
-              (String(record?.work || record?.document_title || "").trim() ||
-                tr("works.untitled")) === work,
-          )
-          .map(cloneAuditValue);
-        if (!records.length) continue;
-        const stem =
-          work
-            .replace(/[^a-z0-9]+/gi, "-")
-            .replace(/^-|-$/g, "")
-            .slice(0, 80) || "untitled-work";
-        const derived = {
-          id: uid(),
-          name: `${stem}.jsonl`,
-          records,
-          errors: [],
-          dirty: new Set(),
-          imported_at: new Date().toISOString(),
-          derived_from: { type: "work_separation", source_file: file.name, work },
+    if (!eligible.length) return toast(tr("works.no_multi_work_jsonl"), { tone: "warning" });
+    openSeparateWorksDialog({
+      sources: eligible.map((file: Any) => {
+        const groups = new Map<string, number>();
+        for (const record of file.records) {
+          const work = workKey(record);
+          groups.set(work, (groups.get(work) || 0) + 1);
+        }
+        return {
+          id: file.id,
+          name: file.name,
+          recordCount: file.records.length,
+          groups: [...groups].map(([work, count]) => ({
+            work,
+            count,
+            defaultChecked: work !== tr("works.untitled"),
+          })),
         };
-        state.files.push(derived);
-        await persistFileNow(derived);
-        created.push(derived);
-      }
-      if (dialog.querySelector("#separateWorksRemove").checked) {
-        file.records = file.records.filter(
-          (record: Any) =>
-            !selectedSet.has(
-              String(record?.work || record?.document_title || "").trim() || tr("works.untitled"),
-            ),
-        );
-        file.dirty = new Set(file.records.map((_: Any, index: Any) => index));
-        await persistFileNow(file);
-      }
-      if (created.length) state.activeFileId = created[0].id;
-      close();
-      corpusCache.fields = null;
-      persistPrefs();
-      shell();
-      renderView();
-      toast(trf("works.created_tabs", { count: created.length }), {
-        tone: "success",
-      });
-    };
+      }),
+      confirm: async ({ fileId, works: selected, removeFromSource }) => {
+        const file = state.files.find((item: Any) => item.id === fileId);
+        if (!file) return;
+        const selectedSet = new Set(selected);
+        const created = [];
+        for (const work of selected) {
+          const records = file.records
+            .filter(
+              (record: Any) =>
+                (String(record?.work || record?.document_title || "").trim() ||
+                  tr("works.untitled")) === work,
+            )
+            .map(cloneAuditValue);
+          if (!records.length) continue;
+          const stem =
+            work
+              .replace(/[^a-z0-9]+/gi, "-")
+              .replace(/^-|-$/g, "")
+              .slice(0, 80) || "untitled-work";
+          const derived = {
+            id: uid(),
+            name: `${stem}.jsonl`,
+            records,
+            errors: [],
+            dirty: new Set(),
+            imported_at: new Date().toISOString(),
+            derived_from: { type: "work_separation", source_file: file.name, work },
+          };
+          state.files.push(derived);
+          await persistFileNow(derived);
+          created.push(derived);
+        }
+        if (removeFromSource) {
+          file.records = file.records.filter(
+            (record: Any) =>
+              !selectedSet.has(
+                String(record?.work || record?.document_title || "").trim() || tr("works.untitled"),
+              ),
+          );
+          file.dirty = new Set(file.records.map((_: Any, index: Any) => index));
+          await persistFileNow(file);
+        }
+        if (created.length) state.activeFileId = created[0].id;
+        corpusCache.fields = null;
+        persistPrefs();
+        shell();
+        renderView();
+        toast(trf("works.created_tabs", { count: created.length }), {
+          tone: "success",
+        });
+      },
+    });
   }
   return {
     openMixedWorkValuesDialog,

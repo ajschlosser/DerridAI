@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { toast } from "../composables/notifications";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
@@ -382,7 +383,7 @@ async function checkPolicyJob(jobId: string): Promise<boolean> {
       if (job.status === "completed") {
         await refreshLanguages();
         await loadContentPolicy(String(job.result?.code || selectedCode.value));
-        runtime.notifyToast?.(i18n.t("language.content_policy_generated"), { tone: "success" });
+        toast(i18n.t("language.content_policy_generated"), { tone: "success" });
       } else if (job.status === "failed") {
         error.value = job.stage_detail || i18n.t("language.content_policy_missing_help");
       }
@@ -434,7 +435,7 @@ async function generateContentPolicy() {
     });
     policyJob.value = created;
     runtime.registerExternalJob?.(created);
-    runtime.notifyToast?.(i18n.t("language.content_policy_generating"), { tone: "info" });
+    toast(i18n.t("language.content_policy_generating"), { tone: "info" });
     monitorPolicy(created.id);
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
@@ -465,7 +466,7 @@ async function saveContentPolicy() {
       contextual_terms: contentPolicy.value.contextual_terms || [],
     });
     await refreshLanguages();
-    runtime.notifyToast?.(i18n.t("language.content_policy_saved"), { tone: "success" });
+    toast(i18n.t("language.content_policy_saved"), { tone: "success" });
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -562,7 +563,7 @@ async function importDictionary(event: Event) {
       ...current.value,
       dictionary: { ...current.value.dictionary, ...Object.fromEntries(entries) },
     };
-    runtime.notifyToast?.(i18n.tf("language.imported", { count: entries.length }), {
+    toast(i18n.tf("language.imported", { count: entries.length }), {
       tone: "success",
     });
   } catch (exc) {
@@ -604,7 +605,7 @@ async function save() {
         detail: { source: "language-save", code: current.value.code },
       }),
     );
-    runtime.notifyToast?.(i18n.t("language.saved"), {
+    toast(i18n.t("language.saved"), {
       tone: "success",
     });
     return true;
@@ -658,14 +659,14 @@ async function checkInstallJob(jobId: string): Promise<boolean> {
         const fallbackCount = Number(job.result?.fallback_count || job.result?.failed_count || 0);
         if (fallbackCount > 0) {
           statusFilter.value = "review";
-          runtime.notifyToast?.(
+          toast(
             i18n.tf("language.installed_with_fallbacks", {
               count: fallbackCount.toLocaleString(i18n.locale),
             }),
             { tone: "warning" },
           );
         } else {
-          runtime.notifyToast?.(i18n.t("language.translation_complete"), { tone: "success" });
+          toast(i18n.t("language.translation_complete"), { tone: "success" });
         }
         resumeJobId.value = "";
       } else if (job.status === "failed") {
@@ -673,7 +674,7 @@ async function checkInstallJob(jobId: string): Promise<boolean> {
           message: job.stage_detail || i18n.t("language.translation_failed"),
         });
       } else if (job.result?.resumable) {
-        runtime.notifyToast?.(i18n.t("language.partial_translation_restored"), { tone: "info" });
+        toast(i18n.t("language.partial_translation_restored"), { tone: "info" });
       }
       return true;
     }
@@ -837,7 +838,7 @@ async function installLanguage() {
     installOpen.value = false;
     installJob.value = created;
     runtime.registerExternalJob?.(created);
-    runtime.notifyToast?.(
+    toast(
       i18n.t(
         wasResume ? "language.translation_resumed" : "language.translation_started_modern",
         wasResume
@@ -890,7 +891,7 @@ async function confirmRemoveLanguage() {
       }),
     );
     await load(languages.value[0]?.code || "en-US");
-    runtime.notifyToast?.(i18n.t("language.removed"), { tone: "success" });
+    toast(i18n.t("language.removed"), { tone: "success" });
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   }

@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { assertionSummaries, assertionValues } from "./fieldAssertions";
+import { toast } from "../composables/notifications";
 
 // Evidence and review selection: which workspace/database records are picked as Research evidence or marked for review.
 // Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -20,7 +21,6 @@ type Helper =
   | "recordDbStatus"
   | "shellRefreshHook"
   | "storeReceipt"
-  | "toast"
   | "tr"
   | "trf";
 type Deps = { state: Loose } & Record<Helper, Fn>;
@@ -37,7 +37,6 @@ export function createEvidenceSelection(deps: Deps) {
     recordDbStatus,
     shellRefreshHook,
     storeReceipt,
-    toast,
     tr,
     trf,
   } = deps;
@@ -122,7 +121,7 @@ export function createEvidenceSelection(deps: Deps) {
   function toggleWorkspaceEvidence(file: Any, index: Any) {
     if (!hasCapability("evidence.select")) {
       toast(tr("permissions.evidence_denied"), {
-        tone: "warn",
+        tone: "warning",
       });
       return;
     }
@@ -170,7 +169,7 @@ export function createEvidenceSelection(deps: Deps) {
   function toggleDbEvidence(collection: Any, id: Any, record: Any = {}) {
     if (!hasCapability("evidence.select")) {
       toast(tr("permissions.evidence_denied"), {
-        tone: "warn",
+        tone: "warning",
       });
       return;
     }
@@ -208,7 +207,7 @@ export function createEvidenceSelection(deps: Deps) {
   function clearSelectedEvidence() {
     if (!hasCapability("evidence.select")) {
       toast(tr("permissions.evidence_denied"), {
-        tone: "warn",
+        tone: "warning",
       });
       return;
     }

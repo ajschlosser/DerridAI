@@ -1,6 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
-import { inferNotificationTone, notify } from "../composables/notifications";
 import { esc } from "./html";
 import {
   dockCollapsedSummary,
@@ -33,7 +32,6 @@ type Helper =
   | "persistPrefs"
   | "removeFinishedJob"
   | "tr"
-  | "translateDynamicUiValue"
   | "trf"
   | "uid";
 type Deps = { state: Loose } & Record<Helper, Fn>;
@@ -51,7 +49,6 @@ export function createOperationDock(deps: Deps) {
     persistPrefs,
     removeFinishedJob,
     tr,
-    translateDynamicUiValue,
     trf,
     uid,
   } = deps;
@@ -60,11 +57,6 @@ export function createOperationDock(deps: Deps) {
   let operationDockResizeWired = false;
   function operationDockIsDocked() {
     return document.documentElement?.dataset?.operationsDockMode === "docked";
-  }
-  /** A shim over the Vue notification host; callers still pass free text and an optional tone. */
-  function toast(message: Any, { tone = "auto", duration = null }: Any = {}) {
-    const text = translateDynamicUiValue(String(message ?? ""));
-    notify(text, inferNotificationTone(text, tone), { duration });
   }
   function applyOperationStackPosition(stack: Any) {
     if (!stack) return;
@@ -585,7 +577,6 @@ export function createOperationDock(deps: Deps) {
     updateOperationStackCount();
   }
   return {
-    toast,
     applyOperationStackPosition,
     setOperationDockMinimized,
     announceOperationDock,

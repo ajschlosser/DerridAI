@@ -8,7 +8,7 @@ export interface Notification {
   tone: NotificationTone;
 }
 export interface NotifyOptions {
-  /** Milliseconds before dismissal; defaults to a time scaled to the message length. */
+  /** Milliseconds before dismissal; defaults to a time scaled to the message length (errors stay). */
   duration?: number | null;
 }
 
@@ -26,20 +26,6 @@ let nextId = 1;
  */
 export function notificationDuration(message: string): number {
   return Math.min(20_000, Math.max(4_200, message.length * 70));
-}
-
-/**
- * The tone of a message from the legacy runtime, which passed free text and loose tone names. An
- * explicit success, warning or danger tone wins (copied record text may itself contain words like
- * "error"); anything else reads failure wording and HTTP statuses from the text, as the legacy
- * toast did.
- */
-export function inferNotificationTone(message: string, tone = "auto"): NotificationTone {
-  if (tone === "success" || tone === "danger" || tone === "warning") return tone;
-  if (tone === "warn") return "warning";
-  return /\bHTTP\s+\d{3}\b/i.test(message) || /\b(failed|could not|error)\b/i.test(message)
-    ? "danger"
-    : "info";
 }
 
 function schedule(id: number) {
@@ -69,9 +55,24 @@ export function notify(
     dismiss(dropped.id);
   }
   notifications.value = [...notifications.value, { id, message, tone }];
-  durations.set(id, options.duration ?? notificationDuration(message));
+  // An error stays until it is dismissed (button or Escape): disappearing on a timer would take it
+  // from people who read slowly or use a screen reader (WCAG 2.2.1).
+  const duration =
+    options.duration ?? (tone === "danger" ? undefined : notificationDuration(message));
+  if (duration !== undefined) durations.set(id, duration);
   schedule(id);
   return id;
+}
+
+/**
+ * Show a message. The tone is always stated by the caller: it is announced to assistive technology
+ * and shown beside the message, so it is never guessed from (language-specific) wording.
+ */
+export function toast(
+  message: string,
+  { tone = "info", duration = null }: { tone?: NotificationTone; duration?: number | null } = {},
+) {
+  return notify(message, tone, { duration });
 }
 
 export function dismiss(id: number) {

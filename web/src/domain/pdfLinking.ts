@@ -1,4 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
 // Linking PDF pages to workspace records: which pages a record cites, which records a page cites, and loading a PDF's
 // metadata. Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as
@@ -14,11 +16,9 @@ type Helper =
   | "allRows"
   | "applyRecordChanges"
   | "normalizePdfLinkChanges"
-  | "openMessageModal"
   | "pdfLinks"
   | "renderView"
   | "shell"
-  | "toast"
   | "tr"
   | "trf";
 type Deps = { state: Loose } & Record<Helper, Fn>;
@@ -29,11 +29,9 @@ export function createPdfLinking(deps: Deps) {
     allRows,
     applyRecordChanges,
     normalizePdfLinkChanges,
-    openMessageModal,
     pdfLinks,
     renderView,
     shell,
-    toast,
     tr,
     trf,
   } = deps;
@@ -89,7 +87,8 @@ export function createPdfLinking(deps: Deps) {
     );
   }
   function openLoadedPdfPage(page: Any) {
-    if (!state.pdf.doc && !state.pdf.file) return toast(tr("pdf.link.open_first_explorer"));
+    if (!state.pdf.doc && !state.pdf.file)
+      return toast(tr("pdf.link.open_first_explorer"), { tone: "warning" });
     const max = state.pdf.doc?.numPages || Number(page) || 1;
     state.pdf.page = Math.max(1, Math.min(max, Number(page) || 1));
     state.pdf.text = "";
@@ -106,7 +105,7 @@ export function createPdfLinking(deps: Deps) {
     );
   }
   async function linkPdfPage(file: Any, index: Any, page: Any) {
-    if (!state.pdf.name) return toast(tr("pdf.link.open_first"));
+    if (!state.pdf.name) return toast(tr("pdf.link.open_first"), { tone: "warning" });
     const record = file.records[index];
     let links = pdfLinks(record);
     const target = { pdf_file: state.pdf.name, pdf_page: Number(page) };
@@ -116,10 +115,10 @@ export function createPdfLinking(deps: Deps) {
           link.pdf_file === target.pdf_file && Number(link.pdf_page) === target.pdf_page,
       )
     )
-      return toast(trf("pdf.link.already", { page }));
+      return toast(trf("pdf.link.already", { page }), { tone: "warning" });
     if (links.length && links.some((link: Any) => link.pdf_file !== target.pdf_file)) {
       if (
-        !(await openMessageModal({
+        !(await openMessageDialog({
           title: tr("pdf.link.replace_title"),
           message: trf("pdf.link.replace_message", {
             current: links[0].pdf_file,
@@ -139,7 +138,9 @@ export function createPdfLinking(deps: Deps) {
     });
     shell();
     renderView();
-    toast(count ? trf("pdf.link.linked", { page }) : tr("pdf.link.unchanged"));
+    toast(count ? trf("pdf.link.linked", { page }) : tr("pdf.link.unchanged"), {
+      tone: count ? "success" : "info",
+    });
   }
   function unlinkPdfLink(file: Any, index: Any, link: Any, { stayInPdf = false } = {}) {
     const record = file?.records?.[index];
@@ -149,7 +150,7 @@ export function createPdfLinking(deps: Deps) {
       (item: Any) =>
         !(item.pdf_file === link.pdf_file && Number(item.pdf_page) === Number(link.pdf_page)),
     );
-    if (next.length === links.length) return toast(tr("pdf.link.not_found"));
+    if (next.length === links.length) return toast(tr("pdf.link.not_found"), { tone: "danger" });
     const count = applyRecordChanges(file, index, normalizePdfLinkChanges(record, next), {
       source: "pdf_unlink",
     });
@@ -165,17 +166,20 @@ export function createPdfLinking(deps: Deps) {
             page: link.pdf_page,
           })
         : tr("pdf.link.unchanged"),
+      { tone: count ? "success" : "info" },
     );
   }
   function unlinkAllPdfLinks(file: Any, index: Any) {
     const record = file?.records?.[index];
-    if (!record || !pdfLinks(record).length) return toast(tr("pdf.link.none"));
+    if (!record || !pdfLinks(record).length) return toast(tr("pdf.link.none"), { tone: "warning" });
     const count = applyRecordChanges(file, index, normalizePdfLinkChanges(record, []), {
       source: "pdf_unlink",
     });
     shell();
     renderView();
-    toast(count ? tr("pdf.link.all_removed") : tr("pdf.link.none_changed"));
+    toast(count ? tr("pdf.link.all_removed") : tr("pdf.link.none_changed"), {
+      tone: count ? "success" : "info",
+    });
   }
   return {
     pdfDisplayTitle,

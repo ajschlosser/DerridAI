@@ -197,25 +197,41 @@ export function createRecordPresenters(deps: Deps) {
     const count = uniqueWorkValues(rows, field).length;
     return `<button type="button" class="mixed-value-inspect ${compact ? "compact" : ""}" data-inspect-mixed-field="${esc(field)}" aria-label="${esc(trf("works.inspect_mixed_aria", { count, field: label(field) }))}"><span>${esc(tr("works.mixed"))}</span><b>${count}</b><small>${esc(tr("works.unique_values"))}</small></button>`;
   }
-  function workMetadataControl(field: string, rows: Loose[]) {
+  /**
+   * Describes the editor for one work-metadata field. The kind follows the same rule
+   * `parseWorkMetadataValue` uses to read the value back, so the control and its parser agree.
+   */
+  function workMetadataControlSpec(field: string, rows: Loose[]) {
     const { mixed, value } = commonWorkValue(rows, field);
     const exemplar = rows
       .map((row) => row.record[field])
       .find((value) => value !== undefined && value !== null);
     const current = mixed ? "" : value;
-    let control;
+    let kind: "boolean" | "json" | "number" | "textarea" | "text";
+    let initial = "";
     if (typeof exemplar === "boolean" || field === "document_is_translation") {
-      control = `<select class="control work-meta-value" data-work-meta-value="${esc(field)}"><option value="" ${mixed || current == null ? "selected" : ""}>${esc(mixed ? tr("works.mixed_leave_unchanged") : tr("works.unset"))}</option><option value="true" ${current === true ? "selected" : ""}>true</option><option value="false" ${current === false ? "selected" : ""}>false</option></select>`;
+      kind = "boolean";
+      initial = current === true ? "true" : current === false ? "false" : "";
     } else if (Array.isArray(exemplar) || (exemplar && typeof exemplar === "object")) {
-      control = `<textarea class="work-meta-value work-meta-json" data-work-meta-value="${esc(field)}" placeholder='${esc(mixed ? tr("works.mixed_values_json") : tr("works.json_value"))}'>${mixed ? "" : esc(JSON.stringify(current ?? [], null, 2))}</textarea>`;
-    } else if (typeof exemplar === "number" || ["year", "publication_year"].includes(field)) {
-      control = `<input class="control work-meta-value" data-work-meta-value="${esc(field)}" type="number" value="${mixed ? "" : esc(current ?? "")}" placeholder="${mixed ? esc(tr("works.mixed_values")) : ""}">`;
-    } else if (field === "full_citation" || field === "edition") {
-      control = `<textarea class="work-meta-value" data-work-meta-value="${esc(field)}" placeholder="${mixed ? esc(tr("works.mixed_values")) : ""}">${mixed ? "" : esc(current ?? "")}</textarea>`;
+      kind = "json";
+      initial = mixed ? "" : JSON.stringify(current ?? [], null, 2);
     } else {
-      control = `<input class="control work-meta-value" data-work-meta-value="${esc(field)}" value="${mixed ? "" : esc(current ?? "")}" placeholder="${mixed ? esc(tr("works.mixed_values")) : ""}">`;
+      kind =
+        typeof exemplar === "number" || ["year", "publication_year"].includes(field)
+          ? "number"
+          : field === "full_citation" || field === "edition"
+            ? "textarea"
+            : "text";
+      initial = mixed ? "" : String(current ?? "");
     }
-    return `<div class="work-meta-row"><label class="work-meta-apply"><input type="checkbox" data-work-meta-apply="${esc(field)}"><span>${esc(tr("ui.apply"))}</span></label><div class="work-meta-field"><b>${esc(label(field))}</b>${mixed ? mixedWorkValueButton(rows, field, { compact: true }) : ""}</div>${control}</div>`;
+    return {
+      field,
+      label: label(field),
+      kind,
+      mixed: Boolean(mixed),
+      mixedCount: mixed ? uniqueWorkValues(rows, field).length : 0,
+      initial,
+    };
   }
   function dashboardPieChart(
     series: Loose[],
@@ -488,7 +504,7 @@ export function createRecordPresenters(deps: Deps) {
     topRecordFieldValues,
     workInsightMetrics,
     mixedWorkValueButton,
-    workMetadataControl,
+    workMetadataControlSpec,
     dashboardPieChart,
     pieShareSeries,
     dashboardMetricBody,

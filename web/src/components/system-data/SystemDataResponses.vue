@@ -1,5 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { toast } from "../../composables/notifications";
+import { openMessageDialog } from "../../composables/messageDialog";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../AppIcon.vue";
@@ -115,7 +117,7 @@ async function load(offset = 0, updateRoute = true, push = false) {
 async function remove(record: DataRow) {
   const id = String(record.record_id || record.id || "");
   if (!id) return;
-  const approved = await runtime.openMessageModal({
+  const approved = await openMessageDialog({
     title: t("runtime.system_delete_response", "Delete saved response?"),
     message: String(record.question || id),
     tone: "danger",
@@ -130,14 +132,14 @@ async function remove(record: DataRow) {
         ? Math.max(0, page.value.offset - page.value.limit)
         : page.value.offset;
     await load(offset);
-    runtime.notifyToast(t("runtime.system_response_deleted", "Saved response deleted."));
+    toast(t("runtime.system_response_deleted", "Saved response deleted."), { tone: "success" });
   } catch (cause) {
-    runtime.notifyToast(cause instanceof Error ? cause.message : String(cause), { tone: "danger" });
+    toast(cause instanceof Error ? cause.message : String(cause), { tone: "danger" });
   }
 }
 
 async function clearAll() {
-  const approved = await runtime.openMessageModal({
+  const approved = await openMessageDialog({
     title: t("runtime.help.clear_rag_response_cache", "Clear saved responses?"),
     message: i18n.tf(
       "runtime.help.clear_rag_response_cache_message",
@@ -152,9 +154,9 @@ async function clearAll() {
   try {
     await systemApi.clearResponseCache();
     await load(0);
-    runtime.notifyToast(t("runtime.response_cache_cleared", "Saved responses cleared."));
+    toast(t("runtime.response_cache_cleared", "Saved responses cleared."), { tone: "success" });
   } catch (cause) {
-    runtime.notifyToast(cause instanceof Error ? cause.message : String(cause), { tone: "danger" });
+    toast(cause instanceof Error ? cause.message : String(cause), { tone: "danger" });
   }
 }
 

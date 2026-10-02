@@ -3,6 +3,8 @@
 import { mountOperationsPanel } from "../runtime/operationsPanelHost";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import { esc, icon } from "./html";
+import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
 // The operations panel host, the RAG progress panel and the corpus-builds home card: bridging the runtime's jobs to the
 // Vue operations panel, and the small HTML fragments the dashboard/RAG view render around it. Moved verbatim from the
@@ -24,7 +26,6 @@ type Helper =
   | "openJobDetails"
   | "openJobResults"
   | "openLlmTaskLauncher"
-  | "openMessageModal"
   | "operationViewModel"
   | "persistPrefs"
   | "pruneClientJobState"
@@ -32,7 +33,6 @@ type Helper =
   | "ragGradeHtml"
   | "refreshJobs"
   | "showAppModal"
-  | "toast"
   | "tr"
   | "trf";
 type Deps = { state: Loose } & Record<Helper, Fn>;
@@ -61,7 +61,6 @@ export function createOperationsPanelBridge(deps: Deps) {
     openJobDetails,
     openJobResults,
     openLlmTaskLauncher,
-    openMessageModal,
     operationViewModel,
     persistPrefs,
     pruneClientJobState,
@@ -69,7 +68,6 @@ export function createOperationsPanelBridge(deps: Deps) {
     ragGradeHtml,
     refreshJobs,
     showAppModal,
-    toast,
     tr,
     trf,
   } = deps;
@@ -182,8 +180,8 @@ export function createOperationsPanelBridge(deps: Deps) {
     const job = state.jobs.find((item: Any) => item.id === jobId);
     if (!job) return pruneClientJobState(jobId);
     if (["queued", "running", "cancelling"].includes(job.status))
-      return toast(tr("rag.cancel_before_remove"));
-    const approved = await openMessageModal({
+      return toast(tr("rag.cancel_before_remove"), { tone: "warning" });
+    const approved = await openMessageDialog({
       title: tr("rag.remove_title"),
       message: trf("rag.remove_help", { status: job.status }),
       tone: "danger",
@@ -197,15 +195,15 @@ export function createOperationsPanelBridge(deps: Deps) {
       persistPrefs();
       refreshRagProgressPanel();
       if (state.view === "home") refreshOperationsPanelOnly();
-      toast(tr("rag.pipeline_removed"));
+      toast(tr("rag.pipeline_removed"), { tone: "success" });
     } catch (error: Any) {
       if (String(error?.message || "").includes("404")) {
         pruneClientJobState(jobId);
         persistPrefs();
         refreshRagProgressPanel();
-        return toast(tr("rag.already_removed"));
+        return toast(tr("rag.already_removed"), { tone: "warning" });
       }
-      openMessageModal({
+      openMessageDialog({
         title: tr("rag.remove_failed"),
         message: error.message,
         tone: "danger",
@@ -216,9 +214,9 @@ export function createOperationsPanelBridge(deps: Deps) {
     const finished = state.jobs.filter(
       (job: Any) => job.type === "rag" && !["queued", "running", "cancelling"].includes(job.status),
     );
-    if (!finished.length) return toast(tr("rag.none_to_clear"));
+    if (!finished.length) return toast(tr("rag.none_to_clear"), { tone: "warning" });
     if (
-      !(await openMessageModal({
+      !(await openMessageDialog({
         title: tr("rag.clear_past_title"),
         message: trf("rag.clear_past_help", { count: finished.length }),
         tone: "danger",
@@ -245,6 +243,7 @@ export function createOperationsPanelBridge(deps: Deps) {
       failed
         ? trf("rag.cleared_past_failed", { count: removed, failed })
         : trf("rag.cleared_past", { count: removed }),
+      { tone: failed ? "warning" : "success" },
     );
   }
   function ragProgressPanelHtml() {

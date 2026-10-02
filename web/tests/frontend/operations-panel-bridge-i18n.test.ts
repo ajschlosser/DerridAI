@@ -39,7 +39,6 @@ function presenters(locale: "en" | "fr") {
     openJobDetails: () => ({}),
     openJobResults: () => ({}),
     openLlmTaskLauncher: () => ({}),
-    openMessageModal: () => ({}),
     operationViewModel: () => ({}),
     persistPrefs: () => ({}),
     pruneClientJobState: () => ({}),
