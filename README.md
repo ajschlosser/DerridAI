@@ -51,7 +51,7 @@ SourceDocument
 
 This means an answer can be audited backward from a generated claim to its support, evidence, record revision, source span, and source document. Embeddings, retrieval rank, reranker scores, caches, UI state, and other operation-specific values remain derived state; they do not become intrinsic properties of the source record.
 
-See [SPECIFICATION.md](SPECIFICATION.md) for the normative cELF 1.0 specification and its non-normative DerridAI white paper.
+See [SPECIFICATION.md](SPECIFICATION.md) for the normative cELF 1.0 specification.
 
 ## Architecture
 
@@ -269,7 +269,7 @@ Start with the documents describing current behavior:
 
 - [User Guide](docs/USER_GUIDE.md) — feature and workflow reference
 - [Architecture](docs/ARCHITECTURE.md) — runtime boundaries, authority, persistence, and data flow
-- [cELF 1.0 specification](SPECIFICATION.md) — normative information model and reference-implementation white paper
+- [cELF 1.0 specification](SPECIFICATION.md) — normative information model and conformance requirements
 - [Project context](docs/PROJECT_CONTEXT.md) — scholarly rationale and implemented-versus-intended capabilities
 - [GraphQL](docs/GRAPHQL.md) — read-only cELF query façade
 - [Realtime](docs/REALTIME.md) — WebSocket notification protocol and resynchronization

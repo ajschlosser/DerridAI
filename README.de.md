@@ -51,7 +51,7 @@ SourceDocument
 
 Damit kann ein generierter Claim rückwärts über Support, Evidenz, Record-Revision und SourceSpan bis zum SourceDocument auditiert werden. Embeddings, Retrieval-Ränge, Reranker-Scores, Caches, UI-Zustand und andere operationsspezifische Werte bleiben abgeleiteter Zustand und werden nicht zu intrinsischen Eigenschaften des Quell-Records.
 
-Siehe [SPECIFICATION.md](SPECIFICATION.md) für die normative cELF-1.0-Spezifikation und das nicht normative DerridAI-Whitepaper.
+Siehe [SPECIFICATION.md](SPECIFICATION.md) für die normative cELF-1.0-Spezifikation.
 
 ## Architektur
 
@@ -265,7 +265,7 @@ Für Browser-Coverage, Storybook, CI-Parität und Beitragsregeln siehe [CONTRIBU
 
 - [User Guide](docs/USER_GUIDE.md) — Funktionen und Workflows
 - [Architecture](docs/ARCHITECTURE.md) — Laufzeitgrenzen, Autorität, Persistenz und Datenfluss
-- [cELF-1.0-Spezifikation](SPECIFICATION.md) — normatives Informationsmodell und Referenzimplementierungs-Whitepaper
+- [cELF-1.0-Spezifikation](SPECIFICATION.md) — normatives Informationsmodell und Konformitätsanforderungen
 - [Project Context](docs/PROJECT_CONTEXT.md) — wissenschaftliche Begründung und implementierte/geplante Fähigkeiten
 - [GraphQL](docs/GRAPHQL.md) — read-only cELF-Abfragefassade
 - [Realtime](docs/REALTIME.md) — WebSocket-Protokoll und Resynchronisierung

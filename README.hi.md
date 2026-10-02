@@ -51,7 +51,7 @@ SourceDocument
 
 इससे generated claim को उसके support, evidence, record revision, source span और source document तक पीछे audit किया जा सकता है। Embeddings, retrieval rank, reranker scores, caches, UI state और अन्य operation-specific values derived state रहते हैं; वे source record की intrinsic properties नहीं बनते।
 
-Normative cELF 1.0 specification और non-normative DerridAI white paper के लिए [SPECIFICATION.md](SPECIFICATION.md) देखें।
+Normative cELF 1.0 specification के लिए [SPECIFICATION.md](SPECIFICATION.md) देखें।
 
 ## Architecture
 
@@ -265,7 +265,7 @@ Browser coverage, Storybook, CI parity और contribution rules के लि�
 
 - [User Guide](docs/USER_GUIDE.md) — features और workflows
 - [Architecture](docs/ARCHITECTURE.md) — runtime boundaries, authority, persistence और data flow
-- [cELF 1.0 specification](SPECIFICATION.md) — normative information model और reference-implementation white paper
+- [cELF 1.0 specification](SPECIFICATION.md) — normative information model और conformance requirements
 - [Project context](docs/PROJECT_CONTEXT.md) — scholarly rationale और implemented/intended capabilities
 - [GraphQL](docs/GRAPHQL.md) — read-only cELF query façade
 - [Realtime](docs/REALTIME.md) — WebSocket protocol और resynchronization

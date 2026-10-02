@@ -51,7 +51,7 @@ SourceDocument
 
 وهذا يسمح بتدقيق الادعاء المولد رجوعاً إلى support والدليل ومراجعة السجل وsource span ثم source document. أما embeddings وretrieval rank وreranker scores وcaches وحالة UI وغيرها من القيم الخاصة بالعملية فتبقى حالة مشتقة، ولا تصبح خصائص ذاتية للسجل المصدر.
 
-راجع [SPECIFICATION.md](SPECIFICATION.md) للاطلاع على مواصفة cELF 1.0 المعيارية والورقة التقنية التفسيرية غير المعيارية الخاصة بـ DerridAI.
+راجع [SPECIFICATION.md](SPECIFICATION.md) للاطلاع على مواصفة cELF 1.0 المعيارية.
 
 ## البنية
 
@@ -265,7 +265,7 @@ npm run build
 
 - [User Guide](docs/USER_GUIDE.md) — الميزات وسير العمل
 - [Architecture](docs/ARCHITECTURE.md) — حدود التشغيل والسلطة والاستمرارية وتدفق البيانات
-- [cELF 1.0 specification](SPECIFICATION.md) — نموذج المعلومات المعياري وwhite paper للتطبيق المرجعي
+- [cELF 1.0 specification](SPECIFICATION.md) — نموذج المعلومات المعياري ومتطلبات المطابقة
 - [Project context](docs/PROJECT_CONTEXT.md) — الأساس البحثي والقدرات المنفذة/المقصودة
 - [GraphQL](docs/GRAPHQL.md) — واجهة قراءة cELF فقط
 - [Realtime](docs/REALTIME.md) — بروتوكول WebSocket وإعادة المزامنة

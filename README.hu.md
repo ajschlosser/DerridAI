@@ -51,7 +51,7 @@ SourceDocument
 
 Így egy generált állítás visszafelé auditálható a támogatásán, bizonyítékán, rekordrevízióján és source span-jén keresztül egészen a source documentig. Az embedding, retrieval rank, reranker score, cache, UI-állapot és más műveletspecifikus érték származtatott állapot marad; nem válik a forrásrekord belső tulajdonságává.
 
-A normatív cELF 1.0 specifikációt és a DerridAI nem normatív white paperét lásd a [SPECIFICATION.md](SPECIFICATION.md) fájlban.
+A normatív cELF 1.0 specifikációt lásd a [SPECIFICATION.md](SPECIFICATION.md) fájlban.
 
 ## Architektúra
 
@@ -265,7 +265,7 @@ Böngészős lefedettséghez, Storybookhoz, CI-paritáshoz és hozzájárulási 
 
 - [Felhasználói útmutató](docs/USER_GUIDE.md) — funkciók és workflow-k
 - [Architektúra](docs/ARCHITECTURE.md) — futásidejű határok, autoritás, perzisztencia és adatfolyam
-- [cELF 1.0 specifikáció](SPECIFICATION.md) — normatív információs modell és referencia-implementációs white paper
+- [cELF 1.0 specifikáció](SPECIFICATION.md) — normatív információs modell és megfelelőségi követelmények
 - [Projektkontekstus](docs/PROJECT_CONTEXT.md) — tudományos indoklás és implementált/tervezett képességek
 - [GraphQL](docs/GRAPHQL.md) — csak olvasható cELF query façade
 - [Realtime](docs/REALTIME.md) — WebSocket protokoll és reszinkronizáció
