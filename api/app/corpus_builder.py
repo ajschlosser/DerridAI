@@ -35,6 +35,7 @@ from .autonomous import Policy as AutonomousPolicy
 from .celf_conformance import evaluate_celf_conformance
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
+from .concurrency import capacity_coordinator, provider_capacity_key, provider_limit
 from .corpus_build_lifecycle import BuildLifecycleMixin
 from .corpus_editorial_memory import EditorialMemoryMixin
 from .corpus_enrichment_helpers import (
@@ -2813,6 +2814,15 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 "indexing"
             )
             attempt_state: dict[int, tuple[Any, str]] = {}
+            capacity_key = provider_capacity_key(
+                provider_profile_id=str(active_request.get("provider_profile_id") or "") or None,
+                provider=provider,
+                base_url=base_url,
+                model=model,
+            )
+            capacity_limit = provider_limit(
+                active_request.get("max_concurrent_requests"), default=1, maximum=64
+            )
 
             initial_note = ""
             if escalating:
@@ -2882,28 +2892,49 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
 
             def request_once(context: StructuredAttemptContext) -> str:
                 call_token, _ = attempt_state[context.attempt]
+
+                def cancelled() -> bool:
+                    return bool(build_id and self._cancelled(build_id))
+
+                def waiting(snapshot: Any) -> None:
+                    if build_id:
+                        self._increment_metric(build_id, "provider_capacity_waits")
+
                 try:
-                    return self._with_transport_retry(
-                        build_id,
-                        chat_complete,
-                        provider=provider,
-                        model=model,
-                        base_url=base_url,
-                        api_key=api_key,
-                        prompt=context.prompt,
-                        options=generation,
-                        json_mode=True,
-                        json_schema=schema,
-                        schema_name=schema_name,
-                        max_tokens=context.max_tokens,
-                        cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
-                        timeout_seconds=float(_stage_timeouts(active_request).get(timeout_key, 240)),
-                        on_delta=(
-                            (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
-                            if build_id
-                            else None
-                        ),
-                    )
+                    with capacity_coordinator.acquire(
+                        "provider_generation",
+                        capacity_key,
+                        capacity_limit,
+                        cancelled=cancelled if build_id else None,
+                        on_wait=waiting,
+                    ) as permit:
+                        if build_id and permit.waited_seconds > 0:
+                            self._increment_metric(
+                                build_id,
+                                "provider_capacity_wait_ms",
+                                int(round(permit.waited_seconds * 1000)),
+                            )
+                        return self._with_transport_retry(
+                            build_id,
+                            chat_complete,
+                            provider=provider,
+                            model=model,
+                            base_url=base_url,
+                            api_key=api_key,
+                            prompt=context.prompt,
+                            options=generation,
+                            json_mode=True,
+                            json_schema=schema,
+                            schema_name=schema_name,
+                            max_tokens=context.max_tokens,
+                            cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
+                            timeout_seconds=float(_stage_timeouts(active_request).get(timeout_key, 240)),
+                            on_delta=(
+                                (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
+                                if build_id
+                                else None
+                            ),
+                        )
                 finally:
                     self._note_llm_call_end(build_id, call_token)
 
