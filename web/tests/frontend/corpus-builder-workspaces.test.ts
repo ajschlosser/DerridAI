@@ -574,7 +574,7 @@ describe("review header", () => {
     expect(meter.attributes("value")).toBe("142");
     expect(wrapper.find(".run-slot").exists()).toBe(true);
     expect(wrapper.find(".review-status-shortcuts").exists()).toBe(false);
-    expect(wrapper.find(".corpus-review-queue-tabs").exists()).toBe(true);
+    expect(wrapper.find(".queue-controls").exists()).toBe(true);
     // Toolbar controls fall through from the header's attrs.
     expect(wrapper.find("#pdf-corpus-record-search").exists()).toBe(true);
     const views = wrapper.findAll(".review-view-option");
