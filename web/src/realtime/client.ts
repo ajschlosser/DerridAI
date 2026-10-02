@@ -10,7 +10,7 @@ import {
   type RealtimeEvent,
   type ServerFrame,
 } from "./protocol";
-import { clearGraphQLReadCache } from "../api/graphql/client";
+import { clearGraphQLReadCache, invalidateGraphQLReads } from "../api/graphql/client";
 
 export type RealtimeStatus =
   | "idle"
@@ -261,7 +261,17 @@ export class RealtimeClient {
     this.lastFrameAt = Date.now();
     if (this.status === "degraded") this.setStatus("connected");
     if (isResourceEvent(frame)) {
-      clearGraphQLReadCache();
+      if (frame.resource_type === "corpus_build") {
+        invalidateGraphQLReads({
+          buildId: frame.resource_id,
+          operations: ["CorpusReviewQueue", "CorpusMetadataFacets"],
+        });
+        if ("metadata" in frame.payload && frame.payload.metadata.record_id)
+          invalidateGraphQLReads({
+            buildId: frame.resource_id,
+            recordIds: [frame.payload.metadata.record_id],
+          });
+      } else clearGraphQLReadCache();
       this.deliver(frame);
       return;
     }

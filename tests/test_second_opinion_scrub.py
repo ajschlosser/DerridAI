@@ -232,6 +232,8 @@ CARRIES_RECORDS = {
 }
 # Routes that return only build-level state (status, counters, manifest) or start work.
 BUILD_LEVEL = {
+    # Projection repair returns only unfiltered counts/generations, not values or records.
+    ("POST", "/api/pdf/corpus-builds/{build_id}/review-queue/rebuild"),
     ("POST", "/api/pdf/corpus-builds"),
     # Returns only the build ID and its warning acknowledgements.
     ("POST", "/api/pdf/corpus-builds/{build_id}/warnings/acknowledge"),

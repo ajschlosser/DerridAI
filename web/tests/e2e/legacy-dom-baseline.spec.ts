@@ -796,6 +796,7 @@ const scenarios: Scenario[] = [
   },
   {
     name: "dialog-ocr-cleanup",
+    contains: ["Clean OCR Artifacts"],
     load: true,
     target: "dialog",
     steps: openDialogFromRecords("Clean OCR Artifacts"),

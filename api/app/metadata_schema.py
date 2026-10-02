@@ -109,7 +109,7 @@ DEFAULT_EQUIVALENCE_PROFILES: dict[str, EquivalenceProfile] = {
 RESERVED_NAMES = (
     set(CORE_FIELDS) | set(SOURCE_BOUND_FIELDS) | set(MANIFEST_INHERITED_FIELDS)
     | {"language", "needs_review", "review_reason", "attribution_confidence", "semantic_classification_confidence", "extraction_quality",
-       "inline_citation", "full_citation", "metadata", "field_evidence", "field_assessments"}
+       "inline_citation", "full_citation", "metadata", "field_evidence", "field_assessments", "queue_state_version"}
 )
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,39}$")
 MAX_FIELDS = 60

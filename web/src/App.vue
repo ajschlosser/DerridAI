@@ -18,7 +18,10 @@ import AppNotifications from "./components/AppNotifications.vue";
 import MessageDialogHost from "./components/MessageDialogHost.vue";
 import RemoveWorkDialog from "./components/RemoveWorkDialog.vue";
 import SeparateWorksDialog from "./components/SeparateWorksDialog.vue";
+import BulkFieldEditorDialog from "./components/BulkFieldEditorDialog.vue";
 import MergeFilesDialog from "./components/MergeFilesDialog.vue";
+import OcrCleanupDialog from "./components/OcrCleanupDialog.vue";
+import RecordHistoryDialog from "./components/RecordHistoryDialog.vue";
 import WorkMetadataEditorDialog from "./components/WorkMetadataEditorDialog.vue";
 import WorkMetadataLlmDialog from "./components/WorkMetadataLlmDialog.vue";
 import WorkMetadataProposalDialog from "./components/WorkMetadataProposalDialog.vue";
@@ -752,6 +755,9 @@ watch(
   <MixedWorkValuesDialog />
   <RemoveWorkDialog />
   <MergeFilesDialog />
+  <BulkFieldEditorDialog />
+  <OcrCleanupDialog />
+  <RecordHistoryDialog />
   <WorkMetadataEditorDialog />
   <WorkMetadataLlmDialog />
   <WorkMetadataProposalDialog />

@@ -194,7 +194,10 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] `workDialogs`: LLM metadata lookup dialog (`WorkMetadataLlmDialog.vue` + `composables/workMetadataLlmDialog.ts`; reuses `ProviderProfileSelect`; the job request stays in the legacy forwarder as a `start` callback; baseline `dialog-works-populate-all` retired)
   - [x] `workDialogs`: proposal-result dialog (`WorkMetadataProposalDialog.vue` + `composables/workMetadataProposalDialog.ts`; value parsing, grouping and `applyRecordChanges` stay in the forwarder's `apply` callback; `workflowProviderSelectHtml`/`workflowProviderSummaryHtml` deleted from the runtime). `workDialogs` is now fully ported
   - [x] `recordDialogs`: merge-files dialog (`MergeFilesDialog.vue` + `composables/mergeFilesDialog.ts`; the merge itself stays in the forwarder's `merge` callback; `mergeDialogHtml` and baseline `dialog-merge` retired)
-  - [ ] remaining `recordDialogs` (bulk field editor, OCR cleanup, record editor, store record editor, history browser, upsert queue), then `jobDialogs`
+  - [x] `recordDialogs`: bulk field editor (`BulkFieldEditorDialog.vue` + `composables/bulkFieldEditorDialog.ts`; the component owns scope/field/value state and prefill, the forwarder supplies `inspect` and an `apply` callback that parses, confirms and writes; `bulkFieldEditorHtml` deleted). Its "only different" checkbox was never read by the legacy handler (an edit always skips unchanged records) and is kept as it was
+  - [x] `recordDialogs`: OCR cleanup (`OcrCleanupDialog.vue` + `composables/ocrCleanupDialog.ts`; scope resolution and the confirmation stay in the forwarder's `choose` callback; `ocrCleanupDialogHtml` and baseline `dialog-ocr-cleanup` retired)
+  - [x] `recordDialogs`: record history browser (`RecordHistoryDialog.vue` + `composables/recordHistoryDialog.ts`; the component owns the version cursor, the forwarder supplies live `versions`, and `restore` / `restoreOriginal` / `clear` callbacks that do the restore, confirmation, refresh and toasts; `recordHistoryDialogHtml` deleted. Disabled-reason hints are `title`s now, not `decorateDisabledControls`)
+  - [ ] remaining `recordDialogs` (record editor, store record editor: both still build fields with the runtime's `fieldEditor`/`parseEditor` HTML; upsert queue), then `jobDialogs`
 - [ ] Step 4 state slices and deletion
 
 Notes for the next session:

@@ -48,6 +48,7 @@ interface CorpusReviewDecisionsOptions {
   advanceFrom: (recordId: string, removedIndex?: number) => Promise<void>;
   refreshBuild: () => Promise<void>;
   refreshRecords: (reset?: boolean, preferredId?: string) => Promise<void>;
+  reconcileRecords?: (recordIds: readonly string[]) => Promise<void>;
   focusFirstMetadataBlocker: () => void;
   setMessage: (message: string, tone?: MessageTone) => void;
   t: (key: string, fallback?: string) => string;
@@ -256,6 +257,8 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
 
         if (followingDecision)
           await options.restoreReviewViewport(viewport, { record: true, inspector: true });
+        if (options.currentBuild.value?.build_id === buildId)
+          await options.reconcileRecords?.([id]);
       },
       async () => {
         restoreAffectedRow(beforeSelected);

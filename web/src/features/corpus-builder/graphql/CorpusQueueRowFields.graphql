@@ -4,6 +4,7 @@
 fragment CorpusQueueRowFields on CorpusQueueRow {
   record_id
   record_revision
+  state_version
   page_start
   page_end
   text_length

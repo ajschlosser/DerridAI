@@ -5,6 +5,7 @@ from __future__ import annotations
 from graphql.error import GraphQLError
 
 from ..celf_queries.access import AccessDenied, InvalidQuery, NotFound
+from ..corpus_queue_projection import QueueCursorError, StaleQueueCursor
 
 
 class PublicError(Exception):
@@ -37,6 +38,10 @@ class Unavailable(PublicError):
     code = "UNAVAILABLE"
 
 
+class StaleCursor(PublicError):
+    code = "STALE_QUEUE_CURSOR"
+
+
 PUBLIC_EXCEPTIONS: tuple[type[Exception], ...] = (PublicError, AccessDenied, NotFound, InvalidQuery)
 
 
@@ -44,6 +49,10 @@ def translate(exc: Exception) -> Exception:
     """Map a domain exception onto the public error it should surface as."""
     if isinstance(exc, PublicError):
         return exc
+    if isinstance(exc, StaleQueueCursor):
+        return StaleCursor(str(exc))
+    if isinstance(exc, QueueCursorError):
+        return BadRequest(str(exc))
     if isinstance(exc, AccessDenied):
         return Forbidden(str(exc) or "Forbidden")
     if isinstance(exc, NotFound):

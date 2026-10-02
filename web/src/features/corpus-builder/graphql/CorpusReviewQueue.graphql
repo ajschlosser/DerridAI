@@ -5,6 +5,8 @@ query CorpusReviewQueue(
   $build_id: String!
   $offset: Int = 0
   $limit: Int = 50
+  $cursor: String
+  $direction: String = "forward"
   $needs_review: Boolean
   $disposition: String
   $metadata_incomplete: Boolean
@@ -16,6 +18,8 @@ query CorpusReviewQueue(
     review_queue(
       offset: $offset
       limit: $limit
+      cursor: $cursor
+      direction: $direction
       needs_review: $needs_review
       disposition: $disposition
       metadata_incomplete: $metadata_incomplete
@@ -29,6 +33,13 @@ query CorpusReviewQueue(
       total
       offset
       limit
+      topology_count
+      data_generation
+      topology_generation
+      next_cursor
+      previous_cursor
+      has_next_page
+      has_previous_page
       queue_counts {
         all
         ready

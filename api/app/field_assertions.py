@@ -62,7 +62,7 @@ _NON_ASSERTION_FIELDS = {
     "schema_version", "profile_id", "profile_version", "provider_profile_id",
     "provider", "model", "document_prompt_version", "segmentation_prompt_version",
     "metadata_prompt_version", "record_sizing_policy", "topology_quality",
-    "topology_index", "topology_count", "boundary_review", "boundary_suspicion",
+    "topology_index", "topology_count", "queue_state_version", "boundary_review", "boundary_suspicion",
     "corpus_build_details", "schema", "schema_id", "schema_hash", "schema_name",
     "human_touched_revision", "accepted_by", "autonomous_decision",
     "editorial_memory_used", "metadata_precedents_cache", "metadata_adjudication_prefills", "llm_rejections",
