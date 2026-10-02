@@ -173,8 +173,12 @@ Task branch for Step 1: `task/router-single-source-of-truth`
 - [x] Step 1.4 reconcile on settled route change (`router.afterEach` in `App.vue` using `runtime.viewForPath`)
 - [x] Step 1.5 equality early-return tightened (`navigateNative`)
 - [x] Step 1.6 tests: `tests/frontend/navigation-history.test.ts`, `tests/frontend/sidebar-startup.test.ts` (new describe), `tests/e2e/navigation-history.spec.ts`
-- [ ] Step 1.7 docs / release note (no USER_GUIDE change needed unless reviewers see a Back/Forward difference; release note when the version is cut)
-- [ ] Step 2 toasts and modals
+- [x] Step 1.7 Step 1 merged as PR #405 (no USER_GUIDE change; release note when the version is cut)
+- [ ] Step 2 toasts and modals (branch `task/toast-modal-vue-services`, worktree `../DerridAI-toasts`)
+  - [x] 2.1 `toast` is a shim over the existing `composables/notifications` host (`AppNotifications.vue`); tone inference, hover/focus pause, bounded stack
+  - [x] 2.2 `openMessageModal` is a shim over `composables/messageDialog` + `MessageDialogHost.vue` (native modal `<dialog role="alertdialog">`, queued, focus returns to the opener); Vitest + Storybook story
+  - [ ] 2.3 migrate the ~47 `notifyToast` / `runtime.toast` and `openMessageModal` call sites to the composables, then delete the shims (`notifyToast`, `toast`, `openMessageModal` in `runtime.js`/`runtimeBridge.ts`, and the `toast`/`openMessageModal` dependency wiring in `domain/*`)
+  - Known differences: toasts now stack (up to 5) instead of replacing one another, and the bold HTTP-status styling is gone. `legacy-dom-baseline` snapshots for settings/research were already stale on master (the "Automatic sizing" control); not regenerated here.
 - [ ] Step 3 routes and dialogs
 - [ ] Step 4 state slices and deletion
 

@@ -749,6 +749,7 @@
   "record.clear_history_confirm": "Clear history",
   "files.close_modified_title": "Close modified JSONL?",
   "files.close_modified_message": "{name} has modified records. Close anyway?",
+  "ui.notice": "Notice",
   "ui.ok": "OK",
   "runtime.auto_improve_changes": "Auto-improve changes",
   "runtime.auto_router": "Auto router",

@@ -1287,29 +1287,6 @@ body:has(dialog[open]) {
   color: var(--muted);
 }
 
-.toast {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 120;
-  padding: 10px 13px;
-  border-radius: 10px;
-  background: #202723;
-  color: var(--accent-on);
-  box-shadow: var(--shadow-md);
-  font-size: 0.75rem;
-  font-weight: 720;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: 0.18s;
-  pointer-events: auto;
-  user-select: text;
-  cursor: text;
-}
-.toast.show {
-  opacity: 1;
-  transform: none;
-}
 
 @media (max-width: 1100px) {
   :root {
@@ -6641,18 +6618,6 @@ select:disabled[data-disabled-reason] {
 }
 
 /* v0.22.0: operation feedback ------------------------------------------------ */
-.toast.failed {
-  background: #7f1d1d;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 14px 40px rgba(73, 13, 13, 0.28);
-}
-.toast.failed strong {
-  font-weight: 900;
-  color: var(--accent-on);
-}
-.toast.success {
-  background: #214d36;
-}
 
 /* v0.22.0: dashboard bar chart + navigable rankings ------------------------- */
 .dash-bars {
@@ -9461,17 +9426,6 @@ label,
 .accessible-empty-icon.tone-neutral {
   background: var(--soft);
   color: var(--muted);
-}
-#toast.toast {
-  left: 14px !important;
-  right: auto !important;
-  bottom: 14px !important;
-  max-width: min(430px, calc(100vw - 28px));
-  border-radius: 9px;
-  background: #17233b;
-  color: var(--accent-on);
-  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
-  font-size: 0.78125rem;
 }
 @media (max-width: 1250px) {
   :root {
@@ -14132,12 +14086,6 @@ button {
 }
 
 /* 0.35.5 — RAGety Anne: unified Research results, Response FAQ, and overlay order */
-#toast.toast {
-  z-index: 12000 !important;
-  max-width: min(480px, calc(100vw - 28px));
-  font-size: 0.8125rem !important;
-  line-height: 1.45 !important;
-}
 .operation-progress-stack {
   z-index: 11000 !important;
 }
@@ -14148,16 +14096,6 @@ button {
 /* Response FAQ presentation moved to native scoped components. */
 
 /* 0.35.10 maintenance — copyable notifications and overlays above shell chrome */
-#toast.toast {
-  z-index: 40000 !important;
-  pointer-events: auto !important;
-  user-select: text !important;
-  cursor: text !important;
-}
-#toast.toast:focus-visible {
-  outline: 3px solid rgba(255, 255, 255, 0.88);
-  outline-offset: 3px;
-}
 .operation-progress,
 .operation-progress-detail,
 .operation-toast-details,
@@ -16912,7 +16850,7 @@ html[data-color-scheme="dark"][data-contrast="more"] {
 ) {
   background: var(--surface-selected);
 }
-:where(.toast, .operation-progress) {
+:where(.operation-progress) {
   background: var(--surface-overlay);
   color: var(--text-primary);
   border: 1px solid var(--border-strong);

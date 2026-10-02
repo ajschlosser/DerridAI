@@ -866,7 +866,6 @@ const {
 const { openMessageModal, copyJsonToClipboard } = createModalDialogs({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  showAppModal: (...args) => showAppModal(...args),
   toast: (...args) => toast(...args),
 });
 const {
