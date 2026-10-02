@@ -13,7 +13,7 @@ import logging
 import re
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Executor, ThreadPoolExecutor
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -290,6 +290,7 @@ class MetadataEnrichmentExecutionMixin:
         next_text: str = "",
         build_id: str = "",
         stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None = None,
+        family_executor: Executor | None = None,
     ) -> dict[str, Any]:
         """Infer interpretive metadata through several small structured tasks.
 
@@ -524,7 +525,14 @@ class MetadataEnrichmentExecutionMixin:
         )
         record_id = str(record.get("record_id") or "")
         operation_events.note_record_metadata(build_id, record_id, "record_started", precedents_used=example_count)
-        stage_results = self._execute_metadata_tasks(record, request, tasks, build_id, stage_callback)
+        stage_results = self._execute_metadata_tasks(
+            record,
+            request,
+            tasks,
+            build_id,
+            stage_callback,
+            family_executor=family_executor,
+        )
         return self._reconcile_metadata_results(
             record,
             profile,
@@ -882,6 +890,8 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         self, record: dict[str, Any], request: dict[str, Any],
         tasks: list[tuple[str, str, type[BaseModel], int, str]], build_id: str,
         stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
+        *,
+        family_executor: Executor | None = None,
     ) -> list[tuple[str, dict[str, Any] | None, Exception | None]]:
         """Run metadata families with bounded overlap when their contracts are independent.
 
@@ -939,15 +949,23 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 # immutable during concurrent family execution. StructuredStageSession
                 # aggregates trace counters under its own lock and keeps call-local paths.
                 ensure_session()
-                with ThreadPoolExecutor(
-                    max_workers=workers,
-                    thread_name_prefix="pdf-corpus-family",
-                ) as pool:
-                    futures = [pool.submit(run_specs, [item]) for item in group]
+                if family_executor is not None:
+                    futures = [family_executor.submit(run_specs, [item]) for item in group]
                     # Consume in schema/task order even when providers finish out of order.
                     # Reconciliation therefore remains deterministic.
                     for future in futures:
                         results.extend(future.result())
+                else:
+                    # Direct/unit-level callers retain a bounded local executor. Build and
+                    # rerun orchestration pass one shared executor so Records steal from the
+                    # same family-work pool instead of creating N nested pools.
+                    with ThreadPoolExecutor(
+                        max_workers=workers,
+                        thread_name_prefix="pdf-corpus-family",
+                    ) as pool:
+                        futures = [pool.submit(run_specs, [item]) for item in group]
+                        for future in futures:
+                            results.extend(future.result())
         except InterruptedError:
             if isinstance(pipeline.get("session"), EnrichmentSession):
                 pipeline["session"].finish(cancelled=True)
