@@ -14,7 +14,11 @@ const build: any = {
   metadata_tasks_completed: 552,
   metadata_tasks_running: 3,
   metadata_tasks_queued: 426,
-  metadata_active_tasks: [{ record_id: "record-184", task: "quotation" }],
+  metadata_active_tasks: [
+    { record_id: "record-184", task: "quotation", started_at: "2026-10-01T18:08:01Z" },
+    { record_id: "record-185", task: "discourse", started_at: "2026-10-01T18:08:02Z" },
+    { record_id: "record-186", task: "indexing", started_at: "2026-10-01T18:08:03Z" },
+  ],
   build_events: [
     { at: "2026-10-01T18:00:00Z", stage: "preparing", status: "running", progress: 0.02 },
     {
@@ -36,8 +40,8 @@ const meta = {
     canResume: false,
     hasRecordTopology: true,
     readyCount: 36,
-    enrichingCount: 1,
-    preparingCount: 273,
+    enrichingCount: 3,
+    preparingCount: 271,
     attentionCount: 17,
     awaitingManifestReview: false,
     retryingSegmentation: false,
