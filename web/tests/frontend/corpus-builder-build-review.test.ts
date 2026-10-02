@@ -333,6 +333,28 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.emitted("reviewMetadata")).toBeUndefined();
   });
 
+  it("routes the primary Continue review action to the first actionable blocker", async () => {
+    const build: any = {
+      ...buildBase,
+      publication_readiness: {
+        ...buildBase.publication_readiness,
+        can_publish: false,
+        next_action: "review_records",
+        blockers: [
+          { code: "required_metadata", count: 3 },
+          { code: "record_attention", count: 2 },
+        ],
+      },
+    };
+    const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
+
+    await wrapper.get(".finish-primary button").trigger("click");
+
+    expect(wrapper.emitted("reviewMetadata")).toHaveLength(1);
+    expect(wrapper.emitted("reviewRecords")).toBeUndefined();
+    expect(wrapper.emitted("reviewIssues")).toBeUndefined();
+  });
+
   it("routes structural record-attention blockers to the Issues queue", async () => {
     const build: any = {
       ...buildBase,
