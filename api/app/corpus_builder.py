@@ -804,6 +804,26 @@ def _one_record_per_estimated_page(asset: dict[str, Any]) -> bool:
     return bool(detection.get("one_record_per_page", True))
 
 
+def _can_use_synthetic_record_pages(asset: dict[str, Any]) -> bool:
+    """Synthetic Record pages never replace physical or detected source pagination."""
+    media_kind = str(asset.get("media_kind") or "").lower()
+    if media_kind in {"pdf", "image", "audio"}:
+        return False
+    detection = asset.get("page_number_detection") if isinstance(asset.get("page_number_detection"), dict) else {}
+    return str(detection.get("status") or "") != "detected"
+
+
+def _apply_synthetic_record_pages(records: list[dict[str, Any]], records_per_page: int) -> None:
+    """Group Records into stable synthetic pages without rewriting source-span locators."""
+    per_page = max(1, int(records_per_page or 1))
+    for index, record in enumerate(records):
+        page = index // per_page + 1
+        record["page_start"] = page
+        record["page_end"] = page
+        record["synthetic_page"] = page
+        record["page_number_source"] = "record_grouping"
+
+
 class PdfCorpusRepository:
     def __init__(self, root: Path | None = None) -> None:
         self.root = root or corpus_root()
@@ -3591,10 +3611,26 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         boundaries = None
         if resume and not source_scope_repair and not previous_build.get("segmentation_blocked"):
             boundaries = self.repo.load_checkpoint(build_id, "boundaries")
-        page_records = _one_record_per_estimated_page(asset)
-        if page_records or not isinstance(boundaries, list):
+        topology_policy = request.get("topology_policy") if isinstance(request.get("topology_policy"), dict) else {}
+        fixed_unit_records = str(topology_policy.get("mode") or "semantic") == "source_units"
+        source_units_per_record = max(1, int(topology_policy.get("source_units_per_record") or 1))
+        records_per_page = (
+            max(1, int(topology_policy["records_per_page"]))
+            if topology_policy.get("records_per_page") is not None
+            else None
+        )
+        page_records = (
+            _one_record_per_estimated_page(asset)
+            and not fixed_unit_records
+            and records_per_page is None
+        )
+        if fixed_unit_records or page_records or not isinstance(boundaries, list):
             segmentation_clock = time.monotonic()
-            if page_records:
+            if fixed_unit_records:
+                from .corpus_segmentation import source_unit_record_boundaries
+
+                boundaries = source_unit_record_boundaries(source_blocks, source_units_per_record)
+            elif page_records:
                 from .corpus_segmentation import page_record_boundaries
 
                 boundaries = page_record_boundaries(semantic_blocks)
@@ -3616,7 +3652,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             or ""
         ).strip() or None
         sentence_report: dict[str, Any] = {}
-        if not page_records:
+        if not page_records and not fixed_unit_records:
             boundaries, sentence_report = snap_boundaries_to_sentences(
                 semantic_blocks,
                 boundaries,
@@ -3637,9 +3673,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         records = self.repo.load_records(build_id) if resume and not source_scope_repair else []
         if not records:
             records = _construct_records(asset, source_blocks, boundaries)
+            if records_per_page and _can_use_synthetic_record_pages(asset):
+                _apply_synthetic_record_pages(records, records_per_page)
             _mark_segmentation_review(records, list(self.repo.get_build(build_id).get("segmentation_unresolved_regions") or []))
-            boundary_suspect_count = annotate_boundary_suspects(
-                records, segmentation_language
+            boundary_suspect_count = (
+                0
+                if fixed_unit_records
+                else annotate_boundary_suspects(records, segmentation_language)
             )
             if boundary_suspect_count:
                 current_build = self.repo.get_build(build_id)
@@ -3734,6 +3774,11 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             current_build["topology_validation"] = topology_validation
             current_build["topology_quality"] = topology_quality
             current_build["record_sizing_policy"] = sizing_policy
+            current_build["topology_policy"] = {
+                "mode": "source_units" if fixed_unit_records else "semantic",
+                "source_units_per_record": source_units_per_record,
+                "records_per_page": records_per_page,
+            }
             self.repo.save_build(current_build)
             if not topology_validation.get("valid"):
                 raw_issues = [str(issue) for issue in topology_validation.get("issues") or []]

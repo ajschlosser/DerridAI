@@ -1,9 +1,9 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
-import { esc, icon } from "./html";
+import { openMessageDialog, type MessageDialogOptions } from "../composables/messageDialog";
 
-// The confirmation and message dialog and the clipboard helper, drawn as HTML strings. Moved verbatim from the legacy
-// runtime; the runtime's state object and helpers are passed in as dependencies.
+// The confirmation and message dialog shim (the dialog itself is `MessageDialogHost.vue`) and the clipboard helper. The
+// runtime's state object and helpers are passed in as dependencies.
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
 type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -11,53 +11,15 @@ type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Fn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /** The helpers that still live in the legacy runtime. */
-type Helper = "showAppModal" | "toast";
+type Helper = "toast";
 type Deps = { state: Loose } & Record<Helper, Fn>;
-type MessageModalOptions = {
-  title?: string;
-  message?: string;
-  detail?: string;
-  tone?: string;
-  confirmLabel?: string;
-  cancelLabel?: string | null;
-};
-
 export function createModalDialogs(deps: Deps) {
-  const { showAppModal, toast } = deps;
+  const { toast } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
   const document: Any = globalThis.document;
-  function openMessageModal({
-    title = "Notice",
-    message = "",
-    detail = "",
-    tone = "info",
-    confirmLabel = "OK",
-    cancelLabel = null,
-  }: MessageModalOptions = {}) {
-    return new Promise((resolve) => {
-      const dialog = document.createElement("dialog");
-      dialog.className = `message-dialog ${tone}`;
-      dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(title)}</h2>${detail ? `<div class="dialog-subtitle">${esc(detail)}</div>` : ""}</div><button class="btn icon-only" data-cancel>${icon("close")}</button></div><div class="db"><div class="message-modal-body">${esc(message).replace(/\n/g, "<br>")}</div></div><div class="da">${cancelLabel ? `<button class="btn" data-cancel>${esc(cancelLabel)}</button>` : ""}<button class="btn ${tone === "danger" ? "danger" : "primary"}" data-confirm>${esc(confirmLabel)}</button></div>`;
-      document.body.appendChild(dialog);
-      const finish = (value: Any) => {
-        dialog.close();
-        dialog.remove();
-        resolve(value);
-      };
-      dialog
-        .querySelectorAll("[data-cancel]")
-        .forEach((button: Any) => (button.onclick = () => finish(false)));
-      dialog.querySelector("[data-confirm]").onclick = () => finish(true);
-      dialog.addEventListener(
-        "cancel",
-        (event: Any) => {
-          event.preventDefault();
-          finish(false);
-        },
-        { once: true },
-      );
-      showAppModal(dialog);
-    });
+  /** A shim over the Vue message dialog host: resolves true when the user confirms. */
+  function openMessageModal(options: MessageDialogOptions = {}) {
+    return openMessageDialog(options);
   }
   async function copyJsonToClipboard(value: Any, labelText = "record") {
     const text = JSON.stringify(value, null, 2);

@@ -22,6 +22,7 @@ function record(
 
 const rows = [
   record("record-enriching", "preparing"),
+  record("record-enriching-2", "preparing"),
   record("record-preparing", "preparing"),
   record("record-ready", "ready", { metadata_enrichment_finished: true }),
   record("record-metadata", "metadata", {
@@ -43,7 +44,7 @@ const meta = {
     loading: false,
     hydrated: true,
     disabled: false,
-    activeProcessingRecordIds: new Set(["record-enriching"]),
+    activeProcessingRecordIds: new Set(["record-enriching", "record-enriching-2"]),
   },
 } satisfies Meta<typeof CorpusReviewRecordQueue>;
 

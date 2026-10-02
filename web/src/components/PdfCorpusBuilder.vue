@@ -19,7 +19,7 @@ import CorpusBuildReadiness from "./CorpusBuildReadiness.vue";
 import CorpusSourceIngest from "./CorpusSourceIngest.vue";
 import CorpusRecordSizingSettings from "./CorpusRecordSizingSettings.vue";
 import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
-import type { ReviewQueue } from "../types/corpus";
+import type { CorpusTopologyPolicy, ReviewQueue } from "../types/corpus";
 import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
 import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
 import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
@@ -86,6 +86,7 @@ import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vu
 import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
 import CorpusRecordSizeAdvice from "./CorpusRecordSizeAdvice.vue";
 import CorpusUnitPolicy from "./CorpusUnitPolicy.vue";
+import CorpusTopologyPolicyControl from "./corpus-builder/CorpusTopologyPolicy.vue";
 import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusSemanticWorkspace from "./corpus-builder/CorpusSemanticWorkspace.vue";
@@ -233,6 +234,29 @@ const handsFree = ref<AutonomousPolicy>({
   publish: false,
 });
 const handsFreeOpen = ref(false);
+const topologyPolicy = ref<CorpusTopologyPolicy>({
+  mode: "semantic",
+  source_units_per_record: 1,
+  records_per_page: null,
+});
+function applyCorpusBuildRequest(request: Record<string, unknown>) {
+  applyBuildRequest(request);
+  const saved =
+    request.topology_policy && typeof request.topology_policy === "object"
+      ? (request.topology_policy as Partial<CorpusTopologyPolicy>)
+      : {};
+  topologyPolicy.value = {
+    mode: saved.mode === "source_units" ? "source_units" : "semantic",
+    source_units_per_record: Math.max(
+      1,
+      Math.min(100, Number(saved.source_units_per_record || 1)),
+    ),
+    records_per_page:
+      saved.records_per_page == null
+        ? null
+        : Math.max(1, Math.min(100, Number(saved.records_per_page || 1))),
+  };
+}
 // The metadata schema a new build follows: which fields records have and what the model looks for. A build keeps a copy.
 const schemaId = ref("default");
 const schemaChoices = ref<SchemaSummary[]>([]);
@@ -342,6 +366,30 @@ const {
   () => selectedProviderId.value,
   (profileId) => directProfilePayload(profileId),
 );
+const syntheticRecordPagesAvailable = computed(() => {
+  const asset = selectedAsset.value;
+  if (!asset) return false;
+  const mediaKind = String(asset.media_kind || "").toLowerCase();
+  if (["pdf", "image", "audio"].includes(mediaKind)) return false;
+  return String(asset.page_number_detection?.status || "") !== "detected";
+});
+const topologySummary = computed(() => {
+  if (topologyPolicy.value.mode === "semantic") {
+    return i18n.t("pdf_corpus.topology.semantic_summary", "Semantic boundaries determine Records");
+  }
+  const units = topologyPolicy.value.source_units_per_record;
+  const records =
+    units === 1
+      ? "1 SourceUnit → 1 Record"
+      : `${units.toLocaleString()} SourceUnits → 1 Record`;
+  const perPage = topologyPolicy.value.records_per_page;
+  return perPage && syntheticRecordPagesAvailable.value
+    ? `${records} → ${perPage.toLocaleString()} ${
+        perPage === 1 ? "Record" : "Records"
+      } per synthetic Page`
+    : records;
+});
+
 const error = ref("");
 const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
@@ -449,21 +497,71 @@ const showReviewWorkspace = computed(
   () =>
     workspaceMode.value === "review" && hasRecordTopology.value && !awaitingManifestReview.value,
 );
-// Required document fields that detection on source load missed; only these are asked of the user.
-// Nothing is asked before detection has run for the source.
-const missingDocumentFields = computed(() =>
-  selectedAsset.value?.deterministic_checked_at
-    ? missingRequiredDocumentFields(selectedSchema.value, selectedAsset.value?.initial_metadata)
-    : [],
-);
-const documentMetadata = ref<Record<string, string>>({});
+const documentMetadata = ref<Record<string, unknown>>({});
 watch(selectedAssetId, () => {
   documentMetadata.value = {};
+  topologyPolicy.value = {
+    mode: "semantic",
+    source_units_per_record: 1,
+    records_per_page: null,
+  };
 });
+const effectiveSetupDocumentMetadata = computed<Record<string, unknown>>(() => ({
+  ...((selectedAsset.value?.initial_metadata || {}) as Record<string, unknown>),
+  ...documentMetadata.value,
+}));
+// Required fields react to reviewer edits as well as ingest detection. Clearing a detected
+// required field therefore makes Setup incomplete instead of failing much later at Publish.
+const missingDocumentFields = computed(() =>
+  selectedAsset.value?.deterministic_checked_at
+    ? missingRequiredDocumentFields(selectedSchema.value, effectiveSetupDocumentMetadata.value)
+    : [],
+);
+const setupManifest = computed<Record<string, unknown>>(() => {
+  const initial = {
+    ...((selectedAsset.value?.initial_metadata || {}) as Record<string, unknown>),
+  };
+  const provenance =
+    initial.field_provenance && typeof initial.field_provenance === "object"
+      ? (initial.field_provenance as Record<string, Record<string, unknown>>)
+      : {};
+  const applied = Object.fromEntries(
+    Object.entries(provenance)
+      .filter(([name]) => initial[name] !== undefined)
+      .map(([name, info]) => [name, { ...info, value: initial[name] }]),
+  );
+  return {
+    ...effectiveSetupDocumentMetadata.value,
+    ...(Object.keys(applied).length ? { deterministic_ingest: { applied } } : {}),
+  };
+});
+function saveSetupManifest(changes: Record<string, unknown>) {
+  documentMetadata.value = { ...documentMetadata.value, ...changes };
+}
 const documentMetadataPayload = () =>
-  suppliedDocumentMetadata(missingDocumentFields.value, documentMetadata.value);
+  Object.fromEntries(
+    Object.entries(documentMetadata.value).map(([name, value]) => [
+      name,
+      typeof value === "string" ? value.trim() || null : value,
+    ]),
+  );
+const missingDocumentMetadata = computed<Record<string, string>>({
+  get: () =>
+    Object.fromEntries(
+      missingDocumentFields.value.map(({ name }) => [
+        name,
+        String(documentMetadata.value[name] ?? "").trim(),
+      ]),
+    ),
+  set: (values) => {
+    documentMetadata.value = { ...documentMetadata.value, ...values };
+  },
+});
 const missingMetadataComplete = computed(
-  () => Object.keys(documentMetadataPayload()).length === missingDocumentFields.value.length,
+  () =>
+    Object.keys(
+      suppliedDocumentMetadata(missingDocumentFields.value, missingDocumentMetadata.value),
+    ).length === missingDocumentFields.value.length,
 );
 
 const {
@@ -500,7 +598,8 @@ const {
   requestedBuildId: () => String(route.query.build || ""),
   runGuidancePayload,
   documentMetadataPayload,
-  applyBuildRequest,
+  topologyPolicyPayload: () => ({ ...topologyPolicy.value }),
+  applyBuildRequest: applyCorpusBuildRequest,
   setMessage,
   resetReviewForBuildStart: () => {
     hydratedMetadataCount.value = 0;
@@ -1500,6 +1599,7 @@ const {
     ),
     structureSummary: selectedStructureSummary.value,
     recordSizingValid: recordSizingValid.value,
+    topologySummary: topologySummary.value,
     targetChars: recordSizing.value.preferred_record_chars,
     toleranceChars: recordSizing.value.record_length_tolerance,
     schemaName: chosenSchema.value?.name || "",
@@ -2447,6 +2547,14 @@ defineExpose({
             :block-count="selectedAsset.block_count"
           />
         </template>
+        <CorpusTopologyPolicyControl
+          v-if="selectedAsset && selectedAsset.media_kind !== 'audio'"
+          v-model="topologyPolicy"
+          :synthetic-pages-available="syntheticRecordPagesAvailable"
+          :disabled="
+            Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId) || busy !== ''
+          "
+        />
         <CorpusRecordSizeAdvice
           v-if="selectedAsset && selectedAsset.media_kind !== 'audio'"
           :asset="selectedAsset"
@@ -2494,11 +2602,13 @@ defineExpose({
           :disabled="busy !== ''"
           @manage-schemas="schemaEditorOpen = true"
         />
-        <CorpusMissingDocumentFields
+        <DocumentManifestEditor
           v-if="selectedAsset"
-          v-model="documentMetadata"
-          :fields="missingDocumentFields"
+          :manifest="setupManifest"
+          :media-kind="selectedAsset.media_kind"
           :disabled="busy !== ''"
+          :show-reanalyze="false"
+          @save="saveSetupManifest"
         />
         <div class="setup-continue">
           <UiButton
@@ -2572,6 +2682,7 @@ defineExpose({
           :page-count="selectedAsset?.page_count || 0"
           :block-count="selectedAsset?.block_count || 0"
           :structure-summary="selectedStructureSummary"
+          :topology-summary="topologySummary"
           :provider-label="selectedProviderLabel"
           :model-label="selectedProfileModel || manualModel"
           :enrichment-mode="enrichmentMode"
@@ -3004,7 +3115,7 @@ defineExpose({
       @close="missingMetadataPromptOpen = false"
     >
       <CorpusMissingDocumentFields
-        v-model="documentMetadata"
+        v-model="missingDocumentMetadata"
         :fields="missingDocumentFields"
         :disabled="busy !== ''"
       />

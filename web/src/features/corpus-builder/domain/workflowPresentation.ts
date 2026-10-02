@@ -99,13 +99,26 @@ export function corpusCurrentOperation(
       Number(build.metadata_tasks_failed || 0) +
       Number(build.metadata_tasks_skipped || 0);
     if (active.length) {
-      const first = active[0];
-      return text.tf("pdf_corpus.progress.metadata_active", {
-        record: first.record_id || "—",
-        family: first.task || "metadata",
-        active: Number(build.metadata_tasks_running || active.length),
+      const activeRecordIds = new Set(
+        active.map((item) => String(item.record_id || "")).filter(Boolean),
+      );
+      if (activeRecordIds.size === 1) {
+        const first = active[0];
+        return text.tf("pdf_corpus.progress.metadata_active", {
+          record: first.record_id || "—",
+          family: first.task || "metadata",
+          active: Number(build.metadata_tasks_running || active.length),
+          settled,
+          total,
+        });
+      }
+      // Several Records can enrich concurrently. The primary status describes the
+      // queue as a whole instead of falsely implying the first array entry is current.
+      return text.tf("pdf_corpus.progress.metadata_queue", {
         settled,
         total,
+        running: Number(build.metadata_tasks_running || active.length),
+        queued: Number(build.metadata_tasks_queued || 0),
       });
     }
     if (total > 0) {

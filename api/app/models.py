@@ -674,6 +674,14 @@ class PdfCorpusRecordSizing(BaseModel):
             raise ValueError("absolute_record_chars must be at least long_record_chars")
 
 
+class PdfCorpusTopologyPolicy(BaseModel):
+    """Explicit relationship between SourceUnits, Records, and synthetic pages."""
+
+    mode: Literal["semantic", "source_units"] = "semantic"
+    source_units_per_record: int = Field(default=1, ge=1, le=100)
+    records_per_page: int | None = Field(default=None, ge=1, le=100)
+
+
 class PdfCorpusExperimentArm(BaseModel):
     name: str = Field(min_length=1, max_length=40)
     ablations: list[Literal["autofill", "blended_confidence", "rejection_memory", "reviewer_conventions", "cross_build_learning"]] = Field(default_factory=list)
@@ -762,6 +770,7 @@ class PdfCorpusBuildCreate(BaseModel):
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
     stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
+    topology_policy: PdfCorpusTopologyPolicy = Field(default_factory=PdfCorpusTopologyPolicy)
     auto_enrich_work_metadata: bool = True
     experiment: PdfCorpusExperiment | None = None
     schema_id: str = Field(default="default", min_length=1, max_length=64)

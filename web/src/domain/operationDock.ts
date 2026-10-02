@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
+import { inferNotificationTone, notify } from "../composables/notifications";
 import { esc } from "./html";
 import {
   dockCollapsedSummary,
@@ -60,46 +61,10 @@ export function createOperationDock(deps: Deps) {
   function operationDockIsDocked() {
     return document.documentElement?.dataset?.operationsDockMode === "docked";
   }
-  function toast(message: Any, { tone = "auto", duration = null } = {}) {
-    let el = document.querySelector("#toast");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "toast";
-      el.className = "toast";
-      document.body.appendChild(el);
-    }
-    // Toast text is operational information: keep it selectable/copyable and
-    // pause dismissal while the user is interacting with it.
-    el.setAttribute("role", "status");
-    el.setAttribute("aria-live", "polite");
-    el.setAttribute("aria-atomic", "true");
-    el.tabIndex = 0;
+  /** A shim over the Vue notification host; callers still pass free text and an optional tone. */
+  function toast(message: Any, { tone = "auto", duration = null }: Any = {}) {
     const text = translateDynamicUiValue(String(message ?? ""));
-    // An explicit success tone wins: copied record text may itself contain words like "error".
-    const failed =
-      tone === "danger" ||
-      (tone !== "success" &&
-        (/\bHTTP\s+\d{3}\b/i.test(text) || /\b(failed|could not|error)\b/i.test(text)));
-    el.classList.toggle("failed", failed);
-    el.classList.toggle("success", tone === "success");
-    const httpIndex = text.search(/\bHTTP\s+\d{3}\b/i);
-    if (failed && httpIndex >= 0) {
-      el.innerHTML = `${esc(text.slice(0, httpIndex))}<strong>${esc(text.slice(httpIndex))}</strong>`;
-    } else {
-      el.textContent = text;
-    }
-    el.classList.add("show");
-    const dismissDelay = duration ?? (failed ? 8000 : 4200);
-    const pause = () => clearTimeout(el._timer);
-    const resume = () => {
-      clearTimeout(el._timer);
-      el._timer = setTimeout(() => el.classList.remove("show"), dismissDelay);
-    };
-    el.onpointerenter = pause;
-    el.onpointerleave = resume;
-    el.onfocusin = pause;
-    el.onfocusout = resume;
-    resume();
+    notify(text, inferNotificationTone(text, tone), { duration });
   }
   function applyOperationStackPosition(stack: Any) {
     if (!stack) return;

@@ -36,6 +36,30 @@ const concurrencyLabel = computed(() => {
   }
   return String(props.build.metadata_concurrency || 1);
 });
+const activeRecords = computed(() => {
+  const grouped = new Map<
+    string,
+    { record_id: string; tasks: string[]; started_at?: string | null }
+  >();
+  for (const item of active.value) {
+    const recordId = String(item.record_id || "").trim();
+    if (!recordId) continue;
+    const task = String(item.task || "").trim();
+    const current = grouped.get(recordId);
+    if (current) {
+      if (task && !current.tasks.includes(task)) current.tasks.push(task);
+      if (!current.started_at && item.started_at) current.started_at = item.started_at;
+    } else {
+      grouped.set(recordId, {
+        record_id: recordId,
+        tasks: task ? [task] : [],
+        started_at: item.started_at,
+      });
+    }
+  }
+  return [...grouped.values()];
+});
+const hiddenActiveRecordCount = computed(() => Math.max(0, activeRecords.value.length - 8));
 const settled = computed(() => complete.value + failed.value + skipped.value);
 const lastProgress = computed(() =>
   props.build.metadata_last_progress_at
@@ -143,16 +167,24 @@ function taskLabel(task: string) {
     >
       <b>{{ i18n.t("pdf_corpus.active_now") }}</b>
       <ul>
-        <li v-for="item in active.slice(0, 6)" :key="`${item.record_id}-${item.task}`">
-          <span>{{ item.record_id }}</span
-          ><strong
-            >{{ taskLabel(String(item.task || ""))
-            }}<small v-if="activeElapsed(item.started_at)">
-              · {{ activeElapsed(item.started_at) }}</small
-            ></strong
-          >
+        <li v-for="item in activeRecords.slice(0, 8)" :key="item.record_id">
+          <span>{{ item.record_id }}</span>
+          <strong>
+            {{
+              item.tasks.length
+                ? item.tasks.map((task) => taskLabel(task)).join(" · ")
+                : i18n.t("pdf_corpus.metadata_enrichment")
+            }}
+            <small v-if="activeElapsed(item.started_at)">
+              · {{ activeElapsed(item.started_at) }}
+            </small>
+          </strong>
         </li>
       </ul>
+      <small v-if="hiddenActiveRecordCount" class="active-overflow">
+        +{{ hiddenActiveRecordCount }}
+        {{ i18n.t("pdf_corpus.active_records_more", "more active Records") }}
+      </small>
     </div>
 
     <div class="status-actions">
@@ -279,10 +311,14 @@ function taskLabel(task: string) {
 .active-tasks li strong {
   white-space: nowrap;
 }
-.active-tasks li small {
+.active-tasks li small,
+.active-overflow {
   font-size: 0.8125rem;
   color: var(--muted);
   font-weight: 600;
+}
+.active-overflow {
+  display: block;
 }
 .status-actions {
   display: flex;

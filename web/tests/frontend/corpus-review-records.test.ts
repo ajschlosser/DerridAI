@@ -183,6 +183,56 @@ describe("useCorpusReviewRecords", () => {
     expect(state.selectedRecord.value?.record_id).toBe("r2");
   });
 
+  it("advances to a valid filtered row when concurrent completion removes the selection", async () => {
+    const state = setup();
+    state.reviewQueue.value = "ready";
+    corpusReviewReads.queuePage
+      .mockResolvedValueOnce(page([row("r1"), row("r2")]))
+      .mockResolvedValueOnce(page([row("r2")]));
+    corpusReviewReads.records
+      .mockResolvedValueOnce([record("r1")])
+      .mockResolvedValueOnce([record("r2")]);
+
+    await state.reviewRecords.refreshRecords(true);
+    expect(state.selectedRecord.value?.record_id).toBe("r1");
+
+    await state.reviewRecords.refreshRecords(false);
+    expect(state.selectedRecord.value?.record_id).toBe("r2");
+  });
+
+  it("keeps an unsaved draft selected even if a concurrent update removes it from the filter", async () => {
+    const state = setup();
+    state.reviewQueue.value = "ready";
+    corpusReviewReads.queuePage
+      .mockResolvedValueOnce(page([row("r1"), row("r2")]))
+      .mockResolvedValueOnce(page([row("r2")]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+
+    await state.reviewRecords.refreshRecords(true);
+    state.setActiveDraft(true);
+    state.selectedRecord.value = { ...state.selectedRecord.value, text: "Unsaved reviewer text" };
+
+    await state.reviewRecords.refreshRecords(false);
+    expect(state.selectedRecord.value?.record_id).toBe("r1");
+    expect(state.selectedRecord.value?.text).toBe("Unsaved reviewer text");
+  });
+
+  it("backs up from an emptied last page after concurrent queue shrinkage", async () => {
+    const state = setup();
+    state.reviewQueue.value = "ready";
+    state.recordOffset.value = 50;
+    corpusReviewReads.queuePage
+      .mockResolvedValueOnce(page([], { total: 1, offset: 50 }))
+      .mockResolvedValueOnce(page([row("r1")], { total: 1, offset: 0 }));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+
+    await state.reviewRecords.refreshRecords(false);
+
+    expect(state.recordOffset.value).toBe(0);
+    expect(state.selectedRecord.value?.record_id).toBe("r1");
+    expect(corpusReviewReads.queuePage).toHaveBeenCalledTimes(2);
+  });
+
   it("preserves an active draft across refreshRecords instead of re-reading the server", async () => {
     const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));

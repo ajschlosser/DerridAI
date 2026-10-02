@@ -219,6 +219,16 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
         { signal: ticket.signal },
       );
       if (!ticket.current()) return;
+      if (!page.rows.length && page.total > 0 && options.recordOffset.value > 0) {
+        // Concurrent completions can empty the final filtered page. Move to the
+        // nearest valid page instead of stranding the reviewer on an empty view.
+        options.recordOffset.value = Math.max(
+          0,
+          Math.floor((page.total - 1) / options.pageSize) * options.pageSize,
+        );
+        await refreshRecords(false);
+        return;
+      }
       queueRows.value = page.rows;
       recordTotal.value = page.total;
       hydratedTopologyCount.value = Math.max(hydratedTopologyCount.value, page.topologyCount);
@@ -226,8 +236,16 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       options.onPageLoaded(page.rows);
       const shouldLoadFacets = !facetsLoadedForBuild || reset;
 
+      const selectedVisible = page.rows.some(
+        (item) => item.record_id === options.selectedRecordId.value,
+      );
+      const keepDraftSelection =
+        options.hasActiveDraft() && Boolean(options.selectedRecordId.value);
       const targetId =
-        preferredId || options.selectedRecordId.value || page.rows[0]?.record_id || "";
+        preferredId ||
+        (selectedVisible || keepDraftSelection ? options.selectedRecordId.value : "") ||
+        page.rows[0]?.record_id ||
+        "";
       if (!targetId) {
         clearSelection();
         if (shouldLoadFacets) void loadFacets();
