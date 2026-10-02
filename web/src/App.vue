@@ -446,7 +446,9 @@ async function startRuntime() {
     // back to wherever the router actually is instead of leaving the two disagreeing.
     void navigation
       .then((failure) => {
-        if (failure && !isNavigationFailure(failure, NavigationFailureType.duplicated)) {
+        // `duplicated` is a no-op, and `cancelled` means a newer navigation superseded this one and will settle the
+        // location itself; resyncing from the not-yet-updated URL would roll the runtime back mid-transition.
+        if (isNavigationFailure(failure, NavigationFailureType.aborted)) {
           console.warn("DerridAI navigation was not applied; resyncing from the router", failure);
           runtime.syncFromLocation();
         }
