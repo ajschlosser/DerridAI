@@ -34,7 +34,7 @@ METADATA_PROMPT_VERSION = "derridai-record-metadata-v15"
 
 
 
-DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v3"
+DOCUMENT_PROMPT_VERSION = "derridai-document-manifest-v4"
 
 
 

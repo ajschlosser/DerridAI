@@ -314,14 +314,6 @@ function markDirty() {
   dirty.value = true;
   emit("dirty", true);
 }
-defineExpose({
-  canSaveDraft: () => !dirty.value || canSave.value,
-  saveDraft: () => {
-    if (dirty.value) save();
-    return !dirty.value;
-  },
-  discardDraft: cancelEdit,
-});
 const {
   selection: liveSelection,
   capture: selectedRecordText,

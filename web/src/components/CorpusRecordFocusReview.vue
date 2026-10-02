@@ -24,11 +24,6 @@ import MovableRecordModal from "./corpus-builder/MovableRecordModal.vue";
  * reader, metadata, evidence, source and decision dock are the same components the workspace uses.
  */
 type InspectorTab = "metadata" | "evidence" | "source" | "semantic";
-const metadataPanel = ref<InstanceType<typeof CorpusMetadataResolutionPanel> | null>(null);
-defineExpose({
-  saveDrafts: () => metadataPanel.value?.saveDrafts(),
-  discardDrafts: () => metadataPanel.value?.discardDrafts(),
-});
 const props = withDefaults(
   defineProps<{
     record: CorpusRecord;
@@ -524,7 +519,6 @@ watch(
             aria-labelledby="focus-tab-metadata"
           >
             <CorpusMetadataResolutionPanel
-              ref="metadataPanel"
               :build-id="buildId"
               :schema="schema"
               :record="record"

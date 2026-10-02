@@ -193,131 +193,78 @@ test.describe("at a wide desktop", () => {
     expect(await width()).toBe(240);
   });
 
-  test("Stay and Discard protect a text draft without changing the active Record", async ({
-    page,
-  }) => {
+  test("record navigation is immediate and restores the local text draft", async ({ page }) => {
     await open(page);
-    await page.getByRole("button", { name: "Edit text", exact: true }).click();
-    const draft = page.locator(".record-review-pane textarea");
-    await draft.fill("An unsaved correction with its negation intact.");
-    await page.locator(".record-row").nth(1).click();
-    const dialog = page.getByRole("dialog", { name: "Leave this unsaved review?" });
-    await expect(dialog).toBeVisible();
-    expect(
-      (
-        await new AxeBuilder({ page })
-          .include('[role="dialog"]')
-          .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
-          .analyze()
-      ).violations,
-    ).toEqual([]);
-    await dialog.getByRole("button", { name: "Stay on this record", exact: true }).last().click();
-    await expect(draft).toHaveValue("An unsaved correction with its negation intact.");
-    await expect(page.locator(".record-row").nth(0)).toHaveAttribute("aria-current", "true");
-    await page.locator(".record-row").nth(1).click();
-    await dialog.getByRole("button", { name: "Discard & continue", exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await expect(page.locator(".record-row").nth(1)).toHaveAttribute("aria-current", "true");
-  });
-
-  test("Save and continue waits for durable text persistence", async ({ page }) => {
-    await open(page);
-    let release!: () => void;
-    const persisted = new Promise<void>((resolve) => {
-      release = resolve;
+    let writes = 0;
+    page.on("request", (request) => {
+      if (request.method() === "PATCH" && request.url().endsWith("/text")) writes++;
     });
-    let submitted: Record<string, unknown> | undefined;
-    await page.route(
-      `**/api/pdf/corpus-builds/${CORPUS_BUILD_ID}/records/${CORPUS_RECORDS[0].record_id}/text`,
-      async (route) => {
-        submitted = route.request().postDataJSON();
-        await persisted;
-        await route.fulfill({
-          json: { ...CORPUS_RECORDS[0], text: submitted!.text, record_revision: 2 },
-        });
-      },
-    );
     await page.getByRole("button", { name: "Edit text", exact: true }).click();
-    await page.locator(".record-review-pane textarea").fill("A reviewed correction.");
+    await page
+      .locator(".record-review-pane textarea")
+      .fill("An unsaved correction with its negation intact.");
     await page.locator(".record-row").nth(1).click();
-    const dialog = page.getByRole("dialog", { name: "Leave this unsaved review?" });
-    await dialog.getByRole("button", { name: "Save & continue", exact: true }).click();
-    await expect.poll(() => submitted?.text).toBe("A reviewed correction.");
-    await expect(dialog).toBeVisible();
-    await expect(page.locator(".record-row").nth(0)).toHaveAttribute("aria-current", "true");
-    release();
-    await expect(dialog).toBeHidden();
     await expect(page.locator(".record-row").nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(page.getByRole("dialog", { name: "Leave this unsaved review?" })).toHaveCount(0);
+    await page.locator(".record-row").nth(0).click();
+    await expect(page.locator(".record-review-pane textarea")).toHaveValue(
+      "An unsaved correction with its negation intact.",
+    );
+    expect(writes).toBe(0);
   });
 
-  test("a failed draft save stays visible and can be retried before navigating", async ({
+  test("an unsaved field does not block Reject and next", async ({ page }) => {
+    await open(page);
+    const build = await page.evaluate(
+      async (buildId) => (await fetch(`/api/pdf/corpus-builds/${buildId}`)).json(),
+      CORPUS_BUILD_ID,
+    );
+    await page.route(
+      `**/api/pdf/corpus-builds/${CORPUS_BUILD_ID}/records/${CORPUS_RECORDS[0].record_id}/review-decision`,
+      (route) =>
+        route.fulfill({
+          json: {
+            applied: true,
+            blocked: false,
+            build,
+            record: {
+              ...CORPUS_RECORDS[0],
+              review_disposition: "rejected",
+              rejected: true,
+              accepted: false,
+              record_revision: 2,
+            },
+            next_record: CORPUS_RECORDS[1],
+          },
+        }),
+    );
+    await page.locator(".decision-list textarea").first().fill("An uncommitted field value.");
+    await page.getByRole("button", { name: "Reject & next", exact: true }).click();
+    await expect(page.locator(".record-row").nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(page.getByRole("dialog", { name: "Leave this unsaved review?" })).toHaveCount(0);
+  });
+
+  test("starting another build preserves the local text draft without a dialog", async ({
     page,
   }) => {
-    await open(page);
-    let failing = true;
-    await page.route(
-      `**/api/pdf/corpus-builds/${CORPUS_BUILD_ID}/records/${CORPUS_RECORDS[0].record_id}/text`,
-      async (route) => {
-        await route.fulfill(
-          failing
-            ? { status: 503, json: { detail: "Persistence unavailable" } }
-            : {
-                json: {
-                  ...CORPUS_RECORDS[0],
-                  text: route.request().postDataJSON().text,
-                  record_revision: 2,
-                },
-              },
-        );
-      },
-    );
-    await page.getByRole("button", { name: "Edit text", exact: true }).click();
-    await page.locator(".record-review-pane textarea").fill("A correction to retry.");
-    await page.locator(".record-row").nth(1).click();
-    const dialog = page.getByRole("dialog", { name: "Leave this unsaved review?" });
-    await dialog.getByRole("button", { name: "Save & continue", exact: true }).click();
-    await expect(dialog.getByRole("alert")).toContainText("Persistence unavailable");
-    await expect(page.locator(".record-row").nth(0)).toHaveAttribute("aria-current", "true");
-    await dialog.getByRole("button", { name: "Stay on this record", exact: true }).last().click();
-    await expect(dialog).toBeHidden();
-    await page.locator(".record-row").nth(1).click();
-    await expect(dialog).toBeVisible();
-    failing = false;
-    await dialog.getByRole("button", { name: "Save & continue", exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await expect(page.locator(".record-row").nth(1)).toHaveAttribute("aria-current", "true");
-  });
-
-  test("Reject & next protects a metadata draft before changing disposition", async ({ page }) => {
-    await open(page);
-    const draft = page.locator(".decision-list textarea").first();
-    await draft.fill("A metadata draft before rejecting.");
-    await page.getByRole("button", { name: "Reject & next", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Leave this unsaved review?" });
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole("button", { name: "Stay on this record", exact: true }).last().click();
-    await expect(page.locator(".record-row").nth(0)).toHaveAttribute("aria-current", "true");
-    await expect(draft).toHaveValue("A metadata draft before rejecting.");
-  });
-
-  test("starting a new build cannot silently discard the current text draft", async ({ page }) => {
     await open(page);
     await page.getByRole("button", { name: "Edit text", exact: true }).click();
     await page
       .locator(".record-review-pane textarea")
       .fill("A draft before starting another build.");
     await page.getByRole("button", { name: "Start new build", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Leave this unsaved review?" });
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole("button", { name: "Stay on this record", exact: true }).last().click();
-    await expect(page.locator(".record-review-pane textarea")).toHaveValue(
-      "A draft before starting another build.",
-    );
+    await expect(page).toHaveURL(/workspace=setup/);
+    await expect(page.getByRole("dialog", { name: "Leave this unsaved review?" })).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        ({ build, record }) =>
+          localStorage.getItem(`derridai.pdf-corpus.text-draft.${build}.${record}`),
+        { build: CORPUS_BUILD_ID, record: CORPUS_RECORDS[0].record_id },
+      ),
+    ).toBe("A draft before starting another build.");
   });
 
-  test("a restored advanced metadata draft is protected before its editor is opened", async ({
-    page,
-  }) => {
+  test("a restored advanced metadata draft does not trap navigation", async ({ page }) => {
     await page.addInitScript(
       ({ buildId, recordId }) =>
         localStorage.setItem(
@@ -328,10 +275,15 @@ test.describe("at a wide desktop", () => {
     );
     await open(page);
     await page.locator(".record-row").nth(1).click();
-    const dialog = page.getByRole("dialog", { name: "Leave this unsaved review?" });
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole("button", { name: "Discard & continue", exact: true }).click();
     await expect(page.locator(".record-row").nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(page.getByRole("dialog", { name: "Leave this unsaved review?" })).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        ({ build, record }) =>
+          localStorage.getItem(`derridai.pdf-corpus.metadata-draft.${build}.${record}`),
+        { build: CORPUS_BUILD_ID, record: CORPUS_RECORDS[0].record_id },
+      ),
+    ).toContain("A saved but uncommitted metadata draft");
   });
 });
 
@@ -445,7 +397,7 @@ test.describe("French review controls in dark mode", () => {
   test.beforeEach(({}, info) =>
     test.skip(info.project.name !== "chromium-desktop", "Runs once, at its own viewport."),
   );
-  test("keeps translated draft decisions readable and keyboard accessible", async ({ page }) => {
+  test("keeps French keyboard navigation immediate with a recoverable draft", async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("derridai-locale", "fr-CA"));
     await mockBackend(page);
     await page.route("**/api/i18n/languages/fr-CA", (route) =>
@@ -456,12 +408,6 @@ test.describe("French review controls in dark mode", () => {
           flag: "🇨🇦",
           dictionary: {
             "pdf_corpus.reject_next": "Rejeter et suivante",
-            "pdf_corpus.draft_navigation_title": "Quitter cet examen non enregistré?",
-            "pdf_corpus.draft_navigation_help":
-              "Enregistrez vos modifications avant de continuer, abandonnez-les ou restez sur cette fiche.",
-            "pdf_corpus.draft_save_continue": "Enregistrer et continuer",
-            "pdf_corpus.draft_discard_continue": "Abandonner et continuer",
-            "pdf_corpus.draft_stay": "Rester sur cette fiche",
           },
         },
       }),
@@ -476,22 +422,10 @@ test.describe("French review controls in dark mode", () => {
     await page.getByRole("button", { name: "Edit text", exact: true }).click();
     await page.locator(".record-review-pane textarea").fill("Une correction non enregistrée.");
     await page.locator(".record-row").nth(1).click();
-    const dialog = page.getByRole("dialog", { name: "Quitter cet examen non enregistré?" });
-    await expect(dialog).toBeVisible();
-    expect(
-      (
-        await new AxeBuilder({ page })
-          .include('[role="dialog"]')
-          .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
-          .analyze()
-      ).violations,
-    ).toEqual([]);
-    await dialog
-      .getByRole("button", { name: "Rester sur cette fiche", exact: true })
-      .last()
-      .focus();
+    await expect(page.locator(".record-row").nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.locator(".record-row").nth(0).focus();
     await page.keyboard.press("Enter");
-    await expect(dialog).toBeHidden();
     await expect(page.locator(".record-review-pane textarea")).toHaveValue(
       "Une correction non enregistrée.",
     );

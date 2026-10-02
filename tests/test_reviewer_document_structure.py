@@ -56,6 +56,55 @@ def make_build(repo:cb.PdfCorpusRepository):
     return asset,build
 
 
+def test_new_build_persists_active_contract_identities(tmp_path:Path,monkeypatch):
+    """Build creation records the contracts actually selected, not test-local version pins."""
+    from app import corpus_manifest_workflow as workflow
+
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    asset=install_asset(repo)
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    monkeypatch.setattr(manager._executor,"submit",lambda *args,**kwargs:None)
+    build=manager.create({"asset_id":asset["asset_id"],"provider":"ollama","model":"test-model"})
+    saved=cb.PdfCorpusRepository(repo.root).get_build(build["build_id"])
+
+    assert saved["schema_version"]==workflow.SCHEMA_VERSION
+    assert saved["profile_id"]==workflow.PROFILE_VERSION
+    assert saved["profile_version"]==workflow.CORPUS_PROFILES[saved["profile_id"]]["version"]
+    assert saved["document_prompt_version"]==workflow.DOCUMENT_PROMPT_VERSION
+    assert saved["segmentation_prompt_version"]==workflow.SEGMENTATION_PROMPT_VERSION
+    assert saved["metadata_prompt_version"]==workflow.METADATA_PROMPT_VERSION
+    assert saved["metadata_schema_version"]==saved["schema"]["schema_version"]
+    assert saved["schema_hash"]==manager._schema_of_build(saved).content_hash()
+
+
+def test_prompt_contract_changes_do_not_relabel_existing_builds(tmp_path:Path,monkeypatch):
+    """Changed current prompts apply only to new builds; persisted history survives reload."""
+    from app import corpus_manifest_workflow as workflow
+
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    asset=install_asset(repo)
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    monkeypatch.setattr(manager._executor,"submit",lambda *args,**kwargs:None)
+    request={"asset_id":asset["asset_id"],"provider":"ollama","model":"test-model"}
+    original=manager.create(request)
+    prompt_fields={
+        "document_prompt_version":"DOCUMENT_PROMPT_VERSION",
+        "segmentation_prompt_version":"SEGMENTATION_PROMPT_VERSION",
+        "metadata_prompt_version":"METADATA_PROMPT_VERSION",
+    }
+    historical={field:original[field] for field in prompt_fields}
+    changed={field:value+"-next" for field,value in historical.items()}
+    for field,constant in prompt_fields.items():
+        monkeypatch.setattr(workflow,constant,changed[field])
+
+    newer=manager.create(request)
+    restarted=cb.PdfCorpusRepository(repo.root)
+    saved_original=restarted.get_build(original["build_id"])
+    saved_newer=restarted.get_build(newer["build_id"])
+    assert {field:saved_original[field] for field in prompt_fields}==historical
+    assert {field:saved_newer[field] for field in prompt_fields}==changed
+
+
 def test_touchup_sanitizer_removes_only_model_added_outer_separators():
     """Strip "---", "~~~", or code fences a model wrapped around text, but nothing else.
 
@@ -190,7 +239,6 @@ def test_confident_stance_alias_is_normalized_and_auto_populated(tmp_path:Path,m
     assert status["proposed_value"]=="affirm"
     assert status["raw_llm_value"]=="affirmed"
     assert status["llm_checked"] is True
-
 
 
 
