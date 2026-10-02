@@ -12,8 +12,8 @@ import { useI18nStore } from "../stores/i18n";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
-import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
+import CorpusSetupDocumentMetadata from "./corpus-builder/CorpusSetupDocumentMetadata.vue";
 import CorpusInitializationDialog from "./CorpusInitializationDialog.vue";
 import CorpusBuildReadiness from "./CorpusBuildReadiness.vue";
 import CorpusSourceIngest from "./CorpusSourceIngest.vue";
@@ -533,6 +533,7 @@ const setupManifest = computed<Record<string, unknown>>(() => {
 function saveSetupManifest(changes: Record<string, unknown>) {
   documentMetadata.value = { ...documentMetadata.value, ...changes };
 }
+const setupDocumentMetadataOverrideCount = computed(() => Object.keys(documentMetadata.value).length);
 const documentMetadataPayload = () =>
   Object.fromEntries(
     Object.entries(documentMetadata.value).map(([name, value]) => [
@@ -2588,6 +2589,15 @@ defineExpose({
         </div>
       </template>
       <template #metadata>
+        <CorpusSetupDocumentMetadata
+          v-if="selectedAsset"
+          :manifest="setupManifest"
+          :media-kind="selectedAsset.media_kind"
+          :missing-required-count="missingDocumentFields.length"
+          :reviewer-override-count="setupDocumentMetadataOverrideCount"
+          :disabled="busy !== ''"
+          @save="saveSetupManifest"
+        />
         <CorpusMetadataConfiguration
           v-model:schema-id="schemaId"
           v-model:run-guidance="runGuidance"
@@ -2596,14 +2606,6 @@ defineExpose({
           :run-guidance-fields="runGuidanceFields"
           :disabled="busy !== ''"
           @manage-schemas="schemaEditorOpen = true"
-        />
-        <DocumentManifestEditor
-          v-if="selectedAsset"
-          :manifest="setupManifest"
-          :media-kind="selectedAsset.media_kind"
-          :disabled="busy !== ''"
-          :show-reanalyze="false"
-          @save="saveSetupManifest"
         />
         <div class="setup-continue">
           <UiButton
