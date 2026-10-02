@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import {
+  NavigationFailureType,
+  RouterLink,
+  RouterView,
+  isNavigationFailure,
+  useRoute,
+  useRouter,
+} from "vue-router";
+import { createNavigationHistory, type HistoryEntryTitle } from "./router/navigationHistory";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
 import { useAuthStore } from "./stores/auth";
 import { useI18nStore } from "./stores/i18n";
@@ -35,6 +43,7 @@ import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
 
 const router = useRouter();
 const route = useRoute();
+const navigationHistory = createNavigationHistory(router);
 const shell = useShellStore();
 const auth = useAuthStore();
 const i18n = useI18nStore();
@@ -53,8 +62,6 @@ const commandShortcut =
   /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || "")
     ? "⌘K"
     : "Ctrl K";
-const nativeBackPath = ref<string | null>(null);
-const nativeForwardPath = ref<string | null>(null);
 const s = computed(() => shell.snapshot);
 const effectiveSidebarCollapsed = computed(() => s.value.sidebarCollapsed || narrowSidebar.value);
 
@@ -340,15 +347,18 @@ const breadcrumbMeta = computed(() => {
   return "";
 });
 
-const canBreadcrumbBack = computed(() => Boolean(nativeBackPath.value) || s.value.canGoBack);
-const canBreadcrumbForward = computed(
-  () => Boolean(nativeForwardPath.value) || s.value.canGoForward,
-);
+const canBreadcrumbBack = navigationHistory.canGoBack;
+const canBreadcrumbForward = navigationHistory.canGoForward;
+function historyLabel(title: HistoryEntryTitle | null, fallbackKey: string) {
+  return title && (title.key || title.fallback)
+    ? i18n.t(title.key || fallbackKey, title.fallback)
+    : i18n.t(fallbackKey);
+}
 const breadcrumbBackLabel = computed(() =>
-  nativeBackPath.value ? i18n.t("ui.back") : s.value.backLabel,
+  historyLabel(navigationHistory.backTitle.value, "ui.back"),
 );
 const breadcrumbForwardLabel = computed(() =>
-  nativeForwardPath.value ? i18n.t("ui.forward") : s.value.forwardLabel,
+  historyLabel(navigationHistory.forwardTitle.value, "ui.forward"),
 );
 
 function onImport(files: FileList) {
@@ -368,9 +378,8 @@ function openCorpusFilePicker() {
 function navigateNative(path: string, runtimeView?: string) {
   const current = router.currentRoute.value.fullPath;
   const target = router.resolve(path).fullPath;
-  if (current === target) return;
-  nativeBackPath.value = current;
-  nativeForwardPath.value = null;
+  // Only short-circuit when the runtime agrees with the router; a drifted runtime view must be allowed to resync.
+  if (current === target && (!runtimeView || runtime.state.view === runtimeView)) return;
   if (runtimeView) {
     runtime.navigateView(runtimeView, target);
     return;
@@ -400,25 +409,11 @@ function navigateFromMobile(view: string) {
 }
 
 function goBreadcrumbBack() {
-  if (nativeBackPath.value) {
-    const target = nativeBackPath.value;
-    nativeForwardPath.value = router.currentRoute.value.fullPath;
-    nativeBackPath.value = null;
-    void router.push(target);
-    return;
-  }
-  runtime.triggerBack();
+  navigationHistory.back();
 }
 
 function goBreadcrumbForward() {
-  if (nativeForwardPath.value) {
-    const target = nativeForwardPath.value;
-    nativeBackPath.value = router.currentRoute.value.fullPath;
-    nativeForwardPath.value = null;
-    void router.push(target);
-    return;
-  }
-  runtime.triggerForward();
+  navigationHistory.forward();
 }
 
 function searchCorpus(query: string) {
@@ -446,8 +441,20 @@ async function startRuntime() {
   runtime.setUrlSyncHook((href: string, options: { replace?: boolean }) => {
     const target = router.resolve(href).fullPath;
     if (router.currentRoute.value.fullPath === target) return;
-    const method = options?.replace ? router.replace : router.push;
-    void method(target).catch(() => undefined);
+    const navigation = options?.replace ? router.replace(target) : router.push(target);
+    // A navigation the router refuses (guard, cancellation) is reported as a value, not an exception. Roll the runtime
+    // back to wherever the router actually is instead of leaving the two disagreeing.
+    void navigation
+      .then((failure) => {
+        if (failure && !isNavigationFailure(failure, NavigationFailureType.duplicated)) {
+          console.warn("DerridAI navigation was not applied; resyncing from the router", failure);
+          runtime.syncFromLocation();
+        }
+      })
+      .catch((error) => {
+        console.warn("DerridAI navigation failed; resyncing from the router", error);
+        runtime.syncFromLocation();
+      });
   });
   try {
     const requiredCapability = String(route.meta.capability || "");
@@ -509,7 +516,17 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  stopRouteSync();
+  navigationHistory.dispose();
   window.removeEventListener(CHOOSE_CORPUS_FILES_EVENT, openCorpusFilePicker);
+});
+
+// The router is the authority on where the user is. When a navigation settles on a path that belongs to a different
+// runtime view (RouterLink, a deep link, a redirect), pull the runtime view along instead of letting the two drift.
+const stopRouteSync = router.afterEach((to, _from, failure) => {
+  if (failure || !runtimeStarted.value) return;
+  const view = runtime.viewForPath(to.path);
+  if (view && view !== runtime.state.view) runtime.syncFromLocation();
 });
 
 watch(

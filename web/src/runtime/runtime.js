@@ -138,7 +138,7 @@ import { createRecordDialogs } from "../domain/recordDialogs";
 import { createOperationDock } from "../domain/operationDock";
 import { createModalDialogs } from "../domain/modalDialogs";
 import { createNavigation } from "../domain/navigation";
-import { pathViewMap, viewPathMap } from "../domain/navigation";
+import { pathViewMap, viewFromPath, viewPathMap } from "../domain/navigation";
 import { createWorkspacePersistence } from "../domain/workspacePersistence";
 import { createEvidenceSelection } from "../domain/evidenceSelection";
 import { createRecordEditing } from "../domain/recordEditing";
@@ -844,10 +844,7 @@ const {
 });
 const {
   getUrlSyncHook,
-  viewLabel,
   navSnapshot,
-  sameSnapshot,
-  applyNavSnapshot,
   setUrlSyncHook,
   currentTableUrlState,
   applyCompressedTableUrlState,
@@ -855,8 +852,6 @@ const {
   syncUrl,
   applyUrlState,
   navigateTo,
-  goBack,
-  goForward,
 } = createNavigation({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -2835,14 +2830,6 @@ function getShellSnapshot() {
     dbUnavailableReason: dbUnavailableReason(),
     activeStore: state.activeStore,
     canEdit: canUse("editLocalRecords") && state.view === "record" && Boolean(selectedRecord()),
-    canGoBack: state.navHistory.length > 0,
-    canGoForward: state.navForward.length > 0,
-    backLabel: state.navHistory.length
-      ? viewLabel(state.navHistory[state.navHistory.length - 1].view)
-      : "",
-    forwardLabel: state.navForward.length
-      ? viewLabel(state.navForward[state.navForward.length - 1].view)
-      : "",
     selectedEvidenceCount: selectedEvidenceEntries().length,
     systemHtml: systemCardHtml(),
     nav: getNavItems(),
@@ -2920,12 +2907,6 @@ function triggerExport() {
 }
 function triggerEdit() {
   return canUse("editLocalRecords") ? openEditor() : toast(tr("runtime.toast.cannot_edit_records"));
-}
-function triggerBack() {
-  return goBack();
-}
-function triggerForward() {
-  return goForward();
 }
 /**
  * Navigate the runtime and, when supplied, preserve an explicit native URL.
@@ -3166,12 +3147,21 @@ document.addEventListener(
   true,
 );
 
-window.addEventListener("popstate", () => {
+/**
+ * Re-derive runtime view state from the browser location (the router owns the URL) and repaint.
+ * Used by browser back/forward and whenever a router navigation settles somewhere the runtime did not expect.
+ */
+function syncFromLocation() {
   applyUrlState();
   persistPrefs();
   shell();
   renderView();
-});
+}
+/** The runtime view a path belongs to, or undefined for paths with no legacy view. */
+function viewForPath(path) {
+  return viewFromPath(path);
+}
+window.addEventListener("popstate", syncFromLocation);
 
 let metadataSearchDelegationWired = false;
 function wireMetadataSearchDelegation() {
@@ -3355,6 +3345,8 @@ export {
   getShellSnapshot,
   setShellRefreshHook,
   setUrlSyncHook,
+  syncFromLocation,
+  viewForPath,
   pauseRuntime,
   refreshJobs,
   unmountOperationsPanel,
@@ -3388,8 +3380,6 @@ export {
   triggerOperations,
   triggerExport,
   triggerEdit,
-  triggerBack,
-  triggerForward,
   getProviderProfilesForUi,
   getProviderRequestConfigForUi,
   getDefaultProviderProfileId,

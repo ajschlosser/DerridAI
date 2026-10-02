@@ -34,10 +34,6 @@ export interface ShellSnapshot {
   dbUnavailableReason: string;
   activeStore: string;
   canEdit: boolean;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  backLabel: string;
-  forwardLabel: string;
   selectedEvidenceCount: number;
   systemHtml: string;
   nav: ShellNavItem[];
@@ -59,10 +55,6 @@ const emptySnapshot: ShellSnapshot = {
   dbUnavailableReason: "",
   activeStore: "",
   canEdit: false,
-  canGoBack: false,
-  canGoForward: false,
-  backLabel: "",
-  forwardLabel: "",
   selectedEvidenceCount: 0,
   systemHtml: "",
   nav: [],
