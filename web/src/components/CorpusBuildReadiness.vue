@@ -63,7 +63,9 @@ const blockingCount = computed(
 const warningNotices = computed<Notice[]>(() =>
   warnings.value.map((issue) => ({ id: issue.message, tone: "warning", text: issue.message })),
 );
-const profileBusyWarning = computed(() => warnings.value.some((issue) => issue.id === "profile_busy"));
+const profileBusyWarning = computed(() =>
+  warnings.value.some((issue) => issue.id === "profile_busy"),
+);
 function dismissWarnings(ids: string[]) {
   dismissed.value = new Set([...dismissed.value, ...ids]);
 }
