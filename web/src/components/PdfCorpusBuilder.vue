@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import {
   corpusBuilderApi,
   type CorpusBuild,
@@ -196,10 +196,7 @@ const reviewRecords = useCorpusReviewRecords({
   selectedRecordId,
   selectedRecord,
   hasActiveDraft: () =>
-    editingText.value ||
-    metadataEditorDirty.value ||
-    advancedMetadataDirty.value ||
-    failedDraftRequests.length > 0,
+    editingText.value || metadataEditorDirty.value || advancedMetadataDirty.value,
   activateRecord,
   onSelectionCleared: () => {
     sourceBlocks.value = [];
@@ -222,7 +219,6 @@ const {
   applyRecord: applyRecordToQueue,
 } = reviewRecords;
 async function selectRecord(target: ReviewTarget) {
-  if (target.record_id !== selectedRecordId.value && !(await confirmReviewNavigation())) return;
   return reviewRecords.selectRecord(target);
 }
 // Optimistic edits replace selectedRecord; keep the cached copy in step so returning to this Record
@@ -1270,7 +1266,6 @@ const {
   refreshRecords,
   selectRecord,
   setFilters: setReviewFilters,
-  beforeNavigate: confirmReviewNavigation,
 });
 const nextQueueRecordId = computed(() => {
   const index = selectedRecordIndex.value;
@@ -1507,7 +1502,6 @@ const {
   reviewQueue,
   recordQuery,
   recordOffset,
-  beforeDecision: confirmReviewNavigation,
   getSelectionVersion: reviewRecords.getSelectionVersion,
   selectedReviewIds,
   justProcessedRecordId,
@@ -1744,7 +1738,6 @@ function queueRecordRequest(
     ({ rebase }) => request(rebase),
     (exc) => {
       onFailure?.();
-      if (draftNavigationSaving.value) failedDraftRequests.push({ recordId, fields, request });
       setMessage(
         i18n.tf("pdf_corpus.record_save_failed", {
           record: typeof recordId === "string" ? recordId : recordId.join(", "),
@@ -2035,7 +2028,6 @@ function openEnrichmentFromFinish() {
   metadataEnrichmentOpen.value = true;
 }
 async function chooseBuild(build: CorpusBuild) {
-  if (!(await confirmReviewNavigation())) return;
   selectedBuildId.value = build.build_id;
   selectedAssetId.value = build.asset_id;
   selectedRecordId.value = "";
@@ -2106,9 +2098,7 @@ async function saveManifest(changes: Record<string, unknown>) {
 }
 
 async function startNewBuildSetup() {
-  if (!(await confirmReviewNavigation())) return;
   stopPolling();
-  finishDraftNavigation(false);
   selectedBuildId.value = "";
   currentBuild.value = null;
   reviewRecords.clear();
@@ -2127,7 +2117,7 @@ async function startNewBuildSetup() {
   });
 }
 function reviewShortcut(event: KeyboardEvent) {
-  if (!selectedRecord.value || busy.value || draftNavigationOpen.value) return;
+  if (!selectedRecord.value || busy.value) return;
   if (
     (event.ctrlKey || event.metaKey) &&
     !event.altKey &&
@@ -2163,7 +2153,6 @@ function reviewShortcut(event: KeyboardEvent) {
  * finished metadata panel does not imply that the Record itself was accepted.
  */
 async function handleMetadataComplete() {
-  if (draftNavigationSaving.value) return;
   if (reviewQueue.value === "metadata" && selectedRecord.value && !selectedMetadataBlocked.value) {
     await focusQueueMove(1);
     return;
@@ -2182,122 +2171,29 @@ watch(selectedProviderId, (profileId) => {
   );
 });
 let settingReviewFilters = false;
-const draftNavigationOpen = ref(false);
-const draftNavigationSaving = ref(false);
 const advancedMetadataDirty = ref(false);
-const pendingMetadataSaves = new Set<Promise<unknown>>();
-const failedDraftRequests: Array<{
-  recordId: string | readonly string[];
-  fields: string[];
-  request: (rebase: boolean) => Promise<unknown>;
-}> = [];
 function trackMetadataSave(request: Promise<unknown>) {
-  pendingMetadataSaves.add(request);
-  void request.then(
-    () => pendingMetadataSaves.delete(request),
-    (exc) => {
-      pendingMetadataSaves.delete(request);
-      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-    },
+  void request.catch((exc) =>
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error"),
   );
 }
-const metadataPanel = ref<InstanceType<typeof CorpusMetadataResolutionPanel> | null>(null);
-const focusReview = ref<InstanceType<typeof CorpusRecordFocusReview> | null>(null);
-let resolveDraftNavigation: ((proceed: boolean) => void) | undefined;
-let draftNavigationPromise: Promise<boolean> | undefined;
-function confirmReviewNavigation(): Promise<boolean> {
-  if (
-    !editingText.value &&
-    !metadataEditorDirty.value &&
-    !advancedMetadataDirty.value &&
-    !failedDraftRequests.length
-  )
-    return Promise.resolve(true);
-  if (draftNavigationPromise) return draftNavigationPromise;
-  draftNavigationOpen.value = true;
-  draftNavigationPromise = new Promise<boolean>((resolve) => {
-    resolveDraftNavigation = resolve;
-  });
-  return draftNavigationPromise;
+async function saveAdvancedMetadata() {
+  const id = selectedRecordId.value;
+  error.value = "";
+  await saveMetadata();
+  await recordSaveQueue.waitFor(id);
+  if (selectedRecordId.value === id && !error.value) advancedMetadataDirty.value = false;
 }
-async function changeReviewQueue(queue: ReviewQueue) {
-  if (queue !== reviewQueue.value && (await confirmReviewNavigation())) reviewQueue.value = queue;
+function changeReviewQueue(queue: ReviewQueue) {
+  reviewQueue.value = queue;
 }
-async function toggleReviewFocus() {
-  if (
-    (metadataEditorDirty.value || advancedMetadataDirty.value || failedDraftRequests.length) &&
-    !(await confirmReviewNavigation())
-  )
-    return;
+function toggleReviewFocus() {
   if (focusView.value) focusView.value = false;
   else openFocusView();
 }
 async function requestWorkspace(workspace: Parameters<typeof switchWorkspace>[0]) {
-  if (workspace !== workspaceMode.value && !(await confirmReviewNavigation())) return;
   await switchWorkspace(workspace);
 }
-function finishDraftNavigation(proceed: boolean) {
-  draftNavigationOpen.value = false;
-  resolveDraftNavigation?.(proceed);
-  resolveDraftNavigation = undefined;
-  draftNavigationPromise = undefined;
-}
-function discardReviewDrafts() {
-  cancelTextEdit();
-  metadataPanel.value?.discardDrafts();
-  focusReview.value?.discardDrafts();
-  metadataEditorDirty.value = false;
-  advancedMetadataDirty.value = false;
-  failedDraftRequests.length = 0;
-  if (selectedRecord.value)
-    metadataDraft.value = JSON.stringify(recordMetadata(selectedRecord.value), null, 2);
-  finishDraftNavigation(true);
-}
-async function saveReviewDrafts() {
-  const id = selectedRecordId.value;
-  draftNavigationSaving.value = true;
-  error.value = "";
-  try {
-    const retries = failedDraftRequests.splice(0);
-    for (const failed of retries)
-      queueRecordRequest(failed.recordId, failed.fields, () => failed.request(true));
-    if (advancedMetadataDirty.value) {
-      await saveMetadata();
-      if (error.value) return;
-      advancedMetadataDirty.value = false;
-    }
-    const panelSaved = focusView.value
-      ? focusReview.value?.saveDrafts()
-      : metadataPanel.value?.saveDrafts();
-    if (metadataEditorDirty.value && panelSaved === false) {
-      setMessage(i18n.t("pdf_corpus.metadata_invalid"), "error");
-      return;
-    }
-    if (editingText.value) await saveReviewedText();
-    await Promise.all([...pendingMetadataSaves]);
-    await recordSaveQueue.waitFor(id);
-    if (
-      !error.value &&
-      !failedDraftRequests.length &&
-      !editingText.value &&
-      !metadataEditorDirty.value
-    )
-      finishDraftNavigation(true);
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    draftNavigationSaving.value = false;
-  }
-}
-onBeforeRouteLeave(confirmReviewNavigation);
-onBeforeRouteUpdate(async (to) => {
-  if (
-    String(to.query.build || "") !== String(route.query.build || "") ||
-    (to.query.record && String(to.query.record) !== selectedRecordId.value)
-  )
-    return confirmReviewNavigation();
-  return true;
-});
 function setReviewFilters(queue: ReviewQueue, query: string) {
   settingReviewFilters = true;
   reviewQueue.value = queue;
@@ -2532,7 +2428,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", reviewShortcut);
   stopPolling();
-  finishDraftNavigation(false);
 });
 defineExpose({
   saveTextFromFocus,
@@ -3084,7 +2979,6 @@ defineExpose({
             tabindex="0"
           >
             <CorpusMetadataResolutionPanel
-              ref="metadataPanel"
               :schema="currentBuild?.schema"
               :build-id="currentBuild?.build_id"
               :record="selectedRecord"
@@ -3127,7 +3021,7 @@ defineExpose({
               @clear-cache="clearMetadataSuggestionCache"
               @edit-document-metadata="documentMetadataOpen = true"
               @dirty="advancedMetadataDirty = true"
-              @save="saveReviewDrafts"
+              @save="saveAdvancedMetadata"
               @rerun="rerunMetadata()"
               @requeue="requeueCurrentRecord"
               @enrich-again="
@@ -3313,35 +3207,6 @@ defineExpose({
         @split="split"
         @create="createFromSelection"
     /></Teleport>
-    <UiDialog
-      v-if="draftNavigationOpen"
-      open
-      :dismissible="!draftNavigationSaving"
-      :title="i18n.t('pdf_corpus.draft_navigation_title')"
-      :close-label="i18n.t('pdf_corpus.draft_stay')"
-      @close="finishDraftNavigation(false)"
-    >
-      <p>{{ i18n.t("pdf_corpus.draft_navigation_help") }}</p>
-      <p v-if="error" role="alert">{{ error }}</p>
-      <template #footer>
-        <UiButton
-          :label="i18n.t('pdf_corpus.draft_stay')"
-          :disabled="draftNavigationSaving"
-          @click="finishDraftNavigation(false)"
-        />
-        <UiButton
-          :label="i18n.t('pdf_corpus.draft_discard_continue')"
-          :disabled="draftNavigationSaving"
-          @click="discardReviewDrafts"
-        />
-        <UiButton
-          variant="primary"
-          :label="i18n.t('pdf_corpus.draft_save_continue')"
-          :disabled="draftNavigationSaving"
-          @click="saveReviewDrafts"
-        />
-      </template>
-    </UiDialog>
     <CorpusTextCleanupDialog
       v-if="textCleanupOpen && selectedRecord"
       :text="textDraft"
@@ -3527,7 +3392,6 @@ defineExpose({
     />
     <Teleport to="body"
       ><CorpusRecordFocusReview
-        ref="focusReview"
         v-if="focusView && selectedRecord"
         v-model:show-context="showRecordContext"
         v-model:inspector-tab="reviewInspectorTab"

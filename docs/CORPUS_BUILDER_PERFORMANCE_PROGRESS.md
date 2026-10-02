@@ -58,3 +58,12 @@ No implementation tests or new timings recorded yet. The first benchmark must se
 - Preserve embedded non-PDF author metadata with `source_metadata` provenance; retain existing PDF provenance and fallback behavior. Bumped the document-manifest prompt contract to v4.
 - 49 focused backend tests passed, including real transcript-block preparation through the structure stage, provider-unavailable fallback, existing manifest pipeline behavior, audio settings/topology, ownership, and build resilience. No live transcription service was used.
 - Persistence implementation checkpoint `d9c30235` was pushed. Additional timing attempts showed unstable shared-machine disk latency (including a 54.6-second baseline sample at 1,000 records) and were stopped; deterministic write-count improvement is validated, but elapsed-time targets remain unverified.
+
+## Review navigation checkpoint (2026-10-02)
+
+- Removed the unsaved-review modal and its navigation/decision gates. Navigation never implicitly confirms unsaved values. Existing local text and advanced-JSON draft recovery remains; ordinary field edits still require an explicit save.
+- Removed modal-only save/discard component APIs, refs, retry state, and English/French strings. Retained explicit advanced-metadata save and existing save-error handling.
+- Updated user guidance and replaced modal tests with immediate-navigation, draft-restoration, new-build, rejection, and French keyboard coverage.
+- Moved the metadata dirty-state regression out of a nested test definition so it actually executes, using public field buttons rather than removed modal-only APIs.
+- App/SDK and test TypeScript checks passed; 86 focused frontend tests passed; production build passed (existing large-chunk warning). Thirteen locale/accessibility-floor/API-contract tests passed. Browser verification is being finalized; initial run passed 17/18, with the new rejection case missing a mock command response; fixed that fixture and reran.
+- Review found `DocumentManifestEditor` lost its import in `8cfda23c` while the build-workspace template still renders it. A new component-resolution test reproduces the failure. User approved the repair; implementation is next.
