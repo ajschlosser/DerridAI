@@ -128,6 +128,7 @@ def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
         "pdf_pages",
         "topology_index",
         "topology_count",
+        "queue_state_version",
         "boundary_review",
         "boundary_suspicion",
         "metadata_field_status",

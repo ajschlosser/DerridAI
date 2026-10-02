@@ -118,8 +118,11 @@ def _select_indices(
             continue
         if filters.source_problem is not None and bool(record.get("source_quality_issues")) is not filters.source_problem:
             continue
-        if q and q not in json.dumps(record, ensure_ascii=False).casefold():
-            continue
+        if q:
+            searchable = copy.deepcopy(record)
+            _present_for_reviewer(searchable)
+            if q not in json.dumps(searchable, ensure_ascii=False).casefold():
+                continue
         queue_records.append(record)
         if filters.review_queue and not _matches_review_queue(record, filters.review_queue):
             continue
@@ -175,7 +178,7 @@ def observed_metadata_values(records: list[dict[str, Any]]) -> dict[str, list[st
     return {field: list(values) for field, values in result.items()}
 
 
-def _compute_observed_metadata_values(records: list[dict[str, Any]]) -> dict[str, list[str]]:
+def _compute_observed_metadata_values(records: list[dict[str, Any]], *, present: bool = True) -> dict[str, list[str]]:
     """Every non-placeholder value seen for a metadata field, for build-wide facets.
 
     Computed over the reviewer-presented view of every stored Record, not the raw
@@ -186,7 +189,8 @@ def _compute_observed_metadata_values(records: list[dict[str, Any]]) -> dict[str
     metadata_values: dict[str, set[str]] = {field: set() for field in ALLOWED_METADATA_FIELDS}
     for raw in records:
         record = copy.deepcopy(raw)
-        _present_for_reviewer(record)
+        if present:
+            _present_for_reviewer(record)
         for field, value in record.items():
             if field in _NON_ASSERTION_FIELDS or (
                 _operational_key(field) and field not in (record.get("metadata_field_status") or {})

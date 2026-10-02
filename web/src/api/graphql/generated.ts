@@ -84,6 +84,8 @@ export type CorpusBuildReviewRecordsArgs = {
 
 /** One PDF Corpus Builder build's reviewable Records (REST: /api/pdf/corpus-builds/{id}). */
 export type CorpusBuildReviewReview_QueueArgs = {
+  cursor?: InputMaybe<Scalars['String']['input']>;
+  direction?: Scalars['String']['input'];
   disposition?: InputMaybe<Scalars['String']['input']>;
   limit?: Scalars['Int']['input'];
   metadata_incomplete?: InputMaybe<Scalars['Boolean']['input']>;
@@ -127,6 +129,7 @@ export type CorpusQueueRow = {
   review_issue_codes: Array<Scalars['String']['output']>;
   review_state?: Maybe<Scalars['String']['output']>;
   source_quality_issues: Scalars['Boolean']['output'];
+  state_version?: Maybe<Scalars['Int']['output']>;
   text_length: Scalars['Int']['output'];
   text_preview: Scalars['String']['output'];
 };
@@ -144,10 +147,17 @@ export type CorpusRecord = {
 
 /** One page of the review queue: rows, total, and build-wide counts. */
 export type CorpusReviewQueuePage = {
+  data_generation: Scalars['Int']['output'];
+  has_next_page: Scalars['Boolean']['output'];
+  has_previous_page: Scalars['Boolean']['output'];
   items: Array<CorpusQueueRow>;
   limit: Scalars['Int']['output'];
+  next_cursor?: Maybe<Scalars['String']['output']>;
   offset: Scalars['Int']['output'];
+  previous_cursor?: Maybe<Scalars['String']['output']>;
   queue_counts: CorpusQueueCounts;
+  topology_count: Scalars['Int']['output'];
+  topology_generation: Scalars['Int']['output'];
   total: Scalars['Int']['output'];
 };
 
@@ -326,8 +336,6 @@ export type Query = {
   celf_model: CelfModel;
   /** A PDF Corpus Builder build by id (REST: GET /api/pdf/corpus-builds/{id}). */
   corpus_build: CorpusBuildReview;
-  /** One canonical cELF SourceDocument with its extraction, structure, provenance, capture links, and downstream build references. */
-  source_document: SourceDocumentView;
   /** One owner-scoped generated claim. */
   generated_claim: GeneratedClaim;
   /** Progressive metadata exemplars (REST: GET /api/system/data/metadata-exemplars). */
@@ -336,6 +344,8 @@ export type Query = {
   record_graph: ResearchObjectGraph;
   /** One Research run with its answer and cited evidence. */
   research_run: ResearchRun;
+  /** One canonical cELF SourceDocument with its extraction, structure, provenance, capture links, and downstream build references. */
+  source_document: SourceDocumentView;
   /** A vector store by name (REST: GET /api/stores/{name}). */
   vector_store: VectorStore;
 };
@@ -350,12 +360,6 @@ export type QueryCorpus_BuildArgs = {
 /** Read-only cELF queries. Commands are REST; live events are WebSocket. */
 export type QueryGenerated_ClaimArgs = {
   claim_id: Scalars['String']['input'];
-};
-
-
-/** Read-only cELF queries. Commands are REST; live events are WebSocket. */
-export type QuerySource_DocumentArgs = {
-  source_document_id: Scalars['String']['input'];
 };
 
 
@@ -382,6 +386,12 @@ export type QueryRecord_GraphArgs = {
 /** Read-only cELF queries. Commands are REST; live events are WebSocket. */
 export type QueryResearch_RunArgs = {
   run_id: Scalars['String']['input'];
+};
+
+
+/** Read-only cELF queries. Commands are REST; live events are WebSocket. */
+export type QuerySource_DocumentArgs = {
+  source_document_id: Scalars['String']['input'];
 };
 
 
@@ -493,6 +503,29 @@ export type SourceCaptureReference = {
   provider_item_id: Scalars['String']['output'];
 };
 
+/** One medium page/layout projection for a SourceDocument. */
+export type SourceDocumentPage = {
+  block_ids: Array<Scalars['String']['output']>;
+  deterministic_region_type?: Maybe<Scalars['String']['output']>;
+  extraction_method?: Maybe<Scalars['String']['output']>;
+  height?: Maybe<Scalars['Float']['output']>;
+  image_count?: Maybe<Scalars['Int']['output']>;
+  logical_pages: Scalars['JSON']['output'];
+  physical_page: Scalars['Int']['output'];
+  printed_page_label?: Maybe<Scalars['String']['output']>;
+  printed_page_label_source?: Maybe<Scalars['String']['output']>;
+  thread_ids: Array<Scalars['String']['output']>;
+  width?: Maybe<Scalars['Float']['output']>;
+};
+
+/** A bounded page of SourceDocument page/layout projections. */
+export type SourceDocumentPagePage = {
+  items: Array<SourceDocumentPage>;
+  limit: Scalars['Int']['output'];
+  offset: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
+};
+
 /** Read projection around one canonical cELF SourceDocument: identity, extraction provenance, document structure, and links to downstream Corpus Builder builds. */
 export type SourceDocumentView = {
   builds: Array<SourceBuildReference>;
@@ -540,29 +573,6 @@ export type SourceDocumentViewSource_UnitsArgs = {
   ids?: InputMaybe<Array<Scalars['String']['input']>>;
   limit?: Scalars['Int']['input'];
   offset?: Scalars['Int']['input'];
-};
-
-/** One medium page/layout projection for a SourceDocument. */
-export type SourceDocumentPage = {
-  block_ids: Array<Scalars['String']['output']>;
-  deterministic_region_type?: Maybe<Scalars['String']['output']>;
-  extraction_method?: Maybe<Scalars['String']['output']>;
-  height?: Maybe<Scalars['Float']['output']>;
-  image_count?: Maybe<Scalars['Int']['output']>;
-  logical_pages: Scalars['JSON']['output'];
-  physical_page: Scalars['Int']['output'];
-  printed_page_label?: Maybe<Scalars['String']['output']>;
-  printed_page_label_source?: Maybe<Scalars['String']['output']>;
-  thread_ids: Array<Scalars['String']['output']>;
-  width?: Maybe<Scalars['Float']['output']>;
-};
-
-/** A bounded page of SourceDocument page/layout projections. */
-export type SourceDocumentPagePage = {
-  items: Array<SourceDocumentPage>;
-  limit: Scalars['Int']['output'];
-  offset: Scalars['Int']['output'];
-  total: Scalars['Int']['output'];
 };
 
 /** A medium-aware documentary locator. Audio spans use time and speaker, never PDF pages. */
@@ -729,7 +739,7 @@ export type CorpusMetadataFacetsQueryVariables = Exact<{
 
 export type CorpusMetadataFacetsQuery = { corpus_build: { metadata_facets: unknown } };
 
-export type CorpusQueueRowFieldsFragment = { record_id: string, record_revision: number | null, page_start: string | null, page_end: string | null, text_length: number, text_preview: string, review_state: string | null, review_disposition: string | null, review_issue_codes: Array<string>, metadata_llm_processed: boolean, needs_review: boolean, source_quality_issues: boolean, metadata_complete: boolean };
+export type CorpusQueueRowFieldsFragment = { record_id: string, record_revision: number | null, state_version: number | null, page_start: string | null, page_end: string | null, text_length: number, text_preview: string, review_state: string | null, review_disposition: string | null, review_issue_codes: Array<string>, metadata_llm_processed: boolean, needs_review: boolean, source_quality_issues: boolean, metadata_complete: boolean };
 
 export type CorpusQueueRowsQueryVariables = Exact<{
   build_id: string;
@@ -737,7 +747,7 @@ export type CorpusQueueRowsQueryVariables = Exact<{
 }>;
 
 
-export type CorpusQueueRowsQuery = { corpus_build: { rows: Array<{ record_id: string, record_revision: number | null, page_start: string | null, page_end: string | null, text_length: number, text_preview: string, review_state: string | null, review_disposition: string | null, review_issue_codes: Array<string>, metadata_llm_processed: boolean, needs_review: boolean, source_quality_issues: boolean, metadata_complete: boolean } | null> } };
+export type CorpusQueueRowsQuery = { corpus_build: { rows: Array<{ record_id: string, record_revision: number | null, state_version: number | null, page_start: string | null, page_end: string | null, text_length: number, text_preview: string, review_state: string | null, review_disposition: string | null, review_issue_codes: Array<string>, metadata_llm_processed: boolean, needs_review: boolean, source_quality_issues: boolean, metadata_complete: boolean } | null> } };
 
 export type CorpusQueueTextsQueryVariables = Exact<{
   build_id: string;
@@ -751,6 +761,8 @@ export type CorpusReviewQueueQueryVariables = Exact<{
   build_id: string;
   offset?: number | null | undefined;
   limit?: number | null | undefined;
+  cursor?: string | null | undefined;
+  direction?: string | null | undefined;
   needs_review?: boolean | null | undefined;
   disposition?: string | null | undefined;
   metadata_incomplete?: boolean | null | undefined;
@@ -760,7 +772,7 @@ export type CorpusReviewQueueQueryVariables = Exact<{
 }>;
 
 
-export type CorpusReviewQueueQuery = { corpus_build: { review_queue: { total: number, offset: number, limit: number, items: Array<{ record_id: string, record_revision: number | null, page_start: string | null, page_end: string | null, text_length: number, text_preview: string, review_state: string | null, review_disposition: string | null, review_issue_codes: Array<string>, metadata_llm_processed: boolean, needs_review: boolean, source_quality_issues: boolean, metadata_complete: boolean }>, queue_counts: { all: number, ready: number, preparing: number, issues: number, metadata: number, topology: number, source: number, accepted: number, rejected: number, pending: number } } } };
+export type CorpusReviewQueueQuery = { corpus_build: { review_queue: { total: number, offset: number, limit: number, topology_count: number, data_generation: number, topology_generation: number, next_cursor: string | null, previous_cursor: string | null, has_next_page: boolean, has_previous_page: boolean, items: Array<{ record_id: string, record_revision: number | null, state_version: number | null, page_start: string | null, page_end: string | null, text_length: number, text_preview: string, review_state: string | null, review_disposition: string | null, review_issue_codes: Array<string>, metadata_llm_processed: boolean, needs_review: boolean, source_quality_issues: boolean, metadata_complete: boolean }>, queue_counts: { all: number, ready: number, preparing: number, issues: number, metadata: number, topology: number, source: number, accepted: number, rejected: number, pending: number } } } };
 
 export type CorpusReviewRecordsQueryVariables = Exact<{
   build_id: string;
@@ -769,6 +781,14 @@ export type CorpusReviewRecordsQueryVariables = Exact<{
 
 
 export type CorpusReviewRecordsQuery = { corpus_build: { records: Array<{ record_id: string, record_revision: number | null, review_document: unknown } | null> } };
+
+export type StoredRecordTraceQueryVariables = Exact<{
+  store: string;
+  chroma_id: string;
+}>;
+
+
+export type StoredRecordTraceQuery = { vector_store: { record: { document: unknown, graph: { specification_version: string, root_id: string, hidden_assertion_count: number, record_state_origin: string, nodes: Array<{ id: string, object_type: string, object_id: string, label: string, summary: string, materialization: string, status: string | null, details: unknown, field_assertion: { assertion_id: string, field_id: string | null, field_name: string | null, value: unknown, derivation_method: string | null, evaluation_status: string | null, authority_status: string | null, value_status: string | null, confidence: number | null, reason: string | null, method: string | null, actor: string | null, model: string | null, run_id: string | null, record_revision: number | null, evidence: unknown, created_at: string | null, supersedes_assertion_id: string | null, is_current: boolean } | null, source_span: { source_document_id: string | null, source_span_id: string | null, source_unit_ids: Array<string>, locator_kind: string | null, physical_page_start: number | null, physical_page_end: number | null, printed_page_start: string | null, printed_page_end: string | null, character_start: number | null, character_end: number | null, time_start: number | null, time_end: number | null, speaker: string | null } | null, evidence_ref: { evidence_ref_id: string, locator_kind: string | null, record_id: string | null, record_revision: number | null, source_document_id: string | null } | null, generated_claim: { claim_id: string, claim_text: string, validation_status: string } | null }>, edges: Array<{ id: string, source: string, target: string, relation: string, inverse_relation: string, normative: boolean, source_cardinality: string | null, target_cardinality: string | null, profile: string | null, status: string | null }> } } | null } };
 
 export type SourceDocumentInspectorQueryVariables = Exact<{
   source_document_id: string;
@@ -779,19 +799,11 @@ export type SourceDocumentInspectorQuery = { source_document: { source_document_
 
 export type SourceDocumentPreviewQueryVariables = Exact<{
   source_document_id: string;
-  limit?: number | null | undefined;
+  limit?: number;
 }>;
 
 
 export type SourceDocumentPreviewQuery = { source_document: { source_units: { total: number, items: Array<{ source_unit_id: string, text: string }> } } };
-
-export type StoredRecordTraceQueryVariables = Exact<{
-  store: string;
-  chroma_id: string;
-}>;
-
-
-export type StoredRecordTraceQuery = { vector_store: { record: { document: unknown, graph: { specification_version: string, root_id: string, hidden_assertion_count: number, record_state_origin: string, nodes: Array<{ id: string, object_type: string, object_id: string, label: string, summary: string, materialization: string, status: string | null, details: unknown, field_assertion: { assertion_id: string, field_id: string | null, field_name: string | null, value: unknown, derivation_method: string | null, evaluation_status: string | null, authority_status: string | null, value_status: string | null, confidence: number | null, reason: string | null, method: string | null, actor: string | null, model: string | null, run_id: string | null, record_revision: number | null, evidence: unknown, created_at: string | null, supersedes_assertion_id: string | null, is_current: boolean } | null, source_span: { source_document_id: string | null, source_span_id: string | null, source_unit_ids: Array<string>, locator_kind: string | null, physical_page_start: number | null, physical_page_end: number | null, printed_page_start: string | null, printed_page_end: string | null, character_start: number | null, character_end: number | null, time_start: number | null, time_end: number | null, speaker: string | null } | null, evidence_ref: { evidence_ref_id: string, locator_kind: string | null, record_id: string | null, record_revision: number | null, source_document_id: string | null } | null, generated_claim: { claim_id: string, claim_text: string, validation_status: string } | null }>, edges: Array<{ id: string, source: string, target: string, relation: string, inverse_relation: string, normative: boolean, source_cardinality: string | null, target_cardinality: string | null, profile: string | null, status: string | null }> } } | null } };
 
 export type VectorRecordRowFieldsFragment = { chroma_id: string, record_id: string | null, work: string | null, page_start: string | null, page_end: string | null, text_preview: string };
 
@@ -830,6 +842,7 @@ export const CorpusQueueRowFieldsFragmentDoc = new TypedDocumentString(`
     fragment CorpusQueueRowFields on CorpusQueueRow {
   record_id
   record_revision
+  state_version
   page_start
   page_end
   text_length
@@ -1131,6 +1144,7 @@ export const CorpusQueueRowsDocument = new TypedDocumentString(`
     fragment CorpusQueueRowFields on CorpusQueueRow {
   record_id
   record_revision
+  state_version
   page_start
   page_end
   text_length
@@ -1154,11 +1168,13 @@ export const CorpusQueueTextsDocument = new TypedDocumentString(`
 }
     `) as unknown as TypedDocumentString<CorpusQueueTextsQuery, CorpusQueueTextsQueryVariables>;
 export const CorpusReviewQueueDocument = new TypedDocumentString(`
-    query CorpusReviewQueue($build_id: String!, $offset: Int = 0, $limit: Int = 50, $needs_review: Boolean, $disposition: String, $metadata_incomplete: Boolean, $source_problem: Boolean, $review_queue: String, $query: String = "") {
+    query CorpusReviewQueue($build_id: String!, $offset: Int = 0, $limit: Int = 50, $cursor: String, $direction: String = "forward", $needs_review: Boolean, $disposition: String, $metadata_incomplete: Boolean, $source_problem: Boolean, $review_queue: String, $query: String = "") {
   corpus_build(build_id: $build_id) {
     review_queue(
       offset: $offset
       limit: $limit
+      cursor: $cursor
+      direction: $direction
       needs_review: $needs_review
       disposition: $disposition
       metadata_incomplete: $metadata_incomplete
@@ -1172,6 +1188,13 @@ export const CorpusReviewQueueDocument = new TypedDocumentString(`
       total
       offset
       limit
+      topology_count
+      data_generation
+      topology_generation
+      next_cursor
+      previous_cursor
+      has_next_page
+      has_previous_page
       queue_counts {
         all
         ready
@@ -1190,6 +1213,7 @@ export const CorpusReviewQueueDocument = new TypedDocumentString(`
     fragment CorpusQueueRowFields on CorpusQueueRow {
   record_id
   record_revision
+  state_version
   page_start
   page_end
   text_length
@@ -1213,56 +1237,6 @@ export const CorpusReviewRecordsDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<CorpusReviewRecordsQuery, CorpusReviewRecordsQueryVariables>;
-export const SourceDocumentInspectorDocument = new TypedDocumentString(`
-    query SourceDocumentInspector($source_document_id: String!) {
-  source_document(source_document_id: $source_document_id) {
-    source_document_id
-    sha256
-    filename
-    created_at
-    media_type
-    media_kind
-    content_suffix
-    source_url
-    page_count
-    source_unit_count
-    ocr_pages
-    derived_from_source_document_id
-    extraction_provenance
-    catalog_metadata
-    initial_metadata
-    captures {
-      capture_id
-      candidate_id
-      provider
-      provider_item_id
-      discovery_method
-      discovered_at
-      acquired_at
-      author_name
-    }
-    builds {
-      build_id
-      status
-      created_at
-      record_count
-    }
-  }
-}
-    `) as unknown as TypedDocumentString<SourceDocumentInspectorQuery, SourceDocumentInspectorQueryVariables>;
-export const SourceDocumentPreviewDocument = new TypedDocumentString(`
-    query SourceDocumentPreview($source_document_id: String!, $limit: Int! = 8) {
-  source_document(source_document_id: $source_document_id) {
-    source_units(limit: $limit) {
-      items {
-        source_unit_id
-        text
-      }
-      total
-    }
-  }
-}
-    `) as unknown as TypedDocumentString<SourceDocumentPreviewQuery, SourceDocumentPreviewQueryVariables>;
 export const StoredRecordTraceDocument = new TypedDocumentString(`
     query StoredRecordTrace($store: String!, $chroma_id: String!) {
   vector_store(name: $store) {
@@ -1350,6 +1324,56 @@ export const StoredRecordTraceDocument = new TypedDocumentString(`
     status
   }
 }`) as unknown as TypedDocumentString<StoredRecordTraceQuery, StoredRecordTraceQueryVariables>;
+export const SourceDocumentInspectorDocument = new TypedDocumentString(`
+    query SourceDocumentInspector($source_document_id: String!) {
+  source_document(source_document_id: $source_document_id) {
+    source_document_id
+    sha256
+    filename
+    created_at
+    media_type
+    media_kind
+    content_suffix
+    source_url
+    page_count
+    source_unit_count
+    ocr_pages
+    derived_from_source_document_id
+    extraction_provenance
+    catalog_metadata
+    initial_metadata
+    captures {
+      capture_id
+      candidate_id
+      provider
+      provider_item_id
+      discovery_method
+      discovered_at
+      acquired_at
+      author_name
+    }
+    builds {
+      build_id
+      status
+      created_at
+      record_count
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<SourceDocumentInspectorQuery, SourceDocumentInspectorQueryVariables>;
+export const SourceDocumentPreviewDocument = new TypedDocumentString(`
+    query SourceDocumentPreview($source_document_id: String!, $limit: Int! = 8) {
+  source_document(source_document_id: $source_document_id) {
+    source_units(limit: $limit) {
+      items {
+        source_unit_id
+        text
+      }
+      total
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<SourceDocumentPreviewQuery, SourceDocumentPreviewQueryVariables>;
 export const VectorStoreBrowseDocument = new TypedDocumentString(`
     query VectorStoreBrowse($name: String!, $includeRecords: Boolean!, $offset: Int!, $limit: Int!, $work: String) {
   vector_store(name: $name) {

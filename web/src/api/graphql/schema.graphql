@@ -38,7 +38,7 @@ type CorpusBuildReview {
   """
   The paged, filtered review queue (REST: GET /api/pdf/corpus-builds/{id}/records).
   """
-  review_queue(offset: Int! = 0, limit: Int! = 50, needs_review: Boolean = null, disposition: String = null, metadata_incomplete: Boolean = null, source_problem: Boolean = null, review_queue: String = null, query: String! = ""): CorpusReviewQueuePage!
+  review_queue(offset: Int! = 0, limit: Int! = 50, needs_review: Boolean = null, disposition: String = null, metadata_incomplete: Boolean = null, source_problem: Boolean = null, review_queue: String = null, query: String! = "", cursor: String = null, direction: String! = "forward"): CorpusReviewQueuePage!
 
   """Queue-row projections for specific Records, in the order requested."""
   rows(record_ids: [String!]!): [CorpusQueueRow]!
@@ -95,6 +95,7 @@ type CorpusQueueRow {
   needs_review: Boolean!
   source_quality_issues: Boolean!
   metadata_complete: Boolean!
+  state_version: Int
 }
 
 """
@@ -117,6 +118,13 @@ type CorpusReviewQueuePage {
   offset: Int!
   limit: Int!
   queue_counts: CorpusQueueCounts!
+  topology_count: Int!
+  data_generation: Int!
+  topology_generation: Int!
+  next_cursor: String
+  previous_cursor: String
+  has_next_page: Boolean!
+  has_previous_page: Boolean!
 }
 
 """One normalized entity/coreference cluster from Document Intelligence."""

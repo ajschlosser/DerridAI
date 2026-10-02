@@ -10,7 +10,6 @@ stages; do not grow this file simply because older callers import from it.
 
 from __future__ import annotations
 
-import copy
 import difflib
 import hashlib
 import json
@@ -24,13 +23,16 @@ import time
 import unicodedata
 import uuid
 from collections import Counter
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import fitz
 from pydantic import BaseModel, ValidationError
 
+from . import corpus_queue_projection
 from .autonomous import Policy as AutonomousPolicy
 from .celf_conformance import evaluate_celf_conformance
 from .concurrency import capacity_coordinator, provider_capacity_key, provider_limit
@@ -186,12 +188,11 @@ from .corpus_record_quality import (
     iso_now,
 )
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
+from .corpus_review_aggregates import record_review_aggregate
 from .corpus_review_queue import (
     QueueFilter,
     QueueSelection,
     QueueSelectionCache,
-    empty_page,
-    observed_metadata_values,
     select_queue,
 )
 from .corpus_review_state import (
@@ -208,12 +209,11 @@ from .corpus_review_state import (
     _settle_enrichment_review_reason as _settle_enrichment_review_reason,
 )
 from .corpus_reviewer_helpers import (
-    _metadata_issue_type_for_field,
-    _present_for_reviewer,
-    _scrub_canonical_transport,
+    _operation_from_build as _operation_from_build,
 )
 from .corpus_reviewer_helpers import (
-    _operation_from_build as _operation_from_build,
+    _present_for_reviewer,
+    _scrub_canonical_transport,
 )
 from .corpus_schema_profile import SchemaProfileMixin
 from .corpus_segmentation import (
@@ -746,10 +746,16 @@ def _json_write(path: Path, payload: Any) -> None:
 
 
 def _json_read(path: Path, default: Any = None) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
-        return default
+    for attempt in range(4):
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except PermissionError:
+            if os.name != "nt" or attempt == 3:
+                raise
+            # Windows can briefly deny opens while another repository atomically replaces this file.
+            time.sleep(0.005 * (2 ** attempt))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return default
 
 
 # 2026: renamed to match the cELF Core Specification's assertion-status vocabulary
@@ -1677,24 +1683,31 @@ class PdfCorpusRepository:
         build = self.get_build(build_id)
         return bool((build.get("records_projection") or {}).get("dirty"))
 
-    def _records_db(self, build_id: str) -> sqlite3.Connection:
+    @contextmanager
+    def _records_db(self, build_id: str) -> Iterator[sqlite3.Connection]:
         path = self.build_records_db_path(build_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(path, timeout=30)
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS corpus_records (
-                record_id TEXT PRIMARY KEY,
-                ordinal INTEGER NOT NULL,
-                payload TEXT NOT NULL
+        try:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS corpus_records (
+                    record_id TEXT PRIMARY KEY,
+                    ordinal INTEGER NOT NULL,
+                    payload TEXT NOT NULL
+                )
+                """
             )
-            """
-        )
-        connection.execute(
-            "CREATE INDEX IF NOT EXISTS idx_corpus_records_ordinal "
-            "ON corpus_records (ordinal)"
-        )
-        return connection
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_corpus_records_ordinal "
+                "ON corpus_records (ordinal)"
+            )
+            corpus_queue_projection.initialize(connection)
+            connection.commit()
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def _bootstrap_records_db(self, build_id: str) -> None:
         if self.build_records_db_path(build_id).exists():
@@ -1721,6 +1734,7 @@ class PdfCorpusRepository:
                     if record.get("record_id")
                 ],
             )
+            self._ensure_review_projection(connection, build_id, rebuild=True)
             connection.commit()
 
     def build_checkpoint_path(self, build_id: str, name: str) -> Path:
@@ -1859,6 +1873,9 @@ class PdfCorpusRepository:
         self, record: dict[str, Any], schema: MetadataSchema | None, signature: bytes,
     ) -> tuple[dict[str, Any], str]:
         """Migrate a record for storage unless its serialized form is already a known fixed point."""
+        if "queue_state_version" in record:
+            record = dict(record)
+            record.pop("queue_state_version")
         payload = json.dumps(record, ensure_ascii=False)
         if (self._payload_digest(payload), signature) in self._migration_fixed_points:
             return record, payload
@@ -1900,6 +1917,8 @@ class PdfCorpusRepository:
                     # Safe: best-effort temp-file cleanup; see _json_write.
                     pass
             with self._records_db(build_id) as connection:
+                if not connection.in_transaction:
+                    connection.execute("BEGIN IMMEDIATE")
                 connection.execute("DELETE FROM corpus_records")
                 connection.executemany(
                     "INSERT INTO corpus_records(record_id, ordinal, payload) VALUES (?, ?, ?)",
@@ -1913,42 +1932,13 @@ class PdfCorpusRepository:
                         if record.get("record_id")
                     ],
                 )
+                self._ensure_review_projection(connection, build_id, rebuild=True)
                 connection.commit()
             self._set_records_projection_state(build_id, dirty=False)
             self._invalidate_review_records_cache(build_id)
         # Semantic maps are System Data. Invalidate by generation in O(1);
         # rebuilding is deferred until a map is actually requested.
         system_store.mark_semantic_map_dirty(build_id, reason="records_saved")
-
-    def _patch_review_records_cache(
-        self, build_id: str, before: tuple[int, int], record_id: str, record: dict[str, Any],
-    ) -> None:
-        """Swap one Record into the cached review snapshot instead of discarding the corpus.
-
-        Only valid when the cache still describes the file as it was immediately before this
-        write (another process may have written in between); otherwise it is dropped and the
-        next read reparses. The list is replaced, never mutated, so a reader holding the old
-        snapshot is unaffected and snapshot identity changes whenever the content does.
-        """
-        cached = self._review_records_cache.get(str(build_id))
-        if cached is None or cached[0] != before:
-            self._invalidate_review_records_cache(build_id)
-            return
-        fresh = copy.deepcopy(record)
-        if any(
-            isinstance(status, dict) and status.get("recheck")
-            for status in (fresh.get("metadata_field_status") or {}).values()
-        ):
-            _scrub_canonical_transport(fresh)
-        snapshot = list(cached[1])
-        for index, existing in enumerate(snapshot):
-            if str(existing.get("record_id")) == record_id:
-                snapshot[index] = fresh
-                break
-        else:
-            self._invalidate_review_records_cache(build_id)
-            return
-        self._review_records_cache[str(build_id)] = (self._records_snapshot_signature(build_id), snapshot)
 
     def update_record(self, build_id: str, record: dict[str, Any]) -> None:
         """Persist one validated record without rebuilding the whole JSONL file.
@@ -1957,6 +1947,9 @@ class PdfCorpusRepository:
         publication projection and is marked dirty until an explicit projection
         refresh completes, so a process crash cannot make divergence invisible.
         """
+        if "queue_state_version" in record:
+            record = dict(record)
+            record.pop("queue_state_version")
         record = migrate_record_assertions(
             _migrate_status_vocabulary(record),
             self._record_schema(build_id),
@@ -1967,9 +1960,10 @@ class PdfCorpusRepository:
         payload = json.dumps(record, ensure_ascii=False)
         with self._lock:
             self._bootstrap_records_db(build_id)
-            before = self._records_snapshot_signature(build_id)
             self._set_records_projection_state(build_id, dirty=True)
             with self._records_db(build_id) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                self._ensure_review_projection(connection, build_id)
                 row = connection.execute(
                     "SELECT ordinal FROM corpus_records WHERE record_id = ?",
                     (record_id,),
@@ -1980,9 +1974,10 @@ class PdfCorpusRepository:
                     "UPDATE corpus_records SET payload = ? WHERE record_id = ?",
                     (payload, record_id),
                 )
+                corpus_queue_projection.update_rows(connection, [(int(row[0]), record)])
                 connection.commit()
             self._remember_fixed_point(payload, self._schema_signature(self._record_schema(build_id)))
-            self._patch_review_records_cache(build_id, before, record_id, record)
+            self._invalidate_review_records_cache(build_id)
         # Committed single-record write (not a per-batch build write): readers may hold stale text.
         note_resource_changed("corpus_records")
         system_store.mark_semantic_map_dirty(build_id, reason=f"record_updated:{record_id}")
@@ -2014,7 +2009,8 @@ class PdfCorpusRepository:
             self._set_records_projection_state(build_id, dirty=False)
 
     def get_records(
-        self, build_id: str, record_ids: list[str] | tuple[str, ...]
+        self, build_id: str, record_ids: list[str] | tuple[str, ...], *,
+        include_queue_version: bool = False,
     ) -> list[dict[str, Any] | None]:
         """Read selected interactive records with indexed SQLite lookups.
 
@@ -2028,24 +2024,37 @@ class PdfCorpusRepository:
             return []
         unique_ids = list(dict.fromkeys(requested))
         found: dict[str, str] = {}
+        versions: dict[str, int] = {}
         with self._lock:
             self._bootstrap_records_db(build_id)
             with self._records_db(build_id) as connection:
+                if include_queue_version:
+                    connection.execute("BEGIN IMMEDIATE")
+                    self._ensure_review_projection(connection, build_id)
                 # Review opens/prefetches only a few rows at a time. Fixed-shape indexed
                 # queries avoid dynamic SQL while preserving order/duplicate semantics below.
                 for record_id in unique_ids:
                     row = connection.execute(
-                        "SELECT payload FROM corpus_records WHERE record_id = ?",
+                        """SELECT c.payload,q.state_version FROM corpus_records c
+                           LEFT JOIN review_queue_rows q ON q.record_id=c.record_id
+                           WHERE c.record_id=?"""
+                        if include_queue_version else "SELECT payload FROM corpus_records WHERE record_id = ?",
                         (record_id,),
                     ).fetchone()
                     if row is not None:
                         found[record_id] = str(row[0])
+                        if include_queue_version:
+                            if row[1] is None:
+                                raise RuntimeError("Canonical record has no review projection version.")
+                            versions[record_id] = int(row[1])
         schema = self._record_schema(build_id)
         signature = self._schema_signature(schema)
         decoded: dict[str, dict[str, Any]] = {
             record_id: self._decode_migrated(payload, schema, signature)
             for record_id, payload in found.items()
         }
+        for record_id, version in versions.items():
+            decoded[record_id]["queue_state_version"] = version
         return [decoded.get(record_id) for record_id in requested]
 
     def get_record(self, build_id: str, record_id: str) -> dict[str, Any]:
@@ -2161,7 +2170,100 @@ class PdfCorpusRepository:
             cache=self._queue_selection_cache if owned else None,
         )
 
-    def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
+    def _ensure_review_projection(
+        self, connection: sqlite3.Connection, build_id: str, *, rebuild: bool = False,
+    ) -> None:
+        schema = self._record_schema(build_id)
+        signature = self._schema_signature(schema)
+        identity = hashlib.sha256(
+            json.dumps(schema.model_dump(mode="json") if schema else None, sort_keys=True).encode()
+        ).hexdigest()
+        corpus_queue_projection.ensure(
+            connection, identity, lambda payload: self._decode_migrated(payload, schema, signature),
+            rebuild=rebuild,
+        )
+
+    def projected_review_page(
+        self, build_id: str, filters: QueueFilter, *, offset: int = 0, limit: int = 50,
+        cursor: str | None = None, direction: str = "forward", include_facets: bool = False,
+    ) -> dict[str, Any]:
+        self.get_build(build_id)
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                self._ensure_review_projection(connection, build_id)
+                selected, page = corpus_queue_projection.select(
+                    connection, build_id, filters, offset=offset, limit=limit, cursor=cursor, direction=direction,
+                )
+                schema = self._record_schema(build_id)
+                signature = self._schema_signature(schema)
+                items = []
+                for record_id, ordinal, version in selected:
+                    payload = connection.execute("SELECT payload FROM corpus_records WHERE record_id=?", (record_id,)).fetchone()
+                    if payload is None:
+                        raise RuntimeError("Review projection references a missing canonical record.")
+                    record = corpus_queue_projection._transport_record(self._decode_migrated(payload[0], schema, signature))
+                    record["topology_index"] = int(ordinal)
+                    record["topology_count"] = page["topology_count"]
+                    record["queue_state_version"] = int(version)
+                    _decorate_review_state(record)
+                    _present_for_reviewer(record)
+                    items.append(record)
+                page["items"] = items
+                if include_facets:
+                    page["metadata_values"] = corpus_queue_projection.facets(connection)
+                return page
+
+    def review_metadata_facets(self, build_id: str, fields: list[str] | None = None) -> dict[str, list[str]]:
+        self.get_build(build_id)
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                self._ensure_review_projection(connection, build_id)
+                return corpus_queue_projection.facets(connection, fields)
+
+    def review_build_aggregates(self, build_id: str, *, automation_running: bool) -> dict[str, Any]:
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                self._ensure_review_projection(connection, build_id)
+                return corpus_queue_projection.build_aggregates(connection, automation_running)
+
+    def rebuild_review_queue(self, build_id: str) -> dict[str, Any]:
+        self.get_build(build_id)
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                self._ensure_review_projection(connection, build_id, rebuild=True)
+                _, page = corpus_queue_projection.select(
+                    connection, build_id, QueueFilter(), offset=0, limit=0, cursor=None, direction="forward",
+                )
+                return page
+
+    def review_queue_summary(self, build_id: str, record_id: str, review_queue: str | None = None) -> tuple[dict[str, int], dict[str, Any] | None]:
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                self._ensure_review_projection(connection, build_id)
+                _, page = corpus_queue_projection.select(
+                    connection, build_id, QueueFilter(), offset=0, limit=0, cursor=None, direction="forward",
+                )
+                next_id = corpus_queue_projection.next_pending(connection, record_id, review_queue)
+                if next_id is None:
+                    return page["queue_counts"], None
+                payload = connection.execute("SELECT payload FROM corpus_records WHERE record_id=?", (next_id,)).fetchone()
+                schema = self._record_schema(build_id)
+                record = corpus_queue_projection._transport_record(self._decode_migrated(payload[0], schema, self._schema_signature(schema)))
+                _decorate_review_state(record)
+                _present_for_reviewer(record)
+                return page["queue_counts"], record
+
+    def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "", cursor: str | None = None, direction: str = "forward") -> dict[str, Any]:
         """REST's composite review page: full presented Records, queue counts and observed values.
 
         Reads the transactional index so review pagination sees interactive
@@ -2171,18 +2273,9 @@ class PdfCorpusRepository:
             needs_review=needs_review, disposition=disposition, metadata_incomplete=metadata_incomplete,
             source_problem=source_problem, review_queue=review_queue, query=query,
         )
-        records = self.review_records(build_id)
-        if records is None:
-            return empty_page(offset, limit)
-        selection = self.select_review_queue(records, filters, offset=offset, limit=limit)
-        return {
-            "items": selection.items,
-            "total": selection.total,
-            "offset": offset,
-            "limit": limit,
-            "queue_counts": selection.queue_counts,
-            "metadata_values": observed_metadata_values(records),
-        }
+        return self.projected_review_page(
+            build_id, filters, offset=offset, limit=limit, cursor=cursor, direction=direction, include_facets=True,
+        )
 
     def review_records(self, build_id: str) -> list[dict[str, Any]] | None:
         """Read-only parsed snapshot for review paging, cached across HTTP requests.
@@ -2231,8 +2324,6 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
     def __init__(self, repository: PdfCorpusRepository | None = None, max_workers: int = 2) -> None:
         self.repo = repository or PdfCorpusRepository()
         self._lock = threading.RLock()
-        # Per-Record review aggregates keyed by Record object identity; see _record_review_aggregate.
-        self._aggregate_memo: dict[tuple[int, bool], tuple[dict[str, Any], dict[str, Any]]] = {}
         self._cancel: set[str] = set()
         # Resolved provider requests may contain server-owned credentials and must
         # never be serialized into build.json. Keep the current execution contract
@@ -4328,90 +4419,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         return build
 
     def _record_review_aggregate(self, record: dict[str, Any], automation_running: bool) -> dict[str, Any]:
-        """One Record's contribution to the build-level issue summary and LLM contribution.
-
-        Pure in (record, automation_running). Cached by Record object identity: the repository's
-        review snapshot is replaced one Record at a time, so every unchanged Record keeps its
-        identity and a review click re-derives one Record instead of the whole corpus (each
-        derivation resolves assertions, which dominated the cost of a click).
-        """
-        key = (id(record), automation_running)
-        hit = self._aggregate_memo.get(key)
-        if hit is not None and hit[0] is record:
-            return hit[1]
-        issue_rows: list[dict[str, Any]] = []
-        by_field: Counter[str] = Counter()
-        by_reason: Counter[str] = Counter()
-        invalid_by_field: Counter[str] = Counter()
-        incomplete: list[str] = []
-        retryable_types = {"not_run", "llm_failed", "evidence_failed", "invalid_value", "unresolved"}
-        contribution: Counter[str] = Counter()
-        llm_elapsed_ms = 0
-        llm_family_calls = 0
-        rejected = str(record.get("review_disposition") or "") == "rejected" or bool(record.get("rejected"))
-        # Rejected records remain recoverable but are outside the publishable corpus, so their
-        # unresolved metadata must not block publication.
-        if not rejected and not (automation_running and not _metadata_enrichment_finished(record)):
-            incomplete = list(dict.fromkeys([str(value) for value in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
-            statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-            for field in incomplete:
-                by_field[field] += 1
-                status_info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-                assertion = current_assertion_by_name(record, field)
-                if assertion is not None and assertion.value_status == "invalid":
-                    invalid_by_field[field] += 1
-                issue_type = _metadata_issue_type_for_field(record, field)
-                by_reason[issue_type] += 1
-                issue_rows.append({
-                    "record_id": record.get("record_id"), "field": field,
-                    "issue_type": issue_type, "retryable": issue_type in retryable_types,
-                    "status": status_info.get("status") or "unresolved",
-                    "reason": status_info.get("reason") or "",
-                    "method": status_info.get("method") or "",
-                    "confidence": status_info.get("confidence"),
-                    "current_value": record.get(field),
-                    "page_start": record.get("page_start"), "page_end": record.get("page_end"),
-                })
-        status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-        for field, info in status_map.items():
-            if not isinstance(info, dict):
-                continue
-            assertion = current_assertion_by_name(record, str(field))
-            if assertion is None:
-                continue
-            if assertion.authority_status in {"human_confirmed", "human_override"}:
-                contribution["human_fields"] += 1
-            elif assertion.derivation_method == "inherited":
-                contribution["inherited_fields"] += 1
-            elif assertion.derivation_method == "deterministic":
-                contribution["deterministic_fields"] += 1
-            elif assertion.derivation_method == "model":
-                if assertion.value_status == "present" and assertion.evaluation_status != "evaluation_failed":
-                    contribution["llm_fields_usable"] += 1
-                if assertion.value_status in {"unresolved", "invalid"} or assertion.evaluation_status == "evaluation_failed":
-                    contribution["llm_fields_review"] += 1
-                    if info.get("proposed_value") not in (None, "", []):
-                        contribution["llm_fields_proposed"] += 1
-        ledger = record.get("metadata_execution_ledger") if isinstance(record.get("metadata_execution_ledger"), dict) else {}
-        for family in ("discourse", "quotation", "indexing"):
-            entry = ledger.get(family) if isinstance(ledger.get(family), dict) else {}
-            state = str(entry.get("state") or "")
-            if state in {"complete", "failed"}:
-                llm_family_calls += 1
-            try:
-                llm_elapsed_ms += int(entry.get("elapsed_ms") or 0)
-            except (TypeError, ValueError):
-                pass
-            contribution[f"tasks_{state or 'unknown'}"] += 1
-        aggregate = {
-            "incomplete": incomplete, "rows": issue_rows, "by_field": by_field, "by_reason": by_reason,
-            "invalid_by_field": invalid_by_field, "contribution": contribution,
-            "llm_elapsed_ms": llm_elapsed_ms, "llm_family_calls": llm_family_calls,
-        }
-        if len(self._aggregate_memo) > 50_000:
-            self._aggregate_memo.clear()
-        self._aggregate_memo[key] = (record, aggregate)
-        return aggregate
+        return record_review_aggregate(record, automation_running)
 
     def _apply_review_aggregates(
         self,
@@ -4494,6 +4502,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             build["publication_history"] = history[-20:]
             build["publication"] = None
             build["publication_status"] = "unpublished"
+        self._apply_review_workflow(
+            build, validation, automation_running=automation_running, pass_running=pass_running,
+        )
+
+    def _apply_review_workflow(
+        self, build: dict[str, Any], validation: dict[str, Any], *, automation_running: bool, pass_running: bool,
+    ) -> None:
         reviewed_count = min(build["record_count"], build["accepted_count"] + build["rejected_count"])
         review_fraction = reviewed_count / max(1, build["record_count"])
         blockers = bool(build["needs_review_count"] or build["boundary_review_count"] or not validation.get("valid"))
@@ -4599,17 +4614,17 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             )
             build[field] = max(0, int(build.get(field) or 0) + int(after) - int(before))
         self.repo.update_record(build_id, record)
-        # Build-level aggregates (issue summary, queue counts, workflow/readiness) are derived from
-        # the cached review snapshot, which update_record just patched in place; only the changed
-        # Record is re-derived. Doing this here keeps `build` coherent for the UI without a rescan.
-        snapshot = self.repo.review_records(build_id) or []
-        build["record_count"] = len(snapshot)
-        build["metadata_total"] = len(snapshot)
         running = str(build.get("status") or "") in {"queued", "running"}
         stage = str(build.get("stage") or "")
-        self._apply_review_aggregates(
-            build, snapshot, build.get("validation") or {},
-            automation_running=running and stage in {"enriching", "metadata_retry"},
+        automation_running = running and stage in {"enriching", "metadata_retry"}
+        build.update(self.repo.review_build_aggregates(build_id, automation_running=automation_running))
+        build["llm_contribution"].update({
+            "enrichment_mode": str((build.get("request") or {}).get("enrichment_mode") or "fast"),
+            "semantic_indexing": bool((build.get("request") or {}).get("semantic_indexing")),
+        })
+        build["boundary_review_count"] = len(build.get("segmentation_boundary_reviews") or build.get("segmentation_unresolved_regions") or [])
+        self._apply_review_workflow(
+            build, build.get("validation") or {}, automation_running=automation_running,
             pass_running=running and stage == "metadata_enrichment_rerun",
         )
         self._refresh_workflow_fields(build)

@@ -110,7 +110,7 @@ DEFAULT_EQUIVALENCE_PROFILES: dict[str, EquivalenceProfile] = {
 RESERVED_NAMES = (
     set(CORE_FIELDS) | set(SOURCE_BOUND_FIELDS) | set(MANIFEST_INHERITED_FIELDS)
     | {"language", "needs_review", "review_reason", "attribution_confidence", "semantic_classification_confidence", "extraction_quality",
-       "inline_citation", "full_citation", "metadata", "field_evidence", "field_assessments"}
+       "inline_citation", "full_citation", "metadata", "field_evidence", "field_assessments", "queue_state_version"}
 )
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,39}$")
 MAX_FIELDS = 60
@@ -930,6 +930,7 @@ def normalize_legacy_cardinality(field: SchemaField, value: Any) -> tuple[Any, b
         return value[0], False
     return value, True
 
+
 def _annotation(field: SchemaField) -> Any:
     if field.type == "boolean":
         return bool | None
@@ -964,7 +965,7 @@ def _repeatable_annotation(field: SchemaField) -> Any:
         return values
 
     return Annotated[
-        list[item],
+        list[item],  # type: ignore[valid-type]
         Field(max_length=field.max_items),
         AfterValidator(unique_instance_ids),
     ]

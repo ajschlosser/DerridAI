@@ -42,7 +42,7 @@ interface CorpusBuildLifecycleControllerOptions {
   setMessage: (message: string, tone?: MessageTone) => void;
   resetReviewForBuildStart: () => void;
   refreshRecords: (reset?: boolean, preferredId?: string) => Promise<void>;
-  /** Patch one review-queue row in place from the server (see useCorpusReviewRecords). */
+  /** Reconcile affected records and authoritative queue membership/counts. */
   refreshRows: (recordIds: string[]) => Promise<void>;
   /** Refresh the full selected Record after its enrichment result is durable. */
   refreshRecord: (recordId: string) => Promise<void>;
@@ -235,7 +235,6 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
           const recordId = String((event as CorpusRecordEvent).payload.metadata.record_id || "");
           if (recordId) {
             void options.refreshRows([recordId]);
-            if (recordId === options.selectedRecordId.value) void options.refreshRecord(recordId);
           }
         }
         return false;

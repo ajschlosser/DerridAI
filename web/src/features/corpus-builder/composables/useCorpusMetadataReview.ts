@@ -33,7 +33,7 @@ interface CorpusMetadataReviewOptions {
   selectedRecord: Ref<CorpusRecord | null>;
   selectedRecordId: Ref<string>;
   /** Patch the review queue's row (and cached Record) from an updated Record. */
-  applyRecordToQueue: (record: CorpusRecord) => void;
+  applyRecordToQueue: (record: CorpusRecord, authoritative?: boolean) => void;
   busy: Ref<string>;
   selectedEvidenceField: Ref<string>;
   reviewInspectorTab: Ref<"metadata" | "evidence" | "source" | "semantic">;
@@ -140,7 +140,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
 
     options.selectedRecord.value = row;
     metadataDraft.value = JSON.stringify(options.recordMetadata(row), null, 2);
-    options.applyRecordToQueue(row);
+    options.applyRecordToQueue(row, false);
     metadataEditorDirty.value = false;
     try {
       localStorage.removeItem(options.metadataDraftKey(buildId, recordId));
@@ -273,7 +273,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
 
     options.selectedRecord.value = row;
     metadataDraft.value = JSON.stringify(options.recordMetadata(row), null, 2);
-    options.applyRecordToQueue(row);
+    options.applyRecordToQueue(row, false);
     await options.restoreReviewViewport(viewport);
     options.queueRecordRequest(recordId, [field], (rebase) =>
       corpusBuilderApi.patchEvidence(

@@ -48,6 +48,7 @@ import { useCorpusSourceConfiguration } from "../features/corpus-builder/composa
 import { useCorpusProviderConfiguration } from "../features/corpus-builder/composables/useCorpusProviderConfiguration";
 import { useCorpusBuildLifecycleController } from "../features/corpus-builder/composables/useCorpusBuildLifecycleController";
 import { useCorpusReviewNavigation } from "../features/corpus-builder/composables/useCorpusReviewNavigation";
+import { useAuthStore } from "../stores/auth";
 import {
   useCorpusReviewRecords,
   type ReviewTarget,
@@ -189,6 +190,7 @@ function setRecordListElement(element: HTMLElement | null) {
 // The queue list holds lightweight rows; full Records are read one at a time when opened.
 const reviewRecords = useCorpusReviewRecords({
   selectedBuildId,
+  reviewerKey: computed(() => String(useAuthStore().user?.id ?? "")),
   currentBuild,
   recordOffset,
   pageSize,
@@ -216,6 +218,8 @@ const {
   hydratedTopologyCount,
   loadingRecordId,
   recordError,
+  hasNextPage,
+  hasPreviousPage,
   refreshRecords,
   applyRecord: applyRecordToQueue,
 } = reviewRecords;
@@ -401,9 +405,9 @@ const missingMetadataPromptOpen = ref(false);
 const canPublishUnreviewed = computed(() =>
   Boolean(
     currentBuild.value &&
-    !currentBuild.value.publication &&
-    Number(currentBuild.value.record_count || 0) > 0 &&
-    ["ready", "awaiting_review"].includes(String(currentBuild.value.status || "")),
+      !currentBuild.value.publication &&
+      Number(currentBuild.value.record_count || 0) > 0 &&
+      ["ready", "awaiting_review"].includes(String(currentBuild.value.status || "")),
   ),
 );
 async function publishUnreviewed() {
@@ -1266,6 +1270,9 @@ const {
   recordListEl,
   pageSize,
   refreshRecords,
+  movePage: reviewRecords.movePage,
+  hasNextPage: reviewRecords.hasNextPage,
+  hasPreviousPage: reviewRecords.hasPreviousPage,
   selectRecord,
   setFilters: setReviewFilters,
 });
@@ -1401,9 +1408,9 @@ const recordSizingValid = computed(
 const canStartConcurrentBuild = computed(() =>
   Boolean(
     recordSizingValid.value &&
-    selectedAsset.value &&
-    contextSafe.value &&
-    (selectedProviderId.value || !activeBuildCount.value),
+      selectedAsset.value &&
+      contextSafe.value &&
+      (selectedProviderId.value || !activeBuildCount.value),
   ),
 );
 const transientNetworkError = computed(() =>
@@ -1524,6 +1531,7 @@ const {
   advanceFrom,
   refreshBuild,
   refreshRecords,
+  reconcileRecords: reviewRecords.refreshRows,
   focusFirstMetadataBlocker,
   setMessage,
   t: (key, fallback) => i18n.t(key, fallback),
@@ -1598,8 +1606,8 @@ const {
   setupFacts: () => ({
     structureNeedsReview: Boolean(
       paginatedSource.value &&
-      selectedAsset.value?.pages?.length &&
-      !selectedAsset.value.document_layout?.main_text_pdf_start,
+        selectedAsset.value?.pages?.length &&
+        !selectedAsset.value.document_layout?.main_text_pdf_start,
     ),
     structureSummary: selectedStructureSummary.value,
     recordSizingValid: recordSizingValid.value,
@@ -2927,8 +2935,8 @@ defineExpose({
           :disabled="busy !== ''"
           :page-number="pageNumber"
           :page-count="pageCount"
-          :has-previous-page="recordOffset > 0"
-          :has-next-page="recordOffset + pageSize < recordTotal"
+          :has-previous-page="hasPreviousPage"
+          :has-next-page="hasNextPage"
           @previous-page="previousPage"
           @next-page="nextPage"
           @root-change="setRecordListElement"
@@ -3276,11 +3284,11 @@ defineExpose({
       :concurrency-risk="
         Boolean(
           providerProfiles.find((p) => p.id === llmActionProviderId)?.type === 'ollama' &&
-          llmActionConcurrentLoad + 1 >
-            Number(
-              providerProfiles.find((p) => p.id === llmActionProviderId)?.max_concurrent_requests ||
-                1,
-            ),
+            llmActionConcurrentLoad + 1 >
+              Number(
+                providerProfiles.find((p) => p.id === llmActionProviderId)
+                  ?.max_concurrent_requests || 1,
+              ),
         )
       "
       :active-requests="llmActionConcurrentLoad"
@@ -3447,10 +3455,9 @@ defineExpose({
         :total="Number(currentBuild?.record_count || 0)"
         :can-history-back="focusHistoryIndex > 0"
         :can-history-forward="focusHistoryIndex >= 0 && focusHistoryIndex < focusHistory.length - 1"
-        :can-previous-record="selectedRecordIndex > 0 || recordOffset > 0"
+        :can-previous-record="selectedRecordIndex > 0 || hasPreviousPage"
         :can-next-record="
-          selectedRecordIndex >= 0 &&
-          (selectedRecordIndex < queueRows.length - 1 || recordOffset + pageSize < recordTotal)
+          selectedRecordIndex >= 0 && (selectedRecordIndex < queueRows.length - 1 || hasNextPage)
         "
         :editing-text="editingText"
         :text-draft="textDraft"

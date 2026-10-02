@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { effectScope, nextTick, ref } from "vue";
 import {
   clearGraphQLReadCache,
+  invalidateGraphQLReads,
   GraphQLRequestError,
   execute,
   isAbortError,
@@ -11,9 +12,11 @@ import {
 import {
   CelfModelDocument,
   CorpusReviewQueueDocument,
+  CorpusReviewRecordsDocument,
   type CorpusReviewQueueQueryVariables,
 } from "../../src/api/graphql/generated";
 import { useQuery } from "../../src/api/graphql/useQuery";
+import { corpusReviewReads } from "../../src/features/corpus-builder/api/reviewReads";
 
 function respond(body: unknown, status = 200) {
   return vi.fn(async () => new Response(JSON.stringify(body), { status }));
@@ -48,6 +51,55 @@ describe("graphql client", () => {
     const query = CorpusReviewQueueDocument.toString();
     expect(operationNameOf(query)).toBe("CorpusReviewQueue");
     expect(query).toContain("fragment CorpusQueueRowFields on CorpusQueueRow");
+  });
+
+  it("maps live queue cursor/generation fields without deriving paging from offsets", async () => {
+    const fetchMock = respond({
+      data: {
+        corpus_build: {
+          review_queue: {
+            items: [],
+            offset: 37,
+            limit: 50,
+            total: 120,
+            topology_count: 150,
+            queue_counts: { all: 150 },
+            data_generation: 9,
+            topology_generation: 3,
+            next_cursor: "next",
+            previous_cursor: "previous",
+            has_next_page: false,
+            has_previous_page: true,
+          },
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const page = await corpusReviewReads.queuePage(
+      "b1",
+      50,
+      50,
+      { reviewQueue: "ready" },
+      {},
+      { cursor: "anchor", direction: "backward" },
+    );
+    expect(lastBody(fetchMock).variables).toMatchObject({
+      build_id: "b1",
+      offset: 50,
+      cursor: "anchor",
+      direction: "backward",
+      review_queue: "ready",
+    });
+    expect(page).toMatchObject({
+      offset: 37,
+      topologyCount: 150,
+      dataGeneration: 9,
+      topologyGeneration: 3,
+      nextCursor: "next",
+      previousCursor: "previous",
+      hasNextPage: false,
+      hasPreviousPage: true,
+    });
   });
 
   it("treats GraphQL errors as failures even with HTTP 200 and exposes their codes", async () => {
@@ -102,6 +154,56 @@ describe("graphql client", () => {
     );
     expect((await second).celf_model.specification_version).toBe("1.0");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("scopes invalidation to operation/build/records and guards late pending responses", async () => {
+    const resolvers: Array<(value: Response) => void> = [];
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => resolvers.push(resolve)));
+    vi.stubGlobal("fetch", fetchMock);
+    const read = (build_id: string, record_ids: string[]) =>
+      execute(CorpusReviewRecordsDocument, { build_id, record_ids });
+    const old = read("b1", ["r1"]);
+    const otherRecord = read("b1", ["r2"]);
+    const otherBuild = read("b2", ["r1"]);
+    invalidateGraphQLReads({
+      operations: ["CorpusReviewRecords"],
+      buildId: "b1",
+      recordIds: ["r1"],
+    });
+    const fresh = read("b1", ["r1"]);
+    const sharedRecord = read("b1", ["r2"]);
+    const sharedBuild = read("b2", ["r1"]);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const response = (id: string) =>
+      new Response(
+        JSON.stringify({ data: { corpus_build: { records: [{ review_document: { id } }] } } }),
+      );
+    resolvers[3](response("fresh"));
+    await fresh;
+    resolvers[0](response("stale"));
+    resolvers[1](response("unrelated-record"));
+    resolvers[2](response("unrelated-build"));
+    await Promise.all([old, otherRecord, otherBuild, sharedRecord, sharedBuild]);
+    expect(await read("b1", ["r1"])).toMatchObject({
+      corpus_build: { records: [{ review_document: { id: "fresh" } }] },
+    });
+    await read("b1", ["r2"]);
+    await read("b2", ["r1"]);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("invalidates only queue operations for a build, preserving its full Records", async () => {
+    const fetchMock = respond({ data: { corpus_build: { records: [], review_queue: {} } } });
+    vi.stubGlobal("fetch", fetchMock);
+    await execute(CorpusReviewRecordsDocument, { build_id: "b1", record_ids: ["r1"] });
+    await execute(CorpusReviewQueueDocument, { build_id: "b1" });
+    await execute(CorpusReviewQueueDocument, { build_id: "b2" });
+    invalidateGraphQLReads({ buildId: "b1", operations: ["CorpusReviewQueue"] });
+    await execute(CorpusReviewRecordsDocument, { build_id: "b1", record_ids: ["r1"] });
+    await execute(CorpusReviewQueueDocument, { build_id: "b2" });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await execute(CorpusReviewQueueDocument, { build_id: "b1" });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
 

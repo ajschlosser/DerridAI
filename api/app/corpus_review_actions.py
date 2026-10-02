@@ -404,14 +404,14 @@ class ReviewActionsMixin:
         _sync_record_metadata_state(target, profile)
         blocking_fields = list(dict.fromkeys([str(v) for v in (target.get("metadata_review_fields") or []) + (target.get("metadata_incomplete_fields") or [])]))
         if disposition == "accepted" and (target.get("source_quality_issues") or blocking_fields):
-            snapshot = self.repo.review_records(build_id) or []
+            counts, _ = self.repo.review_queue_summary(build_id, record_id, review_queue)
             return {
                 "applied": False, "blocked": True,
                 "blocker": "source_problem" if target.get("source_quality_issues") else "metadata_decision_required",
                 "blocking_fields": [] if target.get("source_quality_issues") else blocking_fields,
                 "record": _decorate_review_state(target), "next_record": None,
                 "build": self._refresh_workflow_fields(self.repo.get_build(build_id)),
-                "queue_counts": _queue_counts(snapshot),
+                "queue_counts": counts,
             }
         current_revision = self._assert_record_revision(target, expected_revision)
         self._push_record_review_history(build_id, action=f"review_{disposition}", record_id=record_id, previous_record=previous_record)
@@ -444,25 +444,8 @@ class ReviewActionsMixin:
                 build_id,
                 {record_id: promoted_fields},
             )
-        # Prefer the next *pending* record in the active review queue.  `all` is
-        # intentionally special: `_matches_review_queue(..., "all")` includes
-        # already-reviewed records, which previously let Accept & next advance to
-        # an accepted/rejected row and made the primary action look like a no-op.
-        # The cached snapshot already carries this write (patched in place), and is only read.
-        records = self.repo.review_records(build_id) or []
-        index = next((i for i, row in enumerate(records) if row.get("record_id") == record_id), -1)
-        ordered = records[index + 1:] + records[:max(index, 0)] if index >= 0 else records
-        def pending(candidate: dict[str, Any]) -> bool:
-            return str(candidate.get("review_disposition") or "pending") == "pending"
-        if review_queue and review_queue != "all":
-            next_record = next((candidate for candidate in ordered if pending(candidate) and _matches_review_queue(candidate, review_queue)), None)
-        else:
-            next_record = next((candidate for candidate in ordered if pending(candidate)), None)
-        if next_record is None:
-            next_record = next((candidate for candidate in ordered if pending(candidate)), None)
-        if next_record is not None:
-            next_record = _decorate_review_state(json.loads(json.dumps(next_record)))
-        return {"applied": True, "blocked": False, "record": _decorate_review_state(target), "next_record": next_record, "build": build, "queue_counts": _queue_counts(records)}
+        counts, next_record = self.repo.review_queue_summary(build_id, record_id, review_queue)
+        return {"applied": True, "blocked": False, "record": _decorate_review_state(target), "next_record": next_record, "build": build, "queue_counts": counts}
 
 
     def accept_record(self, build_id: str, record_id: str, accepted: bool = True, expected_revision: int | None = None) -> dict[str, Any]:
@@ -1061,7 +1044,7 @@ class ReviewActionsMixin:
                     method="human_voice_assignment",
                     reason=f"Reviewer assigned the diarized voice {voice_id}.",
                 )
-                project_record_assertions(record, schema=schema)
+                project_record_assertions(record)
                 record["record_revision"] = int(record.get("record_revision") or 0) + 1
                 record["updated_at"] = iso_now()
                 changed = True
