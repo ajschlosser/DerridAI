@@ -644,27 +644,74 @@ async function resolveMetadataWithSelectionEvidence(
   await resolveMetadataField(field, value, String(block.block_id));
 }
 
-/** What the reviewer came from Publication readiness to fix, so they can find it and get back. */
+/** What the reviewer came from Publication readiness to fix, so they can stay in one task. */
 interface FixContext {
   recordId: string;
   field: string;
   code: string;
+  label: string;
   reason: string;
+  queue: ReviewQueue | "";
+  initialTotal: number;
 }
 const fixContext = ref<FixContext | null>(null);
 const fixIssues = computed(() =>
   (currentBuild.value?.validation?.validation_issues || []).filter((item) => item?.record_id),
 );
-/** Where the current finding sits in the queue, so the reviewer can see how much is left. */
+function publicationBlockerCount(code: string) {
+  const blocker = (currentBuild.value?.publication_readiness?.blockers || []).find(
+    (item) => String(item?.code || "") === code,
+  );
+  if (blocker) return Math.max(0, Number(blocker.count || 0));
+  if (code === "review_pending") return Math.max(0, Number(pendingCount.value || 0));
+  if (code === "record_attention") return Math.max(0, Number(issueCount.value || 0));
+  if (code === "boundary_attention") return Math.max(0, Number(topologyIssueCount.value || 0));
+  if (code === "required_metadata") return Math.max(0, Number(metadataIssueCount.value || 0));
+  if (code === "metadata_validation") return fixIssues.value.length;
+  if (code === "source_quality")
+    return Math.max(
+      0,
+      Number(reviewQueueCounts.value.source ?? currentBuild.value?.source_problem_count ?? 0),
+    );
+  return 0;
+}
+function remediationLabel(code: string) {
+  return i18n.t(
+    `pdf_corpus.readiness_blocker.${code || "unknown"}`,
+    String(code || "unknown").replace(/_/g, " "),
+  );
+}
+const fixRemaining = computed(() =>
+  fixContext.value ? publicationBlockerCount(fixContext.value.code) : 0,
+);
+/** Progress is anchored to the blocker count seen when the remediation session started. */
 const fixProgress = computed(() => {
   const current = fixContext.value;
-  const total = fixIssues.value.length;
-  if (!current || total <= 1) return null;
-  const index = fixIssues.value.findIndex(
-    (item) => item.record_id === current.recordId && item.field === current.field,
-  );
-  return index < 0 ? null : { position: index + 1, total };
+  if (!current || current.initialTotal <= 0) return null;
+  const total = current.initialTotal;
+  const remaining = Math.min(total, Math.max(0, fixRemaining.value));
+  return {
+    position: Math.min(total, Math.max(1, total - remaining + 1)),
+    total,
+    remaining,
+  };
 });
+function beginQueueRemediation(code: string) {
+  const total = publicationBlockerCount(code);
+  if (total <= 0) {
+    fixContext.value = null;
+    return;
+  }
+  fixContext.value = {
+    code,
+    label: remediationLabel(code),
+    recordId: selectedRecordId.value,
+    field: "",
+    reason: "",
+    queue: reviewQueue.value,
+    initialTotal: total,
+  };
+}
 /** Land on the record, on the tab that holds the problem, with the field's editor open. */
 async function fixValidationIssue(issue: {
   code?: string;
@@ -675,11 +722,18 @@ async function fixValidationIssue(issue: {
   const recordId = String(issue.record_id || "");
   if (!recordId) return;
   const field = String(issue.field || "");
+  const initialTotal =
+    fixContext.value?.code === "metadata_validation"
+      ? fixContext.value.initialTotal
+      : Math.max(1, publicationBlockerCount("metadata_validation"), fixIssues.value.length);
   fixContext.value = {
     recordId,
     field,
-    code: String(issue.code || ""),
+    code: "metadata_validation",
+    label: remediationLabel("metadata_validation"),
     reason: String(issue.reason || ""),
+    queue: "all",
+    initialTotal,
   };
   await openValidationIssueQueue(recordId);
   // The reviewer may have left the split "record" view in a full-screen Source or
@@ -700,14 +754,21 @@ async function fixValidationIssue(issue: {
   target?.scrollIntoView({ block: "center" });
   target?.querySelector<HTMLElement>("select, textarea, input")?.focus({ preventScroll: true });
 }
-/** Go on to the next finding, or back to Publication readiness when none is left. */
+/** Go on to the next finding in this remediation session. */
 async function fixNextIssue() {
   const current = fixContext.value;
-  const remaining = fixIssues.value.filter(
-    (item) => !(item.record_id === current?.recordId && item.field === current?.field),
-  );
-  if (!remaining.length) return returnToReadiness();
-  await fixValidationIssue(remaining[0]);
+  if (!current) return;
+  if (current.code === "metadata_validation") {
+    const index = fixIssues.value.findIndex(
+      (item) => item.record_id === current.recordId && item.field === current.field,
+    );
+    const next = fixIssues.value[index + 1] || fixIssues.value[0];
+    if (!next || fixIssues.value.length <= 1) return;
+    await fixValidationIssue(next);
+    return;
+  }
+  if (fixRemaining.value <= 0) return returnToReadiness();
+  await focusQueueMove(1);
 }
 /** Leave a fix context and return to Publication readiness, which is the Publish workspace. */
 function returnToReadiness() {
@@ -716,6 +777,87 @@ function returnToReadiness() {
   reviewQueue.value = "all";
   recordQuery.value = "";
   void switchWorkspace("publish");
+}
+let remediationAdvancing = false;
+watch(fixRemaining, async (remaining, previous) => {
+  const current = fixContext.value;
+  if (!current || workspaceMode.value !== "review" || previous <= remaining) return;
+  // Record decisions and metadata review already own their queue-aware advancement.
+  // When the blocker itself disappears, return to the authoritative Publish readiness state.
+  if (remaining === 0) {
+    returnToReadiness();
+    return;
+  }
+  if (remediationAdvancing || !["source_quality", "source_validation"].includes(current.code)) {
+    return;
+  }
+  remediationAdvancing = true;
+  await nextTick();
+  await advanceFrom(current.recordId);
+  remediationAdvancing = false;
+});
+watch(
+  fixIssues,
+  async (issues) => {
+    const current = fixContext.value;
+    if (
+      !current ||
+      current.code !== "metadata_validation" ||
+      workspaceMode.value !== "review" ||
+      remediationAdvancing
+    ) {
+      return;
+    }
+    const currentStillExists = issues.some(
+      (item) => item.record_id === current.recordId && item.field === current.field,
+    );
+    if (currentStillExists) return;
+    if (!issues.length || publicationBlockerCount("metadata_validation") === 0) {
+      returnToReadiness();
+      return;
+    }
+    remediationAdvancing = true;
+    await fixValidationIssue(issues[0]);
+    remediationAdvancing = false;
+  },
+  { deep: true },
+);
+watch(selectedRecordId, (recordId) => {
+  const current = fixContext.value;
+  if (!current || current.code === "metadata_validation" || !recordId) return;
+  fixContext.value = { ...current, recordId };
+});
+watch(reviewQueue, (queue) => {
+  const current = fixContext.value;
+  if (current?.queue && current.queue !== queue) fixContext.value = null;
+});
+watch(workspaceMode, (mode) => {
+  if (mode !== "review" && fixContext.value) fixContext.value = null;
+});
+async function adjudicateBoundaryWithRemediation(
+  direction: "previous" | "next",
+  profileId?: string,
+  model?: string,
+) {
+  const current = fixContext.value;
+  const before = current?.code === "boundary_attention" ? fixRemaining.value : 0;
+  const recordId = selectedRecordId.value;
+  await adjudicateBoundary(direction, profileId, model);
+  if (
+    !current ||
+    current.code !== "boundary_attention" ||
+    workspaceMode.value !== "review" ||
+    fixContext.value?.code !== "boundary_attention"
+  ) {
+    return;
+  }
+  const remaining = fixRemaining.value;
+  if (remaining >= before) return;
+  if (remaining === 0) {
+    returnToReadiness();
+    return;
+  }
+  await advanceFrom(recordId);
 }
 
 /** The reviewer answers from their own knowledge: the decision records them, not a source span, as the source. */
@@ -1366,10 +1508,32 @@ const showBuildWorkspace = computed(
     (workspaceMode.value === "build" ||
       (workspaceMode.value === "review" && !showReviewWorkspace.value)),
 );
-/** Publication blockers open review work: switch to Review, then apply the queue/record/fix context. */
-async function reviewFromPublish(action: () => unknown) {
+/** Publication blockers open review work as one remediation session. */
+async function reviewFromPublish(action: () => unknown, code = "") {
   await switchWorkspace("review");
   await action();
+  if (!code) return;
+  beginQueueRemediation(code);
+  if (code === "required_metadata") {
+    setReviewWorkspaceMode("record");
+    await nextTick();
+    focusFirstMetadataBlocker();
+  } else if (code === "source_quality" || code === "source_validation") {
+    setReviewWorkspaceMode("source");
+  } else if (code === "boundary_attention") {
+    setReviewWorkspaceMode("record");
+    reviewInspectorTab.value = "source";
+  } else {
+    setReviewWorkspaceMode("record");
+  }
+}
+async function reviewValidationFromPublish() {
+  const first = fixIssues.value.find((item) => item?.record_id);
+  if (first) {
+    await reviewFromPublish(() => fixValidationIssue(first));
+    return;
+  }
+  await reviewFromPublish(() => openValidationIssueQueue(), "metadata_validation");
 }
 
 const statusNotices = computed<Notice[]>(() => [
@@ -2453,14 +2617,19 @@ defineExpose({
       :busy="busy !== ''"
       :can-publish-unreviewed="canPublishUnreviewed"
       @retry-metadata="retryIncompleteMetadata"
-      @review-metadata="reviewFromPublish(openMetadataIssueQueue)"
-      @review-validation="reviewFromPublish(() => openValidationIssueQueue())"
+      @review-metadata="reviewFromPublish(openMetadataIssueQueue, 'required_metadata')"
+      @review-validation="reviewValidationFromPublish"
       @fix-issue="(issue) => reviewFromPublish(() => fixValidationIssue(issue))"
-      @review-topology="reviewFromPublish(openTopologyIssueQueue)"
-      @review-issues="reviewFromPublish(openIssueQueue)"
+      @review-topology="reviewFromPublish(openTopologyIssueQueue, 'boundary_attention')"
+      @review-issues="reviewFromPublish(openIssueQueue, 'record_attention')"
       @review-rejected="reviewFromPublish(openRejectedQueue)"
-      @review-records="reviewFromPublish(openAllReviewQueue)"
-      @review-source="reviewFromPublish(openSourceIssueQueue)"
+      @review-records="reviewFromPublish(openAllReviewQueue, 'review_pending')"
+      @review-source="
+        reviewFromPublish(
+          openSourceIssueQueue,
+          publicationBlockerCount('source_validation') ? 'source_validation' : 'source_quality',
+        )
+      "
       @restore-rejected="restoreAllRejected"
       @start-new="startNewBuildSetup"
       @edit-document-metadata="documentMetadataOpen = true"
@@ -2764,7 +2933,7 @@ defineExpose({
             @open-pdf-explorer="openPdfExplorer"
             @update:provider-profile-id="llmActionProviderId = $event"
             @update:model-override="llmActionModel = $event"
-            @adjudicate="adjudicateBoundary"
+            @adjudicate="adjudicateBoundaryWithRemediation"
             @toggle-evidence="toggleEvidenceBlock"
             @set-evidence="setEvidenceBlocks"
             @split="split"

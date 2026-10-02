@@ -186,6 +186,20 @@ test.describe("Corpus Builder composed workflow", () => {
     await expectWcag2AA(page, ".init-panel");
   });
 
+  test("actively enriching records use a spinner and explicit Enriching status", async ({
+    page,
+  }) => {
+    await page.goto(story("corpus-builder-review-record-queue--mixed-states"));
+    const preparing = page
+      .locator(".record-row")
+      .filter({ has: page.locator('[data-state="preparing"]') })
+      .first();
+    await expect(preparing).toContainText("Enriching");
+    await expect(preparing.locator(".record-processing-spinner")).toBeVisible();
+    await expect(preparing.locator(".record-state-icon svg")).toHaveCount(0);
+    await expectWcag2AA(page, ".records-pane");
+  });
+
   test("review queue is one keyboard-operable filter list that includes the issue kinds", async ({
     page,
   }) => {

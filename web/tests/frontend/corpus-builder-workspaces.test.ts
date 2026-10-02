@@ -1,11 +1,13 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { ref } from "vue";
 import { beforeEach, describe, expect, it } from "vitest";
 import CorpusBuilderWorkspaceHeader from "../../src/components/corpus-builder/CorpusBuilderWorkspaceHeader.vue";
 import CorpusBuildHistoryMenu from "../../src/components/CorpusBuildHistoryMenu.vue";
 import CorpusPublishWorkspace from "../../src/components/corpus-builder/CorpusPublishWorkspace.vue";
 import CorpusReviewHeader from "../../src/components/corpus-builder/CorpusReviewHeader.vue";
+import CorpusReviewWorkspace from "../../src/components/corpus-builder/CorpusReviewWorkspace.vue";
 import CorpusReviewToolbar from "../../src/components/corpus-builder/CorpusReviewToolbar.vue";
 import CorpusReviewQueueTabs from "../../src/components/CorpusReviewQueueTabs.vue";
 import CorpusSetupSection from "../../src/components/corpus-builder/CorpusSetupSection.vue";
@@ -396,6 +398,57 @@ describe("setup sections", () => {
     expect(wrapper.get("[data-section='advanced'] .corpus-setup-state").text()).toContain(
       "Optional",
     );
+  });
+});
+
+describe("review remediation context", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  const splitter = () =>
+    ({
+      size: ref(240),
+      aria: () => ({}),
+      onPointerDown: () => undefined,
+      onKeydown: () => undefined,
+      reset: () => undefined,
+    }) as never;
+
+  it("keeps Publish remediation context visible and hides Next on the final item", async () => {
+    const wrapper = mount(CorpusReviewWorkspace, {
+      props: {
+        queueSplitter: splitter(),
+        inspectorSplitter: splitter(),
+        heightSplitter: splitter(),
+        queueCollapsed: false,
+        mode: "record",
+        loading: false,
+        fixContext: {
+          code: "required_metadata",
+          label: "Required metadata",
+          recordId: "r7",
+          field: "stance",
+          reason: "Choose a reviewed value",
+        },
+        fixProgress: { position: 2, total: 4, remaining: 3 },
+      },
+    });
+
+    const banner = wrapper.get(".fix-banner");
+    expect(banner.text()).toContain("Required metadata");
+    expect(banner.text()).toContain("Choose a reviewed value");
+    expect(banner.get("code").text()).toBe("stance");
+    const next = banner.findAll("button").find((button) => button.text().includes("Next"));
+    expect(next).toBeTruthy();
+    await next!.trigger("click");
+    expect(wrapper.emitted("fixNext")).toHaveLength(1);
+
+    await wrapper.setProps({ fixProgress: { position: 4, total: 4, remaining: 1 } });
+    expect(banner.findAll("button").some((button) => button.text().includes("Next"))).toBe(false);
+    const readiness = banner
+      .findAll("button")
+      .find((button) => button.text().includes("readiness"));
+    await readiness!.trigger("click");
+    expect(wrapper.emitted("backToReadiness")).toHaveLength(1);
   });
 });
 

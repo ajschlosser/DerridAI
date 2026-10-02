@@ -97,6 +97,16 @@ describe("Corpus Builder review record queue", () => {
     });
   });
 
+  it("shows actively processing records as Enriching with a spinner instead of a refresh icon", () => {
+    const wrapper = mountQueue({
+      rows: [row({ review_state: "preparing" })],
+    });
+
+    expect(wrapper.get(".record-row-status").text()).toBe("Enriching");
+    expect(wrapper.find(".record-processing-spinner").exists()).toBe(true);
+    expect(wrapper.find(".record-state-icon svg").exists()).toBe(false);
+  });
+
   it("renders non-colour state cues and the LLM-processed marker", () => {
     const wrapper = mountQueue({
       rows: [

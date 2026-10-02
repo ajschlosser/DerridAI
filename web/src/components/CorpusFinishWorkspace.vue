@@ -139,8 +139,15 @@ function act() {
     else emit("reviewRecords");
     return;
   }
-  if (next.value === "review_records") emit("reviewRecords");
-  else if (next.value === "resolve_document_metadata") emit("editDocumentMetadata");
+  if (next.value === "review_records") {
+    const firstReviewBlocker = blockers.value.find((blocker) =>
+      ["review_pending", "record_attention", "boundary_attention", "required_metadata"].includes(
+        String(blocker?.code || ""),
+      ),
+    );
+    if (firstReviewBlocker) fixBlocker(firstReviewBlocker.code);
+    else emit("reviewRecords");
+  } else if (next.value === "resolve_document_metadata") emit("editDocumentMetadata");
   else if (next.value === "resolve_validation") emit("reviewValidation");
   else if (next.value === "publish") emit("publish");
 }
