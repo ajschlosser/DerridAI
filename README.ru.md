@@ -51,7 +51,7 @@ SourceDocument
 
 Это позволяет аудировать сгенерированное утверждение в обратном направлении до его support, evidence, revision записи, source span и source document. Embeddings, retrieval rank, reranker score, кэши, UI state и другие значения конкретной операции остаются производным состоянием и не становятся собственными свойствами исходной записи.
 
-Нормативная спецификация cELF 1.0 и ненормативный white paper DerridAI находятся в [SPECIFICATION.md](SPECIFICATION.md).
+Нормативная спецификация cELF 1.0 находится в [SPECIFICATION.md](SPECIFICATION.md).
 
 ## Архитектура
 
@@ -265,7 +265,7 @@ npm run build
 
 - [User Guide](docs/USER_GUIDE.md) — функции и workflows
 - [Architecture](docs/ARCHITECTURE.md) — runtime boundaries, authority, persistence и data flow
-- [cELF 1.0 specification](SPECIFICATION.md) — нормативная модель и white paper референсной реализации
+- [cELF 1.0 specification](SPECIFICATION.md) — нормативная модель и требования соответствия
 - [Project context](docs/PROJECT_CONTEXT.md) — научная мотивация и implemented/intended capabilities
 - [GraphQL](docs/GRAPHQL.md) — read-only cELF query façade
 - [Realtime](docs/REALTIME.md) — WebSocket protocol и resynchronization

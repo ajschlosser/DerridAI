@@ -51,7 +51,7 @@ SourceDocument
 
 Ainsi, une affirmation générée peut être auditée en remontant vers son support, sa preuve, la révision de notice, le segment source et le document source. Embeddings, rang de récupération, scores de reranker, caches, état de l’interface et autres valeurs propres à une opération restent des états dérivés; ils ne deviennent pas des propriétés intrinsèques de la notice source.
 
-Voir [SPECIFICATION.md](SPECIFICATION.md) pour la spécification normative cELF 1.0 et le livre blanc DerridAI non normatif.
+Voir [SPECIFICATION.md](SPECIFICATION.md) pour la spécification normative cELF 1.0.
 
 ## Architecture
 
@@ -265,7 +265,7 @@ Pour la couverture navigateur, Storybook, la parité CI et les règles de contri
 
 - [Guide de l’utilisateur](docs/USER_GUIDE.md) — fonctionnalités et workflows
 - [Architecture](docs/ARCHITECTURE.md) — exécution, autorité, persistance et flux
-- [Spécification cELF 1.0](SPECIFICATION.md) — modèle normatif et livre blanc de l’implémentation de référence
+- [Spécification cELF 1.0](SPECIFICATION.md) — modèle normatif et exigences de conformité
 - [Contexte du projet](docs/PROJECT_CONTEXT.md) — rationale savante et capacités implémentées/intentionnelles
 - [GraphQL](docs/GRAPHQL.md) — façade de lecture cELF
 - [Realtime](docs/REALTIME.md) — protocole WebSocket et resynchronisation
