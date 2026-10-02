@@ -680,6 +680,24 @@ def _scholarly_page_range(group: list[dict[str, Any]]) -> tuple[int | str | None
     return None, None
 
 
+def page_record_boundaries(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One split at each page change, so each page is one record."""
+    boundaries: list[dict[str, Any]] = []
+    for block, nxt in zip(blocks, blocks[1:]):
+        if block.get("page") == nxt.get("page"):
+            continue
+        boundaries.append({
+            "after_block_id": block["block_id"],
+            "decision": "split",
+            "confidence": 1.0,
+            "changes": [],
+            "source": "word_count_page",
+            "boundary_kind": "page",
+            "semantic_boundary": False,
+        })
+    return boundaries
+
+
 def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boundaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     boundary_map = {item["after_block_id"]: item for item in boundaries}
     groups: list[list[dict[str, Any]]] = []

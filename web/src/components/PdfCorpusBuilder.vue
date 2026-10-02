@@ -322,6 +322,7 @@ const {
   lastIngestedAsset,
   languagePrompt,
   saveSourceLanguage,
+  applyPageEstimate,
   refreshAssets,
   upload,
   applyUnitPolicy,
@@ -2226,6 +2227,7 @@ defineExpose({
           @delete-asset="deleteAsset"
           @continue="openSetupSection('structure')"
           @save-language="saveSourceLanguage"
+          @apply-page-estimate="applyPageEstimate"
           :queued-source-ids="queuedSourceIds"
           @queue-sources="queueSources"
           @sources-changed="refreshAssets"

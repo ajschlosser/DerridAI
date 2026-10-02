@@ -63,7 +63,7 @@ export interface PdfAsset {
   block_count: number;
   /** Deterministic page-number detection for text sources (absent for PDFs and audio). */
   page_number_detection?: {
-    status: "detected" | "not_found" | "disabled";
+    status: "detected" | "not_found" | "disabled" | "estimated";
     pattern?: string;
     convention?: string;
     confidence?: number;
@@ -71,6 +71,19 @@ export interface PdfAsset {
     first?: number | null;
     last?: number | null;
     reason?: string;
+    words_per_page?: number;
+    one_record_per_page?: boolean;
+    confirmed?: boolean;
+  };
+  page_estimate?: {
+    words_per_page: number;
+    one_record_per_page: boolean;
+    confirmed: boolean;
+  };
+  scans?: {
+    source: string;
+    count: number;
+    warnings?: string[];
   };
   ocr_pages: number;
   warnings: string[];

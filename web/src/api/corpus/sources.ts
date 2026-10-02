@@ -146,6 +146,17 @@ export const corpusSourcesApi = {
         body: JSON.stringify(plan),
       },
     ),
+  applyPageEstimate: (assetId: string, wordsPerPage: number, oneRecordPerPage: boolean) =>
+    apiRequest<PdfAsset>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/page-estimate`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          words_per_page: wordsPerPage,
+          one_record_per_page: oneRecordPerPage,
+        }),
+      },
+    ),
   updateAssetLanguage: (assetId: string, language: string | null) =>
     apiRequest<PdfAsset>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/language`, {
       method: "PATCH",

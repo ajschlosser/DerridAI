@@ -148,6 +148,25 @@ export function useCorpusSourceConfiguration(
     }
   }
 
+  async function applyPageEstimate(wordsPerPage: number, oneRecordPerPage: boolean) {
+    const assetId = selectedAssetId.value;
+    if (!assetId) return;
+    busy.value = "page-estimate";
+    try {
+      const asset = await corpusBuilderApi.applyPageEstimate(
+        assetId,
+        wordsPerPage,
+        oneRecordPerPage,
+      );
+      rememberAsset(asset);
+      setMessage(i18n.t("pdf_corpus.page_estimate_saved"));
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
   async function saveSourceLanguage(language: string | null) {
     const prompt = languagePrompt.value;
     if (!prompt) return;
@@ -441,6 +460,7 @@ export function useCorpusSourceConfiguration(
     lastIngestedAsset,
     languagePrompt,
     saveSourceLanguage,
+    applyPageEstimate,
     saveSourceMetadata,
     refreshAssets,
     upload,

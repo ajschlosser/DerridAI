@@ -705,6 +705,17 @@ When **let a model help find page numbers** is on, an import uses the selected
 provider profile the same way a build does; a profile the server cannot resolve
 fails the import with that reason rather than being ignored.
 
+Text, HTML, Word, and RTF sources receive page numbers even when the file has
+no PDF pages. Gutenberg and Wikisource page anchors (including Wikisource
+`pagenum` marks) are used when they are present. Wikisource DjVu scan pages are
+saved beside the transcription, up to a bounded number of page images. Word and
+RTF page breaks, including a declared starting page number, are used next.
+Otherwise DerridAI looks for a printed page-number pattern. If none of those
+succeed, pages are estimated at 300 words. Corpus Builder then asks whether to
+keep that length and whether each estimated page should be its own record; both
+default to yes (300 words, one record per page). Audio still uses time ranges
+and is not given page numbers.
+
 On source load, Corpus Builder first attempts a bounded deterministic language
 signal from the extracted text when embedded or catalogue language metadata is
 absent. The resulting value remains a reviewable assertion. If no reliable

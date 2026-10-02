@@ -99,10 +99,11 @@ def test_detection_can_be_turned_off_and_falls_back_to_synthetic_pages():
     assert {b["printed_page_label_source"] for b in blocks} == {"synthetic_span"}
 
 
-def test_not_found_keeps_the_previous_synthetic_pages():
+def test_not_found_estimates_pages_from_word_count():
     blocks, _ = st.prose_to_blocks("Just prose. " * 50, extraction_method="text", detection_out=(summary := {}))
-    assert summary["status"] == "not_found"
-    assert blocks and blocks[0]["printed_page_label_source"] == "synthetic_span"
+    assert summary["status"] == "estimated" and summary["pattern"] == "word_count"
+    assert summary["words_per_page"] == 300 and summary["one_record_per_page"] is True
+    assert blocks and blocks[0]["printed_page_label_source"] == "word_count"
 
 
 def test_number_words_and_numerals():
@@ -202,7 +203,8 @@ def test_a_failing_model_leaves_the_not_found_result_and_says_why():
         raise RuntimeError("provider down")
 
     blocks, _ = st.prose_to_blocks(text, extraction_method="text", detection_out=(summary := {}), page_llm=boom)
-    assert summary["status"] == "not_found" and blocks[0]["printed_page_label_source"] == "synthetic_span"
+    assert summary["status"] == "estimated" and "word count" in summary["reason"]
+    assert blocks[0]["printed_page_label_source"] == "word_count"
 
 
 def test_candidates_are_short_lines_with_context_and_are_bounded():

@@ -97,6 +97,7 @@ const emit = defineEmits<{
   sourcesChanged: [];
   viewCaptureSources: [captureId: string];
   "save-language": [language: string | null];
+  "apply-page-estimate": [wordsPerPage: number, oneRecordPerPage: boolean];
 }>();
 
 const i18n = useI18nStore();
@@ -107,6 +108,24 @@ const importShellMode = ref<"library" | "author">("library");
 /** The source whose inline "delete?" confirmation is showing. */
 const confirmingDelete = ref("");
 const languageDraft = ref("");
+const pageWords = ref(300);
+const oneRecordPerPage = ref(true);
+const pageEstimateOpen = computed(() => {
+  const detection = props.selectedAsset?.page_number_detection;
+  return Boolean(
+    detection && detection.status === "estimated" && !detection.confirmed && !props.languagePrompt,
+  );
+});
+watch(
+  pageEstimateOpen,
+  (open) => {
+    if (!open) return;
+    const detection = props.selectedAsset?.page_number_detection;
+    pageWords.value = detection?.words_per_page || 300;
+    oneRecordPerPage.value = detection?.one_record_per_page !== false;
+  },
+  { immediate: true },
+);
 const languageOptions = computed(() =>
   sortLanguageCodes(
     ["en", "fr", "de", "es", "it", "pt", "nl", "la", "grc", "ar", "he", "ru", "ja", "zh"],
@@ -163,6 +182,12 @@ function formatDate(value?: string | null) {
 }
 
 function pageDetectionText(detection: NonNullable<PdfAsset["page_number_detection"]>) {
+  if (detection.status === "estimated") {
+    return i18n.tf("pdf_corpus.source_page_estimated", {
+      words: detection.words_per_page ?? 300,
+      count: detection.marker_count ?? 0,
+    });
+  }
   if (detection.status === "detected") {
     return i18n.tf("pdf_corpus.source_page_detected", {
       count: detection.marker_count ?? 0,
@@ -635,6 +660,9 @@ onBeforeUnmount(() => {
             />
             {{ pageDetectionText(selectedAsset.page_number_detection) }}
           </p>
+          <p v-if="selectedAsset.scans?.count" class="page-detect-result" role="status">
+            {{ i18n.tf("pdf_corpus.source_scans", { count: selectedAsset.scans.count }) }}
+          </p>
           <button type="button" class="btn primary continue" @click="emit('continue')">
             {{ i18n.t("pdf_corpus.source_continue") }}
             <span aria-hidden="true">→</span>
@@ -787,6 +815,43 @@ onBeforeUnmount(() => {
         />
       </template>
     </UiDialog>
+    <UiDialog
+      v-if="pageEstimateOpen && selectedAsset"
+      :open="true"
+      :title="i18n.t('pdf_corpus.page_estimate_title')"
+      :description="i18n.tf('pdf_corpus.page_estimate_help', { filename: selectedAsset.filename })"
+      :dismissible="false"
+      size="medium"
+    >
+      <div class="language-prompt">
+        <label class="language-prompt-field">
+          <span>{{ i18n.t("pdf_corpus.page_estimate_words") }}</span>
+          <input
+            v-model.number="pageWords"
+            class="page-words"
+            type="number"
+            min="50"
+            max="2000"
+            step="10"
+          />
+        </label>
+        <label class="page-record-choice">
+          <input v-model="oneRecordPerPage" type="checkbox" />
+          <span>{{ i18n.t("pdf_corpus.page_estimate_one_record") }}</span>
+        </label>
+        <p class="language-prompt-suggestion">
+          {{ i18n.t("pdf_corpus.page_estimate_one_record_help") }}
+        </p>
+      </div>
+      <template #footer>
+        <UiButton
+          variant="primary"
+          :label="i18n.t('pdf_corpus.page_estimate_apply')"
+          :disabled="busy === 'page-estimate' || pageWords < 50 || pageWords > 2000"
+          @click="emit('apply-page-estimate', pageWords, oneRecordPerPage)"
+        />
+      </template>
+    </UiDialog>
   </div>
 </template>
 <style scoped>
@@ -803,6 +868,25 @@ onBeforeUnmount(() => {
 .language-prompt-field {
   display: grid;
   gap: var(--space-2, 8px);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.page-words {
+  min-height: 44px;
+  padding: var(--space-2, 8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2, 6px);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.page-record-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  min-height: 44px;
   color: var(--text-primary);
   font-weight: 600;
 }

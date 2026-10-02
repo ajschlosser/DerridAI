@@ -19,7 +19,7 @@ import statistics
 from dataclasses import dataclass, field
 from typing import Any
 
-DETECTOR_VERSION = 1
+DETECTOR_VERSION = 2
 MAX_PAGE = 20000
 _OPEN, _CLOSE = r"[\[\(\{<]", r"[\]\)\}>]"
 
