@@ -11,6 +11,7 @@ import { countOccurrences } from "./recordQuery";
 import { cloneAuditValue } from "./recordValues";
 import { bindCopy } from "../i18n/bindCopy";
 import { englishDefault } from "../i18n/englishDefault";
+import { toast } from "../composables/notifications";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -53,7 +54,6 @@ type Helper =
   | "setReviewSelected"
   | "shell"
   | "syncUrl"
-  | "toast"
   | "toggleDbEvidence"
   | "toggleWorkspaceEvidence"
   | "tr"
@@ -100,7 +100,6 @@ export function createRecordWorkspace(deps: Deps) {
     setReviewSelected,
     shell,
     syncUrl,
-    toast,
     toggleDbEvidence,
     toggleWorkspaceEvidence,
     uid,

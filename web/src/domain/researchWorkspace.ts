@@ -14,6 +14,7 @@ import {
 } from "./researchPayloads";
 import { bindCopy } from "../i18n/bindCopy";
 import { englishDefault } from "../i18n/englishDefault";
+import { toast } from "../composables/notifications";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -46,8 +47,8 @@ type Helper =
   | "shellRefreshHook"
   | "startJobPolling"
   | "syncJobProgressToasts"
-  | "toast"
   | "tr"
+  | "trf"
   | "uid";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
@@ -77,7 +78,7 @@ export function createResearchWorkspace(deps: Deps) {
     shellRefreshHook,
     startJobPolling,
     syncJobProgressToasts,
-    toast,
+    trf,
     uid,
   } = deps;
   const { tr } = bindCopy(deps.tr, (key, fallback, values = {}) =>
@@ -492,7 +493,13 @@ export function createResearchWorkspace(deps: Deps) {
     syncJobProgressToasts();
     startJobPolling();
     shellRefreshHook?.();
-    toast(`Research started · ${providerDisplayName(profile)} · ${model}`, { tone: "success" });
+    toast(
+      trf("runtime.toast.research_started", {
+        provider: providerDisplayName(profile),
+        model,
+      }),
+      { tone: "success" },
+    );
     return researchJobForUi(job);
   }
   async function gradeResearchJob(jobId: Any) {

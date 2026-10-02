@@ -2,6 +2,8 @@
 // Compatibility composition root for workflows that have not yet moved fully into Vue/domain modules.
 // Prefer adding new behavior to the focused imports below and expose only the narrow bridge needed here;
 // moving logic back into this file makes the remaining runtime migration harder to reason about and test.
+import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?worker";
 import { diffWordsWithSpace } from "diff";
@@ -238,7 +240,7 @@ const {
   topRecordFieldValues,
   workInsightMetrics,
   mixedWorkValueButton,
-  workMetadataControl,
+  workMetadataControlSpec,
   dashboardPieChart,
   pieShareSeries,
   dashboardMetricBody,
@@ -371,7 +373,6 @@ const {
   shell: (...args) => shell(...args),
   syncUrl: (...args) => syncUrl(...args),
   tableAvailableFields: (...args) => tableAvailableFields(...args),
-  toast: (...args) => toast(...args),
   toggleDbEvidence: (...args) => toggleDbEvidence(...args),
   toggleSort: (...args) => toggleSort(...args),
   toggleWorkspaceEvidence: (...args) => toggleWorkspaceEvidence(...args),
@@ -436,7 +437,6 @@ const {
   shell: (...args) => shell(...args),
   syncUrl: (...args) => syncUrl(...args),
   tableAvailableFields: (...args) => tableAvailableFields(...args),
-  toast: (...args) => toast(...args),
   toggleSort: (...args) => toggleSort(...args),
   toggleWorkspaceEvidence: (...args) => toggleWorkspaceEvidence(...args),
   tr: (...args) => tr(...args),
@@ -499,7 +499,6 @@ const {
   setReviewSelected: (...args) => setReviewSelected(...args),
   shell: (...args) => shell(...args),
   syncUrl: (...args) => syncUrl(...args),
-  toast: (...args) => toast(...args),
   toggleDbEvidence: (...args) => toggleDbEvidence(...args),
   toggleWorkspaceEvidence: (...args) => toggleWorkspaceEvidence(...args),
   tr: (...args) => tr(...args),
@@ -602,8 +601,8 @@ const {
   reviewItemFromKey: (...args) => reviewItemFromKey(...args),
   reviewKey: (...args) => reviewKey(...args),
   shell: (...args) => shell(...args),
-  toast: (...args) => toast(...args),
   touchupRecordPayload: (...args) => touchupRecordPayload(...args),
+  tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
   updateDbStatusElements: (...args) => updateDbStatusElements(...args),
   updateOperationStackCount: (...args) => updateOperationStackCount(...args),
@@ -613,11 +612,9 @@ const { backupContainsCredentials, downloadFullBackup, restoreFullBackup } = cre
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   deleteWorkspaceDatabase: (...args) => deleteWorkspaceDatabase(...args),
   idbPut: (...args) => idbPut(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   persistFileNow: (...args) => persistFileNow(...args),
   providerProfiles: (...args) => providerProfiles(...args),
   serializableFile: (...args) => serializableFile(...args),
-  toast: (...args) => toast(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
   workspacePrefs: (...args) => workspacePrefs(...args),
@@ -664,7 +661,6 @@ const {
   responseCacheStore: (...args) => responseCacheStore(...args),
   searchByMetadata: (...args) => searchByMetadata(...args),
   syncUrl: (...args) => syncUrl(...args),
-  toast: (...args) => toast(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
   uid: (...args) => uid(...args),
@@ -702,7 +698,6 @@ const { warmupProviderProfile, warmupConfiguredLlm, importFiles, closeFile, chec
     idbDelete: (...args) => idbDelete(...args),
     invalidateCorpusCache: (...args) => invalidateCorpusCache(...args),
     isResearcher: (...args) => isResearcher(...args),
-    openMessageModal: (...args) => openMessageModal(...args),
     parseJsonl: (...args) => parseJsonl(...args),
     persistFileNow: (...args) => persistFileNow(...args),
     persistPrefs: (...args) => persistPrefs(...args),
@@ -716,7 +711,6 @@ const { warmupProviderProfile, warmupConfiguredLlm, importFiles, closeFile, chec
     shell: (...args) => shell(...args),
     stableJsonlFileIdentity: (...args) => stableJsonlFileIdentity(...args),
     syncUrl: (...args) => syncUrl(...args),
-    toast: (...args) => toast(...args),
     tr: (...args) => tr(...args),
     trf: (...args) => trf(...args),
     updateSystemCard: (...args) => updateSystemCard(...args),
@@ -738,11 +732,9 @@ const {
   allRows: (...args) => allRows(...args),
   applyRecordChanges: (...args) => applyRecordChanges(...args),
   normalizePdfLinkChanges: (...args) => normalizePdfLinkChanges(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   pdfLinks: (...args) => pdfLinks(...args),
   renderView: (...args) => renderView(...args),
   shell: (...args) => shell(...args),
-  toast: (...args) => toast(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
 });
@@ -773,7 +765,6 @@ const {
   openJobDetails: (...args) => openJobDetails(...args),
   openJobResults: (...args) => openJobResults(...args),
   openLlmTaskLauncher: (...args) => openLlmTaskLauncher(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   operationViewModel: (...args) => operationViewModel(...args),
   persistPrefs: (...args) => persistPrefs(...args),
   pruneClientJobState: (...args) => pruneClientJobState(...args),
@@ -781,7 +772,6 @@ const {
   ragGradeHtml: (...args) => ragGradeHtml(...args),
   refreshJobs: (...args) => refreshJobs(...args),
   showAppModal: (...args) => showAppModal(...args),
-  toast: (...args) => toast(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
 });
@@ -798,12 +788,10 @@ const {
   cloneAuditValue: (...args) => cloneAuditValue(...args),
   invalidateCorpusCache: (...args) => invalidateCorpusCache(...args),
   label: (...args) => label(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   persistFile: (...args) => persistFile(...args),
   renderView: (...args) => renderView(...args),
   sameValue: (...args) => sameValue(...args),
   shell: (...args) => shell(...args),
-  toast: (...args) => toast(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
   uid: (...args) => uid(...args),
@@ -838,7 +826,6 @@ const {
   recordDbStatus: (...args) => recordDbStatus(...args),
   shellRefreshHook: (...args) => shellRefreshHook(...args),
   storeReceipt: (...args) => storeReceipt(...args),
-  toast: (...args) => toast(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
 });
@@ -863,13 +850,12 @@ const {
   selectedIndex: (...args) => selectedIndex(...args),
   shell: (...args) => shell(...args),
 });
-const { openMessageModal, copyJsonToClipboard } = createModalDialogs({
+const { copyJsonToClipboard } = createModalDialogs({
   state,
+  trf: (...args) => trf(...args),
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  toast: (...args) => toast(...args),
 });
 const {
-  toast,
   applyOperationStackPosition,
   setOperationDockMinimized,
   announceOperationDock,
@@ -894,7 +880,6 @@ const {
   persistPrefs: (...args) => persistPrefs(...args),
   removeFinishedJob: (...args) => removeFinishedJob(...args),
   tr: (...args) => tr(...args),
-  translateDynamicUiValue: (...args) => translateDynamicUiValue(...args),
   trf: (...args) => trf(...args),
   uid: (...args) => uid(...args),
 });
@@ -925,7 +910,6 @@ const {
   navSnapshot: (...args) => navSnapshot(...args),
   navigateTo: (...args) => navigateTo(...args),
   normalizeTouchupItems: (...args) => normalizeTouchupItems(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   openWorkMetadataProposalResult: (...args) => openWorkMetadataProposalResult(...args),
   pages: (...args) => pages(...args),
   persistFileNow: (...args) => persistFileNow(...args),
@@ -951,7 +935,6 @@ const {
   showAppModal: (...args) => showAppModal(...args),
   startJobPolling: (...args) => startJobPolling(...args),
   syncJobProgressToasts: (...args) => syncJobProgressToasts(...args),
-  toast: (...args) => toast(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
   uid: (...args) => uid(...args),
@@ -993,6 +976,7 @@ const {
   prepareRagRerun,
 } = createResearchWorkspace({
   state,
+  trf: (...args) => trf(...args),
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   api: (...args) => api(...args),
   canAccessPage: (...args) => canAccessPage(...args),
@@ -1017,7 +1001,6 @@ const {
   shellRefreshHook: (...args) => shellRefreshHook(...args),
   startJobPolling: (...args) => startJobPolling(...args),
   syncJobProgressToasts: (...args) => syncJobProgressToasts(...args),
-  toast: (...args) => toast(...args),
   tr: (...args) => tr(...args),
   uid: (...args) => uid(...args),
 });
@@ -1048,7 +1031,6 @@ const {
   label: (...args) => label(...args),
   memoCorpus: (...args) => memoCorpus(...args),
   navigateTo: (...args) => navigateTo(...args),
-  notifyToast: (...args) => notifyToast(...args),
   persistFileNow: (...args) => persistFileNow(...args),
   persistPrefs: (...args) => persistPrefs(...args),
   recordStores: (...args) => recordStores(...args),
@@ -1223,7 +1205,6 @@ const {
   hasCorpusDb: (...args) => hasCorpusDb(...args),
   localRecordKey: (...args) => localRecordKey(...args),
   notifyVectorStoresChanged: (...args) => notifyVectorStoresChanged(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   persistPrefs: (...args) => persistPrefs(...args),
   recordFingerprint: (...args) => recordFingerprint(...args),
   refreshOperationsPanelOnly: (...args) => refreshOperationsPanelOnly(...args),
@@ -1232,7 +1213,6 @@ const {
   startJobPolling: (...args) => startJobPolling(...args),
   storeReceipt: (...args) => storeReceipt(...args),
   syncJobProgressToasts: (...args) => syncJobProgressToasts(...args),
-  toast: (...args) => toast(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
   upsertAuditDelta: (...args) => upsertAuditDelta(...args),
@@ -1259,7 +1239,6 @@ const {
   jobLabel: (...args) => jobLabel(...args),
   label: (...args) => label(...args),
   navigateTo: (...args) => navigateTo(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   parseProposedMetadataValue: (...args) => parseProposedMetadataValue(...args),
   parseWorkMetadataValue: (...args) => parseWorkMetadataValue(...args),
   persistFileNow: (...args) => persistFileNow(...args),
@@ -1275,13 +1254,12 @@ const {
   showAppModal: (...args) => showAppModal(...args),
   startJobPolling: (...args) => startJobPolling(...args),
   syncJobProgressToasts: (...args) => syncJobProgressToasts(...args),
-  toast: (...args) => toast(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
   uid: (...args) => uid(...args),
   uniqueWorkValues: (...args) => uniqueWorkValues(...args),
   workIndex: (...args) => workIndex(...args),
-  workMetadataControl: (...args) => workMetadataControl(...args),
+  workMetadataControlSpec: (...args) => workMetadataControlSpec(...args),
   workflowProviderSelectHtml: (...args) => workflowProviderSelectHtml(...args),
   workflowProviderSummaryHtml: (...args) => workflowProviderSummaryHtml(...args),
 });
@@ -1481,6 +1459,7 @@ const {
   restoreWorkspace,
 } = createWorkspacePersistence({
   state,
+  trf: (...args) => trf(...args),
   fileTimers,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   applyUiTheme: (...args) => applyUiTheme(...args),
@@ -1491,7 +1470,6 @@ const {
   invalidateCorpusCache: (...args) => invalidateCorpusCache(...args),
   restoreCurrentPdfAsset: (...args) => restoreCurrentPdfAsset(...args),
   serializableFile: (...args) => serializableFile(...args),
-  toast: (...args) => toast(...args),
 });
 // Subset files for the Vue Records view: the sources, fields and file creation, over the loaded files.
 const { subsetSources, subsetSourceRecords, subsetFields, defaultSubsetName, createSubsetFile } =
@@ -1538,7 +1516,6 @@ const {
   localRecordKey: (...args) => localRecordKey(...args),
   navigateTo: (...args) => navigateTo(...args),
   needsReviewItems: (...args) => needsReviewItems(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   parseBulkFieldValue: (...args) => parseBulkFieldValue(...args),
   parseEditor: (...args) => parseEditor(...args),
   pendingChangesForRow: (...args) => pendingChangesForRow(...args),
@@ -1558,7 +1535,6 @@ const {
   selectedReviewItems: (...args) => selectedReviewItems(...args),
   shell: (...args) => shell(...args),
   showAppModal: (...args) => showAppModal(...args),
-  toast: (...args) => toast(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
   uid: (...args) => uid(...args),
@@ -1976,11 +1952,21 @@ function recordsListMetadataSearch(field, value, contains) {
 
 function cleanRecord(f, i) {
   const c = stripLigaturesAndArtifacts(f.records[i].text);
-  if (!c.changed) return toast(tr("runtime.toast.no_ligatures"));
+  if (!c.changed) return toast(tr("runtime.toast.no_ligatures"), { tone: "warning" });
   const changed = applyRecordChanges(f, i, { text: c.text }, { source: "ocr_cleanup" });
   shell();
   renderView();
-  toast(`${changed} tracked change${changed === 1 ? "" : "s"} applied`);
+  toast(
+    trf(
+      changed === 1
+        ? "runtime.toast.tracked_changes_applied_one"
+        : "runtime.toast.tracked_changes_applied_many",
+      {
+        count: changed,
+      },
+    ),
+    { tone: "success" },
+  );
 }
 
 function cleanRows(rows) {
@@ -2004,7 +1990,9 @@ function cleanRows(rows) {
   }
   shell();
   renderView();
-  toast(`${recordsChanged} records cleaned · ${fieldsChanged} tracked changes`);
+  toast(trf("dynamic.cleaned_records", { records: recordsChanged, changes: fieldsChanged }), {
+    tone: "success",
+  });
 }
 
 function fieldEditor(k, v) {
@@ -2090,19 +2078,19 @@ async function currentPdfPageText() {
 }
 async function applyPdfLinkMatch(match) {
   if (!match?.key)
-    return openMessageModal({
+    return openMessageDialog({
       title: "No supported record match",
       message: match?.reason || "The model did not identify a sufficiently supported record.",
     });
   const item = reviewItemFromKey(match.key);
   if (!item)
-    return openMessageModal({
+    return openMessageDialog({
       title: "Matched record unavailable",
       message: "The matched record is no longer loaded.",
       tone: "danger",
     });
   const confidence = Number(match.confidence);
-  const approved = await openMessageModal({
+  const approved = await openMessageDialog({
     title: "Link PDF page to record?",
     message: `PDF page ${state.pdf.page} → ${item.record.record_id || "matched record"}\n\n${Number.isFinite(confidence) ? `${Math.round(confidence * 100)}% confidence` : "Confidence not reported"}${match.reason ? `\n${match.reason}` : ""}`,
     confirmLabel: "Link page",
@@ -2110,7 +2098,13 @@ async function applyPdfLinkMatch(match) {
   });
   if (!approved) return;
   linkPdfPage(item.file, item.index, state.pdf.page);
-  toast(`Linked page ${state.pdf.page} to ${item.record.record_id || "record"}`);
+  toast(
+    trf("runtime.toast.linked_page", {
+      page: state.pdf.page,
+      record: item.record.record_id || tr("dynamic.record_one"),
+    }),
+    { tone: "success" },
+  );
 }
 function ragGradeHtml(grade = {}) {
   const normalized = normalizeRagGrade(grade);
@@ -2191,7 +2185,7 @@ function rankPdfLinkCandidates(rawText) {
 async function cleanPdfPageWithLlm() {
   try {
     const raw_text = await currentPdfPageText();
-    if (!raw_text.trim()) return toast(tr("runtime.toast.no_page_text"));
+    if (!raw_text.trim()) return toast(tr("runtime.toast.no_page_text"), { tone: "warning" });
     openLlmTaskLauncher({
       task: "pdf_clean_text",
       title: "Clean PDF page text",
@@ -2213,13 +2207,15 @@ async function cleanPdfPageWithLlm() {
       },
     });
   } catch (error) {
-    toast(`Could not prepare LLM cleanup: ${error.message}`);
+    toast(trf("runtime.toast.llm_cleanup_prepare_failed", { detail: error.message }), {
+      tone: "danger",
+    });
   }
 }
 async function draftPdfPageWithLlm() {
   try {
     const raw_text = await currentPdfPageText();
-    if (!raw_text.trim()) return toast(tr("runtime.toast.no_page_text"));
+    if (!raw_text.trim()) return toast(tr("runtime.toast.no_page_text"), { tone: "warning" });
     openLlmTaskLauncher({
       task: "pdf_draft_record",
       title: "Create draft record from PDF page",
@@ -2236,15 +2232,17 @@ async function draftPdfPageWithLlm() {
       onForegroundResult: async (result) => openPdfDraftRecord(result.record || {}),
     });
   } catch (error) {
-    toast(`Could not prepare draft generation: ${error.message}`);
+    toast(trf("runtime.toast.draft_prepare_failed", { detail: error.message }), { tone: "danger" });
   }
 }
 async function linkPdfPageWithLlm() {
-  if (!state.files.length) return toast(tr("runtime.toast.load_before_pdf_match"));
+  if (!state.files.length)
+    return toast(tr("runtime.toast.load_before_pdf_match"), { tone: "warning" });
   try {
     const raw_text = await currentPdfPageText(),
       candidates = rankPdfLinkCandidates(raw_text);
-    if (!candidates.length) return toast(tr("runtime.toast.no_candidate_records"));
+    if (!candidates.length)
+      return toast(tr("runtime.toast.no_candidate_records"), { tone: "warning" });
     openLlmTaskLauncher({
       task: "pdf_link_record",
       title: "Link PDF page to record",
@@ -2261,7 +2259,9 @@ async function linkPdfPageWithLlm() {
       onForegroundResult: async (result) => applyPdfLinkMatch(result.match || {}),
     });
   } catch (error) {
-    toast(`Could not prepare LLM record matching: ${error.message}`);
+    toast(trf("runtime.toast.record_matching_prepare_failed", { detail: error.message }), {
+      tone: "danger",
+    });
   }
 }
 
@@ -2409,7 +2409,8 @@ async function exportStoreJsonl({
   navigate = true,
   silent = false,
 } = {}) {
-  if (!store) return silent ? null : toast(tr("records.toast.select_collection"));
+  if (!store)
+    return silent ? null : toast(tr("records.toast.select_collection"), { tone: "warning" });
   const params = new URLSearchParams();
   if (work) params.set("work", work);
   const op = silent ? null : showOperationProgress(`Exporting ${store}`, 1);
@@ -2466,14 +2467,23 @@ async function exportStoreJsonl({
       setTimeout(() => hideOperationProgress(op), 600);
     }
     if (!loadTab && !silent)
-      toast(`Exported ${records.length.toLocaleString()} records from ${store}`);
+      toast(
+        trf("dynamic.exported_records", {
+          count: records.length.toLocaleString(),
+          collection: store,
+        }),
+        { tone: "success" },
+      );
     return records;
   } catch (error) {
     if (op) {
       updateOperationProgress(op, 0, 1, `Failed: ${error.message}`);
       setTimeout(() => hideOperationProgress(op), 1800);
     }
-    if (!silent) toast(`Chroma export failed: ${error.message}`);
+    if (!silent)
+      toast(trf("runtime.toast.chroma_export_failed", { detail: error.message }), {
+        tone: "danger",
+      });
     return null;
   }
 }
@@ -2507,8 +2517,6 @@ const vectorCollectionBridge = createVectorCollectionBridge({
   refreshStores,
   persistPrefs,
   upsertRows,
-  toast,
-  openMessageModal,
   decorateDisabledControls,
   showAppModal,
 });
@@ -2701,7 +2709,11 @@ function touchupApplyResults(items, results, approvals, all = false, reviewOnly 
   shell();
   renderView();
   toast(
-    `Marked ${reviewedRecords} record${reviewedRecords === 1 ? "" : "s"} reviewed · ${appliedFields} tracked field change${appliedFields === 1 ? "" : "s"}`,
+    trf("runtime.toast.marked_reviewed", {
+      records: `${reviewedRecords} ${tr(reviewedRecords === 1 ? "dynamic.record_one" : "dynamic.records")}`,
+      fields: `${appliedFields} ${tr(appliedFields === 1 ? "runtime.toast.tracked_field_change_one" : "runtime.toast.tracked_field_change_many")}`,
+    }),
+    { tone: "success" },
   );
   return { appliedFields, reviewedRecords };
 }
@@ -2870,42 +2882,50 @@ function activateFile(fileId) {
 function triggerImport(fileList) {
   return canUse("manageCorpus")
     ? importFiles(fileList)
-    : toast(tr("runtime.toast.cannot_load_files"));
+    : toast(tr("runtime.toast.cannot_load_files"), { tone: "warning" });
 }
 function triggerMerge() {
-  return canUse("manageCorpus") ? openMergeDialog() : toast(tr("runtime.toast.cannot_merge_files"));
+  return canUse("manageCorpus")
+    ? openMergeDialog()
+    : toast(tr("runtime.toast.cannot_merge_files"), { tone: "warning" });
 }
 function triggerBulkEdit() {
   return canUse("editLocalRecords")
     ? openBulkFieldEditor()
-    : toast(tr("runtime.toast.cannot_edit_records"));
+    : toast(tr("runtime.toast.cannot_edit_records"), { tone: "warning" });
 }
 function triggerOcrClean() {
   return canUse("editLocalRecords")
     ? openOcrCleanupDialog()
-    : toast(tr("runtime.toast.cannot_edit_records"));
+    : toast(tr("runtime.toast.cannot_edit_records"), { tone: "warning" });
 }
 function triggerReviewFlagged() {
   return canUse("editLocalRecords")
     ? openTouchup(needsReviewItems())
-    : toast(tr("runtime.toast.cannot_review_records"));
+    : toast(tr("runtime.toast.cannot_review_records"), { tone: "warning" });
 }
 function triggerAutoImproveFlagged() {
   return canUse("editLocalRecords")
     ? openTouchup(needsReviewItems(), "auto")
-    : toast(tr("runtime.toast.cannot_modify_records"));
+    : toast(tr("runtime.toast.cannot_modify_records"), { tone: "warning" });
 }
 function triggerUpsertQueue() {
-  return canUse("manageCorpus") ? openUpsertQueue() : toast(tr("runtime.toast.cannot_manage_dbs"));
+  return canUse("manageCorpus")
+    ? openUpsertQueue()
+    : toast(tr("runtime.toast.cannot_manage_dbs"), { tone: "warning" });
 }
 function triggerOperations() {
   return navigateTo("home");
 }
 function triggerExport() {
-  return canUse("manageCorpus") ? exportMenu() : toast(tr("runtime.toast.cannot_export"));
+  return canUse("manageCorpus")
+    ? exportMenu()
+    : toast(tr("runtime.toast.cannot_export"), { tone: "warning" });
 }
 function triggerEdit() {
-  return canUse("editLocalRecords") ? openEditor() : toast(tr("runtime.toast.cannot_edit_records"));
+  return canUse("editLocalRecords")
+    ? openEditor()
+    : toast(tr("runtime.toast.cannot_edit_records"), { tone: "warning" });
 }
 /**
  * Navigate the runtime and, when supplied, preserve an explicit native URL.
@@ -2917,9 +2937,6 @@ function navigateView(view, href = "") {
 }
 function closeWorkspaceFile(fileId) {
   return closeFile(fileId);
-}
-function notifyToast(message, options = {}) {
-  return toast(message, options);
 }
 
 let chartTooltip = null;
@@ -2973,7 +2990,7 @@ document.addEventListener(
     resultButton.textContent = "Opening…";
     void openJobResults(jobId)
       .catch((error) =>
-        openMessageModal({
+        openMessageDialog({
           title: "Could not open operation result",
           message: error.message || String(error),
           tone: "danger",
@@ -2994,8 +3011,12 @@ document.addEventListener("click", (event) => {
   if (loadedButton) {
     event.stopPropagation();
     const item = reviewItemFromKey(loadedButton.dataset.copyRowKey);
-    if (item) copyJsonToClipboard(item.file.records[item.index], item.record.record_id || "record");
-    else toast(tr("runtime.toast.source_record_gone"));
+    if (item)
+      copyJsonToClipboard(
+        item.file.records[item.index],
+        item.record.record_id || tr("dynamic.record_one"),
+      );
+    else toast(tr("runtime.toast.source_record_gone"), { tone: "danger" });
     return;
   }
   const citeButton = event.target.closest("[data-cite-row-key]");
@@ -3020,7 +3041,7 @@ document.addEventListener("click", (event) => {
       );
     if (record)
       copyCitation(record, dbCite.dataset.adminDbCite || dbCite.dataset.rCite || "inline");
-    else toast(tr("runtime.toast.citation_source_gone"), { tone: "warn" });
+    else toast(tr("runtime.toast.citation_source_gone"), { tone: "warning" });
     return;
   }
   const evidenceButton = event.target.closest("[data-toggle-workspace-evidence]");
@@ -3042,7 +3063,7 @@ document.addEventListener("click", (event) => {
     if (record) {
       const copy = { ...record };
       delete copy._chroma_id;
-      copyJsonToClipboard(copy, copy.record_id || "Chroma record");
+      copyJsonToClipboard(copy, copy.record_id || tr("runtime.toast.chroma_record"));
     }
   }
 });
@@ -3135,7 +3156,7 @@ async function filterResearcherInputElement(target) {
   const now = Date.now();
   if (now - researcherPolicyToastAt > 1200) {
     researcherPolicyToastAt = now;
-    toast(tr("content_filter.warning"), { tone: "warn" });
+    toast(tr("content_filter.warning"), { tone: "warning" });
   }
 }
 document.addEventListener(
@@ -3391,7 +3412,6 @@ export {
   testProviderProfileForUi,
   warmProviderProfileForUi,
   syncResearcherProviderProfiles,
-  notifyToast,
   registerExternalJob,
   dbUnavailableReason,
   hasCorpusDb,
@@ -3408,7 +3428,6 @@ export {
   ensureCompareLibrary,
   copyJsonToClipboard,
   copyCitation,
-  openMessageModal,
   formatTimestamp,
   refreshStores,
   responseCacheStore,
@@ -3434,7 +3453,6 @@ export {
   selectedIndex,
   selectedRecord,
   shell,
-  toast,
   tr,
   unlinkPdfLink,
   workspaceEvidenceSelectionKey,

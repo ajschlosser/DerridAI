@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createAnnotationsWorkspace } from "../../src/domain/annotationsWorkspace";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 
+vi.mock("../../src/composables/notifications", () => ({ toast: vi.fn() }));
+
 // The modern Annotations Playwright workflow covers rendered interactions; these pin commands and snapshot shape.
 function setup(overrides: Record<string, unknown> = {}) {
   const state = createRuntimeState() as unknown as Record<string, any>;

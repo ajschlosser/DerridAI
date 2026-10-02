@@ -177,23 +177,46 @@ Task branch for Step 1: `task/router-single-source-of-truth`
 - [ ] Step 2 toasts and modals (branch `task/toast-modal-vue-services`, worktree `../DerridAI-toasts`)
   - [x] 2.1 `toast` is a shim over the existing `composables/notifications` host (`AppNotifications.vue`); tone inference, hover/focus pause, bounded stack
   - [x] 2.2 `openMessageModal` is a shim over `composables/messageDialog` + `MessageDialogHost.vue` (native modal `<dialog role="alertdialog">`, queued, focus returns to the opener); Vitest + Storybook story
-  - [ ] 2.3 migrate the ~47 `notifyToast` / `runtime.toast` and `openMessageModal` call sites to the composables, then delete the shims (`notifyToast`, `toast`, `openMessageModal` in `runtime.js`/`runtimeBridge.ts`, and the `toast`/`openMessageModal` dependency wiring in `domain/*`)
+  - [x] 2.3a all `.vue` callers (views, `SystemDataResponses`, `PdfExplorerSurface`) call `toast` (`composables/notifications`) and `openMessageDialog` directly; `toast` keeps the legacy loose tone names. Not carried over: the legacy French `translateDynamicUiValue` pass over toast text (native callers already pass translated strings).
+  - [x] 2.3b `openMessageModal` is gone: domain modules, `runtime.js` and `vectorCollectionBridge.js` import `openMessageDialog` directly; the `modalDialogs` shim and `runtimeBridge` export are deleted.
+  - [x] 2.3c the hard-coded English toast strings in `domain/*` and `runtime.js` are keyed (`runtime.toast.*`, reusing `dynamic.*` keys that already existed), in en-US and fr-CA. Only three of them were translated before (cleared history, cleaned records, exported records); the rest showed English in fr-CA.
+  - [x] 2.3d the injected `toast`/`notifyToast` is gone: every caller imports `toast` from `composables/notifications`, and `operationDock`, `runtime.js`, `runtimeBridge.ts` no longer define or forward it. The helper no longer infers a tone from English wording; every call states its tone (success/info/warning/danger). Remaining strings (job progress, cancellation detail, copy-JSON label, record fallbacks) are keyed in en-US and fr-CA.
+  - [x] Accessibility of `AppNotifications.vue`: named polite live region (`aria-atomic=false`, additions only), tone announced in text plus a non-colour symbol (WCAG 1.4.1), Escape dismisses, error notifications do not auto-dismiss (2.2.1), 24px close target. Storybook story added; axe (WCAG 2.2 AA tags) clean in light and dark on that story.
+  - Known unrelated failures: the 15 `legacy-dom-baseline` snapshots were already stale on master (the "Automatic sizing" control); the `corpus-builder-theme-sweep` a11y specs need a Storybook index service this environment lacks.
+
   - Known differences: toasts now stack (up to 5) instead of replacing one another, and the bold HTTP-status styling is gone. `legacy-dom-baseline` snapshots for settings/research were already stale on master (the "Automatic sizing" control); not regenerated here.
-- [ ] Step 3 routes and dialogs
+
+- [ ] Step 3 dialogs, family by family (routes are already Vue views; `vueNative` is unread metadata)
+  - [x] `workDialogs`: mixed-values dialog (`MixedWorkValuesDialog.vue` + `composables/mixedWorkValuesDialog.ts`)
+  - [x] `workDialogs`: remove-work dialog (`RemoveWorkDialog.vue`; the deletion stays in the legacy forwarder as a `confirm` callback)
+  - [x] `workDialogs`: separate-works dialog (`SeparateWorksDialog.vue`, same `confirm` callback pattern)
+  - [x] `workDialogs`: metadata editor (`WorkMetadataEditorDialog.vue`; `workMetadataControl` HTML became `workMetadataControlSpec`, and control values stay strings for `parseWorkMetadataValue`)
+  - [ ] remaining `workDialogs` (LLM, proposal result), then `recordDialogs`, `jobDialogs`
 - [ ] Step 4 state slices and deletion
 
 Notes for the next session:
 
-- Step 1 is implemented but **uncommitted** in the worktree as of 2026-10-01; commit, open the PR against
-  `master`, and tick 1.7 after CI.
-- Validation run so far: `vue-tsc` (app and tests), full Vitest (230 files, 1389 tests), the new Playwright
-  spec, `tests/test_release_consistency.py`, Prettier on touched files. Not run: Storybook build, Docker,
-  the full e2e suite.
-- Known behavior change: the Back/Forward tooltip now names the previous _route title_ instead of the old
-  runtime view label, and Back now follows real browser history (including query-only changes such as
-  a table-state URL), where the runtime used to keep its own 50-entry snapshot list.
-- Remaining navigation debt after Step 1: `state.view` is still written by the runtime and follows the router
-  only for paths in `pathViewMap`; native-only routes (e.g. `/languages`) leave it unchanged. The runtime's
-  own `popstate` listener still exists alongside the router's.
-- Local setup: the worktree's `web/node_modules` came from a fresh `npm ci` (the main checkout's copy was
-  stale and lacked `@tanstack/vue-query`).
+- Step 2 is complete on branch `task/migrate-toast-modal-callers` (worktree `../DerridAI-toasts`, four commits after
+  `origin/master` at e84d5e0c). It is **not pushed and has no PR**: push it, open the PR against `master`, and
+  tick Step 2 in the list above after CI.
+- Validation run: `vue-tsc` (app and tests), full Vitest (233 files, 1402 tests), production and Storybook builds,
+  the locale/release Python tests, the legacy e2e suite, and axe (WCAG 2.2 AA tags, light and dark) on the
+  Notifications story. Not run: Docker, the full e2e suite.
+- Open question: 15 `legacy-dom-baseline` snapshots (research-\*, backup/restore) were already stale on master
+  (the "Automatic sizing" Settings control). Decide whether to regenerate them, delete the ones whose surface is
+  already Vue-native, or leave them until Step 3 retires each dialog family. Check whether CI runs
+  `test:e2e:legacy` as a blocking job first.
+- Next: Step 3 (make `home`, `rag` and `corpus-builder` Vue-native, port `domain/*Dialogs.ts` family by family),
+  retiring each family's snapshots with it.
+- Navigation debt from Step 1 is unchanged: `state.view` still follows the router only for paths in
+  `pathViewMap`, and the runtime's own `popstate` listener still exists alongside the router's.
+- `npm run format:repo:check` reports unrelated files in this environment (generated `sdk/dist`, `.pytest_cache`).
+- Never run Prettier over `web/tests/e2e/**/*-snapshots`; it fails on them and rewrites some.
+- Step 3 correction (2026-10-01): `home`, `rag` and `corpus-builder` already render Vue views; what keeps them tied to
+  the runtime is their `runtime.*` / `runtime.state` reads (Step 4). Step 3 is therefore the imperative dialogs only.
+  Pattern used for the first slice: a composable holds the request, a host component mounted in `App.vue` renders it
+  in a native modal `<dialog>`, and the legacy function stays as a thin forwarder until its callers move.
+- Legacy e2e gotchas: `vite preview` serves `web/dist`, so run `npm run build` first; port 5199 may be held by a stale
+  server from another worktree (use `APP_PORT=<free port>`). A ported dialog's baseline is retired by adding `contains`
+  to its scenario, listing the name in `nonSnapshotScenarios` (`scripts/check-legacy-snapshots.mjs`) and deleting the
+  `.html`; done for the separate-works, edit-metadata and remove-work dialogs.

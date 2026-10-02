@@ -4,6 +4,7 @@
 // commands it sends (search, view, open a record or work, remove one). Moved verbatim from the legacy runtime; the
 // runtime's state object and helpers are passed in as dependencies.
 import { annotationMatches } from "./reviewPresentation";
+import { toast } from "../composables/notifications";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -23,7 +24,6 @@ type Helper =
   | "label"
   | "memoCorpus"
   | "navigateTo"
-  | "notifyToast"
   | "persistFileNow"
   | "persistPrefs"
   | "recordStores"
@@ -47,7 +47,6 @@ export function createAnnotationsWorkspace(deps: Deps) {
     label,
     memoCorpus,
     navigateTo,
-    notifyToast,
     persistFileNow,
     persistPrefs,
     recordStores,
@@ -321,7 +320,7 @@ export function createAnnotationsWorkspace(deps: Deps) {
     }
     state.annotationsFetchedAt = 0;
     await refreshServerAnnotations(true);
-    notifyToast(tr("annotations.removed"), { tone: "success" });
+    toast(tr("annotations.removed"), { tone: "success" });
   }
   return {
     serverAnnotationItems,

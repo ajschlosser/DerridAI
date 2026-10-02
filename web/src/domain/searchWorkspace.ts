@@ -9,6 +9,7 @@ import {
   TABLE_DEFAULTS,
 } from "./runtimeConstants";
 import { decompressUrlState } from "./urlState";
+import { toast } from "../composables/notifications";
 
 // The Search workspace: building the results, facets and columns the Search view shows, and the commands it sends
 // (scope, query, filters, sort, paging, selection, running a search). Moved verbatim from the legacy runtime; the
@@ -64,7 +65,6 @@ type Helper =
   | "shell"
   | "syncUrl"
   | "tableAvailableFields"
-  | "toast"
   | "toggleDbEvidence"
   | "toggleSort"
   | "toggleWorkspaceEvidence"
@@ -119,7 +119,6 @@ export function createSearchWorkspace(deps: Deps) {
     shell,
     syncUrl,
     tableAvailableFields,
-    toast,
     toggleDbEvidence,
     toggleSort,
     toggleWorkspaceEvidence,
@@ -580,7 +579,7 @@ export function createSearchWorkspace(deps: Deps) {
       : "similarity";
     const query = String(state.globalSearch || "").trim();
     if (method !== "filter" && !query) {
-      if (!silent) toast(tr("search.enter_query"), { tone: "warn" });
+      if (!silent) toast(tr("search.enter_query"), { tone: "warning" });
       return getSearchWorkspaceSnapshot({ refresh: false, autoRun: false });
     }
     state.dbSearchFetchK = Math.max(1, Math.min(1000, Number(state.dbSearchFetchK) || 100));

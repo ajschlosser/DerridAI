@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { toast } from "../composables/notifications";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
@@ -230,7 +231,7 @@ async function load(options: { refresh?: boolean; autoRun?: boolean } = {}) {
     if (noDatabase.value) return;
     if (mustCreateDatabase && next.capabilities.can_manage_database && !redirectedForDatabase) {
       redirectedForDatabase = true;
-      runtime.notifyToast(i18n.t("search.redirect_database"), { tone: "info" });
+      toast(i18n.t("search.redirect_database"), { tone: "info" });
       runtime.openDatabaseCreationFromResearch();
       return;
     }
@@ -479,7 +480,7 @@ function saveCurrentView() {
     });
   persistSavedViews();
   closeSaveView();
-  runtime.notifyToast(i18n.t("search.view_saved"), { tone: "success" });
+  toast(i18n.t("search.view_saved"), { tone: "success" });
 }
 async function openSavedView(view: SavedSearchView | RecentSearchEntry) {
   viewsDialog.value?.close();
@@ -493,9 +494,9 @@ function removeSavedView(id: string) {
 async function copyLink() {
   try {
     await navigator.clipboard.writeText(runtime.getSearchShareHref());
-    runtime.notifyToast(i18n.t("search.link_copied"), { tone: "success" });
+    toast(i18n.t("search.link_copied"), { tone: "success" });
   } catch (exc) {
-    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+    toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
   }
 }
 function recordRecentSearch() {

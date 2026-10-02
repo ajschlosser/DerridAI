@@ -1,5 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { toast } from "../composables/notifications";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { ProviderProfile } from "../api/system";
@@ -126,7 +127,7 @@ async function save() {
     refresh();
     expanded.value = {};
     syncExpandedProfiles();
-    runtime.notifyToast?.(i18n.t("providers.saved"), { tone: "success" });
+    toast(i18n.t("providers.saved"), { tone: "success" });
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -147,7 +148,7 @@ function add(type: "ollama" | "openai") {
 }
 function applyBulk(ids: string[], values: Record<string, unknown>) {
   profiles.value = applyProfileFieldValues(profiles.value, ids, values);
-  runtime.notifyToast?.(i18n.t("providers.bulk_applied"), { tone: "info" });
+  toast(i18n.t("providers.bulk_applied"), { tone: "info" });
 }
 async function remove(profile: ProviderProfile) {
   if (!window.confirm(i18n.tf("providers.remove_confirm", { name: profile.name || profile.id })))

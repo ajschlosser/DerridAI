@@ -16,6 +16,10 @@ import AuthScreen from "./components/AuthScreen.vue";
 import CommandSearch from "./components/CommandSearch.vue";
 import AppNotifications from "./components/AppNotifications.vue";
 import MessageDialogHost from "./components/MessageDialogHost.vue";
+import RemoveWorkDialog from "./components/RemoveWorkDialog.vue";
+import SeparateWorksDialog from "./components/SeparateWorksDialog.vue";
+import WorkMetadataEditorDialog from "./components/WorkMetadataEditorDialog.vue";
+import MixedWorkValuesDialog from "./components/MixedWorkValuesDialog.vue";
 import LlmReviewWorkspace from "./components/LlmReviewWorkspace.vue";
 import SemanticMapHost from "./components/semantic/SemanticMapHost.vue";
 import SidebarBrand from "./components/shell/SidebarBrand.vue";
@@ -742,6 +746,10 @@ watch(
   <LlmReviewWorkspace />
   <AppNotifications />
   <MessageDialogHost />
+  <MixedWorkValuesDialog />
+  <RemoveWorkDialog />
+  <WorkMetadataEditorDialog />
+  <SeparateWorksDialog />
 </template>
 
 <style scoped>

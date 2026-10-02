@@ -10,7 +10,14 @@ const spec = readFileSync(specPath, "utf8");
 const scenarioNames = new Set([...spec.matchAll(/\bname:\s*"([^"]+)"/g)].map((match) => match[1]));
 
 // These scenarios deliberately use semantic assertions rather than committed DOM baselines.
-const nonSnapshotScenarios = new Set(["jobs-dock-running", "jobs-dock-running-dark"]);
+const nonSnapshotScenarios = new Set([
+  "jobs-dock-running",
+  "jobs-dock-running-dark",
+  // Ported to Vue components; the scenario asserts the dialog's title instead.
+  "dialog-works-separate",
+  "dialog-works-edit-metadata",
+  "dialog-works-remove-work",
+]);
 
 const hasDynamicJobDetails = spec.includes("dialog-job-details-${index}");
 const files = readdirSync(snapshotDir).filter((file) => /\.(?:html|txt)$/.test(file));
