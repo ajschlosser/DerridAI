@@ -151,14 +151,32 @@ class EnrichmentRerunsMixin:
             operation = dict(build.get("metadata_operation") or {})
             operation["state"] = "running"
             self._update(build_id, metadata_operation=operation)
-            with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-retry") as pool:
+            with (
+                ThreadPoolExecutor(
+                    max_workers=max_workers,
+                    thread_name_prefix="pdf-corpus-meta-retry",
+                ) as pool,
+                ThreadPoolExecutor(
+                    max_workers=max_workers,
+                    thread_name_prefix="pdf-corpus-family-retry",
+                ) as family_pool,
+            ):
                 futures = {}
                 for index in target_indices:
                     record = dict(records[index])
                     previous_text = str(records[index - 1].get("text") or "") if index > 0 else ""
                     next_text = str(records[index + 1].get("text") or "") if index + 1 < len(records) else ""
                     before = list(record.get("metadata_incomplete_fields") or [])
-                    future = pool.submit(self._enrich_record, record, manifest, request, previous_text=previous_text, next_text=next_text, build_id=build_id)
+                    future = pool.submit(
+                        self._enrich_record,
+                        record,
+                        manifest,
+                        request,
+                        previous_text=previous_text,
+                        next_text=next_text,
+                        build_id=build_id,
+                        family_executor=family_pool,
+                    )
                     futures[future] = (index, before)
                 processed = 0
                 resolved = 0
@@ -621,12 +639,22 @@ class EnrichmentRerunsMixin:
                     previous_text=neighbors["previous_text"],
                     next_text=neighbors["next_text"],
                     stage_callback=operation_stage_callback,
+                    family_executor=family_pool,
                 )
                 return enriched, request_used, record_started, None
             except Exception as exc:
                 return None, request_used, record_started, exc
 
-        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-enrich") as pool:
+        with (
+            ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="pdf-corpus-meta-enrich",
+            ) as pool,
+            ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="pdf-corpus-family-enrich",
+            ) as family_pool,
+        ):
             futures = {
                 pool.submit(candidate_for, index): (index, time.perf_counter())
                 for index in indices
