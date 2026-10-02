@@ -140,7 +140,7 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.get('[data-flow-state="attention"] dd').text()).toBe("2");
   });
 
-  it("shows recent authoritative stage changes on the live Build surface", () => {
+  it("shows recent authoritative stage changes on the live Build surface", async () => {
     const wrapper = mount(CorpusBuildWorkspace, {
       props: {
         build: {
