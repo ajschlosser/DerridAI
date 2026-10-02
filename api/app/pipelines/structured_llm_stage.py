@@ -274,7 +274,7 @@ class StructuredStageSession:
                 }
                 for stage_id in order
             }
-        if not order:
+        if not order and not cancelled:
             return
         from .store import pipeline_store
 
