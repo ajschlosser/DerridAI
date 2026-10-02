@@ -52,9 +52,11 @@ const relationshipSummary = computed(() => {
     );
   }
   const units = props.modelValue.source_units_per_record;
-  const recordPart =
-    units === 1 ? "1 SourceUnit → 1 Record" : `${units} SourceUnits → 1 Record`;
-  if (!props.syntheticPagesAvailable || props.modelValue.records_per_page == null)
+  const recordPart = units === 1 ? "1 SourceUnit → 1 Record" : `${units} SourceUnits → 1 Record`;
+  if (
+    !props.syntheticPagesAvailable ||
+    props.modelValue.records_per_page == null
+  )
     return recordPart;
   const pages = props.modelValue.records_per_page;
   return `${recordPart} → ${pages} ${pages === 1 ? "Record" : "Records"} per synthetic Page`;
