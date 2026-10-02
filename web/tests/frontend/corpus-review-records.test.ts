@@ -24,6 +24,7 @@ function row(id: string, revision = 1, overrides: Record<string, unknown> = {}) 
   return {
     record_id: id,
     record_revision: revision,
+    state_version: null,
     page_start: null,
     page_end: null,
     text_length: 10,
@@ -58,6 +59,11 @@ function page(rows: unknown[], overrides: Record<string, unknown> = {}) {
     offset: 0,
     limit: 50,
     hasNextPage: false,
+    hasPreviousPage: false,
+    nextCursor: null,
+    previousCursor: null,
+    dataGeneration: 1,
+    topologyGeneration: 1,
     topologyCount: rows.length,
     counts: {},
     ...overrides,
@@ -180,10 +186,12 @@ describe("useCorpusReviewRecords", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(graphqlClient, "clearGraphQLReadCache").mockImplementation(() => undefined);
+    vi.spyOn(graphqlClient, "invalidateGraphQLReads").mockImplementation(() => undefined);
     corpusReviewReads.metadataFacets.mockResolvedValue({});
     corpusReviewReads.records.mockResolvedValue([]);
     corpusReviewReads.rows.mockResolvedValue([]);
     corpusReviewReads.texts.mockResolvedValue([]);
+    corpusReviewReads.queuePage.mockResolvedValue(page([]));
   });
 
   it("loads the selected Record before starting the build-wide metadata facet scan", async () => {
@@ -406,7 +414,7 @@ describe("useCorpusReviewRecords", () => {
 
     await state.reviewRecords.refreshRecords(true);
 
-    expect(graphqlClient.clearGraphQLReadCache).toHaveBeenCalledTimes(1);
+    expect(graphqlClient.invalidateGraphQLReads).toHaveBeenCalledWith({ buildId: "b1" });
     expect(corpusReviewReads.queuePage).toHaveBeenCalledTimes(1);
   });
 
@@ -416,6 +424,164 @@ describe("useCorpusReviewRecords", () => {
 
     state.reviewRecords.applyRecord(updated);
 
-    expect(graphqlClient.clearGraphQLReadCache).toHaveBeenCalledTimes(1);
+    expect(graphqlClient.invalidateGraphQLReads).toHaveBeenCalledWith({
+      buildId: "b1",
+      recordIds: ["r1"],
+    });
+  });
+
+  it("uses live cursors sequentially, actual offsets, and drops cursors on filter changes", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage
+      .mockResolvedValueOnce(page([row("r1")], { nextCursor: "next", hasNextPage: true }))
+      .mockResolvedValueOnce(page([row("r2")], { offset: 49, previousCursor: "back" }))
+      .mockResolvedValueOnce(page([row("r1")], { offset: 0 }));
+    await state.reviewRecords.refreshRecords();
+    await state.reviewRecords.movePage("forward");
+    expect(corpusReviewReads.queuePage.mock.calls[1][5]).toEqual({
+      cursor: "next",
+      direction: "forward",
+    });
+    expect(state.recordOffset.value).toBe(49);
+    state.reviewQueue.value = "ready";
+    await state.reviewRecords.movePage("backward");
+    expect(corpusReviewReads.queuePage.mock.calls[2][1]).toBe(0);
+    expect(corpusReviewReads.queuePage.mock.calls[2][5]).toEqual({});
+  });
+
+  it("recovers a stale cursor once via offset and surfaces a failed recovery", async () => {
+    const state = setup();
+    const stale = new graphqlClient.GraphQLRequestError("CorpusReviewQueue", [
+      { message: "Queue changed", extensions: { code: "STALE_QUEUE_CURSOR" } },
+    ]);
+    corpusReviewReads.queuePage
+      .mockResolvedValueOnce(page([row("r1")], { nextCursor: "next", hasNextPage: true }))
+      .mockRejectedValueOnce(stale)
+      .mockRejectedValueOnce(stale);
+    await state.reviewRecords.refreshRecords();
+    await state.reviewRecords.movePage("forward");
+    expect(corpusReviewReads.queuePage).toHaveBeenCalledTimes(3);
+    expect(corpusReviewReads.queuePage.mock.calls[2][5]).toEqual({});
+    expect(state.onError).toHaveBeenCalledWith("Queue changed");
+  });
+
+  it("does not retry a cursor with an invalid context", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage
+      .mockResolvedValueOnce(page([row("r1")], { nextCursor: "next", hasNextPage: true }))
+      .mockRejectedValueOnce(
+        new graphqlClient.GraphQLRequestError("CorpusReviewQueue", [
+          { message: "Wrong reviewer", extensions: { code: "BAD_REQUEST" } },
+        ]),
+      );
+    await state.reviewRecords.refreshRecords();
+    await state.reviewRecords.movePage("forward");
+    expect(corpusReviewReads.queuePage).toHaveBeenCalledTimes(2);
+    expect(state.onError).toHaveBeenCalledWith("Wrong reviewer");
+  });
+
+  it("clears build-local caches/cursors on a topology-generation change", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage
+      .mockResolvedValueOnce(page([row("r1")], { nextCursor: "before", topologyGeneration: 1 }))
+      .mockResolvedValueOnce(page([row("r1")], { nextCursor: "after", topologyGeneration: 2 }));
+    corpusReviewReads.records
+      .mockResolvedValueOnce([record("r1", 1, { text: "Before topology edit" })])
+      .mockResolvedValueOnce([record("r1", 1, { text: "After topology edit" })]);
+    await state.reviewRecords.refreshRecords();
+    await state.reviewRecords.refreshRecords();
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+    expect(state.selectedRecord.value?.text).toBe("After topology edit");
+    expect(state.reviewRecords.nextCursor.value).toBe("after");
+    expect(state.reviewRecords.topologyGeneration.value).toBe(2);
+  });
+
+  it("discards reviewer-bound pending responses and cursor state after a reviewer change", async () => {
+    const reviewerKey = ref("reviewer-1");
+    const state = setup({ reviewerKey });
+    let release!: (value: unknown) => void;
+    corpusReviewReads.queuePage
+      .mockReturnValueOnce(new Promise((resolve) => (release = resolve)))
+      .mockResolvedValueOnce(page([], { nextCursor: null }));
+    const loading = state.reviewRecords.refreshRecords();
+    reviewerKey.value = "reviewer-2";
+    release(page([row("sealed-for-first-reviewer")], { nextCursor: "old" }));
+    await loading;
+    await vi.waitFor(() => expect(state.reviewRecords.recordsLoading.value).toBe(false));
+    expect(state.reviewRecords.queueRows.value).toEqual([]);
+    expect(state.reviewRecords.nextCursor.value).toBeNull();
+    expect(state.selectedRecord.value).toBeNull();
+  });
+
+  it("coalesces row hints and reconciles removal/backfill/counts rather than patching membership", async () => {
+    const state = setup();
+    state.reviewQueue.value = "ready";
+    corpusReviewReads.queuePage.mockResolvedValueOnce(page([row("r1"), row("r2")]));
+    corpusReviewReads.records.mockImplementation(async (_build, ids) =>
+      ids.map((id: string) => record(id)),
+    );
+    await state.reviewRecords.refreshRecords();
+    corpusReviewReads.queuePage.mockResolvedValueOnce(
+      page([row("r2"), row("r3")], { total: 4, counts: { all: 5, ready: 4 } }),
+    );
+    await Promise.all([
+      state.reviewRecords.refreshRows(["r1"]),
+      state.reviewRecords.refreshRows(["r2"]),
+    ]);
+    expect(corpusReviewReads.queuePage).toHaveBeenCalledTimes(2);
+    expect(corpusReviewReads.rows).not.toHaveBeenCalled();
+    expect(state.reviewRecords.queueRows.value.map((item) => item.record_id)).toEqual(["r2", "r3"]);
+    expect(state.reviewRecords.recordTotal.value).toBe(4);
+    expect(state.selectedRecordId.value).toBe("r2");
+    expect(corpusReviewReads.metadataFacets).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a stale page already in flight when a record hint schedules reconciliation", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValueOnce(page([row("r1")]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    await state.reviewRecords.refreshRecords();
+    let release!: (value: unknown) => void;
+    corpusReviewReads.queuePage
+      .mockReturnValueOnce(new Promise((resolve) => (release = resolve)))
+      .mockResolvedValueOnce(page([row("r2")]));
+    const oldPage = state.reviewRecords.refreshRecords();
+    const reconcile = state.reviewRecords.refreshRows(["r1"]);
+    release(page([row("r1")], { total: 99 }));
+    await Promise.all([oldPage, reconcile]);
+    expect(state.reviewRecords.queueRows.value.map((item) => item.record_id)).toEqual(["r2"]);
+    expect(state.reviewRecords.recordTotal.value).toBe(1);
+  });
+
+  it("detects enrichment via operational state_version without changing RecordRevision", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage
+      .mockResolvedValueOnce(page([row("r1", 1, { state_version: 1 })]))
+      .mockResolvedValueOnce(page([row("r1", 1, { state_version: 2 })]));
+    corpusReviewReads.records
+      .mockResolvedValueOnce([record("r1", 1, { speaker: null })])
+      .mockResolvedValueOnce([record("r1", 1, { speaker: "Derrida" })]);
+    await state.reviewRecords.refreshRecords();
+    await state.reviewRecords.refreshRecords();
+    expect(state.selectedRecord.value?.speaker).toBe("Derrida");
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves a draft and unrelated cached Records during a targeted membership refresh", async () => {
+    const state = setup();
+    await state.reviewRecords.selectRecord(record("r9"));
+    corpusReviewReads.queuePage.mockResolvedValueOnce(page([row("r1")]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    await state.reviewRecords.refreshRecords();
+    state.setActiveDraft(true);
+    state.selectedRecord.value = { ...state.selectedRecord.value, text: "Local draft" };
+    corpusReviewReads.queuePage.mockResolvedValueOnce(page([row("r2")]));
+    await state.reviewRecords.refreshRows(["r1"]);
+    expect(state.selectedRecord.value?.text).toBe("Local draft");
+    expect(state.selectedRecordId.value).toBe("r1");
+    state.setActiveDraft(false);
+    await state.reviewRecords.selectRecord(row("r9"));
+    expect(state.selectedRecord.value?.record_id).toBe("r9");
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(1);
   });
 });

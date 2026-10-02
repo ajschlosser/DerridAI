@@ -1,6 +1,11 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { expect, test, type Page } from "@playwright/test";
-import { CORPUS_BUILD_ID, CORPUS_RECORDS, mockBackend } from "./support/mock-backend";
+import {
+  CORPUS_BUILD_ID,
+  CORPUS_RECORDS,
+  mockBackend,
+  type Fixtures,
+} from "./support/mock-backend";
 import AxeBuilder from "@axe-core/playwright";
 
 // The Corpus Builder review workspace in the real app: it should fit beneath the top bar,
@@ -8,8 +13,8 @@ import AxeBuilder from "@axe-core/playwright";
 // against the mock API from the production build (see app-views.spec.ts).
 const APP = `http://127.0.0.1:${process.env.APP_PORT || "5199"}`;
 
-async function open(page: Page) {
-  await mockBackend(page);
+async function open(page: Page, fixtures: Fixtures = {}) {
+  await mockBackend(page, { fixtures });
   await page.goto(`${APP}/pdf`);
   await page.locator(".review-grid").waitFor();
   // Entering the workspace scrolls it to the top of the screen; wait for that to settle.
@@ -214,34 +219,96 @@ test.describe("at a wide desktop", () => {
   });
 
   test("an unsaved field does not block Reject and next", async ({ page }) => {
-    await open(page);
+    const records = CORPUS_RECORDS.map((record) => ({ ...record, state_version: 1 }));
+    const fixtures: Fixtures = {
+      [`/api/pdf/corpus-builds/${CORPUS_BUILD_ID}/records`]: (url: URL) => {
+        const offset = Number(url.searchParams.get("offset") || 0);
+        const limit = Number(url.searchParams.get("limit") || 50);
+        return {
+          items: records.slice(offset, offset + limit),
+          total: records.length,
+          offset,
+          limit,
+        };
+      },
+    };
+    await open(page, fixtures);
     const build = await page.evaluate(
       async (buildId) => (await fetch(`/api/pdf/corpus-builds/${buildId}`)).json(),
       CORPUS_BUILD_ID,
     );
     await page.route(
       `**/api/pdf/corpus-builds/${CORPUS_BUILD_ID}/records/${CORPUS_RECORDS[0].record_id}/review-decision`,
-      (route) =>
-        route.fulfill({
+      (route) => {
+        records[0] = {
+          ...records[0],
+          review_disposition: "rejected",
+          review_state: "rejected",
+          rejected: true,
+          accepted: false,
+          needs_review: false,
+          record_revision: 2,
+          state_version: 2,
+        };
+        fixtures[`/api/pdf/corpus-builds/${CORPUS_BUILD_ID}`] = {
+          ...build,
+          review_queue_data_generation: 2,
+          rejected_count: build.rejected_count + 1,
+          review_queue_counts: {
+            ...build.review_queue_counts,
+            rejected: build.review_queue_counts.rejected + 1,
+            pending: build.review_queue_counts.pending - 1,
+            metadata: build.review_queue_counts.metadata - 1,
+            issues: build.review_queue_counts.issues - 1,
+          },
+        };
+        return route.fulfill({
           json: {
             applied: true,
             blocked: false,
-            build,
-            record: {
-              ...CORPUS_RECORDS[0],
-              review_disposition: "rejected",
-              rejected: true,
-              accepted: false,
-              record_revision: 2,
-            },
+            build: fixtures[`/api/pdf/corpus-builds/${CORPUS_BUILD_ID}`],
+            record: records[0],
             next_record: CORPUS_RECORDS[1],
           },
-        }),
+        });
+      },
     );
     await page.locator(".decision-list textarea").first().fill("An uncommitted field value.");
     await page.getByRole("button", { name: "Reject & next", exact: true }).click();
     await expect(page.locator(".record-row").nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(page.locator(".record-row").first()).toContainText("rejected");
     await expect(page.getByRole("dialog", { name: "Leave this unsaved review?" })).toHaveCount(0);
+  });
+
+  test("sequential pages use live cursors and retain the current page's actual offset", async ({
+    page,
+  }) => {
+    const reads: Array<{ offset?: number; cursor?: string; direction?: string }> = [];
+    page.on("request", (request) => {
+      if (!request.url().endsWith("/api/graphql")) return;
+      const body = request.postDataJSON();
+      if (body.operationName === "CorpusReviewQueue") reads.push(body.variables);
+    });
+    await open(page);
+    await page
+      .getByRole("group", { name: "Queue pages" })
+      .getByRole("button", { name: "Next", exact: true })
+      .click();
+    await expect(page.locator(".record-row").first()).toContainText(CORPUS_RECORDS[50].record_id);
+    expect(reads.at(-1)?.cursor).toBeTruthy();
+    expect(reads.at(-1)?.direction).toBe("forward");
+    await page
+      .getByRole("group", { name: "Queue pages" })
+      .getByRole("button", { name: "Previous", exact: true })
+      .click();
+    await expect(page.locator(".record-row").first()).toContainText(CORPUS_RECORDS[0].record_id);
+    expect(reads.at(-1)?.cursor).toBeTruthy();
+    expect(reads.at(-1)?.direction).toBe("backward");
+    await expect(
+      page
+        .getByRole("group", { name: "Queue pages" })
+        .getByRole("button", { name: "Previous", exact: true }),
+    ).toBeDisabled();
   });
 
   test("starting another build preserves the local text draft without a dialog", async ({

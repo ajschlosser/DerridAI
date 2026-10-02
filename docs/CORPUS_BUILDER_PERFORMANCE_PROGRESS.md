@@ -6,25 +6,25 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 ## Baseline and branch
 
-- Branch: `perf/corpus-builder-throughput`.
-- Fetched master: `ebf30937` on 2026-10-02; includes #417 and #418.
-- Working scope: incremental persistence, audio preparation, review navigation, and document-editor regressions; bounded REST/GraphQL queue reuse is implemented; persistent queue projection and dependency caching remain planned.
+- Current branch: `ajschlosser-corpus-builder-performance`; earlier checkpoints used `perf/corpus-builder-throughput`.
+- Continuation baseline: fetched `master` at `ab2b097a`, including #419 and the earlier #417/#418 work.
+- Working scope: persistent transactional queue projection, live cursor pagination, reviewer-visible search, incremental build summaries, and targeted frontend reconciliation. Dependency caching and later performance phases remain planned.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
 ## Checkpoints
 
-| Checkpoint                                 | State                       | Evidence                                                                                        |
-| ------------------------------------------ | --------------------------- | ----------------------------------------------------------------------------------------------- |
-| Plan and tracker                           | Committed/pushed `dc0b35f0` | Scope, invariants, acceptance gates, rollout sequence                                           |
-| Baseline instrumentation                   | Partial                     | Synthetic persistence/write counts captured; stable wall-clock and end-to-end baselines pending |
-| Incremental enrichment completion          | Committed/pushed `d9c30235` | Ownership, restart, failure, and retired-record regressions                                     |
-| Audio manifest preparation                 | Committed/pushed `6fff2e0e` | Transcript time locators and provider fallback                                                  |
-| Remove review navigation modal             | Committed/pushed `bb066a35` | 18 production-browser cases pass; local draft recovery retained                                 |
-| Restore document metadata editor           | Committed/pushed `0be91ae9` | Component-resolution regression and typechecks                                                  |
-| Queue projection                           | Pending                     | Bounded REST selection reuse implemented; persistent projection pending                         |
-| Dependency caching / incremental exemplars | Pending                     | Extend existing mechanisms                                                                      |
-| Readiness / scheduling                     | Pending                     | Preserve publication and ownership gates                                                        |
-| Evaluated learning / review assistance     | Pending                     | Requires held-out evaluation                                                                    |
+| Checkpoint                                 | State                       | Evidence                                                                                              |
+| ------------------------------------------ | --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Plan and tracker                           | Committed/pushed `dc0b35f0` | Scope, invariants, acceptance gates, rollout sequence                                                 |
+| Baseline instrumentation                   | Partial                     | Synthetic persistence/write counts captured; stable wall-clock and end-to-end baselines pending       |
+| Incremental enrichment completion          | Committed/pushed `d9c30235` | Ownership, restart, failure, and retired-record regressions                                           |
+| Audio manifest preparation                 | Committed/pushed `6fff2e0e` | Transcript time locators and provider fallback                                                        |
+| Remove review navigation modal             | Committed/pushed `bb066a35` | 18 production-browser cases pass; local draft recovery retained                                       |
+| Restore document metadata editor           | Committed/pushed `0be91ae9` | Component-resolution regression and typechecks                                                        |
+| Queue projection                           | Implemented; uncommitted    | Transactional SQLite projection, live cursors, scoped reconciliation, repository scaling measurements |
+| Dependency caching / incremental exemplars | Pending                     | Extend existing mechanisms                                                                            |
+| Readiness / scheduling                     | Pending                     | Preserve publication and ownership gates                                                              |
+| Evaluated learning / review assistance     | Pending                     | Requires held-out evaluation                                                                          |
 
 ## Validation and measurements
 
@@ -32,10 +32,9 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 
 ## Next actions
 
-1. Extend the validated queue characterization to the persistent SQLite projection and shared REST/GraphQL selection contract.
-2. Replace post-mutation corpus scans with transactional projection updates; preserve reviewer isolation, substring search, and count semantics.
-3. Establish isolated timing baselines and measure preparation/review latency before claiming progress toward 50%.
-4. Continue the dependency-cache and evaluated-learning phases behind the plan's correctness gates.
+1. Establish isolated real-source and end-to-end timing baselines, including browser/save tail latency, before claiming progress toward 50%.
+2. Continue dependency-aware caching and incremental exemplars behind the plan's correctness gates.
+3. Evaluate earlier readiness, scheduling, and review assistance separately from repository queue improvements.
 
 ## Persistence checkpoint (2026-10-02)
 
@@ -94,3 +93,27 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 - The boundary checks snapshot ownership by identity. Caller-owned mutable lists and evicted snapshots use the uncached selector; each response still receives fresh reviewer presentation. No API/schema or authoritative-state changes.
 - Two cross-transport no-rescan regressions failed before the change; the mutable-list characterization passed. After implementation, 83 focused queue, GraphQL, decision, and second-opinion tests passed; two optional queue benchmarks skipped. Ruff passed. Master was refreshed and remains an ancestor of this branch.
 - This extends the previous selection optimization to GraphQL; it does not establish new end-to-end timings. Persistent transactional projection, incremental post-edit counts/facets, cold-load measurements, dependency caching, and evaluated learning remain planned.
+
+## Persistent review-queue projection checkpoint
+
+- Canonical per-build SQLite Records remain authoritative. Versioned queue/search/facet/metric tables are derived and updated in the same transaction as ordinary Record writes; topology replacements also rebuild their contributions. Dirty-row triggers detect canonical writes from another repository instance. Restart, schema/projection changes, and missing projection tables repair from canonical payloads.
+- REST and GraphQL pages/facets no longer load the full corpus. Ordinary targeted edits use incremental build aggregates and bounded issue summaries rather than reloading Records for aggregation. Full initialization, topology replacement, and explicit repair still perform corpus-wide work.
+- Search preserves literal Unicode casefolded JSON substring matching, including punctuation and `%`/`_`. Blind-review search intentionally uses reviewer-visible values: sealed answers cannot change hits, filtered counts, or facets. Queue categories retain overlapping membership and independent pre-queue-filter counts.
+- Live source-order cursors coexist with offset paging. Ordinary updates preserve cursors while totals/membership remain live; topology or explicit repair expires them. Reviewer/filter/build mismatches are rejected. Operational row `state_version` and page generations are distinct from scholarly `record_revision` and are not canonical publication fields.
+- Full-record payloads and their operational versions are read in one transaction, so a concurrent writer cannot label an older payload with a newer version. Queue versions are excluded from canonical writes, FieldAssertions, publication JSONL, and custom scholarly field names.
+- Scoped frontend invalidation preserves unaffected Record reads, drafts, and selection guards. Coalesced authoritative reconciliation refreshes membership, backfill, counts, and facets; sequential navigation uses cursors, with offsets retained for random access/history.
+- Final combined queue/transport, structural/source-unit, publication, FieldAssertion, and metadata-schema regression run: **220 passed, 12 opt-in benchmarks skipped**. Four opt-in repository benchmark cases passed separately. Backend Ruff and mypy passed. Focused frontend validation: **144 unit tests passed**, application/test typechecks and touched-file ESLint/Prettier passed. Generated GraphQL schema/codegen checks passed. Production frontend and Storybook builds passed with existing chunk-size warnings. **19 production-browser cases passed**, including rejection/draft navigation and live cursor paging. The browser gate used an available port because the shared default port served a different stale build; no shared server was changed. Docker, live-model preparation, and human review studies were not run; this is not a release-readiness claim.
+- Repository-wide Prettier reports 1,306 files in the existing Windows checkout. An unchanged `web/package.json` is formatted in HEAD but fails locally solely because checkout uses CRLF. Changed files pass with the repository's generated-artifact exclusions; unrelated files were not reformatted.
+- Three samples per size/build/mode on Windows 11, Python 3.12.15. Median seconds below compare current snapshot-selection reads with projection reads; both modes use current canonical writes and human FieldAssertion overrides. The comparison is not an exact prior-deployment baseline. Each warm measurement performs 20 one-record pages **per build**; cold/edit columns total all listed builds.
+
+| Records/build | Builds | Cold: snapshot → projection | Warm 20 pages: snapshot → projection | Edit + read: snapshot → projection |
+| ------------- | ------ | --------------------------- | ------------------------------------ | ---------------------------------- |
+| 1,000         | 1      | 0.304 → 0.010               | 0.00382 → 0.194                      | 0.178 → 0.036                      |
+| 1,000         | 2      | 0.629 → 0.021               | 0.00827 → 0.405                      | 0.349 → 0.061                      |
+| 10,000        | 1      | 3.408 → 0.081               | 0.00384 → 1.676                      | 2.036 → 0.105                      |
+| 10,000        | 2      | 7.146 → 0.171               | 0.00782 → 3.490                      | 3.927 → 0.197                      |
+
+- Cold payload decoding falls from all 1,000/10,000 Records to one selected Record per build; the full cold/warm/edit sequence decodes 23 rather than 2,001/20,001 payloads per build. Correctness assertions verify authoritative post-edit facet changes, not just timing.
+- **Trade-off:** unchanged in-memory snapshot paging is faster than fresh transactional SQL/search reads. Projection warm averages remain approximately 10–87 ms per repository page in these samples, but these are averages/medians, not p95 or browser latency guarantees. Projection gains are cold loading and bounded post-edit decoding, not faster warm snapshot-cache hits.
+- Measurements include repository search, counts, facets, and targeted writes; exclude initial projection construction, HTTP, browser rendering, live models, and human decisions. The shared machine and three-sample runs do not establish population tail latency or an end-to-end improvement. Real-source/live-model/human-review studies and the 50% target remain outstanding.
+- Reproduce with a fresh `CORPUS_PROJECTION_BENCHMARK=/absolute/output.jsonl` output path and `python -m pytest -q tests/test_review_queue_projection.py -k repository_projection_benchmark`. Use the same dependencies and avoid competing workloads for an isolated comparison.

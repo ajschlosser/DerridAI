@@ -43,6 +43,8 @@ class CorpusBuildReview:
         source_problem: bool | None = None,
         review_queue: str | None = None,
         query: str = "",
+        cursor: str | None = None,
+        direction: str = "forward",
     ) -> CorpusReviewQueuePage:
         context = require_admin(info)
         filters = QueueFilter(
@@ -50,10 +52,9 @@ class CorpusBuildReview:
             source_problem=source_problem, review_queue=review_queue, query=query,
         )
         try:
-            records = await self._records(info)
             payload = await run_in_threadpool(
-                corpus_queries.review_queue, context.access, records, self.build_id,
-                filters=filters, offset=offset, limit=limit,
+                corpus_queries.stored_review_queue, context.access, self.build_id,
+                filters=filters, offset=offset, limit=limit, cursor=cursor, direction=direction,
             )
         except Exception as exc:
             raise translate(exc) from exc
@@ -114,11 +115,10 @@ class CorpusBuildReview:
         description="Build-wide observed metadata values, optionally narrowed to specific fields.",
     )
     async def metadata_facets(self, info: Info, fields: list[str] | None = None) -> JSON:
-        require_admin(info)
+        context = require_admin(info)
         try:
-            records = await self._records(info)
             facets = await run_in_threadpool(
-                corpus_queries.metadata_facets, records, self.build_id, fields,
+                corpus_queries.stored_metadata_facets, context.access, self.build_id, fields,
             )
         except Exception as exc:
             raise translate(exc) from exc

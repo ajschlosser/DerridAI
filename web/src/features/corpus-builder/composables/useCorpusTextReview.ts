@@ -25,7 +25,7 @@ interface CorpusTextReviewOptions {
   selectedBuildId: Ref<string>;
   selectedRecord: Ref<CorpusRecord | null>;
   /** Patch the review queue's row (and cached Record) from an updated Record. */
-  applyRecordToQueue: (record: CorpusRecord) => void;
+  applyRecordToQueue: (record: CorpusRecord, authoritative?: boolean) => void;
   busy: Ref<string>;
   sourceTranscriptionOpen: Ref<boolean>;
   llmActionProviderId: Ref<string>;
@@ -108,7 +108,7 @@ export function useCorpusTextReview(options: CorpusTextReviewOptions) {
     } as CorpusRecord;
 
     options.selectedRecord.value = row;
-    options.applyRecordToQueue(row);
+    options.applyRecordToQueue(row, false);
     editingText.value = false;
     resolveSourceOnTextSave.value = false;
     try {
