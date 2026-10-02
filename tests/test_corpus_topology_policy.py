@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app import corpus_builder as cb
 from app.corpus_manifest_workflow import _validated_document_metadata
 from app.corpus_segmentation import source_unit_record_boundaries
