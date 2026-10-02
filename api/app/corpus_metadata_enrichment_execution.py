@@ -14,6 +14,7 @@ import re
 import time
 import uuid
 from collections.abc import Callable
+from concurrent.futures import Executor, ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
@@ -21,6 +22,7 @@ from pydantic import BaseModel
 from . import experiment, operation_events
 from .autofill import decide as decide_autofill
 from .autofill import in_audit_sample
+from .concurrency import provider_limit
 from .config import APP_VERSION
 from .corpus_llm_helpers import (
     StructuredOutputError,
@@ -100,6 +102,8 @@ from .run_guidance import find_guidance_matches, format_group_guidance
 from .source_embeddings import SourceEmbeddingProjection
 
 logger = logging.getLogger(__name__)
+
+PARALLEL_METADATA_FAMILIES = frozenset({"discourse", "quotation", "indexing"})
 
 
 def _has_quotation_signal(record: dict[str, Any], source_text: str) -> bool:
@@ -286,6 +290,7 @@ class MetadataEnrichmentExecutionMixin:
         next_text: str = "",
         build_id: str = "",
         stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None = None,
+        family_executor: Executor | None = None,
     ) -> dict[str, Any]:
         """Infer interpretive metadata through several small structured tasks.
 
@@ -520,7 +525,23 @@ class MetadataEnrichmentExecutionMixin:
         )
         record_id = str(record.get("record_id") or "")
         operation_events.note_record_metadata(build_id, record_id, "record_started", precedents_used=example_count)
-        stage_results = self._execute_metadata_tasks(record, request, tasks, build_id, stage_callback)
+        if family_executor is None:
+            stage_results = self._execute_metadata_tasks(
+                record,
+                request,
+                tasks,
+                build_id,
+                stage_callback,
+            )
+        else:
+            stage_results = self._execute_metadata_tasks(
+                record,
+                request,
+                tasks,
+                build_id,
+                stage_callback,
+                family_executor=family_executor,
+            )
         return self._reconcile_metadata_results(
             record,
             profile,
@@ -878,16 +899,120 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         self, record: dict[str, Any], request: dict[str, Any],
         tasks: list[tuple[str, str, type[BaseModel], int, str]], build_id: str,
         stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
+        *,
+        family_executor: Executor | None = None,
     ) -> list[tuple[str, dict[str, Any] | None, Exception | None]]:
-        """Run unsettled families with live ownership checks and durable stage callbacks.
+        """Run metadata families with bounded overlap when their contracts are independent.
 
-        The corpus_metadata_enrichment pipeline decides how each model call runs. It is
-        resolved once per Record, on the first family that needs a call, and the Record's
-        calls are recorded as one pipeline trace (also when the build is cancelled).
+        Built-in discourse, quotation, and indexing families are prepared before this
+        method and write disjoint family keys. They may therefore overlap while sharing
+        one concurrency-safe pipeline trace. Unknown/custom families remain exclusive.
+        The process-wide provider gate is still the authority for actual model traffic.
         """
         pipeline: dict[str, Any] = {}
+        results: list[tuple[str, dict[str, Any] | None, Exception | None]] = []
+
+        def ensure_session() -> None:
+            if "session" in pipeline or "error" in pipeline:
+                return
+            try:
+                pipeline["session"] = EnrichmentSession.open()
+            except RuntimeError as exc:
+                pipeline["error"] = exc
+
+        def run_specs(
+            specs: list[tuple[str, str, type[BaseModel], int, str]],
+            target_record: dict[str, Any] | None = None,
+        ) -> list[tuple[str, dict[str, Any] | None, Exception | None]]:
+            return self._run_metadata_tasks(
+                target_record if target_record is not None else record,
+                request,
+                specs,
+                build_id,
+                stage_callback,
+                pipeline,
+            )
+
+        def run_parallel_spec(
+            spec: tuple[str, str, type[BaseModel], int, str],
+        ) -> tuple[
+            list[tuple[str, dict[str, Any] | None, Exception | None]],
+            dict[str, Any],
+        ]:
+            # Sibling families never mutate one shared Record dictionary. Their only
+            # task-local Record writes are the raw stage result/status/ledger maps;
+            # callbacks checkpoint a snapshot independently, and these maps are merged
+            # into the in-memory Record deterministically below in schema order.
+            family_record = json.loads(json.dumps(record))
+            return run_specs([spec], family_record), family_record
+
+        def merge_family_state(
+            spec: tuple[str, str, type[BaseModel], int, str],
+            family_record: dict[str, Any],
+        ) -> None:
+            family = spec[0]
+            for map_key in (
+                "metadata_stage_results",
+                "metadata_stage_status",
+                "metadata_execution_ledger",
+            ):
+                source = family_record.get(map_key)
+                if not isinstance(source, dict) or family not in source:
+                    continue
+                record.setdefault(map_key, {})[family] = source[family]
+
         try:
-            results = self._run_metadata_tasks(record, request, tasks, build_id, stage_callback, pipeline)
+            index = 0
+            while index < len(tasks):
+                spec = tasks[index]
+                if spec[0] not in PARALLEL_METADATA_FAMILIES:
+                    results.extend(run_specs([spec]))
+                    index += 1
+                    continue
+
+                group: list[tuple[str, str, type[BaseModel], int, str]] = []
+                while (
+                    index < len(tasks)
+                    and tasks[index][0] in PARALLEL_METADATA_FAMILIES
+                ):
+                    group.append(tasks[index])
+                    index += 1
+
+                workers = min(
+                    len(group),
+                    provider_limit(
+                        request.get("max_concurrent_requests"), default=1, maximum=64
+                    ),
+                )
+                if workers <= 1 or len(group) <= 1:
+                    results.extend(run_specs(group))
+                    continue
+
+                # Resolve once before threads start so the shared session dictionary is
+                # immutable during concurrent family execution. StructuredStageSession
+                # aggregates trace counters under its own lock and keeps call-local paths.
+                ensure_session()
+                if family_executor is not None:
+                    futures = [family_executor.submit(run_parallel_spec, item) for item in group]
+                    # Consume in schema/task order even when providers finish out of order.
+                    # Reconciliation and the in-memory checkpoint maps remain deterministic.
+                    for item, future in zip(group, futures):
+                        rows, family_record = future.result()
+                        merge_family_state(item, family_record)
+                        results.extend(rows)
+                else:
+                    # Direct/unit-level callers retain a bounded local executor. Build and
+                    # rerun orchestration pass one shared executor so Records steal from the
+                    # same family-work pool instead of creating N nested pools.
+                    with ThreadPoolExecutor(
+                        max_workers=workers,
+                        thread_name_prefix="pdf-corpus-family",
+                    ) as pool:
+                        futures = [pool.submit(run_parallel_spec, item) for item in group]
+                        for item, future in zip(group, futures):
+                            rows, family_record = future.result()
+                            merge_family_state(item, family_record)
+                            results.extend(rows)
         except InterruptedError:
             if isinstance(pipeline.get("session"), EnrichmentSession):
                 pipeline["session"].finish(cancelled=True)

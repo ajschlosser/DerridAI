@@ -165,6 +165,7 @@ describe("setup state", () => {
     structureNeedsReview: false,
     structureSummary: "Main text PDF 9",
     recordSizingValid: true,
+    topologySummary: "Semantic boundaries determine Records",
     targetChars: 1750,
     toleranceChars: 200,
     schemaName: "Scholarly default",
@@ -210,6 +211,17 @@ describe("setup state", () => {
     expect(states.find((state) => state.id === "metadata")?.state).toBe("warning");
     expect(states.find((state) => state.id === "advanced")?.state).toBe("optional");
     expect(states.find((state) => state.id === "metadata")?.summary).toContain("Scholarly default");
+  });
+
+  it("includes the Record topology relationship in the Structure summary", () => {
+    const states = corpusSetupSectionStates(
+      input({ topologySummary: "1 SourceUnit → 1 Record → 4 Records per synthetic Page" }),
+      [],
+      text,
+    );
+    expect(states.find((state) => state.id === "structure")?.summary).toContain(
+      "1 SourceUnit → 1 Record",
+    );
   });
 
   it("adds Document Intelligence to the Enrichment summary only when it is on", () => {

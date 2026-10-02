@@ -7,6 +7,14 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from .concurrency import (
+    CapacityCancelled,
+    CapacityPermit,
+    capacity_coordinator,
+    provider_capacity_key,
+    provider_limit,
+)
+from .config import settings
 from .job_state import JobPayloadList, PersistentJobStateMixin, iso_now, store_job_error
 from .llm import TouchupFailure, propose_touchup
 from .models import LLMJobCreate
@@ -18,8 +26,6 @@ class LLMJobManager(PersistentJobStateMixin):
     def __init__(self, max_workers: int = 64) -> None:
         self._jobs: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
-        self._provider_condition = threading.Condition(self._lock)
-        self._provider_active: dict[str, int] = {}
         self._executor = ThreadPoolExecutor(
             max_workers=max(4, min(64, int(max_workers))),
             thread_name_prefix="derridai-llm",
@@ -104,49 +110,112 @@ class LLMJobManager(PersistentJobStateMixin):
 
     @staticmethod
     def _provider_key(body: LLMJobCreate) -> str:
-        if body.provider == "ollama":
-            return f"ollama|{str(body.base_url or '').rstrip('/').lower()}"
-        return body.provider_profile_id or f"{body.provider}|{body.base_url or ''}|{body.model or ''}"
+        return provider_capacity_key(
+            provider_profile_id=body.provider_profile_id,
+            provider=body.provider,
+            base_url=body.base_url,
+            model=body.model,
+        )
 
-    def _acquire_provider_slot(self, job_id: str, body: LLMJobCreate) -> bool:
+    def _acquire_provider_slot(self, job_id: str, body: LLMJobCreate) -> CapacityPermit | None:
         key = self._provider_key(body)
-        limit = max(1, min(64, int(body.max_concurrent_requests or 1)))
-        with self._provider_condition:
-            while self._provider_active.get(key, 0) >= limit:
-                job = self._jobs[job_id]
-                if job.get("cancel_requested"):
-                    return False
-                job["status"] = "queued"
-                job["stage_detail"] = (
-                    f"Waiting for provider slot "
-                    f"({self._provider_active.get(key, 0)}/{limit} active)"
-                )
-                self._provider_condition.wait(timeout=0.5)
-            self._provider_active[key] = self._provider_active.get(key, 0) + 1
-            return True
+        limit = provider_limit(body.max_concurrent_requests, default=1, maximum=64)
 
-    def _release_provider_slot(self, body: LLMJobCreate) -> None:
-        key = self._provider_key(body)
-        with self._provider_condition:
-            current = self._provider_active.get(key, 0)
-            if current <= 1:
-                self._provider_active.pop(key, None)
-            else:
-                self._provider_active[key] = current - 1
-            self._provider_condition.notify_all()
+        def cancelled() -> bool:
+            with self._lock:
+                return bool(self._jobs.get(job_id, {}).get("cancel_requested"))
+
+        def waiting(snapshot) -> None:  # noqa: ANN001 - small operational callback
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is not None:
+                    job["status"] = "queued"
+                    job["stage_detail"] = (
+                        f"Waiting for provider slot "
+                        f"({snapshot.active}/{snapshot.limit} active)"
+                    )
+
+        try:
+            return capacity_coordinator.acquire(
+                "provider_generation",
+                key,
+                limit,
+                cancelled=cancelled,
+                on_wait=waiting,
+            )
+        except CapacityCancelled:
+            return None
 
     def _run(self, job_id: str, body: LLMJobCreate) -> None:
-        if not self._acquire_provider_slot(job_id, body):
+        provider_permit = self._acquire_provider_slot(job_id, body)
+        if provider_permit is None:
             with self._lock:
                 job = self._jobs[job_id]
                 job["status"] = "cancelled"
                 job["finished_at"] = iso_now()
             self._persist_job(job_id)
             return
+
+        ollama_permit: CapacityPermit | None = None
         try:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is not None:
+                    job.setdefault("scheduling", {})["provider_wait_ms"] = int(
+                        round(provider_permit.waited_seconds * 1000)
+                    )
+                    job["scheduling"]["active_when_started"] = provider_permit.active_when_acquired
+                    job["scheduling"]["limit"] = provider_permit.limit
+
+            if body.provider == "ollama":
+                ollama_limit = capacity_coordinator.configured_limit(
+                    "ollama_runtime",
+                    "global",
+                    fallback=max(1, int(settings.rag_ollama_max_concurrent)),
+                )
+
+                def cancelled() -> bool:
+                    return self._is_cancel_requested(job_id)
+
+                def waiting(snapshot) -> None:  # noqa: ANN001 - operational callback
+                    with self._lock:
+                        job = self._jobs.get(job_id)
+                        if job is not None:
+                            job["stage_detail"] = (
+                                f"Waiting for Ollama slot "
+                                f"({snapshot.active}/{snapshot.limit} active)"
+                            )
+
+                try:
+                    ollama_permit = capacity_coordinator.acquire(
+                        "ollama_runtime",
+                        "global",
+                        ollama_limit,
+                        cancelled=cancelled,
+                        on_wait=waiting,
+                    )
+                except CapacityCancelled:
+                    with self._lock:
+                        job = self._jobs[job_id]
+                        job["status"] = "cancelled"
+                        job["finished_at"] = iso_now()
+                    return
+                with self._lock:
+                    job = self._jobs.get(job_id)
+                    if job is not None:
+                        job.setdefault("scheduling", {})["ollama_wait_ms"] = int(
+                            round(ollama_permit.waited_seconds * 1000)
+                        )
+                        job["scheduling"]["ollama_active_when_started"] = (
+                            ollama_permit.active_when_acquired
+                        )
+                        job["scheduling"]["ollama_limit"] = ollama_permit.limit
+
             self._run_with_provider_slot(job_id, body)
         finally:
-            self._release_provider_slot(body)
+            if ollama_permit is not None:
+                ollama_permit.release()
+            provider_permit.release()
             self._persist_job(job_id)
 
     def _run_with_provider_slot(self, job_id: str, body: LLMJobCreate) -> None:
