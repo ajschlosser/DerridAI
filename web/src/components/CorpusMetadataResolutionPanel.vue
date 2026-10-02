@@ -463,7 +463,8 @@ function options(field: string) {
     values.push(...(props.knownValues?.[source] || []));
     values.push(...metadataSuggestions(props.record as Record<string, unknown>, [source]));
     const sourceStatus = props.record.metadata_field_status?.[source] as
-      Record<string, unknown> | undefined;
+      | Record<string, unknown>
+      | undefined;
     for (const candidate of [sourceStatus?.proposed_value, sourceStatus?.llm_value]) {
       if (Array.isArray(candidate)) values.push(...candidate.map(String));
       else if (typeof candidate === "string") values.push(candidate);
