@@ -354,6 +354,7 @@ describe("setup sections", () => {
     const toggle = wrapper.get("button");
     expect(toggle.attributes("aria-expanded")).toBe("false");
     expect(toggle.text()).toContain("Of Grammatology.pdf");
+    expect(wrapper.get(".corpus-setup-state").text()).toContain("Complete");
     expect(wrapper.get(".corpus-setup-section-body").attributes("style")).toContain(
       "display: none",
     );
@@ -363,14 +364,18 @@ describe("setup sections", () => {
     expect(toggle.attributes("aria-expanded")).toBe("true");
   });
 
-  it("stacks Source, Structure, Metadata, Enrichment, Advanced with one section open", () => {
+  it("stacks the required setup path, shows progress, and keeps Advanced optional", () => {
     const wrapper = mount(CorpusSetupWorkspace, {
       props: {
         expanded: "metadata",
         disabledSections: ["structure"],
-        sections: (["source", "structure", "metadata", "enrichment", "advanced"] as const).map(
-          (id) => ({ id, state: "complete" as const, summary: id }),
-        ),
+        sections: [
+          { id: "source", state: "complete", summary: "source" },
+          { id: "structure", state: "warning", summary: "structure" },
+          { id: "metadata", state: "incomplete", summary: "metadata" },
+          { id: "enrichment", state: "complete", summary: "enrichment" },
+          { id: "advanced", state: "optional", summary: "advanced" },
+        ],
       },
     });
     expect(
@@ -380,6 +385,14 @@ describe("setup sections", () => {
     expect(open).toHaveLength(1);
     expect(open[0].attributes("data-section")).toBe("metadata");
     expect(wrapper.find("[data-section='structure'] button").attributes("disabled")).toBeDefined();
+
+    const progress = wrapper.get(".corpus-setup-progress progress");
+    expect(progress.attributes("max")).toBe("4");
+    expect(progress.attributes("value")).toBe("3");
+    expect(wrapper.get(".corpus-setup-progress").text()).toContain("3 / 4");
+    expect(wrapper.get(".corpus-setup-attention").text()).toContain("1");
+    expect(wrapper.get("[data-section='metadata'] .corpus-setup-indicator").text()).toBe("3");
+    expect(wrapper.get("[data-section='advanced'] .corpus-setup-state").text()).toContain("Optional");
   });
 });
 
