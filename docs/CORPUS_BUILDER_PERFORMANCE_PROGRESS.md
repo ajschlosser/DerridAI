@@ -50,3 +50,11 @@ No implementation tests or new timings recorded yet. The first benchmark must se
 - Fix audio preparation failing at `structure` with missing `page`.
 - Remove the unsaved-review navigation modal, retaining existing draft recovery.
 - Double-check recent Corpus Builder changes, prioritizing preparation, navigation, recovery, and persistence; no broad review completion claimed.
+
+## Audio preparation checkpoint (2026-10-02)
+
+- Reproduced the reported `structure: 'page'` failure in document-manifest sampling: transcript SourceUnits have time locators and no page field.
+- Format manifest excerpts using audio time ranges/speaker labels, physical pages where present, or source-unit identity; do not fabricate audio page numbers. The source-media prompt explicitly keeps audio page bounds null.
+- Preserve embedded non-PDF author metadata with `source_metadata` provenance; retain existing PDF provenance and fallback behavior. Bumped the document-manifest prompt contract to v4.
+- 49 focused backend tests passed, including real transcript-block preparation through the structure stage, provider-unavailable fallback, existing manifest pipeline behavior, audio settings/topology, ownership, and build resilience. No live transcription service was used.
+- Persistence implementation checkpoint `d9c30235` was pushed. Additional timing attempts showed unstable shared-machine disk latency (including a 54.6-second baseline sample at 1,000 records) and were stopped; deterministic write-count improvement is validated, but elapsed-time targets remain unverified.

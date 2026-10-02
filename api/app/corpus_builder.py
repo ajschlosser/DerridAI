@@ -3103,6 +3103,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
 
     def _document_manifest(self, asset: dict[str, Any], blocks: list[dict[str, Any]], request: dict[str, Any], build_id: str) -> dict[str, Any]:
         metadata = asset.get("metadata") or {}
+        media_kind = str(asset.get("media_kind") or "pdf")
+        metadata_label = "PDF metadata" if media_kind == "pdf" else "source metadata"
+        metadata_method = "pdf_metadata" if media_kind == "pdf" else "source_metadata"
         reviewed_layout = asset.get("document_layout") if isinstance(asset.get("document_layout"), dict) and asset.get("document_layout", {}).get("confirmed_by") == "human" else {}
         # Sample the whole document rather than assuming the front matter is
         # representative. Headings plus front/middle/end blocks reveal later
@@ -3135,20 +3138,28 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 indices = sorted({round(i * (len(chosen) - 1) / max(1, max_samples - 1)) for i in range(max_samples)})
                 chosen = [chosen[index] for index in indices]
         per_excerpt = max(280, min(900, sample_char_budget // max(1, len(chosen)) - 100))
-        sample_text = "\n".join(
-            f"[{b['block_id']} PDF p.{b['page']} label={b.get('printed_page_label')!r} {b['type']}] {str(b.get('text') or '')[:per_excerpt]}"
-            for b in chosen
-        )[:sample_char_budget]
-        prompt = f"""You are establishing a source-bound document manifest for an auditable scholarly corpus build.
-Use only evidence in the supplied PDF metadata and source blocks. Use null when unsupported. Never fill bibliographic facts from general knowledge. Distinguish the PDF page index from a printed page label. The manifest will be inherited deterministically by generated records, so be conservative.
+        def excerpt(block: dict[str, Any]) -> str:
+            if media_kind == "audio" or block.get("locator_kind") == "time":
+                location = block.get("time_label") or f"{block.get('start')}–{block.get('end')} seconds"
+                locator = f"audio time={location} speaker={block.get('speaker')!r}"
+            elif block.get("page") is not None:
+                locator = f"{media_kind} p.{block['page']} label={block.get('printed_page_label')!r}"
+            else:
+                locator = f"{media_kind} source unit"
+            return f"[{block['block_id']} {locator} {block.get('type', 'paragraph')}] {str(block.get('text') or '')[:per_excerpt]}"
 
-PDF metadata: {json.dumps(metadata, ensure_ascii=False)}
+        sample_text = "\n".join(excerpt(block) for block in chosen)[:sample_char_budget]
+        prompt = f"""You are establishing a source-bound document manifest for an auditable scholarly corpus build.
+Use only evidence in the supplied {metadata_label} and source blocks. Use null when unsupported. Never fill bibliographic facts from general knowledge. Distinguish a physical page index from a printed page label. Audio timestamps and source-unit identifiers are not pages. The manifest will be inherited deterministically by generated records, so be conservative.
+
+Source media: {media_kind}
+{metadata_label}: {json.dumps(metadata, ensure_ascii=False)}
 Filename: {asset.get('filename')}
 Reviewer-confirmed document structure (authoritative where present): {json.dumps(reviewed_layout, ensure_ascii=False)}
 Strategic whole-document sample:
 {sample_text}
 
-Return one JSON object matching the schema. `main_text_start_page` and `main_text_end_page` are physical PDF pages when supported. `document_is_translation` should be null unless the source itself supports that conclusion.
+Return one JSON object matching the schema. `main_text_start_page` and `main_text_end_page` are physical pages only for PDF/image sources when supported; use null for audio and other media. `document_is_translation` should be null unless the source itself supports that conclusion.
 """
         # One trace per analysis. If the pipeline cannot be resolved no model is asked and the
         # embedded-metadata fallback below applies, with the reason in the build warning.
@@ -3163,30 +3174,30 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 session.finish(cancelled=True)
             raise
         except Exception as exc:
-            self._append_warning(build_id, f"Document manifest used PDF-metadata fallback: {exc}")
+            self._append_warning(build_id, f"Document manifest used {metadata_label.replace(' ', '-')} fallback: {exc}")
             result = DocumentManifestModel(
                 title=metadata.get("title") or None,
                 document_author=metadata.get("author") or None,
-                notes="LLM manifest unavailable; values are limited to embedded PDF metadata.",
+                notes=f"LLM manifest unavailable; values are limited to embedded {metadata_label}.",
             ).model_dump(mode="json")
         if session is not None:
             session.finish()
             self._record_document_manifest_pipeline(build_id, session)
-        # Embedded PDF metadata is a deterministic source assertion. A model
+        # Embedded source metadata is a deterministic source assertion. A model
         # may enrich missing bibliography, but must not replace an author
         # explicitly declared by the source file.
         if metadata.get("author"):
             result["document_author"] = str(metadata["author"]).strip()
-            result["document_author_source"] = "pdf_metadata"
+            result["document_author_source"] = metadata_method
             result["document_author_confidence"] = 1.0
             result["document_author_assertion"] = {
                 "field": "document_author",
                 "value": result["document_author"],
                 "status": "deterministic",
-                "method": "pdf_metadata",
+                "method": metadata_method,
                 "checked": True,
                 "confidence": 1.0,
-                "reason": "Author value was read from embedded PDF metadata.",
+                "reason": f"Author value was read from embedded {metadata_label}.",
             }
         # A deterministic start-page inference (only present when it is more than 90% sure) outranks
         # the model's guess; the clues travel with the value so the reviewer can check them.
