@@ -35,6 +35,10 @@ _NOT_SPEAKERS = {
 _START_MARK = re.compile(r"\*\*\*\s*START OF (?:THE |THIS )?PROJECT GUTENBERG EBOOK.*?\*\*\*", re.I | re.S)
 _END_MARK = re.compile(r"\*\*\*\s*END OF (?:THE |THIS )?PROJECT GUTENBERG EBOOK.*", re.I | re.S)
 _BYLINE = re.compile(r"^by\s+([A-Z][^.\n]{2,80})$", re.I)
+DEFAULT_WORDS_PER_PAGE = 300
+MIN_WORDS_PER_PAGE = 50
+MAX_WORDS_PER_PAGE = 2000
+W_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 def prepare_text(text: str) -> tuple[str, str]:
     """Keep Gutenberg header lines for metadata, and drop them from source spans."""
@@ -65,15 +69,28 @@ def document_from_text(
     warnings: list[str] | None = None,
     detect_pages: bool = True,
     page_llm: Any = None,
+    words_per_page: int = DEFAULT_WORDS_PER_PAGE,
 ) -> dict[str, Any]:
+    embedded = dict(embedded or {})
+    native_labels = embedded.pop("_native_page_labels", None)
+    native_pattern = embedded.pop("_native_page_pattern", None)
     detection: dict[str, Any] = {}
     blocks, pages = prose_to_blocks(
         text, extraction_method=extraction_method, confidence=confidence,
         detect_pages=detect_pages, detection_out=detection, page_llm=page_llm,
+        native_page_labels=native_labels if isinstance(native_labels, list) else None,
+        native_page_pattern=str(native_pattern) if native_pattern else None,
+        words_per_page=words_per_page,
     )
     if not blocks:
         raise ValueError("The source did not contain extractable text.")
-    embedded = dict(embedded or {})
+    page_estimate = None
+    if detection.get("status") == "estimated":
+        page_estimate = {
+            "words_per_page": int(detection.get("words_per_page") or words_per_page),
+            "one_record_per_page": True,
+            "confirmed": False,
+        }
     return {
         "filename": Path(str(filename or "source.txt")).name,
         "page_count": max(1, len(pages)),
@@ -84,6 +101,7 @@ def document_from_text(
         "included_block_count": sum(1 for block in blocks if not block.get("excluded_reason")),
         "excluded_block_count": sum(1 for block in blocks if block.get("excluded_reason")),
         "page_number_detection": detection,
+        **({"page_estimate": page_estimate} if page_estimate else {}),
         "ocr_pages": 0,
         "warnings": list(warnings or []),
         "extractor": f"derridai-{media_kind}-v1",
@@ -105,25 +123,29 @@ def prose_to_blocks(
     detect_pages: bool = True,
     detection_out: dict[str, Any] | None = None,
     page_llm: Any = None,
+    native_page_labels: list[str] | None = None,
+    native_page_pattern: str | None = None,
+    words_per_page: int = DEFAULT_WORDS_PER_PAGE,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Blocks and pages for prose. Printed page numbers are detected first, deterministically.
+    """Blocks and pages for prose.
 
-    When a plausible sequence of page markers is found, blocks carry the printed page label
-    they fall on and the marker lines are kept as excluded ``page_number`` blocks (the same
-    convention the PDF path uses), so no source text is lost. Otherwise pages are synthetic
-    spans, exactly as before. ``detection_out`` receives the detector's summary.
+    Printed numbers win when a real sequence is found (file markers, Gutenberg/Wikisource
+    anchors, or the pattern detector, then a model). A Word/RTF/form-feed page break is used
+    when no printed sequence exists. Otherwise pages are an explicit word-count estimate.
+    ``detection_out`` receives the method and its provenance.
     """
     from . import page_markers
 
     text, stripped_prefix = strip_line_frame(text)
     if detection_out is not None and stripped_prefix:
         detection_out["line_frame_stripped"] = stripped_prefix
+    plain = text.replace("\f", "\n")
     if detect_pages:
-        detection = page_markers.detect(text)
+        detection = page_markers.detect(plain)
         if detection.status != "detected" and page_llm is not None:
             # Deterministic detection failed: let a model pick candidate lines, then verify them the same way.
             try:
-                assisted = page_markers.detect_with_llm(text, page_llm)
+                assisted = page_markers.detect_with_llm(plain, page_llm)
                 if assisted.status == "detected":
                     detection = assisted
                 else:
@@ -135,12 +157,45 @@ def prose_to_blocks(
     if detection_out is not None:
         detection_out.update(detection.summary())
     if detection.status == "detected":
-        detected = _blocks_with_detected_pages(text, detection, extraction_method, confidence)
+        detected = _blocks_with_detected_pages(plain, detection, extraction_method, confidence)
         if detected is not None:
             return detected
         if detection_out is not None:
             detection_out.update(status="not_found", reason="markers found but no text could be assigned to pages")
-    return _synthetic_page_blocks(text, extraction_method=extraction_method, confidence=confidence)
+    labeled = _form_feed_pages(text, native_page_labels)
+    if detect_pages and labeled and (native_page_pattern or "\f" in text):
+        source = native_page_pattern or "form_feed"
+        native = _blocks_from_labeled_pages(
+            labeled, extraction_method=extraction_method, confidence=confidence, label_source=source,
+        )
+        if native is not None:
+            blocks, pages = native
+            if detection_out is not None:
+                detection_out.update(_format_page_summary(pages, source))
+            return blocks, pages
+    if not detect_pages:
+        return _synthetic_page_blocks(text.replace("\f", "\n"), extraction_method=extraction_method, confidence=confidence)
+    words = words_per_page if MIN_WORDS_PER_PAGE <= int(words_per_page) <= MAX_WORDS_PER_PAGE else DEFAULT_WORDS_PER_PAGE
+    blocks, pages = _word_count_pages(plain, extraction_method=extraction_method, confidence=confidence, words_per_page=words)
+    if detection_out is not None:
+        prior = str(detection_out.get("reason") or "").strip()
+        reason = "No printed page numbers were found; pages were estimated from word count."
+        if prior and prior != "too few candidates":
+            reason = f"{prior}; {reason}"
+        detection_out.update({
+            "status": "estimated",
+            "pattern": "word_count",
+            "convention": "word_count",
+            "confidence": 0.0,
+            "marker_count": len(pages),
+            "reason": reason,
+            "first": 1 if pages else None,
+            "last": len(pages) or None,
+            "words_per_page": words,
+            "one_record_per_page": True,
+            "confirmed": False,
+        })
+    return blocks, pages
 
 
 _LEAD_PIPE = re.compile(r"^[ \t]*\|[ \t]?")
@@ -280,6 +335,167 @@ def _blocks_with_detected_pages(
     if not any(block["type"] == "paragraph" for block in blocks):
         return None
     del by_line
+    return blocks, pages
+
+
+def _format_page_summary(pages: list[dict[str, Any]], pattern: str) -> dict[str, Any]:
+    labels = [str(page.get("printed_page_label") or "") for page in pages]
+    numeric = [int(label) for label in labels if label.isdigit()]
+    return {
+        "status": "detected",
+        "pattern": pattern,
+        "convention": "format",
+        "confidence": 0.95,
+        "marker_count": len(pages),
+        "reason": "Page breaks come from the file or the provider.",
+        "first": numeric[0] if numeric else None,
+        "last": numeric[-1] if numeric else None,
+    }
+
+
+def _form_feed_pages(text: str, labels: list[str] | None) -> list[tuple[str, str]] | None:
+    """Pages split on form feeds, or one page when the file names its starting number."""
+    if "\f" not in text:
+        if labels and len(labels) == 1 and text.strip():
+            return [(str(labels[0]), text.strip())]
+        return None
+    parts = text.split("\f")
+    while parts and not parts[0].strip():
+        parts.pop(0)
+        if labels:
+            labels = labels[1:]
+    while parts and not parts[-1].strip():
+        parts.pop()
+        if labels:
+            labels = labels[:-1]
+    if len(parts) < 2 and not (labels and len(labels) == 1):
+        return None
+    if labels and len(labels) == len(parts):
+        return [(str(label), part.strip()) for label, part in zip(labels, parts)]
+    return [(str(index), part.strip()) for index, part in enumerate(parts, 1)]
+
+
+def _blocks_from_labeled_pages(
+    pages_text: list[tuple[str, str]],
+    *,
+    extraction_method: str,
+    confidence: float,
+    label_source: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]] | None:
+    blocks: list[dict[str, Any]] = []
+    pages: list[dict[str, Any]] = []
+    for index, (label, body) in enumerate(pages_text, 1):
+        paragraphs = [part.strip() for part in re.split(r"\n\s*\n", body) if part.strip()]
+        if not paragraphs:
+            paragraphs = [line.strip() for line in body.splitlines() if line.strip()]
+        ids: list[str] = []
+        for number, paragraph in enumerate(paragraphs, 1):
+            block_id = f"p{index:05d}-b{number:04d}"
+            speaker = leading_speaker(paragraph)
+            blocks.append({
+                "block_id": block_id,
+                "page": index,
+                "printed_page_label": str(label),
+                "printed_page_label_source": label_source,
+                "bbox": [0, 0, 0, 0],
+                "type": "paragraph",
+                "text": paragraph,
+                "extraction_method": extraction_method,
+                "confidence": confidence,
+                **({"speaker": speaker} if speaker else {}),
+            })
+            ids.append(block_id)
+        pages.append({
+            "pdf_page": index,
+            "printed_page_label": str(label),
+            "printed_page_label_source": label_source,
+            "width": 0,
+            "height": 0,
+            "block_ids": ids,
+            "extraction_method": extraction_method,
+        })
+    if not blocks:
+        return None
+    return blocks, pages
+
+
+def _word_count(text: str) -> int:
+    return len(text.split())
+
+
+def pack_paragraphs_by_words(paragraphs: list[dict[str, Any]], words_per_page: int) -> list[list[dict[str, Any]]]:
+    """Group whole paragraphs into pages of about ``words_per_page`` words.
+
+    A paragraph that is itself longer than the budget stays on its own page, so a page
+    edge never cuts a paragraph in half.
+    """
+    groups: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    used = 0
+    for paragraph in paragraphs:
+        words = _word_count(str(paragraph.get("text") or ""))
+        if current and used + words > words_per_page:
+            groups.append(current)
+            current = []
+            used = 0
+        current.append(paragraph)
+        used += words
+    if current:
+        groups.append(current)
+    return groups
+
+
+def blocks_from_word_groups(
+    groups: list[list[dict[str, Any]]],
+    *,
+    extraction_method: str,
+    confidence: float = 0.99,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    blocks: list[dict[str, Any]] = []
+    pages: list[dict[str, Any]] = []
+    for index, group in enumerate(groups, 1):
+        ids: list[str] = []
+        for number, paragraph in enumerate(group, 1):
+            block_id = f"p{index:05d}-b{number:04d}"
+            text = str(paragraph.get("text") or "").strip()
+            speaker = paragraph.get("speaker") or leading_speaker(text)
+            blocks.append({
+                "block_id": block_id,
+                "page": index,
+                "printed_page_label": str(index),
+                "printed_page_label_source": "word_count",
+                "bbox": [0, 0, 0, 0],
+                "type": "paragraph",
+                "text": text,
+                "extraction_method": paragraph.get("extraction_method") or extraction_method,
+                "confidence": paragraph.get("confidence") if paragraph.get("confidence") is not None else confidence,
+                **({"speaker": speaker} if speaker else {}),
+            })
+            ids.append(block_id)
+        pages.append({
+            "pdf_page": index,
+            "printed_page_label": str(index),
+            "printed_page_label_source": "word_count",
+            "width": 0,
+            "height": 0,
+            "block_ids": ids,
+            "extraction_method": extraction_method,
+            "words_per_page": None,
+        })
+    return blocks, pages
+
+
+def _word_count_pages(
+    text: str, *, extraction_method: str, confidence: float, words_per_page: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+    if not paragraphs:
+        paragraphs = [line.strip() for line in text.splitlines() if line.strip()]
+    items = [{"text": paragraph, "extraction_method": extraction_method, "confidence": confidence} for paragraph in paragraphs]
+    groups = pack_paragraphs_by_words(items, words_per_page)
+    blocks, pages = blocks_from_word_groups(groups, extraction_method=extraction_method, confidence=confidence)
+    for page in pages:
+        page["words_per_page"] = words_per_page
     return blocks, pages
 
 
@@ -580,10 +796,62 @@ def _looks_like_text(data: bytes) -> bool:
     return textish / len(sample) > 0.9
 
 
-def rtf_to_text(data: bytes) -> tuple[str, dict[str, str]]:
+def _rtf_page_breaks(raw: str) -> tuple[str, list[str] | None, str | None]:
+    """Turn ``\\page`` / ``\\pgnstartN`` into form feeds and printed labels, before control words are stripped."""
+    number = 1
+    labels: list[int] = []
+    chunks: list[str] = []
+    buf: list[str] = []
+    saw_break = False
+    saw_start = False
+
+    def flush() -> None:
+        chunks.append("".join(buf))
+        labels.append(number)
+        buf.clear()
+
+    index = 0
+    while index < len(raw):
+        if raw.startswith("\\pgnstart", index):
+            match = re.match(r"\\pgnstart(-?\d+)", raw[index:])
+            if match:
+                number = int(match.group(1))
+                saw_start = True
+                index += match.end()
+                continue
+        if raw.startswith("\\page", index) and (index + 5 >= len(raw) or not raw[index + 5].isalpha()):
+            flush()
+            saw_break = True
+            number += 1
+            index += 5
+            if index < len(raw) and raw[index] == " ":
+                index += 1
+            continue
+        buf.append(raw[index])
+        index += 1
+    flush()
+    if not saw_break and not saw_start:
+        return raw, None, None
+    while chunks and not chunks[0].strip():
+        chunks.pop(0)
+        labels.pop(0)
+    while chunks and not chunks[-1].strip():
+        chunks.pop()
+        labels.pop()
+    if not chunks:
+        return raw, None, None
+    pattern = "rtf_page_break" if saw_break else "rtf_page_start"
+    return "\f".join(chunks), [str(label) for label in labels], pattern
+
+
+def rtf_to_text(data: bytes) -> tuple[str, dict[str, Any]]:
     validate_rtf(data)
     raw = data.decode("latin-1", errors="replace")
-    embedded: dict[str, str] = {}
+    raw, labels, pattern = _rtf_page_breaks(raw)
+    embedded: dict[str, Any] = {}
+    if labels and pattern:
+        embedded["_native_page_labels"] = labels
+        embedded["_native_page_pattern"] = pattern
     author = re.search(r"\{\\author\s+([^{}]*)\}", raw, re.I)
     title = re.search(r"\{\\title\s+([^{}]*)\}", raw, re.I)
     if author:
@@ -602,14 +870,100 @@ def _rtf_plain(value: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def docx_to_text(data: bytes) -> tuple[str, dict[str, str]]:
+def _pg_start(sect: Any) -> int | None:
+    for node in sect.iter(W_NS + "pgNumType"):
+        raw = node.get(W_NS + "start")
+        if raw and raw.isdigit() and 0 < int(raw) <= 20000:
+            return int(raw)
+    return None
+
+
+def _docx_body_pages(document: Any) -> tuple[str, list[str] | None, str | None]:
+    """Printed pages from Word page breaks and ``w:pgNumType`` start values."""
+    body = document.find(W_NS + "body")
+    if body is None:
+        return "", None, None
+    pages: list[list[str]] = [[]]
+    labels = [1]
+    saw_break = False
+    saw_start = False
+
+    def close_page(start: int | None = None) -> None:
+        pages.append([])
+        labels.append(start if start is not None else labels[-1] + 1)
+
+    for child in list(body):
+        local = child.tag.rsplit("}", 1)[-1]
+        if local == "sectPr":
+            start = _pg_start(child)
+            # The body's sectPr describes the section already read. Its start is that section's first page.
+            if start is not None and not saw_start:
+                delta = start - labels[0]
+                labels[:] = [label + delta for label in labels]
+                saw_start = True
+            continue
+        if local != "p":
+            continue
+        p_pr = child.find(W_NS + "pPr")
+        if p_pr is not None and p_pr.find(W_NS + "pageBreakBefore") is not None and any(pages[-1]):
+            saw_break = True
+            close_page()
+        if p_pr is not None:
+            sect = p_pr.find(W_NS + "sectPr")
+            if sect is not None:
+                start = _pg_start(sect)
+                if start is not None:
+                    saw_start = True
+                    if not saw_break:
+                        labels[0] = start
+        explicit = any(
+            (node.get(W_NS + "type") == "page")
+            for node in child.iter(W_NS + "br")
+        )
+        buf: list[str] = []
+        for node in child.iter():
+            tag = node.tag.rsplit("}", 1)[-1]
+            if tag == "t" and node.text:
+                buf.append(node.text)
+            elif tag == "tab":
+                buf.append(" ")
+            elif tag == "br" and node.get(W_NS + "type") == "page":
+                text = "".join(buf).strip()
+                if text:
+                    pages[-1].append(text)
+                buf = []
+                saw_break = True
+                close_page()
+            elif tag == "lastRenderedPageBreak" and not explicit:
+                text = "".join(buf).strip()
+                if text:
+                    pages[-1].append(text)
+                buf = []
+                saw_break = True
+                close_page()
+            elif tag == "br":
+                buf.append("\n")
+        text = "".join(buf).strip()
+        if text:
+            pages[-1].append(text)
+    while pages and not pages[-1]:
+        pages.pop()
+        labels.pop()
+    if not pages or (not saw_break and not saw_start):
+        flat = [paragraph for page in pages for paragraph in page]
+        return "\n\n".join(flat), None, None
+    pattern = "docx_page_break" if saw_break else "docx_page_start"
+    return "\f".join("\n\n".join(page) for page in pages), [str(label) for label in labels], pattern
+
+
+def docx_to_text(data: bytes) -> tuple[str, dict[str, Any]]:
     check_size(data)
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as package:
             validate_docx(package)
             if "word/document.xml" not in package.namelist():
                 raise ValueError("The Word document has no document body.")
-            embedded = {}
+            embedded: dict[str, Any] = {}
             if "docProps/core.xml" in package.namelist():
                 core = safe_xml(package.read("docProps/core.xml"))
                 mapping = {"title": "title", "creator": "author", "subject": "subject", "language": "language"}
@@ -618,13 +972,11 @@ def docx_to_text(data: bytes) -> tuple[str, dict[str, str]]:
                     if key and node.text:
                         embedded[key] = node.text
             document = safe_xml(package.read("word/document.xml"))
-            ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-            paragraphs = []
-            for paragraph in document.iter(ns + "p"):
-                text = "".join(node.text or "" for node in paragraph.iter(ns + "t"))
-                if text.strip():
-                    paragraphs.append(text.strip())
-            return "\n\n".join(paragraphs), embedded
+            text, labels, pattern = _docx_body_pages(document)
+            if labels and pattern:
+                embedded["_native_page_labels"] = labels
+                embedded["_native_page_pattern"] = pattern
+            return text, embedded
     except (zipfile.BadZipFile, RuntimeError, NotImplementedError) as exc:
         raise ValueError("The Word document could not be opened.") from exc
 
@@ -643,6 +995,17 @@ _VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link"
 # drop it: headers, navigation arrows, the hidden ws-data microformat), ambox is a MediaWiki maintenance notice ("not
 # backed by a scanned copy"), and hidden text is unseen. Generic class names are deliberately not treated as chrome.
 _CHROME_CLASSES = {"ws-noexport", "noprint", "ambox"}
+
+
+def _page_token(value: str) -> str | None:
+    """A printed page token from a Gutenberg/Wikisource page-number element."""
+    text = re.sub(r"\s+", " ", value).strip(" []().")
+    match = re.fullmatch(r"(?:page|pg|p\.?)?\s*(\d{1,5})", text, re.I)
+    if match and match.group(1):
+        return str(int(match.group(1)))
+    if re.fullmatch(r"[ivxlcdm]{1,8}", text, re.I):
+        return text.lower()
+    return None
 
 
 def _is_chrome(attr: dict[str, str]) -> bool:
@@ -665,12 +1028,49 @@ class _HtmlText(HTMLParser):
         self._in_title = False
         self._chrome_tag = ""
         self._chrome_depth = 0
+        self._pagenum_tag = ""
+        self._pagenum_depth = 0
+        self._pagenum_buf: list[str] = []
+        self._pagenum_attr = ""
+
+    def _emit_pagenum(self) -> None:
+        token = _page_token("".join(self._pagenum_buf)) or _page_token(self._pagenum_attr)
+        self._pagenum_buf = []
+        self._pagenum_attr = ""
+        if not token:
+            return
+        if token.isdigit():
+            self.parts.append(f"\n\n[Page {int(token)}]\n\n")
+        else:
+            self.parts.append(f"\n\n[{token}]\n\n")
+
+    def handle_comment(self, data: str) -> None:
+        if self._skip or self._chrome_depth or self._pagenum_depth:
+            return
+        match = re.search(r"\b(?:page|pg|p)\.?\s*#?\s*(\d{1,5})\b", data, re.I)
+        if match:
+            self.parts.append(f"\n\n[Page {int(match.group(1))}]\n\n")
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr = {key.lower(): value or "" for key, value in attrs}
+        if self._pagenum_depth:
+            if tag == self._pagenum_tag and tag not in _VOID_TAGS:
+                self._pagenum_depth += 1
+            return
         if self._chrome_depth:
             if tag == self._chrome_tag and tag not in _VOID_TAGS:
                 self._chrome_depth += 1
+            return
+        classes = set((attr.get("class") or "").lower().split())
+        if "pagenum" in classes or "page-number" in classes or attr.get("data-page") or attr.get("data-page-number"):
+            anchor = attr.get("id") or attr.get("name") or ""
+            page_anchor = re.fullmatch(r"(?:page|pg|p)[_\-]?(\d{1,5})", anchor, re.I)
+            self._pagenum_attr = attr.get("data-page") or attr.get("data-page-number") or (page_anchor.group(1) if page_anchor else "")
+            self._pagenum_buf = []
+            if tag in _VOID_TAGS:
+                self._emit_pagenum()
+            else:
+                self._pagenum_tag, self._pagenum_depth = tag, 1
             return
         if tag not in _VOID_TAGS and tag not in {"html", "head", "body", "title"} and _is_chrome(attr):
             self._chrome_tag, self._chrome_depth = tag, 1
@@ -691,12 +1091,18 @@ class _HtmlText(HTMLParser):
         if page_anchor and not self._skip:
             # Gutenberg/Wikisource-style page anchors become an explicit marker line.
             self.parts.append(f"\n\n[Page {int(page_anchor.group(1))}]\n\n")
-        elif "pagenum" in classes or "page-number" in classes or "pagebreak" in classes:
+        elif "pagebreak" in classes:
             self.parts.append("\n\n")
         if tag in {"p", "div", "h1", "h2", "h3", "li", "br", "tr"}:
             self.parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
+        if self._pagenum_depth:
+            if tag == self._pagenum_tag:
+                self._pagenum_depth -= 1
+                if self._pagenum_depth == 0:
+                    self._emit_pagenum()
+            return
         if self._chrome_depth:
             if tag == self._chrome_tag:
                 self._chrome_depth -= 1
@@ -711,6 +1117,9 @@ class _HtmlText(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._in_title:
             self.title.append(data)
+        if self._pagenum_depth:
+            self._pagenum_buf.append(data)
+            return
         if self._chrome_depth:
             return
         if not self._skip:

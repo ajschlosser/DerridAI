@@ -38,6 +38,7 @@ from ..models import (
     BuildWarningAcknowledgement,
     GutenbergImport,
     MetadataSchemaPreview,
+    PageEstimatePatch,
     PdfAssetLanguagePatch,
     PdfAssetMetadataPatch,
     PdfCorpusBoundaryAdjudication,
@@ -108,6 +109,31 @@ def _page_llm(
         if value:
             payload[key] = value
     return pdf_corpus_builds.page_marker_chooser(_resolve_pdf_corpus_provider(payload))
+
+
+def _attach_wikisource_scans(asset: dict[str, Any], data: bytes, url: str) -> dict[str, Any]:
+    """Best-effort DjVu page renders for a Wikisource import. The transcription is already saved."""
+    if "wikisource.org" not in url.lower():
+        return asset
+    try:
+        from urllib.parse import urlparse
+
+        from ..source_provider import ProviderHttp
+        from ..source_wikisource import fetch_wikisource_scans, scan_targets_from_html
+
+        targets = scan_targets_from_html(data.decode("utf-8", errors="replace"))
+        if not targets:
+            return asset
+        parsed = urlparse(url)
+        base = f"{parsed.scheme}://{parsed.netloc}"
+        scans, warnings = fetch_wikisource_scans(ProviderHttp("wikimedia"), base, targets)
+        if scans or warnings:
+            return pdf_corpus_repository.store_source_scans(
+                asset["asset_id"], scans, source="wikisource_djvu", warnings=warnings,
+            )
+    except Exception:
+        logger.warning("Wikisource scan download failed", exc_info=True)
+    return asset
 
 
 @router.post("/api/pdf/extract")
@@ -249,7 +275,7 @@ def derive_pdf_asset_units(asset_id: str, body: PdfSourceUnitPolicy) -> dict[str
 def import_pdf_asset_url(body: PdfSourceUrlImport) -> dict[str, Any]:
     try:
         data, filename, content_type = fetch_source_url(body.url, max_bytes=settings.pdf_max_upload_mb * 1024 * 1024)
-        return pdf_corpus_repository.save_asset(
+        asset = pdf_corpus_repository.save_asset(
             data, filename=filename, source_illegibility=body.source_illegibility,
             content_type=content_type, source_url=body.url,
             detect_page_numbers=body.page_number_detection != "off",
@@ -258,6 +284,7 @@ def import_pdf_asset_url(body: PdfSourceUrlImport) -> dict[str, Any]:
                 provider=body.provider, base_url=body.base_url, api_key=body.api_key,
             ),
         )
+        return _attach_wikisource_scans(asset, data, body.url)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
@@ -352,6 +379,27 @@ def patch_pdf_asset_page_labels(asset_id: str, body: PdfPageLabelsPatch) -> dict
         raise HTTPException(status_code=404, detail="PDF asset not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.patch("/api/pdf/assets/{asset_id}/page-estimate")
+def patch_pdf_asset_page_estimate(asset_id: str, body: PageEstimatePatch) -> dict[str, Any]:
+    try:
+        return pdf_corpus_repository.apply_page_estimate(
+            asset_id, words_per_page=body.words_per_page, one_record_per_page=body.one_record_per_page,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/api/pdf/assets/{asset_id}/scans/{index}")
+def get_pdf_asset_scan(asset_id: str, index: int) -> FileResponse:
+    try:
+        path = pdf_corpus_repository.scan_image_path(asset_id, index)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Scan page not found") from exc
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @router.patch("/api/pdf/assets/{asset_id}/language")

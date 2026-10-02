@@ -59,7 +59,7 @@ def default_registrar(acquired: AcquiredSource) -> dict[str, Any]:
     """Register through the same SourceDocument path as uploads, URLs and single library imports."""
     from .corpus_builder import pdf_corpus_repository
 
-    return pdf_corpus_repository.save_asset(
+    asset = pdf_corpus_repository.save_asset(
         acquired.data,
         filename=acquired.filename,
         content_type=acquired.content_type,
@@ -67,6 +67,12 @@ def default_registrar(acquired: AcquiredSource) -> dict[str, Any]:
         source_url=acquired.source_uri,
         detect_page_numbers=True,
     )
+    if acquired.scans:
+        warnings = list((acquired.catalog_metadata or {}).get("scan_warnings") or [])
+        asset = pdf_corpus_repository.store_source_scans(
+            asset["asset_id"], acquired.scans, source="wikisource_djvu", warnings=warnings,
+        )
+    return asset
 
 
 def default_identity_enricher(candidates: list[SourceCandidate], author: ResolvedAuthor, cancelled: Cancelled) -> list[str]:

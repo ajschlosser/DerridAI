@@ -792,6 +792,17 @@ def _image_bytes_to_pdf(data: bytes, filename: str) -> bytes:
     finally:
         image.close()
 
+def _one_record_per_estimated_page(asset: dict[str, Any]) -> bool:
+    """Word-count pages become one record each unless the reviewer turned that off."""
+    detection = asset.get("page_number_detection") if isinstance(asset.get("page_number_detection"), dict) else {}
+    if detection.get("status") != "estimated":
+        return False
+    estimate = asset.get("page_estimate") if isinstance(asset.get("page_estimate"), dict) else {}
+    if "one_record_per_page" in estimate:
+        return bool(estimate.get("one_record_per_page"))
+    return bool(detection.get("one_record_per_page", True))
+
+
 class PdfCorpusRepository:
     def __init__(self, root: Path | None = None) -> None:
         self.root = root or corpus_root()
@@ -1165,6 +1176,111 @@ class PdfCorpusRepository:
             asset["page_labels_updated_at"] = iso_now()
             _json_write(self.asset_meta_path(asset_id), asset)
             return asset
+
+    def apply_page_estimate(self, asset_id: str, *, words_per_page: int, one_record_per_page: bool) -> dict[str, Any]:
+        """Rebuild estimated pages from a reviewer-chosen word length. Printed pages are left alone."""
+        from .source_text import (
+            MAX_WORDS_PER_PAGE,
+            MIN_WORDS_PER_PAGE,
+            blocks_from_word_groups,
+            pack_paragraphs_by_words,
+        )
+
+        if not MIN_WORDS_PER_PAGE <= int(words_per_page) <= MAX_WORDS_PER_PAGE:
+            raise ValueError(f"Words per page must be between {MIN_WORDS_PER_PAGE} and {MAX_WORDS_PER_PAGE}.")
+        with self._lock:
+            asset = self.get_asset(asset_id)
+            detection = dict(asset.get("page_number_detection") or {})
+            if detection.get("status") != "estimated":
+                raise ValueError("Page length applies only when printed page numbers were not found.")
+            paragraphs = [
+                block for block in self._load_block_rows(asset_id)
+                if block.get("type") == "paragraph" and not block.get("excluded_reason") and str(block.get("text") or "").strip()
+            ]
+            if not paragraphs:
+                raise ValueError("This source has no text to paginate.")
+            before = " ".join(word for block in paragraphs for word in str(block.get("text") or "").split())
+            groups = pack_paragraphs_by_words(paragraphs, int(words_per_page))
+            blocks, pages = blocks_from_word_groups(
+                groups, extraction_method=str(paragraphs[0].get("extraction_method") or "text"),
+            )
+            after = " ".join(word for block in blocks for word in str(block.get("text") or "").split())
+            if before != after:
+                raise ValueError("Repaginating would change the source text.")
+            for page in pages:
+                page["words_per_page"] = int(words_per_page)
+            detection.update({
+                "status": "estimated",
+                "pattern": "word_count",
+                "convention": "word_count",
+                "marker_count": len(pages),
+                "first": 1 if pages else None,
+                "last": len(pages) or None,
+                "words_per_page": int(words_per_page),
+                "one_record_per_page": bool(one_record_per_page),
+                "confirmed": True,
+            })
+            asset["page_number_detection"] = detection
+            asset["page_estimate"] = {
+                "words_per_page": int(words_per_page),
+                "one_record_per_page": bool(one_record_per_page),
+                "confirmed": True,
+            }
+            asset["pages"] = pages
+            asset["page_count"] = len(pages)
+            asset["block_count"] = len(blocks)
+            asset["included_block_count"] = len(blocks)
+            asset["excluded_block_count"] = 0
+            tmp = self.asset_blocks_path(asset_id).with_suffix(".blocks.jsonl.tmp")
+            with tmp.open("w", encoding="utf-8") as handle:
+                for block in blocks:
+                    handle.write(json.dumps(block, ensure_ascii=False) + "\n")
+            os.replace(tmp, self.asset_blocks_path(asset_id))
+            _json_write(self.asset_meta_path(asset_id), asset)
+            return asset
+
+    def store_source_scans(self, asset_id: str, scans: list[dict[str, Any]], *, source: str, warnings: list[str] | None = None) -> dict[str, Any]:
+        """Save bounded provider scan images beside a text source. The transcription stays authoritative."""
+        with self._lock:
+            asset = self.get_asset(asset_id)
+            folder = self.root / "assets" / f"{asset_id}.scans"
+            folder.mkdir(parents=True, exist_ok=True)
+            stored: list[dict[str, Any]] = []
+            for index, scan in enumerate(scans, 1):
+                data = scan.get("data")
+                if not isinstance(data, (bytes, bytearray)) or not bytes(data).startswith(b"\xff\xd8"):
+                    continue
+                name = f"{index:04d}.jpg"
+                (folder / name).write_bytes(bytes(data))
+                stored.append({
+                    "file": scan.get("file"),
+                    "djvu_page": scan.get("djvu_page"),
+                    "image": name,
+                    "bytes": len(data),
+                })
+            labels = [page.get("printed_page_label") for page in asset.get("pages") or []]
+            if stored and len(labels) == len(stored):
+                for item, label in zip(stored, labels):
+                    item["printed_page_label"] = label
+            asset["scans"] = {
+                "source": source,
+                "count": len(stored),
+                "pages": stored,
+                "warnings": list(warnings or []),
+            }
+            _json_write(self.asset_meta_path(asset_id), asset)
+            return asset
+
+    def scan_image_path(self, asset_id: str, index: int) -> Path:
+        asset = self.get_asset(asset_id)
+        pages = (asset.get("scans") or {}).get("pages") or []
+        if index < 1 or index > len(pages):
+            raise KeyError(asset_id)
+        name = str(pages[index - 1].get("image") or "")
+        path = self.root / "assets" / f"{asset_id}.scans" / name
+        if not path.is_file():
+            raise KeyError(asset_id)
+        return path
 
     def update_asset_language(self, asset_id: str, *, language: str | None, skipped: bool = False) -> dict[str, Any]:
         """Persist an explicit language decision without rewriting extracted source data."""
@@ -3415,9 +3531,15 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         boundaries = None
         if resume and not source_scope_repair and not previous_build.get("segmentation_blocked"):
             boundaries = self.repo.load_checkpoint(build_id, "boundaries")
-        if not isinstance(boundaries, list):
+        page_records = _one_record_per_estimated_page(asset)
+        if page_records or not isinstance(boundaries, list):
             segmentation_clock = time.monotonic()
-            boundaries = self._segment(semantic_blocks, manifest, request, build_id)
+            if page_records:
+                from .corpus_segmentation import page_record_boundaries
+
+                boundaries = page_record_boundaries(semantic_blocks)
+            else:
+                boundaries = self._segment(semantic_blocks, manifest, request, build_id)
             self._update(build_id, segmentation_elapsed_ms=int((time.monotonic()-segmentation_clock)*1000))
         if self._cancelled(build_id):
             raise InterruptedError("Corpus build cancelled")
@@ -3433,12 +3555,15 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             or manifest.get("document_language")
             or ""
         ).strip() or None
-        boundaries, sentence_report = snap_boundaries_to_sentences(
-            semantic_blocks,
-            boundaries,
-            hard_max_chars=ceiling,
-            language=segmentation_language,
-        )
+        if page_records:
+            sentence_report = {}
+        else:
+            boundaries, sentence_report = snap_boundaries_to_sentences(
+                semantic_blocks,
+                boundaries,
+                hard_max_chars=ceiling,
+                language=segmentation_language,
+            )
         self._update(
             build_id,
             sentence_boundary_report={key: len(value) for key, value in sentence_report.items()},

@@ -505,6 +505,11 @@ class PdfPageLabelsPatch(BaseModel):
     labels: dict[int, str | None] = Field(default_factory=dict)
 
 
+class PageEstimatePatch(BaseModel):
+    words_per_page: int = Field(default=300, ge=50, le=2000)
+    one_record_per_page: bool = True
+
+
 class PdfAssetLanguagePatch(BaseModel):
     """One explicit reviewer decision for an unresolved source language."""
 

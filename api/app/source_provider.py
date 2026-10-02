@@ -11,7 +11,7 @@ import re
 import threading
 import time
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
@@ -48,7 +48,10 @@ POLICIES: dict[str, ProviderPolicy] = {
     ),
     # One Wikimedia gate covers Wikidata, Meta and every Wikisource project.
     "wikimedia": ProviderPolicy(
-        hosts=(".wikisource.org", "wikisource.org", "www.wikidata.org", "meta.wikimedia.org"),
+        hosts=(
+            ".wikisource.org", "wikisource.org", "www.wikidata.org", "meta.wikimedia.org",
+            "commons.wikimedia.org", "upload.wikimedia.org",
+        ),
         min_interval_s=0.2,
         max_concurrent=2,
     ),
@@ -192,6 +195,7 @@ class AcquiredSource:
     content_type: str
     source_uri: str
     catalog_metadata: dict[str, Any]
+    scans: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

@@ -253,6 +253,85 @@ def fetch_whole_work(
     return data, resolved, {"pages": pages}
 
 
+_SCAN_TITLE = re.compile(r"(?:^|:)([^:/]+\.(?:djvu|pdf))/(\d+)\s*$", re.I)
+MAX_SCAN_PAGES = 80
+MAX_SCAN_PAGE_BYTES = 800_000
+MAX_SCAN_TOTAL_BYTES = 16 * 1024 * 1024
+
+
+def scan_targets_from_titles(titles: list[str]) -> list[dict[str, Any]]:
+    """DjVu/PDF scan pages named by ProofreadPage titles, in first-seen order."""
+    found: list[dict[str, Any]] = []
+    seen: set[tuple[str, int]] = set()
+    for raw in titles:
+        title = unquote(str(raw or "").replace("_", " ")).strip()
+        match = _SCAN_TITLE.search(title)
+        if not match:
+            continue
+        file_name = match.group(1).strip()
+        page = int(match.group(2))
+        key = (file_name.casefold(), page)
+        if page < 1 or key in seen:
+            continue
+        seen.add(key)
+        found.append({"file": file_name, "djvu_page": page})
+        if len(found) >= MAX_SCAN_PAGES:
+            break
+    return found
+
+
+def scan_targets_from_html(html: str) -> list[dict[str, Any]]:
+    titles = re.findall(r'data-page-name="([^"]+)"', html, re.I)
+    titles += re.findall(r"(?:/wiki/|title=)(Page:[^\"'#<\s]+)", html, re.I)
+    return scan_targets_from_titles(titles)
+
+
+def fetch_wikisource_scans(http: Any, api_base: str, targets: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    """Bounded JPEG renders of Wikisource scan pages. Failures are warnings, not lost text."""
+    from .source_provider import host_allowed
+
+    saved: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    total = 0
+    policy = getattr(http, "policy", None)
+    for target in targets:
+        if len(saved) >= MAX_SCAN_PAGES or total >= MAX_SCAN_TOTAL_BYTES:
+            warnings.append("scan_pages_truncated")
+            break
+        title = f"File:{target['file']}"
+        try:
+            payload = http.get_json(f"{api_base.rstrip('/')}/w/api.php", {
+                "action": "query", "titles": title, "prop": "imageinfo",
+                "iiprop": "url|mime", "iiurlparam": f"page{int(target['djvu_page'])}-640px",
+                "format": "json", "formatversion": "2",
+            })
+        except CaptureError as exc:
+            warnings.append(f"scan_lookup_failed:{exc.code}")
+            break
+        pages = ((payload.get("query") or {}).get("pages") or [])
+        info = (pages[0].get("imageinfo") or [{}])[0] if pages and isinstance(pages[0], dict) else {}
+        thumb = str(info.get("thumburl") or "")
+        if not thumb:
+            warnings.append("scan_thumbnail_missing")
+            continue
+        try:
+            response = http.get(thumb, max_bytes=MAX_SCAN_PAGE_BYTES)
+            if response.status_code in {301, 302, 303, 307, 308}:
+                location = str(response.headers.get("location") or "")
+                if location and policy is not None and host_allowed(location, policy):
+                    response = http.get(location, max_bytes=MAX_SCAN_PAGE_BYTES)
+            data = bytes(response.content or b"")
+        except CaptureError as exc:
+            warnings.append(f"scan_download_failed:{exc.code}")
+            break
+        if response.status_code != 200 or not data.startswith(b"\xff\xd8"):
+            warnings.append("scan_not_jpeg")
+            continue
+        saved.append({**target, "data": data})
+        total += len(data)
+    return saved, warnings
+
+
 def fetch_wikisource_page(parsed: Any, title: str, *, max_bytes: int) -> tuple[bytes, str, str]:
     """Fetch a Wikisource work through the MediaWiki API (never by scraping /wiki/)."""
     base = f"{parsed.scheme}://{parsed.netloc}"
@@ -492,6 +571,7 @@ class WikisourceProvider:
             code_ = CaptureErrorCode.SOURCE_TOO_LARGE if "size limit" in str(exc) else CaptureErrorCode.ACQUISITION_FAILED
             raise CaptureError(code_, str(exc)) from exc
         provenance["proofread"] = self._proofread(base, code, [page["title"] for page in provenance["pages"]])
+        scans, scan_warnings = self._scans(base, provenance, data)
         safe = re.sub(r"[^\w.\- ]+", "_", resolved).strip().replace(" ", "_") or "wikisource"
         root = provenance["pages"][0] if provenance["pages"] else {}
         return AcquiredSource(
@@ -512,8 +592,21 @@ class WikisourceProvider:
                 "source_sha256": hashlib.sha256(data).hexdigest(),
                 "retrieved_at": datetime.now(UTC).isoformat(),
                 "document_type": "book",
+                **({"scan_warnings": scan_warnings} if scan_warnings else {}),
             },
+            scans=scans,
         )
+
+    def _scans(self, base: str, provenance: dict[str, Any], data: bytes) -> tuple[list[dict[str, Any]], list[str]]:
+        proofread = provenance.get("proofread") if isinstance(provenance.get("proofread"), dict) else {}
+        titles = [str(page.get("title") or "") for page in (proofread.get("pages") or [])]
+        targets = scan_targets_from_titles(titles) or scan_targets_from_html(data.decode("utf-8", errors="replace"))
+        if not targets:
+            return [], []
+        try:
+            return fetch_wikisource_scans(self.http, base, targets)
+        except Exception as exc:  # noqa: BLE001 - a missing scan must not drop the transcription
+            return [], [f"scan_download_failed:{type(exc).__name__}"]
 
     def _proofread(self, base: str, code: str, titles: list[str]) -> dict[str, Any] | None:
         """ProofreadPage provenance (transcluded Page:/Index: ids and proofreading quality), when the project has it."""
