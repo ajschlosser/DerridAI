@@ -115,6 +115,31 @@ describe("Corpus Builder build, review, and finish states", () => {
     );
   });
 
+  it("makes Review primary when issue Records are available even before clean-ready Records", () => {
+    const wrapper = mount(CorpusBuildPrimaryStatus, {
+      props: {
+        build: {
+          ...buildBase,
+          status: "running",
+          stage: "enriching",
+          progress: 0.4,
+          record_count: 20,
+        },
+        running: true,
+        canResume: false,
+        hasRecordTopology: true,
+        readyCount: 0,
+        preparingCount: 18,
+        attentionCount: 2,
+      },
+    });
+
+    const review = buttonByText(wrapper, "Review Records");
+    expect(review.exists()).toBe(true);
+    expect(review.classes()).toContain("primary");
+    expect(wrapper.get('[data-flow-state="attention"] dd').text()).toBe("2");
+  });
+
   it("shows recent authoritative stage changes on the live Build surface", () => {
     const wrapper = mount(CorpusBuildWorkspace, {
       props: {
