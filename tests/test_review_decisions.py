@@ -361,7 +361,7 @@ def test_review_decision_and_record_view_never_touch_the_whole_corpus(tmp_path: 
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     bid = build["build_id"]
 
-    repo.review_records(bid)  # the first read of a build parses the corpus once; clicks must not
+    repo.page_records(bid)  # projected pages do not require a full-corpus snapshot
 
     def forbidden(*_args, **_kwargs):
         raise AssertionError("whole-corpus operation on an interactive review path")
@@ -384,8 +384,8 @@ def test_review_decision_and_record_view_never_touch_the_whole_corpus(tmp_path: 
     # History is record-local (the previous Record only), not a corpus snapshot, and still undoes.
     undo = repo.load_checkpoint(bid, "review_history", {})["undo"]
     assert undo[-1]["record_id"] == "r1" and "records" not in undo[-1]
-    # The cached review snapshot already reflects the write without a reparse.
-    assert [r["review_disposition"] for r in repo.review_records(bid)][:2] == ["accepted", "pending"]
+    # Projected pages reflect the write without a canonical corpus reparse.
+    assert [r["review_disposition"] for r in repo.page_records(bid)["items"]][:2] == ["accepted", "pending"]
 
 
 def test_reading_a_legacy_asset_infers_the_start_once_without_recursing(tmp_path: Path, monkeypatch):

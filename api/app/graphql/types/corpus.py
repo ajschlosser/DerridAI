@@ -65,6 +65,7 @@ class CorpusQueueRow:
     needs_review: bool
     source_quality_issues: bool
     metadata_complete: bool
+    state_version: int | None
 
     @classmethod
     def from_presented_record(cls, record: dict[str, Any]) -> CorpusQueueRow:
@@ -85,6 +86,7 @@ class CorpusQueueRow:
             needs_review=bool(record.get("needs_review")),
             source_quality_issues=bool(record.get("source_quality_issues")),
             metadata_complete=bool(record.get("metadata_complete")),
+            state_version=opt_int(record.get("queue_state_version")),
         )
 
 
@@ -95,6 +97,13 @@ class CorpusReviewQueuePage:
     offset: int
     limit: int
     queue_counts: CorpusQueueCounts
+    topology_count: int
+    data_generation: int
+    topology_generation: int
+    next_cursor: str | None
+    previous_cursor: str | None
+    has_next_page: bool
+    has_previous_page: bool
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> CorpusReviewQueuePage:
@@ -104,6 +113,13 @@ class CorpusReviewQueuePage:
             offset=int(payload.get("offset") or 0),
             limit=int(payload.get("limit") or 0),
             queue_counts=CorpusQueueCounts.from_payload(payload.get("queue_counts") or {}),
+            topology_count=int(payload.get("topology_count") or 0),
+            data_generation=int(payload.get("data_generation") or 0),
+            topology_generation=int(payload.get("topology_generation") or 0),
+            next_cursor=opt_str(payload.get("next_cursor")),
+            previous_cursor=opt_str(payload.get("previous_cursor")),
+            has_next_page=bool(payload.get("has_next_page")),
+            has_previous_page=bool(payload.get("has_previous_page")),
         )
 
 

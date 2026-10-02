@@ -1032,9 +1032,27 @@ def list_pdf_corpus_records(
     source_problem: bool | None = None,
     review_queue: str | None = Query(default=None, pattern="^(ready|issues|metadata|source|topology|accepted|rejected)$"),
     query: str = "",
+    cursor: str | None = Query(default=None, max_length=512),
+    direction: str = Query(default="forward", pattern="^(forward|backward)$"),
 ) -> dict[str, Any]:
     try:
-        return pdf_corpus_repository.page_records(build_id, offset=offset, limit=limit, needs_review=needs_review, disposition=disposition, metadata_incomplete=metadata_incomplete, source_problem=source_problem, review_queue=review_queue, query=query)
+        return pdf_corpus_repository.page_records(build_id, offset=offset, limit=limit, needs_review=needs_review, disposition=disposition, metadata_incomplete=metadata_incomplete, source_problem=source_problem, review_queue=review_queue, query=query, cursor=cursor, direction=direction)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        from ..corpus_queue_projection import QueueCursorError, StaleQueueCursor
+        if isinstance(exc, QueueCursorError):
+            raise HTTPException(
+                status_code=409 if isinstance(exc, StaleQueueCursor) else 422,
+                detail={"code": exc.code, "message": str(exc)},
+            ) from exc
+        raise
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/review-queue/rebuild")
+def rebuild_pdf_corpus_review_queue(build_id: str) -> dict[str, Any]:
+    try:
+        return pdf_corpus_repository.rebuild_review_queue(build_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 

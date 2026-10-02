@@ -603,6 +603,7 @@ function queueRow(record: LooseRecord): LooseRecord {
   return {
     record_id: record.record_id,
     record_revision: record.record_revision ?? null,
+    state_version: record.state_version ?? record.record_revision ?? 1,
     page_start: record.page_start != null ? String(record.page_start) : null,
     page_end: record.page_end != null ? String(record.page_end) : null,
     text_length: Number(record.text_length ?? text.length),
@@ -660,16 +661,76 @@ export function graphqlDefaults(
   if (operationName === "CorpusReviewQueue") {
     const buildId = String(variables.build_id || "");
     const queue = String(variables.review_queue || "all");
-    const offset = Number(variables.offset || 0);
+    let offset = Number(variables.offset || 0);
     const limit = Number(variables.limit || 50);
+    const build = restFallback(`/api/pdf/corpus-builds/${buildId}`, fixtures, role);
+    const topologyGeneration = Number(build.review_queue_topology_generation ?? 1);
+    const dataGeneration = Number(build.review_queue_data_generation ?? 1);
+    const context = JSON.stringify([
+      buildId,
+      role,
+      queue,
+      variables.query || "",
+      variables.needs_review ?? null,
+      variables.disposition ?? null,
+      variables.metadata_incomplete ?? null,
+      variables.source_problem ?? null,
+    ]);
+    const filters = {
+      ...(queue && queue !== "all" ? { review_queue: queue } : {}),
+      ...(variables.query ? { query: String(variables.query) } : {}),
+    };
+    const position = (record: LooseRecord) =>
+      Number(
+        record.topology_index ??
+          corpusRecordsAll(buildId, fixtures, role).findIndex(
+            (item) => item.record_id === record.record_id,
+          ),
+      );
+    if (variables.cursor) {
+      let anchor: { context: string; topologyGeneration: number; position: number };
+      try {
+        anchor = JSON.parse(Buffer.from(String(variables.cursor), "base64url").toString());
+        if (anchor.context !== context) throw new Error("Cursor context changed");
+      } catch {
+        return {
+          data: null,
+          errors: [
+            { message: "Invalid queue cursor context", extensions: { code: "BAD_REQUEST" } },
+          ],
+        };
+      }
+      if (anchor.topologyGeneration !== topologyGeneration)
+        return {
+          data: null,
+          errors: [
+            { message: "Queue topology changed", extensions: { code: "STALE_QUEUE_CURSOR" } },
+          ],
+        };
+      const filtered = restFallback(`/api/pdf/corpus-builds/${buildId}/records`, fixtures, role, {
+        offset: "0",
+        limit: "1000",
+        ...filters,
+      }).items as LooseRecord[];
+      if (variables.direction === "backward") {
+        const before = filtered.filter((record) => position(record) < anchor.position).length;
+        offset = Math.max(0, before - limit);
+      } else {
+        const after = filtered.findIndex((record) => position(record) > anchor.position);
+        offset = after < 0 ? filtered.length : after;
+      }
+    }
     const page = restFallback(`/api/pdf/corpus-builds/${buildId}/records`, fixtures, role, {
       offset: String(offset),
       limit: String(limit),
-      ...(queue && queue !== "all" ? { review_queue: queue } : {}),
+      ...filters,
     });
     const items: LooseRecord[] = Array.isArray(page.items) ? page.items : [];
     const total = Number(page.total ?? items.length);
-    const build = restFallback(`/api/pdf/corpus-builds/${buildId}`, fixtures, role);
+    const cursor = (record: LooseRecord) =>
+      Buffer.from(
+        JSON.stringify({ context, topologyGeneration, position: position(record) }),
+      ).toString("base64url");
     const queue_counts = {
       all: 0,
       ready: 0,
@@ -693,6 +754,16 @@ export function graphqlDefaults(
             offset,
             limit,
             queue_counts,
+            topology_count: Number(
+              build.record_count ?? corpusRecordsAll(buildId, fixtures, role).length,
+            ),
+            data_generation: dataGeneration,
+            topology_generation: topologyGeneration,
+            next_cursor:
+              offset + items.length < total && items.length ? cursor(items.at(-1)!) : null,
+            previous_cursor: offset > 0 && items.length ? cursor(items[0]) : null,
+            has_next_page: offset + items.length < total,
+            has_previous_page: offset > 0,
           },
         },
       },

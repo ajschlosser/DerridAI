@@ -9,7 +9,12 @@ import type { TypedDocumentString } from "./generated";
 export const GRAPHQL_ENDPOINT = "/api/graphql";
 
 /** Stable codes the server puts in `extensions.code` (app/graphql/errors.py). */
-export type GraphQLErrorCode = "FORBIDDEN" | "NOT_FOUND" | "BAD_REQUEST" | "UNAVAILABLE";
+export type GraphQLErrorCode =
+  | "FORBIDDEN"
+  | "NOT_FOUND"
+  | "BAD_REQUEST"
+  | "UNAVAILABLE"
+  | "STALE_QUEUE_CURSOR";
 
 export interface GraphQLErrorEntry {
   message: string;
@@ -56,14 +61,44 @@ export function isAbortError(error: unknown): boolean {
 }
 
 const READ_CACHE_TTL_MS = 1500;
-const readCache = new Map<string, { expiresAt: number; value: unknown }>();
+interface ReadScope {
+  operationName: string;
+  buildId?: string;
+  recordIds?: readonly string[];
+}
+const readCache = new Map<string, { expiresAt: number; value: unknown; scope: ReadScope }>();
 interface PendingRead {
   promise: Promise<unknown>;
   controller: AbortController;
   consumers: number;
+  scope: ReadScope;
+  valid: boolean;
 }
 const pendingReads = new Map<string, PendingRead>();
 let cacheEpoch = 0;
+
+export interface GraphQLReadInvalidation {
+  operations?: readonly string[];
+  buildId?: string;
+  recordIds?: readonly string[];
+}
+
+/** Detach matching pending reads too: their late responses cannot repopulate the cache. */
+export function invalidateGraphQLReads(filter: GraphQLReadInvalidation): void {
+  function matches(scope: ReadScope) {
+    return (
+      (!filter.operations || filter.operations.includes(scope.operationName)) &&
+      (!filter.buildId || filter.buildId === scope.buildId) &&
+      (!filter.recordIds || scope.recordIds?.some((id) => filter.recordIds!.includes(id)))
+    );
+  }
+  for (const [key, entry] of readCache) if (matches(entry.scope)) readCache.delete(key);
+  for (const [key, entry] of pendingReads) {
+    if (!matches(entry.scope)) continue;
+    entry.valid = false;
+    pendingReads.delete(key);
+  }
+}
 
 function consume<TResult>(read: PendingRead, signal?: AbortSignal): Promise<TResult> {
   read.consumers += 1;
@@ -114,6 +149,12 @@ export function execute<TResult, TVariables>(
   const query = document.toString();
   const operationName = operationNameOf(query);
   const key = `${operationName}:${JSON.stringify(variables)}`;
+  const scopedVariables = variables as { build_id?: string; record_ids?: string[] };
+  const scope: ReadScope = {
+    operationName,
+    buildId: scopedVariables?.build_id,
+    recordIds: scopedVariables?.record_ids,
+  };
   if (options.signal?.aborted) return Promise.reject(new DOMException("aborted", "AbortError"));
   const cached = readCache.get(key);
   if (cached && cached.expiresAt > Date.now())
@@ -133,8 +174,12 @@ export function execute<TResult, TVariables>(
       if (response.errors?.length) throw new GraphQLRequestError(operationName, response.errors);
       if (response.data == null) throw new GraphQLRequestError(operationName, []);
       const value = response.data;
-      if (requestEpoch === cacheEpoch && !controller.signal.aborted) {
-        readCache.set(key, { expiresAt: Date.now() + READ_CACHE_TTL_MS, value: clone(value) });
+      if (requestEpoch === cacheEpoch && read.valid && !controller.signal.aborted) {
+        readCache.set(key, {
+          expiresAt: Date.now() + READ_CACHE_TTL_MS,
+          value: clone(value),
+          scope,
+        });
         for (const [cachedKey, entry] of readCache)
           if (entry.expiresAt <= Date.now()) readCache.delete(cachedKey);
         while (readCache.size > 128) {
@@ -148,7 +193,7 @@ export function execute<TResult, TVariables>(
     .finally(() => {
       if (pendingReads.get(key)?.promise === request) pendingReads.delete(key);
     });
-  const read: PendingRead = { promise: request, controller, consumers: 0 };
+  const read: PendingRead = { promise: request, controller, consumers: 0, scope, valid: true };
   pendingReads.set(key, read);
   return consume<TResult>(read, options.signal);
 }

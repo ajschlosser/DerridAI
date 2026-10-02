@@ -1,5 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, type Ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import { useCorpusReviewNavigation } from "../../src/features/corpus-builder/composables/useCorpusReviewNavigation";
 
@@ -7,7 +7,14 @@ function record(id: string) {
   return { record_id: id } as any;
 }
 
-function setup(beforeNavigate?: () => Promise<boolean>) {
+function setup(
+  beforeNavigate?: () => Promise<boolean>,
+  cursorNavigation?: {
+    movePage: (direction: "forward" | "backward") => Promise<void>;
+    hasNextPage: Ref<boolean>;
+    hasPreviousPage: Ref<boolean>;
+  },
+) {
   const currentBuild = ref<any | null>({
     validation: {
       metadata_schema_errors: [{ record_id: "validation-record" }],
@@ -60,6 +67,7 @@ function setup(beforeNavigate?: () => Promise<boolean>) {
     refreshRecords,
     selectRecord,
     beforeNavigate,
+    ...cursorNavigation,
   });
 
   return {
@@ -83,6 +91,28 @@ function setup(beforeNavigate?: () => Promise<boolean>) {
 }
 
 describe("Corpus Builder review navigation", () => {
+  it("uses cursor movement for sequential pages but offsets for history and random jumps", async () => {
+    const movePage = vi.fn(async (_direction: "forward" | "backward") => undefined);
+    const state = setup(undefined, {
+      movePage,
+      hasNextPage: ref(true),
+      hasPreviousPage: ref(true),
+    });
+    await state.navigation.nextPage();
+    await state.navigation.previousPage();
+    expect(movePage.mock.calls).toEqual([["forward"], ["backward"]]);
+    expect(state.refreshRecords).not.toHaveBeenCalled();
+    await state.navigation.changePage(100);
+    expect(state.recordOffset.value).toBe(100);
+    expect(state.refreshRecords).toHaveBeenCalledOnce();
+    state.focusHistory.value = ["r1", "r9"];
+    state.focusHistoryOffsets.value = [0, 100];
+    state.focusHistoryIndex.value = 1;
+    await state.navigation.focusHistoryMove(-1);
+    expect(state.recordOffset.value).toBe(0);
+    expect(state.refreshRecords).toHaveBeenLastCalledWith(false, "r1");
+    expect(movePage).toHaveBeenCalledTimes(2);
+  });
   it("leaves selection, page and filters unchanged when draft navigation is declined", async () => {
     const beforeNavigate = vi.fn().mockResolvedValue(false);
     const state = setup(beforeNavigate);

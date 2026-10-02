@@ -33,7 +33,7 @@ Acceptance: no per-record full-store save during ordinary build enrichment; rest
 
 ## 2. Incremental review-queue projection
 
-Initial increment: bounded snapshot selection reuse now accelerates unchanged REST and GraphQL page navigation. See the progress tracker for measurements and limitations; transactional projection and mutation-time improvements below remain planned.
+Delivered checkpoint: REST and GraphQL queue reads now use a persistent transactional SQLite projection, live source-order cursors, incremental counts/facets/build summaries, and targeted frontend reconciliation. Bounded snapshot selection remains a compatibility path. See the progress tracker for repository measurements, the warm-cache trade-off, and outstanding end-to-end acceptance gates.
 
 `select_queue` scans records; search serializes record JSON and counts perform corpus-wide work. Build a rebuildable SQLite queue projection with record identity, source order, state version, disposition, readiness, incomplete-field/source-problem flags, and review categories.
 
@@ -41,11 +41,13 @@ Initial increment: bounded snapshot selection reuse now accelerates unchanged RE
 - Add cursor pagination for sequential review while preserving offset API compatibility.
 - Incrementally maintain common counts; use indexed queries for uncommon combinations.
 - Define searchable data explicitly. Preserve existing substring semantics initially; token search is a deliberate compatibility decision, not an invisible optimization.
+- For blind review, search only the authenticated reviewer's presented Record. Sealed values must not affect hits, filtered counts, or facets; unsealed search retains casefolded Unicode JSON substring matching.
 - Preserve reviewer-specific and blind-review visibility for rows, search, counts, and facets.
 - Track projection generation/version and provide repair/rebuild support.
 - Extend #417's bounded frontend cache and neighbour prefetch with targeted changed-record updates instead of full queue resets.
+- Live cursors survive ordinary payload changes and reevaluate current membership/counts. Topology, repair, reviewer, or filter changes invalidate their context; retain offsets for random access/history. Records newly eligible behind an already traversed anchor are not guaranteed to be revisited.
 
-Acceptance: equivalence tests against existing queue selection for filters, reviewers, mutations, and restarts; common operations avoid full-corpus decoding; two-build cold loads meet the agreed latency budget.
+Acceptance: equivalence tests against reviewer-visible queue selection for filters, reviewers, mutations, and restarts; common operations avoid full-corpus decoding; two-build cold loads meet the agreed latency budget. Repository decoding and timing checks are recorded in the tracker; HTTP/browser tail latency, real-source preparation, and human-review targets remain separate unverified gates.
 
 ## 3. Earlier safe review readiness
 

@@ -390,7 +390,7 @@ describe("Corpus Builder lifecycle controller", () => {
     state.controller.stopPolling();
   });
 
-  it("refreshes just the finished record's row on corpus.record_completed", async () => {
+  it("reconciles completed records once even when the selected Record is affected", async () => {
     const running = { ...build("build-1"), status: "running", stage: "enriching" };
     const state = setup();
     state.selectedBuildId.value = "build-1";
@@ -421,7 +421,8 @@ describe("Corpus Builder lifecycle controller", () => {
       resource_id: "build-1",
       payload: { metadata: { record_id: "r7" } },
     });
-    expect(state.refreshRecord).toHaveBeenCalledWith("r7");
+    expect(state.refreshRows).toHaveBeenCalledTimes(2);
+    expect(state.refreshRecord).not.toHaveBeenCalled();
 
     state.controller.stopPolling();
   });

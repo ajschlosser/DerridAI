@@ -161,6 +161,61 @@ def test_queue_read_does_not_compute_unused_facets(build, monkeypatch):
     assert len(data["data"]["corpus_build"]["review_queue"]["items"]) == 5
 
 
+def test_projected_queue_and_facets_never_load_a_full_snapshot(build, monkeypatch):
+    repo, build_id = build
+    def fail(*args, **kwargs):
+        raise AssertionError("Projected transport read loaded a full corpus snapshot")
+    monkeypatch.setattr(repo, "review_records", fail)
+    monkeypatch.setattr(repo, "load_records", fail)
+    for query in (REVIEW_QUEUE_QUERY, METADATA_FACETS_QUERY):
+        data = gql(query, {"build_id": build_id, "offset": 0, "limit": 2}).json()
+        assert "errors" not in data, data
+    assert _call("GET", f"/api/pdf/corpus-builds/{build_id}/records", params={"limit": 2}).status_code == 200
+
+
+def test_blind_search_does_not_disclose_values_through_either_transport(build):
+    _, build_id = build
+    for cookie, expected in (("admin-cookie", 1), ("reviewer-cookie", 0)):
+        rest = _call(
+            "GET", f"/api/pdf/corpus-builds/{build_id}/records",
+            params={"query": "Sealed First Answer"}, cookie=cookie,
+        ).json()
+        query = """query Q($id:String!){corpus_build(build_id:$id){
+            review_queue(query:"Sealed First Answer"){total queue_counts{all}}
+        }}"""
+        data = gql(query, {"id": build_id}, cookie=cookie).json()
+        assert "errors" not in data, data
+        page = data["data"]["corpus_build"]["review_queue"]
+        assert page["total"] == page["queue_counts"]["all"] == rest["total"] == expected
+
+
+def test_rest_and_graphql_live_cursor_and_stale_error_contract(build):
+    repo, build_id = build
+    path = f"/api/pdf/corpus-builds/{build_id}/records"
+    first = _call("GET", path, params={"limit": 2}).json()
+    query = """query Q($id:String!,$cursor:String){
+        corpus_build(build_id:$id){review_queue(limit:2,cursor:$cursor){
+            items{record_id state_version} offset topology_count has_next_page next_cursor
+        }}
+    }"""
+    second = gql(query, {"id": build_id, "cursor": first["next_cursor"]}).json()
+    assert "errors" not in second, second
+    page = second["data"]["corpus_build"]["review_queue"]
+    assert [row["record_id"] for row in page["items"]] == ["r3", "r4"]
+    assert page["offset"] == 2
+    assert page["topology_count"] == 12
+    assert all(row["state_version"] is not None for row in page["items"])
+    response = _call("POST", f"/api/pdf/corpus-builds/{build_id}/review-queue/rebuild")
+    assert response.status_code == 200
+    stale = _call("GET", path, params={"cursor": first["next_cursor"]})
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["code"] == "STALE_QUEUE_CURSOR"
+    stale_graphql = gql(query, {"id": build_id, "cursor": first["next_cursor"]}).json()
+    assert stale_graphql["errors"][0]["extensions"]["code"] == "STALE_QUEUE_CURSOR"
+    denied = _call("POST", f"/api/pdf/corpus-builds/{build_id}/review-queue/rebuild", cookie="researcher-cookie")
+    assert denied.status_code == 403
+
+
 def test_review_queue_matches_rest_counts_and_ordering(build):
     repo, build_id = build
     data = gql(REVIEW_QUEUE_QUERY, {"build_id": build_id, "offset": 0, "limit": 50}).json()
@@ -340,8 +395,8 @@ def test_targeted_record_reads_do_not_load_or_migrate_the_whole_corpus(build, mo
     assert [item["record_id"] for item in rows["data"]["corpus_build"]["rows"]] == ["r2", "r1"]
 
 
-def test_review_snapshot_cache_is_patched_in_place_by_record_writes(build, monkeypatch):
-    """Paging reuses parsed records; a one-Record edit is visible without reparsing the corpus."""
+def test_legacy_review_snapshot_is_invalidated_without_mutating_held_snapshots(build, monkeypatch):
+    """Full-corpus compatibility readers reload; projected pages never need this snapshot."""
     repo, build_id = build
     original = repo.load_records
     calls = 0
@@ -363,18 +418,18 @@ def test_review_snapshot_cache_is_patched_in_place_by_record_writes(build, monke
     repo.update_record(build_id, changed)
 
     refreshed = repo.review_records(build_id)
-    assert calls == 1
+    assert calls == 2
     assert refreshed is not first  # replaced, never mutated: readers of the old snapshot are unaffected
     assert next(item for item in first if item["record_id"] == "r1")["text"] != "Updated review text"
     assert next(item for item in refreshed if item["record_id"] == "r1")["text"] == "Updated review text"
     assert [item["record_id"] for item in refreshed] == [item["record_id"] for item in first]
 
-    # A write from another process changes the file signature, so the patched snapshot is not trusted.
+    # A write from another process changes the file signature, so a stale snapshot is not trusted.
     repo._review_records_cache[build_id] = ((0, 0), refreshed)
     changed["text"] = "Second edit"
     repo.update_record(build_id, changed)
     assert next(item for item in repo.review_records(build_id) if item["record_id"] == "r1")["text"] == "Second edit"
-    assert calls == 2
+    assert calls == 3
 
 
 def test_unchanged_payloads_are_not_remigrated(build, monkeypatch):
