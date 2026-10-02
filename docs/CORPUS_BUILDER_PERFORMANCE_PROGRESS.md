@@ -6,25 +6,26 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 ## Baseline and branch
 
-- Current branch: `ajschlosser-corpus-builder-performance`; earlier checkpoints used `perf/corpus-builder-throughput`.
-- Continuation baseline: fetched `master` at `ab2b097a`, including #419 and the earlier #417/#418 work.
-- Working scope: persistent transactional queue projection, live cursor pagination, reviewer-visible search, incremental build summaries, and targeted frontend reconciliation. Dependency caching and later performance phases remain planned.
+- Current continuation branch: `ajschlosser-corpus-builder-performance-264`; earlier checkpoints used `ajschlosser-corpus-builder-performance` and `perf/corpus-builder-throughput`.
+- Continuation baseline: merged #425 at `5748c42a`, including the queue projection and earlier persistence checkpoints below.
+- Working scope: complete record-level metadata-exemplar reconciliation, durable invalidation, coalesced background indexing, and focused repository measurements. Broader enrichment caching and later performance phases remain planned.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
 ## Checkpoints
 
-| Checkpoint                                 | State                       | Evidence                                                                                              |
-| ------------------------------------------ | --------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Plan and tracker                           | Committed/pushed `dc0b35f0` | Scope, invariants, acceptance gates, rollout sequence                                                 |
-| Baseline instrumentation                   | Partial                     | Synthetic persistence/write counts captured; stable wall-clock and end-to-end baselines pending       |
-| Incremental enrichment completion          | Committed/pushed `d9c30235` | Ownership, restart, failure, and retired-record regressions                                           |
-| Audio manifest preparation                 | Committed/pushed `6fff2e0e` | Transcript time locators and provider fallback                                                        |
-| Remove review navigation modal             | Committed/pushed `bb066a35` | 18 production-browser cases pass; local draft recovery retained                                       |
-| Restore document metadata editor           | Committed/pushed `0be91ae9` | Component-resolution regression and typechecks                                                        |
-| Queue projection                           | Committed `85d74a35`        | Transactional SQLite projection, live cursors, scoped reconciliation, repository scaling measurements |
-| Dependency caching / incremental exemplars | Pending                     | Extend existing mechanisms                                                                            |
-| Readiness / scheduling                     | Pending                     | Preserve publication and ownership gates                                                              |
-| Evaluated learning / review assistance     | Pending                     | Requires held-out evaluation                                                                          |
+| Checkpoint                             | State                       | Evidence                                                                                              |
+| -------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Plan and tracker                       | Committed/pushed `dc0b35f0` | Scope, invariants, acceptance gates, rollout sequence                                                 |
+| Baseline instrumentation               | Partial                     | Synthetic persistence/write counts captured; stable wall-clock and end-to-end baselines pending       |
+| Incremental enrichment completion      | Committed/pushed `d9c30235` | Ownership, restart, failure, and retired-record regressions                                           |
+| Audio manifest preparation             | Committed/pushed `6fff2e0e` | Transcript time locators and provider fallback                                                        |
+| Remove review navigation modal         | Committed/pushed `bb066a35` | 18 production-browser cases pass; local draft recovery retained                                       |
+| Restore document metadata editor       | Committed/pushed `0be91ae9` | Component-resolution regression and typechecks                                                        |
+| Queue projection                       | Merged #425                 | Transactional SQLite projection, live cursors, scoped reconciliation, repository scaling measurements |
+| Incremental metadata exemplars         | Local continuation          | Record-local reconciliation, recoverable invalidation, unchanged-vector reuse; measurements below     |
+| Dependency-aware enrichment caching    | Pending                     | Extend existing mechanisms without competing caches                                                   |
+| Readiness / scheduling                 | Pending                     | Preserve publication and ownership gates                                                              |
+| Evaluated learning / review assistance | Pending                     | Requires held-out evaluation                                                                          |
 
 ## Validation and measurements
 
@@ -33,7 +34,7 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 ## Next actions
 
 1. Establish isolated real-source and end-to-end timing baselines, including browser/save tail latency, before claiming progress toward 50%.
-2. Continue dependency-aware caching and incremental exemplars behind the plan's correctness gates.
+2. Continue dependency-aware enrichment caching; measure remaining full-asset source-block loading before deciding whether to add source indexing.
 3. Evaluate earlier readiness, scheduling, and review assistance separately from repository queue improvements.
 
 ## Persistence checkpoint (2026-10-02)
@@ -118,3 +119,26 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 - **Trade-off:** unchanged in-memory snapshot paging is faster than fresh transactional SQL/search reads. Projection warm averages remain approximately 10–87 ms per repository page in these samples, but these are averages/medians, not p95 or browser latency guarantees. Projection gains are cold loading and bounded post-edit decoding, not faster warm snapshot-cache hits.
 - Measurements include repository search, counts, facets, and targeted writes; exclude initial projection construction, HTTP, browser rendering, live models, and human decisions. The shared machine and three-sample runs do not establish population tail latency or an end-to-end improvement. Real-source/live-model/human-review studies and the 50% target remain outstanding.
 - Reproduce with a fresh `CORPUS_PROJECTION_BENCHMARK=/absolute/output.jsonl` output path and `python -m pytest -q tests/test_review_queue_projection.py -k repository_projection_benchmark`. Use the same dependencies and avoid competing workloads for an isolated comparison.
+
+## Incremental metadata-exemplar checkpoint (2026-10-02)
+
+- Inspected merged #425 and continued from its queue-projection baseline; its improvements are not counted again. This increment reconciles complete exemplar sets per changed Record because revision and cross-field reviewed-value changes can affect all of that Record's examples. Selected derivation shares the full derivation policy and retires obsolete rows even when the new set is empty.
+- Canonical Record transactions now retain opaque dirty tokens in a corpus-local SQLite journal. Reviewed-memory binding writes and their system outbox events commit atomically in their own database; the corpus journal covers recovery across the two stores. Only captured tokens/events are acknowledged, so newer edits survive an in-flight projection, including a full rebuild. These operational tables are not scholarly Record or publication fields.
+- Background indexing coalesces per build and drains bounded batches. Ordinary reconciliation reads only affected vector rows, refreshes metadata without embedding, and reuses an existing compatible vector when the same Record's exact evidence context is unchanged under a new exemplar ID. New context still requires embedding. Failure leaves visible recoverable work without blocking canonical review or publication; no immediate failure retry loop is introduced.
+- Initialization, topology replacement, editorial-memory reset, reviewed-alias/source changes, broad dependency changes, explicit repair, and collection-epoch changes retain full recovery. Scoped/paginated outbox resolution avoids the old global 1,000-event recovery cap. Backlog totals count notifications, not distinct Records.
+- Shared examples and cross-field matching exclude pending sealed second-opinion values independently of worker authentication context. Disputed, invalid, and unresolved assertions cannot become trusted examples; reviewed absence still requires bound source evidence. Originating assertion identity, revision, evidence, human authority, and canonical publication/readiness gates remain preserved.
+- Full backend validation exposed a background-warning read/write race that could overwrite newer segmentation progress. Warning mutation now holds the repository writer lock across its read and write, with a concurrency regression. Final full backend run: **1,888 passed, 18 opt-in cases skipped**; REST/GraphQL contracts: **15 passed**. Touched-file Ruff, mypy (11 source files), syntax compilation, and GraphQL SDL/pipeline catalog checks passed. Generated artifacts were not changed. No frontend/browser, Docker, live-model, human-review, complete-preflight, or release-readiness claim is made for this increment.
+- Final repository scaling uses actual SQLite/reviewed Record writes with an **in-memory vector double and no real embeddings**, Python 3.12.15 on Windows 11, Intel Core Ultra 7 265KF (20 logical processors). Three samples per size/build/mode/pattern; both modes use current canonical writes, with forced full-scope rebuilding as the comparison, not an exact replay of the former deployment. Changed exemplar sets and every unaffected vector row are checked after each operation, with full canonical equivalence at the end.
+- Single-edit work **per build** falls from `N+1` decoded Records and `N` embedding documents to **two decoded Records, one returned vector row, and zero embedding documents** when context is unchanged. Five Records edited three times each coalesce to **20 decodes, five returned vector rows, and zero embedding documents**, versus `N+15` decodes and `N` embedding documents for rebuilding. These counts, not elapsed-time percentages, establish the bounded-work result.
+
+| Records/build | Builds | Single edit + projection: rebuild → incremental (s) | Coalesced edits + projection: rebuild → incremental (s) | Incremental save: single / coalesced (s) | Incremental source-block load: single / coalesced (s) |
+| ------------- | ------ | --------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
+| 1,000         | 1      | 1.569 → 0.080                                       | 2.044 → 0.662                                           | 0.038 / 0.604                            | 0.010 / 0.033                                         |
+| 1,000         | 2      | 2.964 → 0.227                                       | 4.615 → 1.519                                           | 0.121 / 1.351                            | 0.027 / 0.018                                         |
+| 10,000        | 1      | 14.704 → 0.319                                      | 15.192 → 0.616                                          | 0.060 / 0.516                            | 0.205 / 0.028                                         |
+| 10,000        | 2      | 21.257 → 0.579                                      | 23.939 → 3.572                                          | 0.261 / 3.076                            | 0.056 / 0.207                                         |
+
+- Columns are medians of total repository work across the listed builds. Save includes the edit reads/writes, not HTTP or browser latency. **Full-asset source-block loading remains once per derivation batch** and can dominate otherwise narrow projection work; it is measured, not eliminated. Table component medians do not necessarily sum to the median total.
+- The final sweep was interrupted after three complete cases. Those cases each emitted all 12 samples after correctness checks; the incomplete largest case was excluded and rerun separately to completion. Shared-machine variance was substantial (including a discarded interrupted-run save near 70 seconds); three samples do not establish p95, a save-latency budget, or a population speedup. All four final configurations completed their equivalence checks; 48 final timing samples are retained in session artifacts.
+- Reproduce with a fresh `CORPUS_EXEMPLAR_BENCHMARK=/absolute/output.jsonl` path and `python -m pytest -q tests/test_incremental_metadata_exemplars.py -k repository_benchmark`. Normal regression runs skip these four opt-in cases. Avoid overlapping heavy work and use the same dependencies; real Chroma/provider cost, real-source end-to-end preparation, browser/save tail latency, and human-review studies remain outstanding. No 50% end-to-end target is claimed.
+- PR preparation committed the increment and merged refreshed `origin/master` at `22325984`. Change-aware preflight passed repository-wide backend lint, syntax, generated-artifact checks, **1,873 backend regressions** (18 opt-in skips), and **15 transport contracts**. Full mypy still reports the 10 errors in seven pipeline files recorded at the prior checkpoint; those files are identical to the refreshed base. The preflight formatting gate could not use absent `web/node_modules`; the equivalent changed-document check passed with pinned Prettier 3.6.2 and the repository configuration. This is not a green full-preflight result. The documented pre-push bypass is used for these disclosed baseline/tooling limitations, not to claim the failing gates passed.

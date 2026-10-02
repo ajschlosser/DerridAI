@@ -227,13 +227,7 @@ def persist_metadata_decision(binding: MetadataMemoryBinding) -> MetadataMemoryB
     """Persist one reviewed decision and enqueue rebuildable projections."""
     if binding.decision_kind == "absence" and binding.value is not None:
         raise ValueError("An explicit absence cannot carry a value.")
-    system_store.put_memory_binding(binding.model_dump(mode="json"))
-    system_store.mark_semantic_memory_dirty(
-        "metadata_exemplars",
-        scope_id=binding.scope_id,
-        record_id=binding.record_id,
-        reason="reviewed_metadata_decision",
-    )
+    system_store.put_memory_binding(binding.model_dump(mode="json"), enqueue_projection=True)
     return binding
 
 

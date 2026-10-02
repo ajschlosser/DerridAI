@@ -1239,10 +1239,22 @@ store without treating every store as a database.
   whether the source is still current. Filters apply as you change them, and
   long evidence expands on demand. **Metadata examples** shows the raw index
   rows without those joins, for debugging the index itself.
+  Pending blind second-opinion values are excluded from shared examples and
+  cross-field matching until resolved; disputed, invalid, and unresolved
+  assertions are not trusted precedents.
 - **semantic_memory_outbox** (Databases) is the refresh queue: after a review
-  changes, the record waits there until its examples are re-embedded, so a
-  backlog means Metadata memory can lag the reviewed corpus. Every table in the
-  Databases workspace has an info tooltip explaining what it holds.
+  changes, its audit event waits there until the derived examples are refreshed,
+  so a backlog means Metadata memory can lag the reviewed corpus. Canonical
+  Record writes also retain recoverable pending work in the build's SQLite
+  journal. The Metadata examples backlog includes both kinds of notification;
+  it is not a count of distinct Records. Ordinary updates refresh only affected
+  Records and reuse unchanged evidence-context vectors. Removing an evidence
+  binding or retiring a Record can remove its older examples. Resetting editorial
+  memory, changing reviewed aliases, repairing a build, or replacing an
+  incompatible index can require a full rebuild. Review and publication do not
+  wait for the vector service; failures remain pending for recovery after restart,
+  a later edit, or an explicit projection repair. Every table in the Databases
+  workspace has an info tooltip explaining what it holds.
 - **Internal vector collections** are DerridAI-owned derived projections. The
   Advanced workspace exposes only these system collections through a restricted,
   read-only command console; corpus collections and mutation commands remain
