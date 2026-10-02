@@ -163,6 +163,22 @@ test.describe("Corpus Builder composed workflow", () => {
     await expect(page.getByRole("button", { name: "Publication readiness" })).toBeVisible();
   });
 
+  test("live Build keeps activity and diagnostics secondary until Run details is opened", async ({
+    page,
+  }) => {
+    await page.goto(story("corpus-builder-build-workspace--progressive-enrichment"));
+    const workspace = page.locator(".corpus-build-workspace");
+    await expect(workspace.locator(".build-activity")).toHaveCount(0);
+
+    const runDetails = workspace.locator("details.corpus-build-diagnostics");
+    await expect(runDetails.getByText("Run details", { exact: true })).toBeVisible();
+    await runDetails.locator("summary").click();
+
+    await expect(workspace.locator(".build-activity")).toBeVisible();
+    await expect(workspace.locator(".build-activity")).toContainText("Build timeline");
+    await expectWcag2AA(page, ".corpus-build-workspace");
+  });
+
   test("publish workspace leads with readiness and hands off to review", async ({ page }) => {
     await page.goto(story("corpus-builder-publish-workspace--unreviewed-records"));
     await expect(page.locator("#corpus-publish-title")).toContainText(
