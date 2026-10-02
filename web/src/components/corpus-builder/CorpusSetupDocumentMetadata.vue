@@ -113,7 +113,7 @@ const statusLabel = computed(() =>
         </span>
       </div>
       <UiButton
-        variant="secondary"
+        variant="soft"
         :label="i18n.t('pdf_corpus.setup.document_metadata_review')"
         :disabled="props.disabled"
         @click="open = true"
