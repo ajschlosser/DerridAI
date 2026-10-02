@@ -93,6 +93,8 @@ describe("Corpus Builder build, review, and finish states", () => {
         canResume: false,
         hasRecordTopology: true,
         readyCount: 8,
+        preparingCount: 95,
+        attentionCount: 9,
       },
     });
     const operation = wrapper.get(".primary-status-operation").text();
@@ -103,6 +105,10 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.get("h2").text()).toBe("Enriching metadata");
     expect(wrapper.get('[role="progressbar"]').attributes("aria-valuenow")).toBe("72");
     expect(wrapper.get('[aria-current="step"]').text()).toContain("Enrich");
+    const handoff = wrapper.get(".primary-status-handoff");
+    expect(handoff.get('[data-flow-state="ready"] dd').text()).toBe("8");
+    expect(handoff.get('[data-flow-state="enriching"] dd').text()).toBe("95");
+    expect(handoff.get('[data-flow-state="attention"] dd').text()).toBe("9");
     expect(buttonByText(wrapper, "Review 8 ready Records").exists()).toBe(true);
     expect(wrapper.get(".primary-status-review-help").text()).toContain(
       "while automated build work continues in the background",
@@ -139,6 +145,11 @@ describe("Corpus Builder build, review, and finish states", () => {
         contextSafe: true,
       },
     });
+    expect(wrapper.find(".build-activity").exists()).toBe(false);
+    const runDetails = wrapper.get("details.corpus-build-diagnostics");
+    expect(runDetails.text()).toContain("Run details");
+    (runDetails.element as HTMLDetailsElement).open = true;
+    await runDetails.trigger("toggle");
     expect(wrapper.get(".build-activity").text()).toContain("Build timeline");
     expect(wrapper.findAll(".build-activity li")).toHaveLength(3);
     expect(wrapper.get(".build-activity").text()).toContain("72%");
