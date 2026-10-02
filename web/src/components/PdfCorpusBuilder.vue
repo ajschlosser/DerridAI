@@ -523,14 +523,18 @@ const documentMetadataPayload = () =>
       typeof value === "string" ? value.trim() || null : value,
     ]),
   );
-const missingDocumentMetadata = computed<Record<string, string>>(() =>
-  Object.fromEntries(
-    missingDocumentFields.value.map(({ name }) => [
-      name,
-      String(documentMetadata.value[name] ?? "").trim(),
-    ]),
-  ),
-);
+const missingDocumentMetadata = computed<Record<string, string>>({
+  get: () =>
+    Object.fromEntries(
+      missingDocumentFields.value.map(({ name }) => [
+        name,
+        String(documentMetadata.value[name] ?? "").trim(),
+      ]),
+    ),
+  set: (values) => {
+    documentMetadata.value = { ...documentMetadata.value, ...values };
+  },
+});
 const missingMetadataComplete = computed(
   () =>
     Object.keys(suppliedDocumentMetadata(missingDocumentFields.value, missingDocumentMetadata.value))
