@@ -10,7 +10,12 @@ text on every pass.
 from __future__ import annotations
 
 import hashlib
+import logging
 from typing import Any, cast
+
+from .config import settings
+
+logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "derridai_source_unit_embeddings"
 SOURCE_BLOCK_COLLECTION_NAME = COLLECTION_NAME
@@ -184,6 +189,40 @@ class SourceEmbeddingProjection:
             })
         return rows
 
+    def _batch_size(self) -> int:
+        """Return a safe ceiling for embedding requests and Chroma mutations.
+
+        API_BATCH_SIZE remains the application-level resource bound. Chroma
+        also exposes a backend-specific maximum that can vary with the storage
+        implementation, so honor the smaller value when the client reports it.
+        """
+
+        configured = max(1, int(getattr(settings, "api_batch_size", 128) or 128))
+        try:
+            client = getattr(self.store, "client", None)
+        except Exception:
+            # Batch-size discovery is advisory. A provider/store adapter without
+            # a readable client still receives the conservative application cap.
+            client = None
+        if client is None:
+            return configured
+
+        for attribute in ("get_max_batch_size", "max_batch_size"):
+            try:
+                value = getattr(client, attribute, None)
+                value = value() if callable(value) else value
+                maximum = int(value)
+            except Exception:
+                logger.debug(
+                    "Could not resolve source embedding batch size from %s.",
+                    attribute,
+                    exc_info=True,
+                )
+                continue
+            if maximum > 0:
+                return min(configured, maximum)
+        return configured
+
     def sync(
         self,
         source_document_id: str,
@@ -216,8 +255,6 @@ class SourceEmbeddingProjection:
                 if prune
                 else set()
             )
-            for unit_id in stale:
-                rows.pop(unit_id, None)
             fallback_pending: list[dict[str, Any]] = []
             reused = 0
             for row in desired:
@@ -230,7 +267,13 @@ class SourceEmbeddingProjection:
                     reused += 1
                     continue
                 fallback_pending.append(row)
-            vectors = self._embed_unique(fallback_pending, resolved_provider, resolved_model)
+            batch_size = self._batch_size()
+            vectors, embedding_batches = self._embed_unique(
+                fallback_pending,
+                resolved_provider,
+                resolved_model,
+                batch_size=batch_size,
+            )
             embedded = len({row["text_hash"] for row in fallback_pending})
             vector_by_hash = {
                 row["text_hash"]: vector for row, vector in zip(fallback_pending, vectors)
@@ -248,12 +291,19 @@ class SourceEmbeddingProjection:
                     "embedding_identity": identity,
                     "embedding": vector_by_hash[row["text_hash"]],
                 }
+            for unit_id in stale:
+                rows.pop(unit_id, None)
             return {
                 "desired": len(desired),
                 "embedded": embedded,
                 "reused": reused,
                 "upserted": len(fallback_pending),
                 "deleted": len(stale),
+                "batch_size": batch_size,
+                "embedding_batches": embedding_batches,
+                "upsert_batches": 0,
+                "delete_batches": 0,
+                "batches": embedding_batches,
             }
 
         payload = collection.get(
@@ -274,9 +324,6 @@ class SourceEmbeddingProjection:
             and isinstance(metadata, dict)
             and _normalise(metadata.get("source_unit_id")) not in desired_ids
         ]
-        if stale_ids:
-            collection.delete(ids=stale_ids)
-
         chroma_pending: list[dict[str, Any]] = []
         for row in desired:
             identity = embedding_identity(
@@ -286,20 +333,48 @@ class SourceEmbeddingProjection:
             prior = current.get(row["source_unit_id"])
             if not prior or str(prior.get("embedding_identity") or "") != identity:
                 chroma_pending.append({**row, "embedding_identity": identity})
-        vectors = self._embed_unique(chroma_pending, resolved_provider, resolved_model)
-        if chroma_pending:
+        batch_size = self._batch_size()
+        vectors, embedding_batches = self._embed_unique(
+            chroma_pending,
+            resolved_provider,
+            resolved_model,
+            batch_size=batch_size,
+        )
+
+        # Write current source units before pruning stale ones. If an embedding
+        # provider or later upsert fails, the previous rebuildable projection is
+        # left available instead of deleting known-good rows first.
+        upsert_batches = 0
+        for start in range(0, len(chroma_pending), batch_size):
+            batch = chroma_pending[start : start + batch_size]
+            batch_vectors = vectors[start : start + batch_size]
             collection.upsert(
-                ids=[source_unit_identity(document_id, row["source_unit_id"]) for row in chroma_pending],
-                documents=[row["text"] for row in chroma_pending],
-                metadatas=chroma_pending,
-                embeddings=vectors,
+                ids=[
+                    source_unit_identity(document_id, row["source_unit_id"])
+                    for row in batch
+                ],
+                documents=[row["text"] for row in batch],
+                metadatas=batch,
+                embeddings=batch_vectors,
             )
+            upsert_batches += 1
+
+        delete_batches = 0
+        for start in range(0, len(stale_ids), batch_size):
+            collection.delete(ids=stale_ids[start : start + batch_size])
+            delete_batches += 1
+
         return {
             "desired": len(desired),
             "embedded": len({row["text_hash"] for row in chroma_pending}),
             "reused": len(desired) - len(chroma_pending),
             "upserted": len(chroma_pending),
             "deleted": len(stale_ids),
+            "batch_size": batch_size,
+            "embedding_batches": embedding_batches,
+            "upsert_batches": upsert_batches,
+            "delete_batches": delete_batches,
+            "batches": embedding_batches + upsert_batches + delete_batches,
         }
 
     def _embed_unique(
@@ -307,24 +382,41 @@ class SourceEmbeddingProjection:
         rows: list[dict[str, Any]],
         provider: str,
         model: str | None,
-    ) -> list[list[float]]:
+        *,
+        batch_size: int | None = None,
+    ) -> tuple[list[list[float]], int]:
         if not rows:
-            return []
+            return [], 0
         unique: list[dict[str, Any]] = []
         seen: set[str] = set()
         for row in rows:
             if row["text_hash"] not in seen:
                 seen.add(row["text_hash"])
                 unique.append(row)
-        vectors = self.store.embeddings.embed(
-            [row["text"] for row in unique],
-            [{} for _ in unique],
-            "embedding",
-            provider=provider,
-            model=model,
-        )
-        vector_by_hash = {row["text_hash"]: vector for row, vector in zip(unique, vectors)}
-        return [vector_by_hash[row["text_hash"]] for row in rows]
+
+        ceiling = max(1, int(batch_size or self._batch_size()))
+        vectors: list[list[float]] = []
+        batches = 0
+        for start in range(0, len(unique), ceiling):
+            batch = unique[start : start + ceiling]
+            batch_vectors = self.store.embeddings.embed(
+                [row["text"] for row in batch],
+                [{} for _ in batch],
+                "embedding",
+                provider=provider,
+                model=model,
+            )
+            if len(batch_vectors) != len(batch):
+                raise RuntimeError(
+                    "The embedding provider returned an unexpected number of source-unit vectors."
+                )
+            vectors.extend(batch_vectors)
+            batches += 1
+
+        vector_by_hash = {
+            row["text_hash"]: vector for row, vector in zip(unique, vectors)
+        }
+        return [vector_by_hash[row["text_hash"]] for row in rows], batches
 
     def embeddings_for(
         self,
