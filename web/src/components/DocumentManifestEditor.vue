@@ -447,6 +447,13 @@ function reset() {
   max-width: 900px;
   margin: 0 auto;
 }
+.manifest-editor :deep(.metadata-form-footer.is-sticky) {
+  /* The shared footer can bleed into a padded panel. This editor is itself the
+     width-constrained surface, so negative inline margins create real horizontal
+     overflow in Storybook and narrow containers. Keep the sticky behavior without
+     extending beyond the manifest form's inline bounds. */
+  margin-inline: 0;
+}
 .manifest-impact {
   display: flex;
   justify-content: space-between;
