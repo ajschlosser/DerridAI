@@ -273,6 +273,8 @@ describe("workspace header", () => {
         sourceFilename: "Of Grammatology.pdf",
         buildId: "build-42",
         status: { label: "Reviewing", detail: "", tone: "info" },
+        recordCount: 84,
+        acceptedCount: 31,
         workspace: "review",
         steps: [
           { id: "setup", available: true, state: "complete" },
@@ -286,6 +288,7 @@ describe("workspace header", () => {
     expect(phases).toHaveLength(3);
     expect(phases[0].text()).toContain("✓");
     expect(phases[1].text()).toContain("Build & review");
+    expect(phases[1].get(".step-mark").text()).toBe("2");
     expect(phases[1].attributes("aria-current")).toBe("step");
     expect(phases[2].attributes("disabled")).toBeDefined();
 
@@ -298,6 +301,9 @@ describe("workspace header", () => {
     expect(wrapper.get(".corpus-workspace-stage").text()).toBe("Reviewing");
     // The build ID is secondary metadata, not headline copy.
     expect(wrapper.get(".corpus-workspace-context strong").text()).toBe("Of Grammatology.pdf");
+    const progress = wrapper.get(".corpus-workspace-progress progress");
+    expect(progress.attributes("max")).toBe("84");
+    expect(progress.attributes("value")).toBe("31");
     expect(wrapper.get("details code").text()).toBe("build-42");
   });
 });
@@ -562,11 +568,19 @@ describe("review header", () => {
     });
     expect(wrapper.findAll("section.review-header")).toHaveLength(1);
     expect(wrapper.get(".review-counts").text()).toContain("142");
-    // Progress is one meter against the whole build, not three competing counts.
+    // Progress remains one meter against the whole build; task-state counts are direct queue shortcuts.
     const meter = wrapper.get("progress.review-meter");
     expect(meter.attributes("max")).toBe("200");
     expect(meter.attributes("value")).toBe("142");
     expect(wrapper.find(".run-slot").exists()).toBe(true);
+    const shortcuts = wrapper.findAll(".review-status-shortcuts button");
+    expect(shortcuts.map((button) => button.text())).toEqual([
+      "Needs attention4",
+      "Ready5",
+      "Accepted142",
+    ]);
+    await shortcuts[0].trigger("click");
+    expect(wrapper.emitted("update:queue")?.at(-1)).toEqual(["issues"]);
     // Toolbar controls fall through from the header's attrs.
     expect(wrapper.find("#pdf-corpus-record-search").exists()).toBe(true);
     const views = wrapper.findAll(".review-view-option");
