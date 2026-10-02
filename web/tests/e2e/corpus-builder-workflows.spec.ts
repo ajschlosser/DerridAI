@@ -38,7 +38,9 @@ test.describe("Corpus Builder composed workflow", () => {
     await page.goto(story("corpus-builder-setup-section--expanded"));
     const toggle = page.locator(".corpus-setup-section-toggle");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator(".corpus-setup-indicator")).toHaveText("1");
     await expect(toggle).toContainText("Of Grammatology.pdf");
+    await expect(page.locator(".corpus-setup-state")).toContainText(/Complete/i);
     await expect(page.locator(".corpus-setup-section-body")).toBeVisible();
     await toggle.focus();
     await expect(toggle).toBeFocused();
@@ -53,6 +55,12 @@ test.describe("Corpus Builder composed workflow", () => {
 
     await page.goto(story("corpus-builder-setup-section--warning"));
     await expect(page.locator(".corpus-setup-section-toggle")).toBeVisible();
+    await expect(page.locator(".corpus-setup-indicator")).toHaveText("3");
+    await expectWcag2AA(page, ".corpus-setup-section");
+
+    await page.goto(story("corpus-builder-setup-section--french-length-stress"));
+    const longSection = page.locator(".corpus-setup-section");
+    await expectNoHorizontalOverflow(longSection);
     await expectWcag2AA(page, ".corpus-setup-section");
   });
 
