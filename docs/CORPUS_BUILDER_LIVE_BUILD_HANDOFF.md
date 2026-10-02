@@ -60,6 +60,12 @@ The Build workspace should answer, in order:
 - The existing stage rail and overall build progress remain in the canonical primary status; no second progress surface was introduced.
 - A dedicated progressive-enrichment Storybook fixture now represents the full Build workspace, not only the status card.
 
+## Validation notes
+
+- Initial CI static/type failure: one updated unit test used `await` in a non-async callback. The callback was corrected; product code was unchanged.
+- Next CI unit failure: the attention-only handoff test asserted the generic class `primary`, while the shared `UiButton` contract uses `variant-primary`. The assertion was corrected; the Review button was already rendering the intended primary variant.
+- Formatting, lint, static/type checks, production build, and the second unit shard were green before the assertion-only correction.
+
 ## Non-goals
 
 - Changing enrichment scheduling, concurrency, retry behavior, or queue calculation.
