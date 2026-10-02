@@ -3840,6 +3840,25 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 if state == "running"
                 else str(copy.get("metadata_enrichment_state") or "running")
             )
+            # Metadata families may finish concurrently. A worker snapshot began from
+            # the Record state that existed before its sibling family advanced, so
+            # replacing the whole status/ledger maps would regress or erase sibling
+            # checkpoints. Merge only this callback's family entry into the live maps
+            # before applying the ordinary authority-preserving Record merge.
+            for map_key in ("metadata_stage_status", "metadata_execution_ledger"):
+                live_map = (
+                    dict(live_record.get(map_key) or {})
+                    if isinstance(live_record.get(map_key), dict)
+                    else {}
+                )
+                worker_map = (
+                    dict(copy.get(map_key) or {})
+                    if isinstance(copy.get(map_key), dict)
+                    else {}
+                )
+                if task_name in worker_map:
+                    live_map[task_name] = worker_map[task_name]
+                copy[map_key] = live_map
             merged = _merge_enrichment_snapshot(
                 live_record, copy, self._allowed_fields(build_id)
             )
