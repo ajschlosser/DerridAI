@@ -67,14 +67,26 @@ Real/printed source pagination remains authoritative and is never silently repla
 - [x] Confirmed PR #404 is merged.
 - [x] Audited Setup, source-unit policy, Record sizing, build lifecycle, realtime corpus summaries, queue processing states, and manifest workflow.
 - [x] Created implementation branch and design log.
-- [ ] Add realtime active-task identities for concurrent enrichment.
-- [ ] Add fixed SourceUnit-to-Record topology policy to API and backend construction.
-- [ ] Add optional Records-per-Page synthetic grouping for unpaginated/estimated sources.
-- [ ] Add Setup topology relationship controls.
-- [ ] Surface the full editable manifest before Build.
-- [ ] Add interaction/focus resilience around concurrent queue updates.
-- [ ] Add regression coverage and run quality gates.
+- [x] Add realtime active-task identities for concurrent enrichment.
+- [x] Add fixed SourceUnit-to-Record topology policy to API and backend construction.
+- [x] Add optional Records-per-Page synthetic grouping for unpaginated/estimated sources.
+- [x] Add Setup topology relationship controls.
+- [x] Surface the full editable manifest before Build.
+- [x] Add interaction/focus resilience around concurrent queue updates.
+- [x] Add unit/backend/Storybook/browser regressions.
+- [ ] Run and fix all quality gates.
 - [ ] Record final validation and follow-up work.
+
+## Interaction consistency notes
+
+- Native radio/checkbox/number controls keep topology setup keyboard-operable without custom key handling.
+- Concurrent queue reconciliation now keeps the selected Record only while it still belongs to the filtered queue. If it leaves after background processing, Review advances to the nearest valid row.
+- An unsaved text/metadata draft is an explicit exception: selection remains pinned until the reviewer saves or cancels, so background work cannot discard local edits.
+- If concurrent completions empty the final page of a filtered queue, Review backs up to the nearest valid page instead of showing an artificial empty state.
+- Build-level copy no longer presents the first active task as "current" when several Records are running; it reports the concurrent queue state instead.
+- Detailed live metadata status groups active task families by Record so one Record with several task families does not look like several Records.
+- The full Setup manifest uses the same editor contract as post-build metadata, while post-build-only reanalysis controls are suppressed.
+- Required document-field completeness is recalculated after reviewer manifest edits; clearing a required detected value makes Setup incomplete immediately.
 
 ## Non-goals
 
