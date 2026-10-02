@@ -198,7 +198,7 @@ EvidenceRef resolves back to documentary authority:
 
   base `record`      -> Record [@ RecordRevision] -> SourceSpan(s) -> SourceDocument
   base `source_span` -> SourceSpan(s) ---------------------------> SourceDocument
-  namespaced kind      -> exact documentary material --------------> SourceDocument
+  namespaced kind     -> exact documentary material --------------> SourceDocument
 ```
 
 RetrievalRun is therefore one possible contributor to EvidenceAcquisitionRun, not its synonym. Human selection, direct reference, deterministic lookup, model-assisted location, import, and other declared non-retrieval methods MAY participate in an EvidenceAcquisitionRun without a RetrievalRun. ResearchRun coordinates or references the applicable acquisition, evidence, generation, validation, and evaluation state; it does not replace those objects or their typed relations.
