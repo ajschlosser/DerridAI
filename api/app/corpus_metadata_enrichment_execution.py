@@ -938,7 +938,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 workers = min(
                     len(group),
                     provider_limit(
-                        request.get("max_concurrent_requests"), default=1, maximum=16
+                        request.get("max_concurrent_requests"), default=1, maximum=64
                     ),
                 )
                 if workers <= 1 or len(group) <= 1:
