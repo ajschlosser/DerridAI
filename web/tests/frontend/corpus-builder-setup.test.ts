@@ -169,7 +169,7 @@ describe("Corpus Builder setup and launch controls", () => {
     });
     expect(wrapper.text()).not.toContain("Reanalyze");
     const inputs = wrapper.findAll('input.control[type="text"]');
-    expect(inputs[0].element.value).toBe("Detected title");
+    expect((inputs[0].element as HTMLInputElement).value).toBe("Detected title");
     await inputs[0].setValue("Reviewed title");
     await wrapper.get("form.manifest-editor").trigger("submit");
     expect(wrapper.emitted("save")?.[0]?.[0]).toEqual({ title: "Reviewed title" });
