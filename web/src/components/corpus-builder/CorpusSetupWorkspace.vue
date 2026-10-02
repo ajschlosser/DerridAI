@@ -59,7 +59,8 @@ const titleKeys: Record<CorpusSetupSectionId, [string, string]> = {
         :aria-label="i18n.t('pdf_corpus.build_configuration')"
       >
         <span>
-          {{ completedRequired }} / {{ requiredSections.length }} {{ i18n.t("pdf_corpus.complete") }}
+          {{ completedRequired }} / {{ requiredSections.length }}
+          {{ i18n.t("pdf_corpus.complete") }}
         </span>
         <progress
           :aria-label="i18n.t('pdf_corpus.build_configuration')"
