@@ -427,6 +427,19 @@ const {
   showReviewWorkspace: lifecycleShowReviewWorkspace,
 } = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue, reviewRequested);
 
+const activeEnrichingRecordIds = computed(
+  () =>
+    new Set(
+      (currentBuild.value?.metadata_active_tasks || [])
+        .map((task) => String(task?.record_id || ""))
+        .filter(Boolean),
+    ),
+);
+const activeEnrichingCount = computed(() => activeEnrichingRecordIds.value.size);
+const queuedPreparingCount = computed(() =>
+  Math.max(0, Number(reviewQueueCounts.value.preparing ?? 0) - activeEnrichingCount.value),
+);
+
 const { workspaceMode, switchWorkspace } = useCorpusWorkspaceNavigation({
   currentBuild,
   hasRecordTopology,
@@ -2582,7 +2595,8 @@ defineExpose({
       :can-resume="canResume"
       :has-record-topology="hasRecordTopology"
       :ready-count="readyCount"
-      :preparing-count="Number(reviewQueueCounts.preparing ?? 0)"
+      :enriching-count="activeEnrichingCount"
+      :preparing-count="queuedPreparingCount"
       :attention-count="issueCount"
       :awaiting-manifest-review="awaitingManifestReview"
       :retrying-segmentation="retryingSegmentation"
@@ -2729,6 +2743,7 @@ defineExpose({
         <CorpusReviewRecordQueue
           :rows="queueRows"
           :record-total="recordTotal"
+          :active-processing-record-ids="activeEnrichingRecordIds"
           :selected-record-id="loadingRecordId || selectedRecordId"
           :selected-review-ids="selectedReviewIds"
           :all-visible-selected="allVisibleSelected"
