@@ -3895,7 +3895,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             build_id,
             metadata_enriched_count=already_complete,
             metadata_enrichment_total=len(records),
-            metadata_concurrency=max(1, min(16, int(request.get("max_concurrent_requests") or 1))),
+            metadata_concurrency=max(1, min(64, int(request.get("max_concurrent_requests") or 1))),
             metadata_started_at=metadata_started_at,
             metadata_last_progress_at=iso_now(),
             metadata_settle_requested=False,
@@ -3914,7 +3914,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             else:
                 record["metadata_enrichment_state"] = "complete"
         self.repo.save_records(build_id, records)
-        max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
+        max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
         metadata_families = ("discourse", "quotation", "indexing")
         # Fast mode still exposes all three family states, but deliberately
         # skipped families settle immediately and do not consume provider time.
