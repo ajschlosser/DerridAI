@@ -26,6 +26,7 @@ const props = defineProps<{
   pageCount?: number;
   hasPreviousPage?: boolean;
   hasNextPage?: boolean;
+  activeProcessingRecordIds?: Set<string>;
 }>();
 
 const emit = defineEmits<{
@@ -75,10 +76,22 @@ function shortRecordId(recordId: string) {
   const match = /^.+?[-_.:](\d+)$/.exec(recordId);
   return match ? `#${Number(match[1])}` : recordId;
 }
+function isActivelyEnriching(record: CorpusQueueRow) {
+  return (
+    record.review_state === "preparing" &&
+    Boolean(props.activeProcessingRecordIds?.has(record.record_id))
+  );
+}
+function displayRecordState(record: CorpusQueueRow) {
+  return isActivelyEnriching(record) ? "enriching" : record.review_state || "ready";
+}
 function recordStateLabel(record: CorpusQueueRow) {
+  if (isActivelyEnriching(record)) {
+    return i18n.t("pdf_corpus.record_state.enriching", "Enriching");
+  }
   const state = record.review_state || "ready";
   if (state === "preparing") {
-    return i18n.t("pdf_corpus.record_state.enriching", "Enriching");
+    return i18n.t("pdf_corpus.record_state.preparing", "Preparing");
   }
   return i18n.t(
     `pdf_corpus.record_state.${state}`,
@@ -162,11 +175,8 @@ function recordSelectionChanged(recordId: string, event: Event) {
         :aria-current="record.record_id === props.selectedRecordId ? 'true' : undefined"
         @click="emit('selectRecord', record)"
       >
-        <span class="record-state-icon" :data-state="record.review_state" aria-hidden="true">
-          <span
-            v-if="record.review_state === 'preparing'"
-            class="spinner record-processing-spinner"
-          ></span>
+        <span class="record-state-icon" :data-state="displayRecordState(record)" aria-hidden="true">
+          <span v-if="isActivelyEnriching(record)" class="spinner record-processing-spinner"></span>
           <AppIcon v-else-if="recordStateIcon(record)" :name="recordStateIcon(record)" />
         </span>
         <span class="record-row-main">
@@ -176,7 +186,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
               <span class="sr-only">{{ record.record_id }}</span>
             </b>
             <small v-if="locator(record)">{{ locator(record) }}</small>
-            <span class="record-row-status" :data-state="record.review_state">
+            <span class="record-row-status" :data-state="displayRecordState(record)">
               {{ recordStateLabel(record) }}
             </span>
           </span>
@@ -444,7 +454,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
   inline-size: 0.75rem;
   block-size: 0.75rem;
 }
-.record-state-icon[data-state="preparing"] {
+.record-state-icon[data-state="enriching"] {
   border-color: transparent;
 }
 .record-processing-spinner {
