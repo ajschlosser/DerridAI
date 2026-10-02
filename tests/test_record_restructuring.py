@@ -190,7 +190,19 @@ def test_record_context_returns_neighbours_in_document_order(tmp_path):
     context = repo.record_context(bid, "r2", before=5, after=5)
     assert [r["record_id"] for r in context["before"]] == ["r1"]
     assert [r["record_id"] for r in context["after"]] == ["r3"]
-    assert set(context["before"][0]) == {"record_id", "text", "text_length", "page_start", "page_end", "review_disposition"}
+    assert set(context["before"][0]) == {
+        "record_id", "record_revision", "source_document_id", "text", "text_length",
+        "text_truncated", "record_character_start", "record_character_end",
+        "page_start", "page_end", "review_disposition",
+    }
+    for neighbour in context["before"] + context["after"]:
+        original = repo.get_record(bid, neighbour["record_id"])
+        assert neighbour["record_revision"] == original.get("record_revision")
+        assert neighbour["source_document_id"] == original.get("source_document_id")
+        assert neighbour["text"] == original["text"]
+        assert neighbour["record_character_start"] == 0
+        assert neighbour["record_character_end"] == len(original["text"])
+        assert neighbour["text_truncated"] is False
     assert repo.record_context(bid, "r2", before=0, after=0) == {"record_id": "r2", "before": [], "after": [], "truncated": False}
     with pytest.raises(KeyError):
         repo.record_context(bid, "nope")

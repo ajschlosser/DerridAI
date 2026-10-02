@@ -45,8 +45,8 @@ from .field_assertions import (
     project_record_assertions,
     reset_fields_for_evaluation,
 )
-from .operation_events import note_corpus_generation_progress, note_model_activity
 from .models import PdfCorpusRecordSizing
+from .operation_events import note_corpus_generation_progress, note_model_activity
 from .reviewer_context import current_reviewer
 
 
