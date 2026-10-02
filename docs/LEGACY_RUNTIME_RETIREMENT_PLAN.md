@@ -186,7 +186,9 @@ Task branch for Step 1: `task/router-single-source-of-truth`
 
   - Known differences: toasts now stack (up to 5) instead of replacing one another, and the bold HTTP-status styling is gone. `legacy-dom-baseline` snapshots for settings/research were already stale on master (the "Automatic sizing" control); not regenerated here.
 
-- [ ] Step 3 routes and dialogs
+- [ ] Step 3 dialogs, family by family (routes are already Vue views; `vueNative` is unread metadata)
+  - [x] `workDialogs`: mixed-values dialog (`MixedWorkValuesDialog.vue` + `composables/mixedWorkValuesDialog.ts`)
+  - [ ] remaining `workDialogs`, then `recordDialogs`, `jobDialogs`
 - [ ] Step 4 state slices and deletion
 
 Notes for the next session:
@@ -207,3 +209,7 @@ Notes for the next session:
   `pathViewMap`, and the runtime's own `popstate` listener still exists alongside the router's.
 - `npm run format:repo:check` reports unrelated files in this environment (generated `sdk/dist`, `.pytest_cache`).
 - Never run Prettier over `web/tests/e2e/**/*-snapshots`; it fails on them and rewrites some.
+- Step 3 correction (2026-10-01): `home`, `rag` and `corpus-builder` already render Vue views; what keeps them tied to
+  the runtime is their `runtime.*` / `runtime.state` reads (Step 4). Step 3 is therefore the imperative dialogs only.
+  Pattern used for the first slice: a composable holds the request, a host component mounted in `App.vue` renders it
+  in a native modal `<dialog>`, and the legacy function stays as a thin forwarder until its callers move.

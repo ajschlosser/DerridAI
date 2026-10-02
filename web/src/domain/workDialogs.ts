@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { openMessageDialog } from "../composables/messageDialog";
+import { openMixedWorkValuesDialog as openMixedWorkValues } from "../composables/mixedWorkValuesDialog";
 import { esc, icon } from "./html";
 import {
   canonicalWorkSourceType,
@@ -126,17 +127,16 @@ export function createWorkDialogs(deps: Deps) {
   const document: Any = globalThis.document;
   function openMixedWorkValuesDialog(work: Any, field: Any, rows: Any) {
     const values = uniqueWorkValues(rows, field);
-    const dialog = document.createElement("dialog");
-    dialog.className = "mixed-values-dialog";
-    dialog.setAttribute("aria-labelledby", "mixedValuesTitle");
-    dialog.innerHTML = `<div class="dh"><div><span class="section-label">${esc(tr("works.metadata_variants"))}</span><h2 class="dialog-title" id="mixedValuesTitle">${esc(label(field))}</h2><div class="dialog-subtitle">${esc(work)} · ${values.length.toLocaleString()} ${esc(tr("works.unique_values"))} · ${rows.length.toLocaleString()} ${esc(tr("dynamic.records"))}</div></div><button class="btn icon-only" type="button" data-close aria-label="${esc(tr("ui.close"))}">${icon("close")}</button></div><div class="db mixed-values-body"><p class="note">${esc(tr("works.mixed_values_help"))}</p><div class="mixed-values-list">${values.map((entry: Any, index: Any) => `<article class="mixed-value-row"><span class="mixed-value-rank">${index + 1}</span><div class="mixed-value-copy"><b>${esc(entry.value == null || entry.value === "" ? tr("ui.unset") : display(entry.value))}</b><small>${esc([...entry.files].slice(0, 3).join(" · "))}${entry.files.size > 3 ? ` · +${entry.files.size - 3}` : ""}</small></div><span class="mixed-value-count">${entry.count.toLocaleString()} <small>${esc(entry.count === 1 ? tr("dynamic.record_one") : tr("dynamic.records"))}</small></span></article>`).join("")}</div></div><div class="da"><button class="btn primary" type="button" data-close>${esc(tr("ui.done"))}</button></div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
+    openMixedWorkValues({
+      work: String(work),
+      fieldLabel: label(field),
+      recordCount: rows.length,
+      values: values.map((entry: Any) => ({
+        text: entry.value == null || entry.value === "" ? null : String(display(entry.value)),
+        files: [...entry.files].map(String),
+        count: entry.count,
+      })),
+    });
   }
   function openWorkMetadataEditor(work: Any, rows: Any) {
     if (!rows?.length) return toast(tr("works.no_records_found"), { tone: "warning" });
