@@ -33,9 +33,9 @@ from pydantic import BaseModel, ValidationError
 
 from .autonomous import Policy as AutonomousPolicy
 from .celf_conformance import evaluate_celf_conformance
+from .concurrency import capacity_coordinator, provider_capacity_key, provider_limit
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
-from .concurrency import capacity_coordinator, provider_capacity_key, provider_limit
 from .corpus_build_lifecycle import BuildLifecycleMixin
 from .corpus_editorial_memory import EditorialMemoryMixin
 from .corpus_enrichment_helpers import (
