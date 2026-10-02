@@ -1044,7 +1044,7 @@ class ReviewActionsMixin:
                     method="human_voice_assignment",
                     reason=f"Reviewer assigned the diarized voice {voice_id}.",
                 )
-                project_record_assertions(record, schema=schema)
+                project_record_assertions(record)
                 record["record_revision"] = int(record.get("record_revision") or 0) + 1
                 record["updated_at"] = iso_now()
                 changed = True
