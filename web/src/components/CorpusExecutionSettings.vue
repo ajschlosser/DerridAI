@@ -98,7 +98,7 @@ function stageTimeout(key: string, event: Event) {
 function concurrent(event: Event) {
   const value = Math.max(
     1,
-    Math.min(16, Math.trunc(Number((event.target as HTMLInputElement).value) || 1)),
+    Math.min(64, Math.trunc(Number((event.target as HTMLInputElement).value) || 1)),
   );
   emit("update:maxConcurrentRequests", value);
 }
@@ -151,7 +151,7 @@ function concurrent(event: Event) {
             class="control"
             type="number"
             min="1"
-            max="16"
+            max="64"
             :value="props.maxConcurrentRequests"
             @input="concurrent"
         /></label>
