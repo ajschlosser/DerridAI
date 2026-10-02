@@ -140,7 +140,7 @@ export function createRecordEditing(deps: Deps) {
     for (const file of files) persistFile(file);
     shell();
     renderView();
-    toast(`Cleared updates history from ${rows.length.toLocaleString()} records`);
+    toast(trf("dynamic.cleared_history_records", { count: rows.length.toLocaleString() }));
   }
   function historyVersionChanges(previous: Any, current: Any) {
     const keys = new Set([...Object.keys(previous || {}), ...Object.keys(current || {})]);

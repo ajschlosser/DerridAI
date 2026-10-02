@@ -861,6 +861,7 @@ const {
 });
 const { copyJsonToClipboard } = createModalDialogs({
   state,
+  trf: (...args) => trf(...args),
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   toast: (...args) => toast(...args),
 });
@@ -988,6 +989,7 @@ const {
   prepareRagRerun,
 } = createResearchWorkspace({
   state,
+  trf: (...args) => trf(...args),
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   api: (...args) => api(...args),
   canAccessPage: (...args) => canAccessPage(...args),
@@ -1474,6 +1476,7 @@ const {
   restoreWorkspace,
 } = createWorkspacePersistence({
   state,
+  trf: (...args) => trf(...args),
   fileTimers,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   applyUiTheme: (...args) => applyUiTheme(...args),
@@ -1972,7 +1975,16 @@ function cleanRecord(f, i) {
   const changed = applyRecordChanges(f, i, { text: c.text }, { source: "ocr_cleanup" });
   shell();
   renderView();
-  toast(`${changed} tracked change${changed === 1 ? "" : "s"} applied`);
+  toast(
+    trf(
+      changed === 1
+        ? "runtime.toast.tracked_changes_applied_one"
+        : "runtime.toast.tracked_changes_applied_many",
+      {
+        count: changed,
+      },
+    ),
+  );
 }
 
 function cleanRows(rows) {
@@ -1996,7 +2008,7 @@ function cleanRows(rows) {
   }
   shell();
   renderView();
-  toast(`${recordsChanged} records cleaned · ${fieldsChanged} tracked changes`);
+  toast(trf("dynamic.cleaned_records", { records: recordsChanged, changes: fieldsChanged }));
 }
 
 function fieldEditor(k, v) {
@@ -2102,7 +2114,12 @@ async function applyPdfLinkMatch(match) {
   });
   if (!approved) return;
   linkPdfPage(item.file, item.index, state.pdf.page);
-  toast(`Linked page ${state.pdf.page} to ${item.record.record_id || "record"}`);
+  toast(
+    trf("runtime.toast.linked_page", {
+      page: state.pdf.page,
+      record: item.record.record_id || tr("dynamic.record_one"),
+    }),
+  );
 }
 function ragGradeHtml(grade = {}) {
   const normalized = normalizeRagGrade(grade);
@@ -2205,7 +2222,7 @@ async function cleanPdfPageWithLlm() {
       },
     });
   } catch (error) {
-    toast(`Could not prepare LLM cleanup: ${error.message}`);
+    toast(trf("runtime.toast.llm_cleanup_prepare_failed", { detail: error.message }));
   }
 }
 async function draftPdfPageWithLlm() {
@@ -2228,7 +2245,7 @@ async function draftPdfPageWithLlm() {
       onForegroundResult: async (result) => openPdfDraftRecord(result.record || {}),
     });
   } catch (error) {
-    toast(`Could not prepare draft generation: ${error.message}`);
+    toast(trf("runtime.toast.draft_prepare_failed", { detail: error.message }));
   }
 }
 async function linkPdfPageWithLlm() {
@@ -2253,7 +2270,7 @@ async function linkPdfPageWithLlm() {
       onForegroundResult: async (result) => applyPdfLinkMatch(result.match || {}),
     });
   } catch (error) {
-    toast(`Could not prepare LLM record matching: ${error.message}`);
+    toast(trf("runtime.toast.record_matching_prepare_failed", { detail: error.message }));
   }
 }
 
@@ -2458,14 +2475,19 @@ async function exportStoreJsonl({
       setTimeout(() => hideOperationProgress(op), 600);
     }
     if (!loadTab && !silent)
-      toast(`Exported ${records.length.toLocaleString()} records from ${store}`);
+      toast(
+        trf("dynamic.exported_records", {
+          count: records.length.toLocaleString(),
+          collection: store,
+        }),
+      );
     return records;
   } catch (error) {
     if (op) {
       updateOperationProgress(op, 0, 1, `Failed: ${error.message}`);
       setTimeout(() => hideOperationProgress(op), 1800);
     }
-    if (!silent) toast(`Chroma export failed: ${error.message}`);
+    if (!silent) toast(trf("runtime.toast.chroma_export_failed", { detail: error.message }));
     return null;
   }
 }
@@ -2692,7 +2714,10 @@ function touchupApplyResults(items, results, approvals, all = false, reviewOnly 
   shell();
   renderView();
   toast(
-    `Marked ${reviewedRecords} record${reviewedRecords === 1 ? "" : "s"} reviewed · ${appliedFields} tracked field change${appliedFields === 1 ? "" : "s"}`,
+    trf("runtime.toast.marked_reviewed", {
+      records: `${reviewedRecords} ${tr(reviewedRecords === 1 ? "dynamic.record_one" : "dynamic.records")}`,
+      fields: `${appliedFields} ${tr(appliedFields === 1 ? "runtime.toast.tracked_field_change_one" : "runtime.toast.tracked_field_change_many")}`,
+    }),
   );
   return { appliedFields, reviewedRecords };
 }

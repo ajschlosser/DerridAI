@@ -335,7 +335,7 @@ export function createJobsWorkspace(deps: Deps) {
       );
       return updated;
     } catch (error) {
-      toast(`Cancel failed: ${(error as Error).message}`);
+      toast(trf("runtime.toast.cancel_failed", { detail: (error as Error).message }));
       return null;
     }
   }
@@ -371,7 +371,10 @@ export function createJobsWorkspace(deps: Deps) {
     syncJobProgressToasts();
     startJobPolling();
     toast(
-      `${mode === "auto" ? "Auto-improve" : "LLM review"} started in background · ${items.length} records`,
+      trf(
+        mode === "auto" ? "runtime.toast.auto_improve_started" : "runtime.toast.llm_review_started",
+        { count: items.length },
+      ),
     );
     return job;
   }

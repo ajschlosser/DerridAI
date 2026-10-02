@@ -11,17 +11,17 @@ type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Fn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /** The helpers that still live in the legacy runtime. */
-type Helper = "toast";
+type Helper = "toast" | "trf";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 export function createModalDialogs(deps: Deps) {
-  const { toast } = deps;
+  const { toast, trf } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
   const document: Any = globalThis.document;
   async function copyJsonToClipboard(value: Any, labelText = "record") {
     const text = JSON.stringify(value, null, 2);
     try {
       await navigator.clipboard.writeText(text);
-      toast(`Copied ${labelText} JSON`);
+      toast(trf("runtime.toast.json_copied", { label: labelText }));
     } catch (error: Any) {
       const area = document.createElement("textarea");
       area.value = text;
@@ -31,7 +31,7 @@ export function createModalDialogs(deps: Deps) {
       area.select();
       try {
         document.execCommand("copy");
-        toast(`Copied ${labelText} JSON`);
+        toast(trf("runtime.toast.json_copied", { label: labelText }));
       } catch {
         openMessageDialog({ title: "Could not copy", message: error.message, tone: "danger" });
       } finally {

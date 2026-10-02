@@ -48,6 +48,7 @@ type Helper =
   | "syncJobProgressToasts"
   | "toast"
   | "tr"
+  | "trf"
   | "uid";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
@@ -78,6 +79,7 @@ export function createResearchWorkspace(deps: Deps) {
     startJobPolling,
     syncJobProgressToasts,
     toast,
+    trf,
     uid,
   } = deps;
   const { tr } = bindCopy(deps.tr, (key, fallback, values = {}) =>
@@ -492,7 +494,13 @@ export function createResearchWorkspace(deps: Deps) {
     syncJobProgressToasts();
     startJobPolling();
     shellRefreshHook?.();
-    toast(`Research started · ${providerDisplayName(profile)} · ${model}`, { tone: "success" });
+    toast(
+      trf("runtime.toast.research_started", {
+        provider: providerDisplayName(profile),
+        model,
+      }),
+      { tone: "success" },
+    );
     return researchJobForUi(job);
   }
   async function gradeResearchJob(jobId: Any) {

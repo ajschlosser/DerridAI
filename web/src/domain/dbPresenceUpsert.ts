@@ -437,7 +437,7 @@ export function createDbPresenceUpsert(deps: Deps) {
       if (state.view === "home") refreshOperationsPanelOnly();
       return true;
     } catch (error: Any) {
-      toast(`Could not start vector build: ${error.message}`);
+      toast(trf("runtime.toast.vector_build_start_failed", { detail: error.message }));
       return false;
     }
   }
