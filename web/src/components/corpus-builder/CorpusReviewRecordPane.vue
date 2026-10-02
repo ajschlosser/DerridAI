@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import UiButton from "../ui/UiButton.vue";
 // Copyright 2026 Aaron John Schlosser, PhD.
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { CorpusRecord } from "../../api/corpus";
 import { recordIssueKinds } from "../../domain/corpusReview";
 import { useI18nStore } from "../../stores/i18n";
@@ -10,7 +10,7 @@ import MovableRecordModal from "./MovableRecordModal.vue";
 import RecordContextReader from "./RecordContextReader.vue";
 
 /** The central Record reader for Review: Record text, text editing and the per-Record notices. */
-defineProps<{
+const props = defineProps<{
   record: CorpusRecord | null;
   buildId: string;
   visible: boolean;
@@ -38,6 +38,13 @@ const textDraft = defineModel<string>("textDraft", { required: true });
 const showContext = defineModel<boolean>("showContext", { required: true });
 const resolveSource = defineModel<boolean>("resolveSource", { required: true });
 const i18n = useI18nStore();
+const recordHeading = computed(() => {
+  const citation = String(props.record?.inline_citation || "").trim();
+  return citation || String(props.record?.record_id || "");
+});
+const showRecordId = computed(
+  () => Boolean(props.record?.record_id) && recordHeading.value !== String(props.record?.record_id),
+);
 const root = ref<HTMLElement | null>(null);
 onMounted(() => emit("rootChange", root.value));
 onBeforeUnmount(() => emit("rootChange", null));
@@ -61,11 +68,11 @@ onBeforeUnmount(() => emit("rootChange", null));
           >
             {{ i18n.t("pdf_corpus.show_queue") }}</button
           ><span class="eyebrow">{{ i18n.t("pdf_corpus.proposed_record") }}</span>
-          <h3 id="review-record-title">{{ record.record_id }}</h3>
-          <p>
-            {{ record.inline_citation }}
-            · {{ record.text_length.toLocaleString() }} {{ i18n.t("pdf_corpus.characters")
-            }}{{ activitySummary }}
+          <h3 id="review-record-title">{{ recordHeading }}</h3>
+          <p class="record-meta">
+            <code v-if="showRecordId" class="record-id">{{ record.record_id }}</code>
+            <span>{{ record.text_length.toLocaleString() }} {{ i18n.t("pdf_corpus.characters") }}</span
+            >{{ activitySummary }}
             <span v-if="record.text_review_status === 'human_corrected'" class="human-corrected">{{
               i18n.t("pdf_corpus.human_corrected")
             }}</span
@@ -254,6 +261,25 @@ onBeforeUnmount(() => emit("rootChange", null));
   margin: 2px 0 0;
   font-size: 0.8125rem;
   color: var(--text-secondary);
+}
+.record-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  align-items: center;
+}
+.record-id {
+  max-width: min(30rem, 52vw);
+  padding: 1px 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .record-primary-text {
   flex: 1;
