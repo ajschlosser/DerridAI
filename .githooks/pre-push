@@ -1,0 +1,9 @@
+#!/bin/sh
+# Copyright 2026 Aaron John Schlosser, PhD.
+# Enabled by scripts/install-git-hooks.sh (core.hooksPath). Skip with DERRIDAI_SKIP_PREFLIGHT=1.
+[ "${DERRIDAI_SKIP_PREFLIGHT:-}" = "1" ] && exit 0
+# Deleting a remote branch needs no preflight.
+while read -r _ local_sha _ _; do
+  [ "$local_sha" = "0000000000000000000000000000000000000000" ] && exit 0
+done
+exec "$(git rev-parse --show-toplevel)/scripts/preflight.sh"

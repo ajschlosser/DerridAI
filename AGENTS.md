@@ -120,6 +120,16 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - **Chroma:** one writer per persistence path. The logical `_response_cache` collection is stored physically as `derridai_response_cache` and is a system cache, not a corpus store.
 - **Secrets:** `.env` is git-ignored. Backups and provider profiles can contain API keys; never log or commit them.
 
+## Before you push (avoids most CI failures)
+
+Run `sh scripts/install-git-hooks.sh` once per clone; the `pre-push` hook then runs `scripts/preflight.sh`, which you can also run by hand. It checks what CI most often rejects on agent branches:
+
+- **Fresh branch.** CI tests your branch merged with `origin/master`. If master moved, merge it and re-run the tests before pushing; a green local run on a stale base proves little.
+- **Prettier on every file you touched**, including Markdown docs and `SPECIFICATION.md`. CI formats only changed files, so one unformatted doc fails `format-check`.
+- **Stage by path, not `git add -A`.** The working tree holds untracked build output and scratch files. Never commit `dist/`, `web/sdk/dist/`, `node_modules/`, caches, or test results (`tests/test_repo_hygiene.py` enforces this).
+- **Generated artifacts** (`web/src/api/graphql/schema.graphql`, `generated.ts`, `pipelineCatalogContract.json`) are regenerated only with the repo's scripts (`scripts/export_graphql_schema.py`, `scripts/export_pipeline_catalog_fixture.py`) in the project venv, and only when the API surface changed. Do not commit regenerated output from another toolchain.
+- **Legacy DOM baselines** (`web/tests/e2e/legacy-dom-baseline.spec.ts-snapshots/`) are characterization records of imperative UI. When you port a dialog to Vue, delete its baseline, add its scenario to `nonSnapshotScenarios` in `web/scripts/check-legacy-snapshots.mjs`, and assert behavior instead; do not regenerate a baseline to make a diff go away.
+
 ## Working style
 
 - Inspect the actual code before asserting how something works. `docs/PROJECT_CONTEXT.md` mixes implemented and intended design; when the code and a description disagree, say so and do not treat intended design as implemented.
