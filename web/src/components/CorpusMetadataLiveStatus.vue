@@ -28,6 +28,14 @@ const queued = computed(() =>
 const active = computed(() =>
   Array.isArray(props.build.metadata_active_tasks) ? props.build.metadata_active_tasks : [],
 );
+const providerCapacity = computed(() => props.build.provider_capacity || null);
+const concurrencyLabel = computed(() => {
+  const capacity = providerCapacity.value;
+  if (capacity && Number(capacity.limit || 0) > 0) {
+    return `${Number(capacity.active || 0)}/${Number(capacity.limit || 0)}`;
+  }
+  return String(props.build.metadata_concurrency || 1);
+});
 const activeRecords = computed(() => {
   const grouped = new Map<
     string,
@@ -134,7 +142,7 @@ function taskLabel(task: string) {
         {{ i18n.t("pdf_corpus.elapsed") }}: {{ elapsed
         }}<template v-if="eta"> · {{ i18n.t("pdf_corpus.eta") }}: ~{{ eta }}</template> ·
         {{ i18n.t("pdf_corpus.last_progress") }}: {{ lastProgress }} ·
-        {{ i18n.t("pdf_corpus.concurrency") }}: {{ build.metadata_concurrency || 1 }}
+        {{ i18n.t("pdf_corpus.concurrency") }}: {{ concurrencyLabel }}
       </p>
       <p class="saved-indicator">
         ✓ {{ i18n.t("pdf_corpus.resume_safe") }} · {{ i18n.t("pdf_corpus.saved_checkpoint") }}

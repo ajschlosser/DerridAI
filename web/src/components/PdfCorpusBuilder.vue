@@ -1042,7 +1042,7 @@ function restoreBuilderDraft() {
     if (draft.recordSizing && typeof draft.recordSizing === "object")
       recordSizing.value = { ...recordSizing.value, ...draft.recordSizing };
     if (Number.isFinite(Number(draft.maxConcurrentRequests)))
-      maxConcurrentRequests.value = Math.max(1, Math.min(16, Number(draft.maxConcurrentRequests)));
+      maxConcurrentRequests.value = Math.max(1, Math.min(64, Number(draft.maxConcurrentRequests)));
     if (draft.enrichmentMode === "fast" || draft.enrichmentMode === "deep")
       enrichmentMode.value = draft.enrichmentMode;
     if (typeof draft.semanticIndexing === "boolean")

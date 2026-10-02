@@ -35,6 +35,7 @@ from .autonomous import Policy as AutonomousPolicy
 from .celf_conformance import evaluate_celf_conformance
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
+from .concurrency import capacity_coordinator, provider_capacity_key, provider_limit
 from .corpus_build_lifecycle import BuildLifecycleMixin
 from .corpus_editorial_memory import EditorialMemoryMixin
 from .corpus_enrichment_helpers import (
@@ -2833,6 +2834,15 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 "indexing"
             )
             attempt_state: dict[int, tuple[Any, str]] = {}
+            capacity_key = provider_capacity_key(
+                provider_profile_id=str(active_request.get("provider_profile_id") or "") or None,
+                provider=provider,
+                base_url=base_url,
+                model=model,
+            )
+            capacity_limit = provider_limit(
+                active_request.get("max_concurrent_requests"), default=1, maximum=64
+            )
 
             initial_note = ""
             if escalating:
@@ -2902,28 +2912,78 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
 
             def request_once(context: StructuredAttemptContext) -> str:
                 call_token, _ = attempt_state[context.attempt]
+
+                def cancelled() -> bool:
+                    return bool(build_id and self._cancelled(build_id))
+
+                def waiting(snapshot: Any) -> None:
+                    if build_id:
+                        self._increment_metric(build_id, "provider_capacity_waits")
+
                 try:
-                    return self._with_transport_retry(
-                        build_id,
-                        chat_complete,
-                        provider=provider,
-                        model=model,
-                        base_url=base_url,
-                        api_key=api_key,
-                        prompt=context.prompt,
-                        options=generation,
-                        json_mode=True,
-                        json_schema=schema,
-                        schema_name=schema_name,
-                        max_tokens=context.max_tokens,
-                        cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
-                        timeout_seconds=float(_stage_timeouts(active_request).get(timeout_key, 240)),
-                        on_delta=(
-                            (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
-                            if build_id
-                            else None
-                        ),
-                    )
+                    with capacity_coordinator.acquire(
+                        "provider_generation",
+                        capacity_key,
+                        capacity_limit,
+                        cancelled=cancelled if build_id else None,
+                        on_wait=waiting,
+                    ) as permit:
+                        if build_id and permit.waited_seconds > 0:
+                            self._increment_metric(
+                                build_id,
+                                "provider_capacity_wait_ms",
+                                int(round(permit.waited_seconds * 1000)),
+                            )
+
+                        def perform_request() -> str:
+                            return self._with_transport_retry(
+                                build_id,
+                                chat_complete,
+                                provider=provider,
+                                model=model,
+                                base_url=base_url,
+                                api_key=api_key,
+                                prompt=context.prompt,
+                                options=generation,
+                                json_mode=True,
+                                json_schema=schema,
+                                schema_name=schema_name,
+                                max_tokens=context.max_tokens,
+                                cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
+                                timeout_seconds=float(_stage_timeouts(active_request).get(timeout_key, 240)),
+                                on_delta=(
+                                    (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
+                                    if build_id
+                                    else None
+                                ),
+                            )
+
+                        if provider == "ollama":
+                            ollama_limit = capacity_coordinator.configured_limit(
+                                "ollama_runtime",
+                                "global",
+                                fallback=max(1, int(settings.rag_ollama_max_concurrent)),
+                            )
+
+                            def waiting_ollama(snapshot: Any) -> None:
+                                if build_id:
+                                    self._increment_metric(build_id, "ollama_capacity_waits")
+
+                            with capacity_coordinator.acquire(
+                                "ollama_runtime",
+                                "global",
+                                ollama_limit,
+                                cancelled=cancelled if build_id else None,
+                                on_wait=waiting_ollama,
+                            ) as ollama_permit:
+                                if build_id and ollama_permit.waited_seconds > 0:
+                                    self._increment_metric(
+                                        build_id,
+                                        "ollama_capacity_wait_ms",
+                                        int(round(ollama_permit.waited_seconds * 1000)),
+                                    )
+                                return perform_request()
+                        return perform_request()
                 finally:
                     self._note_llm_call_end(build_id, call_token)
 
@@ -3825,6 +3885,25 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 if state == "running"
                 else str(copy.get("metadata_enrichment_state") or "running")
             )
+            # Metadata families may finish concurrently. A worker snapshot began from
+            # the Record state that existed before its sibling family advanced, so
+            # replacing the whole status/ledger maps would regress or erase sibling
+            # checkpoints. Merge only this callback's family entry into the live maps
+            # before applying the ordinary authority-preserving Record merge.
+            for map_key in ("metadata_stage_status", "metadata_execution_ledger"):
+                live_map = (
+                    dict(live_record.get(map_key) or {})
+                    if isinstance(live_record.get(map_key), dict)
+                    else {}
+                )
+                worker_map = (
+                    dict(copy.get(map_key) or {})
+                    if isinstance(copy.get(map_key), dict)
+                    else {}
+                )
+                if task_name in worker_map:
+                    live_map[task_name] = worker_map[task_name]
+                copy[map_key] = live_map
             merged = _merge_enrichment_snapshot(
                 live_record, copy, self._allowed_fields(build_id)
             )
@@ -3880,7 +3959,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             build_id,
             metadata_enriched_count=already_complete,
             metadata_enrichment_total=len(records),
-            metadata_concurrency=max(1, min(16, int(request.get("max_concurrent_requests") or 1))),
+            metadata_concurrency=max(1, min(64, int(request.get("max_concurrent_requests") or 1))),
             metadata_started_at=metadata_started_at,
             metadata_last_progress_at=iso_now(),
             metadata_settle_requested=False,
@@ -3899,7 +3978,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             else:
                 record["metadata_enrichment_state"] = "complete"
         self.repo.save_records(build_id, records)
-        max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
+        max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
         metadata_families = ("discourse", "quotation", "indexing")
         # Fast mode still exposes all three family states, but deliberately
         # skipped families settle immediately and do not consume provider time.
@@ -3924,7 +4003,16 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             # the three small metadata families serially for one record, while the
             # main thread alone updates/checkpoints the shared JSONL. This avoids
             # corrupting restart state and respects provider-profile concurrency.
-            with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta") as pool:
+            with (
+                ThreadPoolExecutor(
+                    max_workers=max_workers,
+                    thread_name_prefix="pdf-corpus-meta",
+                ) as pool,
+                ThreadPoolExecutor(
+                    max_workers=max_workers,
+                    thread_name_prefix="pdf-corpus-family",
+                ) as family_pool,
+            ):
                 futures = {}
                 for index in pending:
                     if self._cancelled(build_id):
@@ -3941,6 +4029,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         next_text=next_text,
                         build_id=build_id,
                         stage_callback=persist_metadata_stage,
+                        family_executor=family_pool,
                     )
                     futures[future] = index
                 completed = already_complete

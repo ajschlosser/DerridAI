@@ -56,7 +56,7 @@ def _clamp_concurrency(value: Any) -> Any:
     """A provider profile may allow more parallel requests (a FreeLLM profile defaults to 32) than one corpus operation
     uses. Clamp to the operation's ceiling instead of rejecting the whole request with a 422."""
     try:
-        return max(1, min(16, int(value)))
+        return max(1, min(64, int(value)))
     except (TypeError, ValueError):
         return value
 

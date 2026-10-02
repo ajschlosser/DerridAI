@@ -25,6 +25,7 @@ from ..celf_queries import source_documents as document_queries
 from ..celf_queries.access import AccessContext, InvalidQuery, NotFound
 from ..claim_memory import validated_claims_citing
 from ..config import settings
+from ..concurrency import capacity_coordinator, provider_capacity_key, provider_limit
 from ..corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from ..corpus_review_state import _queue_counts
 from ..http_auth import require_admin
@@ -686,8 +687,42 @@ def get_pdf_corpus_build(build_id: str) -> dict[str, Any]:
         build = pdf_corpus_repository.get_build(build_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
-    # Not stored: it is a live reading of what the build is waiting for right now.
+    # Not stored: these are live readings of what the build is waiting for right now.
     build["llm_activity"] = pdf_corpus_builds.llm_activity(build_id)
+    request_payload = build.get("request") if isinstance(build.get("request"), dict) else {}
+    provider = str(request_payload.get("provider") or build.get("provider") or "ollama")
+    model = str(request_payload.get("model") or build.get("model") or "")
+    capacity_key = provider_capacity_key(
+        provider_profile_id=str(request_payload.get("provider_profile_id") or "") or None,
+        provider=provider,
+        base_url=str(request_payload.get("base_url") or "") or None,
+        model=model or None,
+    )
+    capacity_limit = provider_limit(
+        request_payload.get("max_concurrent_requests"), default=1, maximum=64
+    )
+    provider_snapshot = capacity_coordinator.snapshot(
+        "provider_generation", capacity_key, limit=capacity_limit
+    )
+    build["provider_capacity"] = {
+        "limit": provider_snapshot.limit,
+        "active": provider_snapshot.active,
+        "waiting": provider_snapshot.waiting,
+    }
+    if provider == "ollama":
+        ollama_limit = capacity_coordinator.configured_limit(
+            "ollama_runtime",
+            "global",
+            fallback=max(1, int(settings.rag_ollama_max_concurrent)),
+        )
+        ollama_snapshot = capacity_coordinator.snapshot(
+            "ollama_runtime", "global", limit=ollama_limit
+        )
+        build["ollama_capacity"] = {
+            "limit": ollama_snapshot.limit,
+            "active": ollama_snapshot.active,
+            "waiting": ollama_snapshot.waiting,
+        }
     return build
 
 
