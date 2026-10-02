@@ -154,7 +154,7 @@ Human selection, direct reference, deterministic lookup, model-assisted location
 
 This graph distinguishes three questions that MUST NOT be collapsed: where documentary material comes from; how material entered a research operation as evidence; and which evidence is represented as supporting a particular generated claim. GenerationRun records generation provenance and EvidenceAcquisitionRun records acquisition provenance; neither object is required to traverse the direct support relation from a GeneratedClaim to its EvidenceRef.
 
-The principal reverse support-audit paths are:
+For the cELF 1.0 base locator kinds, the principal reverse support-audit paths are:
 
 `GeneratedClaim -> SupportBinding -> EvidenceRef(record) -> RecordRevision -> SourceSpan -> SourceDocument`
 
@@ -162,7 +162,7 @@ or:
 
 `GeneratedClaim -> SupportBinding -> EvidenceRef(source_span) -> SourceSpan -> SourceDocument`
 
-A system MUST NOT claim full claim traceability merely because a human-readable citation is present when the internal evidence-to-source relationship cannot be resolved. Reproducible Research conformance additionally requires enough retained run state to reconstruct the applicable acquisition and generation branches of the provenance graph.
+A namespaced locator kind MUST preserve an equivalent unambiguous path from EvidenceRef to exact documentary material and ultimately to one SourceDocument. A system MUST NOT claim full claim traceability merely because a human-readable citation is present when the internal evidence-to-source relationship cannot be resolved. Reproducible Research conformance additionally requires enough retained run state to reconstruct the applicable acquisition and generation branches of the provenance graph.
 
 #### Research normalization
 
@@ -583,7 +583,7 @@ For Core conformance, the principal documentary provenance spine is:
 
 with FieldAssertions attached to the applicable Record or RecordRevision state when materialized.
 
-For a GeneratedClaim represented as evidentially supported, a Claim-Binding conforming implementation MUST identify the applicable SupportBinding and EvidenceRef. The direct support-audit paths are:
+For a GeneratedClaim represented as evidentially supported, a Claim-Binding conforming implementation MUST identify the applicable SupportBinding and EvidenceRef. For the cELF 1.0 base locator kinds, the direct support-audit paths are:
 
 `GeneratedClaim -> SupportBinding -> EvidenceRef(record) -> RecordRevision -> SourceSpan -> SourceDocument`
 
@@ -591,7 +591,7 @@ or:
 
 `GeneratedClaim -> SupportBinding -> EvidenceRef(source_span) -> SourceSpan -> SourceDocument`
 
-A record-backed EvidenceRef MUST resolve through the applicable Record or RecordRevision to its SourceDocument and SourceSpan at the precision claimed by the implementation. A direct-source EvidenceRef MUST resolve directly to its declared SourceSpan or SourceSpans and SourceDocument. A supported claim MUST therefore resolve through SupportBinding and EvidenceRef to the authoritative Record/RecordRevision or SourceSpan and SourceDocument. **[CLM-ID-005]**
+A record-backed EvidenceRef MUST resolve through the applicable Record or RecordRevision to its SourceDocument and SourceSpan at the precision claimed by the implementation. A direct-source EvidenceRef MUST resolve directly to its declared SourceSpan or SourceSpans and SourceDocument. A namespaced locator kind MUST provide an equivalent reproducible resolution to exact documentary material and one SourceDocument. A supported claim MUST therefore resolve through SupportBinding and EvidenceRef to authoritative documentary material and ultimately to its SourceDocument. **[CLM-ID-005]**
 
 Generation provenance is a separate branch:
 
@@ -879,11 +879,11 @@ A GenerationRun SHOULD be exportable as an Activity. It SHOULD identify, where k
 
 #### Claim-to-evidence provenance
 
-Where Claim-Binding is implemented, the exported graph SHOULD preserve:
+Where Claim-Binding is implemented, the exported graph SHOULD preserve the applicable claim-to-source path. For the base record-backed locator, a typical path is:
 
 `GeneratedClaim -> SupportBinding -> EvidenceRef -> RecordRevision -> SourceSpan -> SourceDocument.`
 
-A consumer SHOULD be able to begin with a generated claim and identify the documentary material represented as supporting it.
+Direct-source and namespaced locator kinds SHOULD preserve equivalent source resolution. A consumer SHOULD be able to begin with a generated claim and identify the exact documentary material represented as supporting it and the SourceDocument to which that material belongs.
 
 #### Citation provenance
 
@@ -1248,7 +1248,7 @@ The catalogue covers requirements that protect identity, provenance, evidence, c
 | **CLM-ID-002 MUST**     | Claims represented as supported have explicit SupportBindings to one or more named or embedded EvidenceRef semantic locators.                                                             | schema+semantic     |
 | **CLM-ID-003 MUST NOT** | Evidence is not described as supporting a claim merely because it appeared in model context.                                                                                              | behavioral+audit    |
 | **CLM-ID-004 MUST NOT** | Unknown evidence markers do not resolve silently to unrelated sources, and machine claim/evidence relations are not lost merely because markers are rendered as human-readable citations. | semantic            |
-| **CLM-ID-005 MUST**     | A supported claim resolves through SupportBinding and EvidenceRef to the authoritative Record/RecordRevision or SourceSpan and SourceDocument.                                            | semantic            |
+| **CLM-ID-005 MUST**     | A supported claim resolves through SupportBinding and EvidenceRef to authoritative documentary material and ultimately to exactly one SourceDocument; base and namespaced locator kinds preserve an unambiguous reproducible source path. | semantic            |
 | **CLM-ID-006 MUST NOT** | A failed exact-quotation check is not silently treated as successful support.                                                                                                             | semantic+behavioral |
 
 #### Reproducible Research requirements
