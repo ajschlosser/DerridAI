@@ -375,10 +375,7 @@ const syntheticRecordPagesAvailable = computed(() => {
 });
 const topologySummary = computed(() => {
   if (topologyPolicy.value.mode === "semantic") {
-    return i18n.t(
-      "pdf_corpus.topology.semantic_summary",
-      "Semantic boundaries determine Records",
-    );
+    return i18n.t("pdf_corpus.topology.semantic_summary", "Semantic boundaries determine Records");
   }
   const units = topologyPolicy.value.source_units_per_record;
   const records =
@@ -387,7 +384,9 @@ const topologySummary = computed(() => {
       : `${units.toLocaleString()} SourceUnits → 1 Record`;
   const perPage = topologyPolicy.value.records_per_page;
   return perPage && syntheticRecordPagesAvailable.value
-    ? `${records} → ${perPage.toLocaleString()} ${perPage === 1 ? "Record" : "Records"} per synthetic Page`
+    ? `${records} → ${perPage.toLocaleString()} ${
+        perPage === 1 ? "Record" : "Records"
+      } per synthetic Page`
     : records;
 });
 
@@ -515,10 +514,7 @@ const effectiveSetupDocumentMetadata = computed<Record<string, unknown>>(() => (
 // required field therefore makes Setup incomplete instead of failing much later at Publish.
 const missingDocumentFields = computed(() =>
   selectedAsset.value?.deterministic_checked_at
-    ? missingRequiredDocumentFields(
-        selectedSchema.value,
-        effectiveSetupDocumentMetadata.value,
-      )
+    ? missingRequiredDocumentFields(selectedSchema.value, effectiveSetupDocumentMetadata.value)
     : [],
 );
 const setupManifest = computed<Record<string, unknown>>(() => {
