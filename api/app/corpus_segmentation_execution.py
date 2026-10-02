@@ -362,7 +362,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                 raise InterruptedError("Corpus build cancelled")
             workers = min(
                 len(pairs),
-                provider_limit(request.get("max_concurrent_requests"), default=1, maximum=16),
+                provider_limit(request.get("max_concurrent_requests"), default=1, maximum=64),
             ) if pairs else 0
             if session is not None and workers > 1:
                 with ThreadPoolExecutor(
@@ -501,7 +501,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
 
             workers = min(
                 len(chunks),
-                provider_limit(request.get("max_concurrent_requests"), default=1, maximum=16),
+                provider_limit(request.get("max_concurrent_requests"), default=1, maximum=64),
             ) if chunks else 0
             if session is not None and workers > 1:
                 with ThreadPoolExecutor(
