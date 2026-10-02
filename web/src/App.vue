@@ -17,6 +17,7 @@ import CommandSearch from "./components/CommandSearch.vue";
 import AppNotifications from "./components/AppNotifications.vue";
 import MessageDialogHost from "./components/MessageDialogHost.vue";
 import RemoveWorkDialog from "./components/RemoveWorkDialog.vue";
+import SeparateWorksDialog from "./components/SeparateWorksDialog.vue";
 import MixedWorkValuesDialog from "./components/MixedWorkValuesDialog.vue";
 import LlmReviewWorkspace from "./components/LlmReviewWorkspace.vue";
 import SemanticMapHost from "./components/semantic/SemanticMapHost.vue";
@@ -746,6 +747,7 @@ watch(
   <MessageDialogHost />
   <MixedWorkValuesDialog />
   <RemoveWorkDialog />
+  <SeparateWorksDialog />
 </template>
 
 <style scoped>

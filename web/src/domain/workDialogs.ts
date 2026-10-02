@@ -3,6 +3,7 @@
 import { openMessageDialog } from "../composables/messageDialog";
 import { openMixedWorkValuesDialog as openMixedWorkValues } from "../composables/mixedWorkValuesDialog";
 import { openRemoveWorkDialog } from "../composables/removeWorkDialog";
+import { openSeparateWorksDialog } from "../composables/separateWorksDialog";
 import { esc, icon } from "./html";
 import {
   canonicalWorkSourceType,
@@ -560,6 +561,8 @@ export function createWorkDialogs(deps: Deps) {
     });
   }
   async function openSeparateWorksModal() {
+    const workKey = (record: Any) =>
+      String(record?.work || record?.document_title || "").trim() || tr("works.untitled");
     const eligible = state.files.filter((file: Any) => {
       const works = new Set(
         file.records
@@ -569,99 +572,76 @@ export function createWorkDialogs(deps: Deps) {
       return works.size > 1;
     });
     if (!eligible.length) return toast(tr("works.no_multi_work_jsonl"), { tone: "warning" });
-    const dialog = document.createElement("dialog");
-    dialog.className = "work-separate-dialog";
-    const options = eligible
-      .map(
-        (file: Any) =>
-          `<option value="${esc(file.id)}">${esc(file.name)} · ${file.records.length.toLocaleString()} ${esc(tr("dynamic.records"))}</option>`,
-      )
-      .join("");
-    dialog.innerHTML = `<div class="dh"><div><span class="section-label">${esc(tr("works.jsonl_organization"))}</span><h2 class="dialog-title">${esc(tr("works.separate_works_title"))}</h2><div class="dialog-subtitle">${esc(tr("works.separate_works_help"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db separate-works-body"><div class="field"><label>${esc(tr("works.source_jsonl"))}</label><select class="control" id="separateWorksSource">${options}</select></div><div id="separateWorksList" class="separate-works-list"></div><label class="check-item"><input type="checkbox" id="separateWorksRemove"><span>${esc(tr("works.remove_separated"))}</span></label><div class="info">${esc(tr("works.separate_nondestructive_help"))}</div></div><div class="da"><button class="btn" data-close>${esc(tr("ui.cancel"))}</button><button class="btn primary" id="separateWorksCreate">${esc(tr("works.separate_selected"))}</button></div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    const source = () =>
-      state.files.find(
-        (file: Any) => file.id === dialog.querySelector("#separateWorksSource").value,
-      );
-    const renderList = () => {
-      const file = source();
-      const groups = new Map();
-      for (const record of file?.records || []) {
-        const work =
-          String(record?.work || record?.document_title || "").trim() || tr("works.untitled");
-        if (!groups.has(work)) groups.set(work, []);
-        groups.get(work).push(record);
-      }
-      dialog.querySelector("#separateWorksList").innerHTML = [...groups.entries()]
-        .map(
-          ([work, records]) =>
-            `<label class="separate-work-row"><input type="checkbox" data-separate-work="${esc(work)}" ${work === tr("works.untitled") ? "" : "checked"}><span><b>${esc(work)}</b><small>${records.length.toLocaleString()} ${esc(tr("dynamic.records"))}</small></span></label>`,
-        )
-        .join("");
-    };
-    dialog.querySelector("#separateWorksSource").addEventListener("change", renderList);
-    renderList();
-    dialog.querySelector("#separateWorksCreate").onclick = async () => {
-      const file = source();
-      const selected = [...dialog.querySelectorAll("[data-separate-work]:checked")].map(
-        (box) => box.dataset.separateWork,
-      );
-      if (!selected.length) return toast(tr("works.select_at_least_one"), { tone: "warning" });
-      const selectedSet = new Set(selected);
-      const created = [];
-      for (const work of selected) {
-        const records = file.records
-          .filter(
-            (record: Any) =>
-              (String(record?.work || record?.document_title || "").trim() ||
-                tr("works.untitled")) === work,
-          )
-          .map(cloneAuditValue);
-        if (!records.length) continue;
-        const stem =
-          work
-            .replace(/[^a-z0-9]+/gi, "-")
-            .replace(/^-|-$/g, "")
-            .slice(0, 80) || "untitled-work";
-        const derived = {
-          id: uid(),
-          name: `${stem}.jsonl`,
-          records,
-          errors: [],
-          dirty: new Set(),
-          imported_at: new Date().toISOString(),
-          derived_from: { type: "work_separation", source_file: file.name, work },
+    openSeparateWorksDialog({
+      sources: eligible.map((file: Any) => {
+        const groups = new Map<string, number>();
+        for (const record of file.records) {
+          const work = workKey(record);
+          groups.set(work, (groups.get(work) || 0) + 1);
+        }
+        return {
+          id: file.id,
+          name: file.name,
+          recordCount: file.records.length,
+          groups: [...groups].map(([work, count]) => ({
+            work,
+            count,
+            defaultChecked: work !== tr("works.untitled"),
+          })),
         };
-        state.files.push(derived);
-        await persistFileNow(derived);
-        created.push(derived);
-      }
-      if (dialog.querySelector("#separateWorksRemove").checked) {
-        file.records = file.records.filter(
-          (record: Any) =>
-            !selectedSet.has(
-              String(record?.work || record?.document_title || "").trim() || tr("works.untitled"),
-            ),
-        );
-        file.dirty = new Set(file.records.map((_: Any, index: Any) => index));
-        await persistFileNow(file);
-      }
-      if (created.length) state.activeFileId = created[0].id;
-      close();
-      corpusCache.fields = null;
-      persistPrefs();
-      shell();
-      renderView();
-      toast(trf("works.created_tabs", { count: created.length }), {
-        tone: "success",
-      });
-    };
+      }),
+      confirm: async ({ fileId, works: selected, removeFromSource }) => {
+        const file = state.files.find((item: Any) => item.id === fileId);
+        if (!file) return;
+        const selectedSet = new Set(selected);
+        const created = [];
+        for (const work of selected) {
+          const records = file.records
+            .filter(
+              (record: Any) =>
+                (String(record?.work || record?.document_title || "").trim() ||
+                  tr("works.untitled")) === work,
+            )
+            .map(cloneAuditValue);
+          if (!records.length) continue;
+          const stem =
+            work
+              .replace(/[^a-z0-9]+/gi, "-")
+              .replace(/^-|-$/g, "")
+              .slice(0, 80) || "untitled-work";
+          const derived = {
+            id: uid(),
+            name: `${stem}.jsonl`,
+            records,
+            errors: [],
+            dirty: new Set(),
+            imported_at: new Date().toISOString(),
+            derived_from: { type: "work_separation", source_file: file.name, work },
+          };
+          state.files.push(derived);
+          await persistFileNow(derived);
+          created.push(derived);
+        }
+        if (removeFromSource) {
+          file.records = file.records.filter(
+            (record: Any) =>
+              !selectedSet.has(
+                String(record?.work || record?.document_title || "").trim() || tr("works.untitled"),
+              ),
+          );
+          file.dirty = new Set(file.records.map((_: Any, index: Any) => index));
+          await persistFileNow(file);
+        }
+        if (created.length) state.activeFileId = created[0].id;
+        corpusCache.fields = null;
+        persistPrefs();
+        shell();
+        renderView();
+        toast(trf("works.created_tabs", { count: created.length }), {
+          tone: "success",
+        });
+      },
+    });
   }
   return {
     openMixedWorkValuesDialog,
