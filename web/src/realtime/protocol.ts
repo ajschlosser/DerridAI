@@ -67,6 +67,11 @@ export interface CorpusBuildSummary {
   metadata_tasks_skipped?: number;
   metadata_tasks_running?: number;
   metadata_tasks_queued?: number;
+  metadata_active_tasks?: Array<{
+    record_id?: string;
+    task?: string;
+    started_at?: string | null;
+  }>;
   progress?: number;
   [key: string]: unknown;
 }
