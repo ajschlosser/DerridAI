@@ -1,5 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { toast } from "../composables/notifications";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
@@ -291,7 +292,7 @@ async function loadData() {
       recordCount.value = result.page.total;
     }
   } catch (exc) {
-    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+    toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
   }
 }
 
@@ -327,7 +328,7 @@ async function applyConnection(body: ChromaConnectionUpdate) {
     const next = await chromaApi.setConnection(body);
     syncHealthIntoRuntime(next);
     connectionOpen.value = false;
-    runtime.notifyToast(i18n.t("vector.connection_changed"), { tone: "success" });
+    toast(i18n.t("vector.connection_changed"), { tone: "success" });
     activeName.value = "";
     await load();
   } catch (exc) {
@@ -387,7 +388,7 @@ async function runSearch() {
     });
     searchResults.value = payload.results || [];
   } catch (exc) {
-    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+    toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
   } finally {
     searching.value = false;
   }
@@ -400,17 +401,17 @@ async function saveLanguages() {
       language_codes: languageCodes.value,
       collection_role: role.value,
     });
-    runtime.notifyToast(i18n.t("vector.language_tags_saved"), { tone: "success" });
+    toast(i18n.t("vector.language_tags_saved"), { tone: "success" });
     await load();
   } catch (exc) {
-    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+    toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
   }
 }
 
 async function saveEmbedding() {
   if (!activeName.value || contractLocked.value) return;
   if (embeddingProvider.value.startsWith("profile:") && !embeddingModel.value.trim())
-    return runtime.notifyToast(i18n.t("vector.embedding_model_required"), { tone: "warn" });
+    return toast(i18n.t("vector.embedding_model_required"), { tone: "warn" });
   try {
     await chromaApi.setEmbedding(activeName.value, {
       embedding_provider: embeddingProvider.value,
@@ -418,10 +419,10 @@ async function saveEmbedding() {
         ? embeddingModel.value.trim()
         : null,
     });
-    runtime.notifyToast(i18n.t("vector.embedding_saved"), { tone: "success" });
+    toast(i18n.t("vector.embedding_saved"), { tone: "success" });
     await load();
   } catch (exc) {
-    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+    toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
   }
 }
 
@@ -429,7 +430,7 @@ async function toggleProtection() {
   if (!current.value) return;
   try {
     await chromaApi.setProtection(current.value.name, !current.value.protected);
-    runtime.notifyToast(
+    toast(
       current.value.protected
         ? i18n.t("vector.protection_disabled")
         : i18n.t("vector.protection_enabled"),
@@ -437,7 +438,7 @@ async function toggleProtection() {
     );
     await load();
   } catch (exc) {
-    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+    toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
   }
 }
 
@@ -449,10 +450,10 @@ async function confirmAction() {
     try {
       await chromaApi.remove(activeName.value);
       activeName.value = "";
-      runtime.notifyToast(i18n.t("vector.collection_deleted"), { tone: "success" });
+      toast(i18n.t("vector.collection_deleted"), { tone: "success" });
       await load();
     } catch (exc) {
-      runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+      toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
     }
   }
   if (kind === "derive") {
@@ -463,17 +464,17 @@ async function confirmAction() {
         fr_name: deriveFr.value.trim(),
         overwrite: true,
       });
-      runtime.notifyToast(i18n.t("vector.language_collections"), { tone: "success" });
+      toast(i18n.t("vector.language_collections"), { tone: "success" });
       await load();
     } catch (exc) {
-      runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+      toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
     }
   }
 }
 
 function syncActive() {
   const file = runtimeState.files?.find((item) => item.id === runtimeState.activeFileId);
-  if (!file) return runtime.notifyToast(i18n.t("vector.load_jsonl_first"), { tone: "warn" });
+  if (!file) return toast(i18n.t("vector.load_jsonl_first"), { tone: "warn" });
   void runtime
     .upsertRows(
       file.records.map((record: unknown, index: number) => ({ file, record, index })),
@@ -485,8 +486,7 @@ function syncAll() {
   const rows = (runtimeState.files || []).flatMap((file) =>
     file.records.map((record, index) => ({ file, record, index })),
   );
-  if (!rows.length)
-    return runtime.notifyToast(i18n.t("vector.load_jsonl_any_first"), { tone: "warn" });
+  if (!rows.length) return toast(i18n.t("vector.load_jsonl_any_first"), { tone: "warn" });
   void runtime.upsertRows(rows, "records").then(() => load());
 }
 

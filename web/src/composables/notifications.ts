@@ -74,6 +74,17 @@ export function notify(
   return id;
 }
 
+/**
+ * Show a message with the loose tone names the legacy runtime accepted (`"auto"` reads the wording).
+ * Prefer `notify` with an explicit tone in new code.
+ */
+export function toast(
+  message: string,
+  { tone = "auto", duration = null }: { tone?: string; duration?: number | null } = {},
+) {
+  return notify(message, inferNotificationTone(message, tone), { duration });
+}
+
 export function dismiss(id: number) {
   clearTimer(id);
   durations.delete(id);

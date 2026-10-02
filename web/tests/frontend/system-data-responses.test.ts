@@ -16,14 +16,16 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: routerPush, replace: routerReplace }),
 }));
 
+vi.mock("../../src/composables/messageDialog", () => ({
+  openMessageDialog: vi.fn(),
+}));
+
 vi.mock("../../src/runtime/runtimeBridge", () => ({
-  openMessageModal: vi.fn(),
-  notifyToast: vi.fn(),
   formatTimestamp: (value: string) => value,
 }));
 
 import { systemApi } from "../../src/api/system";
-import * as runtime from "../../src/runtime/runtimeBridge";
+import { openMessageDialog } from "../../src/composables/messageDialog";
 import SystemDataResponses from "../../src/components/system-data/SystemDataResponses.vue";
 import { useI18nStore } from "../../src/stores/i18n";
 
@@ -101,7 +103,7 @@ describe("System Data saved responses", () => {
   });
 
   it("requires destructive confirmation before deleting a saved response", async () => {
-    vi.mocked(runtime.openMessageModal).mockResolvedValue(false);
+    vi.mocked(openMessageDialog).mockResolvedValue(false);
     const remove = vi.spyOn(systemApi, "deleteSystemResponseCacheRecord");
 
     const wrapper = mount(SystemDataResponses, {
@@ -110,7 +112,7 @@ describe("System Data saved responses", () => {
     await flushPromises();
     await wrapper.get(".danger-text").trigger("click");
 
-    expect(runtime.openMessageModal).toHaveBeenCalledWith(
+    expect(openMessageDialog).toHaveBeenCalledWith(
       expect.objectContaining({
         tone: "danger",
         message: "What is différance?",

@@ -1,5 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { toast } from "../composables/notifications";
+import { openMessageDialog } from "../composables/messageDialog";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
 import { fullCitation } from "../domain/citations";
@@ -216,7 +218,7 @@ async function onFileChange(event: Event) {
     await refresh();
   } catch (error: Any) {
     console.error("Could not open PDF", error);
-    await runtime.openMessageModal({
+    await openMessageDialog({
       title: copy.value.couldNotOpen,
       message: error.message || String(error),
       tone: "danger",

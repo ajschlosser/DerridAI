@@ -177,7 +177,9 @@ Task branch for Step 1: `task/router-single-source-of-truth`
 - [ ] Step 2 toasts and modals (branch `task/toast-modal-vue-services`, worktree `../DerridAI-toasts`)
   - [x] 2.1 `toast` is a shim over the existing `composables/notifications` host (`AppNotifications.vue`); tone inference, hover/focus pause, bounded stack
   - [x] 2.2 `openMessageModal` is a shim over `composables/messageDialog` + `MessageDialogHost.vue` (native modal `<dialog role="alertdialog">`, queued, focus returns to the opener); Vitest + Storybook story
-  - [ ] 2.3 migrate the ~47 `notifyToast` / `runtime.toast` and `openMessageModal` call sites to the composables, then delete the shims (`notifyToast`, `toast`, `openMessageModal` in `runtime.js`/`runtimeBridge.ts`, and the `toast`/`openMessageModal` dependency wiring in `domain/*`)
+  - [x] 2.3a all `.vue` callers (views, `SystemDataResponses`, `PdfExplorerSurface`) call `toast` (`composables/notifications`) and `openMessageDialog` directly; `toast` keeps the legacy loose tone names. Not carried over: the legacy French `translateDynamicUiValue` pass over toast text (native callers already pass translated strings).
+  - [ ] 2.3b migrate the `domain/*` and `runtime.js` callers (`recordDialogs`, `workDialogs`, `jobDialogs`, `operationsPanelBridge`, `dbPresenceUpsert`, `recordEditing`, `backupWorkspace`, `pdfLinking`, `appLifecycle`, `annotationsWorkspace`, `vectorCollectionBridge.js`), then delete the shims (`notifyToast`, `toast`, `openMessageModal` in `runtime.js`/`runtimeBridge.ts`, and the `toast`/`openMessageModal` dependency wiring)
+
   - Known differences: toasts now stack (up to 5) instead of replacing one another, and the bold HTTP-status styling is gone. `legacy-dom-baseline` snapshots for settings/research were already stale on master (the "Automatic sizing" control); not regenerated here.
 - [ ] Step 3 routes and dialogs
 - [ ] Step 4 state slices and deletion
