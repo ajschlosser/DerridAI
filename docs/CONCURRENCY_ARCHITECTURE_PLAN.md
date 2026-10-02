@@ -7,7 +7,7 @@ observability, and benchmarking.
 
 ## Goal
 
-DerridAI should use all *useful* concurrency made available by a configured provider or execution
+DerridAI should use all _useful_ concurrency made available by a configured provider or execution
 resource without weakening scholarly authority, provenance, source binding, review safety,
 deterministic ordering, crash recovery, or local-first operation.
 
