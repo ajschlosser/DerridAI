@@ -193,7 +193,8 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] `workDialogs`: metadata editor (`WorkMetadataEditorDialog.vue`; `workMetadataControl` HTML became `workMetadataControlSpec`, and control values stay strings for `parseWorkMetadataValue`)
   - [x] `workDialogs`: LLM metadata lookup dialog (`WorkMetadataLlmDialog.vue` + `composables/workMetadataLlmDialog.ts`; reuses `ProviderProfileSelect`; the job request stays in the legacy forwarder as a `start` callback; baseline `dialog-works-populate-all` retired)
   - [x] `workDialogs`: proposal-result dialog (`WorkMetadataProposalDialog.vue` + `composables/workMetadataProposalDialog.ts`; value parsing, grouping and `applyRecordChanges` stay in the forwarder's `apply` callback; `workflowProviderSelectHtml`/`workflowProviderSummaryHtml` deleted from the runtime). `workDialogs` is now fully ported
-  - [ ] `recordDialogs`, then `jobDialogs`
+  - [x] `recordDialogs`: merge-files dialog (`MergeFilesDialog.vue` + `composables/mergeFilesDialog.ts`; the merge itself stays in the forwarder's `merge` callback; `mergeDialogHtml` and baseline `dialog-merge` retired)
+  - [ ] remaining `recordDialogs` (bulk field editor, OCR cleanup, record editor, store record editor, history browser, upsert queue), then `jobDialogs`
 - [ ] Step 4 state slices and deletion
 
 Notes for the next session:

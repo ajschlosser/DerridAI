@@ -90,13 +90,6 @@ describe("LLM tool and record dialog markup", () => {
       fallback,
     );
 
-  it("localizes merge dialog chrome", async () => {
-    const { mergeDialogHtml } = await import("../../src/domain/recordDialogMarkup");
-    const html = mergeDialogHtml([{ id: "1", name: "a.jsonl", records: [1, 2] }], { tr, trf });
-    expect(html).toContain("Fusionner les onglets JSONL");
-    expect(html).not.toContain("Merge JSONL tabs");
-  });
-
   it("localizes LLM tool result actions", async () => {
     const { llmToolResultBody } = await import("../../src/domain/llmToolMarkup");
     const { actions } = llmToolResultBody(

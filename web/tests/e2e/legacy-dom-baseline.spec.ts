@@ -728,6 +728,7 @@ const scenarios: Scenario[] = [
   // Dialogs the runtime builds as HTML strings, reached from the Records commands.
   {
     name: "dialog-merge",
+    contains: ["Merge JSONL tabs"],
     load: true,
     target: "dialog",
     steps: openDialogFromRecords("Merge files", { secondFile: true }),
