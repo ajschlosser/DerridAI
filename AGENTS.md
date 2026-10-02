@@ -122,13 +122,14 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 
 ## Before you push (avoids most CI failures)
 
-Run `sh scripts/install-git-hooks.sh` once per clone; the `pre-push` hook then runs `scripts/preflight.sh`, which you can also run by hand. It checks what CI most often rejects on agent branches:
+Run `sh scripts/install-git-hooks.sh` once per clone. Before opening or updating a PR, merge current `origin/master`, finish a coherent local batch, and run `scripts/preflight.sh`. The pre-push hook runs the same change-impact plan with browser checks enabled; do not use GitHub Actions as an interactive test runner by pushing after every small edit. The plan is machine-readable with `python scripts/preflight_plan.py --format json <paths...>` and selects the CI-equivalent backend, frontend, contract, generated-artifact, publication, formatting, and browser gates required by the changed paths.
 
 - **Fresh branch.** CI tests your branch merged with `origin/master`. If master moved, merge it and re-run the tests before pushing; a green local run on a stale base proves little.
 - **Prettier on every file you touched**, including Markdown docs and `SPECIFICATION.md`. CI formats only changed files, so one unformatted doc fails `format-check`.
 - **Stage by path, not `git add -A`.** The working tree holds untracked build output and scratch files. Never commit `dist/`, `web/sdk/dist/`, `node_modules/`, caches, or test results (`tests/test_repo_hygiene.py` enforces this).
 - **Generated artifacts** (`web/src/api/graphql/schema.graphql`, `generated.ts`, `pipelineCatalogContract.json`) are regenerated only with the repo's scripts (`scripts/export_graphql_schema.py`, `scripts/export_pipeline_catalog_fixture.py`) in the project venv, and only when the API surface changed. Do not commit regenerated output from another toolchain.
 - **Legacy DOM baselines** (`web/tests/e2e/legacy-dom-baseline.spec.ts-snapshots/`) are characterization records of imperative UI. When you port a dialog to Vue, delete its baseline, add its scenario to `nonSnapshotScenarios` in `web/scripts/check-legacy-snapshots.mjs`, and assert behavior instead; do not regenerate a baseline to make a diff go away.
+- **Complete feedback before another push.** Wait for the current Actions run to finish, inspect the primary failed jobs rather than the aggregate `frontend` result, repair the complete failure set in one batch, merge `origin/master` again if it moved, and rerun preflight.
 
 ## Working style
 
