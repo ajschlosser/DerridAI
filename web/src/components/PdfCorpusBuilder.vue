@@ -2582,6 +2582,8 @@ defineExpose({
       :can-resume="canResume"
       :has-record-topology="hasRecordTopology"
       :ready-count="readyCount"
+      :preparing-count="Number(reviewQueueCounts.preparing ?? 0)"
+      :attention-count="issueCount"
       :awaiting-manifest-review="awaitingManifestReview"
       :retrying-segmentation="retryingSegmentation"
       :segmentation-needs-review="segmentationNeedsReview"
