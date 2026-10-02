@@ -21,6 +21,7 @@ function record(
 }
 
 const rows = [
+  record("record-preparing", "preparing"),
   record("record-ready", "ready", { metadata_enrichment_finished: true }),
   record("record-metadata", "metadata", {
     review_issue_codes: ["metadata", "source"],
