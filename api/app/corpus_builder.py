@@ -3555,9 +3555,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             or manifest.get("document_language")
             or ""
         ).strip() or None
-        if page_records:
-            sentence_report = {}
-        else:
+        sentence_report: dict[str, Any] = {}
+        if not page_records:
             boundaries, sentence_report = snap_boundaries_to_sentences(
                 semantic_blocks,
                 boundaries,

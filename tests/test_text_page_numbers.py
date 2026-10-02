@@ -17,7 +17,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 
 from app import source_text as st  # noqa: E402
 from app import source_wikisource as ws  # noqa: E402
-from app.corpus_segmentation import _construct_records, page_record_boundaries  # noqa: E402
+from app.corpus_segmentation import (  # noqa: E402
+    _construct_records,
+    page_record_boundaries,
+)
 from app.source_provider import ProviderPolicy  # noqa: E402
 
 PARA = ("The argument continues across this estimated page. " * 20).strip()

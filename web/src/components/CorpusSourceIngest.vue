@@ -819,9 +819,7 @@ onBeforeUnmount(() => {
       v-if="pageEstimateOpen && selectedAsset"
       :open="true"
       :title="i18n.t('pdf_corpus.page_estimate_title')"
-      :description="
-        i18n.tf('pdf_corpus.page_estimate_help', { filename: selectedAsset.filename })
-      "
+      :description="i18n.tf('pdf_corpus.page_estimate_help', { filename: selectedAsset.filename })"
       :dismissible="false"
       size="medium"
     >

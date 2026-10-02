@@ -146,11 +146,7 @@ export const corpusSourcesApi = {
         body: JSON.stringify(plan),
       },
     ),
-  applyPageEstimate: (
-    assetId: string,
-    wordsPerPage: number,
-    oneRecordPerPage: boolean,
-  ) =>
+  applyPageEstimate: (assetId: string, wordsPerPage: number, oneRecordPerPage: boolean) =>
     apiRequest<PdfAsset>(
       `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/page-estimate`,
       {
