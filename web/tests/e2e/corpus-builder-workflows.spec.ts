@@ -150,6 +150,10 @@ test.describe("Corpus Builder composed workflow", () => {
     await expect(status.getByRole("heading", { name: "Enriching metadata" })).toBeVisible();
     await expect(status.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "58");
     await expect(status.locator('[aria-current="step"]')).toContainText("Enrich");
+    await expect(status.locator('[data-flow-state="ready"]')).toContainText("36");
+    await expect(status.locator('[data-flow-state="enriching"]')).toContainText("274");
+    await expect(status.locator('[data-flow-state="attention"]')).toContainText("17");
+    await expect(status.getByRole("button", { name: "Review 36 ready Records" })).toBeVisible();
     await expect(status.getByRole("button", { name: "Pause" })).toBeVisible();
     await expectNoHorizontalOverflow(status);
     await expectWcag2AA(page, ".corpus-build-primary-status");
