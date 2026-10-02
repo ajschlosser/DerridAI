@@ -913,10 +913,44 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
 
         def run_specs(
             specs: list[tuple[str, str, type[BaseModel], int, str]],
+            target_record: dict[str, Any] | None = None,
         ) -> list[tuple[str, dict[str, Any] | None, Exception | None]]:
             return self._run_metadata_tasks(
-                record, request, specs, build_id, stage_callback, pipeline
+                target_record if target_record is not None else record,
+                request,
+                specs,
+                build_id,
+                stage_callback,
+                pipeline,
             )
+
+        def run_parallel_spec(
+            spec: tuple[str, str, type[BaseModel], int, str],
+        ) -> tuple[
+            list[tuple[str, dict[str, Any] | None, Exception | None]],
+            dict[str, Any],
+        ]:
+            # Sibling families never mutate one shared Record dictionary. Their only
+            # task-local Record writes are the raw stage result/status/ledger maps;
+            # callbacks checkpoint a snapshot independently, and these maps are merged
+            # into the in-memory Record deterministically below in schema order.
+            family_record = json.loads(json.dumps(record))
+            return run_specs([spec], family_record), family_record
+
+        def merge_family_state(
+            spec: tuple[str, str, type[BaseModel], int, str],
+            family_record: dict[str, Any],
+        ) -> None:
+            family = spec[0]
+            for map_key in (
+                "metadata_stage_results",
+                "metadata_stage_status",
+                "metadata_execution_ledger",
+            ):
+                source = family_record.get(map_key)
+                if not isinstance(source, dict) or family not in source:
+                    continue
+                record.setdefault(map_key, {})[family] = source[family]
 
         try:
             index = 0
@@ -950,11 +984,13 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 # aggregates trace counters under its own lock and keeps call-local paths.
                 ensure_session()
                 if family_executor is not None:
-                    futures = [family_executor.submit(run_specs, [item]) for item in group]
+                    futures = [family_executor.submit(run_parallel_spec, item) for item in group]
                     # Consume in schema/task order even when providers finish out of order.
-                    # Reconciliation therefore remains deterministic.
-                    for future in futures:
-                        results.extend(future.result())
+                    # Reconciliation and the in-memory checkpoint maps remain deterministic.
+                    for item, future in zip(group, futures):
+                        rows, family_record = future.result()
+                        merge_family_state(item, family_record)
+                        results.extend(rows)
                 else:
                     # Direct/unit-level callers retain a bounded local executor. Build and
                     # rerun orchestration pass one shared executor so Records steal from the
@@ -963,9 +999,11 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                         max_workers=workers,
                         thread_name_prefix="pdf-corpus-family",
                     ) as pool:
-                        futures = [pool.submit(run_specs, [item]) for item in group]
-                        for future in futures:
-                            results.extend(future.result())
+                        futures = [pool.submit(run_parallel_spec, item) for item in group]
+                        for item, future in zip(group, futures):
+                            rows, family_record = future.result()
+                            merge_family_state(item, family_record)
+                            results.extend(rows)
         except InterruptedError:
             if isinstance(pipeline.get("session"), EnrichmentSession):
                 pipeline["session"].finish(cancelled=True)
