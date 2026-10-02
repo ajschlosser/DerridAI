@@ -533,7 +533,9 @@ const setupManifest = computed<Record<string, unknown>>(() => {
 function saveSetupManifest(changes: Record<string, unknown>) {
   documentMetadata.value = { ...documentMetadata.value, ...changes };
 }
-const setupDocumentMetadataOverrideCount = computed(() => Object.keys(documentMetadata.value).length);
+const setupDocumentMetadataOverrideCount = computed(
+  () => Object.keys(documentMetadata.value).length,
+);
 const documentMetadataPayload = () =>
   Object.fromEntries(
     Object.entries(documentMetadata.value).map(([name, value]) => [
