@@ -95,10 +95,15 @@ const publishReady = computed(
   () => Boolean(readiness.value.can_publish) && blockers.value.length === 0,
 );
 const publishDecisionTone = computed(() => (publishReady.value ? "ok" : "attention"));
+const publishDecisionStatus = computed(() =>
+  publishReady.value ? i18n.t("pdf_corpus.complete") : i18n.t("pdf_corpus.attention_required"),
+);
 const publishDecisionTitle = computed(() => {
   if (publishReady.value) return i18n.t("pdf_corpus.publish.status_ready");
   if (blockers.value.length)
-    return i18n.tf("pdf_corpus.view_publication_blockers", { count: blockers.value.length });
+    return i18n.tf("pdf_corpus.view_publication_blockers", {
+      count: blockers.value.length,
+    });
   return i18n.t("pdf_corpus.inspect_remaining_work");
 });
 const publishDecisionHelp = computed(() =>
@@ -181,7 +186,7 @@ function fixBlocker(code?: string) {
       <div class="publish-decision-copy">
         <span class="readiness-state" :data-tone="publishDecisionTone">
           <AppIcon :name="stateIcon(!publishReady)" />
-          {{ publishReady ? i18n.t("pdf_corpus.complete") : i18n.t("pdf_corpus.attention_required") }}
+          {{ publishDecisionStatus }}
         </span>
         <h3 id="publish-decision-title">{{ publishDecisionTitle }}</h3>
         <p>{{ publishDecisionHelp }}</p>
