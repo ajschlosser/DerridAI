@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Copyright 2026 Aaron John Schlosser, PhD.
-import { computed, useAttrs } from "vue";
+import { useAttrs } from "vue";
 import type { ReviewQueue } from "../../types/corpus";
 import type { ReviewWorkspaceMode } from "../../features/corpus-builder/composables/useCorpusReviewWorkspace";
 import { useI18nStore } from "../../stores/i18n";
@@ -43,9 +43,6 @@ const viewLabels: Record<ReviewWorkspaceMode, string> = {
   metadata: "pdf_corpus.workspace.metadata",
   source: "pdf_corpus.workspace.source",
 };
-const issueQueueActive = computed(() =>
-  ["issues", "metadata", "topology", "source"].includes(queue.value),
-);
 </script>
 
 <template>
@@ -69,65 +66,28 @@ const issueQueueActive = computed(() =>
           :aria-label="i18n.t('pdf_corpus.review_progress')"
         ></progress>
       </div>
-
-      <div
-        class="review-status-shortcuts"
-        role="group"
-        :aria-label="i18n.t('pdf_corpus.review_queue')"
-      >
-        <button
-          type="button"
-          data-queue-shortcut="issues"
-          :aria-pressed="issueQueueActive"
-          @click="queue = 'issues'"
-        >
-          <span>{{ i18n.t("pdf_corpus.queue_tab.issues", "Needs attention") }}</span>
-          <b>{{ issues.toLocaleString() }}</b>
-        </button>
-        <button
-          type="button"
-          data-queue-shortcut="ready"
-          :aria-pressed="queue === 'ready'"
-          @click="queue = 'ready'"
-        >
-          <span>{{ i18n.t("pdf_corpus.queue_tab.ready", "Ready") }}</span>
-          <b>{{ ready.toLocaleString() }}</b>
-        </button>
-        <button
-          type="button"
-          data-queue-shortcut="accepted"
-          :aria-pressed="queue === 'accepted'"
-          @click="queue = 'accepted'"
-        >
-          <span>{{ i18n.t("pdf_corpus.queue_accepted", "Accepted") }}</span>
-          <b>{{ accepted.toLocaleString() }}</b>
-        </button>
-      </div>
-
       <slot name="run-status"></slot>
       <span class="review-header-spacer"></span>
-      <div class="review-header-actions">
-        <UiButton
-          size="small"
-          :label="i18n.t('pdf_corpus.focus_view')"
-          :disabled="focusDisabled"
-          @click="emit('focus')"
-        />
-        <div class="review-view" role="group" :aria-label="i18n.t('pdf_corpus.review_view')">
-          <span class="review-view-label">{{ i18n.t("pdf_corpus.review_view") }}</span>
-          <button
-            v-for="view in views"
-            :key="view.id"
-            type="button"
-            class="review-view-option"
-            :aria-pressed="workspaceMode === view.id"
-            :aria-label="i18n.t(viewLabels[view.id])"
-            :disabled="view.id !== 'record' && !hasSelectedRecord"
-            @click="emit('workspace', view.id)"
-          >
-            {{ i18n.t(view.key) }}
-          </button>
-        </div>
+      <UiButton
+        size="small"
+        :label="i18n.t('pdf_corpus.focus_view')"
+        :disabled="focusDisabled"
+        @click="emit('focus')"
+      />
+      <div class="review-view" role="group" :aria-label="i18n.t('pdf_corpus.review_view')">
+        <span class="review-view-label sr-only">{{ i18n.t("pdf_corpus.review_view") }}</span>
+        <button
+          v-for="view in views"
+          :key="view.id"
+          type="button"
+          class="review-view-option"
+          :aria-pressed="workspaceMode === view.id"
+          :aria-label="i18n.t(viewLabels[view.id])"
+          :disabled="view.id !== 'record' && !hasSelectedRecord"
+          @click="emit('workspace', view.id)"
+        >
+          {{ i18n.t(view.key) }}
+        </button>
       </div>
     </div>
     <CorpusReviewToolbar
@@ -155,58 +115,8 @@ const issueQueueActive = computed(() =>
 .review-header-status {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-2) var(--space-3);
   align-items: center;
-}
-.review-status-shortcuts {
-  display: inline-grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(6.75rem, 1fr);
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-subtle);
-}
-.review-status-shortcuts button {
-  min-height: 40px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2);
-  align-items: center;
-  padding: 0.35rem 0.65rem;
-  border: 1px solid transparent;
-  border-radius: calc(var(--radius-control) - 2px);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--fs-xs);
-  text-align: start;
-}
-.review-status-shortcuts button b {
-  color: var(--text-primary);
-  font-size: var(--fs-sm);
-}
-.review-status-shortcuts button[aria-pressed="true"] {
-  border-color: var(--border-subtle);
-  background: var(--surface-card);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
-}
-.review-status-shortcuts button[data-queue-shortcut="issues"] b {
-  color: var(--tone-warn-fg);
-}
-.review-status-shortcuts button:focus-visible {
-  outline: 3px solid var(--ui-accent-focus);
-  outline-offset: 1px;
-}
-.review-header-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-  justify-content: flex-end;
 }
 .review-counts {
   display: flex;
@@ -254,10 +164,9 @@ const issueQueueActive = computed(() =>
   background: var(--surface-subtle);
 }
 .review-view-label {
-  padding-inline: var(--space-2) var(--space-1);
+  padding-inline: var(--space-2);
   color: var(--text-secondary);
   font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
 }
 .review-view-option {
   min-height: 30px;
@@ -284,37 +193,5 @@ const issueQueueActive = computed(() =>
 .review-view-option:focus-visible {
   outline: 3px solid var(--ui-accent-focus);
   outline-offset: 1px;
-}
-@container (max-width: 54rem) {
-  .review-status-shortcuts {
-    order: 3;
-    inline-size: 100%;
-    grid-auto-columns: minmax(0, 1fr);
-  }
-  .review-header-spacer {
-    display: none;
-  }
-  .review-header-actions {
-    margin-inline-start: auto;
-  }
-}
-@container (max-width: 42rem) {
-  .review-header-actions {
-    inline-size: 100%;
-    justify-content: space-between;
-  }
-  .review-view-label {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-  }
-  .review-status-shortcuts button {
-    grid-template-columns: 1fr;
-    gap: 1px;
-    text-align: center;
-  }
 }
 </style>
