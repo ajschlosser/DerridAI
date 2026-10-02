@@ -98,7 +98,7 @@ onBeforeUnmount(() => {
         :style="{
           '--rw-queue': `${props.queueSplitter.size.value}px`,
           '--rw-inspector': `${props.inspectorSplitter.size.value}px`,
-          height: `${props.heightSplitter.size.value}px`,
+          '--rw-height': `${props.heightSplitter.size.value}px`,
         }"
         :class="{
           'queue-collapsed': queueCollapsed,
@@ -182,6 +182,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   flex: 1 1 auto;
   min-height: 0;
+  height: var(--rw-height, 680px);
   grid-template-rows: minmax(0, 1fr);
   grid-template-columns: var(--rw-queue, 18rem) 0.5rem minmax(0, 1fr) 0.5rem var(
       --rw-inspector,
@@ -346,19 +347,15 @@ onBeforeUnmount(() => {
   .review-frame {
     position: sticky;
     top: var(--ref-topbar, 60px);
-    height: calc(100dvh - var(--ref-topbar, 60px) - 0.75rem);
-    min-height: 30rem;
+    max-height: calc(100dvh - var(--ref-topbar, 60px) - 0.75rem);
+    min-height: 0;
   }
 }
 /* Medium (a laptop): the queue and the record side by side, the inspector as a full-width pane below. */
 @media (min-width: 800px) and (max-width: 1279.98px) and (min-height: 34rem) {
   .review-grid.record-first-review {
     grid-template-columns: var(--rw-queue, 16rem) 0.5rem minmax(0, 1fr);
-    grid-template-rows: minmax(14rem, 1.9fr) minmax(12rem, 1fr);
-  }
-  /* The rows have floors, so the frame needs a floor too: the page scrolls instead of the panes overlapping. */
-  .review-frame {
-    min-height: 40rem;
+    grid-template-rows: minmax(0, 1.9fr) minmax(0, 1fr);
   }
   .review-grid.queue-collapsed {
     grid-template-columns: minmax(0, 1fr);
@@ -395,11 +392,15 @@ onBeforeUnmount(() => {
   .review-splitter {
     display: none;
   }
+  .review-height-splitter {
+    display: none;
+  }
   .review-grid.record-first-review,
   .review-grid.queue-collapsed,
   .review-grid.detail-mode,
   .review-grid.detail-mode.queue-collapsed {
     overflow: visible;
+    height: auto;
     grid-template-rows: auto;
     grid-template-columns: minmax(0, 1fr);
   }

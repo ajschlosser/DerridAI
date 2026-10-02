@@ -105,6 +105,7 @@ function setup(overrides: Record<string, unknown> = {}) {
 
   return {
     reviewRecords,
+    selectedBuildId,
     selectedRecordId,
     selectedRecord,
     recordOffset,
@@ -120,6 +121,62 @@ function setup(overrides: Record<string, unknown> = {}) {
 }
 
 describe("useCorpusReviewRecords", () => {
+  it("does not let a delayed queue response override a newer manual selection", async () => {
+    const state = setup();
+    let resolvePage!: (value: unknown) => void;
+    corpusReviewReads.queuePage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePage = resolve;
+      }),
+    );
+    const loading = state.reviewRecords.refreshRecords();
+    await state.reviewRecords.selectRecord(record("r2"));
+    resolvePage(page([row("r1"), row("r2")]));
+    await loading;
+    expect(state.selectedRecordId.value).toBe("r2");
+    expect(state.activateRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it("discards an ignored-abort Record response after switching builds", async () => {
+    const state = setup();
+    let resolveRecord!: (value: unknown) => void;
+    corpusReviewReads.records.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRecord = resolve;
+      }),
+    );
+    const loading = state.reviewRecords.selectRecord(row("r1"));
+    state.selectedBuildId.value = "b2";
+    resolveRecord([record("r1")]);
+    await loading;
+    expect(state.selectedRecord.value).toBeNull();
+    expect(state.reviewRecords.loadingRecordId.value).toBe("");
+    expect(state.activateRecord).not.toHaveBeenCalled();
+  });
+
+  it("opens the newer authoritative revision when an older foreground read finishes", async () => {
+    const state = setup();
+    let release!: (records: ReturnType<typeof record>[]) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise<ReturnType<typeof record>[]>((resolve) => (release = resolve)),
+    );
+    const pending = state.reviewRecords.selectRecord(row("r1"));
+    state.reviewRecords.applyRecord(record("r1", 2));
+    release([record("r1", 1)]);
+    await pending;
+    expect(state.selectedRecord.value?.record_revision).toBe(2);
+  });
+
+  it("shows a retryable error and re-reads the requested Record", async () => {
+    const state = setup();
+    corpusReviewReads.records.mockRejectedValueOnce(new Error("Offline"));
+    await state.reviewRecords.selectRecord(row("r1"));
+    expect(state.reviewRecords.recordError.value).toBe("Offline");
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    await state.reviewRecords.retryRecord();
+    expect(state.selectedRecordId.value).toBe("r1");
+    expect(state.reviewRecords.recordError.value).toBe("");
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(graphqlClient, "clearGraphQLReadCache").mockImplementation(() => undefined);

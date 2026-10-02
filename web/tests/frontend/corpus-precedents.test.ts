@@ -37,6 +37,7 @@ describe("reviewed precedents in Record Review", () => {
     const wrapper = mount(CorpusFieldPrecedents, {
       props: { buildId: "b1", recordId: "r1", field: "mood", fieldLabel: "Mood", load },
     });
+
     const toggle = wrapper.get("button");
     expect(load).not.toHaveBeenCalled();
     expect(toggle.attributes("aria-expanded")).toBe("false");
@@ -52,6 +53,26 @@ describe("reviewed precedents in Record Review", () => {
     // A correction shows both the rejected model value and the reviewer's value.
     expect(wrapper.text()).toContain("angry");
     expect(wrapper.text()).toContain("calm");
+  });
+
+  it("ignores a late precedent response from a different build", async () => {
+    let release!: (result: MetadataPrecedents) => void;
+    const load = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise<MetadataPrecedents>((resolve) => (release = resolve)),
+      )
+      .mockResolvedValue({ ...precedents, items: [] });
+    const wrapper = mount(CorpusFieldPrecedents, {
+      props: { buildId: "b1", recordId: "r1", field: "mood", fieldLabel: "Mood", load },
+    });
+    await wrapper.get("button").trigger("click");
+    await wrapper.setProps({ buildId: "b2" });
+    await flushPromises();
+    release(precedents);
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("Measured tone.");
+    wrapper.unmount();
   });
 
   it("shows the count of kept precedents without opening or loading", async () => {

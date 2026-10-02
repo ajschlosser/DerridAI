@@ -965,6 +965,50 @@ class PdfCorpusProviderSwitch(BaseModel):
     review_provider: PdfCorpusProviderConfig | None = None
 
 
+class PdfCorpusResumeRecordSizing(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    preferred_record_chars: int | None = Field(default=None, ge=100, le=12000)
+    record_length_tolerance: int | None = Field(default=None, ge=10, le=2000)
+    long_record_chars: int | None = Field(default=None, ge=100, le=24000)
+    absolute_record_chars: int | None = Field(default=None, ge=100, le=48000)
+
+
+class PdfCorpusResumeStageLimits(PdfCorpusStageLimits):
+    model_config = ConfigDict(extra="forbid")
+
+
+class PdfCorpusResumeStageTimeouts(PdfCorpusStageTimeouts):
+    model_config = ConfigDict(extra="forbid")
+
+
+class PdfCorpusBuildResume(BaseModel):
+    """Sparse execution overrides; omitted/null settings preserve the saved values."""
+    model_config = ConfigDict(extra="forbid")
+    provider: Literal["ollama", "openai"] | None = None
+    model: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    provider_profile_id: str | None = None
+    review_provider_profile_id: str | None = None
+    review_provider: PdfCorpusProviderConfig | None = None
+    generation: OllamaTouchupOptions | None = None
+    use_profile_defaults: bool | None = None
+    max_concurrent_requests: ClampedConcurrency | None = None
+    stage_limits: PdfCorpusResumeStageLimits | None = None
+    stage_timeouts: PdfCorpusResumeStageTimeouts | None = None
+    record_sizing: PdfCorpusResumeRecordSizing | None = None
+    enrichment_mode: Literal["fast", "deep"] | None = None
+    semantic_indexing: bool | None = None
+    document_intelligence_profile: Literal["none", "general", "fiction", "scholarly"] | None = None
+    document_nlp_provider: Literal["auto", "spacy", "booknlp"] | None = None
+    document_nlp_include_events: bool | None = None
+    auto_clean_text: bool | None = None
+    llm_touchup_during_enrichment: bool | None = None
+    noise_unusable_threshold: float | None = Field(default=None, ge=0, le=100)
+    llm_assess_text_noise: bool | None = None
+    text_cleanup_rules: list[TextCleanupRule] | None = None
+
+
 class PdfCorpusRecordRerun(BaseModel):
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None

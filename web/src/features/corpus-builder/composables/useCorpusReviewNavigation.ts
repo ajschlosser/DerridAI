@@ -25,6 +25,8 @@ interface CorpusReviewNavigationOptions {
   pageSize: number;
   refreshRecords: (reset?: boolean, preferredId?: string) => Promise<void>;
   selectRecord: (target: ReviewTarget) => Promise<void> | void;
+  setFilters?: (queue: ReviewQueue, query: string) => void;
+  beforeNavigate?: () => Promise<boolean>;
 }
 
 export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions) {
@@ -50,6 +52,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
   }
 
   async function focusHistoryMove(delta: number) {
+    if (options.beforeNavigate && !(await options.beforeNavigate())) return;
     const next = options.focusHistoryIndex.value + delta;
     if (next < 0 || next >= options.focusHistory.value.length) return;
     options.focusHistoryIndex.value = next;
@@ -68,6 +71,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
   }
 
   async function focusQueueMove(delta: number) {
+    if (options.beforeNavigate && !(await options.beforeNavigate())) return;
     const index = options.selectedRecordIndex.value;
     if (index >= 0) {
       const next = options.queueRows.value[index + delta];
@@ -109,11 +113,22 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     await options.refreshRecords(true, recordId);
   }
 
-  async function advanceFrom(recordId: string) {
+  async function advanceFrom(recordId: string, removedIndex?: number) {
+    if (options.beforeNavigate && !(await options.beforeNavigate())) return;
     const index = options.queueRows.value.findIndex((row) => row.record_id === recordId);
-    const next = options.queueRows.value[index + 1] || options.queueRows.value[index - 1];
+    const next = options.queueRows.value[index >= 0 ? index + 1 : (removedIndex ?? 0)];
     if (next) {
       await options.selectRecord(next);
+      return;
+    }
+    if (
+      index < 0 &&
+      removedIndex != null &&
+      options.recordOffset.value + options.queueRows.value.length < options.recordTotal.value
+    ) {
+      await options.refreshRecords();
+      const backfilled = options.queueRows.value[removedIndex];
+      if (backfilled) await options.selectRecord(backfilled);
       return;
     }
     if (options.recordOffset.value + options.pageSize < options.recordTotal.value) {
@@ -121,10 +136,16 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
       await options.refreshRecords();
       return;
     }
+    const previous = options.queueRows.value[index - 1];
+    if (previous) {
+      await options.selectRecord(previous);
+      return;
+    }
     await options.refreshRecords();
   }
 
   async function openQueue(queue: ReviewQueue, preferredId = "", recordQuery = "") {
+    if (options.beforeNavigate && !(await options.beforeNavigate())) return;
     // Queue navigation is an explicit context change. Clear the previous
     // selection before refreshing so refreshRecords can select the first row
     // in the destination queue instead of preserving a stale record that no
@@ -133,8 +154,11 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     options.selectedRecord.value = null;
     options.focusView.value = false;
     options.reviewRequested.value = true;
-    options.reviewQueue.value = queue;
-    options.recordQuery.value = recordQuery;
+    if (options.setFilters) options.setFilters(queue, recordQuery);
+    else {
+      options.reviewQueue.value = queue;
+      options.recordQuery.value = recordQuery;
+    }
     await nextTick();
     await options.refreshRecords(true, preferredId);
     await nextTick();
@@ -142,10 +166,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
   }
 
   async function reviewMetadataRecord(recordId: string) {
-    options.reviewQueue.value = "metadata";
-    options.recordQuery.value = recordId;
-    await nextTick();
-    await options.refreshRecords(true, recordId);
+    await openQueue("metadata", recordId, recordId);
     if (options.selectedRecord.value?.record_id === recordId) {
       options.focusView.value = false;
     }
@@ -190,6 +211,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
   }
 
   async function changePage(offset: number) {
+    if (options.beforeNavigate && !(await options.beforeNavigate())) return;
     // A page change is a visible queue-context change. Do not preserve the Record
     // selected on the previous page: refreshRecords would otherwise issue a second
     // full-Record request for an item that is no longer visible before the user can

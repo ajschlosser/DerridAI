@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, ref, useId, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import {
   corpusBuilderApi,
   type MetadataPrecedent,
@@ -47,6 +47,7 @@ const loading = ref(false);
 const error = ref("");
 const fetched = ref<MetadataPrecedents | null>(null);
 const usedKey = ref("");
+let requestVersion = 0;
 const result = computed(() => fetched.value ?? props.preloaded ?? null);
 // A closed disclosure whose known result (kept or fetched) has no precedents offers nothing; an open one keeps
 // showing the reviewer's empty result instead of vanishing under them.
@@ -59,6 +60,8 @@ watch(
   // A primitive key so a poll re-rendering the same record does not discard loaded precedents.
   () => `${props.buildId}\u0000${props.recordId}\u0000${props.field}`,
   () => {
+    requestVersion += 1;
+    loading.value = false;
     fetched.value = null;
     error.value = "";
     usedKey.value = "";
@@ -67,17 +70,20 @@ watch(
 );
 
 async function fetchPrecedents(refresh: boolean) {
+  const version = ++requestVersion;
   loading.value = true;
   error.value = "";
   try {
     const load = props.load ?? corpusBuilderApi.precedents;
-    fetched.value = await load(props.buildId, props.recordId, props.field, refresh);
+    const result = await load(props.buildId, props.recordId, props.field, refresh);
+    if (version === requestVersion) fetched.value = result;
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    if (version === requestVersion) error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
-    loading.value = false;
+    if (version === requestVersion) loading.value = false;
   }
 }
+onBeforeUnmount(() => (requestVersion += 1));
 
 function toggle() {
   open.value = !open.value;

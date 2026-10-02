@@ -307,8 +307,10 @@ describe("PdfCorpusBuilder characterization", () => {
       saveTextFromFocus: (text: string, resolve: boolean) => Promise<void>;
     };
 
+    const queueReadsBeforeSave = corpusReviewReads.queuePage.mock.calls.length;
     await exposed.saveTextFromFocus("Edited immediately", false);
 
+    expect(corpusReviewReads.queuePage).toHaveBeenCalledTimes(queueReadsBeforeSave);
     expect(exposed.selectedRecord.text).toBe("Edited immediately");
     expect(exposed.selectedRecord.record_revision).toBe(2);
     await new Promise((resolve) => setTimeout(resolve, 0));

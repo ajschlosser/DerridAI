@@ -157,8 +157,45 @@ export interface PdfAsset {
   };
 }
 
+/** Sparse restart overrides. Omitted settings retain the durable build contract. */
+export interface CorpusBuildResume {
+  provider?: "ollama" | "openai";
+  model?: string;
+  base_url?: string;
+  api_key?: string;
+  provider_profile_id?: string;
+  review_provider_profile_id?: string;
+  review_provider?: {
+    provider: "ollama" | "openai";
+    model?: string;
+    base_url?: string;
+    api_key?: string;
+  };
+  generation?: Record<string, unknown>;
+  use_profile_defaults?: boolean;
+  max_concurrent_requests?: number;
+  stage_limits?: Record<string, number>;
+  stage_timeouts?: Record<string, number>;
+  record_sizing?: Record<string, number>;
+  enrichment_mode?: "fast" | "deep";
+  semantic_indexing?: boolean;
+  document_intelligence_profile?: "none" | "general" | "fiction" | "scholarly";
+  document_nlp_provider?: "auto" | "spacy" | "booknlp";
+  document_nlp_include_events?: boolean;
+  auto_clean_text?: boolean;
+  llm_touchup_during_enrichment?: boolean;
+  noise_unusable_threshold?: number;
+  llm_assess_text_noise?: boolean;
+  text_cleanup_rules?: string[];
+}
+
 export interface RecordContextItem {
   record_id: string;
+  record_revision?: number;
+  source_document_id?: string;
+  text_truncated?: boolean;
+  record_character_start?: number;
+  record_character_end?: number;
   text: string;
   text_length: number;
   page_start: number | string | null;

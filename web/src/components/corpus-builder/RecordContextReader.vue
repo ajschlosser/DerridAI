@@ -1,8 +1,10 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { corpusBuilderApi, type RecordContext, type RecordContextItem } from "../../api/corpus";
 import { useI18nStore } from "../../stores/i18n";
+import { realtime } from "../../realtime";
+import { dataTopic } from "../../realtime/resourceKeys";
 
 const props = withDefaults(
   defineProps<{
@@ -19,7 +21,7 @@ const window_ = ref<HTMLElement | null>(null);
 const context = ref<RecordContext | null>(null);
 const failed = ref(false);
 const expanded = ref<Set<string>>(new Set());
-const cache = new Map<string, RecordContext>();
+const cache = new Map<string, { context: RecordContext; text: string }>();
 let ticket = 0;
 
 const enabled = computed(() => props.showContext);
@@ -46,33 +48,50 @@ function pages(item: RecordContextItem) {
     : String(item.page_start);
 }
 function load() {
+  const mine = ++ticket;
   context.value = null;
   failed.value = false;
   expanded.value = new Set();
   if (!enabled.value || !props.buildId || !props.recordId) return;
   const key = `${props.buildId}:${props.recordId}`;
-  const mine = ++ticket;
+  const buildId = props.buildId;
+  const recordId = props.recordId;
+  const text = props.text;
   void (async () => {
     try {
+      const cached = cache.get(key);
       const raw =
-        cache.get(key) ?? (await corpusBuilderApi.recordContext(props.buildId, props.recordId));
+        cached?.text === text
+          ? cached.context
+          : await corpusBuilderApi.recordContext(buildId, recordId);
       const result: RecordContext = {
         ...raw,
         before: Array.isArray(raw?.before) ? raw.before : [],
         after: Array.isArray(raw?.after) ? raw.after : [],
       };
-      cache.set(key, result);
-      if (mine === ticket) context.value = result;
+      if (mine !== ticket) return;
+      cache.delete(key);
+      cache.set(key, { context: result, text });
+      while (cache.size > 24) {
+        const oldest = cache.keys().next().value;
+        if (oldest === undefined) break;
+        cache.delete(oldest);
+      }
+      context.value = result;
     } catch {
       if (mine === ticket) failed.value = true;
     }
   })();
 }
 
-watch(() => [props.buildId, props.recordId, enabled.value], load, { immediate: true });
-onMounted(() => window_.value?.focus({ preventScroll: true }));
+watch(() => [props.buildId, props.recordId, props.text, enabled.value], load, { immediate: true });
+const stopFollowing = realtime.subscribe(dataTopic("corpus_records"), () => {
+  cache.clear();
+  load();
+});
 onBeforeUnmount(() => {
   ticket += 1;
+  stopFollowing();
 });
 </script>
 
@@ -156,6 +175,7 @@ onBeforeUnmount(() => {
     </ol>
     <p v-if="failed" class="ctx-note" role="status">
       {{ i18n.t("pdf_corpus.context_unavailable") }}
+      <button type="button" class="ctx-expand" @click="load">{{ i18n.t("ui.retry") }}</button>
     </p>
   </div>
 </template>
@@ -166,9 +186,7 @@ onBeforeUnmount(() => {
   gap: 14px;
   padding: 14px 24px 20px;
   min-block-size: 220px;
-  max-block-size: max(220px, calc(100vh - 320px));
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
 }
 .context-reader.is-plain {
   align-content: start;

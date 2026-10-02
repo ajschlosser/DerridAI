@@ -848,11 +848,19 @@ The **Build** primary status is the progress surface rather than a hidden techni
 
 Build-state notifications use the shared authenticated realtime connection, with REST/GraphQL remaining authoritative after reconnects. Per-Record metadata and model-call progress events contain identifiers/counters only. Source text, prompts, field values, and raw model output are not sent through Corpus Builder WebSocket events.
 
+After an API restart, unfinished execution is marked **Interrupted**; it is never restarted automatically. Choose **Resume** to continue from the saved manifest, segmentation, Records, and metadata checkpoints. Resume preserves the build's source scope, topology policy, metadata contract, and run guidance; only explicitly supplied execution settings change. Human-reviewed text and decisions remain authoritative. An orphaned metadata operation is marked failed rather than left permanently running, and failed submission remains visible and resumable.
+
+Validated Records become readable before optional source indexing, metadata-memory prefill, and Document Intelligence finish. During preparation the review controls remain locked; readable topology is not a claim that metadata enrichment or publication validation has finished.
+
 When a build uses an LLM, expand **Run details → Model activity** to inspect each build-local call. It records the rendered prompt, provider/model, response schema, generation settings, attempt, raw completed output, validated structured result, and errors. While the inspector is open, provisional output from active calls is refreshed through an administrator-authenticated REST read in response to text-free realtime progress notifications. The provisional text can be incomplete or invalid JSON; only the completed response after schema validation is used by the corpus pipeline. API keys, authorization headers, and provider credentials are never included in the trace.
 
 ## Corpus Builder review workspace
 
-Once a build has records, the review workspace fills the screen under the top bar: the queue on the left, the record in the middle, and the details (metadata, evidence, source) on the right. Each pane scrolls on its own, and the record's title and its decisions stay in view while you read.
+Once a build has records, the review workspace fits below the top bar: the queue on the left, the record in the middle, and the details (metadata, evidence, source) on the right. Each pane has one primary scroll surface, and the record's title and its decisions stay in view while you read. The remembered workspace height is clamped to the available window; phones and very short windows use normal page flow.
+
+The queue loads lightweight previews, then opens the selected Record through an indexed read. Nearby Records are prefetched into a small cache; opening a Record no longer requests a metadata cache entry for every schema field. Loading, missing Records, and read failures are distinct states, with **Retry** for a failed read. A response for an older build or selection cannot replace the current Record.
+
+Explicit Record, page, queue, build, and route navigation protects unsaved text and metadata edits with **Save and continue**, **Discard and continue**, or **Stay here**. Save waits for persistence, and a failed save leaves the dialog open. Background updates and search preserve the active draft rather than silently replacing it. Metadata drafts remain mounted when changing inspector tabs.
 
 One header sits above the panes: a progress meter ("8 of 60 accepted", with the remaining count; the filters below carry the other counts), a compact **background enrichment** status (shown only while a run is active or needs attention, with the run diagnostics and warnings behind it; otherwise **Run another pass**), **Focus view**, and a **View: Record | Metadata | Source** switch that only changes the Review layout. Below it are the queue filters — **All**, **Ready**, **Needs attention** (with an **All issues / Metadata / Topology / Source** sub-filter), **Accepted**, **Rejected** — then search, **Accept clean** and bulk actions, and paging. A queue row leads with the Record's short sequence number ("#12"; the full ID is its tooltip and is read by screen readers), its page locator and one status label, then a two-line preview and the length; a small spark marks a Record the enrichment run has processed.
 
@@ -875,7 +883,7 @@ One header sits above the panes: a progress meter ("8 of 60 accepted", with the 
   - Each new Record carries a lineage note naming its parents; retired Records are listed at `/api/pdf/corpus-builds/{build_id}/retired-records`. Undo restores the original Records.
 - **Undo** and **Redo** (`Z`, `Shift+Z`) are in the decision bar.
 - **The queue** shows each record's state as an icon and a name (Accepted, Rejected, Reviewable, Metadata, Topology, Source problem). Above it, the queue tabs filter by state, **Bulk actions** holds **Bulk edit metadata** and **Reject selected**, and **Accept clean** accepts every reviewable record at once.
-- **Resizing.** Drag the divider between panes, or focus it and use the arrow keys (Shift for bigger steps, Home and End for the limits); double-click to reset. Each width is remembered in this browser.
+- **Resizing.** Drag the divider between panes or the workspace-height divider, or focus it and use the arrow keys (Shift for bigger steps, Home and End for the limits); double-click to reset. Widths and height are remembered in this browser and cannot force the decision bar below the desktop viewport.
 - **Smaller screens.** On a laptop the details sit under the queue and record. On a phone the workspace is an ordinary page.
 
 ## PDF Explorer

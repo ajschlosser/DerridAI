@@ -45,6 +45,7 @@ from .field_assertions import (
     project_record_assertions,
     reset_fields_for_evaluation,
 )
+from .models import PdfCorpusRecordSizing
 from .operation_events import note_corpus_generation_progress, note_model_activity
 from .reviewer_context import current_reviewer
 
@@ -118,12 +119,23 @@ class BuildLifecycleMixin:
     def _mark_interrupted(self) -> None:
         listing = self.repo.list_builds(offset=0, limit=10000)
         for build in listing["items"]:
+            changed = False
+            operation = build.get("metadata_operation")
+            if isinstance(operation, dict) and operation.get("state") in {"queued", "running", "cancelling"}:
+                operation.update({
+                    "state": "failed", "finished_at": iso_now(),
+                    "error": "Metadata execution was interrupted by an API restart. Retry or resume to continue from saved checkpoints.",
+                })
+                changed = True
             if build.get("status") in {"queued", "running"}:
+                build["interrupted_stage"] = build.get("stage")
                 build["status"] = "interrupted"
                 build["stage"] = "interrupted"
                 build["resumable"] = True
                 build["error"] = "Build execution was interrupted by an API restart. Completed checkpoints were preserved; resume to continue."
                 build["finished_at"] = iso_now()
+                changed = True
+            if changed:
                 self.repo.save_build(build)
 
 
@@ -201,7 +213,17 @@ class BuildLifecycleMixin:
         return build
 
 
-    def resume(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
+    def resume(
+        self, build_id: str, request: dict[str, Any], *,
+        resolve_provider: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        with self._lock:
+            return self._resume_locked(build_id, request, resolve_provider=resolve_provider)
+
+    def _resume_locked(
+        self, build_id: str, overrides: dict[str, Any], *,
+        resolve_provider: Callable[[dict[str, Any]], dict[str, Any]] | None,
+    ) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         if build.get("status") in {"queued", "running"}:
             # Resume is intentionally idempotent while work is active. Stale
@@ -210,13 +232,34 @@ class BuildLifecycleMixin:
             return build
         if build.get("status") in {"published"}:
             raise ValueError("Published builds are immutable; create a new build instead.")
+        if (build.get("metadata_operation") or {}).get("state") in {"queued", "running", "cancelling"}:
+            raise ValueError("Wait for the active metadata operation to finish before resuming.")
+        request = dict(build.get("request") or {})
+        for key, value in overrides.items():
+            if value is None:
+                continue
+            if key in {"stage_limits", "stage_timeouts", "record_sizing", "generation"} and isinstance(value, dict):
+                request[key] = {**(request.get(key) or {}), **value}
+            else:
+                request[key] = value
+        if resolve_provider is not None:
+            request = resolve_provider(request)
+        if "record_sizing" in overrides:
+            PdfCorpusRecordSizing.model_validate(request.get("record_sizing") or {})
         _validate_execution_budget(request)
 
         # A resume is also the supported way to recover a blocked build with a
         # better model, larger context, or different stage budgets. Persist the
         # new public execution contract so Operations and provenance describe the
         # run that actually completed, while keeping secrets out of build.json.
-        public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
+        public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider", "review_provider"}}
+        attempts = list(build.get("resume_history") or [])
+        attempts.append({
+            "at": iso_now(), "previous_status": build.get("status"),
+            "previous_stage": build.get("interrupted_stage") or build.get("stage"),
+            "provider": request.get("provider") or build.get("provider"), "model": request.get("model") or build.get("model"),
+        })
+        build["resume_history"] = attempts[-50:]
         build["provider"] = request.get("provider") or build.get("provider") or "ollama"
         build["model"] = request.get("model") or build.get("model")
         build["request"] = public_request
@@ -245,7 +288,15 @@ class BuildLifecycleMixin:
         self.repo.save_build(build)
         with self._lock:
             self._runtime_requests[build_id] = dict(request)
-        self._executor.submit(self._run, build_id, request, True)
+        try:
+            self._executor.submit(self._run, build_id, request, True)
+        except Exception as exc:
+            self._update(
+                build_id, status="failed", stage="failed", finished_at=iso_now(),
+                error=f"Unable to resume build execution: {exc}", resumable=True,
+            )
+            self._runtime_requests.pop(build_id, None)
+            raise
         return build
 
 

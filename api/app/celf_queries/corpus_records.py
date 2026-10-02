@@ -77,7 +77,6 @@ def review_queue(
         "offset": offset,
         "limit": limit,
         "queue_counts": selection.queue_counts,
-        "metadata_values": observed_metadata_values(resolved),
     }
 
 

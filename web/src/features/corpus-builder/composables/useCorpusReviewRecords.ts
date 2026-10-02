@@ -4,7 +4,7 @@
 // (docs/GRAPHQL.md). The queue list holds `CorpusQueueRow`s; a full `CorpusRecord` is read one at
 // a time, only when a row is opened, and kept in an LRU cache so moving between recently seen
 // records does not re-read them.
-import { ref, type Ref } from "vue";
+import { onScopeDispose, ref, watch, type Ref } from "vue";
 import type { CorpusBuild, CorpusRecord } from "../../../api/corpus";
 import type { ReviewQueue } from "../../../types/corpus";
 import { clearGraphQLReadCache, isAbortError } from "../../../api/graphql/client";
@@ -80,10 +80,16 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   const reviewHydrated = ref(false);
   const hydratedTopologyCount = ref(0);
   const loadingRecordId = ref("");
+  const recordError = ref("");
+  const requestedRecordId = ref("");
 
   const cache = createRecordCache();
   const latestPage = createLatestRequest();
   const latestSelection = createLatestRequest();
+  const latestFacets = createLatestRequest();
+  let generation = 0;
+  let selectionVersion = 0;
+  const recordGenerations = new Map<string, number>();
   let facetsLoadedForBuild = false;
   let facetsLoadingForBuild = false;
 
@@ -108,13 +114,21 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       },
     );
     if (!neighbours.length) return;
+    const buildId = options.selectedBuildId.value;
+    const epoch = generation;
+    const versions = new Map(
+      neighbours.map((row) => [row.record_id, recordGenerations.get(row.record_id)]),
+    );
     void corpusReviewReads
       .records(
-        options.selectedBuildId.value,
+        buildId,
         neighbours.map((row) => row.record_id),
       )
       .then((records) => {
-        for (const record of records) cache.set(record.record_id, record);
+        if (epoch !== generation || buildId !== options.selectedBuildId.value) return;
+        for (const record of records)
+          if (versions.get(record.record_id) === recordGenerations.get(record.record_id))
+            cache.set(record.record_id, record);
       })
       .catch(() => undefined);
   }
@@ -123,6 +137,14 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   async function resolveAndActivate(id: string, revisionHint: number | null): Promise<void> {
     if (!options.selectedBuildId.value || !id) return;
     const ticket = latestSelection.start();
+    selectionVersion += 1;
+    const buildId = options.selectedBuildId.value;
+    const epoch = generation;
+    const recordVersion = recordGenerations.get(id);
+    requestedRecordId.value = id;
+    options.selectedRecordId.value = id;
+    recordError.value = "";
+    loadingRecordId.value = "";
     const cached = cache.get(id);
     if (cached && (revisionHint == null || cached.record_revision === revisionHint)) {
       options.activateRecord(cached);
@@ -135,19 +157,28 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     options.selectedRecord.value = null;
     loadingRecordId.value = id;
     try {
-      const [record] = await corpusReviewReads.records(options.selectedBuildId.value, [id], {
+      const [record] = await corpusReviewReads.records(buildId, [id], {
         signal: ticket.signal,
       });
-      if (!ticket.current()) return;
+      if (!ticket.current() || epoch !== generation || buildId !== options.selectedBuildId.value)
+        return;
+      if (recordVersion !== recordGenerations.get(id)) {
+        await resolveAndActivate(id, null);
+        return;
+      }
       if (!record) {
         clearSelection();
+        recordError.value = "not_found";
         return;
       }
       cache.set(record.record_id, record);
       options.activateRecord(record);
       prefetchNeighbours(record.record_id);
     } catch (exc) {
-      if (ticket.current() && !isAbortError(exc)) options.onError(messageOf(exc));
+      if (ticket.current() && buildId === options.selectedBuildId.value && !isAbortError(exc)) {
+        recordError.value = messageOf(exc);
+        options.onError(messageOf(exc));
+      }
     } finally {
       if (ticket.current()) loadingRecordId.value = "";
     }
@@ -158,6 +189,10 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       // The caller already has the full Record (for example a review decision's `next_record`):
       // open it without another read, but still supersede any selection already in flight.
       const ticket = latestSelection.start();
+      selectionVersion += 1;
+      loadingRecordId.value = "";
+      recordError.value = "";
+      requestedRecordId.value = target.record_id;
       cache.set(target.record_id, target);
       if (!ticket.current()) return;
       options.activateRecord(target);
@@ -185,16 +220,17 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   async function loadFacets() {
     if (!options.selectedBuildId.value || facetsLoadingForBuild) return;
     const buildId = options.selectedBuildId.value;
+    const ticket = latestFacets.start();
     facetsLoadingForBuild = true;
     try {
-      const values = await corpusReviewReads.metadataFacets(buildId);
-      if (options.selectedBuildId.value !== buildId) return;
+      const values = await corpusReviewReads.metadataFacets(buildId, [], { signal: ticket.signal });
+      if (!ticket.current() || options.selectedBuildId.value !== buildId) return;
       options.onFacets(values);
       facetsLoadedForBuild = true;
     } catch (exc) {
-      if (!isAbortError(exc)) options.onError(messageOf(exc));
+      if (ticket.current() && !isAbortError(exc)) options.onError(messageOf(exc));
     } finally {
-      facetsLoadingForBuild = false;
+      if (ticket.current()) facetsLoadingForBuild = false;
     }
   }
 
@@ -205,10 +241,12 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       // including enrichment proposals that may change without advancing RecordRevision.
       // A reset is therefore an explicit invalidation boundary for both cache layers.
       clearGraphQLReadCache();
+      generation += 1;
       cache.clear();
       options.recordOffset.value = 0;
     }
     const ticket = latestPage.start();
+    const selectionAtStart = selectionVersion;
     recordsLoading.value = true;
     try {
       const page = await corpusReviewReads.queuePage(
@@ -235,6 +273,10 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       reviewHydrated.value = true;
       options.onPageLoaded(page.rows);
       const shouldLoadFacets = !facetsLoadedForBuild || reset;
+      if (selectionAtStart !== selectionVersion) {
+        if (shouldLoadFacets) void loadFacets();
+        return;
+      }
 
       const selectedVisible = page.rows.some(
         (item) => item.record_id === options.selectedRecordId.value,
@@ -247,6 +289,10 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
         page.rows[0]?.record_id ||
         "";
       if (!targetId) {
+        latestSelection.cancel();
+        loadingRecordId.value = "";
+        requestedRecordId.value = "";
+        recordError.value = "";
         clearSelection();
         if (shouldLoadFacets) void loadFacets();
         return;
@@ -264,7 +310,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       // so never let that O(corpus-size) work race the critical-path Record fetch.
       if (shouldLoadFacets) void loadFacets();
     } catch (exc) {
-      if (!isAbortError(exc)) options.onError(messageOf(exc));
+      if (ticket.current() && !isAbortError(exc)) options.onError(messageOf(exc));
     } finally {
       if (ticket.current()) recordsLoading.value = false;
     }
@@ -273,9 +319,19 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   /** Re-read one full Record after a durable realtime completion hint. */
   async function refreshRecord(recordId: string): Promise<void> {
     if (!options.selectedBuildId.value || !recordId) return;
+    const buildId = options.selectedBuildId.value;
+    const epoch = generation;
+    const version = (recordGenerations.get(recordId) || 0) + 1;
+    recordGenerations.set(recordId, version);
     try {
       clearGraphQLReadCache();
-      const [record] = await corpusReviewReads.records(options.selectedBuildId.value, [recordId]);
+      const [record] = await corpusReviewReads.records(buildId, [recordId]);
+      if (
+        epoch !== generation ||
+        buildId !== options.selectedBuildId.value ||
+        recordGenerations.get(recordId) !== version
+      )
+        return;
       if (!record) return;
       const index = queueRows.value.findIndex((row) => row.record_id === record.record_id);
       if (index >= 0) queueRows.value.splice(index, 1, queueRowFromRecord(record));
@@ -288,7 +344,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       cache.set(record.record_id, record);
       if (selectedStillOpen) options.activateRecord(record);
     } catch (exc) {
-      if (!isAbortError(exc)) options.onError(messageOf(exc));
+      if (epoch === generation && !isAbortError(exc)) options.onError(messageOf(exc));
     }
   }
 
@@ -297,21 +353,30 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     recordIds: readonly string[] = queueRows.value.map((row) => row.record_id),
   ): Promise<void> {
     if (!options.selectedBuildId.value || !recordIds.length) return;
+    const buildId = options.selectedBuildId.value;
+    const epoch = generation;
     // Metadata enrichment rewrites a Record without bumping its revision, so a cached copy would
     // still look current. Drop it; the next open (or the selected Record's refresh) re-reads it.
     for (const id of recordIds) {
-      if (id !== options.selectedRecordId.value) cache.delete(id);
+      cache.delete(id);
+      recordGenerations.set(id, (recordGenerations.get(id) || 0) + 1);
     }
+    const versions = new Map(recordIds.map((id) => [id, recordGenerations.get(id)]));
     try {
       // A row refresh is normally caused by a realtime event or a completed mutation. It must
       // observe the server's current revision and disposition rather than a cached projection.
       clearGraphQLReadCache();
-      const rows = await corpusReviewReads.rows(options.selectedBuildId.value, recordIds);
+      const rows = await corpusReviewReads.rows(buildId, recordIds);
+      if (epoch !== generation || buildId !== options.selectedBuildId.value) return;
       if (!rows.length) return;
-      const byId = new Map(rows.map((row) => [row.record_id, row]));
+      const byId = new Map(
+        rows
+          .filter((row) => versions.get(row.record_id) === recordGenerations.get(row.record_id))
+          .map((row) => [row.record_id, row]),
+      );
       queueRows.value = queueRows.value.map((row) => byId.get(row.record_id) ?? row);
     } catch (exc) {
-      if (!isAbortError(exc)) options.onError(messageOf(exc));
+      if (epoch === generation && !isAbortError(exc)) options.onError(messageOf(exc));
     }
   }
 
@@ -335,14 +400,17 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     // This record came from an authoritative REST response. Drop read projections before keeping
     // the bounded local copy so a later queue refresh cannot resurrect an older disposition.
     clearGraphQLReadCache();
+    recordGenerations.set(record.record_id, (recordGenerations.get(record.record_id) || 0) + 1);
     remember(record);
     const index = queueRows.value.findIndex((row) => row.record_id === record.record_id);
     if (index >= 0) queueRows.value.splice(index, 1, queueRowFromRecord(record));
   }
 
   function clear() {
+    generation += 1;
     latestPage.cancel();
     latestSelection.cancel();
+    latestFacets.cancel();
     clearGraphQLReadCache();
     cache.clear();
     facetsLoadedForBuild = false;
@@ -353,8 +421,14 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     reviewHydrated.value = false;
     hydratedTopologyCount.value = 0;
     loadingRecordId.value = "";
+    recordError.value = "";
+    requestedRecordId.value = "";
+    recordGenerations.clear();
     clearSelection();
   }
+
+  watch(options.selectedBuildId, clear, { flush: "sync" });
+  onScopeDispose(clear, true);
 
   return {
     queueRows,
@@ -363,6 +437,10 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     reviewHydrated,
     hydratedTopologyCount,
     loadingRecordId,
+    recordError,
+    requestedRecordId,
+    getSelectionVersion: () => selectionVersion,
+    retryRecord: () => resolveAndActivate(requestedRecordId.value, null),
     refreshRecords,
     selectRecord,
     selectRecordById,
