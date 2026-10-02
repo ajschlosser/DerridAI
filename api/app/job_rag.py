@@ -9,6 +9,13 @@ import uuid
 from typing import Any
 
 from . import operation_events
+from .concurrency import (
+    CapacityCancelled,
+    CapacityPermit,
+    capacity_coordinator,
+    provider_capacity_key,
+    provider_limit,
+)
 from .chroma_store import ChromaStore
 from .config import settings
 from .job_state import (
@@ -61,19 +68,15 @@ class RAGJobManager(PersistentJobStateMixin):
         self._store = store
         self._jobs: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
-        self._ollama_condition = threading.Condition(self._lock)
-        self._ollama_active = 0
         self._ollama_max_concurrent = max(1, int(ollama_max_concurrent))
-        self._provider_active: dict[str, int] = {}
         self._threads: dict[str, threading.Thread] = {}
         self._start_persistent_state()
 
     def set_ollama_limit(self, limit: int) -> dict[str, Any]:
         value = max(1, min(32, int(limit)))
-        with self._ollama_condition:
+        with self._lock:
             self._ollama_max_concurrent = value
-            self._ollama_condition.notify_all()
-            return self.concurrency_status()
+        return self.concurrency_status()
 
     def concurrency_status(self) -> dict[str, Any]:
         with self._lock:
@@ -83,21 +86,23 @@ class RAGJobManager(PersistentJobStateMixin):
                 if job.get("provider") == "openai"
                 and job.get("status") in {"queued", "running", "cancelling"}
             )
-            ollama_waiting = sum(
-                1
-                for job in self._jobs.values()
-                if job.get("provider") == "ollama"
-                and job.get("status") == "queued"
-                and not job.get("cancel_requested")
-            )
-            return {
-                "openai_mode": "provider_profile_gates",
-                "openai_active": openai_active,
-                "provider_profile_active": dict(self._provider_active),
-                "ollama_max_concurrent": self._ollama_max_concurrent,
-                "ollama_active": self._ollama_active,
-                "ollama_waiting": ollama_waiting,
-            }
+            ollama_limit = self._ollama_max_concurrent
+        ollama = capacity_coordinator.snapshot(
+            "ollama_runtime", "global", limit=ollama_limit
+        )
+        provider_active = {
+            snapshot.key: snapshot.active
+            for snapshot in capacity_coordinator.snapshots()
+            if snapshot.resource == "provider_generation" and snapshot.active
+        }
+        return {
+            "openai_mode": "shared_provider_profile_gate",
+            "openai_active": openai_active,
+            "provider_profile_active": provider_active,
+            "ollama_max_concurrent": ollama_limit,
+            "ollama_active": ollama.active,
+            "ollama_waiting": ollama.waiting,
+        }
 
     def create(self, body: RAGRunRequest, *, owner: str | None = None) -> dict[str, Any]:
         job_id = str(uuid.uuid4())
@@ -119,15 +124,16 @@ class RAGJobManager(PersistentJobStateMixin):
             else None
         )
 
-        with self._ollama_condition:
+        with self._lock:
             if requested_ollama_limit is not None:
                 self._ollama_max_concurrent = max(
                     1,
                     min(32, int(requested_ollama_limit)),
                 )
-                self._ollama_condition.notify_all()
 
-            profile_limit = max(1, min(64, int(body.max_concurrent_requests or 32)))
+            profile_limit = provider_limit(
+                body.max_concurrent_requests, default=32, maximum=64
+            )
             scheduling = {
                 "mode": "provider_profile_and_ollama_gate" if body.provider == "ollama" else "provider_profile_gate",
                 "limit": profile_limit,
@@ -299,109 +305,153 @@ class RAGJobManager(PersistentJobStateMixin):
                 bindings.append(binding.model_dump(mode="json"))
         return {"claims": claims, "support_bindings": bindings}
 
-    def _acquire_ollama_slot(self, job_id: str) -> bool:
-        with self._ollama_condition:
-            waiting_event_recorded = False
-            while self._ollama_active >= self._ollama_max_concurrent:
-                job = self._jobs[job_id]
-                if job["cancel_requested"] or job["status"] == "cancelled":
-                    return False
+    def _acquire_ollama_slot(self, job_id: str) -> CapacityPermit | None:
+        with self._lock:
+            limit = self._ollama_max_concurrent
+
+        def cancelled() -> bool:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                return bool(
+                    job is None
+                    or job.get("cancel_requested")
+                    or job.get("status") == "cancelled"
+                )
+
+        def waiting(snapshot) -> None:  # noqa: ANN001 - operational callback
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is None:
+                    return
                 job["status"] = "queued"
                 job["stage"] = "queued"
                 job["stage_detail"] = (
-                    f"Waiting for Ollama slot: {self._ollama_active} active / "
-                    f"{self._ollama_max_concurrent} allowed"
+                    f"Waiting for Ollama slot: {snapshot.active} active / "
+                    f"{snapshot.limit} allowed"
                 )
-                if not waiting_event_recorded:
-                    job["events"].append({
-                        "timestamp": iso_now(),
-                        "stage": "waiting_for_ollama_slot",
-                        "current": self._ollama_active,
-                        "total": self._ollama_max_concurrent,
-                        "detail": job["stage_detail"],
-                    })
-                    waiting_event_recorded = True
-                self._ollama_condition.wait(timeout=0.5)
+                job["events"].append({
+                    "timestamp": iso_now(),
+                    "stage": "waiting_for_ollama_slot",
+                    "current": snapshot.active,
+                    "total": snapshot.limit,
+                    "detail": job["stage_detail"],
+                })
 
-            job = self._jobs[job_id]
-            if job["cancel_requested"] or job["status"] == "cancelled":
-                return False
-            self._ollama_active += 1
-            job["scheduling"]["limit"] = self._ollama_max_concurrent
-            job["scheduling"]["active_when_started"] = self._ollama_active
-            job["events"].append({
-                "timestamp": iso_now(),
-                "stage": "ollama_slot_acquired",
-                "current": self._ollama_active,
-                "total": self._ollama_max_concurrent,
-                "detail": (
-                    f"Ollama execution slot acquired "
-                    f"({self._ollama_active}/{self._ollama_max_concurrent})"
-                ),
-            })
-            return True
+        try:
+            permit = capacity_coordinator.acquire(
+                "ollama_runtime",
+                "global",
+                limit,
+                cancelled=cancelled,
+                on_wait=waiting,
+            )
+        except CapacityCancelled:
+            return None
 
-    def _release_ollama_slot(self, job_id: str) -> None:
-        with self._ollama_condition:
-            if self._ollama_active > 0:
-                self._ollama_active -= 1
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None:
+                job["scheduling"]["ollama_global_limit"] = permit.limit
+                job["scheduling"]["ollama_active_when_started"] = permit.active_when_acquired
+                job["scheduling"]["ollama_wait_ms"] = int(
+                    round(permit.waited_seconds * 1000)
+                )
+                job["events"].append({
+                    "timestamp": iso_now(),
+                    "stage": "ollama_slot_acquired",
+                    "current": permit.active_when_acquired,
+                    "total": permit.limit,
+                    "detail": (
+                        f"Ollama execution slot acquired "
+                        f"({permit.active_when_acquired}/{permit.limit})"
+                    ),
+                })
+        return permit
+
+    def _release_ollama_slot(self, job_id: str, permit: CapacityPermit) -> None:
+        permit.release()
+        snapshot = capacity_coordinator.snapshot(
+            "ollama_runtime", "global", limit=permit.limit
+        )
+        with self._lock:
             job = self._jobs.get(job_id)
             if job is not None:
                 job["events"].append({
                     "timestamp": iso_now(),
                     "stage": "ollama_slot_released",
-                    "current": self._ollama_active,
-                    "total": self._ollama_max_concurrent,
+                    "current": snapshot.active,
+                    "total": permit.limit,
                     "detail": (
                         f"Ollama execution slot released "
-                        f"({self._ollama_active}/{self._ollama_max_concurrent} active)"
+                        f"({snapshot.active}/{permit.limit} active)"
                     ),
                 })
-            self._ollama_condition.notify_all()
 
     @staticmethod
     def _provider_key(body: RAGRunRequest) -> str:
-        if body.provider == "ollama":
-            return f"ollama|{str(body.base_url or '').rstrip('/').lower()}"
-        return body.provider_profile_id or f"{body.provider}|{body.base_url or ''}|{body.model or ''}"
+        return provider_capacity_key(
+            provider_profile_id=body.provider_profile_id,
+            provider=body.provider,
+            base_url=body.base_url,
+            model=body.model,
+        )
 
-    def _acquire_provider_slot(self, job_id: str, body: RAGRunRequest) -> bool:
+    def _acquire_provider_slot(self, job_id: str, body: RAGRunRequest) -> CapacityPermit | None:
         key = self._provider_key(body)
-        limit = max(1, min(64, int(body.max_concurrent_requests or 32)))
-        with self._ollama_condition:
-            while self._provider_active.get(key, 0) >= limit:
-                job = self._jobs[job_id]
-                if job["cancel_requested"] or job["status"] == "cancelled":
-                    return False
+        limit = provider_limit(body.max_concurrent_requests, default=32, maximum=64)
+
+        def cancelled() -> bool:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                return bool(
+                    job is None
+                    or job.get("cancel_requested")
+                    or job.get("status") == "cancelled"
+                )
+
+        def waiting(snapshot) -> None:  # noqa: ANN001 - operational callback
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is None:
+                    return
                 job["status"] = "queued"
                 job["stage"] = "queued"
                 job["stage_detail"] = (
-                    f"Waiting for provider slot: {self._provider_active.get(key, 0)} active / {limit} allowed"
+                    f"Waiting for provider slot: {snapshot.active} active / "
+                    f"{snapshot.limit} allowed"
                 )
-                self._ollama_condition.wait(timeout=0.5)
-            self._provider_active[key] = self._provider_active.get(key, 0) + 1
-            return True
 
-    def _release_provider_slot(self, body: RAGRunRequest) -> None:
-        key = self._provider_key(body)
-        with self._ollama_condition:
-            current = self._provider_active.get(key, 0)
-            if current <= 1:
-                self._provider_active.pop(key, None)
-            else:
-                self._provider_active[key] = current - 1
-            self._ollama_condition.notify_all()
+        try:
+            permit = capacity_coordinator.acquire(
+                "provider_generation",
+                key,
+                limit,
+                cancelled=cancelled,
+                on_wait=waiting,
+            )
+        except CapacityCancelled:
+            return None
+
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None:
+                job["scheduling"]["provider_wait_ms"] = int(
+                    round(permit.waited_seconds * 1000)
+                )
+                job["scheduling"]["provider_active_when_started"] = permit.active_when_acquired
+                job["scheduling"]["provider_limit"] = permit.limit
+        return permit
 
     def _run(self, job_id: str, body: RAGRunRequest) -> None:
-        ollama_slot = False
-        provider_slot = False
+        ollama_permit: CapacityPermit | None = None
+        provider_permit: CapacityPermit | None = None
         try:
             # Every profile receives its own concurrency gate, including Ollama.
             # Local Ollama work then passes through the process-wide GPU gate as
             # a second constraint. This makes a researcher profile's max value
             # authoritative without allowing one profile to raise the global cap.
-            provider_slot = self._acquire_provider_slot(job_id, body)
-            if not provider_slot:
+            provider_permit = self._acquire_provider_slot(job_id, body)
+            if provider_permit is None:
                 with self._lock:
                     job = self._jobs[job_id]
                     job["status"] = "cancelled"
@@ -410,8 +460,8 @@ class RAGJobManager(PersistentJobStateMixin):
                 return
 
             if body.provider == "ollama":
-                ollama_slot = self._acquire_ollama_slot(job_id)
-                if not ollama_slot:
+                ollama_permit = self._acquire_ollama_slot(job_id)
+                if ollama_permit is None:
                     with self._lock:
                         job = self._jobs[job_id]
                         if not job["finished_at"]:
@@ -808,10 +858,10 @@ class RAGJobManager(PersistentJobStateMixin):
                         "detail": job["stage_detail"],
                     })
         finally:
-            if ollama_slot:
-                self._release_ollama_slot(job_id)
-            if provider_slot:
-                self._release_provider_slot(body)
+            if ollama_permit is not None:
+                self._release_ollama_slot(job_id, ollama_permit)
+            if provider_permit is not None:
+                provider_permit.release()
             with self._lock:
                 self._threads.pop(job_id, None)
             self._persist_job(job_id)
@@ -859,7 +909,7 @@ class RAGJobManager(PersistentJobStateMixin):
         return restored
 
     def cancel(self, job_id: str) -> dict[str, Any]:
-        with self._ollama_condition:
+        with self._lock:
             if job_id not in self._jobs:
                 raise KeyError(job_id)
             job = self._jobs[job_id]
@@ -876,7 +926,6 @@ class RAGJobManager(PersistentJobStateMixin):
                     "total": job["total"],
                     "detail": job["stage_detail"],
                 })
-                self._ollama_condition.notify_all()
             elif job["status"] == "running" and not job["cancel_requested"]:
                 job["cancel_requested"] = True
                 job["cancel_requested_at"] = iso_now()
