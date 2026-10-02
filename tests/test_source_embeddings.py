@@ -3,10 +3,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import app.source_embeddings as source_embeddings
 import numpy as np
 import pytest
-
-import app.source_embeddings as source_embeddings
 from app.source_embeddings import (
     SourceEmbeddingProjection,
     embedding_identity,
