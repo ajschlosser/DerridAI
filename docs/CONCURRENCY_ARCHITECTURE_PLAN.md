@@ -257,6 +257,36 @@ Corpus Builder live state should expose, without pretending it is canonical scho
 
 The UI should normally inherit provider profile capacity. Explicit per-build throttling is an advanced control.
 
+## Provider configuration UX
+
+Normal Corpus Builder behavior should inherit concurrency from the selected provider profile.
+
+An explicit build/job setting may lower that capacity as an operation throttle, but it must not silently raise the process-wide provider limit. The product should distinguish these concepts in both copy and telemetry:
+
+- saved provider capacity;
+- effective operation/build throttle;
+- current active/waiting provider usage;
+- whether other DerridAI workflows are sharing the same profile capacity;
+- local-runtime constraints such as the separate Ollama gate.
+
+For local GPUs, higher numerical concurrency must never be presented as inherently faster. Benchmarking should determine the provider profile's configured capacity.
+
+## Cancellation and fairness
+
+Capacity waiting and scheduling must remain cancellation-aware and starvation-safe.
+
+Required behavior:
+
+- a cancelled task stops waiting promptly;
+- failure/cancellation always releases permits;
+- no repository/domain lock is held while waiting for capacity;
+- separate provider profiles do not block one another;
+- explicit reviewer requeues/reruns receive elevated scheduling priority once the ready-work scheduler is introduced;
+- long-waiting normal work receives aging so priority does not become starvation;
+- bounded breadth prefers finishing already-started Records while still keeping available provider slots occupied.
+
+The initial shared-capacity implementation deliberately uses simple condition-based admission. Priority and aging belong in the Corpus Builder work scheduler, not in provider-capacity accounting itself.
+
 ## Benchmark plan
 
 Measure concurrency 1/2/4/8/16 where supported, plus larger remote-provider limits after the Corpus Builder 16-request operation ceiling is deliberately reviewed.
@@ -292,7 +322,7 @@ Required tests:
 2. cancellation while waiting does not acquire/leak a permit;
 3. exception after acquisition releases the permit;
 4. two different provider keys can both reach their own limits;
-5. Corpus Builder + RAG + LLM job sharing one profile never exceed the aggregate profile limit;
+5. Corpus Builder + RAG + LLM/tool jobs sharing one profile never exceed the aggregate profile limit;
 6. operation-level throttle can be lower than provider capacity;
 7. `max_concurrent_requests=1` preserves serial behavior;
 8. Record-level enrichment reaches configured concurrency when enough ready Records exist;
@@ -318,6 +348,7 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 
 - [x] Add process-wide concurrency/capacity coordinator with cancellable permits, stable provider keys, snapshots, wait timing, and leak-safe context management.
 - [x] Add focused coordinator unit tests.
+- [x] Add a cross-workflow admission test proving LLM and RAG managers sharing one provider profile share one process-wide limit; independent profiles do not block each other.
 - [x] Migrate `LLMJobManager` provider gate.
 - [x] Migrate `LLMToolJobManager` provider gate.
 - [x] Migrate `RAGJobManager` provider-profile gate.
@@ -368,6 +399,20 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 - [ ] Add benchmark harness/results for 1/2/4/8/16 and representative local/remote providers.
 - [ ] Update architecture/user/provider requirement docs after implementation is stable.
 
+## Definition of done
+
+This effort is complete when all of the following are true:
+
+1. one provider-profile concurrency setting is enforced across every major workflow that uses that profile;
+2. Corpus Builder keeps available provider capacity busy whenever enough independent eligible work exists;
+3. independent metadata families and segmentation batches overlap only under explicit safe/provider-limited contracts;
+4. Document Intelligence no longer forces unrelated deterministic/preparatory work to sit idle;
+5. retrieval, embedding, reranking, and extraction concurrency use explicit shared resource limits rather than multiplicative nested pools;
+6. cancellation, retry, resume, and reviewer edits remain race-safe;
+7. fixed provider outputs produce canonically equivalent scholarly state at concurrency 1 and concurrency N;
+8. live UI/telemetry truthfully distinguishes operation throttle, provider capacity, active work, and queueing;
+9. fixed-corpus benchmarks report latency/utilization gains together with source-binding, provenance, authority, and review-quality regression checks.
+
 ## Progress log
 
 ### 2026-10-01 / initial branch setup
@@ -399,6 +444,17 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 - Expanded Corpus concurrency from the old 1–16 operation clamp to the provider contract's full 1–64 range in Pydantic validation, worker scheduling, settings controls, provider payloads, draft restoration, and tests.
 - Corpus build GET responses now attach live, non-persisted provider/Ollama capacity snapshots. The metadata live-status component displays active provider slots over the configured limit.
 - Shared capacity limits are re-read while callers wait, so lowering the Ollama runtime cap takes effect for already-queued callers; a focused test covers this transition.
+
+### 2026-10-01 / PR reconciliation checkpoint
+
+- Reviewed every currently open PR. PR #407 covered concurrent-review UI/state, explicit SourceUnit → Record → Page topology, and early editable manifest setup; PR #408 covered the shared concurrency substrate and backend/provider fan-out.
+- Reconciled both PRs onto current master in `task/corpus-builder-concurrency-unified`, preserving upstream runtime-retirement/i18n changes and manually resolving the overlapping Corpus Builder files.
+- Combined the PR #407 active-Record grouping with PR #408 provider active/limit reporting in the live metadata status surface.
+- Combined explicit topology/manifest setup with the 1–64 concurrency contract in the same `PdfCorpusBuilder`, request model, and setup tests.
+- Retained PR #408's more complete `api/app/concurrency.py` implementation rather than adding the earlier experimental `capacity_coordinator.py` from `task/concurrency-coordinator`; this avoids two competing process-wide capacity authorities.
+- Reconciled the earlier branch's additional plan requirements here: provider-capacity UX distinctions, cancellation/fairness policy, cross-workflow provider-limit testing, and an explicit definition of done.
+- Added `tests/test_shared_provider_capacity.py` to prove two independent managers (LLM and RAG) cannot collectively exceed one shared profile limit and that independent profiles can proceed concurrently.
+- PR #407 and PR #408 were merged into the unified staging branch rather than into `master`; the next public PR is the single consolidated review surface.
 
 ### 2026-10-01 / integration checkpoint
 
