@@ -65,5 +65,12 @@ No implementation tests or new timings recorded yet. The first benchmark must se
 - Removed modal-only save/discard component APIs, refs, retry state, and English/French strings. Retained explicit advanced-metadata save and existing save-error handling.
 - Updated user guidance and replaced modal tests with immediate-navigation, draft-restoration, new-build, rejection, and French keyboard coverage.
 - Moved the metadata dirty-state regression out of a nested test definition so it actually executes, using public field buttons rather than removed modal-only APIs.
-- App/SDK and test TypeScript checks passed; 86 focused frontend tests passed; production build passed (existing large-chunk warning). Thirteen locale/accessibility-floor/API-contract tests passed. Browser verification is being finalized; initial run passed 17/18, with the new rejection case missing a mock command response; fixed that fixture and reran.
+- App/SDK and test TypeScript checks passed; 86 focused frontend tests passed; production build passed (existing large-chunk warning). Thirteen locale/accessibility-floor/API-contract tests passed. All 18 production-browser cases passed, including desktop/laptop/short/mobile layouts, zoom reflow, draft restoration, rejection, and French keyboard navigation. An initial rejection-test failure was a missing mock response; the corrected fixture passed.
 - Review found `DocumentManifestEditor` lost its import in `8cfda23c` while the build-workspace template still renders it. A new component-resolution test reproduces the failure. User approved the repair; implementation is next.
+
+## Document editor and structural concurrency checkpoint (2026-10-02)
+
+- Restored the build-workspace `DocumentManifestEditor` import after reproducing a missing-component failure. The regression mounts the manifest slot and checks that the real component resolves with its document metadata.
+- 34 focused frontend tests passed, with app/SDK and test typechecks, touched-file ESLint, and a final production frontend build. No complete release/CI or Docker claim.
+- A real split during a running enrichment worker now has integration coverage: the parent remains retired, both successor IDs are requeued, text is conserved, lineage survives, and the returned handoff matches durable state. Together with record/source-unit restructuring suites: 34 backend tests passed, six optional benchmark cases skipped.
+- Review scope covered the reported audio failure, review modal and draft recovery, missing document editor, enrichment ownership/restart, and structural late-completion behavior. This is not an exhaustive audit of all Copilot-authored changes; no particular additional PR was specified.

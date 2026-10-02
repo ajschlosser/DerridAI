@@ -13,6 +13,7 @@ import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
+import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import CorpusSetupDocumentMetadata from "./corpus-builder/CorpusSetupDocumentMetadata.vue";
 import CorpusInitializationDialog from "./CorpusInitializationDialog.vue";
 import CorpusBuildReadiness from "./CorpusBuildReadiness.vue";
