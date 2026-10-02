@@ -7,9 +7,9 @@
 **Short name:** cELF (pronounced "self")  
 **Reference implementation:** DerridAI
 
-> **Publication note - non-normative.** This edition uses **Capta-Enriched Lexical Format (cELF, pronounced "self")** as the specification name. The tracked conformance requirement identifiers are unchanged. The accompanying DerridAI white paper is explanatory and does not add, remove, or modify conformance requirements.
+> **Publication note - non-normative.** This edition uses **Capta-Enriched Lexical Format (cELF, pronounced "self")** as the specification name. The name emphasizes the durable, text-bearing documentary representation that cELF standardizes; retrieval is one downstream capability rather than the format's defining purpose. The tracked conformance requirement identifiers are unchanged. The accompanying DerridAI white paper is explanatory and does not add, remove, or modify conformance requirements.
 
-The **Capta-Enriched Lexical Format** (**cELF**, pronounced "self") defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. **Retrieval** is used in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
+The **Capta-Enriched Lexical Format** (**cELF**, pronounced "self") defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. Its primary subject is the durable **lexical representation** of documentary material: text-bearing Records linked to source location, revision state, scholarly assertions, evidence, and research provenance. Those Records can be annotated, exchanged, cited, analyzed, searched, selected as evidence, and supplied to AI systems without making any one retrieval technology part of their identity.
 
 ## Contents
 
@@ -25,7 +25,7 @@ The **Capta-Enriched Lexical Format** (**cELF**, pronounced "self") defines a no
   - [Record Field Classes and Assertions](#record-field-classes-and-assertions)
   - [Attribution and Semantic Relations](#attribution-and-semantic-relations)
   - [Lifecycle, Transformation, Segmentation, and Review](#lifecycle-transformation-segmentation-and-review)
-- [Publication, Storage, and Retrieval](#publication-storage-and-retrieval)
+- [Publication, Storage, and Research Access](#publication-storage-and-research-access)
   - [Publication and Corpus Interchange](#publication-and-corpus-interchange)
   - [Storage and Derived Representations](#storage-and-derived-representations)
   - [Evidence Acquisition](#evidence-acquisition)
@@ -109,17 +109,17 @@ The specification deliberately uses technical object names such as **SourceSpan*
 
 #### Status and purpose
 
-The **Capta-Enriched Lexical Format** defines an information model and interoperability requirements for transforming documents into records that can be extracted, enriched, reviewed, stored, located, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
+The **Capta-Enriched Lexical Format** defines an information model and interoperability requirements for transforming heterogeneous documentary sources into durable, text-bearing Records that preserve source identity, location, revision, enrichment, review, and evidentiary provenance. Those lexical research objects can then be exchanged, analyzed, searched, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
 
 The specification is intended for systems in which document provenance, attribution, evidentiary support, source identity, record identity, normalization, traceability, information quality, and reproducibility materially affect the credibility of AI-assisted research.
 
-cELF is not a retrieval algorithm, model protocol, vector-database format, user-interface specification, or single application architecture. It defines the information that must remain stable across such systems and the relationships that must be preserved when information moves between them.
+cELF is not a retrieval algorithm, model protocol, vector-database format, user-interface specification, or single application architecture. It defines the durable lexical and scholarly information that must remain stable across such systems and the relationships that must be preserved when information moves between them.
 
 A conforming implementation MAY use local or remote databases, files, object stores, APIs, vector indexes, local models, hosted models, browser clients, desktop applications, command-line tools, or other technical means. Conformance depends on preservation of the cELF information model and invariants, not on implementation technology.
 
 The DerridAI application is the originating reference implementation.
 
-> **Terminology note - non-normative.** The name **cELF** expands to **Capta-Enriched Lexical Format**. _Capta_ emphasizes that research objects are selected, delimited, transcribed, categorized, or interpreted through explicit procedures rather than treated as context-free givens. **Lexical** identifies text-bearing documentary representation as the primary interchange substrate; it does not limit source media to plain text. **Enriched** refers to the assertions, provenance, authority, evidence, and run metadata associated with that representation. Source locators remain appropriate to the original medium, including pages, character ranges, image regions, and audio time spans.
+> **Terminology note - non-normative.** The name **cELF** expands to **Capta-Enriched Lexical Format**. _Capta_ emphasizes that research objects are selected, delimited, transcribed, categorized, or interpreted through explicit procedures rather than treated as context-free givens. **Lexical** names the durable text-bearing representation that cELF makes portable: the documentary text of a Record together with stable identity and source linkage. It does not limit source media to plain text; PDF pages, images, audio, web documents, and other media can contribute lexical material through extraction, OCR, transcription, or another declared transformation while retaining medium-appropriate SourceSpans. **Enriched** refers to the assertions, provenance, authority, evidence, and run metadata associated with that representation. Retrieval, indexing, ranking, and embedding are ways of operating over cELF Records, not what makes those Records cELF.
 
 #### Normative terms
 
@@ -129,7 +129,7 @@ Sections explicitly marked _Non-normative_ are explanatory.
 
 #### Design goals
 
-A cELF system is designed so that: heterogeneous documentary inputs are normalized into stable research objects with declared semantics; documentary data remains traceable to source; logical record identity remains distinct from storage identity; source facts remain distinguishable from deterministic derivations, model inferences, human judgments, unresolved states, and explicit absence; retrieval diagnostics remain properties of retrieval events rather than of the source record; evidence can be bound explicitly to generated claims; research runs retain enough versioned state for substantial reproducibility; source-derived facts such as identifiers, page maps, schema validity, and citation structure are handled deterministically when possible - that is, by fixed procedures whose results do not depend on model interpretation; uncertainty remains representable; and derived indexes do not silently replace authoritative corpus state.
+A cELF system is designed so that: heterogeneous documentary inputs are normalized into stable lexical research objects with declared semantics; documentary data remains traceable to source; logical record identity remains distinct from storage identity; source facts remain distinguishable from deterministic derivations, model inferences, human judgments, unresolved states, and explicit absence; retrieval diagnostics remain properties of retrieval events rather than of the source record; evidence can be bound explicitly to generated claims; research runs retain enough versioned state for substantial reproducibility; source-derived facts such as identifiers, page maps, schema validity, and citation structure are handled deterministically when possible - that is, by fixed procedures whose results do not depend on model interpretation; uncertainty remains representable; and derived indexes do not silently replace authoritative corpus state.
 
 > **Core rule.** The identity, provenance, and evidentiary integrity of documentary information MUST survive the transformations between source extraction and AI-assisted research, while computational mechanisms operating over that information remain replaceable.
 
@@ -214,7 +214,7 @@ A SourceSpan MUST NOT imply greater precision than the implementation actually p
 
 #### Record
 
-A **Record** is the central cELF information object. It represents a persistent research unit derived from one or more contiguous or explicitly related SourceSpans.
+A **Record** is the central cELF lexical research object. It represents a persistent, text-bearing research unit derived from one or more contiguous or explicitly related SourceSpans.
 
 A conforming Record MUST contain `record_id`, `source_document_id`, `text`, and `source_spans`. It MAY also contain bibliographic, linguistic, semantic, discourse, attribution, indexing, and domain-specific metadata.
 
@@ -363,13 +363,13 @@ Human review is an authority event. Review decisions SHOULD record actor, time, 
 
 A human-confirmed semantic value MUST NOT later be overwritten silently by a background model job. Contradictory later evidence SHOULD create a dispute, alternative assertion, or reopened review state rather than silently replacing the human decision.
 
-## Publication, Storage, and Retrieval
+## Publication, Storage, and Research Access
 
 ### Publication and Corpus Interchange
 
 #### CorpusPublication
 
-A **CorpusPublication** is an immutable snapshot intended for interchange, indexing, citation, analysis, or later retrieval. It MUST identify `publication_id`, `corpus_id`, publication version, applicable specification or schema version, creation time, and records or immutable references to them.
+A **CorpusPublication** is an immutable snapshot intended for interchange, indexing, citation, annotation, analysis, evidence use, or other later research access. It MUST identify `publication_id`, `corpus_id`, publication version, applicable specification or schema version, creation time, and records or immutable references to them.
 
 Once declared final, a CorpusPublication MUST NOT be changed in place. Corrections MUST create a new publication or revision.
 
@@ -434,11 +434,11 @@ A robust implementation derives this index from authoritative reviewed state, tr
 
 **Evidence Acquisition** is the process by which Records or source spans become candidates for evidentiary use. It provides a mechanism-neutral term for bringing documentary information into an evidentiary role.
 
-#### Meaning of retrieval in cELF
+#### Retrieval within cELF
 
-The term **Retrieval** has two related meanings in this specification family. In the broad sense, retrieval is the recovery of relevant documentary information from the Durable Research Layer for active research use. In the technical sense, retrieval is a computational search operation over an index, store, or corpus using a defined query and retrieval method.
+Retrieval is a downstream access capability over cELF documentary state, not the organizing concept of the format. In the broad research sense, retrieval is the recovery of relevant documentary information for active use. In the narrower technical sense, retrieval is a computational search operation over an index, store, publication, or corpus using a defined query and retrieval method.
 
-Vector similarity search is one technical retrieval method. Lexical search, metadata filtering, hybrid retrieval, database queries, and other computational methods are also retrieval methods. Human selection and model-located source spans participate in the broader recovery of evidence even when they do not constitute a conventional search query. The specification uses **Evidence Acquisition** when it needs a mechanism-neutral name for all such paths into evidence.
+Vector similarity search is one technical retrieval method. Lexical search, metadata filtering, hybrid retrieval, database queries, and other computational methods are also retrieval methods. Human selection and model-located source spans participate in the broader recovery of evidence even when they do not constitute a conventional search query. The specification uses **Evidence Acquisition** when it needs a mechanism-neutral name for all such paths into evidence. None of these access mechanisms changes the identity or semantics of the lexical Records being accessed.
 
 An acquisition method MAY be semantic retrieval, lexical retrieval, hybrid retrieval, deterministic filtering, database query, human selection, direct reference, agentic search, model-located source spans in a long context, or another method.
 
@@ -450,7 +450,7 @@ An acquisition event SHOULD record its method, query or selection condition wher
 
 ### Retrieval Profile
 
-The cELF Retrieval Profile specifies the technical sense of retrieval: explicit search and ranking operations such as vector similarity search, lexical search, filtering, hybrid search, fusion, and reranking. It does not restrict the broader cELF concept of retrieval to vector databases.
+When an implementation claims technical retrieval capability, the cELF Retrieval Profile specifies explicit search and ranking operations such as vector similarity search, lexical search, filtering, hybrid search, fusion, and reranking. The profile governs that capability without making retrieval part of Core Record identity or restricting research access to vector databases.
 
 #### RetrievalRun
 
@@ -1491,7 +1491,7 @@ Reference-implementation coverage MUST NOT be treated as a conformance score unl
 
 _This section is non-normative._
 
-cELF deliberately standardizes fewer objects than a complete application may contain. The Record is central because retrieval chunks, database rows, and cache entries are implementation artifacts while Records are intended to survive changes in retrieval infrastructure.
+cELF deliberately standardizes fewer objects than a complete application may contain. The Record is central because extraction fragments, index chunks, database rows, search hits, and cache entries are implementation artifacts while Records are intended to survive changes in storage, indexing, retrieval, and model infrastructure.
 
 Evidence is a role rather than a copy because the same documentary material may support one inquiry and be irrelevant in another. Attribution remains first-class because document author, speaker, position holder, target, and quoted source can differ. FieldAssertion remains first-class because derivation, evaluation, authority, and value state are scholarly distinctions that generic provenance alone does not capture.
 
@@ -1523,9 +1523,9 @@ _Non-normative explanatory paper_
 
 ## Abstract
 
-The **Capta-Enriched Lexical Format (cELF, pronounced “self”)** defines a portable information model for AI-assisted documentary research. It preserves source identity, record revision, attribution, evidence, uncertainty, assertion provenance, and research-run provenance as documents move through extraction, enrichment, retrieval, generation, review, and publication. DerridAI is the originating reference implementation.
+The **Capta-Enriched Lexical Format (cELF, pronounced “self”)** defines a portable information model for AI-assisted documentary research. It preserves durable text-bearing Records together with source identity, record revision, attribution, evidence, uncertainty, assertion provenance, and research-run provenance as documentary material moves through extraction, transcription or OCR where needed, enrichment, analysis, retrieval, generation, review, and publication. DerridAI is the originating reference implementation.
 
-DerridAI began as a local research environment for a corpus of Jacques Derrida’s works. That corpus puts pressure on ordinary retrieval pipelines because interpretation often depends on quotation boundaries, reported positions, shifts in speaker, edition and translation, pagination, and rhetorical stance. The implementation has therefore been useful for testing whether the distinctions defined by cELF remain recoverable in a working system.
+DerridAI began as a local research environment for a corpus of Jacques Derrida’s works. That corpus puts pressure on ordinary text-processing and retrieval pipelines because interpretation often depends on quotation boundaries, reported positions, shifts in speaker, edition and translation, pagination, and rhetorical stance. The implementation has therefore been useful for testing whether those distinctions remain attached to stable lexical research objects in a working system.
 
 > **Figure - cELF source-to-claim traceability.** `SourceDocument -> SourceSpan -> Record -> RecordRevision -> FieldAssertion -> Evidence Acquisition -> EvidenceRef -> EvidencePacket -> GenerationRun -> GeneratedClaim -> SupportBinding`.
 
@@ -1537,19 +1537,19 @@ The distinction is useful, but it should not be overstated. Matthew Lavin has ar
 
 **Enriched** describes the relation between documentary text and the additional structure attached to it. A lexical passage may acquire source locators, revision identity, FieldAssertions, review authority, evidence references, retrieval provenance, and claim bindings. Those enrichments remain linked to the material from which they were derived.
 
-**Lexical** identifies text-bearing representation as the main interchange surface. It does not mean that cELF accepts only plain-text sources. PDF pages, images, audio, web documents, and other media can be represented with medium-appropriate SourceSpans while transcription or recognized text supplies the lexical material used for search, annotation, and model input.
+**Lexical** identifies text-bearing representation as the main interchange surface. It does not mean that cELF accepts only plain-text sources. PDF pages, images, audio, web documents, and other media can be represented with medium-appropriate SourceSpans while extraction, transcription, or recognized text supplies durable lexical material for annotation, interchange, citation, analysis, search, and model input. The term therefore names the stable documentary layer, not a retrieval technique.
 
 ## 2. Research problem
 
-A conventional retrieval-augmented generation pipeline can be summarized as segmentation, indexing, retrieval, and generation. That is often sufficient when the task is to locate fact-like statements. Documentary research frequently requires additional distinctions: who is speaking, whose position is being reported, whether language is quoted or paraphrased, which revision is in use, what page system a citation refers to, and whether a later claim is actually supported by the cited passage.
+Documentary AI systems need a stable representation of source material before any search, ranking, or generation step can be audited. A conventional retrieval-augmented generation pipeline can be summarized as segmentation, indexing, retrieval, and generation, but that sequence often treats its text chunks as disposable inputs to search. Documentary research frequently requires durable distinctions to survive beyond any one pipeline stage: who is speaking, whose position is being reported, whether language is quoted or paraphrased, which revision is in use, what page system a citation refers to, and whether a later claim is actually supported by the cited passage.
 
 These distinctions are common in humanities corpora and also appear in legal research, historical archives, oral histories, religious studies, and other source-intensive fields. A passage can physically occur in one author’s book while presenting another person’s position. A quotation can be introduced in order to criticize it. Editorial or translator material can appear next to primary text. A segmented passage can lose the sentence that qualifies its meaning.
 
-cELF addresses this by making documentary identity, assertion state, evidence, and claim support explicit parts of the information model. Retrieval remains important, but a ranked result is treated as a candidate for research use rather than as proof of a claim.
+cELF addresses this by making lexical Record identity, documentary provenance, assertion state, evidence, and claim support explicit parts of the information model. Retrieval remains an important way to access those Records, but it is a consumer of the durable cELF layer: a ranked result is treated as a candidate for research use rather than as proof of a claim or as the identity of the underlying passage.
 
 ## 3. What cELF standardizes
 
-cELF defines semantic roles that need to survive implementation changes. Its core objects include SourceDocument, SourceSpan, Record, RecordRevision, FieldAssertion, EvidenceRef, EvidencePacket, GenerationRun, GeneratedClaim, SupportBinding, and ResearchRun. Publication and retrieval profiles add objects needed for those capabilities.
+cELF defines semantic roles that need to survive implementation changes. Its durable documentary substrate begins with SourceDocument, SourceSpan, Record, and RecordRevision; FieldAssertion adds scholarly enrichment, while EvidenceRef, EvidencePacket, GenerationRun, GeneratedClaim, SupportBinding, and ResearchRun preserve later research use and provenance. Publication and retrieval profiles add requirements for those declared capabilities.
 
 The format does not prescribe a database, vector store, model provider, UI framework, or application topology. Those choices can change while the documentary and evidentiary relationships remain stable. Embeddings, rankings, caches, and other computational artifacts are treated as derived state when they can be rebuilt from retained research records.
 
@@ -1565,7 +1565,7 @@ A reference implementation is useful only if it remains separable from the speci
 
 ## 5. Implementation architecture in DerridAI
 
-DerridAI keeps canonical research records separate from derived representations used for retrieval and execution. Canonical state includes source identity, revisions, reviewed FieldAssertions, evidence bindings, corpus publications, and retained research runs. Derived state includes indexes, rankings, compact prompt payloads, and caches that can be rebuilt.
+DerridAI keeps canonical lexical research records separate from derived representations used for indexing, retrieval, and execution. Canonical state includes source identity, Record text, revisions, reviewed FieldAssertions, evidence bindings, corpus publications, and retained research runs. Derived state includes indexes, rankings, compact prompt payloads, and caches that can be rebuilt.
 
 > **Figure - DerridAI reference implementation.** Canonical source, Record, revision, reviewed assertion, evidence, publication, and research-run state remains authoritative; retrieval indexes, rankings, prompt payloads, exemplar projections, and caches are derived and rebuildable.
 
@@ -1648,7 +1648,7 @@ The shared requirement is structural: field identity, derivation, evaluation, au
 
 ## Conclusion
 
-cELF defines a portable structure for documentary identity, assertions, evidence, generated claims, and research runs. DerridAI demonstrates one implementation of that structure across ingestion, corpus review, metadata enrichment, retrieval, generation, validation, and evaluation.
+cELF defines a portable structure for lexical documentary representation, identity, assertions, evidence, generated claims, and research runs. DerridAI demonstrates one implementation of that structure across source ingestion, lexical Record construction, corpus review, metadata enrichment, retrieval, generation, validation, and evaluation.
 
 The design gives language models a defined role in semantic interpretation while keeping source identity, provenance, review authority, and claim/evidence relations explicit. Reviewed evidence can be reused as metadata precedent through derived vector indexes, but each new assertion remains independently grounded in its own record and evidence.
 
