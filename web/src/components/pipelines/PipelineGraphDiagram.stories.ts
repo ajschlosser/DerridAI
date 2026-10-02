@@ -40,3 +40,19 @@ export const Plain: Story = {};
 export const OrderingOnlyEdge: Story = {
   args: { orderingEdges: [{ from: "dense", to: "lexical" }] },
 };
+
+/** Parallel fallbacks and a skip connection must remain individually visible. */
+export const MultipleRoutes: Story = {
+  args: {
+    stages: [
+      {
+        ...stage("dense", "retrieve.chroma_similarity", ["lexical", "pick"]),
+        on_empty: "lexical",
+        on_timeout: "lexical",
+        on_error: "pick",
+      },
+      stage("lexical", "retrieve.lexical_bm25", ["pick"]),
+      stage("pick", "select.top_k"),
+    ],
+  },
+};

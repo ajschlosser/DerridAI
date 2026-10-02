@@ -84,7 +84,7 @@ const selectedId = computed({
 });
 const hoveredId = ref("");
 const orientation = ref<PipelineDiagramOrientation>("horizontal");
-const density = ref<PipelineDiagramDensity>("compact");
+const density = ref<PipelineDiagramDensity>("standard");
 const densityOptions: PipelineDiagramDensity[] = ["compact", "standard", "wide"];
 const viewport = ref<InstanceType<typeof UiRelationViewport> | null>(null);
 const arrowMarkerId = `pipeline-arrow-${useId()}`;
@@ -127,7 +127,7 @@ const edges = computed(() => {
     const type = orderingOnly ? "" : edgeTypeFor(edge, from.strategy);
     return {
       ...edge,
-      path: pipelineEdgePath(from, to),
+      path: pipelineEdgePath(from, to, edge.lane, nodes.value, orientation.value),
       orderingOnly,
       typeLabel: orderingOnly
         ? t("pipelines.edge_ordering_only", "Runs first (no data)")
@@ -156,14 +156,8 @@ const contentBounds = computed(() => {
     { x: node.x, y: node.y },
     { x: node.x + PIPELINE_NODE_WIDTH, y: node.y + PIPELINE_NODE_HEIGHT },
   ]);
-  return (
-    relationBoundsForPoints(points, 28) || {
-      x: 0,
-      y: 0,
-      width: diagram.value.width,
-      height: diagram.value.height,
-    }
-  );
+  points.push({ x: 0, y: 0 }, { x: diagram.value.width, y: diagram.value.height });
+  return relationBoundsForPoints(points, 28)!;
 });
 const viewportHeight = computed(() => Math.min(620, Math.max(320, diagram.value.height + 40)));
 
@@ -418,7 +412,7 @@ function chooseDensity(next: PipelineDiagramDensity) {
       <UiRelationViewport
         ref="viewport"
         class="diagram-viewport"
-        :style="{ height: `${viewportHeight}px` }"
+        :style="{ '--relation-viewport-height': `${viewportHeight}px` }"
         :accessible-label="title"
         :help-text="
           t(
@@ -676,6 +670,7 @@ function chooseDensity(next: PipelineDiagramDensity) {
   fill: var(--text-primary);
 }
 .diagram-node {
+  z-index: 1;
   padding: 0;
   border: 0;
   background: transparent;
@@ -683,16 +678,22 @@ function chooseDensity(next: PipelineDiagramDensity) {
   font: inherit;
   text-align: left;
   --relation-node-border: var(--border-subtle);
-  --relation-node-bg: var(--surface-card);
+  --relation-node-bg: var(--surface-raised);
   --relation-node-detail-fg: var(--text-secondary);
   --relation-node-detail-size: 0.75rem;
   --relation-node-kicker-fg: var(--text-secondary);
   --relation-node-kicker-size: 0.75rem;
-  --relation-node-title-size: 0.75rem;
+  --relation-node-title-size: 0.875rem;
 }
 .diagram-node :deep(.ui-relation-card-node span),
 .diagram-node :deep(.ui-relation-card-node strong) {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.node-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 .diagram-node[data-wiring="problem"] {
   --relation-node-border: var(--tone-danger-border);

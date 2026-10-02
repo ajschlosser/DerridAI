@@ -128,3 +128,28 @@ describe("pipeline relational diagrams", () => {
     );
   });
 });
+
+describe("pipeline connection routing", () => {
+  it("routes skip connections outside intervening cards in either orientation", () => {
+    const stages = [
+      { id: "a", strategy: "a", enabled: true, config: {}, next: ["b", "c"], on_empty: "c" },
+      { id: "b", strategy: "b", enabled: true, config: {}, next: ["c"] },
+      { id: "c", strategy: "c", enabled: true, config: {}, next: [] },
+    ];
+    for (const orientation of ["horizontal", "vertical"] as const) {
+      const graph = layoutPipelineDiagram(stages, ["a"], null, orientation);
+      const skip = graph.edges.filter((edge) => edge.from === "a" && edge.to === "c");
+      expect(new Set(skip.map((edge) => edge.path)).size).toBe(2);
+      for (const edge of skip) {
+        expect(edge.path).toContain(" L ");
+        const coordinates = edge.path.match(/-?\d+(?:\.\d+)?/g)!.map(Number);
+        for (let i = 0; i < coordinates.length; i += 2) {
+          expect(coordinates[i]).toBeGreaterThanOrEqual(0);
+          expect(coordinates[i]).toBeLessThanOrEqual(graph.width);
+          expect(coordinates[i + 1]).toBeGreaterThanOrEqual(0);
+          expect(coordinates[i + 1]).toBeLessThanOrEqual(graph.height);
+        }
+      }
+    }
+  });
+});

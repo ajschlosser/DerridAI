@@ -518,10 +518,9 @@ describe("System Data Pipeline Studio", () => {
     expect(pipelinesApi.newDraft).toHaveBeenCalledWith("research");
     expect(wrapper.get("#pipeline-editor-title").text()).toBe("New pipeline");
     expect(pipelinesApi.analyze).toHaveBeenCalledTimes(1);
-    // A pipeline in progress blocks starting another one over it.
-    expect(
-      wrapper.get(".pipeline-definitions-actions button").attributes("disabled"),
-    ).toBeDefined();
+    // Creation occupies its own view; the catalog cannot obscure the editor.
+    expect(wrapper.find(".pipeline-definitions-actions").exists()).toBe(false);
+    expect(wrapper.find(".pipeline-definitions-workspace").exists()).toBe(false);
     wrapper.unmount();
   });
 

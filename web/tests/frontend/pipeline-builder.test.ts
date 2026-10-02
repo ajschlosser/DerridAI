@@ -448,9 +448,11 @@ describe("new pipeline", () => {
       props: { ...props, draft: draft(), draftPurpose: contractPurpose("research") },
       attachTo: document.body,
     });
-    expect(
-      editing.get(".pipeline-definitions-actions button").attributes("disabled"),
-    ).toBeDefined();
+    expect(editing.find(".pipeline-definitions-actions").exists()).toBe(false);
+    expect(editing.find(".pipeline-definitions-workspace").exists()).toBe(false);
+    expect(editing.findComponent({ name: "PipelineVersionEditorPanel" }).exists()).toBe(true);
+    await editing.setProps({ draft: null });
+    expect(editing.find(".pipeline-definitions-workspace").exists()).toBe(true);
     editing.unmount();
   });
 });

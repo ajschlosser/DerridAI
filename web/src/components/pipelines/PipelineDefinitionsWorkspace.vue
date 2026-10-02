@@ -78,25 +78,18 @@ function create(purposeId: string) {
     role="tabpanel"
     aria-labelledby="pipeline-tab-pipelines"
   >
-    <div class="pipeline-definitions-actions">
+    <div v-if="!draft" class="pipeline-definitions-actions">
       <UiButton
         variant="primary"
         icon="plus"
         :label="t('pipelines.new_pipeline', 'New pipeline')"
-        :disabled="creating || Boolean(draft)"
-        :disabled-reason="
-          draft
-            ? t(
-                'pipelines.new_pipeline_while_editing',
-                'Finish or cancel the version you are editing first.',
-              )
-            : ''
-        "
+        :disabled="creating"
         @click="newOpen = true"
       />
     </div>
 
     <section
+      v-if="!draft"
       class="pipeline-definitions-workspace"
       :aria-label="t('pipelines.definitions', 'Pipeline definitions')"
     >
@@ -171,7 +164,7 @@ function create(purposeId: string) {
 }
 .pipeline-definitions-workspace {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   gap: var(--space-4);
   align-items: start;
 }

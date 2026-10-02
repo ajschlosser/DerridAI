@@ -113,7 +113,14 @@ describe("PipelineGraphDiagram relation interactions", () => {
 
     expect(wrapper.text()).toContain("Fit diagram");
     expect(wrapper.text()).not.toContain("Reset layout");
-    expect(wrapper.find("[data-relation-resize-handle]").exists()).toBe(true);
+    const handle = wrapper.get("[data-relation-resize-handle]");
+    await handle.trigger("keydown", { key: "ArrowDown" });
+    const resized = (wrapper.get(".diagram-viewport").element as HTMLElement).style.height;
+    expect(parseFloat(resized)).toBeGreaterThan(220);
+    await handle.trigger("keydown", { key: "ArrowDown" });
+    expect(
+      parseFloat((wrapper.get(".diagram-viewport").element as HTMLElement).style.height),
+    ).toBeGreaterThan(parseFloat(resized));
 
     const openLayout = async () => {
       await wrapper.get(".ui-menu-trigger").trigger("click");
@@ -136,7 +143,7 @@ describe("PipelineGraphDiagram relation interactions", () => {
 
     items = await openLayout();
     expect(items[1].attributes("aria-checked")).toBe("true");
-    expect(items[2].attributes("aria-checked")).toBe("true");
+    expect(items[3].attributes("aria-checked")).toBe("true");
     await items[4].trigger("click");
     await flushPromises();
     items = await openLayout();
@@ -180,6 +187,8 @@ describe("PipelineGraphDiagram relation interactions", () => {
 
     expect(wrapper.find('[data-kind="on_unavailable"]').exists()).toBe(true);
     expect(wrapper.find('[data-kind="on_timeout"]').exists()).toBe(true);
+    const paths = wrapper.findAll(".diagram-edge").map((edge) => edge.attributes("d"));
+    expect(new Set(paths).size).toBe(paths.length);
     expect(wrapper.find(".diagram-legend [data-kind='on_unavailable']").exists()).toBe(true);
     expect(wrapper.find(".diagram-legend [data-kind='on_timeout']").exists()).toBe(true);
   });

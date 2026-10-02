@@ -345,7 +345,7 @@ function updateFilters(patch: Partial<PipelineDefinitionFilters>) {
   background: var(--surface-card);
 }
 .navigator-count {
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 0.8125rem;
 }
 .navigator-filters {
@@ -361,8 +361,8 @@ function updateFilters(patch: Partial<PipelineDefinitionFilters>) {
 }
 .filter-pair label {
   display: grid;
-  gap: 2px;
-  color: var(--text-tertiary);
+  gap: var(--space-2);
+  color: var(--text-secondary);
   font-size: 0.8125rem;
   font-weight: var(--fw-bold);
 }
@@ -379,7 +379,7 @@ function updateFilters(patch: Partial<PipelineDefinitionFilters>) {
 .group-heading {
   margin: 0;
   padding: var(--space-3) var(--space-3) var(--space-1);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -387,6 +387,7 @@ function updateFilters(patch: Partial<PipelineDefinitionFilters>) {
 }
 .pipeline-group {
   display: grid;
+  border-bottom: 1px solid var(--border-subtle);
 }
 .pipeline-choice {
   position: relative;
@@ -394,7 +395,7 @@ function updateFilters(patch: Partial<PipelineDefinitionFilters>) {
   gap: 2px;
   width: 100%;
   min-height: 44px;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   border: 0;
   background: transparent;
   color: var(--text-primary);
@@ -403,7 +404,9 @@ function updateFilters(patch: Partial<PipelineDefinitionFilters>) {
   cursor: pointer;
 }
 .pipeline-choice strong {
-  font-size: 0.875rem;
+  font-size: 1rem;
+  line-height: var(--lh-normal);
+  overflow-wrap: anywhere;
 }
 .choice-meta,
 .choice-status {
@@ -411,7 +414,7 @@ function updateFilters(patch: Partial<PipelineDefinitionFilters>) {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 0.8125rem;
 }
 .pipeline-choice:hover,
@@ -441,7 +444,7 @@ function updateFilters(patch: Partial<PipelineDefinitionFilters>) {
   padding: 0 var(--space-3) var(--space-2);
   border: 0;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font: inherit;
   font-size: 0.8125rem;
   text-align: left;
@@ -491,7 +494,7 @@ function updateFilters(patch: Partial<PipelineDefinitionFilters>) {
 .navigator-empty {
   margin: 0;
   padding: var(--space-3);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 .sr-only {

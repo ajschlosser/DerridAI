@@ -252,6 +252,7 @@ defineExpose({
 .ui-relation-viewport {
   position: relative;
   min-width: 0;
+  height: var(--relation-viewport-height, auto);
   min-height: 220px;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
