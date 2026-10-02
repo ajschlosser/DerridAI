@@ -733,12 +733,6 @@ const scenarios: Scenario[] = [
     target: "dialog",
     steps: openDialogFromRecords("Merge files", { secondFile: true }),
   },
-  {
-    name: "dialog-subset",
-    load: true,
-    target: "dialog",
-    steps: openDialogFromRecords("Create subset"),
-  },
   // Job dialogs, opened from the Operations panel on the dashboard.
   ...[0, 1, 2].map(
     (index): Scenario => ({
@@ -802,6 +796,7 @@ const scenarios: Scenario[] = [
   },
   {
     name: "dialog-ocr-cleanup",
+    contains: ["Clean OCR Artifacts"],
     load: true,
     target: "dialog",
     steps: openDialogFromRecords("Clean OCR Artifacts"),

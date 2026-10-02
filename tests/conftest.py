@@ -14,8 +14,16 @@ from __future__ import annotations
 import atexit
 import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
+
+_repo_root = Path(__file__).resolve().parents[1]
+_api_root = str(_repo_root / "api")
+if _api_root not in sys.path:
+    # Test modules must not rely on another test being collected first to make
+    # the application package importable.
+    sys.path.insert(0, _api_root)
 
 _worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
 _root = tempfile.mkdtemp(prefix=f"derridai-tests-{_worker}-")

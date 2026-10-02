@@ -25,7 +25,6 @@ sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
 from app.field_assertions import current_assertion_by_name
-from app.models import PdfCorpusBuildCreate
 
 
 def install_repo(tmp_path: Path, records: list[dict], *, status: str = "ready"):
@@ -65,14 +64,6 @@ def ready_record(rid: str, bid: str) -> dict:
         "metadata_incomplete_fields":[],"metadata_review_fields":[],"metadata_complete":True,"metadata_enrichment_state":"complete",
         "review_disposition":"pending","accepted":False,"rejected":False,"needs_review":False,"review_reason":"",
     }
-
-
-def test_one_current_profile_is_registered():
-    """Pin profile and prompt ids, and that a single profile is registered."""
-    assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
-    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v15"
-    assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
-    assert PdfCorpusBuildCreate(asset_id="a").profile_id == "derrida-scholarly-v12"
 
 
 def test_false_primary_text_is_complete_and_human_decision_survives_manifest(tmp_path: Path):

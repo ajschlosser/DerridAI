@@ -12,6 +12,7 @@ import types
 import zipfile
 from dataclasses import replace
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 import httpx
 import pytest
@@ -32,8 +33,33 @@ from app.corpus_segmentation import _construct_records
 from app.rag import _citation_strings
 from app.source_media import detect_media_kind, extract_non_pdf
 from app.source_text import docx_to_text, rtf_to_text
-from test_0610_warbling_wombat import minimal_docx
 from test_human_overrides_and_reruns import install_review_build
+
+
+def minimal_docx(title: str, author: str, paragraphs: list[str]) -> bytes:
+    """Build the smallest DOCX fixture needed by ingestion-boundary tests."""
+    body = "".join(
+        f"<w:p><w:r><w:t>{escape(paragraph)}</w:t></w:r></w:p>"
+        for paragraph in paragraphs
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f"<w:body>{body}</w:body></w:document>"
+    )
+    core = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
+        'xmlns:dc="http://purl.org/dc/elements/1.1/">'
+        f"<dc:title>{escape(title)}</dc:title>"
+        f"<dc:creator>{escape(author)}</dc:creator>"
+        "</cp:coreProperties>"
+    )
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as package:
+        package.writestr("word/document.xml", document)
+        package.writestr("docProps/core.xml", core)
+    return output.getvalue()
 
 
 def archive(entries):
