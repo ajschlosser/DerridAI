@@ -32,17 +32,15 @@ def block(i:int,chars:int=320,kind:str="paragraph",text:str|None=None):
 def test_profile_and_default_record_sizing():
     """The profile and API defaults agree on record sizing.
 
-    Preferred 1750, tolerance 200, "long" 3500, absolute limit 6000, profile id
-    derrida-scholarly-v12. Update these numbers deliberately when policy changes.
+    Preferred 1750, tolerance 200, "long" 3500, and absolute limit 6000.
+    Update these numbers deliberately when policy changes.
     """
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     assert profile["preferred_record_chars"]==1750
     assert profile["record_length_tolerance"]==200
     assert profile["long_record_chars"]==3500
     assert profile["absolute_record_chars"]==6000
     body=PdfCorpusBuildCreate(asset_id="asset")
-    assert body.profile_id=="derrida-scholarly-v12"
     assert body.record_sizing.preferred_record_chars==1750
     assert body.record_sizing.absolute_record_chars==6000
 

@@ -18,7 +18,6 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
-from app.models import PdfCorpusBuildCreate
 
 
 def install_asset(repo:cb.PdfCorpusRepository, count:int=2):
@@ -40,20 +39,15 @@ def make_build(repo:cb.PdfCorpusRepository,count:int=2):
 
 
 def test_profile_requires_region_type_primary_text_and_discourse_role():
-    """Pin profile/prompt ids and the required metadata fields.
+    """Pin the required metadata fields and their central vocabularies.
 
     Required fields are region_type, primary_text and discourse_role; the profile must
-    list main_text and analysis as allowed values. (Name says v8 for history; the ids now
-    checked are the current ones.)
+    list main_text and analysis as allowed values.
     """
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
-    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v15"
-    assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     assert profile["required_metadata_fields"]==["region_type","primary_text","discourse_role"]
     assert "main_text" in profile["region_types"]
     assert "analysis" in profile["discourse_roles"]
-    assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
 
 
 def test_hybrid_metadata_uses_constrained_llm_and_tracks_field_provenance(tmp_path:Path,monkeypatch):

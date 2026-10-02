@@ -56,13 +56,6 @@ def make_build(repo:cb.PdfCorpusRepository):
     return asset,build
 
 
-def test_profile_and_prompt_version_ids_are_pinned():
-    """Pin the profile, metadata prompt, and document-manifest prompt version ids."""
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
-    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v15"
-    assert cb.DOCUMENT_PROMPT_VERSION=="derridai-document-manifest-v3"
-
-
 def test_touchup_sanitizer_removes_only_model_added_outer_separators():
     """Strip "---", "~~~", or code fences a model wrapped around text, but nothing else.
 

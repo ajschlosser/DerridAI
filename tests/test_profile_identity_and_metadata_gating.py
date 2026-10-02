@@ -21,13 +21,16 @@ from app.models import PdfCorpusBuildCreate
 def test_profile_and_prompt_ids_are_pinned():
     """Pin the active corpus profile and prompt version identifiers.
 
-    What: profile "derrida-scholarly-v12", metadata prompt "derridai-record-metadata-v12",
-    exactly one registered profile, and review_metadata_fields matching the constant.
+    What: the profile, all corpus prompt contracts, publication schema, exactly one
+    registered profile, and review_metadata_fields matching the constant.
     Why: AGENTS.md requires bumping these when their semantics change; this test fails
     until the change is made on purpose (update the strings when you bump them).
     """
     assert cb.PROFILE_VERSION=='derrida-scholarly-v12'
+    assert cb.DOCUMENT_PROMPT_VERSION=='derridai-document-manifest-v3'
+    assert cb.SEGMENTATION_PROMPT_VERSION=='derridai-local-boundaries-v9'
     assert cb.METADATA_PROMPT_VERSION=='derridai-record-metadata-v15'
+    assert cb.PUBLICATION_SCHEMA_VERSION=='derridai-corpus-jsonl-v1'
     assert PdfCorpusBuildCreate(asset_id='a').profile_id=='derrida-scholarly-v12'
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]['review_metadata_fields']==list(cb.REVIEW_METADATA_FIELDS)

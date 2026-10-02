@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import pytest
 from app import metadata_schema as ms
 from app.corpus_metadata import (
@@ -22,7 +19,6 @@ from app.metadata_schema_profiles import (
 )
 from pydantic import ValidationError
 
-LEGACY = json.loads((Path(__file__).parent / "fixtures" / "legacy_prompts.json").read_text(encoding="utf-8"))
 CONTEXT = "<<CONTEXT>>\n"
 
 
