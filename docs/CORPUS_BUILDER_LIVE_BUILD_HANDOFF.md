@@ -41,12 +41,22 @@ The Build workspace should answer, in order:
 - [x] Confirmed PR #403 is merged and the Review remediation/spinner work is on `master`.
 - [x] Audited the current Build workspace, primary status, activity timeline, workflow-presentation domain, and existing tests.
 - [x] Created this implementation branch and design log.
-- [ ] Add progressive record counts to the primary status.
-- [ ] Rebalance Build actions around progressive Review handoff.
-- [ ] Collapse activity and diagnostics into secondary Run details.
-- [ ] Extend unit/Storybook/E2E coverage.
+- [x] Add progressive record counts to the primary status.
+- [x] Rebalance Build actions around progressive Review handoff.
+- [x] Collapse activity and diagnostics into secondary Run details.
+- [x] Extend unit/Storybook/E2E coverage.
 - [ ] Run and fix all frontend quality gates.
 - [ ] Record final validation and remaining follow-up work here.
+
+## Implementation notes
+
+- The primary status now receives queue-derived `ready`, `preparing`, and `issues` counts from the same lifecycle state already used by Review.
+- During enrichment/retry stages, those counts replace the less useful single "running tasks" fact with three record-level handoff states.
+- Review moves ahead of Pause/Cancel in action order and becomes primary when either clean-ready or attention-required Records are available.
+- The existing diagnostics root is reused as the **Run details** disclosure. `CorpusBuildActivity` is mounted inside it through an activity slot, so event history is not rendered until the user asks for operational detail.
+- Warnings, failures, manifest gates, retry state, and segmentation intervention remain outside Run details because they can require immediate action.
+- The existing stage rail and overall build progress remain in the canonical primary status; no second progress surface was introduced.
+- A dedicated progressive-enrichment Storybook fixture now represents the full Build workspace, not only the status card.
 
 ## Non-goals
 
