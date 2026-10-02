@@ -14,6 +14,7 @@ import copy
 import difflib
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -2014,6 +2015,19 @@ class PdfCorpusRepository:
 
 
 
+_LOGGER = logging.getLogger(__name__)
+
+
+def _manifest_locator(block: dict[str, Any]) -> str:
+    """Locate a sampled block in the manifest prompt by its own medium: time range for audio, PDF page otherwise."""
+    if block.get("locator_kind") == "time" or block.get("page") is None:
+        start, end = block.get("start"), block.get("end")
+        span = f"{float(start):.1f}-{float(end):.1f}s" if isinstance(start, (int, float)) and isinstance(end, (int, float)) else "unlocated"
+        speaker = str(block.get("speaker") or "").strip()
+        return f"t={span}" + (f" speaker={speaker!r}" if speaker else "")
+    return f"PDF p.{block['page']} label={block.get('printed_page_label')!r}"
+
+
 class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestWorkflowMixin, OperationsMixin, ReviewActionsMixin, EnrichmentRerunsMixin, SchemaProfileMixin, BuildSegmentationExecutionMixin, MetadataEnrichmentExecutionMixin):
     def __init__(self, repository: PdfCorpusRepository | None = None, max_workers: int = 2) -> None:
         self.repo = repository or PdfCorpusRepository()
@@ -2906,7 +2920,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         midpoint = max(0, len(blocks) // 2 - 15)
         add_many(blocks[midpoint:midpoint + 30])
         add_many(blocks[-40:])
-        chosen = sorted(chosen[:140], key=lambda b: (int(b.get("page") or 0), str(b.get("block_id") or "")))
+        chosen = sorted(chosen[:140], key=lambda b: (int(b.get("page") or 0), float(b.get("start") or 0), str(b.get("block_id") or "")))
         limits = _stage_limits(request)
         context = _context_window(request)
         # Keep manifest analysis representative across the whole book even on
@@ -2921,7 +2935,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 chosen = [chosen[index] for index in indices]
         per_excerpt = max(280, min(900, sample_char_budget // max(1, len(chosen)) - 100))
         sample_text = "\n".join(
-            f"[{b['block_id']} PDF p.{b['page']} label={b.get('printed_page_label')!r} {b['type']}] {str(b.get('text') or '')[:per_excerpt]}"
+            f"[{b['block_id']} {_manifest_locator(b)} {b.get('type') or 'block'}] {str(b.get('text') or '')[:per_excerpt]}"
             for b in chosen
         )[:sample_char_budget]
         prompt = f"""You are establishing a source-bound document manifest for an auditable scholarly corpus build.
@@ -3305,12 +3319,14 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             # Checkpoints intentionally survive a failed stage. The user can repair
             # provider configuration and resume instead of restarting a long book.
             stage = str(self.repo.get_build(build_id).get("stage") or "unknown")
+            # A bare str(KeyError) is just the key; name the exception type and keep the traceback in the log.
+            _LOGGER.exception("Corpus build %s failed in stage %s", build_id, stage)
             self._update(
                 build_id,
                 status="failed",
                 stage="failed",
                 finished_at=iso_now(),
-                error=f"{stage}: {exc}",
+                error=f"{stage}: {type(exc).__name__}: {exc}",
                 resumable=True,
                 retrying_segmentation=False,
             )

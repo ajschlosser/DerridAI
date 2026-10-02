@@ -881,3 +881,43 @@ def test_audio_blocks_without_a_valid_time_range_are_mapping_errors():
     assert "r" in cb.PdfCorpusBuildManager.validate_records(bad, [record], profile)["page_mapping_errors"]
     unlocated = [{"block_id": "a1", "text": "hello"}]
     assert "r" in cb.PdfCorpusBuildManager.validate_records(unlocated, [record], profile)["page_mapping_errors"]
+
+
+def _audio_blocks():
+    return [
+        {"block_id": f"a{i}", "text": f"Spoken sentence number {i}. It continues here.", "type": "paragraph",
+         "locator_kind": "time", "start": float(i * 5), "end": float(i * 5 + 4), "speaker": "S1"}
+        for i in range(6)
+    ]
+
+
+def test_the_structure_stage_handles_audio_blocks(tmp_path):
+    m, bid = manager(tmp_path)
+    blocks = _audio_blocks()
+    asset = {"asset_id": "a", "filename": "talk.mp3", "media_kind": "audio", "metadata": {}, "pages": []}
+
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("no model in tests")
+
+    m._document_manifest_call = unavailable
+    manifest = m._document_manifest(asset, blocks, {}, bid)
+    assert isinstance(manifest, dict)
+    # The remaining steps of the stage must also accept blocks located by time.
+    scoped = cb._manifest_main_text_blocks(blocks, manifest, bounds_confirmed=False)
+    cb.page_source_quality_report(scoped, asset["pages"])
+    cb._semantic_atoms(scoped)
+    records = cb._construct_records(asset, scoped, [])
+    assert records and records[0]["pdf_pages"] == []
+
+
+def test_a_failed_build_reports_the_exception_type_and_stays_resumable(tmp_path):
+    m, bid = manager(tmp_path)
+
+    def broken(*args, **kwargs):
+        raise KeyError("page")
+
+    m._prepare_build_scope = broken
+    m._run(bid, {})
+    build = m.repo.get_build(bid)
+    assert build["status"] == "failed" and build["resumable"] is True
+    assert "KeyError" in build["error"] and "page" in build["error"]
