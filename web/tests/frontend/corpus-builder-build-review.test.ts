@@ -237,6 +237,11 @@ describe("Corpus Builder build, review, and finish states", () => {
 
   it("routes a ready corpus to publication", async () => {
     const wrapper = mount(CorpusFinishWorkspace, { props: { build: buildBase } });
+    expect(wrapper.get(".publish-decision").attributes("data-state")).toBe("ready");
+    const details = wrapper.get(".readiness-details-toggle");
+    expect(details.attributes("aria-expanded")).toBe("false");
+    await details.trigger("click");
+    expect(details.attributes("aria-expanded")).toBe("true");
     expect(wrapper.get(".finish-primary button").text()).toContain("Publish");
     await wrapper.get(".finish-primary button").trigger("click");
     expect(wrapper.emitted("publish")).toHaveLength(1);
@@ -276,6 +281,7 @@ describe("Corpus Builder build, review, and finish states", () => {
       },
     };
     const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
+    expect(wrapper.get(".publish-decision").attributes("data-state")).toBe("blocked");
     const primary = wrapper.get(".finish-primary button");
     expect(primary.attributes("disabled")).toBeUndefined();
     await primary.trigger("click");
@@ -299,7 +305,11 @@ describe("Corpus Builder build, review, and finish states", () => {
       },
     };
     const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
+    expect(wrapper.get(".publish-decision").attributes("data-state")).toBe("blocked");
     expect(wrapper.find(".blockers").exists()).toBe(true);
+    expect(wrapper.find(".document-blocker").exists()).toBe(false);
+    expect(wrapper.get(".blocker-detail").text().length).toBeGreaterThan(0);
+    expect(wrapper.get(".readiness-details-toggle").attributes("aria-expanded")).toBe("false");
     await buttonByText(wrapper, "Fix").trigger("click");
     expect(wrapper.emitted("editDocumentMetadata")).toHaveLength(1);
   });
