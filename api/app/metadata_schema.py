@@ -26,6 +26,7 @@ import uuid
 from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -50,9 +51,10 @@ from .semantic_identity import CollectionSemantics, EquivalenceMode, Equivalence
 
 __all__ = ["CollectionSemantics", "EquivalenceMode", "EquivalenceProfile"]
 
-# Format 2 replaced SchemaField.applies_to_work with `scope` and added `document_fields`. Format 1 files still import.
-FORMAT_VERSION = 2
-READABLE_FORMAT_VERSIONS = {1, 2}
+# Format 2 replaced SchemaField.applies_to_work with `scope` and added `document_fields`.
+# Format 3 adds stable list-of-object values for repeatable associated groups. Older files still import.
+FORMAT_VERSION = 3
+READABLE_FORMAT_VERSIONS = {1, 2, 3}
 DEFAULT_SCHEMA_ID = "default"
 CORE_FIELDS = ("region_type", "primary_text", "discourse_role")
 CORE_GROUP = "discourse"
@@ -275,6 +277,7 @@ class SchemaGroup(BaseModel):
     """One model call per record: the opening text, the notes after the field list, and the closing instructions."""
 
     model_config = ConfigDict(extra="forbid")
+    group_id: str = ""
     key: str
     label: str = Field(min_length=1, max_length=80)
     intro: str = Field(min_length=1, max_length=4000)
@@ -284,6 +287,30 @@ class SchemaGroup(BaseModel):
     # May use {fields} (this group's field names) and {assessed_fields} (the ones the model reports confidence for).
     footer: str = Field(default="", max_length=4000)
     retrieval_profile: RetrievalProfile | None = None
+    # A repeatable group is stored under its stable group key as a list of
+    # objects. Each object carries one stable instance_id and all member fields;
+    # numbered labels are presentation only and never become storage keys.
+    repeatable: bool = False
+    max_items: int | None = Field(default=None, ge=1, le=24)
+    instance_label: str = Field(default="{label} {number}", min_length=1, max_length=120)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _identity_default(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        result = dict(value)
+        key = str(result.get("key") or "").strip()
+        if not str(result.get("group_id") or "").strip() and key:
+            result["group_id"] = f"group-{uuid.uuid5(uuid.NAMESPACE_URL, 'derridai:group:' + key)}"
+        return result
+
+    @field_validator("group_id")
+    @classmethod
+    def _group_id(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:-]{1,119}", value):
+            raise ValueError("group_id must be a stable identifier.")
+        return value
 
     @field_validator("key")
     @classmethod
@@ -291,6 +318,20 @@ class SchemaGroup(BaseModel):
         if not re.match(r"^[a-z][a-z0-9_]{1,23}$", value):
             raise ValueError("A group key is lower-case letters, digits and underscores (2 to 24 characters).")
         return value
+
+    @model_validator(mode="after")
+    def _repeatable_configuration(self) -> SchemaGroup:
+        if self.repeatable and self.key == CORE_GROUP:
+            raise ValueError("The locked discourse group cannot be repeatable.")
+        if self.repeatable and self.max_items is None:
+            raise ValueError("A repeatable group needs max_items.")
+        if not self.repeatable and self.max_items is not None:
+            raise ValueError("Only a repeatable group has max_items.")
+        return self
+
+    def display_label(self, number: int) -> str:
+        """Render an instance label without affecting its stable storage identity."""
+        return self.instance_label.replace("{label}", self.label).replace("{number}", str(number))
 
 
 class DocumentFieldPolicy(BaseModel):
@@ -375,10 +416,29 @@ class MetadataSchema(BaseModel):
         ids = [f.field_id for f in self.fields]
         if len(ids) != len(set(ids)):
             raise ValueError("Field identities must be different from each other.")
+        group_ids = [g.group_id for g in self.groups]
+        if len(group_ids) != len(set(group_ids)):
+            raise ValueError("Group identities must be different from each other.")
         for field in self.fields:
             if field.group not in keys:
                 raise ValueError(f"Field '{field.name}' is in a group ('{field.group}') the schema does not have.")
-        known = set(self.field_identity_map().values())
+        for group in self.groups:
+            if group.repeatable:
+                scopes = {field.scope for field in self.fields_in(group.key)}
+                if not scopes:
+                    raise ValueError(f"Repeatable group '{group.key}' needs at least one member field.")
+                if len(scopes) != 1:
+                    raise ValueError(
+                        f"Every member of repeatable group '{group.key}' must use the same scope."
+                    )
+        repeatable_keys = {group.key for group in self.groups if group.repeatable}
+        collisions = repeatable_keys & set(names)
+        if collisions:
+            raise ValueError(
+                "A repeatable group key cannot also be a field name: "
+                + ", ".join(sorted(collisions))
+            )
+        known = set(self.field_identity_map().values()) | {field.field_id for field in self.fields}
         owners = [(f"field '{f.name}'", f.retrieval_profile, self.field_id(f.name)) for f in self.fields]
         owners += [(f"group '{g.key}'", g.retrieval_profile, None) for g in self.groups]
         for label, profile, own_id in owners:
@@ -397,12 +457,19 @@ class MetadataSchema(BaseModel):
         return [f for f in self.fields if f.group == key]
 
     def field_names(self) -> list[str]:
-        return list(CORE_FIELDS) + [f.name for f in self.fields]
+        repeatable = {group.key for group in self.groups if group.repeatable}
+        member_groups = {group.key for group in self.groups if group.repeatable}
+        return list(CORE_FIELDS) + [
+            f.name for f in self.fields if f.group not in member_groups
+        ] + sorted(repeatable)
 
     def field_id(self, name: str) -> str:
         """Return the stable identity used by memory bindings and migrations."""
         if name in CORE_FIELDS:
             return f"core.{name}"
+        group = next((item for item in self.groups if item.repeatable and item.key == name), None)
+        if group is not None:
+            return group.group_id
         field = next((item for item in self.fields if item.name == name), None)
         if field is None:
             raise KeyError(name)
@@ -422,6 +489,9 @@ class MetadataSchema(BaseModel):
         if name in CORE_FIELDS:
             group = self.group(CORE_GROUP)
             return group.retrieval_profile or RetrievalProfile()
+        group = next((item for item in self.groups if item.repeatable and item.key == name), None)
+        if group is not None:
+            return group.retrieval_profile or RetrievalProfile()
         field = next((item for item in self.fields if item.name == name), None)
         if field is None:
             raise KeyError(name)
@@ -437,14 +507,19 @@ class MetadataSchema(BaseModel):
         that declares none is scoped to its own stable identity.
         """
         field = next((item for item in self.fields if item.name == name), None)
-        if field is None and name not in CORE_FIELDS:
+        repeatable_group = next(
+            (item for item in self.groups if item.repeatable and item.key == name), None
+        )
+        if field is None and name not in CORE_FIELDS and repeatable_group is None:
             raise KeyError(name)
         compat = self.semantic_compatibility_id(name) or ""
-        scope = compat or (field.field_id if field else name)
+        scope = compat or (field.field_id if field else self.field_id(name))
         if field is not None and field.equivalence_profile is not None:
             profile = field.equivalence_profile
         elif compat in DEFAULT_EQUIVALENCE_PROFILES:
             profile = DEFAULT_EQUIVALENCE_PROFILES[compat]
+        elif repeatable_group is not None:
+            profile = EquivalenceProfile(mode="exact", collection_semantics="ordered")
         elif field is None or field.type in {"boolean", "number"}:
             profile = EquivalenceProfile(mode="exact")
         elif field.type == "choice":
@@ -455,30 +530,41 @@ class MetadataSchema(BaseModel):
 
     def family_fields(self) -> dict[str, set[str]]:
         """Group key to its field names; the core sits in its group. Same shape as METADATA_FAMILY_FIELDS."""
-        out = {g.key: {f.name for f in self.fields_in(g.key)} for g in self.groups}
+        out = {
+            g.key: ({g.key} if g.repeatable else {f.name for f in self.fields_in(g.key)})
+            for g in self.groups
+        }
         out[CORE_GROUP] |= set(CORE_FIELDS)
         return out
 
     def evidence_fields(self) -> set[str]:
-        return {f.name for f in self.fields if f.evidence} | set(CORE_FIELDS)
+        return {
+            (self.group(f.group).key if self.group(f.group).repeatable else f.name)
+            for f in self.fields
+            if f.evidence
+        } | set(CORE_FIELDS)
 
     def attribution_fields(self) -> set[str]:
-        return {f.name for f in self.fields if f.evidence}
+        return {
+            (self.group(f.group).key if self.group(f.group).repeatable else f.name)
+            for f in self.fields
+            if f.evidence
+        }
 
     def review_fields(self) -> list[str]:
-        return list(CORE_FIELDS) + [
-            f.name
+        return list(CORE_FIELDS) + list(dict.fromkeys(
+            self.group(f.group).key if self.group(f.group).repeatable else f.name
             for f in self.fields
             if f.review and f.role != "operational" and f.review_visibility != "hidden"
-        ]
+        ))
 
     def record_review_fields(self) -> list[str]:
         """Fields intended for the ordinary human Record-review surface."""
-        return list(CORE_FIELDS) + [
-            f.name
+        return list(CORE_FIELDS) + list(dict.fromkeys(
+            self.group(f.group).key if self.group(f.group).repeatable else f.name
             for f in self.fields
             if f.role != "operational" and f.review_visibility != "hidden"
-        ]
+        ))
 
     def by_name(self) -> dict[str, SchemaField]:
         return {f.name: f for f in self.fields}
@@ -563,7 +649,9 @@ def build_group_prompt(
     fields = [
         field
         for field in schema.fields_in(group_key)
-        if requested_fields is None or field.name in requested_fields
+        if requested_fields is None
+        or field.name in requested_fields
+        or (group.repeatable and group.key in requested_fields)
     ]
     region_types = allowed_region_types or REGION_TYPES
     roles = allowed_discourse_roles or DISCOURSE_ROLES
@@ -605,6 +693,14 @@ def build_group_prompt(
     scoped_names = ([*CORE_FIELDS] if group_key == CORE_GROUP else []) + [field.name for field in fields]
     intro = group.intro.rstrip().replace("{fields}", _oxford(scoped_names))
     parts = [intro]
+    if group.repeatable:
+        parts.append(
+            f"Return metadata.{group.key} as a list of at most {group.max_items} objects. "
+            "Each object MUST have one stable instance_id and the associated member fields "
+            f"({_oxford([field.name for field in fields])}). Keep the same instance_id when "
+            "a person edits an instance. Numbered labels are display-only; never create "
+            "numbered metadata keys."
+        )
     if field_names is not None:
         parts.append(
             "THIS MODEL CALL IS FIELD-SCOPED. Return metadata and assessments only for: "
@@ -799,6 +895,34 @@ def _annotation(field: SchemaField) -> Any:
     return str | None
 
 
+def _repeatable_annotation(group: SchemaGroup, fields: list[SchemaField]) -> Any:
+    item_props: dict[str, Any] = {
+        "instance_id": (
+            Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_.:-]{1,119}$")],
+            ...,
+        )
+    }
+    for field in fields:
+        item_props[field.name] = (_annotation(field), ...)
+    item = create_model(
+        f"{group.key.title()}MetadataInstance",
+        __config__=ConfigDict(extra="forbid"),
+        **item_props,
+    )
+
+    def unique_instance_ids(values: list[BaseModel]) -> list[BaseModel]:
+        ids = [value.instance_id for value in values]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Repeatable metadata instance_id values must be unique.")
+        return values
+
+    return Annotated[
+        list[item],
+        Field(max_length=group.max_items),
+        AfterValidator(unique_instance_ids),
+    ]
+
+
 def response_model_for(
     schema: MetadataSchema,
     group_key: str,
@@ -822,14 +946,24 @@ def response_model_for(
     group_fields = [
         field
         for field in schema.fields_in(group_key)
-        if requested_fields is None or field.name in requested_fields
+        if requested_fields is None
+        or field.name in requested_fields
+        or (schema.group(group_key).repeatable and group_key in requested_fields)
     ]
-    for field in group_fields:
-        props[field.name] = (_annotation(field), ...)
+    group = schema.group(group_key)
+    if group.repeatable:
+        props[group.key] = (_repeatable_annotation(group, group_fields), ...)
+    else:
+        for field in group_fields:
+            props[field.name] = (_annotation(field), ...)
     metadata = create_model(f"{group_key.title()}Metadata", __config__=ConfigDict(extra="forbid"), **props)
 
     assessed_names = list(CORE_FIELDS) if group_key == CORE_GROUP else []
-    assessed_names.extend(field.name for field in group_fields if field.assess)
+    if group.repeatable:
+        if any(field.assess for field in group_fields):
+            assessed_names.append(group.key)
+    else:
+        assessed_names.extend(field.name for field in group_fields if field.assess)
     assessed_names = list(dict.fromkeys(assessed_names))
 
     fields: dict[str, Any] = {
@@ -850,7 +984,11 @@ def response_model_for(
         # A custom family may intentionally contain no assessed fields.
         fields["field_assessments"] = (dict[str, FieldAssessment], Field(default_factory=dict))
     evidence_names = set(CORE_FIELDS) if group_key == CORE_GROUP else set()
-    evidence_names.update(field.name for field in group_fields if field.evidence)
+    if group.repeatable:
+        if any(field.evidence for field in group_fields):
+            evidence_names.add(group.key)
+    else:
+        evidence_names.update(field.name for field in group_fields if field.evidence)
     if evidence_names:
         fields["field_evidence"] = (dict[str, FieldEvidence], Field(default_factory=dict))
 
@@ -862,7 +1000,8 @@ def response_model_for(
     response.assessed_fields_for_validation = tuple(assessed_names)
     response.evidence_fields_for_validation = tuple(sorted(evidence_names))
     boolean_fields = {"primary_text"} if group_key == CORE_GROUP else set()
-    boolean_fields.update(field.name for field in group_fields if field.type == "boolean")
+    if not group.repeatable:
+        boolean_fields.update(field.name for field in group_fields if field.type == "boolean")
     response.boolean_fields_for_validation = frozenset(boolean_fields)
 
     # Open text/list values must never be populated from the schema's own control
@@ -1062,9 +1201,23 @@ def edit_model(schema: MetadataSchema, base: type[BaseModel]) -> type[BaseModel]
     """
     configurable = {f.name for f in default_schema().fields}
     props: dict[str, Any] = {name: (info.annotation, info) for name, info in base.model_fields.items() if name not in configurable}
+    repeatable_fields = {
+        field.name
+        for group in schema.groups
+        if group.repeatable
+        for field in schema.fields_in(group.key)
+    }
     for field in schema.fields:
+        if field.name in repeatable_fields:
+            continue
         annotation = _annotation(field)
         if field.type == "list":
             annotation = list[str]
         props[field.name] = (annotation | None if field.type != "list" else annotation, Field(default_factory=list) if field.type == "list" else None)
+    for group in schema.groups:
+        if group.repeatable:
+            props[group.key] = (
+                _repeatable_annotation(group, schema.fields_in(group.key)),
+                Field(default_factory=list),
+            )
     return create_model("RecordEdit", __config__=ConfigDict(extra="forbid"), **props)

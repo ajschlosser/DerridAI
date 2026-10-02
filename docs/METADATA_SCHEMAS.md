@@ -12,10 +12,22 @@ The built-in domain profiles also use stable namespaced identities. Their fields
 
 ## What a schema contains
 
-- **Groups.** Each group is one model call per record. It has an opening text, an optional heading for its field list, notes, a trailer, and a footer with the evidence and assessment instructions. The footer may use `{fields}` and `{assessed_fields}`.
-- **Fields.** Flat, not nested. Each has a stable semantic identity plus name/label, type (`text`, `number`, `boolean`, `choice`, `list`), a group, and the instruction the model receives (`{values}` is replaced by allowed values). A deliberate rename may preserve the stable field identity so compatible reviewed precedents remain attached to the same semantic field. A `choice` field has allowed values, each with an optional definition; `strict` makes them the only values the model may return. `evidence` requires source binding, `assess` requests confidence, and `review` keeps a record from being accepted while the field is unresolved. Fields may also define POS/NER guidance and reviewed-precedent retrieval policy.
+- **Groups.** Each group is one model call per record. It has a stable identity, opening text, an optional heading for its field list, notes, a trailer, and a footer with the evidence and assessment instructions. The footer may use `{fields}` and `{assessed_fields}`. A group may be repeatable, with a bounded number of associated instances.
+- **Fields.** Ordinary fields are flat. Each has a stable semantic identity plus name/label, type (`text`, `number`, `boolean`, `choice`, `list`), a group, and the instruction the model receives (`{values}` is replaced by allowed values). A deliberate rename may preserve the stable field identity so compatible reviewed precedents remain attached to the same semantic field. A `choice` field has allowed values, each with an optional definition; `strict` makes them the only values the model may return. `evidence` requires source binding, `assess` requests confidence, and `review` keeps a record from being accepted while the field is unresolved. Fields may also define POS/NER guidance and reviewed-precedent retrieval policy.
 - **Scope.** Record-scoped fields describe one research record. Corpus-scoped fields are inferred once for the work/corpus and inherited by its records.
 - **Guidance.** Every built-in Fiction and Non-fiction field has an explicit model instruction. Controlled-choice fields additionally define what each allowed value means. Their domain fields are evidence-bound and assessed, so a populated value remains auditable rather than becoming an unqualified model label.
+
+### Repeatable associated groups
+
+A repeatable group stores a bounded list of objects under the group's stable key.
+Every object has a stable `instance_id` and one value for each configured member
+field. For example, quotation participants can associate `quoted_speaker` and
+`quoted_addressee` in the same instance. Review surfaces display those members as
+`QUOTED_SPEAKER_1`, `QUOTED_ADDRESSEE_1`, and so on, but the number is only a
+presentation index: reordering rows does not change their identity, and numbered
+keys are never written into canonical records. This avoids the alignment failures
+of parallel lists and permits deterministic, model, and human processes to revise
+the same associated instance.
 
 ## Built-in profiles
 
@@ -152,7 +164,7 @@ A build copies its schema when it starts. Editing or deleting a saved schema aft
 
 ## Sharing
 
-Export writes one JSON file: `{"derridai_metadata_schema": 2, "sha256": …, "schema": …}`. Import validates the file like anything typed into an editor; the checksum catches damage or edits after export, and is not a signature.
+Export writes one JSON file: `{"derridai_metadata_schema": 3, "sha256": …, "schema": …}`. Import validates the file like anything typed into an editor; the checksum catches damage or edits after export, and is not a signature. Format 1 and 2 schemas remain readable and are migrated in memory.
 
 ## API (administrators)
 

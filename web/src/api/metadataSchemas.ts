@@ -53,6 +53,7 @@ export interface SchemaField {
   ner_tags: string[];
 }
 export interface SchemaGroup {
+  group_id?: string;
   key: string;
   label: string;
   intro: string;
@@ -61,6 +62,9 @@ export interface SchemaGroup {
   trailer: string;
   footer: string;
   retrieval_profile?: RetrievalProfile | null;
+  repeatable?: boolean;
+  max_items?: number | null;
+  instance_label?: string;
 }
 /** A schema's policy for one DerridAI-owned bibliographic field (title, document_author, …). */
 export interface DocumentFieldPolicy {

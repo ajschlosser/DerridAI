@@ -1005,6 +1005,71 @@ class ReviewActionsMixin:
         self._schedule_metadata_exemplar_projection(build_id)
         return entry
 
+    @_serialize_record_mutation
+    def update_voice_assignments(self, asset_id: str, assignments: dict[str, str]) -> dict[str, Any]:
+        """Project reviewed diarized-voice names into every extant record."""
+        reviewer = current_reviewer.get()
+        asset = self.repo.update_voice_assignments(asset_id, assignments, reviewer=reviewer)
+        resolved = {
+            voice_id: str(item.get("display_name") or "").strip()
+            for voice_id, item in (asset.get("voice_assignments") or {}).items()
+            if isinstance(item, dict)
+        }
+        changed_records = 0
+        builds: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            page = self.repo.list_builds(offset=offset, limit=200, asset_id=asset_id)
+            items = list(page.get("items") or [])
+            builds.extend(items)
+            if len(items) < 200:
+                break
+            offset += len(items)
+        for build in builds:
+            build_id = str(build.get("build_id") or "")
+            records = self.repo.load_records(build_id)
+            changed = False
+            schema = self._schema_for(build_id)
+            for record in records:
+                if str(record.get("source_asset_id") or record.get("source_document_id") or "") != asset_id:
+                    continue
+                spans = list(record.get("source_spans") or [])
+                voices: list[str] = []
+                for span in spans:
+                    voice_id = str(span.get("speaker") or "").strip()
+                    if not voice_id:
+                        continue
+                    voices.append(voice_id)
+                    name = resolved.get(voice_id, "")
+                    if name:
+                        span["resolved_speaker"] = name
+                    else:
+                        span.pop("resolved_speaker", None)
+                if not voices or len(voices) != len(spans) or len(set(voices)) != 1:
+                    continue
+                voice_id = voices[0]
+                value = resolved.get(voice_id) or voice_id
+                prior = current_assertion_by_name(record, "speaker")
+                create_human_assertion(
+                    record,
+                    "speaker",
+                    value,
+                    schema=schema,
+                    supersedes=prior,
+                    override=True,
+                    actor=reviewer,
+                    method="human_voice_assignment",
+                    reason=f"Reviewer assigned the diarized voice {voice_id}.",
+                )
+                project_record_assertions(record, schema=schema)
+                record["record_revision"] = int(record.get("record_revision") or 0) + 1
+                record["updated_at"] = iso_now()
+                changed = True
+                changed_records += 1
+            if changed:
+                self.repo.save_records(build_id, records)
+        return {"asset": asset, "records_updated": changed_records}
+
     def semantic_alias_sources(self, build_id: str) -> list[dict[str, Any]]:
         """Other corpus builds whose reviewed identities can be imported here."""
         return alias_sources(self.repo, build_id)

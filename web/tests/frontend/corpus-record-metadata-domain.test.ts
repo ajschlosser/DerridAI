@@ -58,6 +58,25 @@ describe("Corpus Builder editable metadata packet", () => {
     });
   });
 
+  it("edits a repeatable group as one associated value instead of parallel member fields", () => {
+    const quotations = [
+      {
+        instance_id: "quote:1",
+        quoted_speaker: "Levinas",
+        quoted_addressee: "Derrida",
+      },
+    ];
+    const schema = {
+      fields: [
+        { name: "quoted_speaker", group: "quotations", label: "Quoted speaker" },
+        { name: "quoted_addressee", group: "quotations", label: "Quoted addressee" },
+      ],
+      groups: [{ key: "quotations", repeatable: true }],
+    } as any;
+
+    expect(editableRecordMetadata({ quotations }, schema)).toEqual({ quotations });
+  });
+
   it("surfaces a custom schema evidence field without a product-specific allowlist", () => {
     const record = { custom_claim: "The supplement is constitutive." };
     const schema = {

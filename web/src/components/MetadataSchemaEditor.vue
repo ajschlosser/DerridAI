@@ -78,6 +78,11 @@ function load(schema: MetadataSchema, fresh = false) {
     field.ner_tags ||= [];
     field.scope ||= "record";
   }
+  for (const group of next.groups) {
+    group.repeatable ||= false;
+    group.max_items = group.repeatable ? group.max_items || 8 : null;
+    group.instance_label ||= "{label} {number}";
+  }
   next.document_fields = completeDocumentFields(next.document_fields);
   draft.value = next;
   savedHash.value = JSON.stringify(draft.value);

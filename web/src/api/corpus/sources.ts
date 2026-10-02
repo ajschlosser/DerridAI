@@ -185,6 +185,11 @@ export const corpusSourcesApi = {
       method: "PATCH",
       body: JSON.stringify({ metadata, skip_fields: skipFields }),
     }),
+  updateVoiceAssignments: (assetId: string, assignments: Record<string, string>) =>
+    apiRequest<{ asset: PdfAsset; records_updated: number }>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/voice-assignments`,
+      { method: "PATCH", body: JSON.stringify({ assignments }) },
+    ),
   blocks: (assetId: string, offset = 0, limit = 200, ids: string[] = [], page?: number) =>
     apiRequest<{ items: SourceBlock[]; total: number }>(
       `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/blocks?offset=${offset}&limit=${limit}${

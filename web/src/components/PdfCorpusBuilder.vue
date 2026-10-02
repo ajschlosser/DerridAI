@@ -347,6 +347,7 @@ const {
   languagePrompt,
   saveSourceLanguage,
   applyPageEstimate,
+  saveVoiceAssignments,
   refreshAssets,
   upload,
   applyUnitPolicy,
@@ -400,9 +401,9 @@ const missingMetadataPromptOpen = ref(false);
 const canPublishUnreviewed = computed(() =>
   Boolean(
     currentBuild.value &&
-      !currentBuild.value.publication &&
-      Number(currentBuild.value.record_count || 0) > 0 &&
-      ["ready", "awaiting_review"].includes(String(currentBuild.value.status || "")),
+    !currentBuild.value.publication &&
+    Number(currentBuild.value.record_count || 0) > 0 &&
+    ["ready", "awaiting_review"].includes(String(currentBuild.value.status || "")),
   ),
 );
 async function publishUnreviewed() {
@@ -1400,9 +1401,9 @@ const recordSizingValid = computed(
 const canStartConcurrentBuild = computed(() =>
   Boolean(
     recordSizingValid.value &&
-      selectedAsset.value &&
-      contextSafe.value &&
-      (selectedProviderId.value || !activeBuildCount.value),
+    selectedAsset.value &&
+    contextSafe.value &&
+    (selectedProviderId.value || !activeBuildCount.value),
   ),
 );
 const transientNetworkError = computed(() =>
@@ -1597,8 +1598,8 @@ const {
   setupFacts: () => ({
     structureNeedsReview: Boolean(
       paginatedSource.value &&
-        selectedAsset.value?.pages?.length &&
-        !selectedAsset.value.document_layout?.main_text_pdf_start,
+      selectedAsset.value?.pages?.length &&
+      !selectedAsset.value.document_layout?.main_text_pdf_start,
     ),
     structureSummary: selectedStructureSummary.value,
     recordSizingValid: recordSizingValid.value,
@@ -2587,6 +2588,22 @@ defineExpose({
             :filename="selectedAsset.filename"
             :page-count="selectedAsset.page_count"
             :block-count="selectedAsset.block_count"
+            :speakers="
+              selectedAsset.initial_metadata?.speakers ||
+              (selectedAsset.initial_metadata?.speaker
+                ? [selectedAsset.initial_metadata.speaker]
+                : [])
+            "
+            :voice-assignments="
+              Object.fromEntries(
+                Object.entries(selectedAsset.voice_assignments || {}).map(([voice, assignment]) => [
+                  voice,
+                  assignment.display_name,
+                ]),
+              )
+            "
+            :busy="busy === 'voice-assignments'"
+            @save-voice-assignments="saveVoiceAssignments"
           />
         </template>
         <CorpusTopologyPolicyControl
@@ -3259,11 +3276,11 @@ defineExpose({
       :concurrency-risk="
         Boolean(
           providerProfiles.find((p) => p.id === llmActionProviderId)?.type === 'ollama' &&
-            llmActionConcurrentLoad + 1 >
-              Number(
-                providerProfiles.find((p) => p.id === llmActionProviderId)
-                  ?.max_concurrent_requests || 1,
-              ),
+          llmActionConcurrentLoad + 1 >
+            Number(
+              providerProfiles.find((p) => p.id === llmActionProviderId)?.max_concurrent_requests ||
+                1,
+            ),
         )
       "
       :active-requests="llmActionConcurrentLoad"
@@ -3293,11 +3310,20 @@ defineExpose({
       :page-width="selectedPageMeta?.width || 0"
       :page-height="selectedPageMeta?.height || 0"
       :blocks="selectedPageBlocks"
+      :voice-assignments="
+        Object.fromEntries(
+          Object.entries(selectedAsset.voice_assignments || {}).map(([voice, assignment]) => [
+            voice,
+            assignment.display_name,
+          ]),
+        )
+      "
       :text="String(selectedRecord.text || '')"
       :busy="busy !== ''"
       @close="sourceTranscriptionOpen = false"
       @page-change="(page) => (selectedPdfPage = page)"
       @save-text="saveSourceTranscription"
+      @save-voice-assignments="saveVoiceAssignments"
     />
     <CorpusSourceQualityDialog
       :open="ingestWarningOpen"

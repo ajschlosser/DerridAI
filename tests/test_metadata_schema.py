@@ -1,3 +1,4 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
 """Metadata schemas: the built-in one reproduces today's prompts, and custom ones are validated and portable."""
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from app.metadata_schema_profiles import (
     fiction_schema,
     nonfiction_schema,
 )
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 CONTEXT = "<<CONTEXT>>\n"
 
@@ -423,6 +424,134 @@ def custom():
             ms.SchemaField(name="year_mentioned", label="Year mentioned", type="number", group="ideas"),
         ],
     )
+
+
+def repeatable_custom():
+    return ms.MetadataSchema(
+        name="Associated quotations",
+        groups=[
+            ms.SchemaGroup(key="discourse", label="Discourse", intro="Classify."),
+            ms.SchemaGroup(
+                key="quotations",
+                label="Quoted speaker",
+                intro="Extract associated quotations.",
+                repeatable=True,
+                max_items=3,
+            ),
+        ],
+        fields=[
+            ms.SchemaField(
+                name="quoted_speaker",
+                label="Quoted speaker",
+                group="quotations",
+            ),
+            ms.SchemaField(
+                name="quoted_work",
+                label="Quoted work",
+                group="quotations",
+            ),
+        ],
+    )
+
+
+def test_repeatable_group_schema_contract_is_stable_and_bounded():
+    schema = repeatable_custom()
+    group = schema.group("quotations")
+    assert schema.format_version == 3
+    assert group.display_label(2) == "Quoted speaker 2"
+    assert group.max_items == 3
+
+    body = schema.model_dump(mode="json")
+    body["groups"][1]["max_items"] = None
+    with pytest.raises(ValidationError, match="needs max_items"):
+        MetadataSchema.model_validate(body)
+    body = schema.model_dump(mode="json")
+    body["groups"][1]["key"] = "quoted_work"
+    with pytest.raises(ValidationError, match="cannot also be a field name"):
+        MetadataSchema.model_validate(body)
+
+
+def test_repeatable_model_output_uses_instances_not_numbered_storage_keys():
+    model = ms.response_model_for(repeatable_custom(), "quotations")
+    parsed = model.model_validate(
+        {
+            "metadata": {
+                "quotations": [
+                    {
+                        "instance_id": "quote:levinas",
+                        "quoted_speaker": "Emmanuel Levinas",
+                        "quoted_work": "Totality and Infinity",
+                    },
+                    {
+                        "instance_id": "quote:heidegger",
+                        "quoted_speaker": "Martin Heidegger",
+                        "quoted_work": None,
+                    },
+                ]
+            }
+        }
+    )
+    assert parsed.metadata.quotations[0].instance_id == "quote:levinas"
+    properties = model.model_json_schema()["$defs"]["QuotationsMetadata"]["properties"]
+    assert set(properties) == {"quotations"}
+    assert "QUOTED_SPEAKER_1" not in json.dumps(model.model_json_schema())
+
+    duplicate = parsed.model_dump(mode="json")
+    duplicate["metadata"]["quotations"][1]["instance_id"] = "quote:levinas"
+    with pytest.raises(ValidationError, match="instance_id values must be unique"):
+        model.model_validate(duplicate)
+    too_many = parsed.model_dump(mode="json")
+    for number in (3, 4):
+        too_many["metadata"]["quotations"].append(
+            {
+                "instance_id": f"quote:item-{number}",
+                "quoted_speaker": None,
+                "quoted_work": None,
+            }
+        )
+    with pytest.raises(ValidationError, match="at most 3"):
+        model.model_validate(too_many)
+
+
+def test_repeatable_human_edit_model_preserves_associated_members():
+    class FixedEdit(BaseModel):
+        language: str | None = None
+
+    model = ms.edit_model(repeatable_custom(), FixedEdit)
+    parsed = model.model_validate(
+        {
+            "language": "en",
+            "quotations": [
+                {
+                    "instance_id": "quote:a",
+                    "quoted_speaker": "Husserl",
+                    "quoted_work": "Ideas I",
+                }
+            ],
+        }
+    )
+    assert parsed.quotations[0].quoted_work == "Ideas I"
+    assert "quoted_speaker" not in model.model_fields
+    with pytest.raises(ValidationError):
+        model.model_validate({"QUOTED_SPEAKER_1": "Husserl"})
+
+
+@pytest.mark.parametrize("version", [1, 2, 3])
+def test_v1_v2_v3_exports_remain_readable_as_v3(version):
+    schema = custom()
+    raw = schema.model_dump(mode="json", exclude={"id"})
+    raw["format_version"] = version
+    payload = {
+        "derridai_metadata_schema": version,
+        "schema": raw,
+        "sha256": ms.hashlib.sha256(
+            json.dumps(raw, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()[:16],
+    }
+    imported = ms.import_schema(payload)
+    assert imported.format_version == 3
+    assert imported.group("ideas").repeatable is False
+    assert imported.fields_in("ideas")[0].name == "ideas"
 
 
 def test_retrieval_profile_migrates_abandoned_routing_fields_without_losing_metadata_disable():

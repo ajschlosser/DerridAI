@@ -1388,6 +1388,45 @@ class PdfCorpusRepository:
             _json_write(self.asset_meta_path(asset_id), asset)
             return asset
 
+    def update_voice_assignments(
+        self,
+        asset_id: str,
+        assignments: dict[str, str],
+        *,
+        reviewer: str = "",
+    ) -> dict[str, Any]:
+        """Review diarized voice identities without rewriting extracted blocks."""
+        with self._lock:
+            asset = self.get_asset(asset_id)
+            if asset.get("media_kind") != "audio":
+                raise ValueError("Voice assignments are available only for audio sources.")
+            voices = list(dict.fromkeys(
+                str(block.get("speaker") or "").strip()
+                for block in self._load_block_rows(asset_id)
+                if str(block.get("speaker") or "").strip()
+            ))
+            unknown = sorted(set(assignments) - set(voices))
+            if unknown:
+                raise ValueError("Unknown diarized voice(s): " + ", ".join(unknown))
+            normalized: dict[str, dict[str, Any]] = {}
+            previous = asset.get("voice_assignments")
+            previous = previous if isinstance(previous, dict) else {}
+            for voice_id in voices:
+                name = str(assignments.get(voice_id) or "").strip()
+                prior = previous.get(voice_id) if isinstance(previous.get(voice_id), dict) else {}
+                normalized[voice_id] = {
+                    "voice_id": voice_id,
+                    "display_name": name,
+                    "authority": "human" if name else "unassigned",
+                    "reviewer": reviewer if name else "",
+                    "updated_at": iso_now() if name != str(prior.get("display_name") or "") else prior.get("updated_at"),
+                }
+            asset["voice_assignments"] = normalized
+            asset["voice_assignment_revision"] = int(asset.get("voice_assignment_revision") or 0) + 1
+            asset["voice_assignments_updated_at"] = iso_now()
+            _json_write(self.asset_meta_path(asset_id), asset)
+            return asset
+
     def update_document_layout(self, asset_id: str, plan: dict[str, Any]) -> dict[str, Any]:
         """Persist reviewer-owned document structure and derive page metadata deterministically.
 

@@ -177,6 +177,17 @@ const inheritedFieldSet = new Set([
 const schemaFields = computed<Record<string, SchemaField>>(() =>
   Object.fromEntries((props.schema?.fields || []).map((field) => [field.name, field])),
 );
+const repeatableGroups = computed(() =>
+  Object.fromEntries(
+    (props.schema?.groups || [])
+      .filter((group) => group.repeatable)
+      .map((group) => [group.key, group]),
+  ),
+);
+const repeatableMembers = (field: string) =>
+  repeatableGroups.value[field]
+    ? (props.schema?.fields || []).filter((item) => item.group === field)
+    : [];
 const canonicalAssertions = computed(() =>
   currentFieldAssertions(props.record as unknown as Record<string, unknown>),
 );
@@ -185,7 +196,8 @@ const fieldOrder = computed<string[]>(() =>
     ? reviewableMetadataFieldNames(props.record as unknown as Record<string, unknown>, props.schema)
     : reviewableMetadataFieldNames(props.record as unknown as Record<string, unknown>, null),
 );
-const fieldLabel = (field: string) => schemaFields.value[field]?.label || "";
+const fieldLabel = (field: string) =>
+  schemaFields.value[field]?.label || repeatableGroups.value[field]?.label || "";
 const assertionByField = computed(() =>
   Object.fromEntries(canonicalAssertions.value.map((item) => [item.field_name, item])),
 );
@@ -451,8 +463,7 @@ function options(field: string) {
     values.push(...(props.knownValues?.[source] || []));
     values.push(...metadataSuggestions(props.record as Record<string, unknown>, [source]));
     const sourceStatus = props.record.metadata_field_status?.[source] as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     for (const candidate of [sourceStatus?.proposed_value, sourceStatus?.llm_value]) {
       if (Array.isArray(candidate)) values.push(...candidate.map(String));
       else if (typeof candidate === "string") values.push(candidate);
@@ -640,6 +651,8 @@ function displayValue(field: string) {
       >
         <CorpusMetadataFieldEditor
           :label="fieldLabel(field)"
+          :repeatable-members="repeatableMembers(field)"
+          :repeatable-max-items="repeatableGroups[field]?.max_items || undefined"
           :field="field"
           :value="fieldValue(field)"
           :status="status(field)"
@@ -720,6 +733,8 @@ function displayValue(field: string) {
         <div v-for="field in settledFields" :key="field" class="metadata-list-item" role="listitem">
           <CorpusMetadataFieldEditor
             :label="fieldLabel(field)"
+            :repeatable-members="repeatableMembers(field)"
+            :repeatable-max-items="repeatableGroups[field]?.max_items || undefined"
             :field="field"
             :value="fieldValue(field)"
             :status="status(field)"
@@ -771,6 +786,8 @@ function displayValue(field: string) {
         <div v-for="field in addableFields" :key="field" class="metadata-list-item" role="listitem">
           <CorpusMetadataFieldEditor
             :label="fieldLabel(field)"
+            :repeatable-members="repeatableMembers(field)"
+            :repeatable-max-items="repeatableGroups[field]?.max_items || undefined"
             :field="field"
             :value="fieldValue(field)"
             :status="status(field)"
