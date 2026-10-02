@@ -388,8 +388,8 @@ describe("setup sections", () => {
 
     const progress = wrapper.get(".corpus-setup-progress progress");
     expect(progress.attributes("max")).toBe("4");
-    expect(progress.attributes("value")).toBe("3");
-    expect(wrapper.get(".corpus-setup-progress").text()).toContain("3 / 4");
+    expect(progress.attributes("value")).toBe("2");
+    expect(wrapper.get(".corpus-setup-progress").text()).toContain("2 / 4");
     expect(wrapper.get(".corpus-setup-attention").text()).toContain("1");
     expect(wrapper.get("[data-section='metadata'] .corpus-setup-indicator").text()).toBe("3");
     expect(wrapper.get("[data-section='advanced'] .corpus-setup-state").text()).toContain("Optional");
