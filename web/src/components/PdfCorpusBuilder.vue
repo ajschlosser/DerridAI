@@ -495,13 +495,6 @@ const showReviewWorkspace = computed(
   () =>
     workspaceMode.value === "review" && hasRecordTopology.value && !awaitingManifestReview.value,
 );
-// Required document fields that detection on source load missed; only these are asked of the user.
-// Nothing is asked before detection has run for the source.
-const missingDocumentFields = computed(() =>
-  selectedAsset.value?.deterministic_checked_at
-    ? missingRequiredDocumentFields(selectedSchema.value, selectedAsset.value?.initial_metadata)
-    : [],
-);
 const documentMetadata = ref<Record<string, unknown>>({});
 watch(selectedAssetId, () => {
   documentMetadata.value = {};
@@ -511,6 +504,17 @@ watch(selectedAssetId, () => {
     records_per_page: null,
   };
 });
+const effectiveSetupDocumentMetadata = computed<Record<string, unknown>>(() => ({
+  ...((selectedAsset.value?.initial_metadata || {}) as Record<string, unknown>),
+  ...documentMetadata.value,
+}));
+// Required fields react to reviewer edits as well as ingest detection. Clearing a detected
+// required field therefore makes Setup incomplete instead of failing much later at Publish.
+const missingDocumentFields = computed(() =>
+  selectedAsset.value?.deterministic_checked_at
+    ? missingRequiredDocumentFields(selectedSchema.value, effectiveSetupDocumentMetadata.value)
+    : [],
+);
 const setupManifest = computed<Record<string, unknown>>(() => {
   const initial = {
     ...((selectedAsset.value?.initial_metadata || {}) as Record<string, unknown>),
@@ -525,9 +529,8 @@ const setupManifest = computed<Record<string, unknown>>(() => {
       .map(([name, info]) => [name, { ...info, value: initial[name] }]),
   );
   return {
-    ...initial,
+    ...effectiveSetupDocumentMetadata.value,
     ...(Object.keys(applied).length ? { deterministic_ingest: { applied } } : {}),
-    ...documentMetadata.value,
   };
 });
 function saveSetupManifest(changes: Record<string, unknown>) {
