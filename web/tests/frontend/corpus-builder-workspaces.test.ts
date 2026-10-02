@@ -568,19 +568,13 @@ describe("review header", () => {
     });
     expect(wrapper.findAll("section.review-header")).toHaveLength(1);
     expect(wrapper.get(".review-counts").text()).toContain("142");
-    // Progress remains one meter against the whole build; task-state counts are direct queue shortcuts.
+    // Progress remains one meter against the whole build; queue filtering stays in the canonical toolbar.
     const meter = wrapper.get("progress.review-meter");
     expect(meter.attributes("max")).toBe("200");
     expect(meter.attributes("value")).toBe("142");
     expect(wrapper.find(".run-slot").exists()).toBe(true);
-    const shortcuts = wrapper.findAll(".review-status-shortcuts button");
-    expect(shortcuts.map((button) => button.text())).toEqual([
-      "Needs attention4",
-      "Ready5",
-      "Accepted142",
-    ]);
-    await shortcuts[0].trigger("click");
-    expect(wrapper.emitted("update:queue")?.at(-1)).toEqual(["issues"]);
+    expect(wrapper.find(".review-status-shortcuts").exists()).toBe(false);
+    expect(wrapper.find(".corpus-review-queue-tabs").exists()).toBe(true);
     // Toolbar controls fall through from the header's attrs.
     expect(wrapper.find("#pdf-corpus-record-search").exists()).toBe(true);
     const views = wrapper.findAll(".review-view-option");
