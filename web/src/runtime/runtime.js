@@ -602,6 +602,7 @@ const {
   reviewKey: (...args) => reviewKey(...args),
   shell: (...args) => shell(...args),
   touchupRecordPayload: (...args) => touchupRecordPayload(...args),
+  tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
   updateDbStatusElements: (...args) => updateDbStatusElements(...args),
   updateOperationStackCount: (...args) => updateOperationStackCount(...args),
