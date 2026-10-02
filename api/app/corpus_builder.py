@@ -3986,8 +3986,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # local model. Track readiness per record so completed records can be
         # reviewed immediately instead of locking the entire book until the
         # final LLM call finishes.
+        pending_indices = set(pending)
         for index, record in enumerate(records):
-            if index in pending:
+            if index in pending_indices:
                 # A process restart may leave a record marked running. No worker
                 # survives the restart, so it safely returns to the queue while
                 # per-family checkpoints determine where enrichment resumes.
@@ -4017,10 +4018,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             self._persist_build_metadata_stage(build_id, metadata_task_total, snapshot, task_name, state, error_text)
 
         if pending:
-            # Parallelism is a build-level execution concern. Each worker performs
-            # the three small metadata families serially for one record, while the
-            # main thread alone updates/checkpoints the shared JSONL. This avoids
-            # corrupting restart state and respects provider-profile concurrency.
+            # Records share the bounded family pool. Family checkpoints and
+            # completed results persist through targeted SQLite writes; JSONL is
+            # refreshed at the final review handoff, not after every completion.
             with (
                 ThreadPoolExecutor(
                     max_workers=max_workers,
@@ -4105,20 +4105,22 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         records[index] = fallback
                         self._append_warning(build_id, f"{fallback.get('record_id')}: metadata worker failed; the source-bound record was preserved for review.")
                     completed += 1
-                    # Persist one completed worker result without overwriting
-                    # human review decisions already made on other completed
-                    # records while enrichment continues. The disk copy is the
-                    # authoritative live review state; replace only this record.
+                    # Merge only this completion into the latest authoritative row.
+                    # Human decisions and family checkpoints share the manager lock.
+                    # The final handoff reloads all rows once, including other edits.
+                    completed_id = str(records[index].get("record_id") or "")
                     with self._lock:
-                        live_records = self.repo.load_records(build_id)
-                        completed_id = str(records[index].get("record_id") or "")
-                        live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == completed_id), None)
-                        if live_index is None:
-                            live_records = records
-                        else:
-                            live_records[live_index] = _merge_enrichment_snapshot(live_records[live_index], records[index], self._allowed_fields(build_id))
-                        records = live_records
-                        self.repo.save_records(build_id, records)
+                        try:
+                            live_record = self.repo.get_record(build_id, completed_id)
+                        except KeyError:
+                            # A split/merge retired this identity while its worker ran.
+                            # Never restore the worker's obsolete topology snapshot.
+                            continue
+                        merged = _merge_enrichment_snapshot(
+                            live_record, records[index], self._allowed_fields(build_id),
+                        )
+                        self.repo.update_record(build_id, merged)
+                        records[index] = merged
                     # The terminal realtime hint means a subsequent read can observe
                     # the enriched Record. Emit it only after the durable merge/save.
                     note_record_metadata(build_id, completed_id, "record_completed")
@@ -4158,7 +4160,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             metadata_last_progress_at=iso_now(),
         )
 
-        return records
+        return settled_records
 
     def _finalize_build_review(self, build_id: str, scope: BuildScope, records: list[dict[str, Any]]) -> None:
         """Revalidate settled records and publish the authoritative handoff to review."""
