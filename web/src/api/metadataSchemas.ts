@@ -1,6 +1,7 @@
 import { apiRequest } from "./http";
 
-export type SchemaFieldType = "text" | "number" | "boolean" | "choice" | "list";
+export type ScalarSchemaFieldType = "text" | "number" | "boolean" | "choice" | "list";
+export type SchemaFieldType = ScalarSchemaFieldType | "repeatable";
 export type SchemaFieldRole = "scholarly" | "structural" | "document" | "operational";
 export type SchemaReviewVisibility = "primary" | "details" | "hidden";
 /** Where a value lives: on each record, or once for the whole corpus. */
@@ -28,6 +29,22 @@ export interface SchemaValue {
   value: string;
   definition: string;
 }
+export interface SchemaMember {
+  field_id: string;
+  name: string;
+  label: string;
+  type: ScalarSchemaFieldType;
+  values: SchemaValue[];
+  strict: boolean;
+  instruction: string;
+  evidence: boolean;
+  assess: boolean;
+  review: boolean;
+  pos_tags: string[];
+  ner_tags: string[];
+  retrieval_profile?: RetrievalProfile | null;
+  equivalence_profile?: EquivalenceProfile | null;
+}
 export interface SchemaField {
   field_id: string;
   name: string;
@@ -51,9 +68,11 @@ export interface SchemaField {
   equivalence_profile?: EquivalenceProfile | null;
   pos_tags: string[];
   ner_tags: string[];
+  members?: SchemaMember[];
+  max_items?: number | null;
+  instance_label?: string;
 }
 export interface SchemaGroup {
-  group_id?: string;
   key: string;
   label: string;
   intro: string;
@@ -62,9 +81,6 @@ export interface SchemaGroup {
   trailer: string;
   footer: string;
   retrieval_profile?: RetrievalProfile | null;
-  repeatable?: boolean;
-  max_items?: number | null;
-  instance_label?: string;
 }
 /** A schema's policy for one DerridAI-owned bibliographic field (title, document_author, …). */
 export interface DocumentFieldPolicy {
@@ -177,6 +193,9 @@ export function blankField(group = CORE_GROUP): SchemaField {
     review: false,
     pos_tags: [],
     ner_tags: [],
+    members: [],
+    max_items: null,
+    instance_label: "{label} {number}",
     retrieval_profile: {
       enabled: true,
       max_items: 6,

@@ -12,22 +12,29 @@ The built-in domain profiles also use stable namespaced identities. Their fields
 
 ## What a schema contains
 
-- **Groups.** Each group is one model call per record. It has a stable identity, opening text, an optional heading for its field list, notes, a trailer, and a footer with the evidence and assessment instructions. The footer may use `{fields}` and `{assessed_fields}`. A group may be repeatable, with a bounded number of associated instances.
-- **Fields.** Ordinary fields are flat. Each has a stable semantic identity plus name/label, type (`text`, `number`, `boolean`, `choice`, `list`), a group, and the instruction the model receives (`{values}` is replaced by allowed values). A deliberate rename may preserve the stable field identity so compatible reviewed precedents remain attached to the same semantic field. A `choice` field has allowed values, each with an optional definition; `strict` makes them the only values the model may return. `evidence` requires source binding, `assess` requests confidence, and `review` keeps a record from being accepted while the field is unresolved. Fields may also define POS/NER guidance and reviewed-precedent retrieval policy.
+- **Groups.** Each group is one model call per record. It has opening text, an optional heading for its field list, notes, a trailer, and a footer with the evidence and assessment instructions. The footer may use `{fields}` and `{assessed_fields}`. Groups organize computation; they are not Record fields.
+- **Fields.** Each field has a stable semantic identity plus name/label, type (`text`, `number`, `boolean`, `choice`, `list`, or `repeatable`), a group, and the instruction the model receives (`{values}` is replaced by allowed values). A deliberate rename may preserve the stable field identity so compatible reviewed precedents remain attached to the same semantic field. A `choice` field has allowed values, each with an optional definition; `strict` makes them the only values the model may return. `evidence` requires source binding, `assess` requests confidence, and `review` keeps a record from being accepted while the field is unresolved. Fields may also define POS/NER guidance and reviewed-precedent retrieval policy.
 - **Scope.** Record-scoped fields describe one research record. Corpus-scoped fields are inferred once for the work/corpus and inherited by its records.
 - **Guidance.** Every built-in Fiction and Non-fiction field has an explicit model instruction. Controlled-choice fields additionally define what each allowed value means. Their domain fields are evidence-bound and assessed, so a populated value remains auditable rather than becoming an unqualified model label.
 
-### Repeatable associated groups
+### Repeatable structured fields
 
-A repeatable group stores a bounded list of objects under the group's stable key.
-Every object has a stable `instance_id` and one value for each configured member
-field. For example, quotation participants can associate `quoted_speaker` and
-`quoted_addressee` in the same instance. Review surfaces display those members as
+A repeatable `SchemaField` stores a bounded list of objects under its stable field
+name. Every object has a stable `instance_id` and one value for each typed member
+field. For example, `quotation_relations` can associate `quoted_speaker` and
+`quoted_addressee` in the same instance. Review surfaces may display those members as
 `QUOTED_SPEAKER_1`, `QUOTED_ADDRESSEE_1`, and so on, but the number is only a
 presentation index: reordering rows does not change their identity, and numbered
 keys are never written into canonical records. This avoids the alignment failures
 of parallel lists and permits deterministic, model, and human processes to revise
 the same associated instance.
+
+Each member value is also a separate `FieldAssertion` target identified by the
+container field, stable instance, and stable member field. Derivation, evaluation,
+authority, evidence, confidence, and supersession therefore remain independently
+recoverable. A human deletion creates an explicit superseding absence assertion;
+it never silently renumbers or erases prior provenance. This lossless structured
+projection is the cELF representation, while numbered labels are UI-only.
 
 ## Built-in profiles
 

@@ -58,7 +58,7 @@ describe("Corpus Builder editable metadata packet", () => {
     });
   });
 
-  it("edits a repeatable group as one associated value instead of parallel member fields", () => {
+  it("edits a repeatable field as one associated value instead of parallel member fields", () => {
     const quotations = [
       {
         instance_id: "quote:1",
@@ -68,10 +68,18 @@ describe("Corpus Builder editable metadata packet", () => {
     ];
     const schema = {
       fields: [
-        { name: "quoted_speaker", group: "quotations", label: "Quoted speaker" },
-        { name: "quoted_addressee", group: "quotations", label: "Quoted addressee" },
+        {
+          name: "quotations",
+          group: "quotation",
+          label: "Quotations",
+          type: "repeatable",
+          members: [
+            { name: "quoted_speaker", label: "Quoted speaker" },
+            { name: "quoted_addressee", label: "Quoted addressee" },
+          ],
+        },
       ],
-      groups: [{ key: "quotations", repeatable: true }],
+      groups: [{ key: "quotation" }],
     } as any;
 
     expect(editableRecordMetadata({ quotations }, schema)).toEqual({ quotations });

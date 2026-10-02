@@ -19,8 +19,118 @@ from app.field_assertions import (
     reset_fields_for_evaluation,
     validate_projection,
 )
-from app.metadata_schema import default_schema
+from app.metadata_schema import MetadataSchema, SchemaField, SchemaGroup, SchemaMember, default_schema
 from pydantic import ValidationError
+
+
+def test_repeatable_members_have_independent_stable_assertions() -> None:
+    schema = MetadataSchema(
+        name="Relations",
+        groups=[
+            SchemaGroup(key="discourse", label="Discourse", intro="Classify."),
+            SchemaGroup(key="quotation", label="Quotation", intro="Extract."),
+        ],
+        fields=[
+            SchemaField(
+                field_id="field-quotation-relations",
+                name="quotation_relations",
+                label="Quotation relations",
+                type="repeatable",
+                group="quotation",
+                max_items=4,
+                members=[
+                    SchemaMember(
+                        field_id="member-quoted-speaker",
+                        name="quoted_speaker",
+                        label="Quoted speaker",
+                    ),
+                    SchemaMember(
+                        field_id="member-quoted-addressee",
+                        name="quoted_addressee",
+                        label="Quoted addressee",
+                    ),
+                ],
+            )
+        ],
+    )
+    record = {"record_id": "r-repeatable", "record_revision": 1}
+    create_model_assertion(
+        record,
+        "quotation_relations",
+        [{
+            "instance_id": "relation:levinas",
+            "quoted_speaker": "Levinas",
+            "quoted_addressee": "Derrida",
+        }],
+        schema=schema,
+        confidence=0.8,
+        evidence=[{"block_id": "b1"}],
+    )
+
+    members = []
+    for bucket in record["field_assertions"].values():
+        for value in bucket:
+            parsed = FieldAssertion.model_validate(value)
+            if parsed.container_field_id:
+                members.append(parsed)
+    assert {(item.instance_id, item.member_name) for item in members} == {
+        ("relation:levinas", "quoted_speaker"),
+        ("relation:levinas", "quoted_addressee"),
+    }
+    assert len({item.field_id for item in members}) == 2
+    assert all(item.evidence == [{"block_id": "b1"}] for item in members)
+    record["quotation_relations"] = [{"instance_id": "corrupt", "quoted_speaker": "Wrong"}]
+    project_record_assertions(record)
+    assert record["quotation_relations"] == [{
+        "instance_id": "relation:levinas",
+        "quoted_addressee": "Derrida",
+        "quoted_speaker": "Levinas",
+    }]
+
+
+def test_repeatable_legacy_container_assertion_migrates_idempotently() -> None:
+    schema = MetadataSchema(
+        name="Relations",
+        groups=[
+            SchemaGroup(key="discourse", label="Discourse", intro="Classify."),
+            SchemaGroup(key="quotation", label="Quotation", intro="Extract."),
+        ],
+        fields=[
+            SchemaField(
+                field_id="field-relations",
+                name="relations",
+                label="Relations",
+                type="repeatable",
+                group="quotation",
+                max_items=2,
+                members=[
+                    SchemaMember(
+                        field_id="member-speaker",
+                        name="speaker",
+                        label="Speaker",
+                    )
+                ],
+            )
+        ],
+    )
+    record = {"record_id": "legacy-repeatable", "record_revision": 1}
+    create_model_assertion(
+        record,
+        "relations",
+        [{"instance_id": "voice:1", "speaker": "SPEAKER_1"}],
+        schema=None,
+    )
+    migrate_record_assertions(record, schema)
+    first_counts = {key: len(values) for key, values in record["field_assertions"].items()}
+    migrate_record_assertions(record, schema)
+    assert {key: len(values) for key, values in record["field_assertions"].items()} == first_counts
+    members = [
+        FieldAssertion.model_validate(value)
+        for values in record["field_assertions"].values()
+        for value in values
+        if value.get("member_field_id") == "member-speaker"
+    ]
+    assert len(members) == 1
 
 
 def test_model_confidence_and_human_confirmation_preserve_derivation() -> None:

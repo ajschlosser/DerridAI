@@ -179,26 +179,8 @@ export function reviewableMetadataFieldNames(
   record: LooseRecord,
   schema?: MetadataSchema | null,
 ): string[] {
-  const repeatableGroups = new Set(
-    (schema?.groups || []).filter((group) => group.repeatable).map((group) => group.key),
-  );
   const scholarlyFields = schema?.fields?.length
-    ? [
-        ...schema.fields
-          .filter(
-            (field) => isReviewVisibleSchemaField(field) && !repeatableGroups.has(field.group),
-          )
-          .map((field) => field.name),
-        ...(schema.groups || [])
-          .filter(
-            (group) =>
-              group.repeatable &&
-              schema.fields.some(
-                (field) => field.group === group.key && isReviewVisibleSchemaField(field),
-              ),
-          )
-          .map((group) => group.key),
-      ]
+    ? schema.fields.filter(isReviewVisibleSchemaField).map((field) => field.name)
     : [...LEGACY_SCHOLARLY_FIELDS];
   return Array.from(
     new Set([

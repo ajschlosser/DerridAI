@@ -127,6 +127,10 @@ class FieldAssertion(BaseModel):
     record_revision: int | None = Field(default=None, ge=1)
     field_id: str
     field_name: str | None = None
+    container_field_id: str | None = None
+    instance_id: str | None = None
+    member_field_id: str | None = None
+    member_name: str | None = None
     value: Any = None
     derivation_method: DerivationMethod
     evaluation_status: EvaluationStatus
@@ -149,6 +153,14 @@ class FieldAssertion(BaseModel):
 
     @model_validator(mode="after")
     def _valid_state(self) -> FieldAssertion:
+        member_identity = (
+            self.container_field_id,
+            self.instance_id,
+            self.member_field_id,
+            self.member_name,
+        )
+        if any(member_identity) and not all(member_identity):
+            raise ValueError("Repeatable member assertions require complete container, instance and member identity.")
         if self.evaluation_status == "not_evaluated" and self.confidence is not None:
             raise ValueError("not_evaluated assertions must not carry confidence")
         if self.value_status == "confirmed_absent" and self.value not in (None, "", []):
@@ -225,11 +237,15 @@ def current_assertion_by_name(record: dict[str, Any], field_name: str) -> FieldA
     if isinstance(selected, dict):
         for field_id, assertion_id in reversed(list(selected.items())):
             for assertion in get_assertions(record, field_id):
-                if assertion.assertion_id == assertion_id and assertion.field_name == field_name:
+                if (
+                    assertion.assertion_id == assertion_id
+                    and assertion.field_name == field_name
+                    and assertion.container_field_id is None
+                ):
                     return assertion
     for field_id, _values in _assertions(record).items():
         current = current_assertion(record, field_id)
-        if current is not None and current.field_name == field_name:
+        if current is not None and current.field_name == field_name and current.container_field_id is None:
             return current
     return None
 
@@ -281,7 +297,7 @@ def _new_assertion(
     field_id_override: str | None = None,
     **kwargs: Any,
 ) -> FieldAssertion:
-    return store_assertion(
+    assertion = store_assertion(
         record,
         FieldAssertion(
             record_id=str(record.get("record_id") or ""),
@@ -297,6 +313,132 @@ def _new_assertion(
         ),
         select=select,
     )
+    _store_repeatable_member_assertions(
+        record,
+        container_assertion=assertion,
+        schema=schema,
+        select=select,
+    )
+    return assertion
+
+
+def repeatable_member_target_id(
+    container_field_id: str, instance_id: str, member_field_id: str
+) -> str:
+    """Stable assertion target for one member in one stable repeatable instance."""
+    return "repeatable:" + uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        f"derridai:repeatable:{container_field_id}:{instance_id}:{member_field_id}",
+    ).hex
+
+
+def _store_repeatable_member_assertions(
+    record: dict[str, Any],
+    *,
+    container_assertion: FieldAssertion,
+    schema: Any | None,
+    select: bool,
+) -> None:
+    """Explode a repeatable container into independently recoverable cELF assertions."""
+    if schema is None or container_assertion.field_name is None:
+        return
+    try:
+        field = schema.by_name().get(container_assertion.field_name)
+    except AttributeError:
+        return
+    if field is None or getattr(field, "type", None) != "repeatable":
+        return
+    rows = container_assertion.value if isinstance(container_assertion.value, list) else []
+    members = {member.name: member for member in field.members}
+    active_targets: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        instance_id = str(row.get("instance_id") or "").strip()
+        if not instance_id:
+            continue
+        for member_name, member in members.items():
+            target_id = repeatable_member_target_id(
+                field.field_id, instance_id, member.field_id
+            )
+            active_targets.add(target_id)
+            value = copy.deepcopy(row.get(member_name))
+            present = value not in (None, "", [])
+            previous = current_assertion(record, target_id)
+            expected_value_status = (
+                container_assertion.value_status if present else "unresolved"
+            )
+            expected_evaluation = (
+                container_assertion.evaluation_status
+                if present
+                else "no_supported_value"
+            )
+            if (
+                previous is not None
+                and previous.value == value
+                and previous.value_status == expected_value_status
+                and previous.evaluation_status == expected_evaluation
+                and previous.derivation_method == container_assertion.derivation_method
+                and previous.authority_status == container_assertion.authority_status
+                and previous.evidence == container_assertion.evidence
+            ):
+                continue
+            member_assertion = FieldAssertion(
+                record_id=container_assertion.record_id,
+                record_revision=container_assertion.record_revision,
+                field_id=target_id,
+                field_name=container_assertion.field_name,
+                container_field_id=field.field_id,
+                instance_id=instance_id,
+                member_field_id=member.field_id,
+                member_name=member_name,
+                value=value,
+                derivation_method=container_assertion.derivation_method,
+                evaluation_status=expected_evaluation,
+                authority_status=container_assertion.authority_status,
+                value_status=expected_value_status,
+                method=container_assertion.method,
+                confidence=container_assertion.confidence if present else None,
+                calibration=copy.deepcopy(container_assertion.calibration),
+                reason=container_assertion.reason,
+                evidence=copy.deepcopy(container_assertion.evidence),
+                actor=container_assertion.actor,
+                model=container_assertion.model,
+                run_id=container_assertion.run_id,
+                schema_id=container_assertion.schema_id,
+                schema_version=container_assertion.schema_version,
+                legacy_metadata={
+                    **copy.deepcopy(container_assertion.legacy_metadata),
+                    "container_assertion_id": container_assertion.assertion_id,
+                },
+                supersedes_assertion_id=previous.assertion_id if previous else None,
+            )
+            store_assertion(record, member_assertion, select=select)
+
+    # A human removal is an explicit assertion, never a silent row renumbering.
+    if container_assertion.derivation_method == "human" and select:
+        for current in list(current_assertions(record)):
+            if (
+                current.container_field_id == field.field_id
+                and current.field_id not in active_targets
+                and current.value_status != "confirmed_absent"
+            ):
+                store_assertion(
+                    record,
+                    current.model_copy(
+                        update={
+                            "assertion_id": f"assertion-{uuid.uuid4().hex}",
+                            "value": None,
+                            "derivation_method": "human",
+                            "evaluation_status": "no_supported_value",
+                            "authority_status": "human_override",
+                            "value_status": "confirmed_absent",
+                            "confidence": None,
+                            "supersedes_assertion_id": current.assertion_id,
+                            "created_at": _now(),
+                        }
+                    ),
+                )
 
 
 def create_deterministic_assertion(record: dict[str, Any], field_name: str, value: Any, *, schema: Any | None = None, method: str, reason: str = "", confidence: float | None = 1.0) -> FieldAssertion:
@@ -421,7 +563,7 @@ def create_memory_assertion(
 
 def confirm_assertion(record: dict[str, Any], assertion: FieldAssertion, *, actor: str | None = None, reason: str = "") -> FieldAssertion:
     present = assertion.value not in (None, "", [])
-    return store_assertion(
+    confirmed = store_assertion(
         record,
         assertion.model_copy(update={
             "assertion_id": f"assertion-{uuid.uuid4().hex}",
@@ -436,6 +578,25 @@ def confirm_assertion(record: dict[str, Any], assertion: FieldAssertion, *, acto
             "created_at": _now(),
         }),
     )
+    for member in list(current_assertions(record)):
+        if member.legacy_metadata.get("container_assertion_id") != assertion.assertion_id:
+            continue
+        store_assertion(
+            record,
+            member.model_copy(update={
+                "assertion_id": f"assertion-{uuid.uuid4().hex}",
+                "authority_status": "human_confirmed",
+                "actor": actor,
+                "reason": reason or member.reason,
+                "supersedes_assertion_id": member.assertion_id,
+                "created_at": _now(),
+                "legacy_metadata": {
+                    **member.legacy_metadata,
+                    "container_assertion_id": confirmed.assertion_id,
+                },
+            }),
+        )
+    return confirmed
 
 
 def create_human_assertion(
@@ -600,6 +761,26 @@ def reset_fields_for_evaluation(
                 if isinstance(selected, dict):
                     selected.pop(field_id, None)
         else:
+            for field_id in matching_ids:
+                member = current_assertion(record, field_id)
+                if member is None or member.container_field_id is None:
+                    continue
+                store_assertion(
+                    record,
+                    member.model_copy(update={
+                        "assertion_id": f"assertion-{uuid.uuid4().hex}",
+                        "value": None,
+                        "derivation_method": "other",
+                        "evaluation_status": "not_evaluated",
+                        "authority_status": "unreviewed",
+                        "value_status": "unresolved",
+                        "method": method,
+                        "confidence": None,
+                        "reason": reason,
+                        "supersedes_assertion_id": member.assertion_id,
+                        "created_at": _now(),
+                    }),
+                )
             create_unresolved_assertion(
                 record,
                 field,
@@ -694,6 +875,38 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
     """Materialize current values and compatibility views from assertions."""
     status_map: dict[str, Any] = {}
     evidence_map: dict[str, Any] = {}
+    repeatable_rows: dict[str, dict[str, dict[str, Any]]] = {}
+    repeatable_order: dict[str, list[str]] = {}
+    for assertion in current_assertions(record):
+        if not (
+            assertion.container_field_id
+            and assertion.field_name
+            and assertion.instance_id
+            and assertion.member_name
+        ):
+            continue
+        rows = repeatable_rows.setdefault(assertion.field_name, {})
+        row = rows.setdefault(
+            assertion.instance_id,
+            {"instance_id": assertion.instance_id},
+        )
+        if assertion.value_status == "present":
+            row[assertion.member_name] = copy.deepcopy(assertion.value)
+        elif assertion.value_status == "confirmed_absent":
+            row[assertion.member_name] = None
+    for container_name, rows in repeatable_rows.items():
+        prior = record.get(container_name)
+        prior_ids = [
+            str(row.get("instance_id"))
+            for row in prior
+            if isinstance(row, dict) and row.get("instance_id") in rows
+        ] if isinstance(prior, list) else []
+        repeatable_order[container_name] = prior_ids + sorted(set(rows) - set(prior_ids))
+        record[container_name] = [
+            rows[instance_id]
+            for instance_id in repeatable_order[container_name]
+            if any(key != "instance_id" and value not in (None, "", []) for key, value in rows[instance_id].items())
+        ]
     prior_status_map = record.get("metadata_field_status")
     if not isinstance(prior_status_map, dict):
         prior_status_map = {}
@@ -705,10 +918,18 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
         current = current_assertion(record, field_id)
         if current is None or not current.field_name:
             continue
+        # Repeatable member assertions are authoritative provenance for the
+        # structured container, not additional top-level Record fields.
+        if current.container_field_id is not None:
+            continue
         selected_for_name = current_assertion_by_name(record, current.field_name)
         if selected_for_name is None or selected_for_name.assertion_id != current.assertion_id:
             continue
-        if current.value_status == "confirmed_absent":
+        if current.field_name in repeatable_rows:
+            # Member assertions are canonical; the container assertion carries
+            # aggregate compatibility status but cannot overwrite their projection.
+            pass
+        elif current.value_status == "confirmed_absent":
             record[current.field_name] = None
         elif current.value_status == "present" or current.value not in (None, "", []):
             # Unresolved/invalid assertions may intentionally carry a visible
@@ -905,6 +1126,15 @@ def migrate_record_assertions(record: dict[str, Any], schema: Any | None = None)
                 current[field_id] = bucket[-1]["assertion_id"]
                 if field_name:
                     selected_names.add(field_name)
+        if schema is not None:
+            for selected in list(current_assertions(record)):
+                if selected.container_field_id is None:
+                    _store_repeatable_member_assertions(
+                        record,
+                        container_assertion=selected,
+                        schema=schema,
+                        select=True,
+                    )
     statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
     evidence_map = record.get("metadata_evidence") if isinstance(record.get("metadata_evidence"), dict) else {}
     names = set(statuses) | {

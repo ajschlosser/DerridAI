@@ -70,16 +70,14 @@ def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]
     if not isinstance(raw, dict):
         raise ValueError("Work-wide metadata must be a field-to-value object.")
     fields = {f.name: f for f in schema.fields}
-    repeatable_groups = {
-        group.key: group
-        for group in schema.groups
-        if group.repeatable
-        and {field.scope for field in schema.fields_in(group.key)} == {"corpus"}
+    repeatable_fields = {
+        field.name: field for field in schema.fields
+        if field.type == "repeatable" and field.scope == "corpus"
     }
     record_edit = edit_model(schema, BaseModel)
     cleaned: dict[str, Any] = {}
     for name, value in raw.items():
-        if name in repeatable_groups:
+        if name in repeatable_fields:
             try:
                 cleaned[name] = getattr(record_edit.model_validate({name: value}), name)
             except ValidationError as exc:

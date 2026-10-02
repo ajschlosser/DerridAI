@@ -21,7 +21,7 @@ import {
   usableListOptions,
   withoutTransportItems,
 } from "../domain/metadataValues";
-import type { SchemaField } from "../api/metadataSchemas";
+import type { SchemaMember } from "../api/metadataSchemas";
 
 const props = defineProps<{
   field: string;
@@ -37,7 +37,7 @@ const props = defineProps<{
   open?: boolean;
   revealed?: unknown;
   label?: string;
-  repeatableMembers?: SchemaField[];
+  repeatableMembers?: SchemaMember[];
   repeatableMaxItems?: number;
   recheck?: { first: unknown; second: unknown; agreed: boolean };
   constraint?: { value: unknown; reason: string } | null;
@@ -269,7 +269,7 @@ function removeRepeatableRow(index: number) {
   draft.value = repeatableRows().filter((_row, rowIndex) => rowIndex !== index);
   markDirty();
 }
-function setRepeatableValue(index: number, member: SchemaField, value: string | boolean) {
+function setRepeatableValue(index: number, member: SchemaMember, value: string | boolean) {
   const rows = structuredClone(repeatableRows());
   rows[index][member.name] =
     member.type === "boolean"

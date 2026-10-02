@@ -435,39 +435,37 @@ def repeatable_custom():
                 key="quotations",
                 label="Quoted speaker",
                 intro="Extract associated quotations.",
-                repeatable=True,
-                max_items=3,
             ),
         ],
         fields=[
             ms.SchemaField(
-                name="quoted_speaker",
-                label="Quoted speaker",
+                name="quotations",
+                label="Associated quotation",
+                type="repeatable",
                 group="quotations",
-            ),
-            ms.SchemaField(
-                name="quoted_work",
-                label="Quoted work",
-                group="quotations",
+                max_items=3,
+                members=[
+                    ms.SchemaMember(name="quoted_speaker", label="Quoted speaker"),
+                    ms.SchemaMember(name="quoted_work", label="Quoted work"),
+                ],
             ),
         ],
     )
 
 
-def test_repeatable_group_schema_contract_is_stable_and_bounded():
+def test_repeatable_field_schema_contract_is_stable_and_bounded():
     schema = repeatable_custom()
-    group = schema.group("quotations")
+    field = schema.by_name()["quotations"]
     assert schema.format_version == 3
-    assert group.display_label(2) == "Quoted speaker 2"
-    assert group.max_items == 3
+    assert field.max_items == 3
 
     body = schema.model_dump(mode="json")
-    body["groups"][1]["max_items"] = None
-    with pytest.raises(ValidationError, match="needs max_items"):
+    body["fields"][0]["max_items"] = None
+    with pytest.raises(ValidationError, match="needs members and max_items"):
         MetadataSchema.model_validate(body)
     body = schema.model_dump(mode="json")
-    body["groups"][1]["key"] = "quoted_work"
-    with pytest.raises(ValidationError, match="cannot also be a field name"):
+    body["fields"][0]["members"][1]["name"] = "quoted_speaker"
+    with pytest.raises(ValidationError, match="must be unique"):
         MetadataSchema.model_validate(body)
 
 

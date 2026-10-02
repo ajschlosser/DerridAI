@@ -68,6 +68,43 @@ function toggleMatch(fieldId: string, checked: boolean) {
   props.field.retrieval_profile.match_field_ids = [...current];
 }
 const addValue = () => props.field.values.push({ value: "", definition: "" });
+function addMember() {
+  props.field.members ||= [];
+  props.field.members.push({
+    field_id: `member-${crypto.randomUUID()}`,
+    name: "",
+    label: "",
+    type: "text",
+    values: [],
+    strict: false,
+    instruction: "",
+    evidence: false,
+    assess: false,
+    review: false,
+    pos_tags: [],
+    ner_tags: [],
+  });
+}
+function setFieldType(type: string) {
+  props.field.type = type as SchemaField["type"];
+  if (type === "repeatable") {
+    props.field.members ||= [];
+    props.field.max_items ||= 8;
+    props.field.instance_label ||= "{label} {number}";
+  } else {
+    props.field.members = [];
+    props.field.max_items = null;
+  }
+}
+const memberValuesText = (member: NonNullable<SchemaField["members"]>[number]) =>
+  member.values.map((value) => value.value).join(", ");
+function setMemberValues(member: NonNullable<SchemaField["members"]>[number], text: string) {
+  member.values = text
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => ({ value, definition: "" }));
+}
 </script>
 
 <template>
@@ -84,12 +121,19 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
       /></label>
       <label class="schema-field"
         ><span>{{ t("field_type", "Type") }}</span>
-        <select v-model="field.type" class="control">
+        <select
+          :value="field.type"
+          class="control"
+          @change="setFieldType(($event.target as HTMLSelectElement).value)"
+        >
           <option value="text">{{ t("type_text", "Text") }}</option>
           <option value="number">{{ t("type_number", "Number") }}</option>
           <option value="boolean">{{ t("type_boolean", "Yes / no") }}</option>
           <option value="choice">{{ t("type_choice", "One of a list") }}</option>
           <option value="list">{{ t("type_list", "List of texts") }}</option>
+          <option value="repeatable">
+            {{ t("type_repeatable", "Repeatable structured field") }}
+          </option>
         </select></label
       >
       <label class="schema-field"
@@ -128,6 +172,81 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
           <option value="hidden">{{ t("visibility_hidden", "Hidden") }}</option></select
         ><small class="hint">{{ t("review_visibility_summary") }}</small></label
       >
+    </section>
+
+    <section v-if="field.type === 'repeatable'" class="form-block">
+      <label class="schema-field"
+        ><span>{{ t("repeatable_max_items", "Maximum instances") }}</span
+        ><input v-model.number="field.max_items" class="control" type="number" min="1" max="24"
+      /></label>
+      <label class="schema-field"
+        ><span>{{ t("repeatable_instance_label", "Instance label pattern") }}</span
+        ><input v-model="field.instance_label" class="control" maxlength="120"
+      /></label>
+      <div v-for="(member, index) in field.members" :key="member.field_id" class="value-row">
+        <input
+          v-model="member.name"
+          class="control"
+          :aria-label="t('field_name', 'Field name')"
+          placeholder="quoted_speaker"
+        />
+        <input
+          v-model="member.label"
+          class="control"
+          :aria-label="t('field_label', 'Label')"
+          placeholder="Quoted speaker"
+        />
+        <select v-model="member.type" class="control">
+          <option value="text">{{ t("type_text", "Text") }}</option>
+          <option value="number">{{ t("type_number", "Number") }}</option>
+          <option value="boolean">{{ t("type_boolean", "Yes / no") }}</option>
+          <option value="choice">{{ t("type_choice", "One of a list") }}</option>
+          <option value="list">{{ t("type_list", "List of texts") }}</option>
+        </select>
+        <input
+          v-if="member.type === 'choice'"
+          class="control"
+          :value="memberValuesText(member)"
+          :aria-label="t('allowed_values', 'Allowed values')"
+          :placeholder="t('allowed_values', 'Allowed values')"
+          @change="setMemberValues(member, ($event.target as HTMLInputElement).value)"
+        />
+        <label v-if="member.type === 'choice'" class="check">
+          <input v-model="member.strict" type="checkbox" />
+          <span>{{ t("strict", "The model may only return these values") }}</span>
+        </label>
+        <input
+          v-model="member.instruction"
+          class="control"
+          :aria-label="t('instruction', 'What the model should look for')"
+          :placeholder="t('instruction', 'What the model should look for')"
+        />
+        <label class="check">
+          <input v-model="member.evidence" type="checkbox" />
+          <span>{{ t("evidence", "Must cite the source") }}</span>
+        </label>
+        <label class="check">
+          <input v-model="member.assess" type="checkbox" />
+          <span>{{ t("assess", "Report its confidence") }}</span>
+        </label>
+        <label class="check">
+          <input v-model="member.review" type="checkbox" />
+          <span>{{ t("review", "A person must settle it before accepting") }}</span>
+        </label>
+        <UiButton
+          icon-only
+          icon="trash"
+          size="small"
+          :label="t('remove', 'Remove')"
+          @click="field.members?.splice(index, 1)"
+        />
+      </div>
+      <UiButton
+        size="small"
+        icon="plus"
+        :label="t('add_repeatable_member', 'Add member field')"
+        @click="addMember"
+      />
     </section>
 
     <label class="schema-field"

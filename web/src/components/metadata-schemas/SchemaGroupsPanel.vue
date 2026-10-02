@@ -42,9 +42,6 @@ function addGroup() {
     trailer: "",
     footer:
       "Return one field_assessments entry for every one of {assessed_fields}. Each assessment must contain confidence (0..1 or null), needs_review, reason, and outcome (supported_value, no_supported_value, or uncertain).\n",
-    repeatable: false,
-    max_items: null,
-    instance_label: "{label} {number}",
   });
   selectedKey.value = `group_${n}`;
 }
@@ -103,28 +100,6 @@ function removeGroup() {
         ><span>{{ t("fields_heading", "Heading above the field list") }}</span
         ><input v-model="group.fields_heading" class="control"
       /></label>
-      <label v-if="group.key !== CORE_GROUP" class="schema-field checkbox-field">
-        <input
-          v-model="group.repeatable"
-          type="checkbox"
-          :disabled="readonly"
-          @change="group.max_items = group.repeatable ? group.max_items || 8 : null"
-        />
-        <span>{{ t("repeatable_group", "Repeat associated field set") }}</span>
-      </label>
-      <label v-if="group.repeatable" class="schema-field"
-        ><span>{{ t("repeatable_max_items", "Maximum instances") }}</span
-        ><input v-model.number="group.max_items" class="control" type="number" min="1" max="24"
-      /></label>
-      <label v-if="group.repeatable" class="schema-field"
-        ><span>{{ t("repeatable_instance_label", "Instance label pattern") }}</span
-        ><input
-          v-model="group.instance_label"
-          class="control"
-          maxlength="120"
-          placeholder="{label} {number}"
-        /><small class="hint">{label} · {number}</small></label
-      >
       <label class="schema-field wide"
         ><span>{{ t("intro", "Opening instructions") }}</span
         ><textarea v-model="group.intro" class="control" rows="4"></textarea>

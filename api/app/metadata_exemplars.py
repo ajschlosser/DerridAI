@@ -170,6 +170,8 @@ def build_metadata_exemplar(
     why: list[str] | None = None,
     schema: Any = None,
     registry: Any = None,
+    assertion_override: Any = None,
+    value_override: Any = ...,
 ) -> dict[str, Any] | None:
     """Derive one trusted, evidence-bound positive metadata exemplar.
 
@@ -189,7 +191,7 @@ def build_metadata_exemplar(
         return skip("no_field")
 
     migrate_record_assertions(record)
-    assertion = current_assertion_by_name(record, field)
+    assertion = assertion_override or current_assertion_by_name(record, field)
     if assertion is None:
         return skip("no_assertion")
     is_confirmed_absence = assertion.value_status == "confirmed_absent"
@@ -199,7 +201,7 @@ def build_metadata_exemplar(
     ):
         return skip("not_human_confirmed")
 
-    value = record.get(field)
+    value = record.get(field) if value_override is ... else value_override
     if is_confirmed_absence:
         if value not in (None, "", []):
             return skip("absence_has_value")
