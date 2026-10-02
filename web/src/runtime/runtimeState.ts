@@ -56,8 +56,6 @@ export function createRuntimeState() {
     selectedEvidence: {},
     researcherProviderProfiles: [],
     translations: { locale: "en-US", dictionary: {}, base: {} },
-    navHistory: [],
-    navForward: [],
     sidebarCollapsed: false,
     collectionsCollapsed: false,
     operationToastsMinimized: false,
