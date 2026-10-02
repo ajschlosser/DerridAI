@@ -255,8 +255,6 @@ class SourceEmbeddingProjection:
                 if prune
                 else set()
             )
-            for unit_id in stale:
-                rows.pop(unit_id, None)
             fallback_pending: list[dict[str, Any]] = []
             reused = 0
             for row in desired:
@@ -293,6 +291,8 @@ class SourceEmbeddingProjection:
                     "embedding_identity": identity,
                     "embedding": vector_by_hash[row["text_hash"]],
                 }
+            for unit_id in stale:
+                rows.pop(unit_id, None)
             return {
                 "desired": len(desired),
                 "embedded": embedded,
