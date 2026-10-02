@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 
 from . import operation_events
+from .chroma_store import ChromaStore
 from .concurrency import (
     CapacityCancelled,
     CapacityPermit,
@@ -16,7 +17,6 @@ from .concurrency import (
     provider_capacity_key,
     provider_limit,
 )
-from .chroma_store import ChromaStore
 from .config import settings
 from .job_state import (
     JobPayloadList,
