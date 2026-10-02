@@ -290,7 +290,7 @@ const issueQueueActive = computed(() =>
   outline: 3px solid var(--ui-accent-focus);
   outline-offset: 1px;
 }
-@container (max-width: 62rem) {
+@container (max-width: 54rem) {
   .review-status-shortcuts {
     order: 3;
     inline-size: 100%;
