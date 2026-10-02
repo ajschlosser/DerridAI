@@ -21,6 +21,8 @@ const props = defineProps<{
   build: CorpusBuild;
   modelLabel?: string;
   runGuidance?: GuidanceItem[];
+  summaryLabel?: string;
+  summaryHelp?: string;
 }>();
 const i18n = useI18nStore();
 // Diagnostics are for auditing, so nothing inside is mounted until its section is opened.
@@ -60,14 +62,15 @@ const unresolved = computed(
 <template>
   <details
     class="corpus-build-diagnostics"
-    :aria-label="i18n.t('pdf_corpus.diagnostics.title')"
+    :aria-label="summaryLabel || i18n.t('pdf_corpus.diagnostics.title')"
     @toggle="track('root', $event)"
   >
     <summary>
-      <span>{{ i18n.t("pdf_corpus.diagnostics.title") }}</span>
-      <small>{{ i18n.t("pdf_corpus.diagnostics.help") }}</small>
+      <span>{{ summaryLabel || i18n.t("pdf_corpus.diagnostics.title") }}</span>
+      <small>{{ summaryHelp || i18n.t("pdf_corpus.diagnostics.help") }}</small>
     </summary>
     <div v-if="opened.root" class="diagnostics-body">
+      <slot name="activity"></slot>
       <details class="diagnostics-section" @toggle="track('quality', $event)">
         <summary>{{ i18n.t("pdf_corpus.diagnostics.quality") }}</summary>
         <div v-if="opened.quality" class="diagnostics-content">

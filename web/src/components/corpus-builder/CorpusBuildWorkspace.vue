@@ -23,6 +23,9 @@ const props = defineProps<{
   canResume: boolean;
   hasRecordTopology: boolean;
   readyCount?: number;
+  enrichingCount?: number;
+  preparingCount?: number;
+  attentionCount?: number;
   awaitingManifestReview: boolean;
   retryingSegmentation: boolean;
   segmentationNeedsReview: boolean;
@@ -66,6 +69,9 @@ const errorNotices = computed<Notice[]>(() =>
       :can-resume="canResume"
       :has-record-topology="hasRecordTopology"
       :ready-count="readyCount"
+      :enriching-count="enrichingCount"
+      :preparing-count="preparingCount"
+      :attention-count="attentionCount"
       :busy="busy"
       :provider-label="providerLabel"
       :model-label="modelLabel"
@@ -76,8 +82,6 @@ const errorNotices = computed<Notice[]>(() =>
       @open-review="emit('openReview')"
       @open-publish="emit('openPublish')"
     />
-    <CorpusBuildActivity :build="build" />
-
     <UiNoticeStack :items="errorNotices" :label="i18n.t('pdf_corpus.build_error')" />
     <UiNoticeStack
       :items="warningNotices"
@@ -160,7 +164,21 @@ const errorNotices = computed<Notice[]>(() =>
       </details>
     </section>
 
-    <CorpusBuildDiagnostics :build="build" :model-label="modelLabel" :run-guidance="runGuidance">
+    <CorpusBuildDiagnostics
+      :build="build"
+      :model-label="modelLabel"
+      :run-guidance="runGuidance"
+      :summary-label="i18n.t('pdf_corpus.run_details', 'Run details')"
+      :summary-help="
+        i18n.t(
+          'pdf_corpus.run_details_help',
+          'Activity history, quality checks, model activity, and technical diagnostics.',
+        )
+      "
+    >
+      <template #activity>
+        <CorpusBuildActivity :build="build" />
+      </template>
       <template v-if="!awaitingManifestReview" #manifest>
         <slot name="manifest"></slot>
       </template>
