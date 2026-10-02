@@ -247,10 +247,7 @@ function applyCorpusBuildRequest(request: Record<string, unknown>) {
       : {};
   topologyPolicy.value = {
     mode: saved.mode === "source_units" ? "source_units" : "semantic",
-    source_units_per_record: Math.max(
-      1,
-      Math.min(100, Number(saved.source_units_per_record || 1)),
-    ),
+    source_units_per_record: Math.max(1, Math.min(100, Number(saved.source_units_per_record || 1))),
     records_per_page:
       saved.records_per_page == null
         ? null
@@ -379,9 +376,7 @@ const topologySummary = computed(() => {
   }
   const units = topologyPolicy.value.source_units_per_record;
   const records =
-    units === 1
-      ? "1 SourceUnit → 1 Record"
-      : `${units.toLocaleString()} SourceUnits → 1 Record`;
+    units === 1 ? "1 SourceUnit → 1 Record" : `${units.toLocaleString()} SourceUnits → 1 Record`;
   const perPage = topologyPolicy.value.records_per_page;
   return perPage && syntheticRecordPagesAvailable.value
     ? `${records} → ${perPage.toLocaleString()} ${
