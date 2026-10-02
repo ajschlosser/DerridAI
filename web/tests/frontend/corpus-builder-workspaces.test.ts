@@ -393,7 +393,9 @@ describe("setup sections", () => {
     expect(wrapper.get(".corpus-setup-attention").text()).toContain("1");
     expect(wrapper.get("[data-section='source'] .corpus-setup-indicator").text()).toBe("1");
     expect(wrapper.get("[data-section='metadata'] .corpus-setup-indicator").text()).toBe("3");
-    expect(wrapper.get("[data-section='advanced'] .corpus-setup-state").text()).toContain("Optional");
+    expect(wrapper.get("[data-section='advanced'] .corpus-setup-state").text()).toContain(
+      "Optional",
+    );
   });
 });
 
