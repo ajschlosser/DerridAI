@@ -240,7 +240,7 @@ const {
   topRecordFieldValues,
   workInsightMetrics,
   mixedWorkValueButton,
-  workMetadataControl,
+  workMetadataControlSpec,
   dashboardPieChart,
   pieShareSeries,
   dashboardMetricBody,
@@ -1259,7 +1259,7 @@ const {
   uid: (...args) => uid(...args),
   uniqueWorkValues: (...args) => uniqueWorkValues(...args),
   workIndex: (...args) => workIndex(...args),
-  workMetadataControl: (...args) => workMetadataControl(...args),
+  workMetadataControlSpec: (...args) => workMetadataControlSpec(...args),
   workflowProviderSelectHtml: (...args) => workflowProviderSelectHtml(...args),
   workflowProviderSummaryHtml: (...args) => workflowProviderSummaryHtml(...args),
 });

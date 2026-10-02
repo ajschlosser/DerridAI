@@ -2,6 +2,7 @@
 
 import { openMessageDialog } from "../composables/messageDialog";
 import { openMixedWorkValuesDialog as openMixedWorkValues } from "../composables/mixedWorkValuesDialog";
+import { openWorkMetadataEditorDialog } from "../composables/workMetadataEditor";
 import { openRemoveWorkDialog } from "../composables/removeWorkDialog";
 import { openSeparateWorksDialog } from "../composables/separateWorksDialog";
 import { esc, icon } from "./html";
@@ -52,7 +53,7 @@ type Helper =
   | "uid"
   | "uniqueWorkValues"
   | "workIndex"
-  | "workMetadataControl"
+  | "workMetadataControlSpec"
   | "workflowProviderSelectHtml"
   | "workflowProviderSummaryHtml";
 type Deps = { state: Loose; corpusCache: Loose } & Record<Helper, Fn>;
@@ -121,7 +122,7 @@ export function createWorkDialogs(deps: Deps) {
     uid,
     uniqueWorkValues,
     workIndex,
-    workMetadataControl,
+    workMetadataControlSpec,
     workflowProviderSelectHtml,
     workflowProviderSummaryHtml,
   } = deps;
@@ -154,89 +155,64 @@ export function createWorkDialogs(deps: Deps) {
         ),
       ]),
     ].filter((field) => field !== "updates");
-    const dialog = document.createElement("dialog");
-    dialog.className = "work-metadata-dialog";
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("works.edit_work_metadata"))}</h2><div class="dialog-subtitle">${esc(work)} · ${esc(trf("works.associated_records_files", { records: rows.length.toLocaleString(), files: new Set(rows.map((row: Any) => row.file.name)).size }))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db work-metadata-body"><div class="info">${trf("works.edit_metadata_apply_help", {
-    apply: `<b>${esc(tr("common.apply"))}</b>`,
-    work: "<code>work</code>",
-    updates: "<code>updates</code>",
-  })}</div><div class="work-meta-table">${available.map((field) => workMetadataControl(field, rows)).join("")}</div></div>
-  <div class="da"><button class="btn" data-close>${esc(tr("ui.cancel"))}</button><button class="btn primary" id="applyWorkMetadata">${esc(trf("works.apply_selected_to_records", { count: rows.length.toLocaleString() }))}</button></div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    dialog
-      .querySelectorAll("[data-inspect-mixed-field]")
-      .forEach(
-        (button: Any) =>
-          (button.onclick = () =>
-            openMixedWorkValuesDialog(work, button.dataset.inspectMixedField, rows)),
-      );
-    dialog.querySelector("#applyWorkMetadata").onclick = async () => {
-      const selected = [...dialog.querySelectorAll("[data-work-meta-apply]:checked")].map(
-        (box) => box.dataset.workMetaApply,
-      );
-      if (!selected.length) return toast(tr("works.select_field_to_apply"), { tone: "warning" });
-      const changes: Any = {};
-      try {
-        for (const field of selected) {
-          const control = dialog.querySelector(`[data-work-meta-value="${CSS.escape(field)}"]`);
-          changes[field] = parseWorkMetadataValue(field, control, rows);
+    openWorkMetadataEditorDialog({
+      work: String(work),
+      recordCount: rows.length,
+      fileCount: new Set(rows.map((row: Any) => row.file.name)).size,
+      fields: available.map((field) => workMetadataControlSpec(field, rows)),
+      inspectMixed: (field) => openMixedWorkValuesDialog(work, field, rows),
+      apply: async ({ values }) => {
+        const selected = Object.keys(values);
+        const changes: Any = {};
+        try {
+          for (const field of selected)
+            changes[field] = parseWorkMetadataValue(field, { value: values[field] }, rows);
+        } catch (error: Any) {
+          toast(error.message, { tone: "danger" });
+          return false;
         }
-      } catch (error: Any) {
-        return toast(error.message, { tone: "danger" });
-      }
-      if (
-        !(await openMessageDialog({
-          title: tr("works.apply_metadata_confirm"),
-          message: trf("works.apply_fields_to_records", {
-            fields: selected.length,
-            records: rows.length,
-            work,
+        if (
+          !(await openMessageDialog({
+            title: tr("works.apply_metadata_confirm"),
+            message: trf("works.apply_fields_to_records", {
+              fields: selected.length,
+              records: rows.length,
+              work,
+            }),
+            confirmLabel: tr("works.apply_metadata"),
+            cancelLabel: tr("ui.cancel"),
+          }))
+        )
+          return false;
+        const batchId = uid();
+        let changedRecords = 0,
+          fieldChanges = 0;
+        const touchedFiles = new Set();
+        for (const row of rows) {
+          const count = applyRecordChanges(row.file, row.index, changes, {
+            source: "work_metadata",
+            batchId,
+            reason: `Bulk work metadata update for ${work}`,
+          });
+          if (count) {
+            changedRecords++;
+            fieldChanges += count;
+            touchedFiles.add(row.file);
+          }
+        }
+        for (const file of touchedFiles) await persistFileNow(file);
+        shell();
+        renderView();
+        toast(
+          trf("works.metadata_applied", {
+            records: changedRecords.toLocaleString(),
+            fields: fieldChanges.toLocaleString(),
           }),
-          confirmLabel: tr("works.apply_metadata"),
-          cancelLabel: tr("ui.cancel"),
-        }))
-      )
-        return;
-      const applyButton = dialog.querySelector("#applyWorkMetadata");
-      if (applyButton) {
-        applyButton.disabled = true;
-        applyButton.textContent = tr("works.applying_metadata");
-      }
-      const batchId = uid();
-      let changedRecords = 0,
-        fieldChanges = 0;
-      const touchedFiles = new Set();
-      for (const row of rows) {
-        const count = applyRecordChanges(row.file, row.index, changes, {
-          source: "work_metadata",
-          batchId,
-          reason: `Bulk work metadata update for ${work}`,
-        });
-        if (count) {
-          changedRecords++;
-          fieldChanges += count;
-          touchedFiles.add(row.file);
-        }
-      }
-      for (const file of touchedFiles) await persistFileNow(file);
-      close();
-      shell();
-      renderView();
-      toast(
-        trf("works.metadata_applied", {
-          records: changedRecords.toLocaleString(),
-          fields: fieldChanges.toLocaleString(),
-        }),
-        { tone: "success" },
-      );
-    };
+          { tone: "success" },
+        );
+        return true;
+      },
+    });
   }
   function openWorkMetadataLlmDialog(items: Any) {
     const works = (items || []).filter((item: Any) => item?.work && item?.rows?.length);

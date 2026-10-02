@@ -77,6 +77,11 @@ interface Scenario {
   /** Records for the loaded file, instead of the default sample. */
   records?: object[];
   fixtures?: Fixtures;
+  /**
+   * For a surface that is now a Vue component: assert this text appears in the captured markup
+   * instead of comparing a committed baseline of the retired imperative DOM.
+   */
+  contains?: string[];
   /** Interactions that reach the state, after navigation. */
   steps?: (page: Page) => Promise<void>;
   /** What to capture: the page's main region (default) or the open dialog. */
@@ -784,6 +789,7 @@ const scenarios: Scenario[] = [
   },
   {
     name: "dialog-works-separate",
+    contains: ["Separate works from a JSONL file"],
     nav: "Works",
     load: true,
     target: "dialog",
@@ -934,6 +940,7 @@ const scenarios: Scenario[] = [
   },
   {
     name: "dialog-works-edit-metadata",
+    contains: ["Edit work metadata"],
     nav: "Works",
     load: true,
     target: "dialog",
@@ -944,6 +951,7 @@ const scenarios: Scenario[] = [
   },
   {
     name: "dialog-works-remove-work",
+    contains: ["Remove entire work"],
     nav: "Works",
     load: true,
     target: "dialog",
@@ -1199,6 +1207,8 @@ test.describe("legacy runtime DOM baseline", () => {
       if (target === "dock") {
         expect(stableMarkup).toContain('id="operationProgressStack"');
         expect(stableMarkup).toContain('id="operationStackItems"');
+      } else if (scenario.contains) {
+        for (const text of scenario.contains) expect(stableMarkup).toContain(text);
       } else {
         expect(stableMarkup).toMatchSnapshot(`${scenario.name}.html`);
       }

@@ -190,7 +190,8 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] `workDialogs`: mixed-values dialog (`MixedWorkValuesDialog.vue` + `composables/mixedWorkValuesDialog.ts`)
   - [x] `workDialogs`: remove-work dialog (`RemoveWorkDialog.vue`; the deletion stays in the legacy forwarder as a `confirm` callback)
   - [x] `workDialogs`: separate-works dialog (`SeparateWorksDialog.vue`, same `confirm` callback pattern)
-  - [ ] remaining `workDialogs` (metadata editor, LLM, proposal result), then `recordDialogs`, `jobDialogs`
+  - [x] `workDialogs`: metadata editor (`WorkMetadataEditorDialog.vue`; `workMetadataControl` HTML became `workMetadataControlSpec`, and control values stay strings for `parseWorkMetadataValue`)
+  - [ ] remaining `workDialogs` (LLM, proposal result), then `recordDialogs`, `jobDialogs`
 - [ ] Step 4 state slices and deletion
 
 Notes for the next session:
@@ -215,3 +216,7 @@ Notes for the next session:
   the runtime is their `runtime.*` / `runtime.state` reads (Step 4). Step 3 is therefore the imperative dialogs only.
   Pattern used for the first slice: a composable holds the request, a host component mounted in `App.vue` renders it
   in a native modal `<dialog>`, and the legacy function stays as a thin forwarder until its callers move.
+- Legacy e2e gotchas: `vite preview` serves `web/dist`, so run `npm run build` first; port 5199 may be held by a stale
+  server from another worktree (use `APP_PORT=<free port>`). A ported dialog's baseline is retired by adding `contains`
+  to its scenario, listing the name in `nonSnapshotScenarios` (`scripts/check-legacy-snapshots.mjs`) and deleting the
+  `.html`; done for the separate-works, edit-metadata and remove-work dialogs.
