@@ -1,8 +1,11 @@
 import { DOMWrapper, mount, shallowMount } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { describe, expect, it } from "vitest";
 import CorpusSourceIngest from "../../src/components/CorpusSourceIngest.vue";
 import SourceTable from "../../src/components/sources/SourceTable.vue";
+import CorpusImportShell from "../../src/components/corpus-builder/CorpusImportShell.vue";
+import CorpusCaptureDialog from "../../src/components/capture/CorpusCaptureDialog.vue";
 
 const body = () => new DOMWrapper(document.body);
 
@@ -233,9 +236,9 @@ describe("Corpus source ingest experience", () => {
     const wrapper = shallowMount(CorpusSourceIngest, {
       props: { assets: [asset(1), asset(2)] },
     });
-    expect(wrapper.getComponent(SourceTable).props("refreshKey")).toBe("a1,a2");
+    expect(wrapper.getComponent(SourceTable).props("refreshKey")).toContain("a1,a2");
     await wrapper.setProps({ assets: [asset(1), asset(2), asset(3)] });
-    expect(wrapper.getComponent(SourceTable).props("refreshKey")).toBe("a1,a2,a3");
+    expect(wrapper.getComponent(SourceTable).props("refreshKey")).toContain("a1,a2,a3");
   });
 
   it("presents the current source with its facts and a way forward", async () => {
@@ -353,5 +356,34 @@ describe("automatic page detection", () => {
       },
     });
     expect(wrapper.find(".ocr-choice").exists()).toBe(false);
+  });
+});
+
+describe("Corpus source ingest capture refresh", () => {
+  it("reloads the sources table when a capture settles, even if the asset list is unchanged", async () => {
+    const wrapper = shallowMount(CorpusSourceIngest, {
+      props: { assets: [{ asset_id: "a1", filename: "a.pdf", block_count: 1 } as never] },
+    });
+    wrapper.findComponent(CorpusImportShell).vm.$emit("choose", "author");
+    await flushPromises();
+    const before = wrapper.getComponent(SourceTable).props("refreshKey");
+    wrapper
+      .findComponent(CorpusCaptureDialog)
+      .vm.$emit("changed", { status: "complete", active_job: null });
+    await nextTick();
+    expect(wrapper.getComponent(SourceTable).props("refreshKey")).not.toBe(before);
+    expect(wrapper.emitted("sourcesChanged")).toHaveLength(1);
+  });
+
+  it("reloads the sources table when the capture dialog is closed", async () => {
+    const wrapper = shallowMount(CorpusSourceIngest, {
+      props: { assets: [{ asset_id: "a1", filename: "a.pdf", block_count: 1 } as never] },
+    });
+    wrapper.findComponent(CorpusImportShell).vm.$emit("choose", "author");
+    await flushPromises();
+    const before = wrapper.getComponent(SourceTable).props("refreshKey");
+    wrapper.findComponent(CorpusCaptureDialog).vm.$emit("close");
+    await nextTick();
+    expect(wrapper.getComponent(SourceTable).props("refreshKey")).not.toBe(before);
   });
 });

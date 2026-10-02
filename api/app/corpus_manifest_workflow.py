@@ -497,14 +497,28 @@ CURRENT REVIEWED RECORD TEXT:
                     order_errors.append(record_id)
                 previous_last = max(previous_last, indexes[-1])
 
-            expected_pdf_pages = sorted({int(block_map[value]["page"]) for value in ids if value in block_map})
-            actual_pdf_pages = sorted(int(value) for value in record.get("pdf_pages") or [] if isinstance(value, int))
-            if expected_pdf_pages != actual_pdf_pages:
-                page_errors.append(record_id)
             group = [block_map[value] for value in ids if value in block_map]
-            expected_start, expected_end = _scholarly_page_range(group)
-            if record.get("page_start") != expected_start or record.get("page_end") != expected_end:
-                page_errors.append(record_id)
+            # Each block is validated against the locator its medium defines:
+            # timed media (audio) by a well-formed time range, paged media by a
+            # physical page. A block with neither is a mapping error, never skipped.
+            timed = bool(group) and all(block.get("locator_kind") == "time" for block in group)
+            if timed:
+                for block in group:
+                    start, end = block.get("start"), block.get("end")
+                    if not (isinstance(start, (int, float)) and isinstance(end, (int, float))) or start < 0 or end < start:
+                        page_errors.append(record_id)
+            else:
+                try:
+                    expected_pdf_pages = sorted({int(block["page"]) for block in group})
+                except (KeyError, TypeError, ValueError):
+                    page_errors.append(record_id)
+                    expected_pdf_pages = None
+                actual_pdf_pages = sorted(int(value) for value in record.get("pdf_pages") or [] if isinstance(value, int))
+                if expected_pdf_pages is not None and expected_pdf_pages != actual_pdf_pages:
+                    page_errors.append(record_id)
+                expected_start, expected_end = _scholarly_page_range(group)
+                if record.get("page_start") != expected_start or record.get("page_end") != expected_end:
+                    page_errors.append(record_id)
             source_labels = [str(block.get("printed_page_label") or "").strip() for block in group]
             disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
             if disposition == "rejected":
@@ -512,7 +526,7 @@ CURRENT REVIEWED RECORD TEXT:
                 # remains auditable, but exclude them from publication-facing
                 # metadata/content requirements.
                 continue
-            if ids and not any(source_labels):
+            if ids and not timed and not any(source_labels):
                 printed_page_errors.append(record_id)
 
             try:

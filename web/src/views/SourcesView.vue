@@ -43,7 +43,11 @@ const busy = ref("");
 const actionError = ref("");
 const deleteResult = ref<SourceBulkDeleteResult | null>(null);
 const confirmingDelete = ref(false);
+/** Remounts the table (filters change); `reloadVersion` reloads it in place, keeping page and filters. */
 const tableKey = ref(0);
+const reloadVersion = ref(0);
+/** A settled capture may have registered sources, including one that failed or stopped part-way. */
+const SETTLED_CAPTURE = ["complete", "partial", "failed", "cancelled", "interrupted"];
 const initialCapture = String(route.query.capture || "");
 
 const captureLabels = computed(() =>
@@ -114,7 +118,7 @@ function onCaptureChanged(capture: CorpusCapture) {
   if (index >= 0) captures.value.splice(index, 1, row);
   else captures.value.unshift(row);
   // New sources appear only when an acquisition settles.
-  if (!capture.active_job && ["complete", "partial"].includes(capture.status)) tableKey.value += 1;
+  if (!capture.active_job && SETTLED_CAPTURE.includes(capture.status)) reloadVersion.value += 1;
 }
 async function refreshCapture(captureId: string) {
   busy.value = `refresh:${captureId}`;
@@ -150,6 +154,11 @@ function useInBuilder(ids: string[]) {
     }),
   );
 }
+/** Closing stops the dialog's polling, so reload in case sources arrived meanwhile. */
+function closeCapture() {
+  dialogOpen.value = false;
+  reloadVersion.value += 1;
+}
 function viewCaptureSources(captureId: string) {
   dialogOpen.value = false;
   void router.replace({ query: { ...route.query, capture: captureId } });
@@ -166,7 +175,7 @@ async function removeSelected() {
       result.items.filter((item) => item.deleted).map((item) => item.source_document_id),
     );
     selected.value = selected.value.filter((id) => !removed.has(id));
-    if (removed.size) tableKey.value += 1;
+    if (removed.size) reloadVersion.value += 1;
   } catch (cause) {
     fail(cause);
   } finally {
@@ -367,6 +376,7 @@ onMounted(() => void loadCaptures());
       <div class="sources-layout" :class="{ 'has-inspector': inspected }">
         <SourceTable
           :key="tableKey"
+          :refresh-key="reloadVersion"
           v-model:selected="selected"
           :capture-labels="captureLabels"
           :initial-filters="initialCapture ? { capture_id: initialCapture } : {}"
@@ -387,7 +397,7 @@ onMounted(() => void loadCaptures());
       v-if="dialogOpen"
       :open="dialogOpen"
       :capture-id="dialogCaptureId"
-      @close="dialogOpen = false"
+      @close="closeCapture"
       @changed="onCaptureChanged"
       @use-in-builder="useInBuilder"
       @view-sources="viewCaptureSources"

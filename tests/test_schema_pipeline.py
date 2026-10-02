@@ -865,3 +865,19 @@ def test_a_schema_group_can_be_previewed_without_a_build(tmp_path):
     m._interactive_llm_request = lambda build_id, override=None: {}  # type: ignore[method-assign]
     ran = m.preview_schema_group(notes_schema(), "discourse", "It was a calm evening.", {"model": "q"}, run=True)
     assert ran["ran"] is True and ran["answer"]["metadata"]["mood"] == "calm"
+
+
+def test_validating_audio_records_does_not_require_pdf_pages():
+    blocks = [{"block_id": "a1", "text": "hello", "locator_kind": "time", "start": 0.0, "end": 2.0}]
+    records = [{"record_id": "r", "text": "hello", "source_block_ids": ["a1"], "page_start": None, "page_end": None, "pdf_pages": []}]
+    result = cb.PdfCorpusBuildManager.validate_records(blocks, records, dict(cb.CORPUS_PROFILES[cb.PROFILE_VERSION]))
+    assert not result.get("page_errors") and not result.get("printed_page_errors")
+
+
+def test_audio_blocks_without_a_valid_time_range_are_mapping_errors():
+    profile = dict(cb.CORPUS_PROFILES[cb.PROFILE_VERSION])
+    record = {"record_id": "r", "text": "hello", "source_block_ids": ["a1"], "page_start": None, "page_end": None, "pdf_pages": []}
+    bad = [{"block_id": "a1", "text": "hello", "locator_kind": "time", "start": 3.0, "end": 1.0}]
+    assert "r" in cb.PdfCorpusBuildManager.validate_records(bad, [record], profile)["page_mapping_errors"]
+    unlocated = [{"block_id": "a1", "text": "hello"}]
+    assert "r" in cb.PdfCorpusBuildManager.validate_records(unlocated, [record], profile)["page_mapping_errors"]
