@@ -79,6 +79,32 @@ def review_queue(
     }
 
 
+def stored_review_queue(
+    access: AccessContext, build_id: str, *, filters: QueueFilter, offset: int, limit: int,
+    cursor: str | None = None, direction: str = "forward",
+) -> dict[str, Any]:
+    access.require_admin()
+    try:
+        with reviewer_scope(access):
+            return pdf_corpus_repository.projected_review_page(
+                build_id, filters, offset=offset, limit=max(1, min(MAX_QUEUE_PAGE, int(limit))),
+                cursor=cursor, direction=direction,
+            )
+    except KeyError as exc:
+        raise NotFound(f"Corpus build {build_id!r} was not found.") from exc
+
+
+def stored_metadata_facets(
+    access: AccessContext, build_id: str, fields: list[str] | None = None,
+) -> dict[str, list[str]]:
+    access.require_admin()
+    try:
+        with reviewer_scope(access):
+            return pdf_corpus_repository.review_metadata_facets(build_id, fields)
+    except KeyError as exc:
+        raise NotFound(f"Corpus build {build_id!r} was not found.") from exc
+
+
 def present_record(access: AccessContext, record: dict[str, Any]) -> dict[str, Any]:
     """One Record as this reviewer should see it: review state plus blind-review scrub."""
     presented = copy.deepcopy(record)
@@ -96,7 +122,7 @@ def stored_records_by_ids(
     """Indexed reviewer-presented Record reads; never deserialize the whole corpus."""
     access.require_admin()
     try:
-        records = pdf_corpus_repository.get_records(build_id, record_ids)
+        records = pdf_corpus_repository.get_records(build_id, record_ids, include_queue_version=True)
     except KeyError as exc:
         raise NotFound(f"Corpus build {build_id!r} was not found.") from exc
     return [present_record(access, record) if record is not None else None for record in records]

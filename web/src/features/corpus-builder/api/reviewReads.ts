@@ -40,6 +40,11 @@ export interface CorpusQueuePage {
   offset: number;
   limit: number;
   hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  nextCursor: string | null;
+  previousCursor: string | null;
+  dataGeneration: number;
+  topologyGeneration: number;
   /**
    * The whole build's row count (`queue_counts.all`), independent of the active filter/search —
    * used to track when the build's full topology has been hydrated at least once.
@@ -55,6 +60,11 @@ export interface CorpusQueueFilters {
   sourceProblem?: boolean;
   reviewQueue?: ReviewQueue | "";
   query?: string;
+}
+
+export interface CorpusQueueNavigation {
+  cursor?: string | null;
+  direction?: "forward" | "backward";
 }
 
 function queueArguments(filters: CorpusQueueFilters) {
@@ -81,10 +91,11 @@ export const corpusReviewReads = {
     limit: number,
     filters: CorpusQueueFilters = {},
     options: ExecuteOptions = {},
+    navigation: CorpusQueueNavigation = {},
   ): Promise<CorpusQueuePage> {
     const { corpus_build } = await execute(
       CorpusReviewQueueDocument,
-      { build_id: buildId, offset, limit, ...queueArguments(filters) },
+      { build_id: buildId, offset, limit, ...queueArguments(filters), ...navigation },
       options,
     );
     const page = corpus_build.review_queue;
@@ -93,8 +104,13 @@ export const corpusReviewReads = {
       total: page.total,
       offset: page.offset,
       limit: page.limit,
-      hasNextPage: page.offset + page.items.length < page.total,
-      topologyCount: page.queue_counts.all,
+      hasNextPage: page.has_next_page,
+      hasPreviousPage: page.has_previous_page,
+      nextCursor: page.next_cursor ?? null,
+      previousCursor: page.previous_cursor ?? null,
+      dataGeneration: page.data_generation,
+      topologyGeneration: page.topology_generation,
+      topologyCount: page.topology_count,
       counts: page.queue_counts,
     };
   },

@@ -38,6 +38,7 @@ export function queueRowFromRecord(record: CorpusRecord): CorpusQueueRow {
   return {
     record_id: record.record_id,
     record_revision: record.record_revision ?? null,
+    state_version: null,
     page_start: record.page_start == null ? null : String(record.page_start),
     page_end: record.page_end == null ? null : String(record.page_end),
     text_length: record.text_length ?? text.length,

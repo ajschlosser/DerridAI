@@ -23,6 +23,9 @@ interface CorpusReviewNavigationOptions {
   focusHistoryIndex: Ref<number>;
   recordListEl: Ref<HTMLElement | null>;
   pageSize: number;
+  movePage?: (direction: "forward" | "backward") => Promise<void>;
+  hasNextPage?: Ref<boolean>;
+  hasPreviousPage?: Ref<boolean>;
   refreshRecords: (reset?: boolean, preferredId?: string) => Promise<void>;
   selectRecord: (target: ReviewTarget) => Promise<void> | void;
   setFilters?: (queue: ReviewQueue, query: string) => void;
@@ -30,6 +33,21 @@ interface CorpusReviewNavigationOptions {
 }
 
 export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions) {
+  async function loadAdjacentPage(delta: number) {
+    options.recordOffset.value = Math.max(
+      0,
+      options.recordOffset.value + (delta > 0 ? options.pageSize : -options.pageSize),
+    );
+    if (options.movePage) await options.movePage(delta > 0 ? "forward" : "backward");
+    else await options.refreshRecords();
+  }
+
+  function canMovePage(delta: number) {
+    return delta > 0
+      ? (options.hasNextPage?.value ??
+          options.recordOffset.value + options.pageSize < options.recordTotal.value)
+      : (options.hasPreviousPage?.value ?? options.recordOffset.value > 0);
+  }
   function pushFocusHistory(id: string) {
     if (!id || options.focusHistory.value[options.focusHistoryIndex.value] === id) return;
     options.focusHistory.value = options.focusHistory.value.slice(
@@ -82,9 +100,8 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
       }
     }
 
-    if (delta > 0 && options.recordOffset.value + options.pageSize < options.recordTotal.value) {
-      options.recordOffset.value += options.pageSize;
-      await options.refreshRecords(false);
+    if (delta > 0 && canMovePage(delta)) {
+      await loadAdjacentPage(delta);
       const next = options.queueRows.value[0];
       if (next) {
         void options.selectRecord(next);
@@ -93,9 +110,8 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
       return;
     }
 
-    if (delta < 0 && options.recordOffset.value > 0) {
-      options.recordOffset.value = Math.max(0, options.recordOffset.value - options.pageSize);
-      await options.refreshRecords(false);
+    if (delta < 0 && canMovePage(delta)) {
+      await loadAdjacentPage(delta);
       const next = options.queueRows.value[options.queueRows.value.length - 1];
       if (next) {
         void options.selectRecord(next);
@@ -131,9 +147,8 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
       if (backfilled) await options.selectRecord(backfilled);
       return;
     }
-    if (options.recordOffset.value + options.pageSize < options.recordTotal.value) {
-      options.recordOffset.value += options.pageSize;
-      await options.refreshRecords();
+    if (canMovePage(1)) {
+      await loadAdjacentPage(1);
       return;
     }
     const previous = options.queueRows.value[index - 1];
@@ -223,15 +238,19 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
   }
 
   async function previousPage() {
-    if (options.recordOffset.value <= 0) return;
-    await changePage(Math.max(0, options.recordOffset.value - options.pageSize));
+    if (!canMovePage(-1)) return;
+    if (options.beforeNavigate && !(await options.beforeNavigate())) return;
+    options.selectedRecordId.value = "";
+    options.selectedRecord.value = null;
+    await loadAdjacentPage(-1);
   }
 
   async function nextPage() {
-    if (options.recordOffset.value + options.pageSize >= options.recordTotal.value) {
-      return;
-    }
-    await changePage(options.recordOffset.value + options.pageSize);
+    if (!canMovePage(1)) return;
+    if (options.beforeNavigate && !(await options.beforeNavigate())) return;
+    options.selectedRecordId.value = "";
+    options.selectedRecord.value = null;
+    await loadAdjacentPage(1);
   }
 
   return {
@@ -251,5 +270,6 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     openSourceIssueQueue,
     previousPage,
     nextPage,
+    changePage,
   };
 }
