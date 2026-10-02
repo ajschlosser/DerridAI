@@ -36,7 +36,8 @@ interface CorpusBuildLifecycleControllerOptions {
   requestedBuildId: () => string;
   runGuidancePayload: () => Record<string, unknown>;
   /** Reviewer-supplied document fields that detection on source load missed. */
-  documentMetadataPayload?: () => Record<string, string>;
+  documentMetadataPayload?: () => Record<string, unknown>;
+  topologyPolicyPayload?: () => Record<string, unknown>;
   applyBuildRequest: (request: Record<string, unknown>) => void;
   setMessage: (message: string, tone?: MessageTone) => void;
   resetReviewForBuildStart: () => void;
@@ -281,8 +282,10 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     options.resetReviewForBuildStart();
     try {
       const documentMetadata = options.documentMetadataPayload?.() ?? {};
+      const topologyPolicy = options.topologyPolicyPayload?.() ?? {};
       const payload = {
         asset_id: options.selectedAssetId.value,
+        ...(Object.keys(topologyPolicy).length ? { topology_policy: topologyPolicy } : {}),
         auto_enrich_work_metadata: true,
         schema_id: options.schemaId.value,
         run_guidance: options.runGuidancePayload(),
