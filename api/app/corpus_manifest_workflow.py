@@ -129,12 +129,19 @@ def _validated_document_metadata(raw: Any) -> dict[str, Any]:
     unknown = sorted(set(raw) - set(DOCUMENT_FIELDS))
     if unknown:
         raise ValueError("Unknown document field(s): " + ", ".join(unknown))
-    # Presence is meaningful: an explicit null clears an ingest/model suggestion.
-    # Setup's full manifest editor therefore sends reviewer overrides, not only missing fields.
-    supplied = {
-        name: (value.strip() or None) if isinstance(value, str) else value
-        for name, value in raw.items()
-    }
+    # Presence is meaningful for explicit null: it clears an ingest/model suggestion.
+    # Blank strings keep the legacy "omitted" behavior used by required-field prompts.
+    supplied: dict[str, Any] = {}
+    for name, value in raw.items():
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                continue
+            supplied[name] = stripped
+        elif value is None:
+            supplied[name] = None
+        elif value not in ([], {}):
+            supplied[name] = value
     try:
         validated = DocumentManifestModel.model_validate(supplied).model_dump(mode="json")
     except ValidationError as exc:
