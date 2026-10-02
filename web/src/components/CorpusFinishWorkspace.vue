@@ -101,7 +101,7 @@ const publishDecisionStatus = computed(() =>
 const publishDecisionTitle = computed(() => {
   if (publishReady.value) return i18n.t("pdf_corpus.publish.status_ready");
   if (blockers.value.length)
-    return i18n.tf("pdf_corpus.view_publication_blockers", {
+    return i18n.tf("pdf_corpus.publish.status_issues", {
       count: blockers.value.length,
     });
   return i18n.t("pdf_corpus.inspect_remaining_work");
@@ -337,11 +337,11 @@ function fixBlocker(code?: string) {
 
     <details v-if="!publication && !noPublishable" class="readiness-details">
       <summary>
-        <span>
-          <b>{{ i18n.t("pdf_corpus.publish.readiness_title") }}</b>
-          <small>{{ publishDecisionHelp }}</small>
+        <b>{{ i18n.t("pdf_corpus.publish.readiness_title") }}</b>
+        <span class="readiness-details-affordance">
+          {{ i18n.t("pdf_corpus.review_details") }}
+          <AppIcon name="chevron-down" aria-hidden="true" />
         </span>
-        <span class="readiness-details-affordance">{{ i18n.t("pdf_corpus.review_details") }}</span>
       </summary>
       <div class="publication-readiness-list">
         <section
@@ -810,23 +810,21 @@ function fixBlocker(code?: string) {
 .readiness-details > summary::-webkit-details-marker {
   display: none;
 }
-.readiness-details > summary > span:first-child {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-.readiness-details > summary small {
-  color: var(--text-secondary);
-  font-size: var(--fs-xs);
-  font-weight: normal;
-}
 .readiness-details-affordance {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
   color: var(--accent-fg);
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
 }
-.readiness-details[open] .readiness-details-affordance {
-  opacity: 0.75;
+.readiness-details-affordance svg {
+  width: 1rem;
+  height: 1rem;
+  transition: transform 120ms ease;
+}
+.readiness-details[open] .readiness-details-affordance svg {
+  transform: rotate(180deg);
 }
 .publication-readiness-list {
   display: grid;
