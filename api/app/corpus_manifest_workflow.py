@@ -178,6 +178,12 @@ class ManifestWorkflowMixin:
         """
         from .unit_policy import DIVISIBLE, split_sentences
 
+        topology = request.get("topology_policy") if isinstance(request.get("topology_policy"), dict) else {}
+        if str(topology.get("mode") or "semantic") == "source_units":
+            # Fixed SourceUnit topology means exactly the units the reviewer selected.
+            # Do not silently derive finer automatic units from Record-size heuristics.
+            return asset, None
+
         chosen = str((asset.get("unit_policy") or {}).get("mode") or "default")
         if chosen != "default":
             return asset, None
