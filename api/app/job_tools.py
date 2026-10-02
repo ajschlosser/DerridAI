@@ -7,6 +7,12 @@ import uuid
 from typing import Any
 
 from .chroma_store import ChromaStore
+from .concurrency import (
+    CapacityCancelled,
+    capacity_coordinator,
+    provider_capacity_key,
+    provider_limit,
+)
 from .content_policy_generation import generate_policy_for_installed_language
 from .i18n_translation import (
     LanguageTranslationError,
@@ -34,8 +40,6 @@ class LLMToolJobManager(PersistentJobStateMixin):
         self._store = store
         self._jobs: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
-        self._condition = threading.Condition(self._lock)
-        self._active: dict[str, int] = {}
         self._threads: dict[str, threading.Thread] = {}
         self._start_persistent_state()
 
@@ -47,9 +51,14 @@ class LLMToolJobManager(PersistentJobStateMixin):
     def _provider_key(cls, body: LLMToolJobCreate) -> str:
         payload = cls._payload(body)
         assert payload is not None
-        if payload.provider == "ollama":
-            return f"ollama|{str(payload.base_url or '').rstrip('/').lower()}"
-        return body.provider_profile_id or getattr(payload, "provider_profile_id", None) or f"{payload.provider}|{payload.base_url or ''}|{payload.model or ''}"
+        return provider_capacity_key(
+            provider_profile_id=(
+                body.provider_profile_id or getattr(payload, "provider_profile_id", None)
+            ),
+            provider=payload.provider,
+            base_url=payload.base_url,
+            model=payload.model,
+        )
 
     def create(self, body: LLMToolJobCreate, *, owner: str | None = None) -> dict[str, Any]:
         if body.task.startswith("pdf_") and body.pdf is None:
@@ -451,21 +460,47 @@ class LLMToolJobManager(PersistentJobStateMixin):
 
     def _run(self, job_id: str, body: LLMToolJobCreate) -> None:
         key = self._provider_key(body)
-        limit = max(1, min(64, int(body.max_concurrent_requests or 1)))
-        with self._condition:
-            while self._active.get(key, 0) >= limit:
-                job = self._jobs[job_id]
-                if job["cancel_requested"]:
-                    job["status"] = "cancelled"
-                    job["finished_at"] = iso_now()
-                    return
-                job["stage_detail"] = (
-                    f"Waiting for provider slot ({self._active.get(key, 0)}/{limit} active)"
-                )
-                self._condition.wait(timeout=0.5)
-            self._active[key] = self._active.get(key, 0) + 1
+        limit = provider_limit(body.max_concurrent_requests, default=1, maximum=64)
+
+        def cancelled_while_waiting() -> bool:
+            with self._lock:
+                return bool(self._jobs.get(job_id, {}).get("cancel_requested"))
+
+        def waiting(snapshot) -> None:  # noqa: ANN001 - operational callback
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is not None:
+                    job["stage_detail"] = (
+                        f"Waiting for provider slot "
+                        f"({snapshot.active}/{snapshot.limit} active)"
+                    )
 
         try:
+            permit = capacity_coordinator.acquire(
+                "provider_generation",
+                key,
+                limit,
+                cancelled=cancelled_while_waiting,
+                on_wait=waiting,
+            )
+        except CapacityCancelled:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is not None:
+                    job["status"] = "cancelled"
+                    job["finished_at"] = iso_now()
+            self._persist_job(job_id)
+            return
+
+        try:
+            with self._lock:
+                job = self._jobs.get(job_id)
+                if job is not None:
+                    job.setdefault("scheduling", {})["provider_wait_ms"] = int(
+                        round(permit.waited_seconds * 1000)
+                    )
+                    job["scheduling"]["active_when_started"] = permit.active_when_acquired
+                    job["scheduling"]["limit"] = permit.limit
             with self._lock:
                 job = self._jobs[job_id]
                 if job["cancel_requested"]:
@@ -548,13 +583,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
                     job["stage_detail"] = details["message"]
                     job["finished_at"] = iso_now()
         finally:
-            with self._condition:
-                current = self._active.get(key, 0)
-                if current <= 1:
-                    self._active.pop(key, None)
-                else:
-                    self._active[key] = current - 1
-                self._condition.notify_all()
+            permit.release()
             with self._lock:
                 self._threads.pop(job_id, None)
             self._persist_job(job_id)
@@ -609,7 +638,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
         return restored
 
     def cancel(self, job_id: str) -> dict[str, Any]:
-        with self._condition:
+        with self._lock:
             if job_id not in self._jobs:
                 raise KeyError(job_id)
             job = self._jobs[job_id]
@@ -622,7 +651,6 @@ class LLMToolJobManager(PersistentJobStateMixin):
                 job["cancel_requested"] = True
                 job["cancel_requested_at"] = iso_now()
                 job["status"] = "cancelling"
-            self._condition.notify_all()
             job_repository.upsert(copy.deepcopy(job))
             return self._copy(job, True)
 
