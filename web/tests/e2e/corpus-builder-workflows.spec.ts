@@ -212,10 +212,13 @@ test.describe("Corpus Builder composed workflow", () => {
   }) => {
     await page.goto(story("corpus-builder-review-record-queue--mixed-states"));
 
-    const enriching = page.locator('.record-row:has([data-state="enriching"])').first();
-    await expect(enriching).toContainText("Enriching");
-    await expect(enriching.locator(".record-processing-spinner")).toBeVisible();
-    await expect(enriching.locator(".record-state-icon svg")).toHaveCount(0);
+    const enrichingRows = page.locator('.record-row:has([data-state="enriching"])');
+    await expect(enrichingRows).toHaveCount(2);
+    for (const enriching of await enrichingRows.all()) {
+      await expect(enriching).toContainText("Enriching");
+      await expect(enriching.locator(".record-processing-spinner")).toBeVisible();
+      await expect(enriching.locator(".record-state-icon svg")).toHaveCount(0);
+    }
 
     const preparing = page.locator('.record-row:has([data-state="preparing"])').first();
     await expect(preparing).toContainText("Preparing");
