@@ -147,19 +147,52 @@ function fixBlocker(code?: string) {
 
 <template>
   <section class="finish-workspace" :aria-label="i18n.t('pdf_corpus.publish.actions_label')">
-    <div class="publication-head">
+    <div v-if="publication" class="publication-head">
       <div class="publication-primary finish-primary">
         <a
-          v-if="publication"
           class="btn primary"
           :href="`/api/pdf/publications/${encodeURIComponent(publication.publication_id)}/download`"
           >{{ primaryLabel }}</a
         >
-        <UiButton variant="primary" v-else :disabled="busy" @click="act">
+      </div>
+    </div>
+
+    <section
+      v-else-if="!noPublishable"
+      class="publish-decision"
+      :data-state="blockers.length ? 'blocked' : 'ready'"
+      aria-labelledby="publish-decision-title"
+    >
+      <div class="publish-decision-copy">
+        <span class="readiness-state" :data-tone="blockers.length ? 'attention' : 'ok'">
+          <AppIcon :name="stateIcon(Boolean(blockers.length))" />
+          {{
+            blockers.length
+              ? i18n.t("pdf_corpus.attention_required")
+              : i18n.t("pdf_corpus.complete")
+          }}
+        </span>
+        <h3 id="publish-decision-title">
+          {{
+            blockers.length
+              ? i18n.tf("pdf_corpus.view_publication_blockers", { count: blockers.length })
+              : i18n.t("pdf_corpus.publish.status_ready")
+          }}
+        </h3>
+        <p>
+          {{
+            blockers.length
+              ? i18n.t("pdf_corpus.publication_waiting_help")
+              : i18n.t("pdf_corpus.publication_ready_help")
+          }}
+        </p>
+      </div>
+      <div class="publication-primary finish-primary">
+        <UiButton variant="primary" :disabled="busy" @click="act">
           {{ primaryLabel }}
         </UiButton>
       </div>
-    </div>
+    </section>
 
     <section
       v-if="noPublishable"
@@ -233,19 +266,6 @@ function fixBlocker(code?: string) {
       <code>{{ publication.publication_id }}</code>
     </section>
 
-    <div
-      v-if="!publication && readiness.missing_document_fields?.length"
-      class="document-blocker"
-      role="alert"
-    >
-      <b>{{ i18n.t("pdf_corpus.readiness_blocker.required_document_metadata") }}</b
-      ><span>{{
-        readiness.missing_document_fields
-          .map((field) => i18n.t(`record.${field}`, field.replace(/_/g, " ")))
-          .join(", ")
-      }}</span>
-    </div>
-
     <section
       v-if="!publication && blockers.length && !noPublishable"
       class="publication-blockers blockers"
@@ -264,10 +284,39 @@ function fixBlocker(code?: string) {
       </div>
       <ul>
         <li v-for="(blocker, index) in blockers" :key="`${blocker.code}-${index}`">
-          <span>
-            <b>{{ blockerLabel(blocker.code) }}</b>
-            <small v-if="blocker.count" class="count-pill">{{ blocker.count }}</small>
-          </span>
+          <div class="blocker-copy">
+            <span class="blocker-title">
+              <b>{{ blockerLabel(blocker.code) }}</b>
+              <small v-if="blocker.count" class="count-pill">{{ blocker.count }}</small>
+            </span>
+            <small
+              v-if="
+                blocker.code === 'required_document_metadata' &&
+                readiness.missing_document_fields?.length
+              "
+              class="blocker-detail"
+            >
+              {{
+                readiness.missing_document_fields
+                  .map((field) => i18n.t(`record.${field}`, field.replace(/_/g, " ")))
+                  .join(", ")
+              }}
+            </small>
+            <small v-else-if="blocker.code === 'required_metadata'" class="blocker-detail">
+              {{
+                i18n.tf("pdf_corpus.finish_metadata_summary", {
+                  records: Number(summary.records_incomplete || 0),
+                  fields: Number(summary.fields_unresolved || 0),
+                })
+              }}
+            </small>
+            <small
+              v-else-if="blocker.code === 'metadata_validation' && validationIssues.length"
+              class="blocker-detail"
+            >
+              {{ validationIssueSummaryLabel }}
+            </small>
+          </div>
           <button
             type="button"
             class="btn small"
@@ -282,7 +331,21 @@ function fixBlocker(code?: string) {
       </ul>
     </section>
 
-    <div v-if="!publication && !noPublishable" class="publication-readiness-list">
+    <details v-if="!publication && !noPublishable" class="readiness-details">
+      <summary>
+        <span>
+          <b>{{ i18n.t("pdf_corpus.publish.readiness_title") }}</b>
+          <small>
+            {{
+              blockers.length
+                ? i18n.t("pdf_corpus.publication_waiting_help")
+                : i18n.t("pdf_corpus.publication_ready_help")
+            }}
+          </small>
+        </span>
+        <span class="readiness-details-affordance">{{ i18n.t("pdf_corpus.inspect") }}</span>
+      </summary>
+      <div class="publication-readiness-list">
       <section
         class="readiness-row"
         :data-state="Number(readiness.records_pending || 0) > 0 ? 'attention' : 'complete'"
@@ -519,7 +582,8 @@ function fixBlocker(code?: string) {
           </button>
         </div>
       </section>
-    </div>
+      </div>
+    </details>
   </section>
 </template>
 
@@ -535,6 +599,38 @@ function fixBlocker(code?: string) {
   flex-wrap: wrap;
   gap: var(--space-3);
   align-items: flex-start;
+}
+.publish-decision {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-5);
+  align-items: center;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+}
+.publish-decision[data-state="blocked"] {
+  border-color: var(--tone-warn-border);
+  background: var(--tone-warn-bg);
+}
+.publish-decision[data-state="ready"] {
+  border-color: var(--tone-ok-border);
+  background: var(--tone-ok-bg);
+}
+.publish-decision-copy {
+  min-width: 0;
+}
+.publish-decision-copy h3 {
+  margin: var(--space-1) 0;
+  font-size: var(--fs-lg);
+}
+.publish-decision-copy p {
+  max-width: 72ch;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
 }
 .eyebrow,
 .readiness-state {
@@ -572,8 +668,8 @@ function fixBlocker(code?: string) {
 }
 .no-publishable,
 .publication-snapshot,
-.document-blocker,
-.publication-blockers {
+.publication-blockers,
+.readiness-details {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   background: var(--surface-subtle);
@@ -631,20 +727,6 @@ function fixBlocker(code?: string) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.document-blocker {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  padding: var(--space-3) var(--space-4);
-  border-color: var(--tone-warn-border);
-  background: var(--tone-warn-bg);
-  color: var(--tone-warn-fg);
-  font-size: var(--fs-sm);
-}
-.document-blocker span {
-  color: var(--text-secondary);
-}
 .publication-blockers {
   overflow: hidden;
   border-color: var(--tone-warn-border);
@@ -685,10 +767,21 @@ function fixBlocker(code?: string) {
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border-subtle);
 }
-.publication-blockers li > span {
+.blocker-copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+.blocker-title {
   display: flex;
   gap: var(--space-2);
   align-items: baseline;
+}
+.blocker-detail {
+  max-width: 72ch;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
 }
 .count-pill {
   display: inline-grid;
@@ -703,10 +796,43 @@ function fixBlocker(code?: string) {
   font-weight: var(--fw-bold);
   line-height: 1;
 }
+.readiness-details {
+  overflow: hidden;
+  background: var(--surface-card);
+}
+.readiness-details > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  list-style: none;
+}
+.readiness-details > summary::-webkit-details-marker {
+  display: none;
+}
+.readiness-details > summary > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.readiness-details > summary small {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: normal;
+}
+.readiness-details-affordance {
+  color: var(--accent-fg);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.readiness-details[open] .readiness-details-affordance {
+  opacity: 0.75;
+}
 .publication-readiness-list {
   display: grid;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
+  border-top: 1px solid var(--border-subtle);
   overflow: hidden;
 }
 .readiness-row {
@@ -839,8 +965,10 @@ dd {
 }
 @media (max-width: 760px) {
   .publication-head,
+  .publish-decision,
   .no-publishable {
     display: grid;
+    grid-template-columns: 1fr;
   }
   .publication-primary :deep(.btn),
   .publication-primary :deep(.ui-button) {
