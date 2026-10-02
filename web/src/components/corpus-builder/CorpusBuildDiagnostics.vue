@@ -62,7 +62,7 @@ const unresolved = computed(
 <template>
   <details
     class="corpus-build-diagnostics"
-    :aria-label="i18n.t('pdf_corpus.diagnostics.title')"
+    :aria-label="summaryLabel || i18n.t('pdf_corpus.diagnostics.title')"
     @toggle="track('root', $event)"
   >
     <summary>
