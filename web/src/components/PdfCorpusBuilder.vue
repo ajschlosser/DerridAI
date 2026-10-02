@@ -779,18 +779,25 @@ function returnToReadiness() {
   void switchWorkspace("publish");
 }
 let remediationAdvancing = false;
-watch(fixRemaining, (remaining, previous) => {
+watch(fixRemaining, async (remaining, previous) => {
+  const current = fixContext.value;
+  if (!current || workspaceMode.value !== "review" || previous <= remaining) return;
+  // Record decisions and metadata review already own their queue-aware advancement.
+  // When the blocker itself disappears, return to the authoritative Publish readiness state.
+  if (remaining === 0) {
+    returnToReadiness();
+    return;
+  }
   if (
-    !fixContext.value ||
-    workspaceMode.value !== "review" ||
-    previous <= remaining ||
-    remaining !== 0
+    remediationAdvancing ||
+    !["source_quality", "source_validation"].includes(current.code)
   ) {
     return;
   }
-  // Record decisions and metadata review already own their queue-aware advancement.
-  // When the blocker itself disappears, return to the authoritative Publish readiness state.
-  returnToReadiness();
+  remediationAdvancing = true;
+  await nextTick();
+  await advanceFrom(current.recordId);
+  remediationAdvancing = false;
 });
 watch(
   fixIssues,
@@ -830,6 +837,31 @@ watch(reviewQueue, (queue) => {
 watch(workspaceMode, (mode) => {
   if (mode !== "review" && fixContext.value) fixContext.value = null;
 });
+async function adjudicateBoundaryWithRemediation(
+  direction: "previous" | "next",
+  profileId?: string,
+  model?: string,
+) {
+  const current = fixContext.value;
+  const before = current?.code === "boundary_attention" ? fixRemaining.value : 0;
+  const recordId = selectedRecordId.value;
+  await adjudicateBoundary(direction, profileId, model);
+  if (
+    !current ||
+    current.code !== "boundary_attention" ||
+    workspaceMode.value !== "review" ||
+    fixContext.value?.code !== "boundary_attention"
+  ) {
+    return;
+  }
+  const remaining = fixRemaining.value;
+  if (remaining >= before) return;
+  if (remaining === 0) {
+    returnToReadiness();
+    return;
+  }
+  await advanceFrom(recordId);
+}
 
 /** The reviewer answers from their own knowledge: the decision records them, not a source span, as the source. */
 async function resolveMetadataWithHumanSource(field: string, value: unknown, note: string) {
@@ -2904,7 +2936,7 @@ defineExpose({
             @open-pdf-explorer="openPdfExplorer"
             @update:provider-profile-id="llmActionProviderId = $event"
             @update:model-override="llmActionModel = $event"
-            @adjudicate="adjudicateBoundary"
+            @adjudicate="adjudicateBoundaryWithRemediation"
             @toggle-evidence="toggleEvidenceBlock"
             @set-evidence="setEvidenceBlocks"
             @split="split"
