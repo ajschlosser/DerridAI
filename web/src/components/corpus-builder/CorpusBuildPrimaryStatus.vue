@@ -17,6 +17,9 @@ const props = defineProps<{
   canResume: boolean;
   hasRecordTopology: boolean;
   readyCount?: number;
+  enrichingCount?: number;
+  preparingCount?: number;
+  attentionCount?: number;
   busy?: boolean;
   providerLabel?: string;
   modelLabel?: string;
@@ -38,16 +41,27 @@ const operation = computed(() => status.value.detail);
 const settled = computed(() => isAutomatedProcessingDone(props.build));
 const recordCount = computed(() => Number(props.build.record_count || 0));
 const readyCount = computed(() => Math.max(0, Number(props.readyCount || 0)));
+const enrichingCount = computed(() => Math.max(0, Number(props.enrichingCount || 0)));
+const preparingCount = computed(() => Math.max(0, Number(props.preparingCount || 0)));
+const attentionCount = computed(() => Math.max(0, Number(props.attentionCount || 0)));
 const reviewAvailableWhileRunning = computed(
   () => props.running && props.hasRecordTopology && recordCount.value > 0,
 );
+const reviewableCount = computed(() => readyCount.value + attentionCount.value);
 const reviewLabel = computed(() =>
   reviewAvailableWhileRunning.value && readyCount.value > 0
     ? i18n.tf("pdf_corpus.primary_status.review_ready", { count: readyCount.value })
     : i18n.t("pdf_corpus.primary_status.review_records"),
 );
 const reviewPrimary = computed(
-  () => settled.value || (reviewAvailableWhileRunning.value && readyCount.value > 0),
+  () => settled.value || (reviewAvailableWhileRunning.value && reviewableCount.value > 0),
+);
+const showProgressiveHandoff = computed(
+  () =>
+    reviewAvailableWhileRunning.value &&
+    ["enriching", "metadata_retry", "metadata_enrichment_rerun"].includes(
+      String(props.build.stage || ""),
+    ),
 );
 const liveCount = computed(() => {
   if (String(props.build.stage) === "enriching" && props.running) {
@@ -80,20 +94,20 @@ function confirmDelete() {
     <header class="primary-status-head">
       <h2 id="corpus-build-status-title">{{ status.label }}</h2>
       <div class="primary-status-actions">
-        <UiButton v-if="running" :label="i18n.t('pdf_corpus.pause')" @click="emit('pause')" />
-        <UiButton v-if="running" :label="i18n.t('pdf_corpus.cancel')" @click="emit('cancel')" />
-        <UiButton
-          v-if="canResume"
-          :label="i18n.t('pdf_corpus.resume')"
-          :disabled="busy"
-          @click="emit('resume')"
-        />
         <UiButton
           v-if="hasRecordTopology && recordCount > 0"
           :variant="reviewPrimary ? 'primary' : 'default'"
           :label="reviewLabel"
           @click="emit('openReview')"
         />
+        <UiButton
+          v-if="canResume"
+          :label="i18n.t('pdf_corpus.resume')"
+          :disabled="busy"
+          @click="emit('resume')"
+        />
+        <UiButton v-if="running" :label="i18n.t('pdf_corpus.pause')" @click="emit('pause')" />
+        <UiButton v-if="running" :label="i18n.t('pdf_corpus.cancel')" @click="emit('cancel')" />
         <UiButton
           v-if="hasRecordTopology && settled"
           :label="i18n.t('pdf_corpus.primary_status.publication_readiness')"
@@ -144,12 +158,30 @@ function confirmDelete() {
       }}</span>
     </div>
 
+    <dl v-if="showProgressiveHandoff" class="primary-status-handoff">
+      <div data-flow-state="ready">
+        <dt>{{ i18n.t("pdf_corpus.primary_status.ready_for_review", "Ready for review") }}</dt>
+        <dd>{{ readyCount.toLocaleString() }}</dd>
+      </div>
+      <div data-flow-state="enriching">
+        <dt>{{ i18n.t("pdf_corpus.record_state.enriching", "Enriching") }}</dt>
+        <dd>{{ enrichingCount.toLocaleString() }}</dd>
+      </div>
+      <div data-flow-state="preparing">
+        <dt>{{ i18n.t("pdf_corpus.record_state.preparing", "Preparing") }}</dt>
+        <dd>{{ preparingCount.toLocaleString() }}</dd>
+      </div>
+      <div data-flow-state="attention">
+        <dt>{{ i18n.t("pdf_corpus.attention_required") }}</dt>
+        <dd>{{ attentionCount.toLocaleString() }}</dd>
+      </div>
+    </dl>
     <dl class="primary-status-facts">
       <div>
         <dt>{{ i18n.t("pdf_corpus.records") }}</dt>
         <dd>{{ recordCount.toLocaleString() }}</dd>
       </div>
-      <div>
+      <div v-if="!showProgressiveHandoff">
         <dt>{{ liveCount.label }}</dt>
         <dd>{{ liveCount.value.toLocaleString() }}</dd>
       </div>
@@ -289,6 +321,39 @@ function confirmDelete() {
   background: var(--ui-accent);
   transition: width 0.25s;
 }
+.primary-status-handoff {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+.primary-status-handoff > div {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
+}
+.primary-status-handoff dt {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.primary-status-handoff dd {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+.primary-status-handoff [data-flow-state="ready"] {
+  border-color: var(--tone-ok-border);
+  background: var(--tone-ok-bg);
+}
+.primary-status-handoff [data-flow-state="attention"] {
+  border-color: var(--tone-warn-border);
+  background: var(--tone-warn-bg);
+}
 .primary-status-facts {
   display: flex;
   flex-wrap: wrap;
@@ -323,6 +388,16 @@ function confirmDelete() {
 .primary-status-rail li[data-state="current"] {
   color: var(--text-primary);
   font-weight: var(--fw-bold);
+}
+@media (max-width: 900px) {
+  .primary-status-handoff {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .primary-status-handoff {
+    grid-template-columns: 1fr;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .primary-status-track span {
