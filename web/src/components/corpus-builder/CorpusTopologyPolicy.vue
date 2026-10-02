@@ -173,11 +173,7 @@ const relationshipSummary = computed(() => {
           </small>
         </span>
       </label>
-      <label
-        v-if="syntheticPages"
-        for="corpus-records-per-page"
-        class="records-per-page"
-      >
+      <label v-if="syntheticPages" for="corpus-records-per-page" class="records-per-page">
         <span>{{ i18n.t("pdf_corpus.topology.records_per_page", "Records per Page") }}</span>
         <input
           id="corpus-records-per-page"
