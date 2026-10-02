@@ -291,7 +291,10 @@ async function toggleUrl() {
 
 // --- Saved sources ---------------------------------------------------------
 /** Reload the compact table whenever the parent's asset list changes (upload, import, delete). */
-const assetsKey = computed(() => props.assets.map((asset) => asset.asset_id).join(","));
+const sourcesVersion = ref(0);
+const assetsKey = computed(
+  () => `${sourcesVersion.value}:${props.assets.map((asset) => asset.asset_id).join(",")}`,
+);
 const inspectedSource = ref("");
 function deleteName(assetId: string) {
   return props.assets.find((asset) => asset.asset_id === assetId)?.filename || assetId;
@@ -314,8 +317,17 @@ function kindMark(asset: { media_kind?: string; filename: string }) {
 // --- Corpus Capture ----------------------------------------------------------
 const captureOpen = ref(false);
 function onCaptureChanged(capture: CorpusCapture) {
-  if (!capture.active_job && ["complete", "partial"].includes(capture.status))
+  if (!capture.active_job && ["complete", "partial"].includes(capture.status)) {
+    // Captured sources live in the source index, not the parent's asset list, so the
+    // table must be reloaded explicitly; the asset ids alone may not change.
+    sourcesVersion.value += 1;
     emit("sourcesChanged");
+  }
+}
+/** Closing stops the dialog's polling, so reload once in case sources arrived meanwhile. */
+function closeCapture() {
+  captureOpen.value = false;
+  sourcesVersion.value += 1;
 }
 function useCaptured(ids: string[]) {
   captureOpen.value = false;
@@ -691,7 +703,7 @@ onBeforeUnmount(() => {
     <CorpusCaptureDialog
       v-if="captureOpen"
       :open="captureOpen"
-      @close="captureOpen = false"
+      @close="closeCapture"
       @changed="onCaptureChanged"
       @use-in-builder="useCaptured"
       @view-sources="emit('viewCaptureSources', $event)"
