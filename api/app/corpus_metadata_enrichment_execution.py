@@ -13,6 +13,7 @@ import logging
 import re
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +23,7 @@ from . import experiment, operation_events
 from .autofill import decide as decide_autofill
 from .autofill import in_audit_sample
 from .config import APP_VERSION
+from .concurrency import provider_limit
 from .corpus_llm_helpers import (
     StructuredOutputError,
     _context_window,
@@ -100,6 +102,8 @@ from .run_guidance import find_guidance_matches, format_group_guidance
 from .source_embeddings import SourceEmbeddingProjection
 
 logger = logging.getLogger(__name__)
+
+PARALLEL_METADATA_FAMILIES = frozenset({"discourse", "quotation", "indexing"})
 
 
 def _has_quotation_signal(record: dict[str, Any], source_text: str) -> bool:
@@ -879,15 +883,71 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         tasks: list[tuple[str, str, type[BaseModel], int, str]], build_id: str,
         stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
     ) -> list[tuple[str, dict[str, Any] | None, Exception | None]]:
-        """Run unsettled families with live ownership checks and durable stage callbacks.
+        """Run metadata families with bounded overlap when their contracts are independent.
 
-        The corpus_metadata_enrichment pipeline decides how each model call runs. It is
-        resolved once per Record, on the first family that needs a call, and the Record's
-        calls are recorded as one pipeline trace (also when the build is cancelled).
+        Built-in discourse, quotation, and indexing families are prepared before this
+        method and write disjoint family keys. They may therefore overlap while sharing
+        one concurrency-safe pipeline trace. Unknown/custom families remain exclusive.
+        The process-wide provider gate is still the authority for actual model traffic.
         """
         pipeline: dict[str, Any] = {}
+        results: list[tuple[str, dict[str, Any] | None, Exception | None]] = []
+
+        def ensure_session() -> None:
+            if "session" in pipeline or "error" in pipeline:
+                return
+            try:
+                pipeline["session"] = EnrichmentSession.open()
+            except RuntimeError as exc:
+                pipeline["error"] = exc
+
+        def run_specs(
+            specs: list[tuple[str, str, type[BaseModel], int, str]],
+        ) -> list[tuple[str, dict[str, Any] | None, Exception | None]]:
+            return self._run_metadata_tasks(
+                record, request, specs, build_id, stage_callback, pipeline
+            )
+
         try:
-            results = self._run_metadata_tasks(record, request, tasks, build_id, stage_callback, pipeline)
+            index = 0
+            while index < len(tasks):
+                spec = tasks[index]
+                if spec[0] not in PARALLEL_METADATA_FAMILIES:
+                    results.extend(run_specs([spec]))
+                    index += 1
+                    continue
+
+                group: list[tuple[str, str, type[BaseModel], int, str]] = []
+                while (
+                    index < len(tasks)
+                    and tasks[index][0] in PARALLEL_METADATA_FAMILIES
+                ):
+                    group.append(tasks[index])
+                    index += 1
+
+                workers = min(
+                    len(group),
+                    provider_limit(
+                        request.get("max_concurrent_requests"), default=1, maximum=16
+                    ),
+                )
+                if workers <= 1 or len(group) <= 1:
+                    results.extend(run_specs(group))
+                    continue
+
+                # Resolve once before threads start so the shared session dictionary is
+                # immutable during concurrent family execution. StructuredStageSession
+                # aggregates trace counters under its own lock and keeps call-local paths.
+                ensure_session()
+                with ThreadPoolExecutor(
+                    max_workers=workers,
+                    thread_name_prefix="pdf-corpus-family",
+                ) as pool:
+                    futures = [pool.submit(run_specs, [item]) for item in group]
+                    # Consume in schema/task order even when providers finish out of order.
+                    # Reconciliation therefore remains deterministic.
+                    for future in futures:
+                        results.extend(future.result())
         except InterruptedError:
             if isinstance(pipeline.get("session"), EnrichmentSession):
                 pipeline["session"].finish(cancelled=True)
