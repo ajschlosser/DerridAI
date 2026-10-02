@@ -71,7 +71,11 @@ function build(id = "build-1") {
   } as any;
 }
 
-function setup(requestedBuildId = "", documentMetadata: Record<string, string> = {}) {
+function setup(
+  requestedBuildId = "",
+  documentMetadata: Record<string, unknown> = {},
+  topologyPolicy: Record<string, unknown> = {},
+) {
   const builds = ref<any[]>([]);
   const buildsTotal = ref(0);
   const selectedBuildId = ref("");
@@ -120,6 +124,7 @@ function setup(requestedBuildId = "", documentMetadata: Record<string, string> =
     requestedBuildId: () => requestedBuildId,
     runGuidancePayload: () => ({ speaker: "Derrida" }),
     documentMetadataPayload: () => documentMetadata,
+    topologyPolicyPayload: () => topologyPolicy,
     applyBuildRequest,
     setMessage,
     resetReviewForBuildStart,
@@ -196,6 +201,29 @@ describe("Corpus Builder lifecycle controller", () => {
     expect(runtime.registerExternalJob).toHaveBeenCalledTimes(1);
     expect(state.setMessage).toHaveBeenCalledWith("pdf_corpus.build_started");
 
+    state.controller.stopPolling();
+  });
+
+  it("sends the explicit SourceUnit topology policy with a new build", async () => {
+    corpusBuilderApi.createBuild.mockResolvedValue(build("build-new"));
+    corpusBuilderApi.listBuilds.mockResolvedValue({ items: [build("build-new")], total: 1 });
+    const state = setup("", {}, {
+      mode: "source_units",
+      source_units_per_record: 1,
+      records_per_page: 4,
+    });
+
+    await state.controller.startBuild();
+
+    expect(corpusBuilderApi.createBuild).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topology_policy: {
+          mode: "source_units",
+          source_units_per_record: 1,
+          records_per_page: 4,
+        },
+      }),
+    );
     state.controller.stopPolling();
   });
 
