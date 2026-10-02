@@ -104,6 +104,7 @@ const issueQueueActive = computed(() =>
         </button>
       </div>
 
+      <slot name="run-status"></slot>
       <span class="review-header-spacer"></span>
       <div class="review-header-actions">
         <UiButton
@@ -128,9 +129,6 @@ const issueQueueActive = computed(() =>
           </button>
         </div>
       </div>
-    </div>
-    <div class="review-run-status">
-      <slot name="run-status"></slot>
     </div>
     <CorpusReviewToolbar
       v-bind="toolbarProps()"
@@ -209,9 +207,6 @@ const issueQueueActive = computed(() =>
   gap: var(--space-2);
   align-items: center;
   justify-content: flex-end;
-}
-.review-run-status:empty {
-  display: none;
 }
 .review-counts {
   display: flex;
