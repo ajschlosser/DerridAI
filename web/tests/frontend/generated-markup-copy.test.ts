@@ -82,12 +82,6 @@ describe("LLM review markup module", () => {
 });
 
 describe("LLM tool and record dialog markup", () => {
-  const trf = (_key: string, fallback: string, values: Record<string, unknown> = {}) =>
-    Object.entries(values).reduce(
-      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
-      fallback,
-    );
-
   it("owns job dialog toasts through copy, not hardcoded English", async () => {
     const { createJobDialogCopy } = await import("../../src/domain/jobDialogCopy");
     const copy = createJobDialogCopy(
