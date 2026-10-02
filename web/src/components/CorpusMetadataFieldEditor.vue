@@ -467,6 +467,7 @@ const traceRows = computed(() => {
       status?.status === 'unresolved' || status?.status === 'invalid' ? 'true' : 'false'
     "
     :data-unresolved-field="open ? 'true' : undefined"
+    :data-review-state="open ? 'pending' : 'settled'"
     :aria-labelledby="labelId"
     @keydown="onKeydown"
   >
@@ -508,6 +509,9 @@ const traceRows = computed(() => {
     <header v-else class="field-head">
       <div class="field-title">
         <b :id="labelId" class="field-label">{{ fieldLabel }}</b
+        ><span v-if="open" class="field-review-state">{{
+          i18n.t("pdf_corpus.pending_review")
+        }}</span
         ><span v-if="requiredToAccept" class="field-required">{{
           i18n.t("pdf_corpus.required_to_accept")
         }}</span>
@@ -892,8 +896,18 @@ const traceRows = computed(() => {
   border-radius: var(--radius-card);
   background: var(--surface-card);
 }
+.metadata-field[data-mode="edit"][data-review-state="pending"],
 .metadata-field[data-mode="edit"][data-attention="true"] {
   border-inline-start: 3px solid var(--tone-warn-border);
+}
+.metadata-field[data-mode="edit"][data-review-state="pending"] {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--tone-warn-bg) 38%, transparent),
+      transparent 28%
+    ),
+    var(--surface-card);
 }
 .metadata-field[data-mode="edit"]:focus-within {
   border-color: var(--ui-accent, var(--accent));
@@ -1013,10 +1027,20 @@ const traceRows = computed(() => {
   flex-wrap: wrap;
   min-width: 0;
 }
+.field-review-state,
 .field-required {
-  color: var(--tone-warn-fg);
   font-size: var(--fs-xs);
   font-weight: 700;
+}
+.field-review-state {
+  padding: 2px 7px;
+  border: 1px solid var(--tone-warn-border);
+  border-radius: 999px;
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+}
+.field-required {
+  color: var(--tone-warn-fg);
 }
 .field-editor {
   min-width: 0;
