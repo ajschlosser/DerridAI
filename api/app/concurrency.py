@@ -18,8 +18,6 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-Cancelled = Callable[[], bool]
-
 
 class CapacityCancelled(InterruptedError):
     """Raised when a caller is cancelled before shared capacity becomes available."""
@@ -36,6 +34,7 @@ class CapacitySnapshot:
     waiting: int
 
 
+Cancelled = Callable[[], bool]
 WaitCallback = Callable[[CapacitySnapshot], None]
 
 
