@@ -18,9 +18,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-
 Cancelled = Callable[[], bool]
-WaitCallback = Callable[[CapacitySnapshot], None]
 
 
 class CapacityCancelled(InterruptedError):
@@ -36,6 +34,9 @@ class CapacitySnapshot:
     limit: int
     active: int
     waiting: int
+
+
+WaitCallback = Callable[[CapacitySnapshot], None]
 
 
 @dataclass
@@ -56,7 +57,7 @@ class CapacityPermit:
         self._released = True
         self.coordinator.release(self.resource, self.key)
 
-    def __enter__(self) -> "CapacityPermit":
+    def __enter__(self) -> CapacityPermit:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001
