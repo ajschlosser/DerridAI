@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 
 Cancelled = Callable[[], bool]
-WaitCallback = Callable[["CapacitySnapshot"], None]
+WaitCallback = Callable[[CapacitySnapshot], None]
 
 
 class CapacityCancelled(InterruptedError):
@@ -42,7 +42,7 @@ class CapacitySnapshot:
 class CapacityPermit:
     """A leak-safe acquired capacity slot."""
 
-    coordinator: "ConcurrencyCoordinator"
+    coordinator: ConcurrencyCoordinator
     resource: str
     key: str
     limit: int
@@ -265,7 +265,12 @@ def provider_capacity_key(
 def provider_limit(value: object, *, default: int = 1, maximum: int = 64) -> int:
     try:
         selected = value if value not in (None, "") else default
-        return max(1, min(int(maximum), int(selected)))
+        parsed = (
+            int(selected)
+            if isinstance(selected, (int, float, str))
+            else int(str(selected))
+        )
+        return max(1, min(int(maximum), parsed))
     except (TypeError, ValueError):
         return max(1, min(int(maximum), int(default)))
 
