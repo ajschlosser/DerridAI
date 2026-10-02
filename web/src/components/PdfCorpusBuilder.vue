@@ -247,7 +247,10 @@ function applyCorpusBuildRequest(request: Record<string, unknown>) {
       : {};
   topologyPolicy.value = {
     mode: saved.mode === "source_units" ? "source_units" : "semantic",
-    source_units_per_record: Math.max(1, Math.min(100, Number(saved.source_units_per_record || 1))),
+    source_units_per_record: Math.max(
+      1,
+      Math.min(100, Number(saved.source_units_per_record || 1)),
+    ),
     records_per_page:
       saved.records_per_page == null
         ? null
@@ -2548,7 +2551,9 @@ defineExpose({
           v-if="selectedAsset && selectedAsset.media_kind !== 'audio'"
           v-model="topologyPolicy"
           :synthetic-pages-available="syntheticRecordPagesAvailable"
-          :disabled="Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId) || busy !== ''"
+          :disabled="
+            Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId) || busy !== ''
+          "
         />
         <CorpusRecordSizeAdvice
           v-if="selectedAsset && selectedAsset.media_kind !== 'audio'"
