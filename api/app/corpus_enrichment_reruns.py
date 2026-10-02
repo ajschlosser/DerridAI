@@ -148,7 +148,7 @@ class EnrichmentRerunsMixin:
             records = self.repo.load_records(build_id)
             manifest = build.get("manifest") or {}
             total = max(1, len(target_indices))
-            max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
+            max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
             operation = dict(build.get("metadata_operation") or {})
             operation["state"] = "running"
             self._update(build_id, metadata_operation=operation)
@@ -580,7 +580,7 @@ class EnrichmentRerunsMixin:
         priority = [str(value) for value in build.get("metadata_priority_record_ids") or []]
         priority_indices = [index for value in priority for index, row in enumerate(snapshot) if str(row.get("record_id") or "") == value and index in indices]
         indices = priority_indices + [index for index in indices if index not in priority_indices]
-        max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
+        max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
         totals: Counter[str] = Counter()
         pass_schema = self._schema_for(build_id)
         epoch_at_start = self._provider_epoch.get(build_id, 0)
