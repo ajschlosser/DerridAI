@@ -78,6 +78,39 @@ def test_projection_embedding_contract_change_invalidates_cached_vectors():
     assert len(store.embeddings.calls) == 2
 
 
+def test_fallback_projection_preserves_previous_rows_when_embedding_refresh_fails():
+    store = FakeStore()
+    projection = SourceEmbeddingProjection(store)
+    projection.sync(
+        "doc-1",
+        [block("old", "Previous source text.")],
+        provider="ollama",
+        model="m",
+    )
+
+    def fail_embedding(*args, **kwargs):
+        raise RuntimeError("simulated embedding failure")
+
+    store.embeddings.embed = fail_embedding
+
+    with pytest.raises(RuntimeError, match="simulated embedding failure"):
+        projection.sync(
+            "doc-1",
+            [block("new", "Replacement source text.")],
+            provider="ollama",
+            model="m",
+        )
+
+    assert set(
+        projection.embeddings_for(
+            "doc-1",
+            ["old", "new"],
+            provider="ollama",
+            model="m",
+        )
+    ) == {"old"}
+
+
 def test_complete_snapshot_prunes_removed_source_units():
     store = FakeStore()
     projection = SourceEmbeddingProjection(store)
