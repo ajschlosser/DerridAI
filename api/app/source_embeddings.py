@@ -10,9 +10,12 @@ text on every pass.
 from __future__ import annotations
 
 import hashlib
+import logging
 from typing import Any, cast
 
 from .config import settings
+
+logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "derridai_source_unit_embeddings"
 SOURCE_BLOCK_COLLECTION_NAME = COLLECTION_NAME
@@ -210,6 +213,11 @@ class SourceEmbeddingProjection:
                 value = value() if callable(value) else value
                 maximum = int(value)
             except Exception:
+                logger.debug(
+                    "Could not resolve source embedding batch size from %s.",
+                    attribute,
+                    exc_info=True,
+                )
                 continue
             if maximum > 0:
                 return min(configured, maximum)
