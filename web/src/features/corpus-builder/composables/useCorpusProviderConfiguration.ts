@@ -79,7 +79,7 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
       api_key: config.api_key,
       max_concurrent_requests: Math.max(
         1,
-        Math.min(16, Number(config.max_concurrent_requests || 1)),
+        Math.min(64, Number(config.max_concurrent_requests || 1)),
       ),
       generation:
         config.provider === "ollama" && ollama && typeof ollama === "object" ? ollama : undefined,
