@@ -9,6 +9,7 @@ const props = defineProps<{
   description?: string;
   state: "incomplete" | "complete" | "warning" | "optional";
   summary?: string;
+  step?: number;
   expanded: boolean;
   disabled?: boolean;
 }>();
@@ -18,9 +19,11 @@ const i18n = useI18nStore();
 const panelId = computed(() => `corpus-setup-panel-${props.id}`);
 const headingId = computed(() => `corpus-setup-heading-${props.id}`);
 const stateLabel = computed(() => i18n.t(`pdf_corpus.setup.state.${props.state}`));
-const indicator = computed(
-  () => ({ complete: "✓", warning: "!", incomplete: "", optional: "" })[props.state],
-);
+const indicator = computed(() => {
+  if (props.state === "complete") return "✓";
+  if (props.state === "warning") return "!";
+  return props.step ? String(props.step) : "";
+});
 </script>
 
 <template>
@@ -40,9 +43,13 @@ const indicator = computed(
         @click="$emit('toggle')"
       >
         <span class="corpus-setup-indicator" aria-hidden="true">{{ indicator }}</span>
-        <span class="sr-only">{{ stateLabel }}:</span>
-        <span class="corpus-setup-title">{{ title }}</span>
-        <span v-if="summary" class="corpus-setup-summary">{{ summary }}</span>
+        <span class="corpus-setup-copy">
+          <span class="corpus-setup-title-row">
+            <span class="corpus-setup-title">{{ title }}</span>
+            <span class="corpus-setup-state" :data-state="state">{{ stateLabel }}</span>
+          </span>
+          <span v-if="summary" class="corpus-setup-summary">{{ summary }}</span>
+        </span>
         <span class="corpus-setup-affordance">{{
           expanded ? i18n.t("pdf_corpus.setup.collapse") : i18n.t("pdf_corpus.setup.edit")
         }}</span>
@@ -78,7 +85,7 @@ const indicator = computed(
 .corpus-setup-section-toggle {
   width: 100%;
   display: grid;
-  grid-template-columns: auto max-content minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-3) var(--space-4);
@@ -121,17 +128,53 @@ const indicator = computed(
 .corpus-setup-section[data-state="optional"] .corpus-setup-indicator {
   border-style: dashed;
 }
+.corpus-setup-section[data-state="optional"][data-expanded="false"] {
+  background: var(--surface-subtle);
+}
+.corpus-setup-section[data-state="warning"] {
+  box-shadow: inset 3px 0 0 var(--tone-warn-fg);
+}
+.corpus-setup-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.corpus-setup-title-row {
+  min-width: 0;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
 .corpus-setup-title {
   font-size: var(--fs-md, 1rem);
   font-weight: var(--fw-bold);
 }
+.corpus-setup-state {
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  line-height: 1.2;
+}
+.corpus-setup-state[data-state="complete"] {
+  border-color: var(--tone-ok-border);
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
+}
+.corpus-setup-state[data-state="warning"] {
+  border-color: var(--tone-warn-border);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+}
 .corpus-setup-summary {
   min-width: 0;
-  overflow: hidden;
   color: var(--text-secondary);
   font-size: var(--fs-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .corpus-setup-affordance {
   color: var(--accent-fg);
@@ -150,11 +193,12 @@ const indicator = computed(
 }
 @media (max-width: 720px) {
   .corpus-setup-section-toggle {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: var(--space-2);
+    padding-inline: var(--space-3);
   }
-  .corpus-setup-summary {
-    grid-column: 2 / -1;
-    white-space: normal;
+  .corpus-setup-affordance {
+    align-self: start;
+    padding-top: 2px;
   }
 }
 </style>
