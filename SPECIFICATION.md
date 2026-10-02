@@ -156,7 +156,7 @@ Authoritative documentary and scholarly state MUST remain distinguishable from d
 
 The cELF Core profile establishes a documentary provenance spine rather than a complete source-to-claim pipeline:
 
-`SourceDocument -> SourceSpan(s) -> Record -> RecordRevision`
+`SourceDocument -> SourceSpan(s) -> Record [-> RecordRevision]`
 
 A FieldAssertion attaches to the applicable Record or RecordRevision state; it is not a mandatory next step in a linear chain.
 
@@ -610,7 +610,7 @@ A cELF **traceability matrix** is the logical set of typed relations connecting 
 
 For Core conformance, the principal documentary provenance spine is:
 
-`SourceDocument -> SourceSpan(s) -> Record -> RecordRevision`
+`SourceDocument -> SourceSpan(s) -> Record [-> RecordRevision]`
 
 with FieldAssertions attached to the applicable Record or RecordRevision state when materialized.
 
@@ -1046,13 +1046,19 @@ A future claim-publication profile MAY distinguish relations such as support, pa
 
 ### Interoperability and the cELF Traceability Matrix
 
-#### Preservation of the source-to-claim chain
+#### Preservation of the profile provenance graph
 
-The principal reason for interoperability is not merely data export. It is preservation of the cELF traceability matrix outside a single application. At its fullest extent, the lineage is:
+The principal reason for interoperability is not merely data export. It is preservation of the cELF traceability matrix outside a single application. Interoperability begins with the Core documentary spine and preserves the additional branches required by the profiles represented in the export:
 
-`SourceDocument -> SourceSpan -> Record -> RecordRevision -> FieldAssertions/Relations -> EvidenceAcquisition -> EvidenceRef -> EvidencePacket -> GenerationRun -> GeneratedClaim -> SupportBinding.`
+`SourceDocument -> SourceSpan(s) -> Record [-> RecordRevision]`
 
-A portable representation SHOULD preserve enough of this chain for its declared interoperability purpose.
+`EvidenceAcquisitionRun -> EvidenceRef(s)`
+
+`EvidenceRef(s) -> EvidencePacket -> GenerationRun -> GeneratedClaim`
+
+`GeneratedClaim -> SupportBinding -> EvidenceRef(s)`
+
+A portable representation SHOULD preserve the applicable portion of this provenance graph for its declared interoperability purpose. It MUST NOT collapse acquisition provenance, generation context, and claim support into one undifferentiated lineage.
 
 #### Traceability questions
 
@@ -1116,11 +1122,11 @@ The standards addressed in this section solve related but different problems.
 | **Nanopublications**          | Potential publication of small, independently identifiable scholarly assertions. |
 | **JSON, JSONL, JSON-LD, RDF** | Serialization and exchange technologies.                                         |
 
-PROV does not replace cELF concepts such as speaker, quoted speaker, position holder, stance, target, discourse role, proposition status, EvidenceRef, SupportBinding, assertion status, or review state. RO-Crate does not define what constitutes a cELF Record, how a RecordRevision differs from a Record, how evidence is bound to a claim, or which corpus state is authoritative. Nanopublications do not replace the corpus, evidence-acquisition system, Record model, or ResearchRun model.
+PROV does not replace cELF concepts such as speaker, quoted speaker, position holder, stance, target, discourse role, proposition status, EvidenceRef, SupportBinding, assertion status, or review state. RO-Crate does not define what constitutes a cELF Record, how a RecordRevision differs from a Record, how evidence is bound to a claim, or which corpus state is authoritative. Nanopublications do not replace the corpus, EvidenceAcquisitionRun and ResearchRun models, Record model, or the wider cELF provenance graph.
 
 #### What cELF contributes
 
-cELF’s contribution is not a new generic provenance vocabulary or generic archive format. It specifies the scholarly information chain that more general standards can carry.
+cELF’s contribution is not a new generic provenance vocabulary or generic archive format. It specifies the scholarly provenance graph and profile-specific semantics that more general standards can carry.
 
 A generic provenance graph might state that Entity A was derived from Entity B and that Activity C used A to generate Entity D. A cELF representation can additionally establish that B is a specific SourceDocument; A is revision 3 of a Record representing pages 97–98; the document author is Derrida; the current speaker is Derrida; the represented position is attributed to Levinas; the attribution was first model-inferred and later human-confirmed; EvidenceAcquisitionRun A3 records that the Record entered the ResearchRun through researcher selection rather than vector search; EvidenceRef E7 identified the exact supplied passage; GenerationRun G9 used the EvidencePacket; GeneratedClaim C12 was produced; SupportBinding SB8 states that E7 supports C12; and a deterministic citation resolver generated the scholarly citation from bibliographic and page metadata.
 
@@ -1530,7 +1536,7 @@ cELF's contribution is not a new generic provenance vocabulary, workflow engine,
 
 | Standard or technology   | Primary responsibility relative to cELF                                                                            |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| **cELF**                 | Documentary identity, scholarly attribution and epistemic state, evidentiary use, and source-to-claim traceability |
+| **cELF**                 | Documentary identity, scholarly attribution and epistemic state, evidence acquisition and use, generation provenance, and claim-support traceability |
 | **W3C PROV**             | General provenance relationships among entities, activities, and agents                                            |
 | **RO-Crate**             | Portable packaging and contextual metadata for research objects                                                    |
 | **JSON / JSON-LD / RDF** | Serialization and exchange technologies                                                                            |
@@ -1575,7 +1581,7 @@ By contrast, extraction blocks, generic relations, schema-editor objects, storag
 
 cELF Core is organized around a durable documentary provenance spine:
 
-`SourceDocument -> SourceSpan(s) -> Record -> RecordRevision`
+`SourceDocument -> SourceSpan(s) -> Record [-> RecordRevision]`
 
 FieldAssertions attach to the applicable Record or RecordRevision state and preserve the epistemic history of scholarly enrichment.
 
@@ -1607,7 +1613,7 @@ The **Capta-Enriched Lexical Format (cELF, pronounced “self”)** defines a po
 
 DerridAI began as a local research environment for a corpus of Jacques Derrida’s works. That corpus puts pressure on ordinary text-processing and retrieval pipelines because interpretation often depends on quotation boundaries, reported positions, shifts in speaker, edition and translation, pagination, and rhetorical stance. The implementation has therefore been useful for testing whether those distinctions remain attached to stable lexical research objects in a working system.
 
-> **Figure - cELF provenance structure.** Core documentary spine: `SourceDocument -> SourceSpan(s) -> Record -> RecordRevision`. Profile extensions form a graph: `EvidenceAcquisitionRun -> EvidenceRef(s) -> EvidencePacket -> GenerationRun -> GeneratedClaim`, while `GeneratedClaim -> SupportBinding -> EvidenceRef(s)` preserves direct claim support.
+> **Figure - cELF provenance structure.** Core documentary spine: `SourceDocument -> SourceSpan(s) -> Record [-> RecordRevision]`. Profile extensions form a graph: `EvidenceAcquisitionRun -> EvidenceRef(s) -> EvidencePacket -> GenerationRun -> GeneratedClaim`, while `GeneratedClaim -> SupportBinding -> EvidenceRef(s)` preserves direct claim support.
 
 ## 1. The name: _capta_, enrichment, and lexical form
 
