@@ -108,7 +108,9 @@ function recordStateIcon(record: CorpusQueueRow) {
       ? "close"
       : state === "metadata" || state === "topology" || state === "source"
         ? "warning"
-        : "";
+        : state === "preparing"
+          ? "refresh"
+          : "";
 }
 
 function extraIssueKinds(record: CorpusQueueRow) {
