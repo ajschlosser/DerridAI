@@ -4,6 +4,7 @@
 // start-up and after Chroma becomes available. Moved verbatim from the legacy runtime; the runtime's state object and
 // helpers are passed in as dependencies.
 import { apiRequest } from "../api/http";
+import { openMessageDialog } from "../composables/messageDialog";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -22,7 +23,6 @@ type Helper =
   | "idbDelete"
   | "invalidateCorpusCache"
   | "isResearcher"
-  | "openMessageModal"
   | "parseJsonl"
   | "persistFileNow"
   | "persistPrefs"
@@ -54,7 +54,6 @@ export function createAppLifecycle(deps: Deps) {
     idbDelete,
     invalidateCorpusCache,
     isResearcher,
-    openMessageModal,
     parseJsonl,
     persistFileNow,
     persistPrefs,
@@ -228,7 +227,7 @@ export function createAppLifecycle(deps: Deps) {
     if (!f) return;
     if (
       f.dirty.size &&
-      !(await openMessageModal({
+      !(await openMessageDialog({
         title: tr("files.close_modified_title"),
         message: trf("files.close_modified_message", { name: f.name }),
         tone: "danger",

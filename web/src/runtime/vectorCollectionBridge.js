@@ -1,3 +1,4 @@
+import { openMessageDialog } from "../composables/messageDialog";
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 /** Live collection-creation bridge for the Vue Vector Stores workspace. */
@@ -14,7 +15,6 @@ export function createVectorCollectionBridge({
   persistPrefs,
   upsertRows,
   toast,
-  openMessageModal,
   decorateDisabledControls,
   showAppModal,
 }) {
@@ -190,7 +190,7 @@ export function createVectorCollectionBridge({
           form.dimension = String(form.preflight.embedding_dimension);
         return true;
       } catch (error) {
-        openMessageModal({
+        openMessageDialog({
           title: tr("vector.preflight_failed"),
           message: error.message || String(error),
           tone: "danger",
@@ -307,7 +307,7 @@ export function createVectorCollectionBridge({
         } catch (error) {
           button.disabled = false;
           button.textContent = tr("vector.create_collection");
-          openMessageModal({
+          openMessageDialog({
             title: tr("vector.create_failed"),
             message: error.message || String(error),
             tone: "danger",

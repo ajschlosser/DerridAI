@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { esc } from "./html";
+import { openMessageDialog } from "../composables/messageDialog";
 
 // Whether a record already exists in a vector database (presence), and the pending-upsert queue and command that syncs
 // records into one. Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as
@@ -22,7 +23,6 @@ type Helper =
   | "hasCorpusDb"
   | "localRecordKey"
   | "notifyVectorStoresChanged"
-  | "openMessageModal"
   | "persistPrefs"
   | "recordFingerprint"
   | "refreshOperationsPanelOnly"
@@ -54,7 +54,6 @@ export function createDbPresenceUpsert(deps: Deps) {
     hasCorpusDb,
     localRecordKey,
     notifyVectorStoresChanged,
-    openMessageModal,
     persistPrefs,
     recordFingerprint,
     refreshOperationsPanelOnly,
@@ -360,7 +359,7 @@ export function createDbPresenceUpsert(deps: Deps) {
   }
   async function upsertRows(rows: Any, labelText = "records", { largeSyncConfirmed = false } = {}) {
     if (!hasCorpusDb())
-      return openMessageModal({
+      return openMessageDialog({
         title: tr("records.toast.vector_required"),
         message: dbUnavailableReason(),
         confirmLabel: tr("ui.ok"),
@@ -372,7 +371,7 @@ export function createDbPresenceUpsert(deps: Deps) {
         job.type === "upsert" && ["queued", "running", "cancelling"].includes(job.status),
     );
     if (activeUpsert)
-      return openMessageModal({
+      return openMessageDialog({
         title: tr("operations.vector_sync_active_title"),
         message: trf("operations.vector_sync_active_help", {
           label: activeUpsert.label || activeUpsert.store_name || "The current sync",
@@ -382,7 +381,7 @@ export function createDbPresenceUpsert(deps: Deps) {
     const store = state.activeStore;
     await refreshPresenceForRows(rows, { force: true });
     if (rows.length > 500 && !largeSyncConfirmed) {
-      const approved = await openMessageModal({
+      const approved = await openMessageDialog({
         title: tr("operations.large_sync_background_title"),
         message: trf("operations.large_sync_background_help", {
           count: rows.length.toLocaleString(),

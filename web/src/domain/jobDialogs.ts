@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
+import { openMessageDialog } from "../composables/messageDialog";
 import { esc, icon } from "./html";
 import { realtime } from "../realtime";
 import { followResource } from "../realtime/follow";
@@ -39,7 +40,6 @@ type Helper =
   | "navSnapshot"
   | "navigateTo"
   | "normalizeTouchupItems"
-  | "openMessageModal"
   | "openWorkMetadataProposalResult"
   | "pages"
   | "persistFileNow"
@@ -92,7 +92,6 @@ export function createJobDialogs(deps: Deps) {
     navSnapshot,
     navigateTo,
     normalizeTouchupItems,
-    openMessageModal,
     openWorkMetadataProposalResult,
     pages,
     persistFileNow,
@@ -290,7 +289,7 @@ export function createJobDialogs(deps: Deps) {
         if (state.view === "rag") refreshRagProgressPanel();
         return toast(copy.operationRemoved);
       }
-      await openMessageModal({
+      await openMessageDialog({
         title: copy.openResultFailed,
         message: error.message || String(error),
         tone: "danger",
@@ -314,7 +313,7 @@ export function createJobDialogs(deps: Deps) {
       }
     } catch (error: Any) {
       console.error("Could not render operation result", error, job);
-      await openMessageModal({
+      await openMessageDialog({
         title: copy.renderResultFailed,
         message: error.message || String(error),
         detail: jobLabel(job),
@@ -395,7 +394,7 @@ export function createJobDialogs(deps: Deps) {
 
     async function rejectAndDismiss() {
       if (
-        !(await openMessageModal({
+        !(await openMessageDialog({
           title: copy.discardTitle,
           message: copy.discardMessage,
           tone: "danger",
@@ -788,7 +787,7 @@ export function createJobDialogs(deps: Deps) {
   function openLlmToolResult(job: Any) {
     const result = job.result;
     if (!result)
-      return openMessageModal({
+      return openMessageDialog({
         title: copy.resultUnavailableTitle,
         message: copy.resultUnavailable,
         tone: "danger",

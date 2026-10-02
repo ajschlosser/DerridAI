@@ -3,6 +3,7 @@
 import { mountOperationsPanel } from "../runtime/operationsPanelHost";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import { esc, icon } from "./html";
+import { openMessageDialog } from "../composables/messageDialog";
 
 // The operations panel host, the RAG progress panel and the corpus-builds home card: bridging the runtime's jobs to the
 // Vue operations panel, and the small HTML fragments the dashboard/RAG view render around it. Moved verbatim from the
@@ -24,7 +25,6 @@ type Helper =
   | "openJobDetails"
   | "openJobResults"
   | "openLlmTaskLauncher"
-  | "openMessageModal"
   | "operationViewModel"
   | "persistPrefs"
   | "pruneClientJobState"
@@ -61,7 +61,6 @@ export function createOperationsPanelBridge(deps: Deps) {
     openJobDetails,
     openJobResults,
     openLlmTaskLauncher,
-    openMessageModal,
     operationViewModel,
     persistPrefs,
     pruneClientJobState,
@@ -183,7 +182,7 @@ export function createOperationsPanelBridge(deps: Deps) {
     if (!job) return pruneClientJobState(jobId);
     if (["queued", "running", "cancelling"].includes(job.status))
       return toast(tr("rag.cancel_before_remove"));
-    const approved = await openMessageModal({
+    const approved = await openMessageDialog({
       title: tr("rag.remove_title"),
       message: trf("rag.remove_help", { status: job.status }),
       tone: "danger",
@@ -205,7 +204,7 @@ export function createOperationsPanelBridge(deps: Deps) {
         refreshRagProgressPanel();
         return toast(tr("rag.already_removed"));
       }
-      openMessageModal({
+      openMessageDialog({
         title: tr("rag.remove_failed"),
         message: error.message,
         tone: "danger",
@@ -218,7 +217,7 @@ export function createOperationsPanelBridge(deps: Deps) {
     );
     if (!finished.length) return toast(tr("rag.none_to_clear"));
     if (
-      !(await openMessageModal({
+      !(await openMessageDialog({
         title: tr("rag.clear_past_title"),
         message: trf("rag.clear_past_help", { count: finished.length }),
         tone: "danger",

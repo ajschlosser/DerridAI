@@ -1,4 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { openMessageDialog } from "../composables/messageDialog";
 
 // Linking PDF pages to workspace records: which pages a record cites, which records a page cites, and loading a PDF's
 // metadata. Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as
@@ -14,7 +15,6 @@ type Helper =
   | "allRows"
   | "applyRecordChanges"
   | "normalizePdfLinkChanges"
-  | "openMessageModal"
   | "pdfLinks"
   | "renderView"
   | "shell"
@@ -29,7 +29,6 @@ export function createPdfLinking(deps: Deps) {
     allRows,
     applyRecordChanges,
     normalizePdfLinkChanges,
-    openMessageModal,
     pdfLinks,
     renderView,
     shell,
@@ -119,7 +118,7 @@ export function createPdfLinking(deps: Deps) {
       return toast(trf("pdf.link.already", { page }));
     if (links.length && links.some((link: Any) => link.pdf_file !== target.pdf_file)) {
       if (
-        !(await openMessageModal({
+        !(await openMessageDialog({
           title: tr("pdf.link.replace_title"),
           message: trf("pdf.link.replace_message", {
             current: links[0].pdf_file,

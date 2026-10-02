@@ -2,6 +2,7 @@
 // Compatibility composition root for workflows that have not yet moved fully into Vue/domain modules.
 // Prefer adding new behavior to the focused imports below and expose only the narrow bridge needed here;
 // moving logic back into this file makes the remaining runtime migration harder to reason about and test.
+import { openMessageDialog } from "../composables/messageDialog";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?worker";
 import { diffWordsWithSpace } from "diff";
@@ -613,7 +614,6 @@ const { backupContainsCredentials, downloadFullBackup, restoreFullBackup } = cre
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   deleteWorkspaceDatabase: (...args) => deleteWorkspaceDatabase(...args),
   idbPut: (...args) => idbPut(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   persistFileNow: (...args) => persistFileNow(...args),
   providerProfiles: (...args) => providerProfiles(...args),
   serializableFile: (...args) => serializableFile(...args),
@@ -702,7 +702,6 @@ const { warmupProviderProfile, warmupConfiguredLlm, importFiles, closeFile, chec
     idbDelete: (...args) => idbDelete(...args),
     invalidateCorpusCache: (...args) => invalidateCorpusCache(...args),
     isResearcher: (...args) => isResearcher(...args),
-    openMessageModal: (...args) => openMessageModal(...args),
     parseJsonl: (...args) => parseJsonl(...args),
     persistFileNow: (...args) => persistFileNow(...args),
     persistPrefs: (...args) => persistPrefs(...args),
@@ -738,7 +737,6 @@ const {
   allRows: (...args) => allRows(...args),
   applyRecordChanges: (...args) => applyRecordChanges(...args),
   normalizePdfLinkChanges: (...args) => normalizePdfLinkChanges(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   pdfLinks: (...args) => pdfLinks(...args),
   renderView: (...args) => renderView(...args),
   shell: (...args) => shell(...args),
@@ -773,7 +771,6 @@ const {
   openJobDetails: (...args) => openJobDetails(...args),
   openJobResults: (...args) => openJobResults(...args),
   openLlmTaskLauncher: (...args) => openLlmTaskLauncher(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   operationViewModel: (...args) => operationViewModel(...args),
   persistPrefs: (...args) => persistPrefs(...args),
   pruneClientJobState: (...args) => pruneClientJobState(...args),
@@ -798,7 +795,6 @@ const {
   cloneAuditValue: (...args) => cloneAuditValue(...args),
   invalidateCorpusCache: (...args) => invalidateCorpusCache(...args),
   label: (...args) => label(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   persistFile: (...args) => persistFile(...args),
   renderView: (...args) => renderView(...args),
   sameValue: (...args) => sameValue(...args),
@@ -863,7 +859,7 @@ const {
   selectedIndex: (...args) => selectedIndex(...args),
   shell: (...args) => shell(...args),
 });
-const { openMessageModal, copyJsonToClipboard } = createModalDialogs({
+const { copyJsonToClipboard } = createModalDialogs({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   toast: (...args) => toast(...args),
@@ -925,7 +921,6 @@ const {
   navSnapshot: (...args) => navSnapshot(...args),
   navigateTo: (...args) => navigateTo(...args),
   normalizeTouchupItems: (...args) => normalizeTouchupItems(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   openWorkMetadataProposalResult: (...args) => openWorkMetadataProposalResult(...args),
   pages: (...args) => pages(...args),
   persistFileNow: (...args) => persistFileNow(...args),
@@ -1223,7 +1218,6 @@ const {
   hasCorpusDb: (...args) => hasCorpusDb(...args),
   localRecordKey: (...args) => localRecordKey(...args),
   notifyVectorStoresChanged: (...args) => notifyVectorStoresChanged(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   persistPrefs: (...args) => persistPrefs(...args),
   recordFingerprint: (...args) => recordFingerprint(...args),
   refreshOperationsPanelOnly: (...args) => refreshOperationsPanelOnly(...args),
@@ -1259,7 +1253,6 @@ const {
   jobLabel: (...args) => jobLabel(...args),
   label: (...args) => label(...args),
   navigateTo: (...args) => navigateTo(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   parseProposedMetadataValue: (...args) => parseProposedMetadataValue(...args),
   parseWorkMetadataValue: (...args) => parseWorkMetadataValue(...args),
   persistFileNow: (...args) => persistFileNow(...args),
@@ -1538,7 +1531,6 @@ const {
   localRecordKey: (...args) => localRecordKey(...args),
   navigateTo: (...args) => navigateTo(...args),
   needsReviewItems: (...args) => needsReviewItems(...args),
-  openMessageModal: (...args) => openMessageModal(...args),
   parseBulkFieldValue: (...args) => parseBulkFieldValue(...args),
   parseEditor: (...args) => parseEditor(...args),
   pendingChangesForRow: (...args) => pendingChangesForRow(...args),
@@ -2090,19 +2082,19 @@ async function currentPdfPageText() {
 }
 async function applyPdfLinkMatch(match) {
   if (!match?.key)
-    return openMessageModal({
+    return openMessageDialog({
       title: "No supported record match",
       message: match?.reason || "The model did not identify a sufficiently supported record.",
     });
   const item = reviewItemFromKey(match.key);
   if (!item)
-    return openMessageModal({
+    return openMessageDialog({
       title: "Matched record unavailable",
       message: "The matched record is no longer loaded.",
       tone: "danger",
     });
   const confidence = Number(match.confidence);
-  const approved = await openMessageModal({
+  const approved = await openMessageDialog({
     title: "Link PDF page to record?",
     message: `PDF page ${state.pdf.page} → ${item.record.record_id || "matched record"}\n\n${Number.isFinite(confidence) ? `${Math.round(confidence * 100)}% confidence` : "Confidence not reported"}${match.reason ? `\n${match.reason}` : ""}`,
     confirmLabel: "Link page",
@@ -2508,7 +2500,6 @@ const vectorCollectionBridge = createVectorCollectionBridge({
   persistPrefs,
   upsertRows,
   toast,
-  openMessageModal,
   decorateDisabledControls,
   showAppModal,
 });
@@ -2973,7 +2964,7 @@ document.addEventListener(
     resultButton.textContent = "Opening…";
     void openJobResults(jobId)
       .catch((error) =>
-        openMessageModal({
+        openMessageDialog({
           title: "Could not open operation result",
           message: error.message || String(error),
           tone: "danger",
@@ -3408,7 +3399,6 @@ export {
   ensureCompareLibrary,
   copyJsonToClipboard,
   copyCitation,
-  openMessageModal,
   formatTimestamp,
   refreshStores,
   responseCacheStore,

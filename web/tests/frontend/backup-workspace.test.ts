@@ -1,24 +1,30 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { openMessageDialog } from "../../src/composables/messageDialog";
 import { createBackupWorkspace } from "../../src/domain/backupWorkspace";
 import { englishDefault } from "../../src/i18n/englishDefault";
+
+vi.mock("../../src/composables/messageDialog", () => ({ openMessageDialog: vi.fn() }));
+const openMessageModal = vi.mocked(openMessageDialog);
+beforeEach(() => {
+  openMessageModal.mockReset();
+  openMessageModal.mockResolvedValue(false);
+});
 
 // The confirm, created, failed and restored views are covered by the legacy baseline's backup and restore scenarios
 // (recorded before this logic moved); these pin the guards.
 function setup(state: Record<string, unknown> = {}, profiles: unknown[] = []) {
   const toast = vi.fn();
-  const openMessageModal = vi.fn(async () => false);
   const deps = new Proxy(
     {
       state: { jobs: [], files: [], ...state },
       toast,
-      openMessageModal,
       providerProfiles: () => profiles,
       tr: (key: string, fallback = "") => fallback || englishDefault(key) || key,
     },
     { get: (target: Record<string, unknown>, name: string) => target[name] ?? vi.fn() },
   );
-  return { toast, openMessageModal, workspace: createBackupWorkspace(deps as never) };
+  return { toast, workspace: createBackupWorkspace(deps as never) };
 }
 
 describe("backup workspace", () => {
@@ -28,7 +34,7 @@ describe("backup workspace", () => {
   });
 
   it("refuses to restore while operations are active", async () => {
-    const { toast, openMessageModal, workspace } = setup({ jobs: [{ status: "running" }] });
+    const { toast, workspace } = setup({ jobs: [{ status: "running" }] });
     await workspace.restoreFullBackup(new File(["x"], "b.zip"));
     expect(toast).toHaveBeenCalledWith(
       "Cancel or wait for all background operations before restoring a backup.",
@@ -37,7 +43,7 @@ describe("backup workspace", () => {
   });
 
   it("does nothing without a file, and stops when the confirmation is declined", async () => {
-    const { toast, openMessageModal, workspace } = setup();
+    const { toast, workspace } = setup();
     await workspace.restoreFullBackup(undefined);
     await workspace.restoreFullBackup(new File(["x"], "b.zip"));
     expect(openMessageModal).toHaveBeenCalledTimes(1);

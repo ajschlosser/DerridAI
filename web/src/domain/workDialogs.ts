@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
+import { openMessageDialog } from "../composables/messageDialog";
 import { esc, icon } from "./html";
 import {
   canonicalWorkSourceType,
@@ -27,7 +28,6 @@ type Helper =
   | "jobLabel"
   | "label"
   | "navigateTo"
-  | "openMessageModal"
   | "parseProposedMetadataValue"
   | "parseWorkMetadataValue"
   | "persistFileNow"
@@ -99,7 +99,6 @@ export function createWorkDialogs(deps: Deps) {
     jobLabel,
     label,
     navigateTo,
-    openMessageModal,
     parseProposedMetadataValue,
     parseWorkMetadataValue,
     persistFileNow,
@@ -192,7 +191,7 @@ export function createWorkDialogs(deps: Deps) {
         return toast(error.message);
       }
       if (
-        !(await openMessageModal({
+        !(await openMessageDialog({
           title: tr("works.apply_metadata_confirm"),
           message: trf("works.apply_fields_to_records", {
             fields: selected.length,
@@ -287,7 +286,7 @@ export function createWorkDialogs(deps: Deps) {
       if (summary) summary.innerHTML = workflowProviderSummaryHtml(profile);
     });
     dialog.querySelector("#manageWorkProviders")?.addEventListener("click", async () => {
-      const ok = await openMessageModal({
+      const ok = await openMessageDialog({
         title: tr("works.leave_metadata_title"),
         message: tr("works.leave_metadata_help"),
         confirmLabel: tr("works.open_providers"),
@@ -357,7 +356,7 @@ export function createWorkDialogs(deps: Deps) {
       } catch (error: Any) {
         button.disabled = false;
         button.innerHTML = `${icon("spark")}${esc(tr("works.start_metadata_lookup"))}`;
-        openMessageModal({
+        openMessageDialog({
           title: tr("works.metadata_lookup_failed"),
           message: error.message || String(error),
           tone: "danger",
@@ -578,7 +577,7 @@ export function createWorkDialogs(deps: Deps) {
       } catch (error: Any) {
         button.disabled = false;
         button.textContent = tr("works.remove_work");
-        openMessageModal({
+        openMessageDialog({
           title: tr("works.remove_failed"),
           message: error.message,
           tone: "danger",

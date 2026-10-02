@@ -36,8 +36,6 @@ export const triggerOperations = (...args: Parameters<typeof runtime.triggerOper
   runtime.triggerOperations(...args);
 export const notifyToast = (...args: Parameters<typeof runtime.notifyToast>) =>
   runtime.notifyToast(...args);
-export const openMessageModal = (...args: Parameters<typeof runtime.openMessageModal>) =>
-  runtime.openMessageModal(...args);
 export const formatTimestamp = (...args: Parameters<typeof runtime.formatTimestamp>) =>
   runtime.formatTimestamp(...args);
 export const refreshStores = (...args: Parameters<typeof runtime.refreshStores>) =>

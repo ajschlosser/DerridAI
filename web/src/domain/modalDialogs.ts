@@ -1,8 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
-import { openMessageDialog, type MessageDialogOptions } from "../composables/messageDialog";
+import { openMessageDialog } from "../composables/messageDialog";
 
-// The confirmation and message dialog shim (the dialog itself is `MessageDialogHost.vue`) and the clipboard helper. The
+// The clipboard helper (the message dialog itself is `MessageDialogHost.vue`). The
 // runtime's state object and helpers are passed in as dependencies.
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -17,10 +17,6 @@ export function createModalDialogs(deps: Deps) {
   const { toast } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
   const document: Any = globalThis.document;
-  /** A shim over the Vue message dialog host: resolves true when the user confirms. */
-  function openMessageModal(options: MessageDialogOptions = {}) {
-    return openMessageDialog(options);
-  }
   async function copyJsonToClipboard(value: Any, labelText = "record") {
     const text = JSON.stringify(value, null, 2);
     try {
@@ -37,11 +33,11 @@ export function createModalDialogs(deps: Deps) {
         document.execCommand("copy");
         toast(`Copied ${labelText} JSON`);
       } catch {
-        openMessageModal({ title: "Could not copy", message: error.message, tone: "danger" });
+        openMessageDialog({ title: "Could not copy", message: error.message, tone: "danger" });
       } finally {
         area.remove();
       }
     }
   }
-  return { openMessageModal, copyJsonToClipboard };
+  return { copyJsonToClipboard };
 }

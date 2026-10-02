@@ -1,4 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { openMessageDialog } from "../composables/messageDialog";
 
 // Full backup and restore: download a zip of the browser workspace plus every Chroma collection, and load one back.
 // Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -11,7 +12,6 @@ type Fn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-
 type Helper =
   | "deleteWorkspaceDatabase"
   | "idbPut"
-  | "openMessageModal"
   | "persistFileNow"
   | "providerProfiles"
   | "serializableFile"
@@ -26,7 +26,6 @@ export function createBackupWorkspace(deps: Deps) {
     state,
     deleteWorkspaceDatabase,
     idbPut,
-    openMessageModal,
     persistFileNow,
     providerProfiles,
     serializableFile,
@@ -51,7 +50,7 @@ export function createBackupWorkspace(deps: Deps) {
       : tr("settings.backup_confirm_message");
     if (
       !confirmed &&
-      !(await openMessageModal({
+      !(await openMessageDialog({
         title: tr("settings.backup_confirm_title"),
         message: warning,
         tone: hasCredentials ? "danger" : "info",
@@ -147,7 +146,7 @@ export function createBackupWorkspace(deps: Deps) {
     if (activeJobs.length) return toast(tr("runtime.toast.wait_before_restore"));
     if (
       !confirmed &&
-      !(await openMessageModal({
+      !(await openMessageDialog({
         title: tr("runtime.backup.restore_title"),
         message: tr("runtime.backup.restore_message"),
         tone: "danger",

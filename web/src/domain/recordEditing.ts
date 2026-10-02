@@ -1,4 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { openMessageDialog } from "../composables/messageDialog";
 
 // Applying, clearing and restoring per-record edits, and the change history behind them. Moved verbatim from the legacy
 // runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -14,7 +15,6 @@ type Helper =
   | "cloneAuditValue"
   | "invalidateCorpusCache"
   | "label"
-  | "openMessageModal"
   | "persistFile"
   | "renderView"
   | "sameValue"
@@ -32,7 +32,6 @@ export function createRecordEditing(deps: Deps) {
     cloneAuditValue,
     invalidateCorpusCache,
     label,
-    openMessageModal,
     persistFile,
     renderView,
     sameValue,
@@ -99,7 +98,7 @@ export function createRecordEditing(deps: Deps) {
     }
     if (
       confirmFirst &&
-      !(await openMessageModal({
+      !(await openMessageDialog({
         title: tr("record.clear_history_title"),
         message: trf("record.clear_history_message", {
           count,
@@ -123,7 +122,7 @@ export function createRecordEditing(deps: Deps) {
     if (!rows.length) return toast(tr("runtime.toast.no_loaded_updates"));
     if (
       !confirmed &&
-      !(await openMessageModal({
+      !(await openMessageDialog({
         title: tr("settings.clear_updates_title"),
         message: tr("settings.clear_updates_message"),
         tone: "danger",

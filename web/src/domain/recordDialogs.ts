@@ -10,6 +10,7 @@ import {
   recordHistoryDialogHtml,
 } from "./recordDialogMarkup";
 import { createRecordDialogCopy } from "./recordDialogCopy";
+import { openMessageDialog } from "../composables/messageDialog";
 
 // The dialogs for editing, merging, subsetting and cleaning records and for the upsert queue, drawn as HTML strings. Moved
 // verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -43,7 +44,6 @@ type Helper =
   | "localRecordKey"
   | "navigateTo"
   | "needsReviewItems"
-  | "openMessageModal"
   | "parseBulkFieldValue"
   | "parseEditor"
   | "pendingChangesForRow"
@@ -177,7 +177,6 @@ export function createRecordDialogs(deps: Deps) {
     localRecordKey,
     navigateTo,
     needsReviewItems,
-    openMessageModal,
     parseBulkFieldValue,
     parseEditor,
     pendingChangesForRow,
@@ -372,7 +371,7 @@ export function createRecordDialogs(deps: Deps) {
       const changing = target.filter((row: Any) => !sameValue(row.record?.[field], value));
       if (!changing.length) return toast(copy.alreadyValue);
       if (
-        !(await openMessageModal({
+        !(await openMessageDialog({
           title: copy.bulkTitle,
           message: copy.bulkMessage(field, changing.length.toLocaleString()),
           confirmLabel: copy.bulkConfirm,
@@ -450,7 +449,7 @@ export function createRecordDialogs(deps: Deps) {
           if (!rows.length) return toast(copy.noScopeOcr);
           close();
           if (
-            await openMessageModal({
+            await openMessageDialog({
               title: copy.ocrTitle,
               message: copy.ocrMessage(rows.length.toLocaleString()),
               confirmLabel: copy.ocrConfirm,
@@ -503,7 +502,7 @@ export function createRecordDialogs(deps: Deps) {
           .querySelectorAll("[data-key]")
           .forEach((el: Any) => (next[el.dataset.key] = parseEditor(el)));
       } catch (error: Any) {
-        openMessageModal({
+        openMessageDialog({
           title: copy.saveFailed,
           message: error.message,
           tone: "danger",
@@ -559,7 +558,7 @@ export function createRecordDialogs(deps: Deps) {
           if (!sameValue(raw[el.dataset.key], value)) changes[el.dataset.key] = value;
         });
       } catch (error: Any) {
-        openMessageModal({
+        openMessageDialog({
           title: copy.parseFailed,
           message: error.message,
           tone: "danger",
@@ -671,7 +670,7 @@ export function createRecordDialogs(deps: Deps) {
       dialog.querySelector("#historyUndoAll").onclick = async () => {
         const original = versions[0];
         if (
-          !(await openMessageModal({
+          !(await openMessageDialog({
             title: copy.restoreOriginalTitle,
             message: copy.restoreOriginalMessage,
             confirmLabel: copy.restoreOriginalConfirm,
@@ -703,7 +702,7 @@ export function createRecordDialogs(deps: Deps) {
   }
   async function openUpsertQueue() {
     if (!hasCorpusDb())
-      return openMessageModal({
+      return openMessageDialog({
         title: copy.vectorRequired,
         message: dbUnavailableReason(),
         confirmLabel: "OK",
