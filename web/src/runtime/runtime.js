@@ -1260,8 +1260,6 @@ const {
   uniqueWorkValues: (...args) => uniqueWorkValues(...args),
   workIndex: (...args) => workIndex(...args),
   workMetadataControlSpec: (...args) => workMetadataControlSpec(...args),
-  workflowProviderSelectHtml: (...args) => workflowProviderSelectHtml(...args),
-  workflowProviderSummaryHtml: (...args) => workflowProviderSummaryHtml(...args),
 });
 let recordFingerprintCache = new WeakMap();
 function invalidateCorpusCache() {
@@ -1883,18 +1881,6 @@ function searchByMetadata(field, value, { contains = false } = {}) {
   }
   persistPrefs();
   navigateTo("global");
-}
-
-function workflowProviderSelectHtml(selectedId) {
-  const profiles = providerProfiles();
-  const selected = providerProfile(selectedId) || profiles[0] || null;
-  if (!profiles.length)
-    return `<div class="workflow-provider-empty"><b>${esc(tr("language.no_provider_profiles"))}</b><p>${esc(tr("language.no_provider_profiles_help"))}</p></div>`;
-  return `<label class="workflow-field workflow-provider-select-field"><span>${esc(tr("works.provider_profile"))}</span><select class="control workflow-provider-select" id="workMetadataProvider">${profiles.map((profile) => `<option value="${esc(profile.id)}" ${profile.id === selected?.id ? "selected" : ""}>${esc(providerDisplayName(profile))} · ${profile.type === "ollama" ? "Ollama" : "OpenAI-compatible"} · ${esc(profile.model || tr("language.model_not_set"))}${profile.id === state.appConfig.default_provider_profile ? ` · ${esc(tr("ui.default"))}` : ""}</option>`).join("")}</select><small>${esc(tr("works.provider_profile_help"))}</small></label><div class="workflow-provider-summary" id="workMetadataProviderSummary">${workflowProviderSummaryHtml(selected)}</div>`;
-}
-function workflowProviderSummaryHtml(profile) {
-  if (!profile) return "";
-  return `<span class="workflow-provider-mark">${profile.type === "ollama" ? "O" : "AI"}</span><span><b>${esc(providerDisplayName(profile))}</b><small>${profile.type === "ollama" ? "Ollama" : "OpenAI-compatible"} · ${esc(profile.model || tr("language.model_not_set"))}</small><small>${Number(profile.max_concurrent_requests ?? 1)} ${esc(tr("works.concurrent_requests"))}</small></span>${profile.id === state.appConfig.default_provider_profile ? `<span class="provider-default-chip">${esc(tr("ui.default"))}</span>` : ""}`;
 }
 
 function bulkEditRowsForScope(scope) {
