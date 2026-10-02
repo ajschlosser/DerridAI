@@ -136,7 +136,7 @@ describe("Corpus Builder build, review, and finish states", () => {
 
     const review = buttonByText(wrapper, "Review Records");
     expect(review.exists()).toBe(true);
-    expect(review.classes()).toContain("primary");
+    expect(review.classes()).toContain("variant-primary");
     expect(wrapper.get('[data-flow-state="attention"] dd').text()).toBe("2");
   });
 
