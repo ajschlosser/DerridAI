@@ -156,8 +156,10 @@ test.describe("Corpus Builder composed workflow", () => {
   test("setup exposes the full editable manifest before Build", async ({ page }) => {
     await page.goto(story("corpus-builder-setup-early-manifest--editable-before-build"));
     const editor = page.locator(".manifest-editor");
-    await expect(editor).toContainText("Of Grammatology");
     await expect(editor.getByRole("button", { name: /reanalyze/i })).toHaveCount(0);
+    // Form control values are not part of an element's textContent. Assert the
+    // pre-Build manifest value on the input itself instead of duplicating that
+    // assertion with toContainText().
     await expect(editor.locator('input.control[type="text"]').first()).toHaveValue(
       "Of Grammatology",
     );
