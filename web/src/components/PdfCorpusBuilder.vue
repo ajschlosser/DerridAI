@@ -515,7 +515,10 @@ const effectiveSetupDocumentMetadata = computed<Record<string, unknown>>(() => (
 // required field therefore makes Setup incomplete instead of failing much later at Publish.
 const missingDocumentFields = computed(() =>
   selectedAsset.value?.deterministic_checked_at
-    ? missingRequiredDocumentFields(selectedSchema.value, effectiveSetupDocumentMetadata.value)
+    ? missingRequiredDocumentFields(
+        selectedSchema.value,
+        effectiveSetupDocumentMetadata.value,
+      )
     : [],
 );
 const setupManifest = computed<Record<string, unknown>>(() => {
@@ -560,8 +563,9 @@ const missingDocumentMetadata = computed<Record<string, string>>({
 });
 const missingMetadataComplete = computed(
   () =>
-    Object.keys(suppliedDocumentMetadata(missingDocumentFields.value, missingDocumentMetadata.value))
-      .length === missingDocumentFields.value.length,
+    Object.keys(
+      suppliedDocumentMetadata(missingDocumentFields.value, missingDocumentMetadata.value),
+    ).length === missingDocumentFields.value.length,
 );
 
 const {
