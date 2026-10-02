@@ -7,6 +7,8 @@ import UiButton from "../ui/UiButton.vue";
 
 type Splitter = ReturnType<typeof useSplitter>;
 export interface CorpusFixContext {
+  code: string;
+  label: string;
   recordId: string;
   field: string;
   reason: string;
@@ -26,7 +28,7 @@ const props = defineProps<{
   mode: "record" | "metadata" | "source";
   loading: boolean;
   fixContext: CorpusFixContext | null;
-  fixProgress: { position: number; total: number } | null;
+  fixProgress: { position: number; total: number; remaining: number } | null;
 }>();
 const emit = defineEmits<{
   fixNext: [];
@@ -49,20 +51,28 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="corpus-review-workspace">
-    <div v-if="fixContext" class="fix-banner" role="status">
-      <span>
-        <b>{{ i18n.t("pdf_corpus.fixing_title") }}</b>
-        <span v-if="fixProgress" class="fix-banner-progress">{{
-          i18n.tf("pdf_corpus.fixing_progress", {
-            position: fixProgress.position,
-            total: fixProgress.total,
-          })
+    <div v-if="fixContext" class="fix-banner" role="status" aria-live="polite">
+      <div class="fix-banner-copy">
+        <span class="fix-banner-eyebrow">{{
+          i18n.t("pdf_corpus.remediation_from_readiness", "From Publish readiness")
         }}</span>
-        {{ fixContext.reason }}
-        <code>{{ fixContext.field || fixContext.recordId }}</code>
-      </span>
+        <span class="fix-banner-title-row">
+          <b>{{ fixContext.label }}</b>
+          <span v-if="fixProgress" class="fix-banner-progress">{{
+            i18n.tf("pdf_corpus.fixing_progress", {
+              position: fixProgress.position,
+              total: fixProgress.total,
+            })
+          }}</span>
+        </span>
+        <span v-if="fixContext.reason" class="fix-banner-detail">{{ fixContext.reason }}</span>
+        <code v-if="fixContext.field || fixContext.recordId">{{
+          fixContext.field || fixContext.recordId
+        }}</code>
+      </div>
       <span class="fix-banner-actions">
         <UiButton
+          v-if="!fixProgress || fixProgress.remaining > 1"
           size="small"
           :label="i18n.t('pdf_corpus.fix_next_issue')"
           @click="emit('fixNext')"
@@ -285,19 +295,50 @@ onBeforeUnmount(() => {
   gap: var(--space-3);
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--tone-info-border);
+  border-inline-start: 4px solid var(--tone-info-fg);
   border-radius: var(--radius-control);
   background: var(--tone-info-bg);
   color: var(--tone-info-fg);
   font-size: var(--fs-sm);
 }
+.fix-banner-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.fix-banner-eyebrow {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.fix-banner-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+.fix-banner-title-row b {
+  font-size: var(--fs-md);
+}
+.fix-banner-detail {
+  max-width: 72ch;
+  line-height: 1.45;
+}
+.fix-banner-copy code {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
 .fix-banner-actions {
   display: inline-flex;
   gap: var(--space-2);
+  flex-wrap: wrap;
 }
 .fix-banner-progress {
-  margin-inline: var(--space-2);
   font-weight: var(--fw-semibold);
 }
 /* Wide and medium screens: the frame fills the screen under the top bar. */
