@@ -1,6 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { describe, expect, it, vi } from "vitest";
-import { toast } from "../../src/composables/notifications";
 import { createAnnotationsWorkspace } from "../../src/domain/annotationsWorkspace";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 

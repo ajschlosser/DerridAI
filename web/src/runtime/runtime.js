@@ -1031,7 +1031,6 @@ const {
   label: (...args) => label(...args),
   memoCorpus: (...args) => memoCorpus(...args),
   navigateTo: (...args) => navigateTo(...args),
-  notifyToast: (...args) => notifyToast(...args),
   persistFileNow: (...args) => persistFileNow(...args),
   persistPrefs: (...args) => persistPrefs(...args),
   recordStores: (...args) => recordStores(...args),

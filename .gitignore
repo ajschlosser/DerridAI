@@ -53,3 +53,4 @@ data/.home/*
 *.swo
 .test-data/
 web/test-results/
+web/sdk/dist/
