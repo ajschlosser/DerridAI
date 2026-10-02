@@ -1,8 +1,10 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
 import CorpusMetadataFieldEditor from "../../src/components/CorpusMetadataFieldEditor.vue";
 import UiCombobox from "../../src/components/ui/UiCombobox.vue";
+import CorpusMetadataResolutionPanel from "../../src/components/CorpusMetadataResolutionPanel.vue";
 
 async function openList(modelValue: string, options: string[]) {
   const wrapper = mount(UiCombobox, {
@@ -56,6 +58,7 @@ describe("field editor decision controls", () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
       props: { field: "concept", value: "", control: "text", open: true },
     });
+
     const box = wrapper.get("textarea");
     await box.setValue("★ Responsibility");
     await wrapper.get("[data-primary-action]").trigger("click");
@@ -114,5 +117,48 @@ describe("field editor decision controls", () => {
     const matrix = wrapper.get(".trace-matrix");
     expect(matrix.text()).toContain("metadata memory");
     expect(matrix.text()).toContain("80%");
+  });
+});
+
+describe("metadata panel draft aggregation", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  it("keeps the panel dirty until every field draft is saved", async () => {
+    const wrapper = mount(CorpusMetadataResolutionPanel, {
+      props: {
+        record: {
+          record_id: "r1",
+          text: "Derrida reports a position attributed to Levinas.",
+          text_length: 49,
+          source_block_ids: [],
+          source_spans: [],
+          speaker: "",
+          position_holder: "",
+          metadata_review_fields: ["speaker", "position_holder"],
+        },
+        regionTypes: [],
+        discourseRoles: [],
+      },
+    });
+    const editors = wrapper.findAllComponents(CorpusMetadataFieldEditor);
+    const speaker = editors.find((editor) => editor.props("field") === "speaker")!;
+    const holder = editors.find((editor) => editor.props("field") === "position_holder")!;
+    await speaker.get("textarea").setValue("Derrida");
+    await holder.get("textarea").setValue("Levinas");
+    await speaker.get("[data-primary-action]").trigger("click");
+    expect(wrapper.emitted("dirty")?.at(-1)).toEqual([true]);
+    await holder.get("[data-primary-action]").trigger("click");
+    expect(wrapper.emitted("dirty")?.at(-1)).toEqual([false]);
+
+    await speaker.get("textarea").setValue("Another speaker");
+    await holder.get("textarea").setValue("Another position holder");
+    await speaker.get("[data-primary-action]").trigger("click");
+    await holder.get("[data-primary-action]").trigger("click");
+    expect(wrapper.emitted("resolve")?.slice(-2)).toEqual([
+      ["speaker", "Another speaker"],
+      ["position_holder", "Another position holder"],
+    ]);
+    expect(wrapper.emitted("dirty")?.at(-1)).toEqual([false]);
+    wrapper.unmount();
   });
 });

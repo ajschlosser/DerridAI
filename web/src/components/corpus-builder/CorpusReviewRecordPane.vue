@@ -12,6 +12,8 @@ import RecordContextReader from "./RecordContextReader.vue";
 /** The central Record reader for Review: Record text, text editing and the per-Record notices. */
 const props = defineProps<{
   record: CorpusRecord | null;
+  loading?: boolean;
+  loadError?: string;
   buildId: string;
   visible: boolean;
   queueCollapsed: boolean;
@@ -33,6 +35,7 @@ const emit = defineEmits<{
   closePopout: [];
   selectRecord: [recordId: string];
   rootChange: [element: HTMLElement | null];
+  retry: [];
 }>();
 const textDraft = defineModel<string>("textDraft", { required: true });
 const showContext = defineModel<boolean>("showContext", { required: true });
@@ -75,6 +78,7 @@ onBeforeUnmount(() => emit("rootChange", null));
     v-show="visible"
     ref="root"
     class="record-review-pane"
+    :aria-busy="loading"
     :aria-labelledby="record ? 'review-record-title' : undefined"
   >
     <template v-if="record">
@@ -234,7 +238,22 @@ onBeforeUnmount(() => emit("rootChange", null));
         @close="emit('closePopout')"
       />
     </template>
-    <div v-else class="inspector-empty">
+    <div v-else-if="loading" class="reader-state" role="status" aria-live="polite">
+      <b>{{ i18n.t("pdf_corpus.loading_record") }}</b>
+      <div class="reader-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
+    </div>
+    <div v-else-if="loadError" class="reader-state" role="alert">
+      <b>{{
+        i18n.t(
+          loadError === "not_found"
+            ? "pdf_corpus.record_not_found"
+            : "pdf_corpus.record_load_failed",
+        )
+      }}</b>
+      <p v-if="loadError !== 'not_found'">{{ loadError }}</p>
+      <UiButton :label="i18n.t('ui.retry')" @click="emit('retry')" />
+    </div>
+    <div v-else class="inspector-empty" role="status">
       {{ i18n.t("pdf_corpus.select_record") }}
     </div>
   </article>
@@ -245,6 +264,25 @@ onBeforeUnmount(() => emit("rootChange", null));
 .record-review-pane {
   min-width: 0;
   background: var(--surface-card);
+}
+.reader-state {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  overflow-wrap: anywhere;
+}
+.reader-skeleton {
+  display: grid;
+  gap: var(--space-3);
+}
+.reader-skeleton span {
+  height: var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
+}
+.reader-skeleton span:last-child {
+  width: 65%;
 }
 .record-review-head {
   position: sticky;

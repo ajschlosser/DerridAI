@@ -44,6 +44,7 @@ from ..models import (
     PdfAssetMetadataPatch,
     PdfCorpusBoundaryAdjudication,
     PdfCorpusBuildCreate,
+    PdfCorpusBuildResume,
     PdfCorpusBulkDisposition,
     PdfCorpusBulkMetadataPatch,
     PdfCorpusEvidencePatch,
@@ -1102,9 +1103,12 @@ def settle_pdf_corpus_metadata(build_id: str) -> dict[str, Any]:
 
 
 @router.post("/api/pdf/corpus-builds/{build_id}/resume")
-def resume_pdf_corpus_build(build_id: str, body: PdfCorpusRecordRerun) -> dict[str, Any]:
+def resume_pdf_corpus_build(build_id: str, body: PdfCorpusBuildResume) -> dict[str, Any]:
     try:
-        return pdf_corpus_builds.resume(build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
+        return pdf_corpus_builds.resume(
+            build_id, body.model_dump(exclude_unset=True, exclude_none=True),
+            resolve_provider=_resolve_pdf_corpus_provider,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
     except ValueError as exc:
@@ -1259,16 +1263,7 @@ def get_pdf_corpus_record_research_claims(build_id: str, record_id: str) -> dict
 @router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-cache")
 def get_pdf_corpus_metadata_cache(build_id: str, record_id: str, field: str) -> dict[str, Any]:
     try:
-        record = next(
-            (
-                row
-                for row in pdf_corpus_repository.load_records(build_id)
-                if str(row.get("record_id") or "") == record_id
-            ),
-            None,
-        )
-        if record is None:
-            raise KeyError(record_id)
+        record = pdf_corpus_repository.get_record(build_id, record_id)
         build = pdf_corpus_repository.get_build(build_id)
         cached = adjudication_suggestions(
             record_id=record_id,

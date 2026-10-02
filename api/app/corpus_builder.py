@@ -188,6 +188,8 @@ from .corpus_record_quality import (
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
 from .corpus_review_queue import (
     QueueFilter,
+    QueueSelection,
+    QueueSelectionCache,
     empty_page,
     observed_metadata_values,
     select_queue,
@@ -838,6 +840,7 @@ class PdfCorpusRepository:
             str, tuple[tuple[int, int], list[dict[str, Any]]]
         ] = {}
         self._review_records_cache_capacity = 4
+        self._queue_selection_cache = QueueSelectionCache()
         # (payload digest, schema signature) pairs known to be fixed points of
         # ``migrate_record_assertions``/``_migrate_status_vocabulary``. Migration is
         # idempotent and every writer already migrates, so re-running it on every read
@@ -2040,31 +2043,50 @@ class PdfCorpusRepository:
                     "SELECT payload FROM corpus_records WHERE ordinal > ? ORDER BY ordinal ASC LIMIT ?",
                     (ordinal, after),
                 ).fetchall()
-        budget = [max(0, int(max_chars))]
+        total_budget = max(0, int(max_chars))
+        before_budget = total_budget // 2 if previous and following else total_budget
+        after_budget = total_budget - before_budget if previous else total_budget
+        truncated = False
 
-        def slim(payload: str) -> dict[str, Any] | None:
+        def slim(payload: str, budget: int, *, preceding: bool) -> tuple[dict[str, Any] | None, int]:
+            nonlocal truncated
             record = json.loads(payload)
             text = str(record.get("text") or "")
-            if budget[0] <= 0:
-                return None
-            budget[0] -= len(text)
+            if budget <= 0:
+                truncated = True
+                return None, budget
+            length = min(len(text), budget)
+            start = len(text) - length if preceding else 0
+            truncated = truncated or length < len(text)
             return {
                 "record_id": record.get("record_id"),
-                "text": text,
+                "record_revision": record.get("record_revision"),
+                "source_document_id": record.get("source_document_id"),
+                "text": text[start:start + length],
                 "text_length": len(text),
+                "text_truncated": length < len(text),
+                "record_character_start": start,
+                "record_character_end": start + length,
                 "page_start": record.get("page_start"),
                 "page_end": record.get("page_end"),
                 "review_disposition": record.get("review_disposition"),
-            }
+            }, budget - length
 
-        # Nearest first, so the budget is spent where context matters most.
-        near_before = [item for item in (slim(r[0]) for r in previous) if item]
-        near_after = [item for item in (slim(r[0]) for r in following) if item]
+        # Reserve both sides and keep the text closest to the selected Record.
+        near_before, near_after = [], []
+        for payload, in previous:
+            item, before_budget = slim(payload, before_budget, preceding=True)
+            if item:
+                near_before.append(item)
+        for payload, in following:
+            item, after_budget = slim(payload, after_budget, preceding=False)
+            if item:
+                near_after.append(item)
         return {
             "record_id": record_id,
             "before": list(reversed(near_before)),  # document order, farthest first
             "after": near_after,
-            "truncated": len(near_before) < len(previous) or len(near_after) < len(following),
+            "truncated": truncated,
         }
 
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
@@ -2085,6 +2107,21 @@ class PdfCorpusRepository:
                 _scrub_canonical_transport(record)
         return records
 
+    def select_review_queue(
+        self, records: list[dict[str, Any]], filters: QueueFilter, *, offset: int, limit: int,
+    ) -> QueueSelection:
+        """Share bounded selections across transports for repository-owned snapshots.
+
+        Caller-owned lists remain uncached: their contents may change in place.
+        Evicted snapshots also use the pure selector without retaining new cache entries.
+        """
+        with self._lock:
+            owned = any(snapshot is records for _signature, snapshot in self._review_records_cache.values())
+        return select_queue(
+            records, filters, offset=offset, limit=limit,
+            cache=self._queue_selection_cache if owned else None,
+        )
+
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
         """REST's composite review page: full presented Records, queue counts and observed values.
 
@@ -2098,7 +2135,7 @@ class PdfCorpusRepository:
         records = self.review_records(build_id)
         if records is None:
             return empty_page(offset, limit)
-        selection = select_queue(records, filters, offset=offset, limit=limit)
+        selection = self.select_review_queue(records, filters, offset=offset, limit=limit)
         return {
             "items": selection.items,
             "total": selection.total,
@@ -2111,8 +2148,8 @@ class PdfCorpusRepository:
     def review_records(self, build_id: str) -> list[dict[str, Any]] | None:
         """Read-only parsed snapshot for review paging, cached across HTTP requests.
 
-        The queue still evaluates the whole corpus for authoritative counts and filters,
-        but it no longer reparses/migrates every JSON payload for each page navigation.
+        Queue selections may reuse this immutable snapshot across page navigation.
+        Record writes replace the snapshot, invalidating selections by identity.
         """
         self.get_build(build_id)
         if not self.build_records_path(build_id).exists() and not self.build_records_db_path(build_id).exists():
@@ -3084,6 +3121,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
 
     def _document_manifest(self, asset: dict[str, Any], blocks: list[dict[str, Any]], request: dict[str, Any], build_id: str) -> dict[str, Any]:
         metadata = asset.get("metadata") or {}
+        media_kind = str(asset.get("media_kind") or "pdf")
+        metadata_label = "PDF metadata" if media_kind == "pdf" else "source metadata"
+        metadata_method = "pdf_metadata" if media_kind == "pdf" else "source_metadata"
         reviewed_layout = asset.get("document_layout") if isinstance(asset.get("document_layout"), dict) and asset.get("document_layout", {}).get("confirmed_by") == "human" else {}
         # Sample the whole document rather than assuming the front matter is
         # representative. Headings plus front/middle/end blocks reveal later
@@ -3116,20 +3156,28 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 indices = sorted({round(i * (len(chosen) - 1) / max(1, max_samples - 1)) for i in range(max_samples)})
                 chosen = [chosen[index] for index in indices]
         per_excerpt = max(280, min(900, sample_char_budget // max(1, len(chosen)) - 100))
-        sample_text = "\n".join(
-            f"[{b['block_id']} PDF p.{b['page']} label={b.get('printed_page_label')!r} {b['type']}] {str(b.get('text') or '')[:per_excerpt]}"
-            for b in chosen
-        )[:sample_char_budget]
-        prompt = f"""You are establishing a source-bound document manifest for an auditable scholarly corpus build.
-Use only evidence in the supplied PDF metadata and source blocks. Use null when unsupported. Never fill bibliographic facts from general knowledge. Distinguish the PDF page index from a printed page label. The manifest will be inherited deterministically by generated records, so be conservative.
+        def excerpt(block: dict[str, Any]) -> str:
+            if media_kind == "audio" or block.get("locator_kind") == "time":
+                location = block.get("time_label") or f"{block.get('start')}–{block.get('end')} seconds"
+                locator = f"audio time={location} speaker={block.get('speaker')!r}"
+            elif block.get("page") is not None:
+                locator = f"{media_kind} p.{block['page']} label={block.get('printed_page_label')!r}"
+            else:
+                locator = f"{media_kind} source unit"
+            return f"[{block['block_id']} {locator} {block.get('type', 'paragraph')}] {str(block.get('text') or '')[:per_excerpt]}"
 
-PDF metadata: {json.dumps(metadata, ensure_ascii=False)}
+        sample_text = "\n".join(excerpt(block) for block in chosen)[:sample_char_budget]
+        prompt = f"""You are establishing a source-bound document manifest for an auditable scholarly corpus build.
+Use only evidence in the supplied {metadata_label} and source blocks. Use null when unsupported. Never fill bibliographic facts from general knowledge. Distinguish a physical page index from a printed page label. Audio timestamps and source-unit identifiers are not pages. The manifest will be inherited deterministically by generated records, so be conservative.
+
+Source media: {media_kind}
+{metadata_label}: {json.dumps(metadata, ensure_ascii=False)}
 Filename: {asset.get('filename')}
 Reviewer-confirmed document structure (authoritative where present): {json.dumps(reviewed_layout, ensure_ascii=False)}
 Strategic whole-document sample:
 {sample_text}
 
-Return one JSON object matching the schema. `main_text_start_page` and `main_text_end_page` are physical PDF pages when supported. `document_is_translation` should be null unless the source itself supports that conclusion.
+Return one JSON object matching the schema. `main_text_start_page` and `main_text_end_page` are physical pages only for PDF/image sources when supported; use null for audio and other media. `document_is_translation` should be null unless the source itself supports that conclusion.
 """
         # One trace per analysis. If the pipeline cannot be resolved no model is asked and the
         # embedded-metadata fallback below applies, with the reason in the build warning.
@@ -3144,30 +3192,30 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 session.finish(cancelled=True)
             raise
         except Exception as exc:
-            self._append_warning(build_id, f"Document manifest used PDF-metadata fallback: {exc}")
+            self._append_warning(build_id, f"Document manifest used {metadata_label.replace(' ', '-')} fallback: {exc}")
             result = DocumentManifestModel(
                 title=metadata.get("title") or None,
                 document_author=metadata.get("author") or None,
-                notes="LLM manifest unavailable; values are limited to embedded PDF metadata.",
+                notes=f"LLM manifest unavailable; values are limited to embedded {metadata_label}.",
             ).model_dump(mode="json")
         if session is not None:
             session.finish()
             self._record_document_manifest_pipeline(build_id, session)
-        # Embedded PDF metadata is a deterministic source assertion. A model
+        # Embedded source metadata is a deterministic source assertion. A model
         # may enrich missing bibliography, but must not replace an author
         # explicitly declared by the source file.
         if metadata.get("author"):
             result["document_author"] = str(metadata["author"]).strip()
-            result["document_author_source"] = "pdf_metadata"
+            result["document_author_source"] = metadata_method
             result["document_author_confidence"] = 1.0
             result["document_author_assertion"] = {
                 "field": "document_author",
                 "value": result["document_author"],
                 "status": "deterministic",
-                "method": "pdf_metadata",
+                "method": metadata_method,
                 "checked": True,
                 "confidence": 1.0,
-                "reason": "Author value was read from embedded PDF metadata.",
+                "reason": f"Author value was read from embedded {metadata_label}.",
             }
         # A deterministic start-page inference (only present when it is more than 90% sure) outranks
         # the model's guess; the clues travel with the value so the reviewer can check them.
@@ -3708,44 +3756,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 inline, full = _citation_strings(record)
                 record["inline_citation"] = inline
                 record["full_citation"] = full
-            # Source-unit embeddings are a shared, rebuildable projection. Build
-            # them after the active source-unit topology is known and before any
-            # consumer (metadata memory or local evidence retrieval) asks for vectors.
-            source_projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
-            try:
-                provider, model = source_projection.store.default_embedding_spec()
-                source_embedding_projection = source_projection.sync(
-                    str(asset.get("asset_id") or build_id),
-                    source_blocks,
-                    provider=provider,
-                    model=model,
-                    prune=True,
-                )
-            except Exception as exc:  # derived state must not block canonical topology
-                source_embedding_projection = {
-                    "status": "unavailable",
-                    "error": f"{type(exc).__name__}: {exc}"[:300],
-                }
-                self._append_warning(
-                    build_id,
-                    "Source-unit semantic indexing is unavailable; canonical source and records remain intact. "
-                    + str(source_embedding_projection["error"]),
-                )
-            current_build = self.repo.get_build(build_id)
-            current_build["source_unit_embedding_projection"] = source_embedding_projection
-            self.repo.save_build(current_build)
-            # Pre-fill from reviewed precedents matched on each record's source spans (advisory).
-            memory_prefill = (
-                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema))
-                if bool(request.get("memory_prefill", True))
-                else {"status": "disabled"}
-            )
-            if memory_prefill.get("status") == "unavailable":
-                self._append_warning(
-                    build_id,
-                    "Metadata memory could not pre-fill fields (embedding provider or vector store unavailable). "
-                    "The build continues without it: " + str(memory_prefill.get("error") or ""),
-                )
             # Validate topology before spending time on metadata enrichment.
             # At this point all source-derived text and boundaries are deterministic;
             # any failure is therefore an implementation/topology problem, not an
@@ -3770,7 +3780,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         f"{found['params'].get('limit')}-character ceiling; split it during review."
                     )
             current_build = self.repo.get_build(build_id)
-            current_build["memory_prefill"] = memory_prefill
             current_build["topology_validation"] = topology_validation
             current_build["topology_quality"] = topology_quality
             current_build["record_sizing_policy"] = sizing_policy
@@ -3812,6 +3821,43 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             # Persist deterministic records before any metadata call. A provider
             # failure can therefore never discard successful segmentation work.
             self.repo.save_records(build_id, records)
+            self._update(build_id, record_count=len(records), boundary_count=len(boundaries))
+            # Canonical topology is readable before optional derived work; review
+            # remains locked until preparation and enrichment scheduling complete.
+            source_projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
+            try:
+                provider, model = source_projection.store.default_embedding_spec()
+                source_embedding_projection = source_projection.sync(
+                    str(asset.get("asset_id") or build_id), source_blocks,
+                    provider=provider, model=model, prune=True,
+                )
+            except Exception as exc:
+                source_embedding_projection = {
+                    "status": "unavailable", "error": f"{type(exc).__name__}: {exc}"[:300],
+                }
+                self._append_warning(
+                    build_id,
+                    "Source-unit semantic indexing is unavailable; canonical source and records remain intact. "
+                    + str(source_embedding_projection["error"]),
+                )
+            current_build = self.repo.get_build(build_id)
+            current_build["source_unit_embedding_projection"] = source_embedding_projection
+            self.repo.save_build(current_build)
+            memory_prefill = (
+                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema))
+                if bool(request.get("memory_prefill", True))
+                else {"status": "disabled"}
+            )
+            if memory_prefill.get("status") == "unavailable":
+                self._append_warning(
+                    build_id,
+                    "Metadata memory could not pre-fill fields (embedding provider or vector store unavailable). "
+                    "The build continues without it: " + str(memory_prefill.get("error") or ""),
+                )
+            current_build = self.repo.get_build(build_id)
+            current_build["memory_prefill"] = memory_prefill
+            self.repo.save_build(current_build)
+        self.repo.save_records(build_id, records)
         guidance = request.get("run_guidance") if isinstance(request.get("run_guidance"), dict) else {}
         for record in records:
             matches = find_guidance_matches(str(record.get("text") or ""), guidance)
@@ -3826,6 +3872,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         self._update(
             build_id,
             stage="document_intelligence",
+            record_count=len(records),
             progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.40),
         )
         self._run_document_intelligence(build_id, records, manifest, request)
@@ -3968,8 +4015,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # local model. Track readiness per record so completed records can be
         # reviewed immediately instead of locking the entire book until the
         # final LLM call finishes.
+        pending_indices = set(pending)
         for index, record in enumerate(records):
-            if index in pending:
+            if index in pending_indices:
                 # A process restart may leave a record marked running. No worker
                 # survives the restart, so it safely returns to the queue while
                 # per-family checkpoints determine where enrichment resumes.
@@ -3999,10 +4047,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             self._persist_build_metadata_stage(build_id, metadata_task_total, snapshot, task_name, state, error_text)
 
         if pending:
-            # Parallelism is a build-level execution concern. Each worker performs
-            # the three small metadata families serially for one record, while the
-            # main thread alone updates/checkpoints the shared JSONL. This avoids
-            # corrupting restart state and respects provider-profile concurrency.
+            # Records share the bounded family pool. Family checkpoints and
+            # completed results persist through targeted SQLite writes; JSONL is
+            # refreshed at the final review handoff, not after every completion.
             with (
                 ThreadPoolExecutor(
                     max_workers=max_workers,
@@ -4087,20 +4134,22 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         records[index] = fallback
                         self._append_warning(build_id, f"{fallback.get('record_id')}: metadata worker failed; the source-bound record was preserved for review.")
                     completed += 1
-                    # Persist one completed worker result without overwriting
-                    # human review decisions already made on other completed
-                    # records while enrichment continues. The disk copy is the
-                    # authoritative live review state; replace only this record.
+                    # Merge only this completion into the latest authoritative row.
+                    # Human decisions and family checkpoints share the manager lock.
+                    # The final handoff reloads all rows once, including other edits.
+                    completed_id = str(records[index].get("record_id") or "")
                     with self._lock:
-                        live_records = self.repo.load_records(build_id)
-                        completed_id = str(records[index].get("record_id") or "")
-                        live_index = next((i for i, row in enumerate(live_records) if str(row.get("record_id") or "") == completed_id), None)
-                        if live_index is None:
-                            live_records = records
-                        else:
-                            live_records[live_index] = _merge_enrichment_snapshot(live_records[live_index], records[index], self._allowed_fields(build_id))
-                        records = live_records
-                        self.repo.save_records(build_id, records)
+                        try:
+                            live_record = self.repo.get_record(build_id, completed_id)
+                        except KeyError:
+                            # A split/merge retired this identity while its worker ran.
+                            # Never restore the worker's obsolete topology snapshot.
+                            continue
+                        merged = _merge_enrichment_snapshot(
+                            live_record, records[index], self._allowed_fields(build_id),
+                        )
+                        self.repo.update_record(build_id, merged)
+                        records[index] = merged
                     # The terminal realtime hint means a subsequent read can observe
                     # the enriched Record. Emit it only after the durable merge/save.
                     note_record_metadata(build_id, completed_id, "record_completed")
@@ -4140,7 +4189,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             metadata_last_progress_at=iso_now(),
         )
 
-        return records
+        return settled_records
 
     def _finalize_build_review(self, build_id: str, scope: BuildScope, records: list[dict[str, Any]]) -> None:
         """Revalidate settled records and publish the authoritative handoff to review."""

@@ -116,9 +116,13 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
       label: `${options.t("pdf_corpus.corpus_builder")} · ${build.source_filename || ""}`,
       status: ["queued", "running"].includes(build.status)
         ? build.status
-        : build.status === "blocked"
+        : ["blocked", "awaiting_manifest_review"].includes(build.status)
           ? "blocked"
-          : "completed",
+          : ["failed", "interrupted"].includes(build.status)
+            ? "failed"
+            : build.status === "cancelled"
+              ? "cancelled"
+              : "completed",
       raw_status: build.status,
       stage: build.stage,
       stage_detail: build.stage,
@@ -159,8 +163,10 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
       options.currentBuild.value = null;
       return;
     }
+    const buildId = options.selectedBuildId.value;
     try {
-      const refreshed = await corpusBuilderApi.build(options.selectedBuildId.value);
+      const refreshed = await corpusBuilderApi.build(buildId);
+      if (options.selectedBuildId.value !== buildId) return;
       if (options.currentBuild.value?.build_id === refreshed.build_id) {
         // Reconcile into the existing reactive object so a background authoritative read
         // cannot remount the active workspace or reset child component state.
@@ -248,9 +254,10 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
       isDone: () => finished,
       onEvent: handleRealtimeEvent,
       refresh: async () => {
-        if (!options.selectedBuildId.value) return;
+        if (options.selectedBuildId.value !== buildId) return;
         const wasRunning = buildRunning() || terminalPending;
         await refreshBuild();
+        if (options.selectedBuildId.value !== buildId) return;
         // A realtime note can be missed (reconnect, dropped under backpressure, sent before the
         // Record was open). Reconcile the open Record on the slow path, at most every 10s.
         const openRecordId = options.selectedRecordId.value;

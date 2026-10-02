@@ -1,8 +1,9 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { expect, test, type Page } from "@playwright/test";
-import { mockBackend } from "./support/mock-backend";
+import { CORPUS_BUILD_ID, CORPUS_RECORDS, mockBackend } from "./support/mock-backend";
+import AxeBuilder from "@axe-core/playwright";
 
-// The Corpus Builder review workspace in the real app: it should fill the screen under the top bar,
+// The Corpus Builder review workspace in the real app: it should fit beneath the top bar,
 // keep its decisions in reach, scroll each pane on its own, and be usable from the keyboard. Rendered
 // against the mock API from the production build (see app-views.spec.ts).
 const APP = `http://127.0.0.1:${process.env.APP_PORT || "5199"}`;
@@ -35,7 +36,7 @@ test.describe("at a wide desktop", () => {
     test.skip(info.project.name !== "chromium-desktop", "Runs once, at its own viewports."),
   );
 
-  test("the workspace fills the screen under the top bar and adds no phantom scroll", async ({
+  test("the workspace respects its preferred height within the viewport without phantom scroll", async ({
     page,
   }) => {
     await open(page);
@@ -55,7 +56,7 @@ test.describe("at a wide desktop", () => {
       Math.abs(m.top - m.topbar),
       "the frame sits right under the top bar",
     ).toBeLessThanOrEqual(2);
-    expect(m.bottom, "and reaches the bottom of the window").toBeGreaterThan(m.view - 24);
+    expect(m.bottom - m.top, "retains a usable reading area").toBeGreaterThan(600);
     expect(m.bottom).toBeLessThanOrEqual(m.view);
     // The queue's visually-hidden labels used to stretch the page by thousands of pixels.
     expect(m.below, "nothing but the footer is below the workspace").toBeLessThan(160);
@@ -191,6 +192,99 @@ test.describe("at a wide desktop", () => {
     await page.locator(".review-grid").waitFor();
     expect(await width()).toBe(240);
   });
+
+  test("record navigation is immediate and restores the local text draft", async ({ page }) => {
+    await open(page);
+    let writes = 0;
+    page.on("request", (request) => {
+      if (request.method() === "PATCH" && request.url().endsWith("/text")) writes++;
+    });
+    await page.getByRole("button", { name: "Edit text", exact: true }).click();
+    await page
+      .locator(".record-review-pane textarea")
+      .fill("An unsaved correction with its negation intact.");
+    await page.locator(".record-row").nth(1).click();
+    await expect(page.locator(".record-row").nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(page.getByRole("dialog", { name: "Leave this unsaved review?" })).toHaveCount(0);
+    await page.locator(".record-row").nth(0).click();
+    await expect(page.locator(".record-review-pane textarea")).toHaveValue(
+      "An unsaved correction with its negation intact.",
+    );
+    expect(writes).toBe(0);
+  });
+
+  test("an unsaved field does not block Reject and next", async ({ page }) => {
+    await open(page);
+    const build = await page.evaluate(
+      async (buildId) => (await fetch(`/api/pdf/corpus-builds/${buildId}`)).json(),
+      CORPUS_BUILD_ID,
+    );
+    await page.route(
+      `**/api/pdf/corpus-builds/${CORPUS_BUILD_ID}/records/${CORPUS_RECORDS[0].record_id}/review-decision`,
+      (route) =>
+        route.fulfill({
+          json: {
+            applied: true,
+            blocked: false,
+            build,
+            record: {
+              ...CORPUS_RECORDS[0],
+              review_disposition: "rejected",
+              rejected: true,
+              accepted: false,
+              record_revision: 2,
+            },
+            next_record: CORPUS_RECORDS[1],
+          },
+        }),
+    );
+    await page.locator(".decision-list textarea").first().fill("An uncommitted field value.");
+    await page.getByRole("button", { name: "Reject & next", exact: true }).click();
+    await expect(page.locator(".record-row").nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(page.getByRole("dialog", { name: "Leave this unsaved review?" })).toHaveCount(0);
+  });
+
+  test("starting another build preserves the local text draft without a dialog", async ({
+    page,
+  }) => {
+    await open(page);
+    await page.getByRole("button", { name: "Edit text", exact: true }).click();
+    await page
+      .locator(".record-review-pane textarea")
+      .fill("A draft before starting another build.");
+    await page.getByRole("button", { name: "Start new build", exact: true }).click();
+    await expect(page).toHaveURL(/workspace=setup/);
+    await expect(page.getByRole("dialog", { name: "Leave this unsaved review?" })).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        ({ build, record }) =>
+          localStorage.getItem(`derridai.pdf-corpus.text-draft.${build}.${record}`),
+        { build: CORPUS_BUILD_ID, record: CORPUS_RECORDS[0].record_id },
+      ),
+    ).toBe("A draft before starting another build.");
+  });
+
+  test("a restored advanced metadata draft does not trap navigation", async ({ page }) => {
+    await page.addInitScript(
+      ({ buildId, recordId }) =>
+        localStorage.setItem(
+          `derridai.pdf-corpus.metadata-draft.${buildId}.${recordId}`,
+          JSON.stringify({ speaker: "A saved but uncommitted metadata draft" }),
+        ),
+      { buildId: CORPUS_BUILD_ID, recordId: CORPUS_RECORDS[0].record_id },
+    );
+    await open(page);
+    await page.locator(".record-row").nth(1).click();
+    await expect(page.locator(".record-row").nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(page.getByRole("dialog", { name: "Leave this unsaved review?" })).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        ({ build, record }) =>
+          localStorage.getItem(`derridai.pdf-corpus.metadata-draft.${build}.${record}`),
+        { build: CORPUS_BUILD_ID, record: CORPUS_RECORDS[0].record_id },
+      ),
+    ).toContain("A saved but uncommitted metadata draft");
+  });
 });
 
 test.describe("on a laptop", () => {
@@ -259,5 +353,81 @@ test.describe("on a short window", () => {
     expect(Math.min(text.bottom, dock.y) - text.y).toBeGreaterThan(60);
     // The compact menu is still named for assistive technology.
     await expect(page.getByRole("button", { name: /More (record )?actions/ })).toBeVisible();
+  });
+});
+
+for (const viewport of [
+  { width: 390, height: 844, name: "mobile" },
+  { width: 720, height: 450, name: "200 percent zoom-equivalent" },
+]) {
+  test.describe(`at the ${viewport.name} viewport`, () => {
+    test.use({ viewport: { width: viewport.width, height: viewport.height } });
+    test.beforeEach(({}, info) =>
+      test.skip(info.project.name !== "chromium-desktop", "Runs once, at its own viewports."),
+    );
+    test("reflows without horizontal overflow and keeps text and decisions reachable", async ({
+      page,
+    }) => {
+      await open(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.locator(".record-primary-text .ctx-focus").scrollIntoViewIfNeeded();
+      await expect(page.locator(".record-primary-text .ctx-focus")).toContainText("hospitality");
+      const accept = page.getByRole("button", { name: "Accept & next", exact: true });
+      await accept.scrollIntoViewIfNeeded();
+      await expect(accept).toBeInViewport();
+      await page
+        .getByRole("button", { name: "Reject & next", exact: true })
+        .scrollIntoViewIfNeeded();
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include(".review-grid")
+            .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+    });
+  });
+}
+
+test.describe("French review controls in dark mode", () => {
+  test.use({ viewport: { width: 1280, height: 720 }, colorScheme: "dark" });
+  test.beforeEach(({}, info) =>
+    test.skip(info.project.name !== "chromium-desktop", "Runs once, at its own viewport."),
+  );
+  test("keeps French keyboard navigation immediate with a recoverable draft", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("derridai-locale", "fr-CA"));
+    await mockBackend(page);
+    await page.route("**/api/i18n/languages/fr-CA", (route) =>
+      route.fulfill({
+        json: {
+          code: "fr-CA",
+          name: "Français",
+          flag: "🇨🇦",
+          dictionary: {
+            "pdf_corpus.reject_next": "Rejeter et suivante",
+          },
+        },
+      }),
+    );
+    await page.goto(`${APP}/pdf`);
+    await page.locator(".review-grid").waitFor();
+    await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "dark");
+    await expect(
+      page.getByRole("button", { name: "Rejeter et suivante", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Edit text", exact: true }).click();
+    await page.locator(".record-review-pane textarea").fill("Une correction non enregistrée.");
+    await page.locator(".record-row").nth(1).click();
+    await expect(page.locator(".record-row").nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.locator(".record-row").nth(0).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".record-review-pane textarea")).toHaveValue(
+      "Une correction non enregistrée.",
+    );
   });
 });

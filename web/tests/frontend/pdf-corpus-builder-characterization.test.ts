@@ -78,6 +78,7 @@ vi.mock("../../src/runtime/runtime.js", () => ({
 }));
 
 import PdfCorpusBuilder from "../../src/components/PdfCorpusBuilder.vue";
+import DocumentManifestEditor from "../../src/components/DocumentManifestEditor.vue";
 import { queueRowFromRecord } from "../../src/features/corpus-builder/domain/queueRows";
 import { useI18nStore } from "../../src/stores/i18n";
 
@@ -90,7 +91,7 @@ const defaultSchema = {
   fields: [],
 };
 
-async function mountBuilder(query = "") {
+async function mountBuilder(query = "", renderManifest = false) {
   const pinia = createPinia();
   setActivePinia(pinia);
   useI18nStore().dictionary = {};
@@ -106,7 +107,12 @@ async function mountBuilder(query = "") {
   await router.isReady();
   const wrapper = shallowMount(PdfCorpusBuilder, {
     attachTo: document.body,
-    global: { plugins: [pinia, router] },
+    global: {
+      plugins: [pinia, router],
+      stubs: renderManifest
+        ? { CorpusBuildWorkspace: { template: '<div><slot name="manifest" /></div>' } }
+        : {},
+    },
   });
   await flushPromises();
   return Object.assign(wrapper, { router });
@@ -235,6 +241,15 @@ describe("PdfCorpusBuilder characterization", () => {
       });
     });
 
+    it("renders the document manifest editor in the build workspace", async () => {
+      pdfCorpusApi.build.mockResolvedValue({ ...reviewBuild, manifest: { title: "Lecture" } });
+      const wrapper = await mountBuilder("?workspace=build&build=build-1", true);
+      const editor = wrapper.findComponent(DocumentManifestEditor);
+      expect(editor.exists()).toBe(true);
+      expect(editor.props("manifest")).toEqual({ title: "Lecture" });
+      wrapper.unmount();
+    });
+
     it.each([
       ["build", "CorpusBuildWorkspace"],
       ["review", "CorpusReviewWorkspace"],
@@ -307,8 +322,10 @@ describe("PdfCorpusBuilder characterization", () => {
       saveTextFromFocus: (text: string, resolve: boolean) => Promise<void>;
     };
 
+    const queueReadsBeforeSave = corpusReviewReads.queuePage.mock.calls.length;
     await exposed.saveTextFromFocus("Edited immediately", false);
 
+    expect(corpusReviewReads.queuePage).toHaveBeenCalledTimes(queueReadsBeforeSave);
     expect(exposed.selectedRecord.text).toBe("Edited immediately");
     expect(exposed.selectedRecord.record_revision).toBe(2);
     await new Promise((resolve) => setTimeout(resolve, 0));

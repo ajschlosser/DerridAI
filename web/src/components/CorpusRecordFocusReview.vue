@@ -512,18 +512,19 @@ watch(
 
         <div class="focus-inspector-body">
           <section
-            v-if="tab === 'metadata'"
+            v-show="tab === 'metadata'"
             id="focus-panel-metadata"
             class="focus-panel focus-metadata-panel"
             role="tabpanel"
             aria-labelledby="focus-tab-metadata"
           >
             <CorpusMetadataResolutionPanel
+              :build-id="buildId"
               :schema="schema"
               :record="record"
               :region-types="regionTypes"
               :discourse-roles="discourseRoles"
-              :busy="busy"
+              :busy="busy || locked"
               :batch-saving="batchSaving"
               :saving-field="savingField"
               :saved-field="savedField"
@@ -546,7 +547,7 @@ watch(
             />
           </section>
 
-          <template v-else-if="tab === 'evidence'">
+          <template v-if="tab === 'evidence'">
             <section
               v-if="guidanceMatches.length"
               class="focus-guidance"

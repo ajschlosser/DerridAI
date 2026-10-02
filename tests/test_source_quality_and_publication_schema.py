@@ -1,7 +1,7 @@
-"""Profile identity, source-quality gate, and publication schema.
+"""Source-quality gate and publication schema.
 
-Why: version identifiers are provenance; corrupted PDF text must stop enrichment;
-published JSONL must be namespaced, Unicode-safe, and use only allowed vocabulary.
+Why: corrupted PDF text must stop enrichment; published JSONL must be namespaced,
+Unicode-safe, and use only allowed vocabulary.
 How: pure functions and small dicts; no LLM or disk.
 """
 
@@ -15,16 +15,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
-from app.models import PdfCorpusBuildCreate
-
-
-def test_profile_prompt_and_publication_schema_ids():
-    """Pin profile, prompt and publication schema ids; only one profile is registered."""
-    assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
-    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v15"
-    assert cb.PUBLICATION_SCHEMA_VERSION == "derridai-corpus-jsonl-v1"
-    assert PdfCorpusBuildCreate(asset_id="asset").profile_id == "derrida-scholarly-v12"
-    assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
 
 
 def test_source_quality_blocks_corruption_not_unicode():

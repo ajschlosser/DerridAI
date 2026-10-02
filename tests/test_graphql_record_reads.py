@@ -151,6 +151,16 @@ query Q($build_id: String!, $offset: Int!, $limit: Int!) {
 """
 
 
+def test_queue_read_does_not_compute_unused_facets(build, monkeypatch):
+    _, build_id = build
+    def fail(*args):
+        raise AssertionError("Queue reads must not scan metadata facets")
+    monkeypatch.setattr(corpus_queries, "observed_metadata_values", fail)
+    data = gql(REVIEW_QUEUE_QUERY, {"build_id": build_id, "offset": 0, "limit": 5}).json()
+    assert "errors" not in data
+    assert len(data["data"]["corpus_build"]["review_queue"]["items"]) == 5
+
+
 def test_review_queue_matches_rest_counts_and_ordering(build):
     repo, build_id = build
     data = gql(REVIEW_QUEUE_QUERY, {"build_id": build_id, "offset": 0, "limit": 50}).json()
@@ -394,6 +404,19 @@ def test_metadata_facets_matches_rest_observed_values(build):
     assert data["data"]["corpus_build"]["metadata_facets"] == rest["metadata_values"]
 
 
+def test_metadata_facets_exclude_source_text_and_operational_fields(build):
+    repo, build_id = build
+    records = repo.load_records(build_id)
+    records[0]["prosody"] = "questioning"
+    records[0]["metadata_stage_status"] = ["running"]
+    repo.save_records(build_id, records)
+    data = gql(METADATA_FACETS_QUERY, {"build_id": build_id, "fields": []}).json()
+    assert "errors" not in data, data
+    facets = data["data"]["corpus_build"]["metadata_facets"]
+    assert facets["prosody"] == ["questioning"]
+    assert not {"text", "source_extracted_text", "record_id", "source_document_id", "metadata_stage_status"} & facets.keys()
+
+
 def test_metadata_facets_can_be_narrowed_to_specific_fields(build):
     repo, build_id = build
     data = gql(METADATA_FACETS_QUERY, {"build_id": build_id, "fields": ["speaker"]}).json()
@@ -409,6 +432,11 @@ def test_second_reviewer_never_sees_a_sealed_first_answer_through_record_or_rest
         "GET", f"/api/pdf/corpus-builds/{build_id}/records", cookie="reviewer-cookie", params={"limit": 50},
     )
     assert "Sealed First Answer" not in rest_as_second.text
+    facets_as_second = gql(
+        METADATA_FACETS_QUERY, {"build_id": build_id, "fields": None}, cookie="reviewer-cookie",
+    )
+    assert "errors" not in facets_as_second.json()
+    assert "Sealed First Answer" not in facets_as_second.text
 
     # The first reviewer is not owed an independent answer, so nothing is hidden from them.
     as_first = gql(RECORD_QUERY, {"build_id": build_id, "record_id": "r4"}, cookie="admin-cookie")
@@ -491,3 +519,71 @@ def test_vector_store_hides_hidden_and_response_cache_collections_from_researche
     cache_data = gql(cache_query, cookie="researcher-cookie").json()
     assert cache_data["data"] is None
     assert "not found" in cache_data["errors"][0]["message"].casefold()
+
+
+def test_resume_route_passes_only_explicit_execution_overrides(build, monkeypatch):
+    _, build_id = build
+    submitted = []
+    def resume(target, payload, *, resolve_provider):
+        submitted.append((target, payload, resolve_provider))
+        return {"build_id": target, "status": "queued"}
+    monkeypatch.setattr(corpus_routes.pdf_corpus_builds, "resume", resume)
+    response = _call("POST", f"/api/pdf/corpus-builds/{build_id}/resume", json={
+        "model": "replacement", "stage_limits": {"discourse_num_predict": 1234},
+    })
+    assert response.status_code == 200
+    assert submitted[0][1] == {"model": "replacement", "stage_limits": {"discourse_num_predict": 1234}}
+    assert submitted[0][2] is corpus_routes._resolve_pdf_corpus_provider
+    forbidden = _call("POST", f"/api/pdf/corpus-builds/{build_id}/resume", json={
+        "topology_policy": {"mode": "semantic"},
+    })
+    assert forbidden.status_code == 422
+    assert len(submitted) == 1
+
+
+def test_metadata_cache_lookup_never_deserializes_the_corpus(build, monkeypatch):
+    repo, build_id = build
+    def no_scan(*args, **kwargs):
+        pytest.fail("A field cache lookup must use the indexed Record read")
+    monkeypatch.setattr(repo, "load_records", no_scan)
+    monkeypatch.setattr(corpus_routes, "adjudication_suggestions", lambda **kwargs: {})
+    response = _call("GET", f"/api/pdf/corpus-builds/{build_id}/records/r1/metadata-cache", params={"field": "speaker"})
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("first_transport", ["rest", "graphql"])
+def test_queue_selection_is_reused_across_transports(build, monkeypatch, first_transport):
+    from app import corpus_review_queue as queue_module
+    repo, build_id = build
+
+    def read(transport, offset):
+        if transport == "rest":
+            response = _call("GET", f"/api/pdf/corpus-builds/{build_id}/records", params={"offset": offset, "limit": 1})
+            assert response.status_code == 200
+            return response.json()
+        data = gql(REVIEW_QUEUE_QUERY, {"build_id": build_id, "offset": offset, "limit": 1}).json()
+        assert "errors" not in data, data
+        return data["data"]["corpus_build"]["review_queue"]
+
+    first = read(first_transport, 0)
+    with monkeypatch.context() as patch:
+        patch.setattr(queue_module, "_select_indices", lambda *_: pytest.fail("warm transport rescanned the corpus"))
+        second = read("graphql" if first_transport == "rest" else "rest", 1)
+        assert second["items"][0]["record_id"] == "r2"
+        assert second["queue_counts"] == first["queue_counts"]
+    changed = repo.get_record(build_id, "r3")
+    changed.update(review_disposition="accepted", accepted=True)
+    repo.update_record(build_id, changed)
+    assert read("graphql", 0)["queue_counts"]["accepted"] == 2
+
+
+def test_query_local_mutable_records_do_not_enter_snapshot_cache(build):
+    repo, build_id = build
+    access = AccessContext(username="root", role="admin", user_id=1)
+    records = repo.load_records(build_id)  # caller-owned mutable list, not repository snapshot
+    filters = corpus_queries.QueueFilter(disposition="accepted")
+    first = corpus_queries.review_queue(access, records, build_id, filters=filters, offset=0, limit=10)
+    assert first["total"] == 1
+    records[1]["review_disposition"] = "accepted"
+    second = corpus_queries.review_queue(access, records, build_id, filters=filters, offset=0, limit=10)
+    assert second["total"] == 2

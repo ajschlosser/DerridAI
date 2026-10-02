@@ -13,6 +13,7 @@ import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
+import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import CorpusSetupDocumentMetadata from "./corpus-builder/CorpusSetupDocumentMetadata.vue";
 import CorpusInitializationDialog from "./CorpusInitializationDialog.vue";
 import CorpusBuildReadiness from "./CorpusBuildReadiness.vue";
@@ -195,7 +196,8 @@ const reviewRecords = useCorpusReviewRecords({
   recordQuery,
   selectedRecordId,
   selectedRecord,
-  hasActiveDraft: () => editingText.value || metadataEditorDirty.value,
+  hasActiveDraft: () =>
+    editingText.value || metadataEditorDirty.value || advancedMetadataDirty.value,
   activateRecord,
   onSelectionCleared: () => {
     sourceBlocks.value = [];
@@ -213,10 +215,11 @@ const {
   reviewHydrated,
   hydratedTopologyCount,
   loadingRecordId,
+  recordError,
   refreshRecords,
   applyRecord: applyRecordToQueue,
 } = reviewRecords;
-function selectRecord(target: ReviewTarget) {
+async function selectRecord(target: ReviewTarget) {
   return reviewRecords.selectRecord(target);
 }
 // Optimistic edits replace selectedRecord; keep the cached copy in step so returning to this Record
@@ -646,7 +649,6 @@ const {
   metadataRerunFamily,
   metadataObservedValues,
   metadataKnownValues,
-  rememberMetadataValues,
   saveMetadata,
   toggleEvidenceBlock,
   setEvidenceBlocks,
@@ -1264,6 +1266,7 @@ const {
   pageSize,
   refreshRecords,
   selectRecord,
+  setFilters: setReviewFilters,
 });
 const nextQueueRecordId = computed(() => {
   const index = selectedRecordIndex.value;
@@ -1499,6 +1502,8 @@ const {
   recordTotal,
   reviewQueue,
   recordQuery,
+  recordOffset,
+  getSelectionVersion: reviewRecords.getSelectionVersion,
   selectedReviewIds,
   justProcessedRecordId,
   bulkActionFeedback,
@@ -1828,7 +1833,10 @@ function offerFirstSourceProblem(rows: CorpusQueueRow[]) {
 }
 
 async function refreshBlocks() {
+  const buildId = selectedBuildId.value;
+  const assetId = selectedAssetId.value;
   const record = selectedRecord.value;
+  const recordId = record?.record_id;
   const ids = [
     ...(record?.source_block_ids || []),
     ...(record?.source_unit_ids || []),
@@ -1842,13 +1850,13 @@ async function refreshBlocks() {
     sourceBlocks.value = [];
     return;
   }
-  const result = await corpusBuilderApi.blocks(
-    selectedAssetId.value,
-    0,
-    Math.min(1000, ids.length),
-    ids,
-  );
-  sourceBlocks.value = result.items;
+  const result = await corpusBuilderApi.blocks(assetId, 0, Math.min(1000, ids.length), ids);
+  if (
+    selectedBuildId.value === buildId &&
+    selectedAssetId.value === assetId &&
+    selectedRecord.value?.record_id === recordId
+  )
+    sourceBlocks.value = result.items;
 }
 async function ensureReviewHydrated(preferredId = "") {
   if (!selectedBuildId.value || !currentBuild.value || awaitingManifestReview.value) return;
@@ -1857,6 +1865,13 @@ async function ensureReviewHydrated(preferredId = "") {
   );
   if (expected < 1) return;
   await nextTick();
+  if (recordsLoading.value) return;
+  if (
+    reviewHydrated.value &&
+    expected <= hydratedTopologyCount.value &&
+    (!preferredId || preferredId === selectedRecordId.value)
+  )
+    return;
   // Background topology hydration must reconcile in place. A reset clears the selected
   // Record cache and pagination, which makes live enrichment look like a page refresh.
   await refreshRecords(false, preferredId);
@@ -1917,7 +1932,7 @@ async function selectRecordById(recordId: string) {
 /** Show a full Record in the review workspace (the queue resolves rows to Records first). */
 function activateRecord(record: CorpusRecord) {
   const viewport = captureReviewViewport();
-  const sameRecord = selectedRecordId.value === record.record_id;
+  const sameRecord = selectedRecord.value?.record_id === record.record_id;
   const preserveActiveDraft = sameRecord && editingText.value;
   if (!sameRecord) metadataEditorDirty.value = false;
   selectedRecordId.value = record.record_id;
@@ -1936,51 +1951,37 @@ function activateRecord(record: CorpusRecord) {
     editingText.value = Boolean(saved && saved !== String(record.text || ""));
   }
   resolveSourceOnTextSave.value = Boolean(record.source_quality_issues?.length);
-  void loadAdjudicationSuggestions(record);
   const fallback = JSON.stringify(recordMetadata(record), null, 2);
-  try {
-    metadataDraft.value =
-      localStorage.getItem(metadataDraftKey(selectedBuildId.value, record.record_id)) || fallback;
-  } catch {
-    metadataDraft.value = fallback;
+  if (!sameRecord || !advancedMetadataDirty.value) {
+    try {
+      metadataDraft.value =
+        localStorage.getItem(metadataDraftKey(selectedBuildId.value, record.record_id)) || fallback;
+    } catch {
+      metadataDraft.value = fallback;
+    }
+    advancedMetadataDirty.value = metadataDraft.value !== fallback;
   }
 
-  async function loadAdjudicationSuggestions(record: CorpusRecord) {
-    const fields = (currentBuild.value?.schema?.fields || []).map((field) => field.name);
-    const results = await Promise.all(
-      fields.map(async (field) => {
-        try {
-          return [
-            field,
-            await corpusBuilderApi.metadataCache(
-              currentBuild.value?.build_id || "",
-              record.record_id,
-              field,
-            ),
-          ] as const;
-        } catch {
-          return null;
-        }
-      }),
+  if (!sameRecord)
+    void refreshBlocks().catch((exc: unknown) =>
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error"),
     );
-    for (const item of results) {
-      if (!item) continue;
-      const values = item?.[1]?.suggestions?.prior_values;
-      if (!Array.isArray(values)) continue;
-      for (const value of values) {
-        if (typeof value === "string" && value.trim()) rememberMetadataValues(item[0], value);
-      }
-    }
-  }
-  void refreshBlocks();
-  if (selectedBuildId.value && !sameRecord)
+  const buildId = selectedBuildId.value;
+  if (buildId && !sameRecord)
     void corpusBuilderApi
-      .markViewed(selectedBuildId.value, record.record_id)
+      .markViewed(buildId, record.record_id)
       .then((result) => {
-        if (selectedRecord.value?.record_id === record.record_id)
+        if (
+          selectedBuildId.value === buildId &&
+          selectedRecord.value?.record_id === record.record_id
+        )
           selectedRecord.value.activity = result.activity;
       })
-      .catch(() => undefined);
+      .catch(
+        (exc: unknown) =>
+          selectedBuildId.value === buildId &&
+          setMessage(exc instanceof Error ? exc.message : String(exc), "error"),
+      );
   void restoreReviewViewport(viewport, { record: !sameRecord });
 }
 function toggleReviewSelection(recordId: string, checked: boolean) {
@@ -2097,7 +2098,7 @@ async function saveManifest(changes: Record<string, unknown>) {
   }
 }
 
-function startNewBuildSetup() {
+async function startNewBuildSetup() {
   stopPolling();
   selectedBuildId.value = "";
   currentBuild.value = null;
@@ -2140,7 +2141,7 @@ function reviewShortcut(event: KeyboardEvent) {
   else if (command === "redo") void redoReview();
   else if (command === "next") void focusQueueMove(1);
   else if (command === "previous") void focusQueueMove(-1);
-  else if (command === "focus") focusView.value = !focusView.value;
+  else if (command === "focus") void toggleReviewFocus();
   else if (command === "metadata" && !focusView.value) {
     if (reviewWorkspaceMode.value === "source") setReviewWorkspaceMode("record");
     focusFirstMetadataBlocker();
@@ -2170,13 +2171,55 @@ watch(selectedProviderId, (profileId) => {
     Math.min(16, Number(profile?.max_concurrent_requests || payload?.max_concurrent_requests || 1)),
   );
 });
-watch([reviewQueue, recordQuery], () => {
-  selectedRecordId.value = "";
-  selectedRecord.value = null;
-  metadataEditorDirty.value = false;
-  editingText.value = false;
-  void refreshRecords(true);
-});
+let settingReviewFilters = false;
+const advancedMetadataDirty = ref(false);
+function trackMetadataSave(request: Promise<unknown>) {
+  void request.catch((exc) =>
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error"),
+  );
+}
+async function saveAdvancedMetadata() {
+  const id = selectedRecordId.value;
+  error.value = "";
+  await saveMetadata();
+  await recordSaveQueue.waitFor(id);
+  if (selectedRecordId.value === id && !error.value) advancedMetadataDirty.value = false;
+}
+function changeReviewQueue(queue: ReviewQueue) {
+  reviewQueue.value = queue;
+}
+function toggleReviewFocus() {
+  if (focusView.value) focusView.value = false;
+  else openFocusView();
+}
+async function requestWorkspace(workspace: Parameters<typeof switchWorkspace>[0]) {
+  await switchWorkspace(workspace);
+}
+function setReviewFilters(queue: ReviewQueue, query: string) {
+  settingReviewFilters = true;
+  reviewQueue.value = queue;
+  recordQuery.value = query;
+  settingReviewFilters = false;
+}
+watch(
+  [reviewQueue, recordQuery],
+  () => {
+    if (settingReviewFilters) return;
+    if (editingText.value || metadataEditorDirty.value || advancedMetadataDirty.value) {
+      // Keep the current draft pinned when the reviewer narrows the queue.
+      recordOffset.value = 0;
+      void refreshRecords(false);
+      return;
+    }
+    selectedRecordId.value = "";
+    selectedRecord.value = null;
+    metadataEditorDirty.value = false;
+    editingText.value = false;
+    recordOffset.value = 0;
+    void refreshRecords(false);
+  },
+  { flush: "sync" },
+);
 watch([reviewRequested, reviewQueue], ([requested, queue], [wasRequested, wasQueue]) => {
   if (!hasRecordTopology.value || workspaceMode.value === "review") return;
   const explicitReviewNavigation =
@@ -2215,8 +2258,9 @@ watch(
     );
     if (!buildId || expected < 1) return;
     const visibleStage =
-      ["enriching", "review", "ready"].includes(String(stage || "")) ||
-      ["awaiting_review", "ready"].includes(String(status || ""));
+      ["constructing_records", "document_intelligence", "enriching", "review", "ready"].includes(
+        String(stage || ""),
+      ) || ["awaiting_review", "ready"].includes(String(status || ""));
     if (!visibleStage) return;
     if (!reviewHydrated.value || expected > hydratedTopologyCount.value) {
       await ensureReviewHydrated(selectedRecordId.value);
@@ -2408,7 +2452,7 @@ defineExpose({
       :workspace="workspaceMode"
       :steps="workflowSteps"
       :sticky="!showReviewWorkspace"
-      @workspace="switchWorkspace"
+      @workspace="requestWorkspace"
     >
       <template #actions>
         <CorpusBuildHistoryMenu
@@ -2790,7 +2834,8 @@ defineExpose({
       </template>
       <template #header>
         <CorpusReviewHeader
-          v-model:queue="reviewQueue"
+          :queue="reviewQueue"
+          @update:queue="changeReviewQueue"
           v-model:query="recordQuery"
           :accepted="Number(reviewQueueCounts.accepted ?? currentBuild?.accepted_count ?? 0)"
           :ready="readyCount"
@@ -2818,7 +2863,7 @@ defineExpose({
           :bulk-total-count="Number(currentBuild?.record_count || recordTotal)"
           :bulk-disabled="busy !== '' || reviewLocked"
           :disabled="busy !== ''"
-          @focus="openFocusView"
+          @focus="toggleReviewFocus"
           @workspace="setReviewWorkspaceMode"
           @accept-clean="acceptCleanRecords"
           @bulk-action="runBulkAction"
@@ -2888,6 +2933,8 @@ defineExpose({
           v-model:show-context="showRecordContext"
           v-model:resolve-source="resolveSourceOnTextSave"
           :record="selectedRecord"
+          :loading="Boolean(loadingRecordId)"
+          :load-error="recordError"
           :build-id="currentBuild?.build_id || ''"
           :visible="reviewWorkspaceMode === 'record'"
           :queue-collapsed="reviewQueueCollapsed"
@@ -2907,6 +2954,7 @@ defineExpose({
           @open-popout="openRecordPopout"
           @close-popout="recordPopout = null"
           @select-record="selectRecordById"
+          @retry="reviewRecords.retryRecord"
         />
       </template>
       <template #inspector>
@@ -2920,10 +2968,10 @@ defineExpose({
           @root-change="reviewInspectorEl = $event"
         >
           <section
-            v-if="
-              selectedRecord &&
-              (reviewWorkspaceMode === 'metadata' ||
-                (reviewWorkspaceMode === 'record' && reviewInspectorTab === 'metadata'))
+            v-if="selectedRecord"
+            v-show="
+              reviewWorkspaceMode === 'metadata' ||
+              (reviewWorkspaceMode === 'record' && reviewInspectorTab === 'metadata')
             "
             id="review-panel-metadata"
             class="review-inspector-panel"
@@ -2937,7 +2985,7 @@ defineExpose({
               :record="selectedRecord"
               :region-types="regionTypes"
               :discourse-roles="discourseRoles"
-              :busy="busy !== '' && busy !== 'metadata-field'"
+              :busy="reviewLocked || (busy !== '' && busy !== 'metadata-field')"
               :batch-saving="metadataSavingField === '__batch__'"
               :saving-field="metadataSavingField"
               :saved-field="metadataSavedField"
@@ -2945,19 +2993,25 @@ defineExpose({
               :known-values="metadataKnownValues"
               :blocking-fields="selectedMetadataBlockingFields"
               @complete="handleMetadataComplete"
-              @resolve="resolveMetadataField"
+              @resolve="(field, value) => trackMetadataSave(resolveMetadataField(field, value))"
               @no-value="resolveMetadataNoValue"
               @resolve-many="resolveMetadataSuggestions"
               @source="showMetadataSource"
-              @resolve-with-evidence="resolveMetadataWithSelectionEvidence"
-              @resolve-with-human-source="resolveMetadataWithHumanSource"
+              @resolve-with-evidence="
+                (field, value, text) =>
+                  trackMetadataSave(resolveMetadataWithSelectionEvidence(field, value, text))
+              "
+              @resolve-with-human-source="
+                (field, value, note) =>
+                  trackMetadataSave(resolveMetadataWithHumanSource(field, value, note))
+              "
               @browse-evidence="openEvidenceBrowser"
               @dirty="handleMetadataDirty"
             />
             <CorpusReviewAdvancedMetadata
               v-model:draft="metadataDraft"
               v-model:family="metadataRerunFamily"
-              :busy="busy !== ''"
+              :busy="reviewLocked || busy !== ''"
               :has-manifest="Boolean(currentBuild?.manifest)"
               :profiles="providerProfiles"
               :provider-id="llmActionProviderId || selectedProviderId"
@@ -2967,8 +3021,8 @@ defineExpose({
               @update:model-override="(value) => (llmActionModel = value)"
               @clear-cache="clearMetadataSuggestionCache"
               @edit-document-metadata="documentMetadataOpen = true"
-              @dirty="metadataEditorDirty = true"
-              @save="saveMetadata"
+              @dirty="advancedMetadataDirty = true"
+              @save="saveAdvancedMetadata"
               @rerun="rerunMetadata()"
               @requeue="requeueCurrentRecord"
               @enrich-again="
@@ -2979,7 +3033,7 @@ defineExpose({
             />
           </section>
           <CorpusReviewEvidencePanel
-            v-else-if="
+            v-if="
               selectedRecord &&
               reviewWorkspaceMode === 'record' &&
               reviewInspectorTab === 'evidence'
@@ -3026,7 +3080,8 @@ defineExpose({
           <CorpusReviewSourcePanel
             v-else-if="
               selectedRecord &&
-              (reviewWorkspaceMode === 'record' || reviewWorkspaceMode === 'source')
+              (reviewWorkspaceMode === 'source' ||
+                (reviewWorkspaceMode === 'record' && reviewInspectorTab === 'source'))
             "
             :record="selectedRecord"
             :workspace-mode="reviewWorkspaceMode"
@@ -3065,8 +3120,16 @@ defineExpose({
             @set-evidence="setEvidenceBlocks"
             @split="split"
           />
-          <div v-else class="inspector-empty">
-            {{ i18n.t("pdf_corpus.select_record") }}
+          <div v-if="!selectedRecord" class="inspector-empty" role="status">
+            {{
+              i18n.t(
+                loadingRecordId
+                  ? "pdf_corpus.record_loading"
+                  : recordError
+                    ? "pdf_corpus.record_load_failed"
+                    : "pdf_corpus.select_record",
+              )
+            }}
           </div>
         </CorpusReviewInspector>
       </template>
@@ -3391,7 +3454,7 @@ defineExpose({
         :active-requests="llmActionConcurrentLoad"
         :just-processed-record-id="justProcessedRecordId"
         :next-record-id="nextQueueRecordId"
-        @close="focusView = false"
+        @close="toggleReviewFocus"
         @history-back="focusHistoryMove(-1)"
         @history-forward="focusHistoryMove(1)"
         @previous-record="focusQueueMove(-1)"
@@ -3406,9 +3469,15 @@ defineExpose({
         @text-draft-change="textDraft = $event"
         @resolve-source-issues-change="resolveSourceOnTextSave = $event"
         @open-text-cleanup="textCleanupOpen = true"
-        @resolve-metadata="resolveMetadataField"
-        @resolve-metadata-with-evidence="resolveMetadataWithSelectionEvidence"
-        @resolve-metadata-with-human-source="resolveMetadataWithHumanSource"
+        @resolve-metadata="(field, value) => trackMetadataSave(resolveMetadataField(field, value))"
+        @resolve-metadata-with-evidence="
+          (field, value, text) =>
+            trackMetadataSave(resolveMetadataWithSelectionEvidence(field, value, text))
+        "
+        @resolve-metadata-with-human-source="
+          (field, value, note) =>
+            trackMetadataSave(resolveMetadataWithHumanSource(field, value, note))
+        "
         @browse-metadata-evidence="openEvidenceBrowser"
         @resolve-metadata-many="resolveMetadataSuggestions"
         @confirm-no-metadata-value="resolveMetadataNoValue"

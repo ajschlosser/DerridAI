@@ -59,7 +59,19 @@ const emit = defineEmits<{
   complete: [];
 }>();
 const i18n = useI18nStore();
-
+const dirtyFields = new Set<string>();
+function fieldDirty(field: string, dirty: boolean) {
+  if (dirty) dirtyFields.add(field);
+  else dirtyFields.delete(field);
+  emit("dirty", dirtyFields.size > 0);
+}
+watch(
+  () => props.record.record_id,
+  () => {
+    dirtyFields.clear();
+    emit("dirty", false);
+  },
+);
 const MACHINE_VOCABULARY_LABELS = new Set(
   [
     "ADJ",
@@ -671,7 +683,7 @@ function displayValue(field: string) {
             }
           "
           @browse-evidence="(value) => emit('browseEvidence', field, value)"
-          @dirty="(value) => emit('dirty', value)"
+          @dirty="(value) => fieldDirty(field, value)"
         >
           <template #policy>
             <CorpusFieldPolicyBadges
@@ -733,7 +745,7 @@ function displayValue(field: string) {
               (value, note) => emit('resolveWithHumanSource', field, value, note)
             "
             @browse-evidence="(value) => emit('browseEvidence', field, value)"
-            @dirty="(value) => emit('dirty', value)"
+            @dirty="(value) => fieldDirty(field, value)"
           >
             <template #policy>
               <CorpusFieldPolicyBadges
@@ -780,7 +792,7 @@ function displayValue(field: string) {
               (value, note) => emit('resolveWithHumanSource', field, value, note)
             "
             @browse-evidence="(value) => emit('browseEvidence', field, value)"
-            @dirty="(value) => emit('dirty', value)"
+            @dirty="(value) => fieldDirty(field, value)"
           >
             <template #policy>
               <CorpusFieldPolicyBadges

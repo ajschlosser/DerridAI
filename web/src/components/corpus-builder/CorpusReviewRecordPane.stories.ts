@@ -36,3 +36,7 @@ type Story = StoryObj<typeof meta>;
 export const Reading: Story = {};
 export const Editing: Story = { args: { editing: true, textDraft: "Il n’y a pas de hors-texte." } };
 export const NothingSelected: Story = { args: { record: null } };
+export const Loading: Story = { args: { record: null, loading: true } };
+export const Failed: Story = { args: { record: null, loadError: "Network unavailable" } };
+export const Missing: Story = { args: { record: null, loadError: "not_found" } };
+export const Preparing: Story = { args: { locked: true } };

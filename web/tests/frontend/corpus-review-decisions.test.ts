@@ -30,7 +30,8 @@ function record(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
-function setup() {
+function setup(beforeDecision?: () => Promise<boolean>) {
+  const getSelectionVersion = vi.fn(() => 0);
   const currentBuild = ref<any | null>({
     build_id: "b1",
     review_queue_counts: {},
@@ -58,6 +59,7 @@ function setup() {
     inspectorTop: 0,
   }));
   const restoreReviewViewport = vi.fn(async () => undefined);
+  const recordOffset = ref(0);
   const queued: Array<{
     request: (rebase: boolean) => Promise<unknown>;
     onFailure?: () => void | Promise<void>;
@@ -112,6 +114,9 @@ function setup() {
     syncBuildInRail,
     selectRecord,
     advanceFrom,
+    recordOffset,
+    beforeDecision,
+    getSelectionVersion,
     refreshBuild,
     refreshRecords,
     focusFirstMetadataBlocker,
@@ -121,6 +126,8 @@ function setup() {
   });
 
   return {
+    restoreReviewViewport,
+    getSelectionVersion,
     decisions,
     currentBuild,
     selectedRecord,
@@ -250,6 +257,96 @@ describe("Corpus Builder review decisions", () => {
     await state.queued[0].request(false);
 
     expect(state.advanceFrom).toHaveBeenCalledWith("r1");
+  });
+
+  it("advances Reject & next and does not steal a later manual selection", async () => {
+    const state = setup();
+    const second = record({ record_id: "r2" });
+    const third = record({ record_id: "r3" });
+    state.queueRows.value = [state.selectedRecord.value, second, third];
+    state.recordTotal.value = 3;
+    await state.decisions.rejectRecord();
+    expect(state.queueRows.value[0].review_disposition).toBe("rejected");
+    expect(state.selectedRecordId.value).toBe("r2");
+    state.selectedRecordId.value = "r3";
+    state.selectedRecord.value = third;
+    corpusBuilderApi.reviewDecision.mockResolvedValue({
+      blocked: false,
+      record: record({ rejected: true, review_disposition: "rejected" }),
+      build: { build_id: "b1" },
+      next_record: second,
+    });
+    state.restoreReviewViewport.mockClear();
+    await state.queued[0].request(false);
+    expect(state.selectedRecordId.value).toBe("r3");
+    expect(state.restoreReviewViewport).not.toHaveBeenCalled();
+    expect(corpusBuilderApi.reviewDecision).toHaveBeenCalledWith(
+      "b1",
+      "r1",
+      "rejected",
+      "",
+      1,
+      "all",
+    );
+  });
+
+  it("does not advance after manual navigation returns to the same Record ID", async () => {
+    const state = setup();
+    state.queueRows.value.push(record({ record_id: "r2" }));
+    state.recordTotal.value = 2;
+    await state.decisions.rejectRecord();
+    state.selectedRecordId.value = "r1";
+    state.selectedRecord.value = state.queueRows.value[0];
+    state.getSelectionVersion.mockReturnValue(2);
+    state.selectRecord.mockClear();
+    corpusBuilderApi.reviewDecision.mockResolvedValue({
+      blocked: false,
+      record: record({ rejected: true, review_disposition: "rejected" }),
+      build: { build_id: "b1" },
+      next_record: record({ record_id: "r2" }),
+    });
+    await state.queued[0].request(false);
+    expect(state.selectedRecordId.value).toBe("r1");
+    expect(state.selectRecord).not.toHaveBeenCalled();
+  });
+
+  it("rolls back only the failed decision without replacing a later selection", async () => {
+    const state = setup();
+    state.queueRows.value.push(record({ record_id: "r2" }), record({ record_id: "r3" }));
+    state.recordTotal.value = 3;
+    await state.decisions.attemptAccept();
+    state.selectedRecordId.value = "r3";
+    state.selectedRecord.value = state.queueRows.value[2];
+    state.queueRows.value[1] = record({ record_id: "r2", record_revision: 9 });
+    await state.queued[0].onFailure?.();
+    expect(state.selectedRecordId.value).toBe("r3");
+    expect(state.queueRows.value[1].record_revision).toBe(9);
+    expect(state.queueRows.value[0].review_disposition).toBe("pending");
+  });
+
+  it("does not decide or advance while draft navigation is declined", async () => {
+    const state = setup(vi.fn().mockResolvedValue(false));
+    await state.decisions.rejectRecord();
+    expect(state.queued).toHaveLength(0);
+    expect(state.selectedRecordId.value).toBe("r1");
+    expect(state.selectedRecord.value?.review_disposition).toBe("pending");
+  });
+
+  it("uses filtered queue backfill at the page boundary instead of moving backward", async () => {
+    const state = setup();
+    state.queueRows.value = [record({ record_id: "r0" }), state.selectedRecord.value];
+    state.recordTotal.value = 3;
+    state.reviewQueue.value = "ready";
+    corpusBuilderApi.reviewDecision.mockResolvedValue({
+      blocked: false,
+      record: record({ rejected: true, review_disposition: "rejected" }),
+      build: { build_id: "b1" },
+      next_record: record({ record_id: "r2" }),
+    });
+    await state.decisions.rejectRecord();
+    expect(state.selectedRecordId.value).toBe("r1");
+    await state.queued[0].request(false);
+    expect(state.advanceFrom).toHaveBeenCalledWith("r1", 1);
   });
 
   it("closes Focus View when the accepted record was the last one in the queue", async () => {

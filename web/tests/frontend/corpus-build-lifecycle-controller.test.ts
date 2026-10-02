@@ -165,6 +165,21 @@ describe("Corpus Builder lifecycle controller", () => {
     vi.useRealTimers();
   });
 
+  it.each([
+    ["failed", "failed"],
+    ["interrupted", "failed"],
+    ["cancelled", "cancelled"],
+    ["blocked", "blocked"],
+    ["awaiting_manifest_review", "blocked"],
+  ])("preserves the authoritative %s operation status", (status, projected) => {
+    const state = setup();
+    state.currentBuild.value = { ...build(), status };
+    state.controller.registerBuildOperation(state.currentBuild.value);
+    expect(runtime.registerExternalJob).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: projected }),
+    );
+  });
+
   it("selects the requested build while refreshing the build rail", async () => {
     corpusBuilderApi.listBuilds.mockResolvedValue({
       items: [build("build-1"), build("build-2")],

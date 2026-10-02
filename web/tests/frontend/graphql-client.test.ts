@@ -86,6 +86,23 @@ describe("graphql client", () => {
     const error = await pending.catch((cause) => cause);
     expect(isAbortError(error)).toBe(true);
   });
+
+  it("cancels only one consumer of a shared read", async () => {
+    let respond!: (value: Response) => void;
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => (respond = resolve)));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+    const first = execute(CelfModelDocument, {}, { signal: controller.signal });
+    const second = execute(CelfModelDocument, {});
+    const cancelled = first.catch((error: unknown) => error);
+    controller.abort();
+    expect(isAbortError(await cancelled)).toBe(true);
+    respond(
+      new Response(JSON.stringify({ data: { celf_model: { specification_version: "1.0" } } })),
+    );
+    expect((await second).celf_model.specification_version).toBe("1.0");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("useQuery", () => {

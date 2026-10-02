@@ -14,7 +14,10 @@ from __future__ import annotations
 import json
 import sys
 import types
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
@@ -440,3 +443,199 @@ def test_blocked_segmentation_resume_marks_retry_and_is_idempotent_while_active(
     assert duplicate["status"] == "queued"
     assert duplicate["retrying_segmentation"] is True
     assert len(submissions) == 1  # no second background worker
+
+
+def test_restart_resume_preserves_build_contract_and_reviewed_records(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    _install_asset(repo, _blocks(3))
+    build = _build(repo, blocks=3)
+    saved_request = {
+        "provider": "ollama", "model": "original",
+        "topology_policy": {"mode": "source_units", "source_units_per_record": 2},
+        "run_guidance": {"speaker": {"instructions": "Do not flatten attribution."}},
+        "stage_limits": {"discourse_num_predict": 1234, "segmentation_num_predict": 4321},
+        "document_intelligence_profile": "none",
+    }
+    build.update(status="running", stage="enriching", request=saved_request)
+    repo.save_build(build)
+    manifest = {"title": "Reviewed title", "document_author": "Reviewer"}
+    repo.save_checkpoint(build["build_id"], "manifest", manifest)
+    repo.save_checkpoint(build["build_id"], "boundaries", [{"after_block_id": "p001-b001"}])
+    repo.save_records(build["build_id"], [{
+        "record_id": "reviewed", "record_revision": 7, "text": "Not a replacement.",
+        "accepted": True, "metadata_complete": True, "speaker": "Human reviewer",
+    }])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    assert repo.get_build(build["build_id"])["status"] == "interrupted"
+    submissions = []
+    monkeypatch.setattr(manager._executor, "submit", lambda *args: submissions.append(args))
+    resumed = manager.resume(build["build_id"], {
+        "model": "replacement", "api_key": "runtime-only", "stage_limits": {"discourse_num_predict": 2468},
+    })
+    assert resumed["request"]["topology_policy"] == saved_request["topology_policy"]
+    assert resumed["request"]["run_guidance"] == saved_request["run_guidance"]
+    assert resumed["request"]["stage_limits"] == {"discourse_num_predict": 2468, "segmentation_num_predict": 4321}
+    assert resumed["request"]["document_intelligence_profile"] == "none"
+    assert resumed["request"]["model"] == "replacement"
+    assert "api_key" not in resumed["request"]
+    assert submissions[0][2]["api_key"] == "runtime-only"
+    assert submissions[0][3] is True
+    assert repo.load_checkpoint(build["build_id"], "manifest") == manifest
+    assert repo.get_record(build["build_id"], "reviewed")["record_revision"] == 7
+
+
+def test_concurrent_resume_submits_one_worker(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(status="interrupted", resumable=True)
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    submissions = []
+    monkeypatch.setattr(manager._executor, "submit", lambda *args: submissions.append(args))
+    with ThreadPoolExecutor(max_workers=8) as callers:
+        results = list(callers.map(lambda _: manager.resume(build["build_id"], {}), range(20)))
+    assert all(result["status"] == "queued" for result in results)
+    assert len(submissions) == 1
+
+
+def test_resume_submission_failure_is_visible_and_recoverable(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(status="interrupted", resumable=True)
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    def fail(*args):
+        raise RuntimeError("Executor unavailable")
+    monkeypatch.setattr(manager._executor, "submit", fail)
+    with pytest.raises(RuntimeError, match="Executor unavailable"):
+        manager.resume(build["build_id"], {})
+    failed = repo.get_build(build["build_id"])
+    assert failed["status"] == "failed"
+    assert failed["resumable"] is True
+    assert "Executor unavailable" in failed["error"]
+
+
+def test_restart_retires_orphaned_metadata_operation_without_replay(tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(
+        status="running", stage="metadata_enrichment_rerun",
+        metadata_operation={"state": "running", "operation_id": "op-1"},
+    )
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    interrupted = repo.get_build(build["build_id"])
+    assert interrupted["interrupted_stage"] == "metadata_enrichment_rerun"
+    assert interrupted["metadata_operation"]["state"] == "failed"
+    assert interrupted["metadata_operation"]["operation_id"] == "op-1"
+    assert "restart" in interrupted["metadata_operation"]["error"]
+    assert not manager._runtime_requests
+    manager._executor.shutdown(wait=True)
+
+
+def test_resume_executes_saved_topology_and_preserves_reviewed_text(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    blocks = _blocks(3)
+    _install_asset(repo, blocks)
+    build = _build(repo, blocks=3)
+    request = {
+        "provider": "ollama", "model": "test", "memory_prefill": False,
+        "document_intelligence_profile": "none",
+        "topology_policy": {"mode": "source_units", "source_units_per_record": 1},
+    }
+    build["request"] = request
+    repo.save_build(build)
+    first = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(cb, "chat_complete", lambda **kwargs: "{}")
+    def stop_after_topology(*args, **kwargs):
+        raise RuntimeError("Simulated interrupted enrichment")
+    monkeypatch.setattr(first, "_schedule_build_enrichment", stop_after_topology)
+    monkeypatch.setattr(cb.SourceEmbeddingProjection, "sync", lambda *args, **kwargs: {"status": "ready"})
+    first._run(build["build_id"], request)
+    records = repo.load_records(build["build_id"])
+    assert len(records) == 3
+    records[0].update(text="Human-reviewed text, not the extraction.", record_revision=7, accepted=True)
+    repo.save_records(build["build_id"], records)
+    saved = repo.get_build(build["build_id"])
+    saved.update(status="running", stage="enriching")
+    repo.save_build(saved)
+    first._executor.shutdown(wait=True)
+    restarted = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    submitted = []
+    submit = restarted._executor.submit
+    def capture(*args, **kwargs):
+        future = submit(*args, **kwargs)
+        submitted.append(future)
+        return future
+    monkeypatch.setattr(restarted._executor, "submit", capture)
+    restarted.resume(build["build_id"], {})
+    submitted[0].result(timeout=30)
+    final = repo.get_build(build["build_id"])
+    assert final["status"] == "awaiting_review", final.get("error")
+    assert repo.get_record(build["build_id"], records[0]["record_id"])["text"] == records[0]["text"]
+    assert repo.get_record(build["build_id"], records[0]["record_id"])["record_revision"] == 7
+    assert final["request"]["topology_policy"] == request["topology_policy"]
+    restarted._executor.shutdown(wait=True)
+
+
+def test_topology_is_durable_before_optional_embedding_work(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    _install_asset(repo, _blocks(3))
+    build = _build(repo, blocks=3)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    observed = []
+    def inspect_projection(*args, **kwargs):
+        stored = repo.load_records(build["build_id"])
+        observed.append(len(stored))
+        assert repo.get_build(build["build_id"])["record_count"] == len(stored)
+        return {"status": "ready"}
+    monkeypatch.setattr(cb.SourceEmbeddingProjection, "sync", inspect_projection)
+    monkeypatch.setattr(cb, "chat_complete", lambda **kwargs: "{}")
+    manager._run(build["build_id"], {
+        "provider": "ollama", "model": "test", "memory_prefill": False,
+        "document_intelligence_profile": "none",
+        "topology_policy": {"mode": "source_units", "source_units_per_record": 1},
+    })
+    assert observed == [3]
+    manager._executor.shutdown(wait=True)
+
+
+def test_record_context_enforces_budget_and_retains_exact_locator(tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    repo.save_records(build["build_id"], [
+        {"record_id": "before", "record_revision": 2, "text": "before-text", "source_document_id": "doc"},
+        {"record_id": "focus", "text": "focus"},
+        {"record_id": "after", "record_revision": 3, "text": "after-text", "source_document_id": "doc"},
+    ])
+    context = repo.record_context(build["build_id"], "focus", max_chars=8)
+    assert context["truncated"] is True
+    assert context["before"][0]["text"] == "text"
+    assert context["after"][0]["text"] == "afte"
+    assert sum(len(item["text"]) for item in context["before"] + context["after"]) == 8
+    previous = context["before"][0]
+    assert previous["record_revision"] == 2
+    assert previous["record_character_start"] == 7
+    assert previous["record_character_end"] == 11
+    assert previous["text_truncated"] is True
+    assert not repo.record_context(build["build_id"], "focus", max_chars=0)["before"]
+
+
+def test_sparse_resume_sizing_is_validated_against_saved_settings(monkeypatch, tmp_path):
+    from app.models import PdfCorpusBuildResume
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(status="interrupted", resumable=True, request={
+        "record_sizing": {
+            "preferred_record_chars": 5000, "record_length_tolerance": 200,
+            "long_record_chars": 7000, "absolute_record_chars": 9000,
+        },
+    })
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(manager._executor, "submit", lambda *args: None)
+    overrides = PdfCorpusBuildResume(record_sizing={"preferred_record_chars": 6000})
+    resumed = manager.resume(build["build_id"], overrides.model_dump(exclude_unset=True, exclude_none=True))
+    assert resumed["request"]["record_sizing"]["preferred_record_chars"] == 6000
+    assert resumed["request"]["record_sizing"]["long_record_chars"] == 7000
+    manager._executor.shutdown(wait=True)

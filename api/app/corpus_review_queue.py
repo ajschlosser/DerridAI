@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import copy
 import json
+from collections import OrderedDict
 from dataclasses import dataclass
+from threading import RLock
 from typing import Any
 
 from .corpus_metadata import ALLOWED_METADATA_FIELDS
@@ -19,6 +21,7 @@ from .corpus_review_state import (
     _queue_counts,
 )
 from .corpus_reviewer_helpers import _present_for_reviewer
+from .field_assertions import _NON_ASSERTION_FIELDS, _operational_key
 from .metadata_values import is_placeholder
 from .reviewer_context import current_reviewer
 
@@ -61,25 +64,50 @@ def _disposition(record: dict[str, Any]) -> str:
     return "pending"
 
 
-def select_queue(
-    records: list[dict[str, Any]],
-    filters: QueueFilter,
-    *,
-    offset: int,
-    limit: int,
-) -> QueueSelection:
-    """Apply the same filter/window/presentation the review page has always used.
+class QueueSelectionCache:
+    """Bounded derived selections for immutable repository snapshots only.
 
-    ``items`` are deep-copied before ``_decorate_review_state``/``_present_for_reviewer``
-    so the shared, request-scoped Record cache (``load_build_records``) is never mutated
-    by presentation. Call within the caller's ``reviewer_scope`` so blind review sees the
-    right identity.
+    Retain the snapshot to prevent object-id reuse. Never cache presented Records:
+    each page still applies the active reviewer's visibility rules to fresh copies.
+    Callers with mutable lists must use select_queue without this cache.
     """
+
+    def __init__(self, capacity: int = 4, record_budget: int = 40_000) -> None:
+        self._capacity = capacity
+        self._record_budget = record_budget
+        self._entries: OrderedDict[
+            tuple[int, QueueFilter, str],
+            tuple[list[dict[str, Any]], list[int], dict[str, int]],
+        ] = OrderedDict()
+        self._lock = RLock()
+
+    def selection(
+        self, records: list[dict[str, Any]], filters: QueueFilter,
+    ) -> tuple[list[int], dict[str, int]]:
+        key = (id(records), filters, str(current_reviewer.get() or ""))
+        with self._lock:
+            hit = self._entries.get(key)
+            if hit is not None:
+                self._entries.move_to_end(key)
+                return hit[1], hit[2]
+        indices, counts = _select_indices(records, filters)
+        if len(records) <= self._record_budget:
+            with self._lock:
+                self._entries[key] = (records, indices, counts)
+                while self._entries and (
+                    len(self._entries) > self._capacity
+                    or sum(len(entry[0]) for entry in self._entries.values()) > self._record_budget
+                ):
+                    self._entries.popitem(last=False)
+        return indices, counts
+
+
+def _select_indices(
+    records: list[dict[str, Any]], filters: QueueFilter,
+) -> tuple[list[int], dict[str, int]]:
     q = filters.query.casefold().strip()
-    items: list[dict[str, Any]] = []
+    indices: list[int] = []
     queue_records: list[dict[str, Any]] = []
-    total = 0
-    topology_count = len(records)
     for topology_index, record in enumerate(records):
         if filters.needs_review is not None and bool(record.get("needs_review")) is not filters.needs_review:
             continue
@@ -95,15 +123,37 @@ def select_queue(
         queue_records.append(record)
         if filters.review_queue and not _matches_review_queue(record, filters.review_queue):
             continue
-        if total >= offset and len(items) < limit:
-            presented = copy.deepcopy(record)
-            presented["topology_index"] = topology_index
-            presented["topology_count"] = topology_count
-            _decorate_review_state(presented)
-            _present_for_reviewer(presented)
-            items.append(presented)
-        total += 1
-    return QueueSelection(items=items, total=total, queue_counts=_queue_counts(queue_records))
+        indices.append(topology_index)
+    return indices, _queue_counts(queue_records)
+
+
+def select_queue(
+    records: list[dict[str, Any]],
+    filters: QueueFilter,
+    *,
+    offset: int,
+    limit: int,
+    cache: QueueSelectionCache | None = None,
+) -> QueueSelection:
+    """Select and present a page without mutating stored Records.
+
+    Only immutable repository snapshots may opt into selection reuse. Counts
+    retain the pre-queue-filter scope; topology positions retain corpus order.
+    Presentation runs within the caller's reviewer_scope on every request.
+    """
+    indices, counts = (
+        cache.selection(records, filters) if cache is not None else _select_indices(records, filters)
+    )
+    start = max(0, offset)
+    items: list[dict[str, Any]] = []
+    for index in indices[start:start + max(0, limit)]:
+        presented = copy.deepcopy(records[index])
+        presented["topology_index"] = index
+        presented["topology_count"] = len(records)
+        _decorate_review_state(presented)
+        _present_for_reviewer(presented)
+        items.append(presented)
+    return QueueSelection(items=items, total=len(indices), queue_counts=dict(counts))
 
 
 # Facets inspect every Record, so they are memoized per (snapshot, reviewer). The snapshot is the
@@ -138,6 +188,10 @@ def _compute_observed_metadata_values(records: list[dict[str, Any]]) -> dict[str
         record = copy.deepcopy(raw)
         _present_for_reviewer(record)
         for field, value in record.items():
+            if field in _NON_ASSERTION_FIELDS or (
+                _operational_key(field) and field not in (record.get("metadata_field_status") or {})
+            ):
+                continue
             if field not in metadata_values and not isinstance(value, (str, list, tuple)):
                 continue
             metadata_values.setdefault(field, set())
@@ -155,7 +209,7 @@ def _compute_observed_metadata_values(records: list[dict[str, Any]]) -> dict[str
         field_status = record.get("metadata_field_status")
         if isinstance(field_status, dict):
             for field, status in field_status.items():
-                if not isinstance(status, dict):
+                if field in _NON_ASSERTION_FIELDS or not isinstance(status, dict):
                     continue
                 for candidate_key in ("proposed_value", "llm_value"):
                     candidate = status.get(candidate_key)
