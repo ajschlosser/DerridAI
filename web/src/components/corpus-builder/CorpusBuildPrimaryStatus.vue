@@ -17,6 +17,7 @@ const props = defineProps<{
   canResume: boolean;
   hasRecordTopology: boolean;
   readyCount?: number;
+  enrichingCount?: number;
   preparingCount?: number;
   attentionCount?: number;
   busy?: boolean;
@@ -40,6 +41,7 @@ const operation = computed(() => status.value.detail);
 const settled = computed(() => isAutomatedProcessingDone(props.build));
 const recordCount = computed(() => Number(props.build.record_count || 0));
 const readyCount = computed(() => Math.max(0, Number(props.readyCount || 0)));
+const enrichingCount = computed(() => Math.max(0, Number(props.enrichingCount || 0)));
 const preparingCount = computed(() => Math.max(0, Number(props.preparingCount || 0)));
 const attentionCount = computed(() => Math.max(0, Number(props.attentionCount || 0)));
 const reviewAvailableWhileRunning = computed(
@@ -163,6 +165,10 @@ function confirmDelete() {
       </div>
       <div data-flow-state="enriching">
         <dt>{{ i18n.t("pdf_corpus.record_state.enriching", "Enriching") }}</dt>
+        <dd>{{ enrichingCount.toLocaleString() }}</dd>
+      </div>
+      <div data-flow-state="preparing">
+        <dt>{{ i18n.t("pdf_corpus.record_state.preparing", "Preparing") }}</dt>
         <dd>{{ preparingCount.toLocaleString() }}</dd>
       </div>
       <div data-flow-state="attention">
@@ -317,7 +323,7 @@ function confirmDelete() {
 }
 .primary-status-handoff {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-2);
   margin: 0;
 }
@@ -383,7 +389,12 @@ function confirmDelete() {
   color: var(--text-primary);
   font-weight: var(--fw-bold);
 }
-@media (max-width: 720px) {
+@media (max-width: 900px) {
+  .primary-status-handoff {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
   .primary-status-handoff {
     grid-template-columns: 1fr;
   }
