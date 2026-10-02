@@ -138,3 +138,34 @@ def test_different_keys_have_independent_capacity() -> None:
     finally:
         left.release()
         right.release()
+
+
+def test_waiter_observes_configured_limit_changed_while_waiting() -> None:
+    coordinator = ConcurrencyCoordinator()
+    coordinator.set_limit("ollama_runtime", "global", 2)
+    first = coordinator.acquire("ollama_runtime", "global", 99)
+    second = coordinator.acquire("ollama_runtime", "global", 99)
+    acquired = threading.Event()
+    release = threading.Event()
+
+    def waiter() -> None:
+        with coordinator.acquire("ollama_runtime", "global", 99, poll_seconds=0.01):
+            acquired.set()
+            release.wait(timeout=2)
+
+    thread = threading.Thread(target=waiter)
+    thread.start()
+    for _ in range(100):
+        if coordinator.snapshot("ollama_runtime", "global", limit=99).waiting == 1:
+            break
+        threading.Event().wait(0.01)
+    else:
+        pytest.fail("waiter did not reach the shared capacity queue")
+
+    coordinator.set_limit("ollama_runtime", "global", 1)
+    second.release()
+    assert not acquired.wait(timeout=0.05)
+    first.release()
+    assert acquired.wait(timeout=1)
+    release.set()
+    thread.join(timeout=2)
