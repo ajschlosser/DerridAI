@@ -56,7 +56,11 @@ const titleKeys: Record<CorpusSetupSectionId, [string, string]> = {
         :aria-label="i18n.t('pdf_corpus.build_configuration')"
       >
         <span>{{ completedRequired }} / {{ requiredSections.length }} {{ i18n.t("pdf_corpus.complete") }}</span>
-        <progress :max="requiredSections.length" :value="completedRequired"></progress>
+        <progress
+          :aria-label="i18n.t('pdf_corpus.build_configuration')"
+          :max="requiredSections.length"
+          :value="completedRequired"
+        ></progress>
       </div>
     </header>
     <p v-if="props.existingBuildName" class="corpus-setup-next-build" role="note">
