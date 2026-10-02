@@ -191,16 +191,19 @@ Task branch for Step 1: `task/router-single-source-of-truth`
 
 Notes for the next session:
 
-- Step 1 is implemented but **uncommitted** in the worktree as of 2026-10-01; commit, open the PR against
-  `master`, and tick 1.7 after CI.
-- Validation run so far: `vue-tsc` (app and tests), full Vitest (230 files, 1389 tests), the new Playwright
-  spec, `tests/test_release_consistency.py`, Prettier on touched files. Not run: Storybook build, Docker,
-  the full e2e suite.
-- Known behavior change: the Back/Forward tooltip now names the previous _route title_ instead of the old
-  runtime view label, and Back now follows real browser history (including query-only changes such as
-  a table-state URL), where the runtime used to keep its own 50-entry snapshot list.
-- Remaining navigation debt after Step 1: `state.view` is still written by the runtime and follows the router
-  only for paths in `pathViewMap`; native-only routes (e.g. `/languages`) leave it unchanged. The runtime's
-  own `popstate` listener still exists alongside the router's.
-- Local setup: the worktree's `web/node_modules` came from a fresh `npm ci` (the main checkout's copy was
-  stale and lacked `@tanstack/vue-query`).
+- Step 2 is complete on branch `task/migrate-toast-modal-callers` (worktree `../DerridAI-toasts`, four commits after
+  `origin/master` at e84d5e0c). It is **not pushed and has no PR**: push it, open the PR against `master`, and
+  tick Step 2 in the list above after CI.
+- Validation run: `vue-tsc` (app and tests), full Vitest (233 files, 1402 tests), production and Storybook builds,
+  the locale/release Python tests, the legacy e2e suite, and axe (WCAG 2.2 AA tags, light and dark) on the
+  Notifications story. Not run: Docker, the full e2e suite.
+- Open question: 15 `legacy-dom-baseline` snapshots (research-\*, backup/restore) were already stale on master
+  (the "Automatic sizing" Settings control). Decide whether to regenerate them, delete the ones whose surface is
+  already Vue-native, or leave them until Step 3 retires each dialog family. Check whether CI runs
+  `test:e2e:legacy` as a blocking job first.
+- Next: Step 3 (make `home`, `rag` and `corpus-builder` Vue-native, port `domain/*Dialogs.ts` family by family),
+  retiring each family's snapshots with it.
+- Navigation debt from Step 1 is unchanged: `state.view` still follows the router only for paths in
+  `pathViewMap`, and the runtime's own `popstate` listener still exists alongside the router's.
+- `npm run format:repo:check` reports unrelated files in this environment (generated `sdk/dist`, `.pytest_cache`).
+- Never run Prettier over `web/tests/e2e/**/*-snapshots`; it fails on them and rewrites some.
