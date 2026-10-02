@@ -30,7 +30,7 @@ The Build workspace should answer, in order:
 ## Design notes
 
 - Progressive enrichment is not a blocking monolithic job. The UI should expose useful Records as they become reviewable.
-- The record queue already distinguishes backend `preparing` rows as **Enriching** with a spinner. Build-level language should use the same mental model.
+- Backend `preparing` means a Record is waiting for enrichment. Only Records named in `metadata_active_tasks` are actively processing. The queue therefore keeps queued Records as **Preparing** with the original refresh icon and uses the animated **Enriching** treatment only for active Records.
 - Queue counts are preferable to inferred percentages for the handoff: `ready`, `preparing`, and `issues` directly describe what the reviewer can act on.
 - Activity history is evidence, not the current state. It belongs below the primary operational surface.
 - Diagnostics are valuable for troubleshooting but should not compete with the next task during a healthy build.
@@ -46,12 +46,14 @@ The Build workspace should answer, in order:
 - [x] Collapse activity and diagnostics into secondary Run details.
 - [x] Extend unit/Storybook/E2E coverage.
 - [ ] Run and fix all frontend quality gates.
+- [x] Correct processing semantics: only active task Records are Enriching; queued Records remain Preparing with the original icon.
 - [ ] Record final validation and remaining follow-up work here.
 
 ## Implementation notes
 
-- The primary status now receives queue-derived `ready`, `preparing`, and `issues` counts from the same lifecycle state already used by Review.
-- During enrichment/retry stages, those counts replace the less useful single "running tasks" fact with three record-level handoff states.
+- The primary status now receives queue-derived `ready`, queued `preparing`, active `enriching`, and `issues` counts from the same lifecycle/build state already used by Review.
+- Active enrichment is counted by unique Record IDs in `metadata_active_tasks`; queued Preparing is the review `preparing` count minus those active Records.
+- During enrichment/retry stages, those counts replace the less useful single "running tasks" fact with four record-level handoff states.
 - Review moves ahead of Pause/Cancel in action order and becomes primary when either clean-ready or attention-required Records are available.
 - The existing diagnostics root is reused as the **Run details** disclosure. `CorpusBuildActivity` is mounted inside it through an activity slot, so event history is not rendered until the user asks for operational detail.
 - Warnings, failures, manifest gates, retry state, and segmentation intervention remain outside Run details because they can require immediate action.
