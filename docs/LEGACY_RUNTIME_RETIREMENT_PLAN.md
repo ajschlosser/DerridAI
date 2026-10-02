@@ -199,7 +199,8 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] `recordDialogs`: record history browser (`RecordHistoryDialog.vue` + `composables/recordHistoryDialog.ts`; the component owns the version cursor, the forwarder supplies live `versions`, and `restore` / `restoreOriginal` / `clear` callbacks that do the restore, confirmation, refresh and toasts; `recordHistoryDialogHtml` deleted. Disabled-reason hints are `title`s now, not `decorateDisabledControls`)
   - [x] `recordDialogs`: record editor and store record editor (one `RecordFieldEditorDialog.vue` + `composables/recordFieldEditorDialog.ts`; the pure field-kind/parse rules live in `domain/recordEditorFields.ts`; the forwarders supply `save`, which diffs against the record and applies or PATCHes. `fieldEditor`/`parseEditor`, `recordDialogMarkup.ts` and baseline `record-edit-sheet` retired. The on/off label of a boolean now uses `ui.on`/`ui.off` instead of hard-coded English "Enabled/Disabled")
   - [x] `recordDialogs`: upsert queue (`UpsertQueueDialog.vue` + `composables/upsertQueueDialog.ts`; the forwarder supplies plain-data `items()` (re-read after a removal), `remove` and `sync`. The change list is a disclosure button with `aria-expanded`; unchecked state now survives removing a record). `recordDialogs` is now fully ported
-  - [ ] `jobDialogs` (`domain/jobDialogs.ts`, 1,113 lines; next)
+  - [x] `jobDialogs`: record preview (`RecordPreviewDialog.vue` + `composables/recordPreviewDialog.ts`; the forwarder formats labels and values, the component only renders; the "copy" button keeps `data-copy-row-key` for the page-level handler; `recordPreviewMarkup.ts` deleted)
+  - [ ] remaining `jobDialogs` (job details, job results, LLM tool result, task launcher, PDF draft record, touch-up), each with its markup helper in `domain/job*Markup.ts`
 - [ ] Step 4 state slices and deletion
 
 Notes for the next session:

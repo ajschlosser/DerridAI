@@ -5,7 +5,7 @@ import { esc, icon } from "./html";
 import { realtime } from "../realtime";
 import { followResource } from "../realtime/follow";
 import { llmReviewDialogHtml } from "./jobReviewMarkup";
-import { recordPreviewDialogHtml } from "./recordPreviewMarkup";
+import { openRecordPreviewDialog } from "../composables/recordPreviewDialog";
 import { createJobDialogCopy } from "./jobDialogCopy";
 import {
   llmTaskLauncherHtml,
@@ -763,27 +763,40 @@ export function createJobDialogs(deps: Deps) {
       "review_reason",
     ].filter((field) => record[field] !== undefined);
 
-    const dialog = document.createElement("dialog");
-    dialog.className = "record-preview-dialog";
     const stale = Boolean(result?.fingerprint && recordFingerprint(record) !== result.fingerprint);
     const updates = Array.isArray(record.updates) ? record.updates.slice(-8).reverse() : [];
-
-    dialog.innerHTML = recordPreviewDialogHtml(
-      { record, local, result, stale, important, proposedFields, proposal, updates },
-      { tr, trf, label, pages, fullCitation, jsonPretty, formatTimestamp, reviewKey },
-    );
-
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    dialog.querySelector("#previewOpenRecord").onclick = () => {
-      close();
-      navigateTo("record", { fileId: local.file.id, index: local.index });
-    };
+    openRecordPreviewDialog({
+      recordId: record.record_id || trf("dashboard.record_n", { n: local.index + 1 }),
+      subtitle: `${record.work || local.file.name} · ${local.file.name}`,
+      stale,
+      summary: {
+        work: record.work || "—",
+        pages: String(pages(record)),
+        citation: fullCitation(record) || "—",
+        proposalCount: proposedFields.length,
+        needsReview: Boolean(record.needs_review),
+      },
+      fields: important.map((field) => ({
+        key: field,
+        label: String(label(field)),
+        value: String(jsonPretty(record[field])),
+        proposed: proposedFields.includes(field),
+      })),
+      text: String(record.text || ""),
+      proposals: proposedFields.map((field) => ({
+        label: String(label(field)),
+        current: String(jsonPretty(record[field])),
+        proposed: String(jsonPretty(proposal.changes[field])),
+        rationale: String(proposal.rationale?.[field] || ""),
+      })),
+      history: updates.map((update: Any) => ({
+        when: String(formatTimestamp(update.timestamp)),
+        field: String(label(update.field_name || "field")),
+        source: `${update.source || tr("jobs.preview.manual")}${update.initiated_by ? ` · ${update.initiated_by}` : ""}`,
+      })),
+      copyKey: String(reviewKey(local.file, local.index)),
+      openFull: () => navigateTo("record", { fileId: local.file.id, index: local.index }),
+    });
   }
   function openLlmToolResult(job: Any) {
     const result = job.result;
