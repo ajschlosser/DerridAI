@@ -153,18 +153,31 @@ test.describe("Corpus Builder composed workflow", () => {
     await expectWcag2AA(page, ".topology-policy");
   });
 
-  test("setup exposes the full editable manifest before Build", async ({ page }) => {
+  test("setup keeps document defaults concise and opens a dedicated editor before Build", async ({
+    page,
+  }) => {
     await page.goto(story("corpus-builder-setup-early-manifest--editable-before-build"));
-    const editor = page.locator(".manifest-editor");
-    await expect(editor.getByRole("button", { name: /reanalyze/i })).toHaveCount(0);
-    // Form control values are not part of an element's textContent. Assert the
-    // pre-Build manifest value on the input itself instead of duplicating that
-    // assertion with toContainText().
-    await expect(editor.locator('input.control[type="text"]').first()).toHaveValue(
+
+    const summary = page.locator(".setup-document-metadata");
+    await expect(summary).toContainText("Of Grammatology");
+    await expect(summary).toContainText("Jacques Derrida");
+    await expect(summary.locator(".manifest-editor")).toHaveCount(0);
+    await expectNoHorizontalOverflow(summary);
+    await expectWcag2AA(page, ".setup-document-metadata");
+
+    await summary.getByRole("button", { name: /review document metadata/i }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: /review document metadata/i })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /reanalyze/i })).toHaveCount(0);
+    await expect(dialog.locator('input.control[type="text"]').first()).toHaveValue(
       "Of Grammatology",
     );
-    await expectNoHorizontalOverflow(editor);
-    await expectWcag2AA(page, ".manifest-editor");
+    // Document structure has its own Setup step; the metadata editor should not
+    // duplicate those controls in this pre-Build workflow.
+    await expect(dialog.getByText("Document structure", { exact: true })).toHaveCount(0);
+    await expectNoHorizontalOverflow(dialog);
+    await expectWcag2AA(page, '[role="dialog"]');
   });
 
   test("build primary status is the one progress surface, with stages and next actions", async ({
