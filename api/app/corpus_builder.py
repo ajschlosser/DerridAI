@@ -2914,27 +2914,56 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                                 "provider_capacity_wait_ms",
                                 int(round(permit.waited_seconds * 1000)),
                             )
-                        return self._with_transport_retry(
-                            build_id,
-                            chat_complete,
-                            provider=provider,
-                            model=model,
-                            base_url=base_url,
-                            api_key=api_key,
-                            prompt=context.prompt,
-                            options=generation,
-                            json_mode=True,
-                            json_schema=schema,
-                            schema_name=schema_name,
-                            max_tokens=context.max_tokens,
-                            cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
-                            timeout_seconds=float(_stage_timeouts(active_request).get(timeout_key, 240)),
-                            on_delta=(
-                                (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
-                                if build_id
-                                else None
-                            ),
-                        )
+
+                        def perform_request() -> str:
+                            return self._with_transport_retry(
+                                build_id,
+                                chat_complete,
+                                provider=provider,
+                                model=model,
+                                base_url=base_url,
+                                api_key=api_key,
+                                prompt=context.prompt,
+                                options=generation,
+                                json_mode=True,
+                                json_schema=schema,
+                                schema_name=schema_name,
+                                max_tokens=context.max_tokens,
+                                cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
+                                timeout_seconds=float(_stage_timeouts(active_request).get(timeout_key, 240)),
+                                on_delta=(
+                                    (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
+                                    if build_id
+                                    else None
+                                ),
+                            )
+
+                        if provider == "ollama":
+                            ollama_limit = capacity_coordinator.configured_limit(
+                                "ollama_runtime",
+                                "global",
+                                fallback=max(1, int(settings.rag_ollama_max_concurrent)),
+                            )
+
+                            def waiting_ollama(snapshot: Any) -> None:
+                                if build_id:
+                                    self._increment_metric(build_id, "ollama_capacity_waits")
+
+                            with capacity_coordinator.acquire(
+                                "ollama_runtime",
+                                "global",
+                                ollama_limit,
+                                cancelled=cancelled if build_id else None,
+                                on_wait=waiting_ollama,
+                            ) as ollama_permit:
+                                if build_id and ollama_permit.waited_seconds > 0:
+                                    self._increment_metric(
+                                        build_id,
+                                        "ollama_capacity_wait_ms",
+                                        int(round(ollama_permit.waited_seconds * 1000)),
+                                    )
+                                return perform_request()
+                        return perform_request()
                 finally:
                     self._note_llm_call_end(build_id, call_token)
 
