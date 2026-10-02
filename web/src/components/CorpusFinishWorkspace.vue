@@ -67,6 +67,7 @@ const groupedValidationIssues = computed<ValidationIssueGroup[]>(() => {
   return order.map((recordId) => ({ recordId, issues: byRecord.get(recordId) || [] }));
 });
 const showAllIssueGroups = ref(false);
+const showReadinessDetails = ref(false);
 const shownIssueGroups = computed(() =>
   showAllIssueGroups.value
     ? groupedValidationIssues.value
@@ -335,253 +336,263 @@ function fixBlocker(code?: string) {
       </ul>
     </section>
 
-    <details v-if="!publication && !noPublishable" class="readiness-details">
-      <summary>
-        <b>{{ i18n.t("pdf_corpus.publish.readiness_title") }}</b>
-        <span class="readiness-details-affordance">
-          {{ i18n.t("pdf_corpus.review_details") }}
-          <AppIcon name="chevron-down" aria-hidden="true" />
-        </span>
-      </summary>
-      <div class="publication-readiness-list">
-        <section
-          class="readiness-row"
-          :data-state="Number(readiness.records_pending || 0) > 0 ? 'attention' : 'complete'"
-        >
-          <div class="readiness-row-copy">
-            <span
-              class="readiness-state"
-              :data-tone="Number(readiness.records_pending || 0) > 0 ? 'attention' : 'ok'"
-            >
-              <AppIcon :name="stateIcon(Number(readiness.records_pending || 0) > 0)" />
-              {{
-                Number(readiness.records_pending || 0) > 0
-                  ? i18n.t("pdf_corpus.attention_required")
-                  : i18n.t("pdf_corpus.complete")
-              }}
-            </span>
-            <h3>{{ i18n.t("pdf_corpus.record_review") }}</h3>
-            <p>
-              {{ readiness.records_reviewed || 0 }} / {{ readiness.records_total || 0 }}
-              {{ i18n.t("pdf_corpus.reviewed") }}
-            </p>
+    <button
+      v-if="!publication && !noPublishable"
+      type="button"
+      class="readiness-details-toggle"
+      :aria-expanded="showReadinessDetails"
+      aria-controls="publication-readiness-details"
+      @click="showReadinessDetails = !showReadinessDetails"
+    >
+      <b>{{ i18n.t("pdf_corpus.publish.readiness_title") }}</b>
+      <span class="readiness-details-affordance">
+        {{ i18n.t("pdf_corpus.review_details") }}
+        <AppIcon name="chevron-down" aria-hidden="true" />
+      </span>
+    </button>
+    <div
+      v-if="!publication && !noPublishable"
+      v-show="showReadinessDetails"
+      id="publication-readiness-details"
+      class="publication-readiness-list"
+    >
+      <section
+        class="readiness-row"
+        :data-state="Number(readiness.records_pending || 0) > 0 ? 'attention' : 'complete'"
+      >
+        <div class="readiness-row-copy">
+          <span
+            class="readiness-state"
+            :data-tone="Number(readiness.records_pending || 0) > 0 ? 'attention' : 'ok'"
+          >
+            <AppIcon :name="stateIcon(Number(readiness.records_pending || 0) > 0)" />
+            {{
+              Number(readiness.records_pending || 0) > 0
+                ? i18n.t("pdf_corpus.attention_required")
+                : i18n.t("pdf_corpus.complete")
+            }}
+          </span>
+          <h3>{{ i18n.t("pdf_corpus.record_review") }}</h3>
+          <p>
+            {{ readiness.records_reviewed || 0 }} / {{ readiness.records_total || 0 }}
+            {{ i18n.t("pdf_corpus.reviewed") }}
+          </p>
+        </div>
+        <dl>
+          <div>
+            <dt>{{ i18n.t("pdf_corpus.accepted_label") }}</dt>
+            <dd>{{ readiness.records_accepted || 0 }}</dd>
           </div>
-          <dl>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.accepted_label") }}</dt>
-              <dd>{{ readiness.records_accepted || 0 }}</dd>
-            </div>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.rejected") }}</dt>
-              <dd>{{ readiness.records_rejected || 0 }}</dd>
-            </div>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.pending") }}</dt>
-              <dd>{{ readiness.records_pending || 0 }}</dd>
-            </div>
-          </dl>
-          <div class="readiness-actions">
-            <UiButton
-              v-if="Number(readiness.records_pending || 0) > 0"
-              @click="emit('reviewRecords')"
-            >
-              {{ i18n.t("pdf_corpus.continue_review") }}
-            </UiButton>
-            <UiButton
-              v-if="Number(readiness.records_rejected || 0) > 0"
-              @click="emit('reviewRejected')"
-            >
-              {{ i18n.t("pdf_corpus.review_rejected_records") }}
-            </UiButton>
+          <div>
+            <dt>{{ i18n.t("pdf_corpus.rejected") }}</dt>
+            <dd>{{ readiness.records_rejected || 0 }}</dd>
           </div>
-        </section>
+          <div>
+            <dt>{{ i18n.t("pdf_corpus.pending") }}</dt>
+            <dd>{{ readiness.records_pending || 0 }}</dd>
+          </div>
+        </dl>
+        <div class="readiness-actions">
+          <UiButton
+            v-if="Number(readiness.records_pending || 0) > 0"
+            @click="emit('reviewRecords')"
+          >
+            {{ i18n.t("pdf_corpus.continue_review") }}
+          </UiButton>
+          <UiButton
+            v-if="Number(readiness.records_rejected || 0) > 0"
+            @click="emit('reviewRejected')"
+          >
+            {{ i18n.t("pdf_corpus.review_rejected_records") }}
+          </UiButton>
+        </div>
+      </section>
 
-        <section
-          class="readiness-row"
-          :data-state="Number(summary.fields_unresolved || 0) > 0 ? 'attention' : 'complete'"
-        >
-          <div class="readiness-row-copy">
-            <span
-              class="readiness-state"
-              :data-tone="Number(summary.fields_unresolved || 0) > 0 ? 'attention' : 'ok'"
-            >
-              <AppIcon :name="stateIcon(Number(summary.fields_unresolved || 0) > 0)" />
-              {{
-                Number(summary.fields_unresolved || 0) > 0
-                  ? i18n.t("pdf_corpus.attention_required")
-                  : i18n.t("pdf_corpus.complete")
-              }}
-            </span>
-            <h3>{{ i18n.t("pdf_corpus.required_metadata") }}</h3>
-            <p v-if="Number(summary.fields_unresolved || 0) > 0">
-              {{
-                i18n.tf("pdf_corpus.finish_metadata_summary", {
-                  records: Number(summary.records_incomplete || 0),
-                  fields: Number(summary.fields_unresolved || 0),
-                })
-              }}
-            </p>
-            <p v-else>{{ i18n.t("pdf_corpus.finish_metadata_complete") }}</p>
+      <section
+        class="readiness-row"
+        :data-state="Number(summary.fields_unresolved || 0) > 0 ? 'attention' : 'complete'"
+      >
+        <div class="readiness-row-copy">
+          <span
+            class="readiness-state"
+            :data-tone="Number(summary.fields_unresolved || 0) > 0 ? 'attention' : 'ok'"
+          >
+            <AppIcon :name="stateIcon(Number(summary.fields_unresolved || 0) > 0)" />
+            {{
+              Number(summary.fields_unresolved || 0) > 0
+                ? i18n.t("pdf_corpus.attention_required")
+                : i18n.t("pdf_corpus.complete")
+            }}
+          </span>
+          <h3>{{ i18n.t("pdf_corpus.required_metadata") }}</h3>
+          <p v-if="Number(summary.fields_unresolved || 0) > 0">
+            {{
+              i18n.tf("pdf_corpus.finish_metadata_summary", {
+                records: Number(summary.records_incomplete || 0),
+                fields: Number(summary.fields_unresolved || 0),
+              })
+            }}
+          </p>
+          <p v-else>{{ i18n.t("pdf_corpus.finish_metadata_complete") }}</p>
+        </div>
+        <dl>
+          <div>
+            <dt>{{ i18n.t("pdf_corpus.auto_retry") }}</dt>
+            <dd>{{ summary.auto_retry_fields || 0 }}</dd>
           </div>
-          <dl>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.auto_retry") }}</dt>
-              <dd>{{ summary.auto_retry_fields || 0 }}</dd>
-            </div>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.human_review") }}</dt>
-              <dd>{{ summary.human_review_fields || 0 }}</dd>
-            </div>
-          </dl>
-          <div class="readiness-actions">
-            <UiButton
-              v-if="Number(summary.fields_unresolved || 0) > 0"
-              @click="emit('reviewMetadata')"
-            >
-              {{ i18n.t("pdf_corpus.open_metadata_queue") }}
-            </UiButton>
-            <UiButton
-              v-if="
-                Number(summary.fields_unresolved || 0) > 0 &&
-                Number(summary.auto_retry_fields || 0) > 0
-              "
-              :disabled="busy"
-              @click="emit('retryMetadata')"
-            >
-              {{
-                i18n.tf("pdf_corpus.retry_metadata_fields", {
-                  count: Number(summary.auto_retry_fields || 0),
-                })
-              }}
-            </UiButton>
-            <UiButton :disabled="busy" @click="emit('rerunEnrichment')">
-              {{ i18n.t("pdf_corpus.metadata_enrichment_again") }}
-            </UiButton>
+          <div>
+            <dt>{{ i18n.t("pdf_corpus.human_review") }}</dt>
+            <dd>{{ summary.human_review_fields || 0 }}</dd>
           </div>
-        </section>
+        </dl>
+        <div class="readiness-actions">
+          <UiButton
+            v-if="Number(summary.fields_unresolved || 0) > 0"
+            @click="emit('reviewMetadata')"
+          >
+            {{ i18n.t("pdf_corpus.open_metadata_queue") }}
+          </UiButton>
+          <UiButton
+            v-if="
+              Number(summary.fields_unresolved || 0) > 0 &&
+              Number(summary.auto_retry_fields || 0) > 0
+            "
+            :disabled="busy"
+            @click="emit('retryMetadata')"
+          >
+            {{
+              i18n.tf("pdf_corpus.retry_metadata_fields", {
+                count: Number(summary.auto_retry_fields || 0),
+              })
+            }}
+          </UiButton>
+          <UiButton :disabled="busy" @click="emit('rerunEnrichment')">
+            {{ i18n.t("pdf_corpus.metadata_enrichment_again") }}
+          </UiButton>
+        </div>
+      </section>
 
-        <section class="readiness-row" :data-state="validation.valid ? 'complete' : 'attention'">
-          <div class="readiness-row-copy">
-            <span class="readiness-state" :data-tone="validation.valid ? 'ok' : 'attention'">
-              <AppIcon :name="stateIcon(!validation.valid)" />
+      <section class="readiness-row" :data-state="validation.valid ? 'complete' : 'attention'">
+        <div class="readiness-row-copy">
+          <span class="readiness-state" :data-tone="validation.valid ? 'ok' : 'attention'">
+            <AppIcon :name="stateIcon(!validation.valid)" />
+            {{
+              validation.valid
+                ? i18n.t("pdf_corpus.complete")
+                : i18n.t("pdf_corpus.attention_required")
+            }}
+          </span>
+          <h3>{{ i18n.t("pdf_corpus.final_validation") }}</h3>
+          <p>
+            {{
+              validation.valid
+                ? i18n.t("pdf_corpus.publication_ready_help")
+                : i18n.t("pdf_corpus.publication_waiting_help")
+            }}
+          </p>
+        </div>
+        <dl>
+          <div>
+            <dt>{{ i18n.t("pdf_corpus.source_fidelity") }}</dt>
+            <dd>
               {{
-                validation.valid
-                  ? i18n.t("pdf_corpus.complete")
-                  : i18n.t("pdf_corpus.attention_required")
+                validation.source_valid
+                  ? i18n.t("pdf_corpus.passed")
+                  : i18n.t("pdf_corpus.needs_attention")
               }}
-            </span>
-            <h3>{{ i18n.t("pdf_corpus.final_validation") }}</h3>
-            <p>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ i18n.t("pdf_corpus.metadata_validation") }}</dt>
+            <dd>
               {{
-                validation.valid
-                  ? i18n.t("pdf_corpus.publication_ready_help")
-                  : i18n.t("pdf_corpus.publication_waiting_help")
+                validation.metadata_valid
+                  ? i18n.t("pdf_corpus.passed")
+                  : i18n.t("pdf_corpus.needs_attention")
               }}
-            </p>
+            </dd>
           </div>
-          <dl>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.source_fidelity") }}</dt>
-              <dd>
-                {{
-                  validation.source_valid
-                    ? i18n.t("pdf_corpus.passed")
-                    : i18n.t("pdf_corpus.needs_attention")
-                }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.metadata_validation") }}</dt>
-              <dd>
-                {{
-                  validation.metadata_valid
-                    ? i18n.t("pdf_corpus.passed")
-                    : i18n.t("pdf_corpus.needs_attention")
-                }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.source_quality") }}</dt>
-              <dd>
-                {{
-                  Number(sourceQuality.blocking_page_count || 0) === 0
-                    ? i18n.t("pdf_corpus.passed")
-                    : i18n.tf("pdf_corpus.blocking_pages", {
-                        count: Number(sourceQuality.blocking_page_count || 0),
-                      })
-                }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.coverage") }}</dt>
-              <dd>{{ Math.round(Number(validation.coverage || 0) * 100) }}%</dd>
-            </div>
-          </dl>
-          <div class="readiness-actions">
-            <UiButton v-if="!validation.valid" @click="emit('reviewValidation')">
-              {{ i18n.t("pdf_corpus.review_validation_issues") }}
-            </UiButton>
-          </div>
-          <div v-if="groupedValidationIssues.length" class="validation-issue-summary">
-            <b>{{ validationIssueSummaryLabel }}</b>
-            <ul>
-              <li
-                v-for="group in shownIssueGroups"
-                :key="group.recordId || 'ungrouped'"
-                class="issue-group"
-              >
-                <div class="issue-group-head">
-                  <span class="issue-group-heading">
-                    <code v-if="group.recordId">{{ group.recordId }}</code>
-                    <span v-if="group.issues.length > 1" class="count-pill">{{
-                      group.issues.length
-                    }}</span>
-                  </span>
-                  <button
-                    v-if="group.recordId"
-                    type="button"
-                    class="btn small"
-                    :aria-label="
-                      group.issues.length > 1
-                        ? i18n.tf('pdf_corpus.fix_record_issues', {
-                            count: group.issues.length,
-                            record: group.recordId,
-                          })
-                        : i18n.tf('pdf_corpus.fix_issue_labelled', {
-                            reason: issueGroupLabel(group.issues[0]),
-                          })
-                    "
-                    @click="emit('fixIssue', group.issues[0])"
-                  >
-                    {{ i18n.t("pdf_corpus.fix_this_issue") }}
-                  </button>
-                </div>
-                <ul class="issue-group-reasons">
-                  <li v-for="(issue, index) in group.issues" :key="`${issue.code}-${index}`">
-                    {{ issueGroupLabel(issue) }}
-                  </li>
-                </ul>
-              </li>
-            </ul>
-            <button
-              v-if="groupedValidationIssues.length > 5"
-              type="button"
-              class="link-button"
-              :aria-expanded="showAllIssueGroups"
-              @click="showAllIssueGroups = !showAllIssueGroups"
-            >
+          <div>
+            <dt>{{ i18n.t("pdf_corpus.source_quality") }}</dt>
+            <dd>
               {{
-                showAllIssueGroups
-                  ? i18n.t("pdf_corpus.validation_show_fewer")
-                  : i18n.tf("pdf_corpus.validation_more_records", {
-                      count: groupedValidationIssues.length - 5,
+                Number(sourceQuality.blocking_page_count || 0) === 0
+                  ? i18n.t("pdf_corpus.passed")
+                  : i18n.tf("pdf_corpus.blocking_pages", {
+                      count: Number(sourceQuality.blocking_page_count || 0),
                     })
               }}
-            </button>
+            </dd>
           </div>
-        </section>
-      </div>
-    </details>
+          <div>
+            <dt>{{ i18n.t("pdf_corpus.coverage") }}</dt>
+            <dd>{{ Math.round(Number(validation.coverage || 0) * 100) }}%</dd>
+          </div>
+        </dl>
+        <div class="readiness-actions">
+          <UiButton v-if="!validation.valid" @click="emit('reviewValidation')">
+            {{ i18n.t("pdf_corpus.review_validation_issues") }}
+          </UiButton>
+        </div>
+        <div v-if="groupedValidationIssues.length" class="validation-issue-summary">
+          <b>{{ validationIssueSummaryLabel }}</b>
+          <ul>
+            <li
+              v-for="group in shownIssueGroups"
+              :key="group.recordId || 'ungrouped'"
+              class="issue-group"
+            >
+              <div class="issue-group-head">
+                <span class="issue-group-heading">
+                  <code v-if="group.recordId">{{ group.recordId }}</code>
+                  <span v-if="group.issues.length > 1" class="count-pill">{{
+                    group.issues.length
+                  }}</span>
+                </span>
+                <button
+                  v-if="group.recordId"
+                  type="button"
+                  class="btn small"
+                  :aria-label="
+                    group.issues.length > 1
+                      ? i18n.tf('pdf_corpus.fix_record_issues', {
+                          count: group.issues.length,
+                          record: group.recordId,
+                        })
+                      : i18n.tf('pdf_corpus.fix_issue_labelled', {
+                          reason: issueGroupLabel(group.issues[0]),
+                        })
+                  "
+                  @click="emit('fixIssue', group.issues[0])"
+                >
+                  {{ i18n.t("pdf_corpus.fix_this_issue") }}
+                </button>
+              </div>
+              <ul class="issue-group-reasons">
+                <li v-for="(issue, index) in group.issues" :key="`${issue.code}-${index}`">
+                  {{ issueGroupLabel(issue) }}
+                </li>
+              </ul>
+            </li>
+          </ul>
+          <button
+            v-if="groupedValidationIssues.length > 5"
+            type="button"
+            class="link-button"
+            :aria-expanded="showAllIssueGroups"
+            @click="showAllIssueGroups = !showAllIssueGroups"
+          >
+            {{
+              showAllIssueGroups
+                ? i18n.t("pdf_corpus.validation_show_fewer")
+                : i18n.tf("pdf_corpus.validation_more_records", {
+                    count: groupedValidationIssues.length - 5,
+                  })
+            }}
+          </button>
+        </div>
+      </section>
+    </div>
   </section>
 </template>
 
@@ -667,7 +678,7 @@ function fixBlocker(code?: string) {
 .no-publishable,
 .publication-snapshot,
 .publication-blockers,
-.readiness-details {
+.readiness-details-toggle {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   background: var(--surface-subtle);
@@ -794,21 +805,21 @@ function fixBlocker(code?: string) {
   font-weight: var(--fw-bold);
   line-height: 1;
 }
-.readiness-details {
-  overflow: hidden;
-  background: var(--surface-card);
-}
-.readiness-details > summary {
+.readiness-details-toggle {
+  width: 100%;
   display: flex;
   justify-content: space-between;
   gap: var(--space-4);
   align-items: center;
   padding: var(--space-3) var(--space-4);
+  color: var(--text-primary);
   cursor: pointer;
-  list-style: none;
+  font: inherit;
+  text-align: start;
 }
-.readiness-details > summary::-webkit-details-marker {
-  display: none;
+.readiness-details-toggle:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 2px;
 }
 .readiness-details-affordance {
   display: inline-flex;
@@ -823,12 +834,13 @@ function fixBlocker(code?: string) {
   height: 1rem;
   transition: transform 120ms ease;
 }
-.readiness-details[open] .readiness-details-affordance svg {
+.readiness-details-toggle[aria-expanded="true"] .readiness-details-affordance svg {
   transform: rotate(180deg);
 }
 .publication-readiness-list {
   display: grid;
-  border-top: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   overflow: hidden;
 }
 .readiness-row {
