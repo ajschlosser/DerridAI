@@ -436,9 +436,9 @@ A robust implementation derives this index from authoritative reviewed state, tr
 
 #### Retrieval within cELF
 
-Retrieval is a downstream access capability over cELF documentary state, not the organizing concept of the format. In the broad research sense, retrieval is the recovery of relevant documentary information for active use. In the narrower technical sense, retrieval is a computational search operation over an index, store, publication, or corpus using a defined query and retrieval method.
+Retrieval is a downstream access capability over cELF documentary state, not the organizing concept of the format. In cELF, **retrieval** refers specifically to computational search over an index, store, publication, or corpus using a defined query and retrieval method.
 
-Vector similarity search is one technical retrieval method. Lexical search, metadata filtering, hybrid retrieval, database queries, and other computational methods are also retrieval methods. Human selection and model-located source spans participate in the broader recovery of evidence even when they do not constitute a conventional search query. The specification uses **Evidence Acquisition** when it needs a mechanism-neutral name for all such paths into evidence. None of these access mechanisms changes the identity or semantics of the lexical Records being accessed.
+Vector similarity search, lexical search, metadata filtering, hybrid retrieval, database queries, fusion, and reranking are retrieval methods. Human selection, direct reference, long-context inspection, and model-located source spans can also bring documentary material into a research operation, but cELF does not redefine those activities as retrieval merely to place them under one umbrella. The specification uses **Evidence Acquisition** as the mechanism-neutral term for the broader set of paths by which documentary material becomes candidate evidence. None of these access mechanisms changes the identity or semantics of the lexical Records being accessed.
 
 An acquisition method MAY be semantic retrieval, lexical retrieval, hybrid retrieval, deterministic filtering, database query, human selection, direct reference, agentic search, model-located source spans in a long context, or another method.
 
@@ -859,7 +859,7 @@ For example, a PROV “was derived from” relation does not by itself establish
 
 #### Retrieval and evidence-acquisition provenance
 
-The PROV mapping MUST preserve the two senses of retrieval used by cELF. In the narrow technical sense, retrieval may involve vector similarity, lexical search, hybrid search, metadata filtering, or reranking. In the broader sense, retrieval is the recovery of relevant documentary information for research use.
+The PROV mapping MUST preserve the distinction between **technical retrieval** and the broader process of **evidence acquisition**. Retrieval may involve vector similarity, lexical search, hybrid search, metadata filtering, fusion, or reranking; evidence acquisition also includes non-retrieval paths such as manual researcher selection, direct reference, deterministic lookup, model-located evidence, or imported evidence.
 
 An EvidenceAcquisition activity MAY therefore represent vector retrieval, lexical retrieval, hybrid retrieval, manual researcher selection, deterministic query, database lookup, model-located evidence, imported evidence, or another declared acquisition method. An EvidenceRef SHOULD retain its acquisition method where known.
 
