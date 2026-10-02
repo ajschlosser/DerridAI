@@ -3110,7 +3110,7 @@ defineExpose({
       @close="missingMetadataPromptOpen = false"
     >
       <CorpusMissingDocumentFields
-        v-model="documentMetadata"
+        v-model="missingDocumentMetadata"
         :fields="missingDocumentFields"
         :disabled="busy !== ''"
       />
