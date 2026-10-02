@@ -8,7 +8,7 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 - Branch: `perf/corpus-builder-throughput`.
 - Fetched master: `ebf30937` on 2026-10-02; includes #417 and #418.
-- Working scope: incremental persistence, audio preparation, review navigation, and document-editor regressions; bounded REST queue reuse is implemented; persistent queue projection and dependency caching remain planned.
+- Working scope: incremental persistence, audio preparation, review navigation, and document-editor regressions; bounded REST/GraphQL queue reuse is implemented; persistent queue projection and dependency caching remain planned.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
 ## Checkpoints
@@ -86,4 +86,11 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 - Tests cover filter results, Unicode substring search, original topology positions, pre-queue-filter counts, per-record writes, structural replacement, external writes, restart, reviewer switching, independent response copies, eviction, oversized snapshots, and mutable callers using the uncached default.
 - Synthetic selection-only benchmark: 20 one-record pages, one unchanged snapshot, Unicode text search, three alternating uncached/cached samples per size, Python 3.12.14 on Windows. The cached run includes initial fill. Median totals: 1,000 records **0.1343 s -> 0.00676 s**; 10,000 records **1.3703 s -> 0.06846 s** (about 95% reduction in this component). Both benchmark cases passed. This excludes repository I/O, facets, HTTP, browser rendering, model calls, and human decisions; it is not a 95% end-to-end improvement.
 - Reproduce with `PYTHONPATH=api CORPUS_QUEUE_BENCHMARK=/absolute/output.jsonl python -m pytest -q tests/test_review_queue_navigation_cache.py -k benchmark`. Use a fresh output path. The uncached comparison uses the same selection implementation with reuse disabled, isolating the cache benefit.
-- Limitations: each mutation or filter/reviewer change can require a fresh scan. GraphQL keeps the uncached default. Persistent indexed projection, incremental counts/facets after edits, two-build cold-load measurements, and the 50% end-to-end target remain outstanding.
+- Limitations: each mutation or filter/reviewer change can require a fresh scan. GraphQL initially kept the uncached default; the following checkpoint adds shared reuse. Persistent indexed projection, incremental counts/facets after edits, two-build cold-load measurements, and the 50% end-to-end target remain outstanding.
+
+## Shared REST/GraphQL selection checkpoint (2026-10-02)
+
+- REST and GraphQL now call the same repository selection boundary and reuse the same bounded cache for repository-owned immutable snapshots. Page navigation across either transport avoids repeated corpus selection scans for the same filters and reviewer.
+- The boundary checks snapshot ownership by identity. Caller-owned mutable lists and evicted snapshots use the uncached selector; each response still receives fresh reviewer presentation. No API/schema or authoritative-state changes.
+- Two cross-transport no-rescan regressions failed before the change; the mutable-list characterization passed. After implementation, 83 focused queue, GraphQL, decision, and second-opinion tests passed; two optional queue benchmarks skipped. Ruff passed. Master was refreshed and remains an ancestor of this branch.
+- This extends the previous selection optimization to GraphQL; it does not establish new end-to-end timings. Persistent transactional projection, incremental post-edit counts/facets, cold-load measurements, dependency caching, and evaluated learning remain planned.

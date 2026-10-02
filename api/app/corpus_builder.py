@@ -188,6 +188,7 @@ from .corpus_record_quality import (
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
 from .corpus_review_queue import (
     QueueFilter,
+    QueueSelection,
     QueueSelectionCache,
     empty_page,
     observed_metadata_values,
@@ -2106,6 +2107,21 @@ class PdfCorpusRepository:
                 _scrub_canonical_transport(record)
         return records
 
+    def select_review_queue(
+        self, records: list[dict[str, Any]], filters: QueueFilter, *, offset: int, limit: int,
+    ) -> QueueSelection:
+        """Share bounded selections across transports for repository-owned snapshots.
+
+        Caller-owned lists remain uncached: their contents may change in place.
+        Evicted snapshots also use the pure selector without retaining new cache entries.
+        """
+        with self._lock:
+            owned = any(snapshot is records for _signature, snapshot in self._review_records_cache.values())
+        return select_queue(
+            records, filters, offset=offset, limit=limit,
+            cache=self._queue_selection_cache if owned else None,
+        )
+
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
         """REST's composite review page: full presented Records, queue counts and observed values.
 
@@ -2119,7 +2135,7 @@ class PdfCorpusRepository:
         records = self.review_records(build_id)
         if records is None:
             return empty_page(offset, limit)
-        selection = select_queue(records, filters, offset=offset, limit=limit, cache=self._queue_selection_cache)
+        selection = self.select_review_queue(records, filters, offset=offset, limit=limit)
         return {
             "items": selection.items,
             "total": selection.total,

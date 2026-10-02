@@ -33,7 +33,7 @@ Acceptance: no per-record full-store save during ordinary build enrichment; rest
 
 ## 2. Incremental review-queue projection
 
-Initial increment: bounded snapshot selection reuse now accelerates unchanged REST page navigation. See the progress tracker for measurements and limitations; transactional projection and mutation-time improvements below remain planned.
+Initial increment: bounded snapshot selection reuse now accelerates unchanged REST and GraphQL page navigation. See the progress tracker for measurements and limitations; transactional projection and mutation-time improvements below remain planned.
 
 `select_queue` scans records; search serializes record JSON and counts perform corpus-wide work. Build a rebuildable SQLite queue projection with record identity, source order, state version, disposition, readiness, incomplete-field/source-problem flags, and review categories.
 

@@ -549,3 +549,41 @@ def test_metadata_cache_lookup_never_deserializes_the_corpus(build, monkeypatch)
     monkeypatch.setattr(corpus_routes, "adjudication_suggestions", lambda **kwargs: {})
     response = _call("GET", f"/api/pdf/corpus-builds/{build_id}/records/r1/metadata-cache", params={"field": "speaker"})
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize("first_transport", ["rest", "graphql"])
+def test_queue_selection_is_reused_across_transports(build, monkeypatch, first_transport):
+    from app import corpus_review_queue as queue_module
+    repo, build_id = build
+
+    def read(transport, offset):
+        if transport == "rest":
+            response = _call("GET", f"/api/pdf/corpus-builds/{build_id}/records", params={"offset": offset, "limit": 1})
+            assert response.status_code == 200
+            return response.json()
+        data = gql(REVIEW_QUEUE_QUERY, {"build_id": build_id, "offset": offset, "limit": 1}).json()
+        assert "errors" not in data, data
+        return data["data"]["corpus_build"]["review_queue"]
+
+    first = read(first_transport, 0)
+    with monkeypatch.context() as patch:
+        patch.setattr(queue_module, "_select_indices", lambda *_: pytest.fail("warm transport rescanned the corpus"))
+        second = read("graphql" if first_transport == "rest" else "rest", 1)
+        assert second["items"][0]["record_id"] == "r2"
+        assert second["queue_counts"] == first["queue_counts"]
+    changed = repo.get_record(build_id, "r3")
+    changed.update(review_disposition="accepted", accepted=True)
+    repo.update_record(build_id, changed)
+    assert read("graphql", 0)["queue_counts"]["accepted"] == 2
+
+
+def test_query_local_mutable_records_do_not_enter_snapshot_cache(build):
+    repo, build_id = build
+    access = AccessContext(username="root", role="admin", user_id=1)
+    records = repo.load_records(build_id)  # caller-owned mutable list, not repository snapshot
+    filters = corpus_queries.QueueFilter(disposition="accepted")
+    first = corpus_queries.review_queue(access, records, build_id, filters=filters, offset=0, limit=10)
+    assert first["total"] == 1
+    records[1]["review_disposition"] = "accepted"
+    second = corpus_queries.review_queue(access, records, build_id, filters=filters, offset=0, limit=10)
+    assert second["total"] == 2
