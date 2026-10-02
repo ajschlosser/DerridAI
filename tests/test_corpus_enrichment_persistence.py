@@ -161,6 +161,30 @@ def test_retired_record_completion_does_not_restore_old_topology(build_factory, 
         repo.get_record(build_id, "r1")
 
 
+def test_split_during_enrichment_requeues_successors_and_conserves_source(build_factory, monkeypatch):
+    repo, build_id, manager = build_factory(count=1)
+    original = repo.get_record(build_id, "r1")["text"]
+    processed = []
+
+    def enrich(record, *_args, **_kwargs):
+        processed.append(record["record_id"])
+        if record["record_id"] == "r1":
+            manager.split(build_id, "r1", expected_revision=1, offset=original.index("evidence") + 8)
+        return _completed(record)
+
+    monkeypatch.setattr(manager, "_enrich_record", enrich)
+    result = manager._schedule_build_enrichment(build_id, {}, {}, repo.load_records(build_id))
+    successor_ids = {row["record_id"] for row in result}
+    assert len(result) == 2
+    assert "r1" not in successor_ids
+    assert set(processed) == {"r1", *successor_ids}
+    assert all(row["metadata_complete"] and not row.get("metadata_requeue_requested") for row in result)
+    assert "".join("".join(row["text"].split()) for row in result) == "".join(original.split())
+    assert all(row["lineage"]["parent_record_ids"] == ["r1"] for row in result)
+    assert result == repo.load_records(build_id)
+    assert manager.retired_records(build_id)[0]["record_id"] == "r1"
+
+
 @pytest.mark.skipif(not os.environ.get("CORPUS_PERSISTENCE_BENCHMARK"), reason="opt-in persistence benchmark")
 @pytest.mark.parametrize("count", [1000, 10000])
 @pytest.mark.parametrize("sample", range(3))

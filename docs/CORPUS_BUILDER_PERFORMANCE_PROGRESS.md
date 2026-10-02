@@ -8,31 +8,34 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 - Branch: `perf/corpus-builder-throughput`.
 - Fetched master: `ebf30937` on 2026-10-02; includes #417 and #418.
-- Working scope: first measured persistence optimization; later increments remain planned.
+- Working scope: incremental persistence, audio preparation, review navigation, and document-editor regressions; queue and caching increments remain planned.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
 ## Checkpoints
 
-| Checkpoint                                 | State                       | Evidence                                                                    |
-| ------------------------------------------ | --------------------------- | --------------------------------------------------------------------------- |
-| Plan and tracker                           | Committed/pushed `dc0b35f0` | Detailed scope, invariants, acceptance gates, and rollout sequence recorded |
-| Baseline instrumentation                   | Pending                     | Characterize full-store saves and affected-record updates before edits      |
-| Incremental enrichment completion          | Pending                     | Preserve latest human decisions and durable recovery                        |
-| Queue projection                           | Pending                     | Follow persistence checkpoint                                               |
-| Dependency caching / incremental exemplars | Pending                     | Extend existing mechanisms                                                  |
-| Readiness / scheduling                     | Pending                     | Preserve publication and ownership gates                                    |
-| Evaluated learning / review assistance     | Pending                     | Requires held-out evaluation                                                |
+| Checkpoint | State | Evidence |
+| --- | --- | --- |
+| Plan and tracker | Committed/pushed `dc0b35f0` | Scope, invariants, acceptance gates, rollout sequence |
+| Baseline instrumentation | Partial | Synthetic persistence/write counts captured; stable wall-clock and end-to-end baselines pending |
+| Incremental enrichment completion | Committed/pushed `d9c30235` | Ownership, restart, failure, and retired-record regressions |
+| Audio manifest preparation | Committed/pushed `6fff2e0e` | Transcript time locators and provider fallback |
+| Remove review navigation modal | Committed/pushed `bb066a35` | 18 production-browser cases pass; local draft recovery retained |
+| Restore document metadata editor | Committed/pushed `0be91ae9` | Component-resolution regression and typechecks |
+| Queue projection | Pending | Next performance increment; preserve reviewer isolation |
+| Dependency caching / incremental exemplars | Pending | Extend existing mechanisms |
+| Readiness / scheduling | Pending | Preserve publication and ownership gates |
+| Evaluated learning / review assistance | Pending | Requires held-out evaluation |
 
 ## Validation and measurements
 
-No implementation tests or new timings recorded yet. The first benchmark must separate synthetic persistence cost from end-to-end model processing and must record the exact baseline and method.
+Focused validation is recorded below by checkpoint; overlapping test counts are not additive. The synthetic persistence benchmark verifies fewer full-store writes, not an end-to-end speedup. Shared-machine disk variability prevents a reliable elapsed-time conclusion. Live-model preparation and human-review measurements remain outstanding.
 
 ## Next actions
 
-1. Commit and push planning documents.
-2. Characterize existing persistence and human-edit preservation tests; establish a reproducible baseline.
-3. Replace repeated full-store completion saves using the existing incremental persistence contract.
-4. Run focused regressions and comparison benchmarks; update this tracker, commit, and push.
+1. Characterize queue selection, reviewer overlays, and mutation invalidation before introducing a derived queue projection.
+2. Implement the smallest equivalent queue increment with restart and filter-equivalence tests.
+3. Establish isolated timing baselines and measure preparation/review latency before claiming progress toward 50%.
+4. Continue the dependency-cache and evaluated-learning phases behind the plan's correctness gates.
 
 ## Persistence checkpoint (2026-10-02)
 
@@ -66,7 +69,7 @@ No implementation tests or new timings recorded yet. The first benchmark must se
 - Updated user guidance and replaced modal tests with immediate-navigation, draft-restoration, new-build, rejection, and French keyboard coverage.
 - Moved the metadata dirty-state regression out of a nested test definition so it actually executes, using public field buttons rather than removed modal-only APIs.
 - App/SDK and test TypeScript checks passed; 86 focused frontend tests passed; production build passed (existing large-chunk warning). Thirteen locale/accessibility-floor/API-contract tests passed. All 18 production-browser cases passed, including desktop/laptop/short/mobile layouts, zoom reflow, draft restoration, rejection, and French keyboard navigation. An initial rejection-test failure was a missing mock response; the corrected fixture passed.
-- Review found `DocumentManifestEditor` lost its import in `8cfda23c` while the build-workspace template still renders it. A new component-resolution test reproduces the failure. User approved the repair; implementation is next.
+- Review found `DocumentManifestEditor` lost its import in `8cfda23c` while the build-workspace template still renders it. A new component-resolution test reproduces the failure. The approved repair is completed in the following checkpoint.
 
 ## Document editor and structural concurrency checkpoint (2026-10-02)
 
