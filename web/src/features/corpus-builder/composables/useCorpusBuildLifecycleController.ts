@@ -97,6 +97,8 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
       patch.metadata_tasks_running = summary.metadata_tasks_running;
     if (summary.metadata_tasks_queued !== undefined)
       patch.metadata_tasks_queued = summary.metadata_tasks_queued;
+    if (summary.metadata_active_tasks !== undefined)
+      patch.metadata_active_tasks = summary.metadata_active_tasks.map((task) => ({ ...task }));
     Object.assign(build, patch);
     syncBuildInRail(build);
   }
