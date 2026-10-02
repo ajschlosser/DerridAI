@@ -323,17 +323,17 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 - [x] Migrate `RAGJobManager` provider-profile gate.
 - [x] Move/bridge Ollama process gate into the coordinator.
 - [x] Gate Corpus Builder structured provider calls through shared provider capacity.
-- [~] Expose safe capacity snapshots to operational status (RAG status migrated; Corpus/UI surface still pending).
+- [x] Expose safe capacity snapshots to operational status. RAG and Corpus build reads now report shared provider capacity; Corpus live metadata status shows active/limit utilization.
 
 ### Phase B — Corpus Builder scheduling
 
-- [ ] Separate build-level worker count, operation throttle, and provider capacity.
+- [~] Separate build-level worker count, operation throttle, and provider capacity. Shared provider capacity is now independent; Record/family pools share the provider contract, while a distinct user-facing operation throttle remains pending.
 - [~] Introduce explicit metadata-family concurrency/dependency policy (built-in discourse/quotation/indexing are explicitly parallel-safe; schema-extensible dependency metadata remains pending).
-- [x] Execute independent built-in metadata families concurrently with a bounded per-Record family pool plus process-wide provider gate; replacing the interim nested pool with a ready-work scheduler remains in this phase.
+- [x] Execute independent built-in metadata families concurrently. Build/retry/rerun orchestration now supplies one shared family-work pool so active Records steal from the same bounded queue instead of creating a family executor per Record.
 - [x] Preserve Record-local staged checkpoint callbacks and deterministic reconciliation.
 - [ ] Add bounded-breadth/finish-started-record priority behavior.
 - [ ] Ensure targeted reruns/requeues receive priority without starving bulk work.
-- [ ] Add Record concurrency/barrier tests.
+- [~] Add Record concurrency/barrier tests. Coordinator/family overlap and sibling-checkpoint isolation are covered; end-to-end multi-Record scheduler barriers remain pending.
 
 ### Phase C — segmentation and document preparation
 
@@ -386,4 +386,16 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 - Enabled bounded overlap of the built-in discourse, quotation, and indexing metadata families. Results are consumed in schema order even when calls finish out of order; unknown/custom families remain exclusive.
 - Parallelized segmentation classifier batches and the bounded boundary second-reader pass. Inference uses immutable pair snapshots and authoritative boundary mutations are applied in document order.
 - Added barrier-based coordinator tests plus metadata-family scheduling tests. Full branch CI has not yet been triggered; a draft PR/check run is still pending after the next integration slice.
-- Remaining architectural debt in this slice: metadata family overlap currently uses a small nested per-Record executor. The target ready-work scheduler will remove that nested shape and provide bounded breadth/finish-started-Record prioritization.
+- Replaced the per-Record family executor with one shared family-work pool per build/retry/rerun operation. Record workers prepare bounded breadth while family calls steal from the shared queue; a fuller explicit dependency scheduler and finish-started-Record priority policy remain pending.
+- Isolated concurrent family task state onto per-family Record snapshots and changed durable stage checkpointing to merge only the callback family's status/ledger entry. This prevents a stale quotation/indexing snapshot from regressing a sibling family's running/completed checkpoint.
+- Removed the hidden Corpus Builder 16-request ceiling across API validation, backend worker pools, setup controls and browser draft restoration. Corpus operations now preserve the provider profile's supported 1–64 range; local Ollama remains constrained by the separate shared runtime gate.
+- Added live provider-capacity snapshots to Corpus build reads and wired the existing metadata status surface to report active/limit utilization instead of only the configured concurrency number.
+
+### 2026-10-01 / shared work queue and capacity-range follow-up
+
+- Corpus first-pass enrichment, automatic retry, and enrichment reruns now create one family executor per operation and pass it into Record workers. This avoids multiplicative nested pools while retaining bounded Record preparation.
+- Concurrent metadata families use isolated Record snapshots; only their own stage result/status/ledger entries are merged back in schema order. Durable callbacks likewise preserve sibling family entries from the live Record.
+- Added a regression test where a stale quotation snapshot arrives after discourse has already started; both family checkpoints and build counters must remain correct.
+- Expanded Corpus concurrency from the old 1–16 operation clamp to the provider contract's full 1–64 range in Pydantic validation, worker scheduling, settings controls, provider payloads, draft restoration, and tests.
+- Corpus build GET responses now attach live, non-persisted provider/Ollama capacity snapshots. The metadata live-status component displays active provider slots over the configured limit.
+- Shared capacity limits are re-read while callers wait, so lowering the Ollama runtime cap takes effect for already-queued callers; a focused test covers this transition.
