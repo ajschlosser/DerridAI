@@ -3939,7 +3939,16 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             # the three small metadata families serially for one record, while the
             # main thread alone updates/checkpoints the shared JSONL. This avoids
             # corrupting restart state and respects provider-profile concurrency.
-            with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta") as pool:
+            with (
+                ThreadPoolExecutor(
+                    max_workers=max_workers,
+                    thread_name_prefix="pdf-corpus-meta",
+                ) as pool,
+                ThreadPoolExecutor(
+                    max_workers=max_workers,
+                    thread_name_prefix="pdf-corpus-family",
+                ) as family_pool,
+            ):
                 futures = {}
                 for index in pending:
                     if self._cancelled(build_id):
@@ -3956,6 +3965,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         next_text=next_text,
                         build_id=build_id,
                         stage_callback=persist_metadata_stage,
+                        family_executor=family_pool,
                     )
                     futures[future] = index
                 completed = already_complete
