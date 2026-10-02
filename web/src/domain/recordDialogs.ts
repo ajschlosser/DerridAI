@@ -1,13 +1,17 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { esc, icon } from "./html";
-import { chromaRecordEditorHtml, recordEditorHtml } from "./recordDialogMarkup";
+import { recordEditorField } from "./recordEditorFields";
 import { createRecordDialogCopy } from "./recordDialogCopy";
 import { openBulkFieldEditorDialog } from "../composables/bulkFieldEditorDialog";
 import { openMergeFilesDialog } from "../composables/mergeFilesDialog";
 import { openMessageDialog } from "../composables/messageDialog";
 import { toast } from "../composables/notifications";
 import { openOcrCleanupDialog as openOcrCleanupDialogHost } from "../composables/ocrCleanupDialog";
+import {
+  openRecordFieldEditorDialog,
+  type RecordEditorSection,
+} from "../composables/recordFieldEditorDialog";
 import { openRecordHistoryDialog } from "../composables/recordHistoryDialog";
 
 // The dialogs for editing, merging, subsetting and cleaning records and for the upsert queue, drawn as HTML strings. Moved
@@ -30,7 +34,6 @@ type Helper =
   | "cloneAuditValue"
   | "dbUnavailableReason"
   | "download"
-  | "fieldEditor"
   | "fileJsonl"
   | "formatTimestamp"
   | "hasCorpusDb"
@@ -42,7 +45,6 @@ type Helper =
   | "navigateTo"
   | "needsReviewItems"
   | "parseBulkFieldValue"
-  | "parseEditor"
   | "pendingChangesForRow"
   | "pendingUpsertRows"
   | "persistFileNow"
@@ -160,7 +162,6 @@ export function createRecordDialogs(deps: Deps) {
     cloneAuditValue,
     dbUnavailableReason,
     download,
-    fieldEditor,
     fileJsonl,
     fileTimers,
     formatTimestamp,
@@ -173,7 +174,6 @@ export function createRecordDialogs(deps: Deps) {
     navigateTo,
     needsReviewItems,
     parseBulkFieldValue,
-    parseEditor,
     pendingChangesForRow,
     pendingUpsertRows,
     persistFileNow,
@@ -412,68 +412,50 @@ export function createRecordDialogs(deps: Deps) {
       i = selectedIndex(f),
       r = selectedRecord();
     if (!r) return;
-    const dialog = document.createElement("dialog");
-    const used = new Set();
-    const groups = [];
+    const used = new Set<string>();
+    const sections: RecordEditorSection[] = [];
     for (const group of EDITOR_GROUPS) {
-      const fields = group.fields.filter((k: Any) => k in r);
-      if (!fields.length) continue;
-      fields.forEach((k: Any) => used.add(k));
-      groups.push(
-        `<section class="editor-section"><h3>${esc(tr(group.key, group.fallback))}</h3><div class="editor-grid">${fields.map((k: Any) => fieldEditor(k, r[k])).join("")}</div></section>`,
-      );
+      const keys = group.fields.filter((k) => k in r);
+      if (!keys.length) continue;
+      keys.forEach((k) => used.add(k));
+      sections.push({
+        title: tr(group.key, group.fallback),
+        fields: keys.map((k) => recordEditorField(k, r[k], label)),
+      });
     }
     const other = Object.keys(r).filter((k) => !used.has(k) && k !== "updates");
     if (other.length)
-      groups.push(
-        `<section class="editor-section"><h3>${esc(tr("record.group_other"))}</h3><div class="editor-grid">${other.map((k) => fieldEditor(k, r[k])).join("")}</div></section>`,
-      );
-    dialog.innerHTML = recordEditorHtml(
-      { subtitle: `${r.record_id || ""} · ${r.work || f.name}`, groups: groups.join("") },
-      tr,
-    );
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    dialog.querySelectorAll("[data-close]").forEach(
-      (b: Any) =>
-        (b.onclick = () => {
-          dialog.close();
-          dialog.remove();
-        }),
-    );
-    dialog.querySelector("form").onsubmit = (e: Any) => {
-      e.preventDefault();
-      const next = { ...r };
-      try {
-        dialog
-          .querySelectorAll("[data-key]")
-          .forEach((el: Any) => (next[el.dataset.key] = parseEditor(el)));
-      } catch (error: Any) {
-        openMessageDialog({
-          title: copy.saveFailed,
-          message: error.message,
-          tone: "danger",
-        });
-        return;
-      }
-      if ("text_length" in next) next.text_length = String(next.text || "").length;
-      const changes: Any = {};
-      for (const [field, value] of Object.entries(next))
-        if (field !== "updates" && !sameValue(r[field], value)) changes[field] = value;
-      const count = applyRecordChanges(f, i, changes, { source: "manual" });
-      dialog.close();
-      dialog.remove();
-      shell();
-      renderView();
-      count
-        ? toast(copy.saved(count), { tone: "success" })
-        : toast(copy.noChanges, { tone: "warning" });
-    };
+      sections.push({
+        title: tr("record.group_other"),
+        fields: other.map((k) => recordEditorField(k, r[k], label)),
+      });
+    openRecordFieldEditorDialog({
+      title: tr("record.edit"),
+      subtitle: `${r.record_id || ""} · ${r.work || f.name}`,
+      help: "",
+      footerNote: tr("records.editor.local_note"),
+      saveLabel: tr("records.editor.save"),
+      parseErrorTitle: copy.saveFailed,
+      sections,
+      save: async (values) => {
+        const next = { ...r, ...values };
+        if ("text_length" in next) next.text_length = String(next.text || "").length;
+        const changes: Any = {};
+        for (const [field, value] of Object.entries(next))
+          if (field !== "updates" && !sameValue(r[field], value)) changes[field] = value;
+        const count = applyRecordChanges(f, i, changes, { source: "manual" });
+        shell();
+        renderView();
+        count
+          ? toast(copy.saved(count), { tone: "success" })
+          : toast(copy.noChanges, { tone: "warning" });
+        return true;
+      },
+    });
   }
   function openStoreRecordEditor(record: Any) {
     const chromaId = record._chroma_id;
     if (!chromaId) return toast(tr("record.no_storage_id"), { tone: "warning" });
-    const dialog = document.createElement("dialog");
     const editable = Object.keys(record).filter(
       (k) =>
         k !== "_chroma_id" &&
@@ -481,72 +463,60 @@ export function createRecordDialogs(deps: Deps) {
         k !== "_updates_count" &&
         !k.startsWith("_researcher_"),
     );
-    dialog.innerHTML = chromaRecordEditorHtml(
-      {
-        chromaId,
-        store: state.activeStore,
-        fields: editable.map((k) => fieldEditor(k, record[k])).join(""),
-      },
-      tr,
-    );
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((b: Any) => (b.onclick = close));
-    dialog.querySelector("form").onsubmit = async (e: Any) => {
-      e.preventDefault();
-      const raw = { ...record };
-      delete raw._chroma_id;
-      const changes: Any = {};
-      try {
-        dialog.querySelectorAll("[data-key]").forEach((el: Any) => {
-          const value = parseEditor(el);
-          if (!sameValue(raw[el.dataset.key], value)) changes[el.dataset.key] = value;
-        });
-      } catch (error: Any) {
-        openMessageDialog({
-          title: copy.parseFailed,
-          message: error.message,
-          tone: "danger",
-        });
-        return;
-      }
-      if (!Object.keys(changes).length) return close();
-      const timestamp = new Date().toISOString(),
-        batchId = uid();
-      const auditEntries = Object.entries(changes).map(([field, newValue]) => ({
-        field_name: field,
-        old_value: cloneAuditValue(raw[field]),
-        new_value: cloneAuditValue(newValue),
-        timestamp,
-        source: "chroma_manual",
-        batch_id: batchId,
-        initiated_by: state.userContext?.username || null,
-      }));
-      try {
-        await api(
-          `/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(chromaId)}`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({
-              changes,
-              audit_entries: auditEntries,
-              document_field: "text",
-              embedding_field: "embedding",
-            }),
-          },
-        );
+    openRecordFieldEditorDialog({
+      title: tr("records.chroma.edit"),
+      subtitle: `${chromaId} · ${state.activeStore}`,
+      help: tr("records.chroma.help"),
+      footerNote: "",
+      saveLabel: tr("records.chroma.save"),
+      parseErrorTitle: copy.parseFailed,
+      sections: [
+        {
+          title: tr("records.chroma.section"),
+          fields: editable.map((k) => recordEditorField(k, record[k], label)),
+        },
+      ],
+      save: async (values) => {
+        const raw = { ...record };
+        delete raw._chroma_id;
+        const changes: Any = {};
+        for (const [field, value] of Object.entries(values))
+          if (!sameValue(raw[field], value)) changes[field] = value;
+        if (!Object.keys(changes).length) return true;
+        const timestamp = new Date().toISOString(),
+          batchId = uid();
+        const auditEntries = Object.entries(changes).map(([field, newValue]) => ({
+          field_name: field,
+          old_value: cloneAuditValue(raw[field]),
+          new_value: cloneAuditValue(newValue),
+          timestamp,
+          source: "chroma_manual",
+          batch_id: batchId,
+          initiated_by: state.userContext?.username || null,
+        }));
+        try {
+          await api(
+            `/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(chromaId)}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                changes,
+                audit_entries: auditEntries,
+                document_field: "text",
+                embedding_field: "embedding",
+              }),
+            },
+          );
+        } catch (error: Any) {
+          toast(copy.chromaFailed(error.message), { tone: "danger" });
+          return false;
+        }
         state.storeWorksStore = "";
-        close();
         toast(copy.chromaUpdated, { tone: "success" });
         renderView();
-      } catch (error: Any) {
-        toast(copy.chromaFailed(error.message), { tone: "danger" });
-      }
-    };
+        return true;
+      },
+    });
   }
   function openRecordHistoryBrowser(file: Any, index: Any) {
     const record = file?.records?.[index];
