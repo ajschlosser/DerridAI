@@ -444,7 +444,9 @@ describe("review remediation context", () => {
 
     await wrapper.setProps({ fixProgress: { position: 4, total: 4, remaining: 1 } });
     expect(banner.findAll("button").some((button) => button.text().includes("Next"))).toBe(false);
-    const readiness = banner.findAll("button").find((button) => button.text().includes("readiness"));
+    const readiness = banner
+      .findAll("button")
+      .find((button) => button.text().includes("readiness"));
     await readiness!.trigger("click");
     expect(wrapper.emitted("backToReadiness")).toHaveLength(1);
   });
