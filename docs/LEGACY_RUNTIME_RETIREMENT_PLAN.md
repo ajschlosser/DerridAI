@@ -200,7 +200,8 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] `recordDialogs`: record editor and store record editor (one `RecordFieldEditorDialog.vue` + `composables/recordFieldEditorDialog.ts`; the pure field-kind/parse rules live in `domain/recordEditorFields.ts`; the forwarders supply `save`, which diffs against the record and applies or PATCHes. `fieldEditor`/`parseEditor`, `recordDialogMarkup.ts` and baseline `record-edit-sheet` retired. The on/off label of a boolean now uses `ui.on`/`ui.off` instead of hard-coded English "Enabled/Disabled")
   - [x] `recordDialogs`: upsert queue (`UpsertQueueDialog.vue` + `composables/upsertQueueDialog.ts`; the forwarder supplies plain-data `items()` (re-read after a removal), `remove` and `sync`. The change list is a disclosure button with `aria-expanded`; unchecked state now survives removing a record). `recordDialogs` is now fully ported
   - [x] `jobDialogs`: record preview (`RecordPreviewDialog.vue` + `composables/recordPreviewDialog.ts`; the forwarder formats labels and values, the component only renders; the "copy" button keeps `data-copy-row-key` for the page-level handler; `recordPreviewMarkup.ts` deleted)
-  - [ ] remaining `jobDialogs` (job details, job results, LLM tool result, task launcher, PDF draft record, touch-up), each with its markup helper in `domain/job*Markup.ts`
+  - [x] `jobDialogs`: LLM tool result (`LlmToolResultDialog.vue` + `composables/llmToolResultDialog.ts`; the forwarder builds a typed body and one optional follow-up `action`, which runs after the dialog closes; `llmToolResultBody`/`llmToolResultDialogHtml` are gone. The grade view still arrives as escaped `gradeHtml` from the shared renderer)
+  - [ ] remaining `jobDialogs` (job details, job results, task launcher, PDF draft record, touch-up), each with its markup helper in `domain/job*Markup.ts`
 - [ ] Step 4 state slices and deletion
 
 Notes for the next session:

@@ -8,57 +8,6 @@ type Trf = (key: string, fallback: string, values?: Record<string, unknown>) => 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
-export function llmToolResultDialogHtml(
-  input: { title: string; job: Any; result: Any; body: string; actions: string },
-  tr: Tr,
-): string {
-  const { title, job, result, body, actions } = input;
-  return `<div class="dh"><div><h2 class="dialog-title">${esc(title)}</h2><div class="dialog-subtitle">${esc(job.provider || "")} · ${esc(job.model || result.model || "")}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db">${body}</div><div class="da"><button class="btn" data-close>${esc(tr("common.close"))}</button>${actions}</div>`;
-}
-
-export function llmToolResultBody(
-  task: string,
-  job: Any,
-  result: Any,
-  deps: { tr: Tr; trf: Trf; ragGradeHtml: (grade: Any) => string },
-): { body: string; actions: string } {
-  const { tr, trf, ragGradeHtml } = { ...deps, ...bindCopy(deps.tr, deps.trf) };
-  if (task === "pdf_clean_text") {
-    return {
-      body: `<section class="card-inset"><div class="cardhead"><b>${esc(tr("jobs.tool.cleaned_text"))}</b></div><pre class="llm-tool-text">${esc(result.text || "")}</pre></section>`,
-      actions: `<button class="btn primary" id="useToolText">${esc(tr("jobs.tool.use_page_text"))}</button>`,
-    };
-  }
-  if (task === "pdf_draft_record") {
-    return {
-      body: `<pre class="rag-json">${esc(JSON.stringify(result.record || {}, null, 2))}</pre>`,
-      actions: `<button class="btn primary" id="openToolDraft">${esc(tr("jobs.tool.review_draft"))}</button>`,
-    };
-  }
-  if (task === "pdf_link_record") {
-    return {
-      body: `<div class="llm-tool-match"><b>${esc(result.match?.record_id || tr("jobs.tool.no_match"))}</b><p>${esc(result.match?.reason || "")}</p></div>`,
-      actions: result.match?.key
-        ? `<button class="btn primary" id="applyToolLink">${esc(tr("jobs.tool.review_link"))}</button>`
-        : "",
-    };
-  }
-  if (task === "rag_grade") {
-    const question = job.request?.question || "";
-    const body = `${question ? `<section class="llm-tool-context"><span>${esc(tr("jobs.tool.question"))}</span><p>${esc(question)}</p></section>` : ""}${result.response_cache_error ? `<div class="info warn">${esc(trf("jobs.tool.grade_cache_failed", { error: result.response_cache_error }))}</div>` : ""}${ragGradeHtml(result.grade || {})}`;
-    return { body, actions: "" };
-  }
-  if (task === "rag_grade_batch") {
-    const errors = Array.isArray(result.errors) && result.errors.length;
-    const body = `<section class="bulk-grade-result"><div class="compare-result-summary"><div><strong>${Number(result.graded || 0).toLocaleString()}</strong><span>${esc(tr("jobs.tool.graded"))}</span></div><div><strong>${Number(result.failed || 0).toLocaleString()}</strong><span>${esc(tr("jobs.tool.failed"))}</span></div><div><strong>${Number(result.total || 0).toLocaleString()}</strong><span>${esc(tr("jobs.tool.responses"))}</span></div></div>${errors ? `<details><summary>${esc(trf("jobs.tool.errors_n", { count: result.errors.length }))}</summary><pre class="rag-json">${esc(JSON.stringify(result.errors, null, 2))}</pre></details>` : `<div class="info">${esc(tr("jobs.tool.all_processed"))}</div>`}</section>`;
-    return { body, actions: "" };
-  }
-  return {
-    body: `<pre class="rag-json">${esc(JSON.stringify(result, null, 2))}</pre>`,
-    actions: "",
-  };
-}
-
 export function llmTaskLauncherHtml(
   input: {
     title: string;

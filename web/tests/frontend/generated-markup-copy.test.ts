@@ -88,23 +88,6 @@ describe("LLM tool and record dialog markup", () => {
       fallback,
     );
 
-  it("localizes LLM tool result actions", async () => {
-    const { llmToolResultBody } = await import("../../src/domain/llmToolMarkup");
-    const { actions } = llmToolResultBody(
-      "pdf_clean_text",
-      {},
-      { text: "x" },
-      {
-        tr: (key, fallback = "") =>
-          key === "jobs.tool.use_page_text" ? "Utiliser comme texte de page" : fallback,
-        trf,
-        ragGradeHtml: () => "",
-      },
-    );
-    expect(actions).toContain("Utiliser comme texte de page");
-    expect(actions).not.toContain("Use as current page text");
-  });
-
   it("owns job dialog toasts through copy, not hardcoded English", async () => {
     const { createJobDialogCopy } = await import("../../src/domain/jobDialogCopy");
     const copy = createJobDialogCopy(

@@ -7,12 +7,12 @@ import { followResource } from "../realtime/follow";
 import { llmReviewDialogHtml } from "./jobReviewMarkup";
 import { openRecordPreviewDialog } from "../composables/recordPreviewDialog";
 import { createJobDialogCopy } from "./jobDialogCopy";
+import { llmTaskLauncherHtml, pdfDraftRecordHtml } from "./llmToolMarkup";
 import {
-  llmTaskLauncherHtml,
-  llmToolResultBody,
-  llmToolResultDialogHtml,
-  pdfDraftRecordHtml,
-} from "./llmToolMarkup";
+  openLlmToolResultDialog,
+  type LlmToolResultBody,
+  type LlmToolResultRequest,
+} from "../composables/llmToolResultDialog";
 import { toast } from "../composables/notifications";
 
 // The dialogs opened from background jobs and LLM tasks: job details and results, RAG results, record previews, the LLM
@@ -806,42 +806,61 @@ export function createJobDialogs(deps: Deps) {
         message: copy.resultUnavailable,
         tone: "danger",
       });
-    const dialog = document.createElement("dialog");
-    dialog.className = "llm-tool-result-dialog";
     const task = job.tool || job.mode;
-    if (task === "work_metadata") {
-      dialog.remove();
-      return openWorkMetadataProposalResult(job);
+    if (task === "work_metadata") return openWorkMetadataProposalResult(job);
+    const subtitle = `${job.provider || ""} \u00b7 ${job.model || result.model || ""}`;
+    const json = (value: Any) => JSON.stringify(value, null, 2);
+    let body: LlmToolResultBody = { kind: "raw", json: json(result) };
+    let action: LlmToolResultRequest["action"] = null;
+    if (task === "pdf_clean_text") {
+      body = { kind: "clean_text", text: result.text || "" };
+      action = {
+        label: tr("jobs.tool.use_page_text"),
+        run: () => {
+          state.pdf.text = result.text || "";
+          state.pdf.extractionSource = trf("jobs.tool.cleanup_source", {
+            model: job.model || result.model || tr("jobs.tool.model_fallback", "model"),
+          });
+          if (state.view === "pdf")
+            window.dispatchEvent(new CustomEvent("derridai:pdf-explorer-refresh"));
+        },
+      };
+    } else if (task === "pdf_draft_record") {
+      body = { kind: "draft_record", json: json(result.record || {}) };
+      action = {
+        label: tr("jobs.tool.review_draft"),
+        run: () => openPdfDraftRecord(result.record || {}),
+      };
+    } else if (task === "pdf_link_record") {
+      body = {
+        kind: "link_record",
+        recordId: result.match?.record_id || "",
+        reason: result.match?.reason || "",
+      };
+      if (result.match?.key)
+        action = {
+          label: tr("jobs.tool.review_link"),
+          run: () => applyPdfLinkMatch(result.match || {}),
+        };
+    } else if (task === "rag_grade") {
+      body = {
+        kind: "rag_grade",
+        question: job.request?.question || "",
+        cacheError: result.response_cache_error || "",
+        gradeHtml: ragGradeHtml(result.grade || {}),
+      };
+    } else if (task === "rag_grade_batch") {
+      const errors = Array.isArray(result.errors) ? result.errors : [];
+      body = {
+        kind: "rag_grade_batch",
+        graded: Number(result.graded || 0),
+        failed: Number(result.failed || 0),
+        total: Number(result.total || 0),
+        errorsJson: errors.length ? json(errors) : "",
+        errorCount: errors.length,
+      };
     }
-    const { body, actions } = llmToolResultBody(task, job, result, { tr, trf, ragGradeHtml });
-    dialog.innerHTML = llmToolResultDialogHtml(
-      { title: jobLabel(job), job, result, body, actions },
-      tr,
-    );
-    document.body.appendChild(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    showAppModal(dialog);
-    dialog.querySelector("#useToolText")?.addEventListener("click", () => {
-      state.pdf.text = result.text || "";
-      state.pdf.extractionSource = trf("jobs.tool.cleanup_source", {
-        model: job.model || result.model || tr("jobs.tool.model_fallback", "model"),
-      });
-      close();
-      if (state.view === "pdf")
-        window.dispatchEvent(new CustomEvent("derridai:pdf-explorer-refresh"));
-    });
-    dialog.querySelector("#openToolDraft")?.addEventListener("click", () => {
-      close();
-      openPdfDraftRecord(result.record || {});
-    });
-    dialog.querySelector("#applyToolLink")?.addEventListener("click", async () => {
-      await applyPdfLinkMatch(result.match || {});
-      close();
-    });
+    openLlmToolResultDialog({ title: jobLabel(job), subtitle, body, action });
   }
   function openLlmTaskLauncher({
     task,
