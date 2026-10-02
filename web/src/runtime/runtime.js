@@ -1500,7 +1500,6 @@ const {
   clearRecordUpdates: (...args) => clearRecordUpdates(...args),
   cloneAuditValue: (...args) => cloneAuditValue(...args),
   dbUnavailableReason: (...args) => dbUnavailableReason(...args),
-  decorateDisabledControls: (...args) => decorateDisabledControls(...args),
   download: (...args) => download(...args),
   fieldEditor: (...args) => fieldEditor(...args),
   fileJsonl: (...args) => fileJsonl(...args),
