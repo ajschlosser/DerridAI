@@ -109,7 +109,7 @@ describe("model-suggested values", () => {
 
     expect(wrapper.get(".metadata-field").attributes("data-mode")).toBe("edit");
     expect(wrapper.get(".metadata-field").attributes("data-review-state")).toBe("pending");
-    expect(wrapper.get(".field-review-state").text()).toContain("Pending review");
+    expect(wrapper.get(".field-review-state").text()).toContain("Needs review");
     expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("criticize");
     expect(wrapper.find(".proposal-view").exists()).toBe(false);
     expect(wrapper.find(".proposal-value").exists()).toBe(false);
