@@ -181,6 +181,7 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [ ] 2.3b migrate the `domain/*` and `runtime.js` callers (`recordDialogs`, `workDialogs`, `jobDialogs`, `operationsPanelBridge`, `dbPresenceUpsert`, `recordEditing`, `backupWorkspace`, `pdfLinking`, `appLifecycle`, `annotationsWorkspace`, `vectorCollectionBridge.js`), then delete the shims (`notifyToast`, `toast`, `openMessageModal` in `runtime.js`/`runtimeBridge.ts`, and the `toast`/`openMessageModal` dependency wiring)
 
   - Known differences: toasts now stack (up to 5) instead of replacing one another, and the bold HTTP-status styling is gone. `legacy-dom-baseline` snapshots for settings/research were already stale on master (the "Automatic sizing" control); not regenerated here.
+
 - [ ] Step 3 routes and dialogs
 - [ ] Step 4 state slices and deletion
 
