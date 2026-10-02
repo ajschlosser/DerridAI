@@ -78,11 +78,13 @@ Acceptance: unchanged warm stages avoid provider calls; field edits do not resta
 
 ## 5. Incremental vector memory
 
-Source-span embedding reuse and reviewed-example prefill already exist. `project_build_metadata_exemplars` currently derives a build's exemplars and calls `rebuild_scope`; make ordinary review updates incremental.
+Delivered continuation after #425: `project_build_metadata_exemplars` now derives complete exemplar sets for changed Records and reconciles only their vector rows. Unchanged evidence contexts reuse compatible vectors even when revision-bound exemplar IDs change; metadata-only changes do not request embeddings. Durable per-build dirty tokens and the reviewed-memory outbox survive failure/restart, and background tasks coalesce per build. The progress tracker records equivalence checks, work counts, and component timings.
 
-- Consume durable dirty work per record/field; upsert or retire only affected exemplars.
-- Bind stable exemplar IDs to originating assertions, record revisions, and evidence spans.
-- Coalesce repeated edits; retain full rebuild for recovery/reconciliation.
+The reconciliation unit is a complete Record, rather than only the edited field: RecordRevision and other reviewed-value snapshots can affect all of its exemplars. Full rebuilds remain for initialization, repair, broad invalidation and collection replacement. Full-asset source blocks still load once per derivation batch; source-storage indexing and broader enrichment caching remain separate work. Pending sealed second opinions and disputed, invalid, or unresolved assertions cannot enter the trusted exemplar projection.
+
+- Delivered: consume durable dirty work per Record; upsert or retire complete affected exemplar sets, including an empty set.
+- Delivered: preserve originating assertion identity, record revision, and bound evidence; reconcile revision-dependent exemplar IDs without re-embedding identical context.
+- Delivered: coalesce repeated edits; retain full rebuild for recovery/reconciliation and acknowledge only captured dirty tokens/events.
 - Include model revision/digest and preprocessing identity in embedding contracts where available.
 - Share exact compatible computations without collapsing source identity; batch bounded neighbour queries.
 - Keep reverse dependencies for retractions and changed suggestions.

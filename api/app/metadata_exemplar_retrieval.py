@@ -11,9 +11,13 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
-from collections.abc import Callable, Iterable
+import uuid
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from functools import wraps
 from typing import Any
 
 from . import operation_events
@@ -39,6 +43,15 @@ DEFAULT_MMR_LAMBDA = 0.72
 DEFAULT_PACKET_CHAR_BUDGET = DEFAULT_PROMPT_TOKEN_BUDGET * PROMPT_CHARS_PER_TOKEN
 MAX_QUERY_CHARS = 12000
 MAX_FALLBACK_CANDIDATES = 256
+_projection_writer_lock = threading.RLock()
+
+
+def _serialized_projection[**P, T](operation: Callable[P, T]) -> Callable[P, T]:
+    @wraps(operation)
+    def run(*args: P.args, **kwargs: P.kwargs) -> T:
+        with _projection_writer_lock:
+            return operation(*args, **kwargs)
+    return run
 _STOP_WORDS = {
     "en": {
         "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has",
@@ -67,6 +80,7 @@ def _projection(exemplar: dict[str, Any], scope_id: str) -> dict[str, Any]:
     evidence_ref = exemplar.get("evidence_ref") if isinstance(exemplar.get("evidence_ref"), dict) else {}
     return {
         "metadata_exemplar_id": str(exemplar.get("metadata_exemplar_id") or ""),
+        "assertion_id": str(exemplar.get("assertion_id") or ""),
         "scope_id": str(scope_id),
         "record_id": str(exemplar.get("record_id") or ""),
         "record_revision": exemplar.get("record_revision"),
@@ -79,6 +93,7 @@ def _projection(exemplar: dict[str, Any], scope_id: str) -> dict[str, Any]:
         "assertion_status": str(exemplar.get("assertion_status") or ""),
         "assertion_method": str(exemplar.get("assertion_method") or ""),
         "reviewed_at": str(exemplar.get("reviewed_at") or ""),
+        "reviewed_values_json": _json_value(exemplar.get("reviewed_values") or {}),
         "page_start": exemplar.get("page_start") if exemplar.get("page_start") is not None else "",
         "page_end": exemplar.get("page_end") if exemplar.get("page_end") is not None else "",
         "schema_id": str(exemplar.get("schema_id") or ""),
@@ -523,11 +538,29 @@ class ChromaMetadataExemplarIndex:
         self.store = store
         self.collection_name = str(collection_name)
         self._disabled_reason = ""
+        self.on_recreated: Callable[[], None] | None = None
 
     @property
     def disabled_reason(self) -> str:
         return self._disabled_reason
 
+    @contextmanager
+    def projection_writer(self) -> Iterator[None]:
+        """One writer for this shared derived collection, including recreation."""
+        with _projection_writer_lock:
+            yield
+
+    @_serialized_projection
+    def collection_epoch(self) -> str:
+        collection = self._ensure()
+        metadata = dict(collection.metadata or {})
+        epoch = str(metadata.get("derridai_exemplar_epoch") or "")
+        if not epoch:
+            epoch = uuid.uuid4().hex
+            collection.modify(metadata={**metadata, "derridai_exemplar_epoch": epoch})
+        return epoch
+
+    @_serialized_projection
     def _ensure(self) -> Any:
         default_spec = getattr(self.store, "default_embedding_spec", None)
         expected_provider: str | None = None
@@ -583,6 +616,7 @@ class ChromaMetadataExemplarIndex:
                     "derridai_hidden_system_collection": True,
                     "derridai_derived": True,
                     self.SCHEMA_KEY: self.SCHEMA_VERSION,
+                    "derridai_exemplar_epoch": uuid.uuid4().hex,
                 },
             )
         except Exception as exc:
@@ -592,6 +626,8 @@ class ChromaMetadataExemplarIndex:
             message = str(exc).casefold()
             if "already exists" not in message and "unique" not in message:
                 raise
+        if self.on_recreated is not None:
+            self.on_recreated()
         return self.store.client.get_collection(name=self.collection_name)
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
@@ -618,6 +654,7 @@ class ChromaMetadataExemplarIndex:
             model=model,
         )
 
+    @_serialized_projection
     def sync(self, scope_id: str, exemplars: list[dict[str, Any]]) -> dict[str, int]:
         """Incrementally mirror known record/field exemplars without scope churn.
 
@@ -638,8 +675,13 @@ class ChromaMetadataExemplarIndex:
             exemplar_id: _projection(item, scope_id)
             for exemplar_id, item in desired.items()
         }
+        if not desired:
+            return {"desired": 0, "upserted": 0, "deleted": 0}
         current_payload = collection.get(
-            where={"scope_id": scope_id},
+            where={"$and": [
+                {"scope_id": scope_id},
+                {"record_id": {"$in": sorted({str(item["record_id"]) for item in projections.values()})}},
+            ]},
             include=["metadatas"],
         )
         current_ids_list = [str(value) for value in (current_payload.get("ids") or [])]
@@ -681,6 +723,7 @@ class ChromaMetadataExemplarIndex:
             "deleted": len(stale),
         }
 
+    @_serialized_projection
     def rebuild_scope(self, scope_id: str, exemplars: list[dict[str, Any]]) -> dict[str, int]:
         """Delete and recreate one derived scope from canonical reviewed data."""
 
@@ -708,6 +751,104 @@ class ChromaMetadataExemplarIndex:
             "upserted": len(desired),
             "deleted": len(existing),
         }
+
+    def reconcile_records(
+        self, scope_id: str, record_ids: list[str], exemplars: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Replace complete Record exemplar sets without touching unrelated Records."""
+        from .chroma_store import encode_metadata
+
+        wanted_records = sorted(set(record_ids))
+        desired = {
+            str(item["metadata_exemplar_id"]): _projection(item, str(scope_id))
+            for item in exemplars
+            if item.get("metadata_exemplar_id")
+        }
+        if any(str(item["record_id"]) not in wanted_records for item in desired.values()):
+            raise ValueError("Exemplars must belong to the explicitly reconciled Records.")
+        stats = {
+            "desired": len(desired), "upserted": 0, "deleted": 0, "reused": 0,
+            "metadata_updated": 0, "embedded": 0, "vector_reused": 0,
+        }
+        write_batch_size = max(1, min(100, int(settings.api_batch_size)))
+        with self.projection_writer():
+            collection = self._ensure()
+            for start in range(0, len(wanted_records), 100):
+                batch = wanted_records[start:start + 100]
+                payload = collection.get(
+                    where={"$and": [{"scope_id": str(scope_id)}, {"record_id": {"$in": batch}}]},
+                    include=["metadatas", "documents", "embeddings"],
+                )
+                current = {
+                    str(key): (metadata, document)
+                    for key, metadata, document in zip(
+                        payload.get("ids") or [], payload.get("metadatas") or [],
+                        payload.get("documents") or [],
+                    )
+                }
+                vectors = {
+                    str(key): vector for key, vector in zip(
+                        payload.get("ids") or [], _as_sequence(payload.get("embeddings")),
+                    )
+                }
+                reusable = {
+                    (str(metadata.get("record_id") or ""), document): vectors[key]
+                    for key, (metadata, document) in current.items()
+                    if key in vectors and _as_sequence(vectors[key])
+                }
+                targets = {key: row for key, row in desired.items() if row["record_id"] in batch}
+                writes = []
+                metadata_ids = []
+                metadata_rows = []
+                vector_rows = []
+                for key, row in targets.items():
+                    encoded = encode_metadata(row, document_field="context_text", embedding_field="embedding")
+                    encoded.update(_record_id=row["record_id"], _document_field="context_text")
+                    old = current.get(key)
+                    if old is None or old[1] != row["context_text"]:
+                        vector = reusable.get((row["record_id"], row["context_text"]))
+                        if vector is not None:
+                            vector_rows.append((key, row["context_text"], encoded, _as_sequence(vector)))
+                        else:
+                            writes.append(row)
+                    elif old[0] == encoded:
+                        stats["reused"] += 1
+                    else:
+                        metadata_ids.append(key)
+                        metadata_rows.append(encoded)
+                if writes:
+                    self.store.upsert_many(
+                        self.collection_name, writes,
+                        document_field="context_text", id_field="metadata_exemplar_id",
+                    )
+                    stats["upserted"] += len(writes)
+                    stats["embedded"] += len(writes)
+                if vector_rows:
+                    for offset in range(0, len(vector_rows), write_batch_size):
+                        vector_batch = vector_rows[offset:offset + write_batch_size]
+                        collection.upsert(
+                            ids=[row[0] for row in vector_batch],
+                            documents=[row[1] for row in vector_batch],
+                            metadatas=[row[2] for row in vector_batch],
+                            embeddings=[row[3] for row in vector_batch],
+                        )
+                    stats["upserted"] += len(vector_rows)
+                    stats["vector_reused"] += len(vector_rows)
+                if metadata_ids:
+                    for offset in range(0, len(metadata_ids), write_batch_size):
+                        collection.update(
+                            ids=metadata_ids[offset:offset + write_batch_size],
+                            metadatas=metadata_rows[offset:offset + write_batch_size],
+                        )
+                    stats["metadata_updated"] += len(metadata_ids)
+                stale = sorted(set(current) - set(targets))
+                if stale:
+                    for offset in range(0, len(stale), write_batch_size):
+                        collection.delete(ids=stale[offset:offset + write_batch_size])
+                    stats["deleted"] += len(stale)
+                if writes or vector_rows or metadata_ids or stale:
+                    operation_events.note_resource_changed("metadata_exemplars")
+        return stats
 
     def _lexical_fallback_result(
         self,

@@ -590,7 +590,7 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             conn.commit()
             return int(cursor.rowcount)
 
-    def put_memory_binding(self, payload: dict[str, Any]) -> None:
+    def put_memory_binding(self, payload: dict[str, Any], *, enqueue_projection: bool = False) -> None:
         binding_id = str(payload.get("binding_id") or "").strip()
         record_id = str(payload.get("record_id") or "").strip()
         field_id = str(payload.get("field_id") or "").strip()
@@ -624,6 +624,16 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                     str(payload.get("created_at") or now), now,
                 ),
             )
+            if enqueue_projection:
+                import uuid
+
+                conn.execute(
+                    "INSERT INTO semantic_memory_outbox "
+                    "(item_id,projection,scope_id,record_id,reason,status,created_at,updated_at) "
+                    "VALUES(?,?,?,?,?,?,?,?)",
+                    (str(uuid.uuid4()), "metadata_exemplars", payload.get("scope_id"),
+                     record_id, "reviewed_metadata_decision", "dirty", now, now),
+                )
             conn.commit()
 
     def list_memory_bindings(
@@ -679,10 +689,13 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         projection: str | None = None,
         *,
         scope_id: str | None = None,
+        unscoped: bool = False,
+        after: tuple[str, str] | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         projection_filter = str(projection) if projection else None
         scope_filter = str(scope_id) if scope_id else None
+        after_time, after_id = after if after is not None else ("", "")
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 """
@@ -691,7 +704,9 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                 WHERE status='dirty'
                   AND (? IS NULL OR projection=?)
                   AND (? IS NULL OR scope_id=?)
-                ORDER BY created_at
+                  AND (?=0 OR scope_id IS NULL OR scope_id='')
+                  AND (created_at>? OR (created_at=? AND item_id>?))
+                ORDER BY created_at,item_id
                 LIMIT ?
                 """,
                 (
@@ -699,8 +714,27 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                     projection_filter,
                     scope_filter,
                     scope_filter,
+                    int(unscoped),
+                    after_time, after_time, after_id,
                     max(1, min(1000, int(limit))),
                 ),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def resolve_semantic_memory_scope(self, item_ids: list[str], scope_id: str) -> None:
+        with self._lock, self._connect() as conn:
+            conn.executemany(
+                "UPDATE semantic_memory_outbox SET scope_id=? WHERE item_id=? "
+                "AND status='dirty' AND (scope_id IS NULL OR scope_id='')",
+                [(scope_id, item_id) for item_id in item_ids],
+            )
+
+    def semantic_memory_dirty_summary(self, projection: str) -> list[dict[str, Any]]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT COALESCE(scope_id,'') AS scope_id,COUNT(*) AS dirty "
+                "FROM semantic_memory_outbox WHERE status='dirty' AND projection=? GROUP BY scope_id",
+                (projection,),
             ).fetchall()
         return [dict(row) for row in rows]
 
