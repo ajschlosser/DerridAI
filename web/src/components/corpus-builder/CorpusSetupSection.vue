@@ -20,9 +20,10 @@ const panelId = computed(() => `corpus-setup-panel-${props.id}`);
 const headingId = computed(() => `corpus-setup-heading-${props.id}`);
 const stateLabel = computed(() => i18n.t(`pdf_corpus.setup.state.${props.state}`));
 const indicator = computed(() => {
+  if (props.step) return String(props.step);
   if (props.state === "complete") return "✓";
   if (props.state === "warning") return "!";
-  return props.step ? String(props.step) : "";
+  return "";
 });
 </script>
 
