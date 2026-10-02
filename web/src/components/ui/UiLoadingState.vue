@@ -4,7 +4,7 @@ withDefaults(
   defineProps<{
     label: string;
     detail?: string;
-    variant?: "status" | "skeleton";
+    variant?: "status" | "skeleton" | "inline";
     skeletonCount?: number;
   }>(),
   { detail: "", variant: "status", skeletonCount: 3 },
@@ -40,6 +40,11 @@ withDefaults(
   display: grid;
   gap: var(--space-4, 16px);
   color: var(--text-primary);
+}
+
+.ui-loading-state.is-inline {
+  display: flex;
+  padding-block: var(--space-2, 8px);
 }
 
 .ui-loading-state.is-status {
@@ -78,7 +83,9 @@ withDefaults(
   border: 2px solid var(--border-interactive);
   border-block-start-color: transparent;
   border-radius: 50%;
-  animation: ui-loading-spin 800ms linear infinite;
+  animation:
+    ui-loading-reveal 0s 180ms both,
+    ui-loading-spin 800ms 180ms linear infinite;
 }
 
 .ui-loading-skeletons {
@@ -111,6 +118,15 @@ withDefaults(
 
 .ui-loading-skeleton span:last-child {
   inline-size: 54%;
+}
+
+@keyframes ui-loading-reveal {
+  from {
+    visibility: hidden;
+  }
+  to {
+    visibility: visible;
+  }
 }
 
 @keyframes ui-loading-spin {

@@ -26,3 +26,12 @@ export const Skeleton: Story = {
     skeletonCount: 4,
   },
 };
+
+export const Inline: Story = { args: { label: "Updating…", detail: "", variant: "inline" } };
+export const InlineFrench: Story = {
+  args: {
+    label: "Mise à jour…",
+    detail: "Le contenu reste disponible pendant la mise à jour.",
+    variant: "inline",
+  },
+};

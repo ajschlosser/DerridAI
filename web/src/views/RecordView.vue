@@ -1,6 +1,9 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { toast } from "../composables/notifications";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { decompressUrlState } from "../domain/urlState";
+import { useAuthStore } from "../stores/auth";
 import { useRoute } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
 import { useI18nStore } from "../stores/i18n";
@@ -23,6 +26,9 @@ const i18n = useI18nStore();
 const shell = useShellStore();
 const semanticMap = useSemanticMapStore();
 const route = useRoute();
+const auth = useAuthStore();
+let readRequest = 0;
+let semanticRequest = 0;
 const snapshot = ref<RecordWorkspaceSnapshot>({ available: false, mode: "workspace" });
 const loading = ref(true);
 const error = ref("");
@@ -56,16 +62,18 @@ const showRecordMap = computed(
 );
 
 async function loadSemanticMap() {
+  const request = ++semanticRequest;
   recordSemanticBuildId.value = "";
   const recordId = String(snapshot.value.record_id || "");
   if (!recordId) return;
   recordSemanticLoading.value = true;
   try {
-    recordSemanticBuildId.value =
-      (await corpusBuildsApi.recordSemanticMapBuild(recordId).catch(() => ({ build_id: null })))
-        .build_id || "";
+    const result = await corpusBuildsApi
+      .recordSemanticMapBuild(recordId)
+      .catch(() => ({ build_id: null }));
+    if (request === semanticRequest) recordSemanticBuildId.value = result.build_id || "";
   } finally {
-    recordSemanticLoading.value = false;
+    if (request === semanticRequest) recordSemanticLoading.value = false;
   }
 }
 function openSemanticMap() {
@@ -106,6 +114,7 @@ const badges = computed(() => {
 async function loadTraceability(current: RecordWorkspaceSnapshot) {
   const request = ++graphRequest;
   objectGraph.value = null;
+  graphLoading.value = false;
   graphError.value = "";
   if (!current.available || !current.record) return;
   if (!String(current.record.record_id || "").trim()) {
@@ -132,16 +141,30 @@ async function loadTraceability(current: RecordWorkspaceSnapshot) {
   }
 }
 async function load() {
+  const request = ++readRequest;
   loading.value = true;
   error.value = "";
   try {
-    snapshot.value = (await runtime.getRecordWorkspaceSnapshot()) as RecordWorkspaceSnapshot;
+    const next = (await runtime.getRecordWorkspaceSnapshot()) as RecordWorkspaceSnapshot;
+    if (request !== readRequest) return;
+    if (next.record_id !== snapshot.value.record_id) editOpen.value = false;
+    snapshot.value = next;
     void loadTraceability(snapshot.value);
     loadSemanticMap();
   } catch (exc) {
+    if (request !== readRequest) return;
+    if (
+      exc &&
+      typeof exc === "object" &&
+      "status" in exc &&
+      [401, 403].includes(Number(exc.status))
+    ) {
+      clearSelection();
+      loading.value = false;
+    }
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
-    loading.value = false;
+    if (request === readRequest) loading.value = false;
   }
 }
 const newer = useNewerData();
@@ -154,13 +177,19 @@ async function refreshAfter(action: () => Promise<unknown> | unknown) {
     await action();
     await load();
   } catch (exc) {
+    if (!snapshot.value.available) {
+      loading.value = false;
+      error.value = exc instanceof Error ? exc.message : String(exc);
+    }
     toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
   }
 }
 async function previous() {
+  clearSelection();
   await refreshAfter(() => runtime.recordWorkspaceNavigate(-1));
 }
 async function next() {
+  clearSelection();
   await refreshAfter(() => runtime.recordWorkspaceNavigate(1));
 }
 function isTypingTarget(target: EventTarget | null) {
@@ -298,7 +327,34 @@ function keyboardResize(event: KeyboardEvent) {
 }
 
 const activeFileId = computed(() => shell.snapshot.files.find((file) => file.active)?.id || "");
-watch([() => route.fullPath, activeFileId, () => shell.snapshot.activeStore], () => {
+// Ignore find-query URL changes: they do not change the authorized record identity.
+const selectionKey = computed(() =>
+  JSON.stringify([
+    route.path,
+    route.query.file,
+    route.query.record,
+    (decompressUrlState(String(route.query.ts || "")) as { rr?: string } | null)?.rr || "",
+    activeFileId.value,
+    shell.snapshot.activeStore,
+    auth.user,
+  ]),
+);
+function clearSelection() {
+  loading.value = true;
+  readRequest += 1;
+  graphRequest += 1;
+  semanticRequest += 1;
+  snapshot.value = { available: false, mode: "workspace" };
+  objectGraph.value = null;
+  normativeModel.value = null;
+  graphLoading.value = false;
+  recordSemanticBuildId.value = "";
+  recordSemanticLoading.value = false;
+  editOpen.value = false;
+  closeAnnotation();
+}
+watch(selectionKey, clearSelection, { flush: "sync" });
+watch(selectionKey, () => {
   void load();
 });
 watch(
@@ -316,6 +372,9 @@ onMounted(() => {
   void load();
 });
 onBeforeUnmount(() => {
+  readRequest += 1;
+  graphRequest += 1;
+  semanticRequest += 1;
   window.removeEventListener("derridai:record-updated", onRecordUpdated);
   window.removeEventListener("keydown", handleKeyboard);
   window.removeEventListener("pointermove", resize);
@@ -324,17 +383,19 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="record-workspace-page" :aria-busy="loading">
+  <main class="record-workspace-page">
     <NewerDataBanner :visible="newer.hasNewer.value" @load="loadNewer" />
-    <div v-if="loading" class="record-workspace-loading">
-      <UiLoadingState :label="i18n.t('record.loading')" />
+    <div v-if="loading && !snapshot.available" class="record-workspace-loading" aria-busy="true">
+      <h1>{{ i18n.t("loading.record_frame") }}</h1>
+      <UiLoadingState :label="i18n.t('record.loading')" variant="skeleton" :skeleton-count="2" />
     </div>
-    <section v-else-if="error" class="record-workspace-empty">
+    <section v-if="error" class="record-workspace-empty" role="alert">
+      <p v-if="snapshot.available">{{ i18n.t("loading.stale") }}</p>
       <h1>{{ i18n.t("record.load_failed") }}</h1>
       <p>{{ error }}</p>
-      <button type="button" @click="load">{{ i18n.t("ui.retry") }}</button>
+      <button type="button" @click="load()">{{ i18n.t("ui.retry") }}</button>
     </section>
-    <section v-else-if="!snapshot.available" class="record-workspace-empty">
+    <section v-if="!loading && !error && !snapshot.available" class="record-workspace-empty">
       <h1>{{ i18n.t("record.no_record_selected") }}</h1>
       <p>
         {{ snapshot.reason || i18n.t("record.no_record_help") }}
@@ -347,7 +408,8 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </section>
-    <template v-else>
+    <template v-if="snapshot.available">
+      <UiLoadingState v-if="loading" variant="inline" :label="i18n.t('loading.updating')" />
       <RecordWorkspaceHeader
         :work="work"
         :author="author"

@@ -1,7 +1,10 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 # Canonical built-in locale. Keep keys synchronized with the paired locale module.
 
-EN_US: dict[str, str] = {'common.apply': 'Apply',
+EN_US: dict[str, str] = {'loading.updating': "Updating…",
+ 'loading.stale': "The refresh failed. Previously loaded content is shown.",
+ 'loading.record_frame': "Record",
+ 'common.apply': 'Apply',
  'common.cancel': 'Cancel',
  'common.clear': 'Clear',
  'common.close': 'Close',

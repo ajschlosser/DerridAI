@@ -1,7 +1,10 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 # Canonical built-in locale. Keep keys synchronized with the paired locale module.
 
-FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
+FR_CA: dict[str, str] = {'loading.updating': "Mise à jour…",
+ 'loading.stale': "La mise à jour a échoué. Le contenu précédemment chargé est affiché.",
+ 'loading.record_frame': "Notice",
+ 'common.apply': 'Appliquer',
  'common.cancel': 'Annuler',
  'common.clear': 'Effacer',
  'common.close': 'Fermer',
