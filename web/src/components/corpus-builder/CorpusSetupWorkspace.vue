@@ -49,7 +49,8 @@ const titleKeys: Record<CorpusSetupSectionId, [string, string]> = {
       <div>
         <h2 id="pdf-corpus-config-title">{{ i18n.t("pdf_corpus.build_configuration") }}</h2>
         <p v-if="setupWarnings" class="corpus-setup-attention">
-          {{ i18n.t("pdf_corpus.attention_required") }} · {{ setupWarnings }}
+          {{ i18n.t("pdf_corpus.attention_required") }} ·
+          {{ i18n.tf("pdf_corpus.readiness.note_count", { count: setupWarnings }) }}
         </p>
       </div>
       <div
