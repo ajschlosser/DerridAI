@@ -7,7 +7,8 @@ import { followResource } from "../realtime/follow";
 import { llmReviewDialogHtml } from "./jobReviewMarkup";
 import { openRecordPreviewDialog } from "../composables/recordPreviewDialog";
 import { createJobDialogCopy } from "./jobDialogCopy";
-import { llmTaskLauncherHtml, pdfDraftRecordHtml } from "./llmToolMarkup";
+import { llmTaskLauncherHtml } from "./llmToolMarkup";
+import { openPdfDraftRecordDialog } from "../composables/pdfDraftRecordDialog";
 import {
   openLlmToolResultDialog,
   type LlmToolResultBody,
@@ -1051,79 +1052,78 @@ export function createJobDialogs(deps: Deps) {
     render();
   }
   function openPdfDraftRecord(record: Any) {
-    const dialog = document.createElement("dialog");
-    dialog.className = "pdf-draft-dialog";
-    const files = state.files;
-    const stores = recordStores();
-    dialog.innerHTML = pdfDraftRecordHtml(
-      {
-        title: state.pdf.title || state.pdf.name,
-        page: state.pdf.page,
-        recordJson: JSON.stringify(record, null, 2),
-        files,
-        stores,
-      },
-      { tr, trf },
-    );
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    dialog.querySelector("#savePdfDraft").onclick = async () => {
-      let draft: Any;
-      try {
-        draft = JSON.parse(dialog.querySelector("#pdfDraftJson").value);
-        if (!draft || typeof draft !== "object" || Array.isArray(draft))
-          throw new Error("Draft must be one JSON object.");
-      } catch (error: Any) {
-        return toast(copy.invalidDraft(error.message), { tone: "danger" });
-      }
-      if (!draft.record_id) draft.record_id = `pdf-draft-${Date.now()}`;
-      draft.needs_review = true;
-      draft.updates = Array.isArray(draft.updates) ? draft.updates : [];
-      draft.pdf_file = state.pdf.name || draft.pdf_file || null;
-      draft.pdf_pages = [
-        ...new Set([...(Array.isArray(draft.pdf_pages) ? draft.pdf_pages : []), state.pdf.page]),
-      ].sort((a, b) => a - b);
-      draft.text_length = String(draft.text || "").length;
-
-      const fileId = dialog.querySelector("#pdfDraftFile").value;
-      const storeName = dialog.querySelector("#pdfDraftStore").value;
-      if (!fileId && !storeName) return toast(copy.chooseDestination, { tone: "warning" });
-
-      if (fileId) {
-        const file = state.files.find((item: Any) => item.id === fileId);
-        if (!file) return toast(copy.jsonlGone, { tone: "danger" });
-        file.records.push(cloneAuditValue(draft));
-        file.dirty.add(file.records.length - 1);
-        await persistFileNow(file);
-      }
-      if (storeName) {
+    openPdfDraftRecordDialog({
+      title: state.pdf.title || state.pdf.name,
+      page: state.pdf.page,
+      recordJson: JSON.stringify(record, null, 2),
+      files: state.files.map((file: Any) => ({
+        id: file.id,
+        name: file.name,
+        count: file.records.length,
+      })),
+      stores: recordStores().map((store: Any) => ({
+        id: store.name,
+        name: store.name,
+        count: Number(store.count || 0),
+      })),
+      save: async ({ json, fileId, storeName }) => {
+        let draft: Any;
         try {
-          await api(`/api/stores/${encodeURIComponent(storeName)}/records`, {
-            method: "POST",
-            body: JSON.stringify({ record: upsertRecordPayload(draft) }),
-          });
-          await refreshStores();
+          draft = JSON.parse(json);
+          if (!draft || typeof draft !== "object" || Array.isArray(draft))
+            throw new Error("Draft must be one JSON object.");
         } catch (error: Any) {
-          return toast(copy.chromaUpsertFailed(error.message), { tone: "danger" });
+          toast(copy.invalidDraft(error.message), { tone: "danger" });
+          return false;
         }
-      }
-      close();
-      shell();
-      renderView();
-      toast(
-        fileId && storeName
-          ? copy.draftAddedBoth(draft.record_id)
-          : fileId
-            ? copy.draftAddedJsonl(draft.record_id)
-            : copy.draftAddedChroma(draft.record_id),
-        { tone: "success" },
-      );
-    };
+        if (!draft.record_id) draft.record_id = `pdf-draft-${Date.now()}`;
+        draft.needs_review = true;
+        draft.updates = Array.isArray(draft.updates) ? draft.updates : [];
+        draft.pdf_file = state.pdf.name || draft.pdf_file || null;
+        draft.pdf_pages = [
+          ...new Set([...(Array.isArray(draft.pdf_pages) ? draft.pdf_pages : []), state.pdf.page]),
+        ].sort((a, b) => a - b);
+        draft.text_length = String(draft.text || "").length;
+
+        if (!fileId && !storeName) {
+          toast(copy.chooseDestination, { tone: "warning" });
+          return false;
+        }
+        if (fileId) {
+          const file = state.files.find((item: Any) => item.id === fileId);
+          if (!file) {
+            toast(copy.jsonlGone, { tone: "danger" });
+            return false;
+          }
+          file.records.push(cloneAuditValue(draft));
+          file.dirty.add(file.records.length - 1);
+          await persistFileNow(file);
+        }
+        if (storeName) {
+          try {
+            await api(`/api/stores/${encodeURIComponent(storeName)}/records`, {
+              method: "POST",
+              body: JSON.stringify({ record: upsertRecordPayload(draft) }),
+            });
+            await refreshStores();
+          } catch (error: Any) {
+            toast(copy.chromaUpsertFailed(error.message), { tone: "danger" });
+            return false;
+          }
+        }
+        shell();
+        renderView();
+        toast(
+          fileId && storeName
+            ? copy.draftAddedBoth(draft.record_id)
+            : fileId
+              ? copy.draftAddedJsonl(draft.record_id)
+              : copy.draftAddedChroma(draft.record_id),
+          { tone: "success" },
+        );
+        return true;
+      },
+    });
   }
   function openTouchup(inputItems = null, initialMode = "foreground") {
     const items = normalizeTouchupItems(inputItems);

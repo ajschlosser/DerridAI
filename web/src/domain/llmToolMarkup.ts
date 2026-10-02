@@ -1,10 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
-import { bindCopy } from "../i18n/bindCopy";
 import { esc, icon } from "./html";
 
 type Tr = (key: string, fallback?: string) => string;
-type Trf = (key: string, fallback: string, values?: Record<string, unknown>) => string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
@@ -80,25 +78,4 @@ export function llmTaskLauncherHtml(
       <div class="tools llm-tool-profile-actions"><button class="btn small" id="toolWarm">${icon("spark")}${esc(tr("jobs.tool.warm"))}</button>${isResearcher ? "" : `<button class="btn small" id="toolProviders">${icon("gear")}${esc(tr("pdf.manage_providers"))}</button>`}<span class="note" id="toolStatus">${status.available ? esc(tr("jobs.tool.endpoint_ready")) : esc(status.error || tr("providers.not_verified"))}</span></div>
     </div>
     <div class="da"><button class="btn" data-close>${esc(tr("common.cancel"))}</button><button class="btn primary" id="runLlmTask">${icon("spark")}${esc(runMode === "background" ? tr("jobs.tool.start_background") : tr("jobs.tool.run_now"))}</button></div>`;
-}
-
-export function pdfDraftRecordHtml(
-  input: { title: string; page: number; recordJson: string; files: Any[]; stores: Any[] },
-  deps: { tr: Tr; trf: Trf },
-): string {
-  const { tr, trf } = { ...deps, ...bindCopy(deps.tr, deps.trf) };
-  const { title, page, recordJson, files, stores } = input;
-  const chromaDisabled = stores.length
-    ? ""
-    : `disabled data-disabled-reason="${esc(tr("jobs.draft.chroma_required"))}" title="${esc(tr("jobs.draft.chroma_required"))}"`;
-  return `<div class="dh"><div><h2 class="dialog-title">${esc(tr("jobs.draft.title"))}</h2><div class="dialog-subtitle">${esc(title)} · ${esc(trf("jobs.draft.subtitle", { page }))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db pdf-draft-body">
-    <div class="info warn">${esc(tr("jobs.draft.warn"))}</div>
-    <textarea class="pdf-draft-json" id="pdfDraftJson" spellcheck="false">${esc(recordJson)}</textarea>
-    <div class="pdf-draft-targets">
-      <div class="field"><label>${esc(tr("jobs.draft.jsonl"))}</label><select class="control" id="pdfDraftFile"><option value="">${esc(tr("jobs.draft.no_jsonl"))}</option>${files.map((file: Any) => `<option value="${esc(file.id)}">${esc(file.name)} · ${esc(trf("jobs.draft.file_records", { count: file.records.length }))}</option>`).join("")}</select></div>
-      <div class="field"><label>${esc(tr("jobs.draft.chroma"))}</label><select class="control" id="pdfDraftStore" ${chromaDisabled}><option value="">${esc(stores.length ? tr("jobs.draft.no_chroma") : tr("jobs.draft.no_db"))}</option>${stores.map((store: Any) => `<option value="${esc(store.name)}">${esc(store.name)} · ${esc(trf("jobs.draft.file_records", { count: Number(store.count || 0).toLocaleString() }))}</option>`).join("")}</select></div>
-    </div>
-  </div>
-  <div class="da"><button class="btn" data-close>${esc(tr("common.cancel"))}</button><button class="btn primary" id="savePdfDraft">${icon("check")}${esc(tr("jobs.draft.add"))}</button></div>`;
 }

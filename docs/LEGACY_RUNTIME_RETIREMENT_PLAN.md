@@ -201,7 +201,8 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] `recordDialogs`: upsert queue (`UpsertQueueDialog.vue` + `composables/upsertQueueDialog.ts`; the forwarder supplies plain-data `items()` (re-read after a removal), `remove` and `sync`. The change list is a disclosure button with `aria-expanded`; unchecked state now survives removing a record). `recordDialogs` is now fully ported
   - [x] `jobDialogs`: record preview (`RecordPreviewDialog.vue` + `composables/recordPreviewDialog.ts`; the forwarder formats labels and values, the component only renders; the "copy" button keeps `data-copy-row-key` for the page-level handler; `recordPreviewMarkup.ts` deleted)
   - [x] `jobDialogs`: LLM tool result (`LlmToolResultDialog.vue` + `composables/llmToolResultDialog.ts`; the forwarder builds a typed body and one optional follow-up `action`, which runs after the dialog closes; `llmToolResultBody`/`llmToolResultDialogHtml` are gone. The grade view still arrives as escaped `gradeHtml` from the shared renderer)
-  - [ ] remaining `jobDialogs` (job details, job results, task launcher, PDF draft record, touch-up), each with its markup helper in `domain/job*Markup.ts`
+  - [x] `jobDialogs`: PDF draft record (`PdfDraftRecordDialog.vue` + `composables/pdfDraftRecordDialog.ts`; the component owns the JSON text and destinations, the forwarder's `save` validates, writes and resolves true to close, so a rejected draft keeps its edits; `pdfDraftRecordHtml` is gone)
+  - [ ] remaining `jobDialogs` (job details, job results, task launcher, touch-up), each with its markup helper in `domain/job*Markup.ts`
 - [ ] Step 4 state slices and deletion
 
 Notes for the next session:

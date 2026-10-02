@@ -20,6 +20,7 @@ import RemoveWorkDialog from "./components/RemoveWorkDialog.vue";
 import SeparateWorksDialog from "./components/SeparateWorksDialog.vue";
 import BulkFieldEditorDialog from "./components/BulkFieldEditorDialog.vue";
 import LlmToolResultDialog from "./components/LlmToolResultDialog.vue";
+import PdfDraftRecordDialog from "./components/PdfDraftRecordDialog.vue";
 import RecordPreviewDialog from "./components/RecordPreviewDialog.vue";
 import UpsertQueueDialog from "./components/UpsertQueueDialog.vue";
 import RecordFieldEditorDialog from "./components/RecordFieldEditorDialog.vue";
@@ -766,6 +767,7 @@ watch(
   <UpsertQueueDialog />
   <RecordPreviewDialog />
   <LlmToolResultDialog />
+  <PdfDraftRecordDialog />
   <WorkMetadataEditorDialog />
   <WorkMetadataLlmDialog />
   <WorkMetadataProposalDialog />
