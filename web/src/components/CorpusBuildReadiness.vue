@@ -63,6 +63,7 @@ const blockingCount = computed(
 const warningNotices = computed<Notice[]>(() =>
   warnings.value.map((issue) => ({ id: issue.message, tone: "warning", text: issue.message })),
 );
+const profileBusyWarning = computed(() => warnings.value.some((issue) => issue.id === "profile_busy"));
 function dismissWarnings(ids: string[]) {
   dismissed.value = new Set([...dismissed.value, ...ids]);
 }
@@ -246,7 +247,7 @@ const sourceFacts = computed(() => {
       @dismiss="(id) => dismissWarnings([id])"
       @dismiss-all="dismissWarnings"
     />
-    <p v-if="activeBuildCount" class="capacity-note">
+    <p v-if="activeBuildCount && !profileBusyWarning" class="capacity-note">
       {{ i18n.tf("pdf_corpus.active_build_capacity", { count: activeBuildCount }) }}
     </p>
 
