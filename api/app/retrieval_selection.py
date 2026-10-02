@@ -96,21 +96,21 @@ def mmr_select[Candidate: Mapping[str, Any]](
         return []
     lam = max(0.0, min(1.0, float(lambda_mult)))
     remaining: list[Candidate] = list(candidates)
+    relevances = [float(relevance(candidate)) for candidate in remaining]
+    vectors = [vector(candidate) for candidate in remaining]
+    diversities = [0.0] * len(remaining)
     selected: list[dict[str, Any]] = []
 
     while remaining and len(selected) < bounded_limit:
         best_index = 0
         best_score = -float("inf")
-        for index, candidate in enumerate(remaining):
-            rel = float(relevance(candidate))
-            diversity = max(
-                (
-                    cosine_similarity(vector(candidate), chosen.get("_mmr_vector"))
-                    for chosen in selected
-                ),
-                default=0.0,
-            )
-            objective = lam * rel - (1.0 - lam) * diversity
+        for index in range(len(remaining)):
+            if selected:
+                similarity = cosine_similarity(vectors[index], selected[-1].get("_mmr_vector"))
+                # Extend the previous maximum with only the newest selection.
+                # The first comparison must retain negative cosine similarity.
+                diversities[index] = similarity if len(selected) == 1 else max(diversities[index], similarity)
+            objective = lam * relevances[index] - (1.0 - lam) * diversities[index]
             if objective > best_score:
                 best_index = index
                 best_score = objective
@@ -119,7 +119,9 @@ def mmr_select[Candidate: Mapping[str, Any]](
         chosen = dict(source)
         # Keep the vector only as an internal scratch value while selecting. It
         # is removed before the result escapes so API payloads do not balloon.
-        chosen["_mmr_vector"] = vector(source)
+        chosen["_mmr_vector"] = vectors.pop(best_index)
+        relevances.pop(best_index)
+        diversities.pop(best_index)
         chosen[score_key] = best_score
         selected.append(chosen)
 
@@ -166,7 +168,10 @@ def source_aware_select[Candidate: Mapping[str, Any]](
         text = str(record.get("text") or "").casefold()
         return {token for token in text.split() if len(token) > 3}
 
-    def redundancy(candidate: Mapping[str, Any], selected: Mapping[str, Any]) -> float:
+    def redundancy(
+        candidate: Mapping[str, Any], selected: Mapping[str, Any],
+        left_terms: set[str], right_terms: set[str],
+    ) -> float:
         left = record_of(candidate)
         right = record_of(selected)
         penalty = 0.0
@@ -197,8 +202,6 @@ def source_aware_select[Candidate: Mapping[str, Any]](
         if left_source and left_source == right_source and abs(left_page - right_page) <= 1:
             penalty += 0.30
 
-        left_terms = text_terms(candidate)
-        right_terms = text_terms(selected)
         if left_terms and right_terms:
             overlap = len(left_terms & right_terms) / max(1, min(len(left_terms), len(right_terms)))
             penalty += min(0.30, overlap * 0.30)
@@ -209,21 +212,29 @@ def source_aware_select[Candidate: Mapping[str, Any]](
         # outweigh a near-tied relevance score.
         return min(0.95, penalty)
 
+    relevances = [normalized(value) for value in raw_relevance]
+    # Tokenize each passage once, rather than once per pair per round.
+    terms = [text_terms(candidate) for candidate in remaining]
+    penalties = [0.0] * len(remaining)
+    selected_terms: set[str] = set()
     selected: list[dict[str, Any]] = []
     while remaining and len(selected) < bounded_limit:
         best_index = 0
         best_score = -float("inf")
         for index, candidate in enumerate(remaining):
-            rel = normalized(float(relevance(candidate)))
-            duplicate_penalty = max(
-                (redundancy(candidate, chosen) for chosen in selected),
-                default=0.0,
-            )
-            objective = rel - duplicate_penalty
+            if selected:
+                penalties[index] = max(
+                    penalties[index],
+                    redundancy(candidate, selected[-1], terms[index], selected_terms),
+                )
+            objective = relevances[index] - penalties[index]
             if objective > best_score:
                 best_score = objective
                 best_index = index
         chosen = dict(remaining.pop(best_index))
+        selected_terms = terms.pop(best_index)
+        relevances.pop(best_index)
+        penalties.pop(best_index)
         chosen["diversity_score"] = best_score
         selected.append(chosen)
 
