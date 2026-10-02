@@ -69,6 +69,9 @@ class RAGJobManager(PersistentJobStateMixin):
         self._jobs: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
         self._ollama_max_concurrent = max(1, int(ollama_max_concurrent))
+        capacity_coordinator.set_limit(
+            "ollama_runtime", "global", self._ollama_max_concurrent
+        )
         self._threads: dict[str, threading.Thread] = {}
         self._start_persistent_state()
 
@@ -76,6 +79,7 @@ class RAGJobManager(PersistentJobStateMixin):
         value = max(1, min(32, int(limit)))
         with self._lock:
             self._ollama_max_concurrent = value
+        capacity_coordinator.set_limit("ollama_runtime", "global", value)
         return self.concurrency_status()
 
     def concurrency_status(self) -> dict[str, Any]:
@@ -129,6 +133,9 @@ class RAGJobManager(PersistentJobStateMixin):
                 self._ollama_max_concurrent = max(
                     1,
                     min(32, int(requested_ollama_limit)),
+                )
+                capacity_coordinator.set_limit(
+                    "ollama_runtime", "global", self._ollama_max_concurrent
                 )
 
             profile_limit = provider_limit(
