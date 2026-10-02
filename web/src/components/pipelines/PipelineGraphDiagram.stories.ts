@@ -56,3 +56,30 @@ export const MultipleRoutes: Story = {
     ],
   },
 };
+
+const longId = "review_" + "source_provenance_and_attribution_".repeat(18);
+export const DenseLongLabels: Story = {
+  args: {
+    stages: [
+      {
+        ...stage(longId, "retrieve.chroma_similarity", ["a", "b", "c", "d", "e", "f", "g"]),
+        on_empty: "g",
+        on_error: "g",
+        on_timeout: "g",
+        on_unavailable: "g",
+      },
+      ...["a", "b", "c", "d", "e", "f"].map((id) => ({
+        ...stage(id, "retrieve.lexical_bm25", ["g"]),
+        on_empty: "g",
+      })),
+      stage("g", "select.top_k"),
+    ],
+    entryStageIds: [longId],
+    badges: {
+      [longId]: {
+        text: "A long translated explanation of the stage's provenance checks. ".repeat(8),
+        tone: "warn",
+      },
+    },
+  },
+};

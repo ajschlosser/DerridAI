@@ -1,4 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { routePipelineEdges } from "./pipelineRouting";
 import type { PipelineDefinition, PipelineRunTrace, PipelineStage } from "../types/pipelines";
 
 export const PIPELINE_NODE_WIDTH = 280;
@@ -22,7 +23,7 @@ export type PipelineGraphEdge = {
   kind: PipelineEdgeKind;
   traversed: boolean;
   path: string;
-  lane: number;
+  points: Array<{ x: number; y: number }>;
 };
 
 export type PipelineGraphNode = {
@@ -32,6 +33,8 @@ export type PipelineGraphNode = {
   entry: boolean;
   x: number;
   y: number;
+  width: number;
+  height: number;
   executionStatus: string | null;
   presence: "configured" | "not_reached" | "observed_only";
   elapsedMs: number | null;
@@ -115,49 +118,13 @@ export function configurationForTrace(
   };
 }
 
-/** Separate connection ports and route long/backward edges outside the card grid. */
-export function pipelineEdgePath(
-  from: PipelineGraphNode,
-  to: PipelineGraphNode,
-  lane = 0,
-  nodes: PipelineGraphNode[] = [from, to],
-  orientation: PipelineDiagramOrientation = "horizontal",
-): string {
-  const vertical = orientation === "vertical";
-  const primary = (node: PipelineGraphNode) => (vertical ? node.y : node.x);
-  const secondary = (node: PipelineGraphNode) => (vertical ? node.x : node.y);
-  const length = vertical ? PIPELINE_NODE_HEIGHT : PIPELINE_NODE_WIDTH;
-  const breadth = vertical ? PIPELINE_NODE_WIDTH : PIPELINE_NODE_HEIGHT;
-  const point = (a: number, b: number) => (vertical ? `${b} ${a}` : `${a} ${b}`);
-  // Distinct ports keep parallel next/fallback arrowheads visible.
-  const port = 24 + (lane % 5) * 22;
-  const a = primary(from) + length;
-  const b = primary(to);
-  const u = secondary(from) + port;
-  const v = secondary(to) + port;
-  const blocked = nodes.some(
-    (node) =>
-      node.id !== from.id &&
-      node.id !== to.id &&
-      primary(node) > primary(from) &&
-      primary(node) < primary(to),
-  );
-  if (b > a && !blocked) {
-    const bend = (a + b) / 2 + ((lane % 5) - 2) * 8;
-    return `M ${point(a, u)} C ${point(bend, u)}, ${point(bend, v)}, ${point(b, v)}`;
-  }
-  const outside = Math.max(...nodes.map((node) => secondary(node) + breadth)) + 32 + lane * 18;
-  const exit = a + 16 + (lane % 5) * 6;
-  const entry = b - 16 - (lane % 5) * 6;
-  return `M ${point(a, u)} L ${point(exit, u)} L ${point(exit, outside)} L ${point(entry, outside)} L ${point(entry, v)} L ${point(b, v)}`;
-}
-
 export function layoutPipelineDiagram(
   stages: PipelineStage[],
   entryStageIds: string[],
   execution?: PipelineRunTrace | null,
   orientation: PipelineDiagramOrientation = "horizontal",
   density: PipelineDiagramDensity = "standard",
+  measured: Record<string, { width: number; height: number }> = {},
 ): PipelineDiagram {
   const { columnGap, rowGap } = DENSITY_SPACING[density];
   const byId = new Map(stages.map((stage) => [stage.id, stage]));
@@ -231,33 +198,51 @@ export function layoutPipelineDiagram(
     column.push(id);
     columns.set(index, column);
   }
-  const columnCount = Math.max(1, ...[...columns.keys()].map((index) => index + 1));
-  const tallest = Math.max(1, ...[...columns.values()].map((column) => column.length));
-  const height = CANVAS_PAD * 2 + tallest * PIPELINE_NODE_HEIGHT + (tallest - 1) * rowGap;
-  const width =
-    CANVAS_PAD * 2 + columnCount * PIPELINE_NODE_WIDTH + Math.max(0, columnCount - 1) * columnGap;
-
+  const sizes = new Map(
+    ids.map((id) => {
+      const ports = Math.max(
+        edges.filter((e) => e.from === id).length,
+        edges.filter((e) => e.to === id).length,
+      );
+      return [
+        id,
+        {
+          width: Math.max(
+            PIPELINE_NODE_WIDTH,
+            measured[id]?.width || 0,
+            orientation === "vertical" ? 48 + ports * 18 : 0,
+          ),
+          height: Math.max(
+            PIPELINE_NODE_HEIGHT,
+            measured[id]?.height || 0,
+            orientation === "horizontal" ? 48 + ports * 18 : 0,
+          ),
+        },
+      ];
+    }),
+  );
   const nodes: PipelineGraphNode[] = [];
-  for (const [index, column] of columns) {
-    const stack = column.length * PIPELINE_NODE_HEIGHT + Math.max(0, column.length - 1) * rowGap;
-    const offsetY = CANVAS_PAD + (height - CANVAS_PAD * 2 - stack) / 2;
-    column.forEach((id, row) => {
-      const stage = byId.get(id)!;
-      const mark = observed.get(id);
-      const configured = stages.some((item) => item.id === id);
+  let primary = CANVAS_PAD;
+  for (const [, column] of [...columns].sort((a, b) => a[0] - b[0])) {
+    const primarySize = Math.max(
+      ...column.map((id) =>
+        orientation === "horizontal" ? sizes.get(id)!.width : sizes.get(id)!.height,
+      ),
+    );
+    let secondary = CANVAS_PAD;
+    for (const id of column) {
+      const stage = byId.get(id)!,
+        mark = observed.get(id),
+        configured = stages.some((item) => item.id === id);
+      const size = sizes.get(id)!;
       nodes.push({
         id,
         strategy: stage.strategy,
         enabled: stage.enabled,
         entry: entryStageIds.includes(id),
-        x:
-          orientation === "horizontal"
-            ? CANVAS_PAD + index * (PIPELINE_NODE_WIDTH + columnGap)
-            : CANVAS_PAD + row * (PIPELINE_NODE_WIDTH + columnGap),
-        y:
-          orientation === "horizontal"
-            ? offsetY + row * (PIPELINE_NODE_HEIGHT + rowGap)
-            : CANVAS_PAD + index * (PIPELINE_NODE_HEIGHT + rowGap),
+        x: orientation === "horizontal" ? primary : secondary,
+        y: orientation === "horizontal" ? secondary : primary,
+        ...size,
         executionStatus: execution
           ? mark?.stage.status || (configured ? "not_reached" : null)
           : null,
@@ -267,7 +252,11 @@ export function layoutPipelineDiagram(
         outputCount: mark?.stage.output_count ?? null,
         fallbackReason: mark?.stage.fallback_reason ?? null,
       });
-    });
+      secondary +=
+        (orientation === "horizontal" ? size.height : size.width) +
+        (orientation === "horizontal" ? rowGap : columnGap);
+    }
+    primary += primarySize + (orientation === "horizontal" ? columnGap : rowGap);
   }
 
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
@@ -289,24 +278,33 @@ export function layoutPipelineDiagram(
       id: `${edge.kind}:${edge.from}:${edge.to}:${index}`,
       ...edge,
       traversed,
-      lane: index,
-      path: pipelineEdgePath(from, to, index, nodes, orientation),
+      path: "",
+      points: [],
     });
   });
 
-  if (orientation === "vertical") {
-    return {
-      nodes,
-      edges: drawn,
-      width:
-        CANVAS_PAD * 2 +
-        tallest * PIPELINE_NODE_WIDTH +
-        Math.max(0, tallest - 1) * columnGap +
-        64 +
-        edges.length * 18,
-      height:
-        CANVAS_PAD * 2 + columnCount * PIPELINE_NODE_HEIGHT + Math.max(0, columnCount - 1) * rowGap,
-    };
+  const routed = routePipelineEdges(nodes, drawn, orientation);
+  const points = [
+    ...nodes.flatMap((n) => [
+      { x: n.x, y: n.y },
+      { x: n.x + n.width, y: n.y + n.height },
+    ]),
+    ...routed.flatMap((e) => e.points),
+  ];
+  const dx = CANVAS_PAD - Math.min(CANVAS_PAD, ...points.map((p) => p.x));
+  const dy = CANVAS_PAD - Math.min(CANVAS_PAD, ...points.map((p) => p.y));
+  for (const node of nodes) {
+    node.x += dx;
+    node.y += dy;
   }
-  return { nodes, edges: drawn, width, height: height + 64 + edges.length * 18 };
+  for (const edge of routed) {
+    edge.points = edge.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+    edge.path = edge.points.map((p, i) => (i ? "L " : "M ") + p.x + " " + p.y).join(" ");
+  }
+  return {
+    nodes,
+    edges: routed,
+    width: Math.max(0, ...points.map((p) => p.x)) + dx + CANVAS_PAD,
+    height: Math.max(0, ...points.map((p) => p.y)) + dy + CANVAS_PAD,
+  };
 }

@@ -9,6 +9,8 @@ const node: PipelineGraphNode = {
   strategy: "retrieve.chroma_similarity",
   enabled: true,
   entry: true,
+  width: 280,
+  height: 160,
   x: 0,
   y: 0,
   executionStatus: null,

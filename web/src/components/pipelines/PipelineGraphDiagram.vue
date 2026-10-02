@@ -1,18 +1,17 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, nextTick, ref, useId, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch, type Directive } from "vue";
 import UiRelationCardNode from "../relations/UiRelationCardNode.vue";
 import UiRelationEdge from "../relations/UiRelationEdge.vue";
 import UiRelationNodeShell from "../relations/UiRelationNodeShell.vue";
 import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
 import { relationBoundsForPoints } from "../../domain/relations/geometry";
+import { routePipelineEdges } from "../../domain/pipelineRouting";
 import { RELATION_SURFACE_PRESETS } from "../../domain/relations/presets";
 import {
   PIPELINE_NODE_HEIGHT,
-  PIPELINE_NODE_WIDTH,
   layoutPipelineDiagram,
-  pipelineEdgePath,
   type PipelineDiagramDensity,
   type PipelineDiagramOrientation,
   type PipelineEdgeKind,
@@ -90,6 +89,40 @@ const viewport = ref<InstanceType<typeof UiRelationViewport> | null>(null);
 const arrowMarkerId = `pipeline-arrow-${useId()}`;
 const layoutState = useRelationLayoutState();
 
+const measured = ref<Record<string, { width: number; height: number }>>({});
+const measuredIds = new WeakMap<HTMLElement, string>();
+function measureCard(el: HTMLElement) {
+  const id = measuredIds.get(el);
+  if (!id || !el.offsetHeight) return;
+  const height = Math.max(PIPELINE_NODE_HEIGHT, Math.ceil(el.offsetHeight) + 24);
+  if (measured.value[id]?.height !== height) {
+    measured.value = { ...measured.value, [id]: { width: 0, height } };
+    layoutState.clearPositions();
+  }
+}
+const sizeObserver =
+  typeof ResizeObserver === "undefined"
+    ? null
+    : new ResizeObserver((entries) => {
+        for (const entry of entries) measureCard(entry.target as HTMLElement);
+      });
+const vMeasure: Directive<HTMLElement, string> = {
+  mounted(el, { value }) {
+    measuredIds.set(el, value);
+    sizeObserver?.observe(el);
+    measureCard(el);
+  },
+  updated(el, { value }) {
+    measuredIds.set(el, value);
+    measureCard(el);
+  },
+  unmounted(el) {
+    sizeObserver?.unobserve(el);
+    measuredIds.delete(el);
+  },
+};
+onUnmounted(() => sizeObserver?.disconnect());
+
 const diagram = computed(() =>
   layoutPipelineDiagram(
     props.stages,
@@ -97,6 +130,7 @@ const diagram = computed(() =>
     props.execution || null,
     orientation.value,
     density.value,
+    measured.value,
   ),
 );
 const nodes = computed(() =>
@@ -120,23 +154,18 @@ function edgeTypeFor(edge: { from: string; kind: PipelineEdgeKind }, strategyId:
 }
 const edges = computed(() => {
   const byId = new Map(nodes.value.map((node) => [node.id, node]));
-  return diagram.value.edges.map((edge) => {
+  return routePipelineEdges(nodes.value, diagram.value.edges, orientation.value).map((edge) => {
     const from = byId.get(edge.from)!;
-    const to = byId.get(edge.to)!;
     const orderingOnly = edge.kind === "next" && ordering.value.has(`${edge.from}\u0000${edge.to}`);
     const type = orderingOnly ? "" : edgeTypeFor(edge, from.strategy);
     return {
       ...edge,
-      path: pipelineEdgePath(from, to, edge.lane, nodes.value, orientation.value),
       orderingOnly,
       typeLabel: orderingOnly
         ? t("pipelines.edge_ordering_only", "Runs first (no data)")
         : type
           ? pipelineDataTypeLabel(type, t)
           : "",
-      // Label position: the middle of the straight line between the two card centres.
-      labelX: (from.x + to.x) / 2 + PIPELINE_NODE_WIDTH / 2,
-      labelY: (from.y + to.y) / 2 + PIPELINE_NODE_HEIGHT / 2,
     };
   });
 });
@@ -154,9 +183,9 @@ const selected = computed(
 const contentBounds = computed(() => {
   const points = nodes.value.flatMap((node) => [
     { x: node.x, y: node.y },
-    { x: node.x + PIPELINE_NODE_WIDTH, y: node.y + PIPELINE_NODE_HEIGHT },
+    { x: node.x + node.width, y: node.y + node.height },
   ]);
-  points.push({ x: 0, y: 0 }, { x: diagram.value.width, y: diagram.value.height });
+  points.push(...edges.value.flatMap((edge) => edge.points));
   return relationBoundsForPoints(points, 28)!;
 });
 const viewportHeight = computed(() => Math.min(620, Math.max(320, diagram.value.height + 40)));
@@ -298,9 +327,35 @@ function infoRows(node: (typeof nodes.value)[number]): TooltipInfoboxRow[] {
 }
 
 function moveNode(id: string, point: { x: number; y: number }) {
+  const proposed = nodes.value.map((node) => (node.id === id ? { ...node, ...point } : node));
+  const moved = proposed.find((node) => node.id === id)!;
+  if (
+    proposed.some(
+      (node) =>
+        node.id !== id &&
+        moved.x < node.x + node.width + 16 &&
+        moved.x + moved.width + 16 > node.x &&
+        moved.y < node.y + node.height + 16 &&
+        moved.y + moved.height + 16 > node.y,
+    )
+  )
+    return;
+  // Keep the last valid placement if a drag would close the available routing corridors.
+  try {
+    routePipelineEdges(proposed, diagram.value.edges, orientation.value);
+  } catch {
+    return;
+  }
   layoutState.setPosition(id, point);
   selectedId.value = id;
 }
+
+onMounted(() => {
+  void nextTick(fitView);
+});
+watch(measured, () => {
+  void nextTick(fitView);
+});
 
 function fitView() {
   viewport.value?.fitView(contentBounds.value);
@@ -425,7 +480,7 @@ function chooseDensity(next: PipelineDiagramDensity) {
         :content-bounds="contentBounds"
         :content-width="diagram.width"
         :content-height="diagram.height"
-        :min-zoom="surfacePreset.minZoom"
+        :min-zoom="0.01"
         :max-zoom="surfacePreset.maxZoom"
         :resize-axis="surfacePreset.resizeAxis"
       >
@@ -448,26 +503,17 @@ function chooseDensity(next: PipelineDiagramDensity) {
                 <path d="M 0 0 L 10 5 L 0 10 z" />
               </marker>
             </defs>
-            <UiRelationEdge
-              v-for="edge in edges"
-              :key="edge.id"
-              class="diagram-edge"
-              :path="edge.path"
-              :data-kind="edge.kind"
-              :data-traversed="edge.traversed ? 'true' : 'false'"
-              :data-ordering="edge.orderingOnly ? 'true' : undefined"
-              :marker-end="`url(#${arrowMarkerId})`"
-            />
-            <text
-              v-for="edge in labelledEdges"
-              :key="`label-${edge.id}`"
-              class="diagram-edge-label"
-              :x="edge.labelX"
-              :y="edge.labelY"
-              text-anchor="middle"
-            >
-              {{ edge.typeLabel }}
-            </text>
+            <g v-for="edge in edges" :key="edge.id">
+              <path class="diagram-edge-casing" :d="edge.path" />
+              <UiRelationEdge
+                class="diagram-edge"
+                :path="edge.path"
+                :data-kind="edge.kind"
+                :data-traversed="edge.traversed ? 'true' : 'false'"
+                :data-ordering="edge.orderingOnly ? 'true' : undefined"
+                :marker-end="`url(#${arrowMarkerId})`"
+              />
+            </g>
           </svg>
           <template v-for="node in nodes" :key="node.id">
             <UiRelationNodeShell
@@ -483,8 +529,8 @@ function chooseDensity(next: PipelineDiagramDensity) {
               :data-presence="node.presence"
               :data-wiring="flagged.has(node.id) ? 'problem' : undefined"
               :style="{
-                width: `${PIPELINE_NODE_WIDTH}px`,
-                height: `${PIPELINE_NODE_HEIGHT}px`,
+                width: `${node.width}px`,
+                height: `${node.height}px`,
               }"
               @move="moveNode(node.id, $event)"
               @activate="selectedId = node.id"
@@ -494,25 +540,27 @@ function chooseDensity(next: PipelineDiagramDensity) {
               @blur="hoveredId = ''"
             >
               <UiRelationCardNode>
-                <span class="node-kicker">
-                  <span v-if="node.entry">{{ t("pipelines.node_entry", "Entry") }}</span>
-                  <span>{{
-                    phaseLabelFor(node.strategy) ||
-                    pipelineStageFamilyLabel(familyFor(node.strategy), t)
-                  }}</span>
-                </span>
-                <strong>{{ node.id }}</strong>
-                <span>{{ labelFor(node.strategy) }}</span>
-                <span v-if="flagged.has(node.id)" class="node-badge" data-tone="danger">
-                  {{ t("pipelines.node_input_missing", "Input not satisfied") }}
-                </span>
-                <span
-                  v-else-if="badges[node.id]"
-                  class="node-badge"
-                  :data-tone="badges[node.id].tone"
-                >
-                  {{ badges[node.id].text }}
-                </span>
+                <div v-measure="node.id" class="node-content">
+                  <span class="node-kicker">
+                    <span v-if="node.entry">{{ t("pipelines.node_entry", "Entry") }}</span>
+                    <span>{{
+                      phaseLabelFor(node.strategy) ||
+                      pipelineStageFamilyLabel(familyFor(node.strategy), t)
+                    }}</span>
+                  </span>
+                  <strong>{{ node.id }}</strong>
+                  <span>{{ labelFor(node.strategy) }}</span>
+                  <span v-if="flagged.has(node.id)" class="node-badge" data-tone="danger">
+                    {{ t("pipelines.node_input_missing", "Input not satisfied") }}
+                  </span>
+                  <span
+                    v-else-if="badges[node.id]"
+                    class="node-badge"
+                    :data-tone="badges[node.id].tone"
+                  >
+                    {{ badges[node.id].text }}
+                  </span>
+                </div>
               </UiRelationCardNode>
             </UiRelationNodeShell>
             <UiTooltipInfobox
@@ -542,6 +590,12 @@ function chooseDensity(next: PipelineDiagramDensity) {
       {{ t("pipelines.diagram_empty", "This pipeline has no stages to diagram.") }}
     </p>
 
+    <ul v-if="labelledEdges.length" class="diagram-edge-labels">
+      <li v-for="edge in labelledEdges" :key="edge.id">
+        <strong>{{ edge.from }} → {{ edge.to }} · {{ edgeLabel(edge.kind) }}</strong>
+        <span class="diagram-edge-label">{{ edge.typeLabel }}</span>
+      </li>
+    </ul>
     <ul class="diagram-legend">
       <li v-for="kind in edgeKinds" :key="kind" :data-kind="kind">{{ edgeLabel(kind) }}</li>
       <li v-if="ordering.size" data-kind="ordering">
@@ -653,15 +707,37 @@ function chooseDensity(next: PipelineDiagramDensity) {
   stroke-dasharray: 10 5;
   opacity: 0.7;
 }
-.diagram-edge-label {
-  fill: var(--text-primary);
-  font-size: 12px;
-  font-weight: 700;
-  paint-order: stroke;
-  stroke: var(--surface-card);
-  stroke-width: 4px;
+.diagram-edge-labels {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  list-style: none;
+}
+.diagram-edge-labels li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.diagram-edge-casing {
+  fill: none;
+  stroke: var(--surface-inset);
+  stroke-width: 7px;
   stroke-linejoin: round;
-  pointer-events: none;
+}
+.node-content {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.diagram-node :deep(.ui-relation-card-node) {
+  overflow: visible;
+}
+.diagram-node :deep(.ui-relation-card-node span),
+.diagram-node :deep(.ui-relation-card-node strong) {
+  overflow: visible;
+  text-overflow: clip;
 }
 .diagram-edge[data-traversed="true"] {
   stroke-width: 2.25;
@@ -701,12 +777,10 @@ function chooseDensity(next: PipelineDiagramDensity) {
 .node-badge {
   display: inline-block;
   max-width: 100%;
-  overflow: hidden;
   color: var(--text-secondary);
   font-size: 0.75rem;
   font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 .node-badge[data-tone="warn"] {
   color: var(--tone-warn-fg);

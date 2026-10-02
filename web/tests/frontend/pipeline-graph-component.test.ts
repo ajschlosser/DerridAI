@@ -1,7 +1,7 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import PipelineGraphDiagram from "../../src/components/pipelines/PipelineGraphDiagram.vue";
 import type { PipelineStage, PipelineStrategy } from "../../src/types/pipelines";
 
@@ -90,12 +90,14 @@ describe("PipelineGraphDiagram relation interactions", () => {
     const node = wrapper.findAll(".diagram-node")[0];
     const before = readPosition(node.attributes("style") || "");
     const edgeBefore = wrapper.get(".diagram-edge").attributes("d");
+    const zoom = Number(layer.attributes("style")?.match(/scale\(([^)]+)\)/)?.[1] || 1);
     await node.trigger("pointerdown", { button: 0, pointerId: 2, clientX: 10, clientY: 10 });
     await node.trigger("pointermove", { pointerId: 2, clientX: 40, clientY: 25 });
     await node.trigger("pointerup", { pointerId: 2 });
     await flushPromises();
     const after = readPosition(node.attributes("style") || "");
-    expect(after).toEqual({ left: before.left + 30, top: before.top + 15 });
+    expect(after.left).toBeCloseTo(before.left + 30 / zoom);
+    expect(after.top).toBeCloseTo(before.top + 15 / zoom);
     expect(wrapper.get(".diagram-edge").attributes("d")).not.toBe(edgeBefore);
   });
 
@@ -235,4 +237,60 @@ describe("PipelineGraphDiagram edge type labels", () => {
     expect(wrapper.get(".diagram-edge").attributes("data-ordering")).toBeUndefined();
     expect(wrapper.get(".diagram-legend").text()).not.toContain("no data");
   });
+});
+
+it("reflows card bounds when rendered text grows or shrinks", async () => {
+  setActivePinia(createPinia());
+  let notify!: ResizeObserverCallback;
+  const disconnect = vi.fn();
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: ResizeObserverCallback) {
+        notify = callback;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect = disconnect;
+    },
+  );
+  const wrapper = mount(PipelineGraphDiagram, {
+    props: {
+      stages,
+      entryStageIds: ["retrieve"],
+      strategies,
+      title: "Pipeline",
+      description: "Test",
+    },
+  });
+  try {
+    const content = wrapper.get(".node-content").element as HTMLElement;
+    let height = 540;
+    Object.defineProperty(content, "offsetHeight", { get: () => height });
+    const resize = async () => {
+      notify(
+        [
+          {
+            target: content,
+            contentRect: content.getBoundingClientRect(),
+            borderBoxSize: [],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          },
+        ],
+        {} as ResizeObserver,
+      );
+      await flushPromises();
+    };
+    await resize();
+    const card = wrapper.get(".diagram-node").element as HTMLElement;
+    expect(parseFloat(card.style.height)).toBe(564);
+    height = 50;
+    await resize();
+    expect(parseFloat(card.style.height)).toBe(160);
+  } finally {
+    wrapper.unmount();
+    vi.unstubAllGlobals();
+  }
+  expect(disconnect).toHaveBeenCalled();
 });

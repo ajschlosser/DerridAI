@@ -153,3 +153,77 @@ describe("pipeline connection routing", () => {
     }
   });
 });
+
+describe("content-aware pipeline layout", () => {
+  const dense = Array.from({ length: 8 }, (_, i) => ({
+    id: String(i),
+    strategy: "strategy",
+    enabled: true,
+    config: {},
+    next: i < 7 ? [String(i + 1), "7"] : [],
+    on_empty: i < 7 ? "7" : "0",
+    on_error: i < 7 ? "7" : "7",
+  }));
+  for (const orientation of ["horizontal", "vertical"] as const) {
+    it.each([
+      { stages: dense },
+      {
+        stages: dense.map((s, i) => ({
+          ...s,
+          next: i < 7 ? [String(i + 1), "7"] : [],
+          on_empty: i < 7 ? "7" : null,
+          on_error: null,
+        })),
+      },
+    ])(orientation + " keeps tall cards and all connections separate (%#)", (fixture) => {
+      const graph = layoutPipelineDiagram(fixture.stages, ["0"], null, orientation, "standard", {
+        "3": { width: 280, height: 580 },
+      });
+      expect(graph.nodes.find((n) => n.id === "3")!.height).toBeGreaterThanOrEqual(580);
+      const segments: number[][] = [];
+      for (const edge of graph.edges) {
+        const xy = edge.path.match(/-?\d+(?:\.\d+)?/g)!.map(Number);
+        expect(xy.length).toBeGreaterThanOrEqual(4);
+        for (let i = 0; i < xy.length - 2; i += 2) {
+          const [x1, y1, x2, y2] = xy.slice(i, i + 4);
+          for (const n of graph.nodes) {
+            const crosses =
+              x1 === x2
+                ? x1 > n.x &&
+                  x1 < n.x + n.width &&
+                  Math.max(y1, y2) > n.y &&
+                  Math.min(y1, y2) < n.y + n.height
+                : y1 > n.y &&
+                  y1 < n.y + n.height &&
+                  Math.max(x1, x2) > n.x &&
+                  Math.min(x1, x2) < n.x + n.width;
+            expect(crosses, edge.id + " crosses " + n.id).toBe(false);
+          }
+          for (const [a, b, c, d] of segments) {
+            const overlaps =
+              x1 === x2 && a === c && a === x1
+                ? Math.min(Math.max(y1, y2), Math.max(b, d)) >
+                  Math.max(Math.min(y1, y2), Math.min(b, d))
+                : y1 === y2 &&
+                  b === d &&
+                  b === y1 &&
+                  Math.min(Math.max(x1, x2), Math.max(a, c)) >
+                    Math.max(Math.min(x1, x2), Math.min(a, c));
+            expect(overlaps, "Shared connection segment").toBe(false);
+          }
+        }
+        for (let i = 0; i < xy.length - 2; i += 2) segments.push(xy.slice(i, i + 4));
+      }
+      for (const a of graph.nodes)
+        for (const b of graph.nodes) {
+          if (a.id === b.id) continue;
+          expect(
+            a.x < b.x + b.width &&
+              a.x + a.width > b.x &&
+              a.y < b.y + b.height &&
+              a.y + a.height > b.y,
+          ).toBe(false);
+        }
+    });
+  }
+});
