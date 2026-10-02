@@ -15,8 +15,9 @@ const props = withDefaults(
     manifest?: Record<string, unknown>;
     disabled?: boolean;
     affectedRecords?: number;
+    showReanalyze?: boolean;
   }>(),
-  { manifest: () => ({}), disabled: false, affectedRecords: 0 },
+  { manifest: () => ({}), disabled: false, affectedRecords: 0, showReanalyze: true },
 );
 const emit = defineEmits<{ save: [changes: Record<string, unknown>]; reanalyze: [] }>();
 const i18n = useI18nStore();
@@ -246,6 +247,7 @@ function reset() {
       </div>
       <div class="manifest-impact-side">
         <UiButton
+          v-if="props.showReanalyze"
           :label="i18n.t('pdf_corpus.reanalyze_document')"
           :disabled="props.disabled"
           :title="i18n.t('pdf_corpus.reanalyze_document_help')"
