@@ -23,6 +23,7 @@ const props = defineProps<{
   canResume: boolean;
   hasRecordTopology: boolean;
   readyCount?: number;
+  enrichingCount?: number;
   preparingCount?: number;
   attentionCount?: number;
   awaitingManifestReview: boolean;
@@ -68,6 +69,7 @@ const errorNotices = computed<Notice[]>(() =>
       :can-resume="canResume"
       :has-record-topology="hasRecordTopology"
       :ready-count="readyCount"
+      :enriching-count="enrichingCount"
       :preparing-count="preparingCount"
       :attention-count="attentionCount"
       :busy="busy"
