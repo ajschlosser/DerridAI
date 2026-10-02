@@ -775,27 +775,18 @@ function returnToReadiness() {
   void switchWorkspace("publish");
 }
 let remediationAdvancing = false;
-watch(fixRemaining, async (remaining, previous) => {
-  const current = fixContext.value;
+watch(fixRemaining, (remaining, previous) => {
   if (
-    !current ||
+    !fixContext.value ||
     workspaceMode.value !== "review" ||
-    remediationAdvancing ||
-    previous <= remaining
+    previous <= remaining ||
+    remaining !== 0
   ) {
     return;
   }
-  if (remaining === 0) {
-    returnToReadiness();
-    return;
-  }
-  // Metadata review already advances when the last pending field on a Record is decided.
-  // Validation has exact-field completion handling below.
-  if (current.code === "required_metadata" || current.code === "metadata_validation") return;
-  remediationAdvancing = true;
-  await nextTick();
-  await focusQueueMove(1);
-  remediationAdvancing = false;
+  // Record decisions and metadata review already own their queue-aware advancement.
+  // When the blocker itself disappears, return to the authoritative Publish readiness state.
+  returnToReadiness();
 });
 watch(
   fixIssues,
