@@ -293,6 +293,7 @@ Select a work with its card; the card is a button, so it works from the keyboard
 - **Comfortable** rows show the full extracted text. **Compact** rows are tighter, narrow the text column, and show the text on one line; where it is cut off, **Expand** shows the rest of that row's text.
 - **Get Citation** copies an inline or full citation. The notification quotes exactly what was copied. The menu closes on a choice, on Escape, or on a click elsewhere.
 - **Copy view link** copies a link that reopens this table as shown: file name, search, column filters, sort, page and columns. JSONL records stay in this browser, so whoever opens the link is asked for the same file. The notification shows the copied link.
+- Notifications name their kind (success, information, warning or error) in text and with a symbol, not by colour alone, and are announced politely by screen readers. Success, information and warning notifications disappear after a time that grows with the message length, and pause while the pointer or keyboard focus is on them. Error notifications stay until dismissed with their close button or Escape.
 
 ### Create a JSONL subset
 

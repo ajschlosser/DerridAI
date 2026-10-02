@@ -124,3 +124,39 @@ describe("record presenters", () => {
     expect(presenters.searchRecordOptions("")).toHaveLength(2);
   });
 });
+
+describe("workMetadataControlSpec", () => {
+  const rowsOf = (field: string, ...values: unknown[]) =>
+    values.map((value, index) => ({ file: { name: "f" }, index, record: { [field]: value } }));
+  const spec = (field: string, rows: unknown[]) =>
+    presenters.workMetadataControlSpec(field, rows) as Record<string, unknown>;
+
+  it("chooses the control kind from the value, matching the parser", () => {
+    expect(spec("document_is_translation", rowsOf("document_is_translation", true))).toMatchObject({
+      kind: "boolean",
+      initial: "true",
+      mixed: false,
+    });
+    expect(spec("keywords", rowsOf("keywords", ["a"]))).toMatchObject({
+      kind: "json",
+      initial: JSON.stringify(["a"], null, 2),
+    });
+    expect(spec("year", rowsOf("year", undefined))).toMatchObject({ kind: "number", initial: "" });
+    expect(spec("edition", rowsOf("edition", "2nd"))).toMatchObject({
+      kind: "textarea",
+      initial: "2nd",
+    });
+    expect(spec("publisher", rowsOf("publisher", "P"))).toMatchObject({
+      kind: "text",
+      initial: "P",
+    });
+  });
+
+  it("starts blank and reports the variant count when records disagree", () => {
+    expect(spec("publisher", rowsOf("publisher", "A", "B", "A"))).toMatchObject({
+      mixed: true,
+      mixedCount: 2,
+      initial: "",
+    });
+  });
+});

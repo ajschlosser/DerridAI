@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { toast } from "../composables/notifications";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
@@ -273,7 +274,7 @@ async function loadWorkspace(refresh = true) {
     }
     schedulePoll();
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   } finally {
     loading.value = false;
   }
@@ -365,7 +366,7 @@ async function runResearch() {
       .querySelector(".research-answer-workspace")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   } finally {
     starting.value = false;
   }
@@ -450,7 +451,7 @@ async function openJob(job: ResearchJob) {
       .querySelector(".research-answer-workspace")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 async function cancelJob(job: ResearchJob) {
@@ -459,7 +460,7 @@ async function cancelJob(job: ResearchJob) {
     if (activeJob.value?.id === job.id) activeJob.value = updated;
     await refreshRuns();
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 async function removeJob(job: ResearchJob) {
@@ -469,7 +470,7 @@ async function removeJob(job: ResearchJob) {
     if (activeJob.value?.id === job.id) activeJob.value = null;
     await refreshRuns();
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 async function refreshRuns() {
@@ -480,7 +481,7 @@ function loadHistory(item: Record<string, unknown>) {
   prompt.value = String(item.prompt || "");
   instructions.value = String(item.instructions || "");
   persistDraft();
-  runtime.notifyToast(i18n.t("research.question_restored"), {
+  toast(i18n.t("research.question_restored"), {
     tone: "success",
   });
 }
@@ -490,7 +491,7 @@ function removeEvidence(key: string) {
     if (workspace.value) workspace.value = { ...workspace.value, selected_evidence: evidence };
     if (!evidence.length && preset.value === "evidence") applyPreset("balanced");
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 function clearEvidence() {
@@ -500,15 +501,15 @@ function clearEvidence() {
     if (config.value) config.value = { ...config.value, skip_retrieval: false };
     if (preset.value === "evidence") preset.value = "balanced";
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 async function copyAnswer() {
   try {
     await navigator.clipboard.writeText(activeResult.value?.answer || "");
-    runtime.notifyToast(i18n.t("research.answer_copied"), { tone: "success" });
+    toast(i18n.t("research.answer_copied"), { tone: "success" });
   } catch {
-    runtime.notifyToast(i18n.t("research.clipboard_failed"), {
+    toast(i18n.t("research.clipboard_failed"), {
       tone: "danger",
     });
   }
@@ -527,7 +528,7 @@ async function gradeAnswer() {
   try {
     await runtime.gradeResearchJob(activeJob.value.id);
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 function prepareRerun() {
@@ -543,7 +544,7 @@ function prepareRerun() {
   model.value = profileModel(profile || null);
   generation.value = profileGeneration(profile || null);
   activeJob.value = null;
-  runtime.notifyToast(i18n.t("research.rerun_loaded"), {
+  toast(i18n.t("research.rerun_loaded"), {
     tone: "success",
   });
   void nextTick(() => document.querySelector<HTMLTextAreaElement>("#researchQuestion")?.focus());
@@ -554,11 +555,11 @@ async function discoverModels() {
     discoveredModels.value = (await runtime.discoverResearchModels(
       config.value.provider_profile_id,
     )) as string[];
-    runtime.notifyToast(`${discoveredModels.value.length} ${i18n.t("research.models_found")}`, {
+    toast(`${discoveredModels.value.length} ${i18n.t("research.models_found")}`, {
       tone: "success",
     });
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 function applySettings(payload: {
@@ -570,7 +571,7 @@ function applySettings(payload: {
   generation.value = { ...payload.generation };
   model.value = payload.model || profileModel(selectedProfile.value);
   preset.value = "custom";
-  runtime.notifyToast(i18n.t("research.settings_applied"), {
+  toast(i18n.t("research.settings_applied"), {
     tone: "success",
   });
 }

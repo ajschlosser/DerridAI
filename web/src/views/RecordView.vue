@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { toast } from "../composables/notifications";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
@@ -153,7 +154,7 @@ async function refreshAfter(action: () => Promise<unknown> | unknown) {
     await action();
     await load();
   } catch (exc) {
-    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+    toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
   }
 }
 async function previous() {

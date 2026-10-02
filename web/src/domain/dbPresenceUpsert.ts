@@ -1,6 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { esc } from "./html";
+import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
 // Whether a record already exists in a vector database (presence), and the pending-upsert queue and command that syncs
 // records into one. Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as
@@ -22,7 +24,6 @@ type Helper =
   | "hasCorpusDb"
   | "localRecordKey"
   | "notifyVectorStoresChanged"
-  | "openMessageModal"
   | "persistPrefs"
   | "recordFingerprint"
   | "refreshOperationsPanelOnly"
@@ -31,7 +32,6 @@ type Helper =
   | "startJobPolling"
   | "storeReceipt"
   | "syncJobProgressToasts"
-  | "toast"
   | "tr"
   | "trf"
   | "upsertAuditDelta"
@@ -54,7 +54,6 @@ export function createDbPresenceUpsert(deps: Deps) {
     hasCorpusDb,
     localRecordKey,
     notifyVectorStoresChanged,
-    openMessageModal,
     persistPrefs,
     recordFingerprint,
     refreshOperationsPanelOnly,
@@ -63,7 +62,6 @@ export function createDbPresenceUpsert(deps: Deps) {
     startJobPolling,
     storeReceipt,
     syncJobProgressToasts,
-    toast,
     tr,
     trf,
     upsertAuditDelta,
@@ -302,6 +300,7 @@ export function createDbPresenceUpsert(deps: Deps) {
           "vector.sync_suppression_failed",
           "Could not save this queue decision; the item remains available.",
         ),
+        { tone: "danger" },
       );
       return;
     }
@@ -321,6 +320,7 @@ export function createDbPresenceUpsert(deps: Deps) {
             "vector.sync_suppression_failed",
             "Could not save this queue decision; the item remains available.",
           ),
+          { tone: "danger" },
         );
         persistPrefs();
       });
@@ -360,19 +360,20 @@ export function createDbPresenceUpsert(deps: Deps) {
   }
   async function upsertRows(rows: Any, labelText = "records", { largeSyncConfirmed = false } = {}) {
     if (!hasCorpusDb())
-      return openMessageModal({
+      return openMessageDialog({
         title: tr("records.toast.vector_required"),
         message: dbUnavailableReason(),
         confirmLabel: tr("ui.ok"),
       });
-    if (!state.activeStore) return toast(tr("records.toast.select_collection"));
-    if (!rows.length) return toast(tr("runtime.toast.no_upsert_rows"));
+    if (!state.activeStore)
+      return toast(tr("records.toast.select_collection"), { tone: "warning" });
+    if (!rows.length) return toast(tr("runtime.toast.no_upsert_rows"), { tone: "warning" });
     const activeUpsert = state.jobs.find(
       (job: Any) =>
         job.type === "upsert" && ["queued", "running", "cancelling"].includes(job.status),
     );
     if (activeUpsert)
-      return openMessageModal({
+      return openMessageDialog({
         title: tr("operations.vector_sync_active_title"),
         message: trf("operations.vector_sync_active_help", {
           label: activeUpsert.label || activeUpsert.store_name || "The current sync",
@@ -382,7 +383,7 @@ export function createDbPresenceUpsert(deps: Deps) {
     const store = state.activeStore;
     await refreshPresenceForRows(rows, { force: true });
     if (rows.length > 500 && !largeSyncConfirmed) {
-      const approved = await openMessageModal({
+      const approved = await openMessageDialog({
         title: tr("operations.large_sync_background_title"),
         message: trf("operations.large_sync_background_help", {
           count: rows.length.toLocaleString(),
@@ -438,7 +439,9 @@ export function createDbPresenceUpsert(deps: Deps) {
       if (state.view === "home") refreshOperationsPanelOnly();
       return true;
     } catch (error: Any) {
-      toast(`Could not start vector build: ${error.message}`);
+      toast(trf("runtime.toast.vector_build_start_failed", { detail: error.message }), {
+        tone: "danger",
+      });
       return false;
     }
   }

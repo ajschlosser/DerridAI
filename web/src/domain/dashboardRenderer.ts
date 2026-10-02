@@ -3,6 +3,7 @@
 import { mlaPageSpan } from "./citations";
 import { esc, icon } from "./html";
 import { commonWorkValue, workCoverUrl } from "./workMetadata";
+import { toast } from "../composables/notifications";
 
 // The home dashboard, drawn as an HTML string into the runtime surface. Moved verbatim from the legacy runtime; the
 // runtime's state object and helpers are passed in as dependencies.
@@ -48,7 +49,6 @@ type Helper =
   | "responseCacheStore"
   | "searchByMetadata"
   | "syncUrl"
-  | "toast"
   | "tr"
   | "trf"
   | "uid"
@@ -94,7 +94,6 @@ export function createDashboardRenderer(deps: Deps) {
     responseCacheStore,
     searchByMetadata,
     syncUrl,
-    toast,
     tr,
     trf,
     uid,
@@ -429,7 +428,7 @@ export function createDashboardRenderer(deps: Deps) {
             openDatabaseCreationFromResearch();
           } else {
             navigateTo("global");
-            toast(tr("research.no_database"), { tone: "warn" });
+            toast(tr("research.no_database"), { tone: "warning" });
           }
           return;
         }

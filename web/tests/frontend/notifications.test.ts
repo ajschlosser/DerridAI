@@ -1,10 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { describe, expect, it, vi } from "vitest";
-import {
-  inferNotificationTone,
-  notificationDuration,
-  useNotifications,
-} from "../../src/composables/notifications";
+import { notificationDuration, toast, useNotifications } from "../../src/composables/notifications";
 
 describe("notification duration", () => {
   it("keeps short messages for the default time and gives long ones time to be read", () => {
@@ -15,12 +11,11 @@ describe("notification duration", () => {
 });
 
 describe("notification tone, pausing and bounds", () => {
-  it("lets an explicit tone win over failure wording and reads the text otherwise", () => {
-    expect(inferNotificationTone("Copied error log", "success")).toBe("success");
-    expect(inferNotificationTone("Could not save", "info")).toBe("danger");
-    expect(inferNotificationTone("Saved")).toBe("info");
-    expect(inferNotificationTone("HTTP 500 from api")).toBe("danger");
-    expect(inferNotificationTone("Careful", "warn")).toBe("warning");
+  it("shows a message with the tone the caller states, and info by default", () => {
+    const { notifications } = useNotifications();
+    toast("Saved");
+    toast("Careful", { tone: "warning" });
+    expect(notifications.value.slice(-2).map((item) => item.tone)).toEqual(["info", "warning"]);
   });
 
   it("holds a notification while it is paused and dismisses it after resume", () => {
@@ -32,6 +27,17 @@ describe("notification tone, pausing and bounds", () => {
     expect(notifications.value.some((item) => item.id === id)).toBe(true);
     resume(id);
     vi.advanceTimersByTime(1000);
+    expect(notifications.value.some((item) => item.id === id)).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it("keeps an error until it is dismissed", () => {
+    vi.useFakeTimers();
+    const { notifications, notify, dismiss } = useNotifications();
+    const id = notify("Could not save", "danger");
+    vi.advanceTimersByTime(60_000);
+    expect(notifications.value.some((item) => item.id === id)).toBe(true);
+    dismiss(id);
     expect(notifications.value.some((item) => item.id === id)).toBe(false);
     vi.useRealTimers();
   });

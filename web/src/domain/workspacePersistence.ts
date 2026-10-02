@@ -1,4 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { toast } from "../composables/notifications";
 
 // Workspace persistence: saving files and preferences to IndexedDB, debounced, and restoring them at start-up. Moved
 // verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -18,7 +19,7 @@ type Helper =
   | "invalidateCorpusCache"
   | "restoreCurrentPdfAsset"
   | "serializableFile"
-  | "toast";
+  | "trf";
 type Deps = {
   state: Loose;
   fileTimers: Map<string, ReturnType<typeof setTimeout>>;
@@ -37,7 +38,7 @@ export function createWorkspacePersistence(deps: Deps) {
     invalidateCorpusCache,
     restoreCurrentPdfAsset,
     serializableFile,
-    toast,
+    trf,
   } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
   async function persistFileNow(file: Any) {
@@ -46,7 +47,7 @@ export function createWorkspacePersistence(deps: Deps) {
       await idbPut("files", serializableFile(file));
     } catch (error: Any) {
       console.error("IndexedDB file persistence failed", error);
-      toast(`Local persistence failed: ${error.message}`);
+      toast(trf("runtime.toast.persistence_failed", { detail: error.message }), { tone: "danger" });
     }
   }
   function persistFile(file: Any) {
@@ -300,7 +301,9 @@ export function createWorkspacePersistence(deps: Deps) {
       await restoreCurrentPdfAsset();
     } catch (error: Any) {
       console.error("Could not restore IndexedDB workspace", error);
-      toast(`Could not restore saved workspace: ${error.message}`);
+      toast(trf("runtime.toast.workspace_restore_failed", { detail: error.message }), {
+        tone: "danger",
+      });
     } finally {
       state.storageReady = true;
     }

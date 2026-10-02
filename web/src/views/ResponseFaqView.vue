@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { toast } from "../composables/notifications";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
@@ -266,7 +267,7 @@ async function load({ chooseFirst = false }: { chooseFirst?: boolean } = {}) {
     const data = await waitForPage();
     if (data) await applyPage(data, chooseFirst);
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 // After a key change the observer fetches on its own; wait for that fetch's data.
@@ -292,9 +293,9 @@ function scheduleSearch() {
 async function copyAnswer() {
   try {
     await navigator.clipboard.writeText(result.value?.answer || "");
-    runtime.notifyToast(i18n.t("research.answer_copied"), { tone: "success" });
+    toast(i18n.t("research.answer_copied"), { tone: "success" });
   } catch {
-    runtime.notifyToast(i18n.t("research.clipboard_failed"), {
+    toast(i18n.t("research.clipboard_failed"), {
       tone: "danger",
     });
   }

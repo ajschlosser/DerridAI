@@ -1,10 +1,13 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "../../src/composables/notifications";
 import { createJobsWorkspace } from "../../src/domain/jobsWorkspace";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 import { jobsState } from "../../src/state/jobsState";
 import { RealtimeClient } from "../../src/realtime/client";
 import { MockSocket, jobEvent } from "./realtime-support";
+
+vi.mock("../../src/composables/notifications", () => ({ toast: vi.fn() }));
 
 type Anything = any;
 
@@ -18,6 +21,9 @@ function setup(overrides: Record<string, unknown> = {}) {
   const deps = new Proxy(
     {
       state,
+      tr: (_key: string, fallback = "") => fallback,
+      trf: (key: string, values: Record<string, unknown> = {}) =>
+        `${key} ${Object.values(values).join(" ")}`,
       isActiveJobStatus: (status: string) => ["queued", "running", "cancelling"].includes(status),
       // Never started: behaves like the pre-realtime client.
       realtime: new RealtimeClient({ createSocket: (url) => new MockSocket(url) }),
@@ -161,9 +167,9 @@ describe("jobs workspace", () => {
       // The terminal summary is followed by one authoritative REST snapshot.
       expect(api).toHaveBeenCalledWith("/api/jobs");
       expect(state.jobs[0].status).toBe("completed");
-      const completions = spies.toast.mock.calls.filter(([message]: unknown[]) =>
-        String(message).includes("completed"),
-      );
+      const completions = vi
+        .mocked(toast)
+        .mock.calls.filter(([message]) => String(message).includes("completed"));
       expect(completions).toHaveLength(1);
     });
 

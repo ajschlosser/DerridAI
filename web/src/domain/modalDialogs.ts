@@ -1,8 +1,9 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
-import { openMessageDialog, type MessageDialogOptions } from "../composables/messageDialog";
+import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
-// The confirmation and message dialog shim (the dialog itself is `MessageDialogHost.vue`) and the clipboard helper. The
+// The clipboard helper (the message dialog itself is `MessageDialogHost.vue`). The
 // runtime's state object and helpers are passed in as dependencies.
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -11,21 +12,17 @@ type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Fn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /** The helpers that still live in the legacy runtime. */
-type Helper = "toast";
+type Helper = "trf";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 export function createModalDialogs(deps: Deps) {
-  const { toast } = deps;
+  const { trf } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
   const document: Any = globalThis.document;
-  /** A shim over the Vue message dialog host: resolves true when the user confirms. */
-  function openMessageModal(options: MessageDialogOptions = {}) {
-    return openMessageDialog(options);
-  }
   async function copyJsonToClipboard(value: Any, labelText = "record") {
     const text = JSON.stringify(value, null, 2);
     try {
       await navigator.clipboard.writeText(text);
-      toast(`Copied ${labelText} JSON`);
+      toast(trf("runtime.toast.json_copied", { label: labelText }), { tone: "success" });
     } catch (error: Any) {
       const area = document.createElement("textarea");
       area.value = text;
@@ -35,13 +32,13 @@ export function createModalDialogs(deps: Deps) {
       area.select();
       try {
         document.execCommand("copy");
-        toast(`Copied ${labelText} JSON`);
+        toast(trf("runtime.toast.json_copied", { label: labelText }), { tone: "success" });
       } catch {
-        openMessageModal({ title: "Could not copy", message: error.message, tone: "danger" });
+        openMessageDialog({ title: "Could not copy", message: error.message, tone: "danger" });
       } finally {
         area.remove();
       }
     }
   }
-  return { openMessageModal, copyJsonToClipboard };
+  return { copyJsonToClipboard };
 }

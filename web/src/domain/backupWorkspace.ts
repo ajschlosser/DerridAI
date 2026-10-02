@@ -1,4 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
 // Full backup and restore: download a zip of the browser workspace plus every Chroma collection, and load one back.
 // Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -11,11 +13,9 @@ type Fn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-
 type Helper =
   | "deleteWorkspaceDatabase"
   | "idbPut"
-  | "openMessageModal"
   | "persistFileNow"
   | "providerProfiles"
   | "serializableFile"
-  | "toast"
   | "tr"
   | "trf"
   | "workspacePrefs";
@@ -26,11 +26,9 @@ export function createBackupWorkspace(deps: Deps) {
     state,
     deleteWorkspaceDatabase,
     idbPut,
-    openMessageModal,
     persistFileNow,
     providerProfiles,
     serializableFile,
-    toast,
     tr,
     trf,
     workspacePrefs,
@@ -43,7 +41,9 @@ export function createBackupWorkspace(deps: Deps) {
       ["queued", "running", "cancelling"].includes(job.status),
     );
     if (activeJobs.length) {
-      return toast(trf("runtime.toast.wait_before_backup", { count: activeJobs.length }));
+      return toast(trf("runtime.toast.wait_before_backup", { count: activeJobs.length }), {
+        tone: "warning",
+      });
     }
     const hasCredentials = backupContainsCredentials();
     const warning = hasCredentials
@@ -51,7 +51,7 @@ export function createBackupWorkspace(deps: Deps) {
       : tr("settings.backup_confirm_message");
     if (
       !confirmed &&
-      !(await openMessageModal({
+      !(await openMessageDialog({
         title: tr("settings.backup_confirm_title"),
         message: warning,
         tone: hasCredentials ? "danger" : "info",
@@ -128,9 +128,11 @@ export function createBackupWorkspace(deps: Deps) {
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast(trf("runtime.toast.backup_created", { size: (blob.size / 1024 / 1024).toFixed(1) }));
+      toast(trf("runtime.toast.backup_created", { size: (blob.size / 1024 / 1024).toFixed(1) }), {
+        tone: "success",
+      });
     } catch (error: Any) {
-      toast(trf("runtime.toast.backup_failed", { detail: error.message }));
+      toast(trf("runtime.toast.backup_failed", { detail: error.message }), { tone: "danger" });
     } finally {
       const current = document.querySelector<HTMLButtonElement>("#downloadFullBackup");
       if (current) {
@@ -144,10 +146,11 @@ export function createBackupWorkspace(deps: Deps) {
     const activeJobs = state.jobs.filter((job: Any) =>
       ["queued", "running", "cancelling"].includes(job.status),
     );
-    if (activeJobs.length) return toast(tr("runtime.toast.wait_before_restore"));
+    if (activeJobs.length)
+      return toast(tr("runtime.toast.wait_before_restore"), { tone: "warning" });
     if (
       !confirmed &&
-      !(await openMessageModal({
+      !(await openMessageDialog({
         title: tr("runtime.backup.restore_title"),
         message: tr("runtime.backup.restore_message"),
         tone: "danger",
@@ -215,10 +218,12 @@ export function createBackupWorkspace(deps: Deps) {
           });
         }
       }
-      toast(trf("runtime.toast.restore_complete", { count: payload.chroma?.count || 0 }));
+      toast(trf("runtime.toast.restore_complete", { count: payload.chroma?.count || 0 }), {
+        tone: "success",
+      });
       setTimeout(() => location.reload(), 500);
     } catch (error: Any) {
-      toast(trf("runtime.toast.restore_failed", { detail: error.message }));
+      toast(trf("runtime.toast.restore_failed", { detail: error.message }), { tone: "danger" });
       const current = document.querySelector<HTMLButtonElement>("#restoreFullBackup");
       if (current) {
         current.disabled = false;

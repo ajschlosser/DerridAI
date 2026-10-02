@@ -17,6 +17,7 @@ import CorpusRecordSizingSettings from "../../src/components/CorpusRecordSizingS
 import DocumentStructureConfigurator from "../../src/components/DocumentStructureConfigurator.vue";
 import DocumentManifestEditor from "../../src/components/DocumentManifestEditor.vue";
 import CorpusTopologyPolicy from "../../src/components/corpus-builder/CorpusTopologyPolicy.vue";
+import CorpusSetupDocumentMetadata from "../../src/components/corpus-builder/CorpusSetupDocumentMetadata.vue";
 import PdfPageLabelEditor from "../../src/components/PdfPageLabelEditor.vue";
 
 function buttonByText(wrapper: any, text: string) {
@@ -154,6 +155,38 @@ describe("Corpus Builder setup and launch controls", () => {
     });
     expect(wrapper.find(".page-toggle").exists()).toBe(false);
     expect(wrapper.get(".page-authority-note").text()).toContain("authoritative page structure");
+  });
+
+  it("summarizes document defaults before opening the full setup editor", () => {
+    const wrapper = mount(CorpusSetupDocumentMetadata, {
+      props: {
+        manifest: {
+          title: "Of Grammatology",
+          document_author: "Jacques Derrida",
+          translator: "Gayatri Chakravorty Spivak",
+          publisher: "Johns Hopkins University Press",
+          publication_year: 1976,
+          language: "en",
+          original_language: "fr",
+          deterministic_ingest: {
+            applied: {
+              title: { value: "Of Grammatology" },
+              document_author: { value: "Jacques Derrida" },
+            },
+          },
+        },
+        missingRequiredCount: 1,
+        reviewerOverrideCount: 2,
+      },
+    });
+
+    const card = wrapper.get(".setup-document-metadata");
+    expect(card.text()).toContain("Of Grammatology");
+    expect(card.text()).toContain("Jacques Derrida");
+    expect(card.text()).toContain("1976");
+    expect(card.text()).toContain("1 required field(s) missing");
+    expect(card.text()).toContain("2 reviewer edit(s)");
+    expect(wrapper.find(".manifest-editor").exists()).toBe(false);
   });
 
   it("edits detected manifest values before Build without post-build reanalysis controls", async () => {

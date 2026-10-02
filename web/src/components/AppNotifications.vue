@@ -5,10 +5,18 @@ import { useI18nStore } from "../stores/i18n";
 
 const { notifications, dismiss, pause, resume } = useNotifications();
 const i18n = useI18nStore();
+// A shape as well as a colour, so the tone is not carried by colour alone (WCAG 1.4.1).
+const toneIcons = { success: "✓", info: "ℹ", warning: "⚠", danger: "✕" } as const;
 </script>
 
 <template>
-  <section class="notifications" aria-live="polite" aria-atomic="true">
+  <section
+    class="notifications"
+    :aria-label="i18n.t('ui.notifications')"
+    aria-live="polite"
+    aria-atomic="false"
+    aria-relevant="additions"
+  >
     <div
       v-for="item in notifications"
       :key="item.id"
@@ -19,8 +27,11 @@ const i18n = useI18nStore();
       @pointerleave="resume(item.id)"
       @focusin="pause(item.id)"
       @focusout="resume(item.id)"
+      @keydown.esc="dismiss(item.id)"
     >
-      <span>{{ item.message }}</span>
+      <span class="notification-icon" aria-hidden="true">{{ toneIcons[item.tone] }}</span>
+      <span class="sr-only">{{ i18n.t(`ui.notification_${item.tone}`) }}:</span>
+      <span class="notification-message">{{ item.message }}</span>
       <button
         type="button"
         :aria-label="i18n.t('ui.dismiss_notification')"
@@ -62,12 +73,36 @@ const i18n = useI18nStore();
   outline-offset: var(--focus-ring-offset);
 }
 /* Long values (a citation, a link) wrap rather than widen the notification. */
-.notification span {
+.notification-message {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.notification-icon {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .notification[data-tone="success"] {
   border-left-color: var(--tone-ok-fg);
+}
+.notification[data-tone="success"] .notification-icon {
+  color: var(--tone-ok-fg);
+}
+.notification[data-tone="warning"] .notification-icon {
+  color: var(--tone-warn-fg);
+}
+.notification[data-tone="danger"] .notification-icon {
+  color: var(--tone-danger-fg);
 }
 .notification[data-tone="warning"] {
   border-left-color: var(--tone-warn-fg);

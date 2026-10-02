@@ -1,5 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { toast } from "../composables/notifications";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
 import { mlaPageSpan } from "../domain/citations";
@@ -273,12 +274,12 @@ async function goSearch() {
     if (!state.activeStore) {
       runtime.persistPrefs();
       if (runtime.canAccessPage("vector")) {
-        runtime.notifyToast(i18n.t("search.redirect_database"), { tone: "info" });
+        toast(i18n.t("search.redirect_database"), { tone: "info" });
         runtime.openDatabaseCreationFromResearch();
       } else {
         runtime.navigateTo("global");
-        runtime.notifyToast(i18n.t("research.no_database"), {
-          tone: "warn",
+        toast(i18n.t("research.no_database"), {
+          tone: "warning",
         });
       }
       return;
@@ -310,7 +311,7 @@ async function goSearch() {
       );
       state.storeSearchResults = data.results || [];
     } catch (error) {
-      runtime.notifyToast(
+      toast(
         `${i18n.t("research.search_failed")}: ${error instanceof Error ? error.message : String(error)}`,
         { tone: "danger" },
       );
@@ -384,7 +385,7 @@ function openRecentRecord(fileId: string, index: number) {
 async function setUiTheme(value: string) {
   runtime.applyUiTheme(value);
   runtime.persistPrefs();
-  runtime.notifyToast(i18n.t("dashboard.appearance_saved"), {
+  toast(i18n.t("dashboard.appearance_saved"), {
     tone: "success",
   });
   await refresh();

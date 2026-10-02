@@ -1,7 +1,7 @@
 # Corpus Builder concurrency, topology, and early-manifest UX
 
 - Status: in progress
-- Branch: `ux/corpus-builder-concurrency-setup-manifest`
+- Branch: `task/concurrency-coordinator` (consolidated PR #410)
 - Scope: setup policy, build/review live-state presentation, realtime corpus summaries, and manifest timing.
 
 ## Objectives
@@ -71,7 +71,9 @@ Real/printed source pagination remains authoritative and is never silently repla
 - [x] Add fixed SourceUnit-to-Record topology policy to API and backend construction.
 - [x] Add optional Records-per-Page synthetic grouping for unpaginated/estimated sources.
 - [x] Add Setup topology relationship controls.
-- [x] Surface the full editable manifest before Build.
+- [x] Surface document metadata before Build without embedding the full editor in the setup flow.
+- [x] Replace the cramped inline manifest with a compact work/edition summary and a dedicated large editor dialog.
+- [x] Keep setup document metadata distinct from the Record metadata schema and omit duplicate Document structure controls from the setup editor.
 - [x] Add interaction/focus resilience around concurrent queue updates.
 - [x] Add unit/backend/Storybook/browser regressions.
 - [ ] Run and fix all quality gates.
@@ -85,7 +87,7 @@ Real/printed source pagination remains authoritative and is never silently repla
 - If concurrent completions empty the final page of a filtered queue, Review backs up to the nearest valid page instead of showing an artificial empty state.
 - Build-level copy no longer presents the first active task as "current" when several Records are running; it reports the concurrent queue state instead.
 - Detailed live metadata status groups active task families by Record so one Record with several task families does not look like several Records.
-- The full Setup manifest uses the same editor contract as post-build metadata, while post-build-only reanalysis controls are suppressed.
+- Setup shows a compact document-metadata summary (identity, publication, language, provenance/reviewer-edit status) and opens the shared manifest editor in a dedicated large dialog. Post-build-only reanalysis controls are suppressed, and structure fields are omitted because Setup already has a dedicated Document structure step.
 - Required document-field completeness is recalculated after reviewer manifest edits; clearing a required detected value makes Setup incomplete immediately.
 
 ## Non-goals

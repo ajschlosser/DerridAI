@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
+import { openMessageDialog } from "../composables/messageDialog";
 import { esc, icon } from "./html";
 import { realtime } from "../realtime";
 import { followResource } from "../realtime/follow";
@@ -12,6 +13,7 @@ import {
   llmToolResultDialogHtml,
   pdfDraftRecordHtml,
 } from "./llmToolMarkup";
+import { toast } from "../composables/notifications";
 
 // The dialogs opened from background jobs and LLM tasks: job details and results, RAG results, record previews, the LLM
 // task launcher and the touch-up, drawn as HTML strings. Moved verbatim from the legacy runtime; the runtime's state
@@ -39,7 +41,6 @@ type Helper =
   | "navSnapshot"
   | "navigateTo"
   | "normalizeTouchupItems"
-  | "openMessageModal"
   | "openWorkMetadataProposalResult"
   | "pages"
   | "persistFileNow"
@@ -65,7 +66,6 @@ type Helper =
   | "showAppModal"
   | "startJobPolling"
   | "syncJobProgressToasts"
-  | "toast"
   | "tr"
   | "trf"
   | "uid"
@@ -92,7 +92,6 @@ export function createJobDialogs(deps: Deps) {
     navSnapshot,
     navigateTo,
     normalizeTouchupItems,
-    openMessageModal,
     openWorkMetadataProposalResult,
     pages,
     persistFileNow,
@@ -118,7 +117,6 @@ export function createJobDialogs(deps: Deps) {
     showAppModal,
     startJobPolling,
     syncJobProgressToasts,
-    toast,
     tr,
     trf,
     uid,
@@ -138,9 +136,9 @@ export function createJobDialogs(deps: Deps) {
         pruneClientJobState(jobId);
         persistPrefs();
         if (state.view === "rag") refreshRagProgressPanel();
-        return toast(copy.operationRemoved);
+        return toast(copy.operationRemoved, { tone: "success" });
       }
-      return toast(copy.loadDetailsFailed(error.message));
+      return toast(copy.loadDetailsFailed(error.message), { tone: "danger" });
     }
     const dialog = document.createElement("dialog");
     dialog.className = "job-details-dialog";
@@ -288,9 +286,9 @@ export function createJobDialogs(deps: Deps) {
         pruneClientJobState(jobId);
         persistPrefs();
         if (state.view === "rag") refreshRagProgressPanel();
-        return toast(copy.operationRemoved);
+        return toast(copy.operationRemoved, { tone: "success" });
       }
-      await openMessageModal({
+      await openMessageDialog({
         title: copy.openResultFailed,
         message: error.message || String(error),
         tone: "danger",
@@ -314,7 +312,7 @@ export function createJobDialogs(deps: Deps) {
       }
     } catch (error: Any) {
       console.error("Could not render operation result", error, job);
-      await openMessageModal({
+      await openMessageDialog({
         title: copy.renderResultFailed,
         message: error.message || String(error),
         detail: jobLabel(job),
@@ -336,7 +334,7 @@ export function createJobDialogs(deps: Deps) {
         if (idx >= 0) state.jobs[idx] = { ...state.jobs[idx], ...job };
         return true;
       } catch (error: Any) {
-        toast(copy.refreshFailed(error.message));
+        toast(copy.refreshFailed(error.message), { tone: "danger" });
         return false;
       }
     }
@@ -395,7 +393,7 @@ export function createJobDialogs(deps: Deps) {
 
     async function rejectAndDismiss() {
       if (
-        !(await openMessageModal({
+        !(await openMessageDialog({
           title: copy.discardTitle,
           message: copy.discardMessage,
           tone: "danger",
@@ -412,9 +410,9 @@ export function createJobDialogs(deps: Deps) {
         dialog.close();
         dialog.remove();
         await refreshJobs({ rerender: state.view === "home" });
-        toast(copy.rejectedRemoved);
+        toast(copy.rejectedRemoved, { tone: "success" });
       } catch (error: Any) {
-        toast(copy.rejectFailed(error.message));
+        toast(copy.rejectFailed(error.message), { tone: "danger" });
       }
     }
 
@@ -529,7 +527,7 @@ export function createJobDialogs(deps: Deps) {
         }
       }
 
-      if (!resolveItems.length) return toast(copy.noResultsSelected);
+      if (!resolveItems.length) return toast(copy.noResultsSelected, { tone: "warning" });
 
       try {
         job = await resolveOnServer("accept", resolveItems);
@@ -540,9 +538,11 @@ export function createJobDialogs(deps: Deps) {
         await refreshJobs({ rerender: state.view === "home" });
         selections.clear();
         render({ preserveScroll: true });
-        toast(copy.accepted(resolveItems.length, fieldsApplied, job.pending_result_count || 0));
+        toast(copy.accepted(resolveItems.length, fieldsApplied, job.pending_result_count || 0), {
+          tone: "success",
+        });
       } catch (error: Any) {
-        toast(copy.localAppliedQueueFailed(error.message));
+        toast(copy.localAppliedQueueFailed(error.message), { tone: "danger" });
       }
     }
 
@@ -559,15 +559,15 @@ export function createJobDialogs(deps: Deps) {
         fields,
         resolve_record: false,
       }));
-      if (!items.length) return toast(copy.selectToReject);
+      if (!items.length) return toast(copy.selectToReject, { tone: "warning" });
       try {
         job = await resolveOnServer("reject", items);
         selections.clear();
         await refreshJobs({ rerender: state.view === "home" });
         render({ preserveScroll: true });
-        toast(copy.rejectedRemain(job.pending_change_count || 0));
+        toast(copy.rejectedRemain(job.pending_change_count || 0), { tone: "warning" });
       } catch (error: Any) {
-        toast(copy.rejectSelectedFailed(error.message));
+        toast(copy.rejectSelectedFailed(error.message), { tone: "danger" });
       }
     }
 
@@ -650,7 +650,7 @@ export function createJobDialogs(deps: Deps) {
           (button.onclick = () => {
             const entry = flattened[+button.dataset.previewResult];
             if (entry?.local) openReviewRecordPreview(entry.local, entry.result);
-            else toast(copy.sourceGone);
+            else toast(copy.sourceGone, { tone: "danger" });
           }),
       );
       dialog.querySelectorAll("[data-preview-unchanged]").forEach(
@@ -658,7 +658,7 @@ export function createJobDialogs(deps: Deps) {
           (button.onclick = () => {
             const entry = unchanged[+button.dataset.previewUnchanged];
             if (entry?.local) openReviewRecordPreview(entry.local, entry.result);
-            else toast(copy.sourceGone);
+            else toast(copy.sourceGone, { tone: "danger" });
           }),
       );
       dialog.querySelector("#markJobReviewed")?.addEventListener("click", () => apply("review"));
@@ -701,9 +701,9 @@ export function createJobDialogs(deps: Deps) {
     }
   }
   async function openRagResult(job: Any) {
-    if (!job?.id) return toast(tr("research.result_unavailable"), { tone: "warn" });
+    if (!job?.id) return toast(tr("research.result_unavailable"), { tone: "warning" });
     if (!canAccessPage("rag"))
-      return toast(tr("permissions.research_result_denied"), { tone: "warn" });
+      return toast(tr("permissions.research_result_denied"), { tone: "warning" });
     // v0.35.5: a RAG result is a research object, not a legacy modal. Open it in
     // the same native result workspace used by Research so typography, source
     // binding, evidence inspection, accessibility, and i18n stay identical no
@@ -722,7 +722,7 @@ export function createJobDialogs(deps: Deps) {
   }
   function openReviewRecordPreview(local: Any, result: Any) {
     const record = local?.file?.records?.[local.index];
-    if (!record) return toast(copy.sourceGoneWorkspace);
+    if (!record) return toast(copy.sourceGoneWorkspace, { tone: "danger" });
 
     const proposal = result?.proposal || {};
     const proposedFields = Object.keys(proposal.changes || {});
@@ -788,7 +788,7 @@ export function createJobDialogs(deps: Deps) {
   function openLlmToolResult(job: Any) {
     const result = job.result;
     if (!result)
-      return openMessageModal({
+      return openMessageDialog({
         title: copy.resultUnavailableTitle,
         message: copy.resultUnavailable,
         tone: "danger",
@@ -841,7 +841,7 @@ export function createJobDialogs(deps: Deps) {
     onForegroundResult = null,
   }: Any = {}) {
     const profiles = providerProfiles();
-    if (!profiles.length) return toast(copy.configureProvider);
+    if (!profiles.length) return toast(copy.configureProvider, { tone: "warning" });
     let profileId = state.appConfig.default_provider_profile || profiles[0].id;
     if (task === "rag_grade" && generationModel) {
       const independent = profiles.find(
@@ -907,9 +907,9 @@ export function createJobDialogs(deps: Deps) {
       };
       dialog.querySelector("#runLlmTask").onclick = async () => {
         const active = providerProfile(profileId);
-        if (!active) return toast(copy.chooseProfile);
+        if (!active) return toast(copy.chooseProfile, { tone: "warning" });
         if (!["ollama", "openai"].includes(String(active.type || "")))
-          return toast(copy.profileUnsupported);
+          return toast(copy.profileUnsupported, { tone: "warning" });
         const config = providerRequestConfig(active, { textReview: true });
         let extra: Any = {};
         try {
@@ -917,7 +917,7 @@ export function createJobDialogs(deps: Deps) {
           if (!extra || Array.isArray(extra) || typeof extra !== "object")
             throw new Error("Advanced options must be an object");
         } catch (error: Any) {
-          return toast(error.message);
+          return toast(error.message, { tone: "danger" });
         }
         const n = (id: Any) => {
           const raw = dialog.querySelector(`#${id}`)?.value;
@@ -944,12 +944,12 @@ export function createJobDialogs(deps: Deps) {
           active.type === "openai" && active.model_mode === "auto"
             ? "auto"
             : String(dialog.querySelector("#toolModel")?.value || "").trim();
-        if (!model) return toast(copy.selectModel);
+        if (!model) return toast(copy.selectModel, { tone: "warning" });
         if (
           task === "rag_grade" &&
           (!String(payload.question || "").trim() || !String(payload.answer || "").trim())
         )
-          return toast(copy.gradeRequiresQa);
+          return toast(copy.gradeRequiresQa, { tone: "warning" });
         const direct = {
           ...payload,
           provider: active.type,
@@ -998,7 +998,7 @@ export function createJobDialogs(deps: Deps) {
             syncJobProgressToasts();
             startJobPolling();
             close();
-            toast(copy.startedBackground(title));
+            toast(copy.startedBackground(title), { tone: "success" });
           } else {
             if (task === "rag_grade_batch")
               throw new Error("Cache-wide grading runs as a background operation.");
@@ -1010,7 +1010,7 @@ export function createJobDialogs(deps: Deps) {
         } catch (error: Any) {
           button.disabled = false;
           button.innerHTML = `${icon("spark")}${runMode === "background" ? tr("jobs.tool.start_background") : tr("jobs.tool.run_now")}`;
-          toast(copy.failed(title, error.message));
+          toast(copy.failed(title, error.message), { tone: "danger" });
         }
       };
     };
@@ -1047,7 +1047,7 @@ export function createJobDialogs(deps: Deps) {
         if (!draft || typeof draft !== "object" || Array.isArray(draft))
           throw new Error("Draft must be one JSON object.");
       } catch (error: Any) {
-        return toast(copy.invalidDraft(error.message));
+        return toast(copy.invalidDraft(error.message), { tone: "danger" });
       }
       if (!draft.record_id) draft.record_id = `pdf-draft-${Date.now()}`;
       draft.needs_review = true;
@@ -1060,11 +1060,11 @@ export function createJobDialogs(deps: Deps) {
 
       const fileId = dialog.querySelector("#pdfDraftFile").value;
       const storeName = dialog.querySelector("#pdfDraftStore").value;
-      if (!fileId && !storeName) return toast(copy.chooseDestination);
+      if (!fileId && !storeName) return toast(copy.chooseDestination, { tone: "warning" });
 
       if (fileId) {
         const file = state.files.find((item: Any) => item.id === fileId);
-        if (!file) return toast(copy.jsonlGone);
+        if (!file) return toast(copy.jsonlGone, { tone: "danger" });
         file.records.push(cloneAuditValue(draft));
         file.dirty.add(file.records.length - 1);
         await persistFileNow(file);
@@ -1077,7 +1077,7 @@ export function createJobDialogs(deps: Deps) {
           });
           await refreshStores();
         } catch (error: Any) {
-          return toast(copy.chromaUpsertFailed(error.message));
+          return toast(copy.chromaUpsertFailed(error.message), { tone: "danger" });
         }
       }
       close();
