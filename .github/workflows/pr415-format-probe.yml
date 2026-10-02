@@ -1,0 +1,32 @@
+name: PR415 temporary formatter
+
+on:
+  push:
+    branches:
+      - feature/text-page-numbers
+
+permissions:
+  contents: read
+
+jobs:
+  format-spec:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+        working-directory: web
+      - name: Format specification
+        run: ./web/node_modules/.bin/prettier SPECIFICATION.md --write --config web/.prettierrc
+      - name: Emit formatted specification
+        shell: bash
+        run: |
+          echo "PR415_FORMATTED_SPEC_BEGIN"
+          base64 -w0 SPECIFICATION.md
+          echo
+          echo "PR415_FORMATTED_SPEC_END"
