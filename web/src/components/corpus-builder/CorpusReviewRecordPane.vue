@@ -45,6 +45,11 @@ const recordHeading = computed(() => {
 const showRecordId = computed(
   () => Boolean(props.record?.record_id) && recordHeading.value !== String(props.record?.record_id),
 );
+const recordLengthLabel = computed(() =>
+  props.record
+    ? `${props.record.text_length.toLocaleString()} ${i18n.t("pdf_corpus.characters")}`
+    : "",
+);
 const root = ref<HTMLElement | null>(null);
 onMounted(() => emit("rootChange", root.value));
 onBeforeUnmount(() => emit("rootChange", null));
@@ -71,7 +76,7 @@ onBeforeUnmount(() => emit("rootChange", null));
           <h3 id="review-record-title">{{ recordHeading }}</h3>
           <p class="record-meta">
             <code v-if="showRecordId" class="record-id">{{ record.record_id }}</code>
-            <span>{{ record.text_length.toLocaleString() }} {{ i18n.t("pdf_corpus.characters") }}</span
+            <span>{{ recordLengthLabel }}</span
             >{{ activitySummary }}
             <span v-if="record.text_review_status === 'human_corrected'" class="human-corrected">{{
               i18n.t("pdf_corpus.human_corrected")
