@@ -21,6 +21,12 @@ export interface RecordSizingPolicy {
   absolute_record_chars: number;
 }
 
+export interface CorpusTopologyPolicy {
+  mode: "semantic" | "source_units";
+  source_units_per_record: number;
+  records_per_page: number | null;
+}
+
 export type ReviewQueue =
   | "all"
   | "ready"
