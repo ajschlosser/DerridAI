@@ -38,6 +38,7 @@ export interface CorpusSetupInput {
   structureNeedsReview: boolean;
   structureSummary: string;
   recordSizingValid: boolean;
+  topologySummary: string;
   targetChars: number;
   toleranceChars: number;
   schemaName: string;
@@ -175,6 +176,7 @@ export function corpusSetupSectionStates(
       ? text.t("pdf_corpus.setup.summary.structure_waiting", "Choose a source first")
       : [
           hasPages(asset.media_kind) ? input.structureSummary : "",
+          input.topologySummary,
           input.targetChars
             ? text.tf("pdf_corpus.readiness.sizing", {
                 target: input.targetChars.toLocaleString(),
