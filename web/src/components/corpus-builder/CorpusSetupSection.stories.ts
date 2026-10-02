@@ -9,6 +9,7 @@ const meta = {
     title: "Source",
     description: "Choose the document this build will read.",
     state: "complete",
+    step: 1,
     summary: "Of Grammatology.pdf · PDF · 437 pages",
     expanded: false,
   },
@@ -31,11 +32,18 @@ export const Warning: Story = {
     id: "metadata",
     title: "Metadata",
     state: "warning",
+    step: 3,
     summary: "Scholarly default · 2 document fields need attention",
   },
 };
 export const Optional: Story = {
-  args: { id: "advanced", title: "Advanced", state: "optional", summary: "Run policy defaults" },
+  args: {
+    id: "advanced",
+    title: "Advanced",
+    state: "optional",
+    step: undefined,
+    summary: "Run policy defaults",
+  },
 };
 export const FrenchLengthStress: Story = {
   parameters: { locale: "fr-CA" },
