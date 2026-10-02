@@ -4,12 +4,12 @@ import { esc, icon } from "./html";
 import {
   bulkFieldEditorHtml,
   chromaRecordEditorHtml,
-  mergeDialogHtml,
   ocrCleanupDialogHtml,
   recordEditorHtml,
   recordHistoryDialogHtml,
 } from "./recordDialogMarkup";
 import { createRecordDialogCopy } from "./recordDialogCopy";
+import { openMergeFilesDialog } from "../composables/mergeFilesDialog";
 import { openMessageDialog } from "../composables/messageDialog";
 import { toast } from "../composables/notifications";
 
@@ -206,89 +206,81 @@ export function createRecordDialogs(deps: Deps) {
   const document: Any = globalThis.document;
   function openMergeDialog() {
     if (state.files.length < 2) return toast(copy.mergeNeedTwo, { tone: "warning" });
-    const dialog = document.createElement("dialog");
-    dialog.className = "merge-dialog";
-    dialog.innerHTML = mergeDialogHtml(state.files, { tr, trf });
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((x: Any) => (x.onclick = close));
-    dialog.querySelector("#mergeSelectAll").onclick = () =>
-      dialog.querySelectorAll("[data-merge-file]").forEach((x: Any) => (x.checked = true));
-    dialog.querySelector("#mergeSelectNone").onclick = () =>
-      dialog.querySelectorAll("[data-merge-file]").forEach((x: Any) => (x.checked = false));
-    dialog.querySelector("#mergeCreate").onclick = async () => {
-      const ids = [...dialog.querySelectorAll("[data-merge-file]:checked")].map(
-        (x) => x.dataset.mergeFile,
-      );
-      const files = state.files.filter((file: Any) => ids.includes(file.id));
-      if (!files.length) return toast(copy.selectFile, { tone: "warning" });
-      const firstIndex = Math.min(...files.map((file: Any) => state.files.indexOf(file)));
-      const name = (
-        dialog.querySelector("#mergeName").value.trim() || "derridai-merged.jsonl"
-      ).replace(/\s+/g, "-");
-      const records = files.flatMap((file: Any) =>
-        file.records.map((record: Any) => cloneAuditValue(record)),
-      );
-      const merged = {
-        id: uid(),
-        name: name.endsWith(".jsonl") ? name : `${name}.jsonl`,
-        records,
-        errors: files.flatMap((file: Any) => file.errors || []),
-        dirty: new Set(records.map((_: Any, index: Any) => index)),
-        imported_at: new Date().toISOString(),
-        merged_from: files.map((file: Any) => file.name),
-      };
-
-      const removedIds = new Set<Any>(files.map((file: Any) => file.id));
-      state.files = state.files.filter((file: Any) => !removedIds.has(file.id));
-      state.files.splice(firstIndex, 0, merged);
-
-      for (const id of removedIds) {
-        delete state.selected[id];
-        delete state.searches[id];
-        delete state.pages[id];
-        delete state.sorts[id];
-        if (fileTimers.has(id)) {
-          clearTimeout(fileTimers.get(id));
-          fileTimers.delete(id);
+    openMergeFilesDialog({
+      files: state.files.map((file: Any) => ({
+        id: String(file.id),
+        name: String(file.name),
+        recordCount: file.records.length,
+      })),
+      defaultName: "derridai-merged.jsonl",
+      merge: async ({ fileIds: ids, name: rawName, download: wantsDownload }) => {
+        const files = state.files.filter((file: Any) => ids.includes(file.id));
+        if (!files.length) {
+          toast(copy.selectFile, { tone: "warning" });
+          return false;
         }
-        await idbDelete("files", id).catch((error: Any) =>
-          console.error("Could not remove merged source tab from IndexedDB", error),
+        const firstIndex = Math.min(...files.map((file: Any) => state.files.indexOf(file)));
+        const name = (rawName.trim() || "derridai-merged.jsonl").replace(/\s+/g, "-");
+        const records = files.flatMap((file: Any) =>
+          file.records.map((record: Any) => cloneAuditValue(record)),
         );
-      }
-      state.reviewSelection = new Set(
-        [...state.reviewSelection].filter((key) => !removedIds.has(String(key).split("::")[0])),
-      );
-      for (const store of Object.keys(state.upsertState || {})) {
-        for (const key of Object.keys(state.upsertState[store] || {})) {
-          if (removedIds.has(String(key).split("::")[0])) delete state.upsertState[store][key];
+        const merged = {
+          id: uid(),
+          name: name.endsWith(".jsonl") ? name : `${name}.jsonl`,
+          records,
+          errors: files.flatMap((file: Any) => file.errors || []),
+          dirty: new Set(records.map((_: Any, index: Any) => index)),
+          imported_at: new Date().toISOString(),
+          merged_from: files.map((file: Any) => file.name),
+        };
+
+        const removedIds = new Set<Any>(files.map((file: Any) => file.id));
+        state.files = state.files.filter((file: Any) => !removedIds.has(file.id));
+        state.files.splice(firstIndex, 0, merged);
+
+        for (const id of removedIds) {
+          delete state.selected[id];
+          delete state.searches[id];
+          delete state.pages[id];
+          delete state.sorts[id];
+          if (fileTimers.has(id)) {
+            clearTimeout(fileTimers.get(id));
+            fileTimers.delete(id);
+          }
+          await idbDelete("files", id).catch((error: Any) =>
+            console.error("Could not remove merged source tab from IndexedDB", error),
+          );
         }
-      }
-      for (const store of Object.keys(state.upsertIgnored || {})) {
-        for (const key of Object.keys(state.upsertIgnored[store] || {})) {
-          if (removedIds.has(String(key).split("::")[0])) delete state.upsertIgnored[store][key];
-        }
-      }
-      for (const bucket of [state.storePresence, state.storePresenceIds]) {
-        for (const store of Object.keys(bucket || {})) {
-          for (const key of Object.keys(bucket[store] || {})) {
-            if (removedIds.has(String(key).split("::")[0])) delete bucket[store][key];
+        state.reviewSelection = new Set(
+          [...state.reviewSelection].filter((key) => !removedIds.has(String(key).split("::")[0])),
+        );
+        for (const store of Object.keys(state.upsertState || {})) {
+          for (const key of Object.keys(state.upsertState[store] || {})) {
+            if (removedIds.has(String(key).split("::")[0])) delete state.upsertState[store][key];
           }
         }
-      }
+        for (const store of Object.keys(state.upsertIgnored || {})) {
+          for (const key of Object.keys(state.upsertIgnored[store] || {})) {
+            if (removedIds.has(String(key).split("::")[0])) delete state.upsertIgnored[store][key];
+          }
+        }
+        for (const bucket of [state.storePresence, state.storePresenceIds]) {
+          for (const store of Object.keys(bucket || {})) {
+            for (const key of Object.keys(bucket[store] || {})) {
+              if (removedIds.has(String(key).split("::")[0])) delete bucket[store][key];
+            }
+          }
+        }
 
-      await persistFileNow(merged);
-      state.activeFileId = merged.id;
-      if (dialog.querySelector("#mergeDownload").checked) download(merged.name, fileJsonl(merged));
-      persistPrefs();
-      close();
-      navigateTo("list", { fileId: merged.id });
-      toast(copy.merged(files.length, records.length.toLocaleString()), { tone: "success" });
-    };
+        await persistFileNow(merged);
+        state.activeFileId = merged.id;
+        if (wantsDownload) download(merged.name, fileJsonl(merged));
+        persistPrefs();
+        navigateTo("list", { fileId: merged.id });
+        toast(copy.merged(files.length, records.length.toLocaleString()), { tone: "success" });
+        return true;
+      },
+    });
   }
   function openBulkFieldEditor({ rows = null, title = copy.bulkEditTitle } = {}) {
     if (!state.files.length) return toast(copy.loadFirst, { tone: "warning" });

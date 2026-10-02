@@ -17,6 +17,8 @@ const nonSnapshotScenarios = new Set([
   "dialog-works-separate",
   "dialog-works-edit-metadata",
   "dialog-works-remove-work",
+  "dialog-works-populate-all",
+  "dialog-merge",
 ]);
 
 const hasDynamicJobDetails = spec.includes("dialog-job-details-${index}");

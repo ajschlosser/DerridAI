@@ -82,20 +82,11 @@ describe("LLM review markup module", () => {
 });
 
 describe("LLM tool and record dialog markup", () => {
-  const tr = (key: string, fallback = "") =>
-    key === "records.merge.title" ? "Fusionner les onglets JSONL" : fallback;
   const trf = (_key: string, fallback: string, values: Record<string, unknown> = {}) =>
     Object.entries(values).reduce(
       (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
       fallback,
     );
-
-  it("localizes merge dialog chrome", async () => {
-    const { mergeDialogHtml } = await import("../../src/domain/recordDialogMarkup");
-    const html = mergeDialogHtml([{ id: "1", name: "a.jsonl", records: [1, 2] }], { tr, trf });
-    expect(html).toContain("Fusionner les onglets JSONL");
-    expect(html).not.toContain("Merge JSONL tabs");
-  });
 
   it("localizes LLM tool result actions", async () => {
     const { llmToolResultBody } = await import("../../src/domain/llmToolMarkup");

@@ -8,11 +8,6 @@ type Trf = (key: string, fallback: string, values?: Record<string, unknown>) => 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
-export function mergeDialogHtml(files: Any[], deps: { tr: Tr; trf: Trf }): string {
-  const { tr, trf } = { ...deps, ...bindCopy(deps.tr, deps.trf) };
-  return `<div class="dh"><div><h2 class="dialog-title">${esc(tr("records.merge.title"))}</h2><div class="dialog-subtitle">${esc(tr("records.merge.subtitle"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db"><div class="merge-actions"><button class="btn small" id="mergeSelectAll">${esc(tr("ui.select_all"))}</button><button class="btn small" id="mergeSelectNone">${esc(tr("ui.clear"))}</button></div><div class="merge-file-list">${files.map((file: Any) => `<label class="merge-file-item"><input type="checkbox" data-merge-file="${file.id}" checked><span><b>${esc(file.name)}</b><small>${esc(trf("records.merge.file_records", { count: file.records.length.toLocaleString() }))}</small></span></label>`).join("")}</div><div class="field"><label>${esc(tr("records.merge.filename"))}</label><input class="control" id="mergeName" value="derridai-merged.jsonl"></div><label class="check-item"><input type="checkbox" id="mergeDownload"><span>${esc(tr("records.merge.download"))}</span></label><div class="info">${esc(tr("records.merge.help"))}</div></div><div class="da"><button class="btn" data-close>${esc(tr("common.cancel"))}</button><button class="btn primary" id="mergeCreate">${esc(tr("records.merge.create"))}</button></div>`;
-}
-
 export function bulkFieldEditorHtml(
   input: {
     title: string;
