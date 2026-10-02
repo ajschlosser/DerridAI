@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from app.corpus_record_quality import _metadata_source_quality_gate
 from app.field_assertions import (
     FieldAssertion,
@@ -28,6 +26,7 @@ from app.metadata_schema import (
     SchemaMember,
     default_schema,
 )
+from pydantic import ValidationError
 
 
 def test_repeatable_members_have_independent_stable_assertions() -> None:
