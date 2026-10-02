@@ -13,18 +13,18 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 ## Checkpoints
 
-| Checkpoint | State | Evidence |
-| --- | --- | --- |
-| Plan and tracker | Committed/pushed `dc0b35f0` | Scope, invariants, acceptance gates, rollout sequence |
-| Baseline instrumentation | Partial | Synthetic persistence/write counts captured; stable wall-clock and end-to-end baselines pending |
-| Incremental enrichment completion | Committed/pushed `d9c30235` | Ownership, restart, failure, and retired-record regressions |
-| Audio manifest preparation | Committed/pushed `6fff2e0e` | Transcript time locators and provider fallback |
-| Remove review navigation modal | Committed/pushed `bb066a35` | 18 production-browser cases pass; local draft recovery retained |
-| Restore document metadata editor | Committed/pushed `0be91ae9` | Component-resolution regression and typechecks |
-| Queue projection | Pending | Next performance increment; preserve reviewer isolation |
-| Dependency caching / incremental exemplars | Pending | Extend existing mechanisms |
-| Readiness / scheduling | Pending | Preserve publication and ownership gates |
-| Evaluated learning / review assistance | Pending | Requires held-out evaluation |
+| Checkpoint                                 | State                       | Evidence                                                                                        |
+| ------------------------------------------ | --------------------------- | ----------------------------------------------------------------------------------------------- |
+| Plan and tracker                           | Committed/pushed `dc0b35f0` | Scope, invariants, acceptance gates, rollout sequence                                           |
+| Baseline instrumentation                   | Partial                     | Synthetic persistence/write counts captured; stable wall-clock and end-to-end baselines pending |
+| Incremental enrichment completion          | Committed/pushed `d9c30235` | Ownership, restart, failure, and retired-record regressions                                     |
+| Audio manifest preparation                 | Committed/pushed `6fff2e0e` | Transcript time locators and provider fallback                                                  |
+| Remove review navigation modal             | Committed/pushed `bb066a35` | 18 production-browser cases pass; local draft recovery retained                                 |
+| Restore document metadata editor           | Committed/pushed `0be91ae9` | Component-resolution regression and typechecks                                                  |
+| Queue projection                           | Pending                     | Next performance increment; preserve reviewer isolation                                         |
+| Dependency caching / incremental exemplars | Pending                     | Extend existing mechanisms                                                                      |
+| Readiness / scheduling                     | Pending                     | Preserve publication and ownership gates                                                        |
+| Evaluated learning / review assistance     | Pending                     | Requires held-out evaluation                                                                    |
 
 ## Validation and measurements
 
