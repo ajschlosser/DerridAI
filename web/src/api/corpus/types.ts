@@ -861,6 +861,10 @@ export interface CorpusBuild {
   metadata_enriched_count?: number;
   metadata_enrichment_total?: number;
   metadata_concurrency?: number;
+  /** Live process-wide provider capacity; never persisted into scholarly build state. */
+  provider_capacity?: { limit?: number; active?: number; waiting?: number };
+  /** Live shared Ollama runtime capacity when the selected provider is local Ollama. */
+  ollama_capacity?: { limit?: number; active?: number; waiting?: number };
   metadata_tasks_total?: number;
   metadata_tasks_completed?: number;
   metadata_tasks_failed?: number;
