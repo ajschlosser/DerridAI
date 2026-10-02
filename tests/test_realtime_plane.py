@@ -468,6 +468,12 @@ def test_corpus_build_notes_become_corpus_and_operations_events():
         "metadata_enriched_count": 2,
         "metadata_completed": 2,
         "metadata_tasks_completed": 4,
+        "metadata_tasks_running": 2,
+        "metadata_tasks_queued": 4,
+        "metadata_active_tasks": [
+            {"record_id": "record-2", "task": "discourse", "started_at": "now"},
+            {"record_id": "record-3", "task": "quotation", "started_at": "now"},
+        ],
         "review_count": 2,
         "review_queue_counts": {"all": 4, "ready": 2, "issues": 2, "pending": 4},
     })
@@ -492,6 +498,10 @@ def test_corpus_build_notes_become_corpus_and_operations_events():
     assert metadata_progress.payload["build"]["metadata_total"] == 4
     assert metadata_progress.payload["build"]["metadata_completed"] == 2
     assert metadata_progress.payload["build"]["metadata_enriched_count"] == 2
+    assert metadata_progress.payload["build"]["metadata_active_tasks"] == [
+        {"record_id": "record-2", "task": "discourse", "started_at": "now"},
+        {"record_id": "record-3", "task": "quotation", "started_at": "now"},
+    ]
     assert metadata_progress.payload["build"]["review_queue_counts"]["issues"] == 2
     assert "sk-secret" not in str([event.payload for event in seen])
 

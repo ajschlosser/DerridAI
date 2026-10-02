@@ -18,6 +18,7 @@ const props = withDefaults(
     pageCount?: number;
     blockCount?: number;
     structureSummary?: string;
+    topologySummary?: string;
     schemaLabel?: string;
     providerLabel?: string;
     modelLabel?: string;
@@ -35,6 +36,7 @@ const props = withDefaults(
     pageCount: 0,
     blockCount: 0,
     structureSummary: "",
+    topologySummary: "",
     schemaLabel: "",
     providerLabel: "",
     modelLabel: "",
@@ -152,6 +154,7 @@ const sourceFacts = computed(() => {
         <dd>
           <span>
             {{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}
+            <small v-if="topologySummary">{{ topologySummary }}</small>
             <small>{{ i18n.t("pdf_corpus.readiness.record_size") }} · {{ sizing }}</small>
           </span>
           <button
@@ -207,7 +210,10 @@ const sourceFacts = computed(() => {
       <div v-if="!hasPages(mediaKind)">
         <dt>{{ i18n.t("pdf_corpus.readiness.record_size") }}</dt>
         <dd>
-          <span>{{ sizing }}</span>
+          <span>
+            <template v-if="topologySummary">{{ topologySummary }}</template>
+            <small>{{ sizing }}</small>
+          </span>
           <button
             type="button"
             class="build-plan-edit"

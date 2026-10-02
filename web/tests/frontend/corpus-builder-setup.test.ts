@@ -15,6 +15,8 @@ import CorpusBuildReadiness from "../../src/components/CorpusBuildReadiness.vue"
 import CorpusExecutionSettings from "../../src/components/CorpusExecutionSettings.vue";
 import CorpusRecordSizingSettings from "../../src/components/CorpusRecordSizingSettings.vue";
 import DocumentStructureConfigurator from "../../src/components/DocumentStructureConfigurator.vue";
+import DocumentManifestEditor from "../../src/components/DocumentManifestEditor.vue";
+import CorpusTopologyPolicy from "../../src/components/corpus-builder/CorpusTopologyPolicy.vue";
 import PdfPageLabelEditor from "../../src/components/PdfPageLabelEditor.vue";
 
 function buttonByText(wrapper: any, text: string) {
@@ -105,6 +107,72 @@ describe("Corpus Builder setup and launch controls", () => {
     expect(wrapper.emitted("editSection")).toEqual([["source"]]);
     expect(wrapper.get(".build-command-warning").text()).toContain("1");
     expect(wrapper.get(".readiness-warnings").text()).toContain("2 document fields");
+  });
+
+  it("supports exact SourceUnit-to-Record grouping and optional synthetic pages", async () => {
+    const wrapper = mount(CorpusTopologyPolicy, {
+      props: {
+        modelValue: {
+          mode: "semantic",
+          source_units_per_record: 1,
+          records_per_page: null,
+        },
+        syntheticPagesAvailable: true,
+      },
+    });
+
+    await wrapper.get('input[value="source_units"]').setValue(true);
+    let next = lastEmission(wrapper, "update:modelValue")[0] as any;
+    expect(next.mode).toBe("source_units");
+
+    await wrapper.setProps({ modelValue: next });
+    await wrapper.get("#corpus-source-units-per-record").setValue("2");
+    next = lastEmission(wrapper, "update:modelValue")[0] as any;
+    expect(next.source_units_per_record).toBe(2);
+
+    await wrapper.setProps({ modelValue: next });
+    await wrapper.get(".page-toggle input").setValue(true);
+    next = lastEmission(wrapper, "update:modelValue")[0] as any;
+    expect(next.records_per_page).toBe(1);
+
+    await wrapper.setProps({ modelValue: next });
+    await wrapper.get("#corpus-records-per-page").setValue("4");
+    next = lastEmission(wrapper, "update:modelValue")[0] as any;
+    expect(next.records_per_page).toBe(4);
+  });
+
+  it("keeps authoritative source pages separate from synthetic Record pages", () => {
+    const wrapper = mount(CorpusTopologyPolicy, {
+      props: {
+        modelValue: {
+          mode: "source_units",
+          source_units_per_record: 1,
+          records_per_page: null,
+        },
+        syntheticPagesAvailable: false,
+      },
+    });
+    expect(wrapper.find(".page-toggle").exists()).toBe(false);
+    expect(wrapper.get(".page-authority-note").text()).toContain("authoritative page structure");
+  });
+
+  it("edits detected manifest values before Build without post-build reanalysis controls", async () => {
+    const wrapper = mount(DocumentManifestEditor, {
+      props: {
+        mediaKind: "text",
+        manifest: {
+          title: "Detected title",
+          document_author: "Detected author",
+        },
+        showReanalyze: false,
+      },
+    });
+    expect(wrapper.text()).not.toContain("Reanalyze");
+    const inputs = wrapper.findAll('input.control[type="text"]');
+    expect((inputs[0].element as HTMLInputElement).value).toBe("Detected title");
+    await inputs[0].setValue("Reviewed title");
+    await wrapper.get("form.manifest-editor").trigger("submit");
+    expect(wrapper.emitted("save")?.[0]?.[0]).toEqual({ title: "Reviewed title" });
   });
 
   it("keeps automatic limits valid as the target changes, without touching custom ones", async () => {
