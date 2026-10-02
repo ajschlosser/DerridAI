@@ -225,6 +225,12 @@ def preview(blocks: list[dict[str, Any]], policy: dict[str, Any] | None, *, samp
     derived, _ = apply_unit_policy(blocks, resolved)
     included = [b for b in derived if not b.get("excluded_reason")]
     sizes = [len(str(b.get("text") or "")) for b in included]
+    # Opening units are mostly front matter/errata, so sample from 20% in, unless
+    # that would leave fewer units than the sample needs.
+    start = len(included) // 5
+    if len(included) - start < sample:
+        start = 0
+    window = included[start:]
     return {
         "policy": resolved,
         "unit_count": len(included),
@@ -234,10 +240,10 @@ def preview(blocks: list[dict[str, Any]], policy: dict[str, Any] | None, *, samp
         "min_chars": min(sizes, default=0),
         "language_segmentation": profile_metadata(
             str(resolved.get("language") or "") or None,
-            "\n".join(str(block.get("text") or "") for block in included[:8]),
+            "\n".join(str(block.get("text") or "") for block in window[:8]),
         ),
         "sample": [
             {"block_id": b.get("block_id"), "page": b.get("page"), "text": str(b.get("text") or "")[:240]}
-            for b in included[:sample]
+            for b in window[:sample]
         ],
     }

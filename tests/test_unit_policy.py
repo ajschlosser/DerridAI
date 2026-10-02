@@ -64,6 +64,14 @@ def test_preview_reports_counts_and_samples():
     assert result["sample"][0]["block_id"] == "a-u001"
 
 
+def test_preview_samples_from_twenty_percent_in_when_there_is_room():
+    blocks = [{"block_id": f"b{i:03d}", "page": 1, "type": "paragraph", "text": f"Paragraph {i}."} for i in range(100)]
+    result = up.preview(blocks, {"mode": "default"})
+    assert [u["block_id"] for u in result["sample"]][0] == "b020"
+    short = up.preview(blocks[:7], {"mode": "default"})
+    assert short["sample"][0]["block_id"] == "b000"
+
+
 def test_repository_derives_a_sentence_asset_and_keeps_the_original(tmp_path):
     from app import corpus_builder as cb
 
