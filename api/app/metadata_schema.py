@@ -431,7 +431,9 @@ class MetadataSchema(BaseModel):
         fields = result.get("fields") if isinstance(result.get("fields"), list) else []
         # Migrate the short-lived format-3 repeatable-group draft losslessly.
         for group in groups:
-            if not isinstance(group, dict) or not group.pop("repeatable", False):
+            if not isinstance(group, dict):
+                continue
+            if not group.pop("repeatable", False):
                 group.pop("group_id", None)
                 group.pop("max_items", None)
                 group.pop("instance_label", None)
@@ -997,7 +999,6 @@ def response_model_for(
         if requested_fields is None
         or field.name in requested_fields
     ]
-    group = schema.group(group_key)
     for field in group_fields:
         props[field.name] = (
             _repeatable_annotation(field) if field.type == "repeatable" else _annotation(field),
