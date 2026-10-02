@@ -77,6 +77,7 @@ class ConcurrencyCoordinator:
         self._condition = threading.Condition(threading.RLock())
         self._active: dict[tuple[str, str], int] = {}
         self._waiting: dict[tuple[str, str], int] = {}
+        self._limits: dict[tuple[str, str], int] = {}
 
     @staticmethod
     def _limit(value: int) -> int:
@@ -92,10 +93,28 @@ class ConcurrencyCoordinator:
             raise ValueError("Concurrency key must be non-empty.")
         return resource, key
 
+    def set_limit(self, resource: str, key: str, limit: int) -> int:
+        """Set a process-wide configured limit for a shared resource key."""
+
+        identity = self._identity(resource, key)
+        bounded = self._limit(limit)
+        with self._condition:
+            self._limits[identity] = bounded
+            self._condition.notify_all()
+        return bounded
+
+    def configured_limit(
+        self, resource: str, key: str, *, fallback: int = 1
+    ) -> int:
+        identity = self._identity(resource, key)
+        with self._condition:
+            return int(self._limits.get(identity, self._limit(fallback)))
+
     def snapshot(self, resource: str, key: str, *, limit: int = 1) -> CapacitySnapshot:
         identity = self._identity(resource, key)
         bounded = self._limit(limit)
         with self._condition:
+            bounded = int(self._limits.get(identity, bounded))
             return CapacitySnapshot(
                 resource=identity[0],
                 key=identity[1],
@@ -113,7 +132,7 @@ class ConcurrencyCoordinator:
                 CapacitySnapshot(
                     resource=resource,
                     key=key,
-                    limit=0,
+                    limit=int(self._limits.get((resource, key), 0)),
                     active=int(self._active.get((resource, key), 0)),
                     waiting=int(self._waiting.get((resource, key), 0)),
                 )
@@ -139,6 +158,8 @@ class ConcurrencyCoordinator:
 
         identity = self._identity(resource, key)
         bounded = self._limit(limit)
+        with self._condition:
+            bounded = int(self._limits.get(identity, bounded))
         started = time.monotonic()
         notified_wait = False
 
@@ -211,6 +232,7 @@ class ConcurrencyCoordinator:
         with self._condition:
             self._active.clear()
             self._waiting.clear()
+            self._limits.clear()
             self._condition.notify_all()
 
 
