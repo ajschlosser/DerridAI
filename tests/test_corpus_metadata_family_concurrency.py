@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import threading
+from concurrent.futures import ThreadPoolExecutor as SharedPool
 
 from app import corpus_metadata_enrichment_execution as enrichment
 
@@ -91,3 +92,24 @@ def test_custom_family_remains_exclusive_before_parallel_builtin_group(monkeypat
         "indexing",
     ]
     assert harness.calls[0] == ["custom"]
+
+
+def test_build_orchestration_can_supply_one_shared_family_executor(monkeypatch) -> None:
+    monkeypatch.setattr(enrichment, "EnrichmentSession", _Session)
+    harness = _Harness(threading.Barrier(3))
+
+    def local_pool_must_not_be_created(*args, **kwargs):
+        raise AssertionError("shared family executor should avoid a per-Record nested pool")
+
+    monkeypatch.setattr(enrichment, "ThreadPoolExecutor", local_pool_must_not_be_created)
+    with SharedPool(max_workers=3, thread_name_prefix="shared-family-test") as shared:
+        results = harness._execute_metadata_tasks(
+            {},
+            {"max_concurrent_requests": 3},
+            [_spec("discourse"), _spec("quotation"), _spec("indexing")],
+            "build",
+            None,
+            family_executor=shared,
+        )
+
+    assert [row[0] for row in results] == ["discourse", "quotation", "indexing"]
