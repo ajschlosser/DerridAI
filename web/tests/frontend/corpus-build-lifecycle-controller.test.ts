@@ -285,8 +285,16 @@ describe("Corpus Builder lifecycle controller", () => {
           metadata_tasks_running: 2,
           metadata_tasks_queued: 1,
           metadata_active_tasks: [
-            { record_id: "record-1", task: "discourse", started_at: "2026-10-02T04:00:00Z" },
-            { record_id: "record-2", task: "quotation", started_at: "2026-10-02T04:00:01Z" },
+            {
+              record_id: "record-1",
+              task: "discourse",
+              started_at: "2026-10-02T04:00:00Z",
+            },
+            {
+              record_id: "record-2",
+              task: "quotation",
+              started_at: "2026-10-02T04:00:01Z",
+            },
           ],
           review_count: 1,
         },
