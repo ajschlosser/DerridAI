@@ -698,6 +698,27 @@ def page_record_boundaries(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]
     return boundaries
 
 
+def source_unit_record_boundaries(
+    blocks: list[dict[str, Any]], source_units_per_record: int
+) -> list[dict[str, Any]]:
+    """Split deterministically after each fixed-size SourceUnit group."""
+    group_size = max(1, int(source_units_per_record or 1))
+    boundaries: list[dict[str, Any]] = []
+    for index, block in enumerate(blocks[:-1], 1):
+        if index % group_size:
+            continue
+        boundaries.append({
+            "after_block_id": block["block_id"],
+            "decision": "split",
+            "confidence": 1.0,
+            "changes": [],
+            "source": "source_unit_policy",
+            "boundary_kind": "source_unit_group",
+            "semantic_boundary": False,
+        })
+    return boundaries
+
+
 def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boundaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     boundary_map = {item["after_block_id"]: item for item in boundaries}
     groups: list[list[dict[str, Any]]] = []

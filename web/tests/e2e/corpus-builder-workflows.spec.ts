@@ -142,6 +142,31 @@ test.describe("Corpus Builder composed workflow", () => {
     await expectWcag2AA(page, ".corpus-build-telemetry");
   });
 
+  test("setup exposes explicit SourceUnit Record Page relationships", async ({ page }) => {
+    await page.goto(story("corpus-builder-setup-topology-policy--fixed-source-units"));
+    const policy = page.locator(".topology-policy");
+    await expect(policy).toContainText("SourceUnit");
+    await expect(policy).toContainText("1 SourceUnit → 1 Record");
+    await expect(policy.locator("#corpus-source-units-per-record")).toHaveValue("1");
+    await expect(policy.locator("#corpus-records-per-page")).toHaveValue("4");
+    await expectNoHorizontalOverflow(policy);
+    await expectWcag2AA(page, ".topology-policy");
+  });
+
+  test("setup exposes the full editable manifest before Build", async ({ page }) => {
+    await page.goto(story("corpus-builder-setup-early-manifest--editable-before-build"));
+    const editor = page.locator(".manifest-editor");
+    await expect(editor.getByRole("button", { name: /reanalyze/i })).toHaveCount(0);
+    // Form control values are not part of an element's textContent. Assert the
+    // pre-Build manifest value on the input itself instead of duplicating that
+    // assertion with toContainText().
+    await expect(editor.locator('input.control[type="text"]').first()).toHaveValue(
+      "Of Grammatology",
+    );
+    await expectNoHorizontalOverflow(editor);
+    await expectWcag2AA(page, ".manifest-editor");
+  });
+
   test("build primary status is the one progress surface, with stages and next actions", async ({
     page,
   }) => {
@@ -212,10 +237,13 @@ test.describe("Corpus Builder composed workflow", () => {
   }) => {
     await page.goto(story("corpus-builder-review-record-queue--mixed-states"));
 
-    const enriching = page.locator('.record-row:has([data-state="enriching"])').first();
-    await expect(enriching).toContainText("Enriching");
-    await expect(enriching.locator(".record-processing-spinner")).toBeVisible();
-    await expect(enriching.locator(".record-state-icon svg")).toHaveCount(0);
+    const enrichingRows = page.locator('.record-row:has([data-state="enriching"])');
+    await expect(enrichingRows).toHaveCount(2);
+    for (const enriching of await enrichingRows.all()) {
+      await expect(enriching).toContainText("Enriching");
+      await expect(enriching.locator(".record-processing-spinner")).toBeVisible();
+      await expect(enriching.locator(".record-state-icon svg")).toHaveCount(0);
+    }
 
     const preparing = page.locator('.record-row:has([data-state="preparing"])').first();
     await expect(preparing).toContainText("Preparing");

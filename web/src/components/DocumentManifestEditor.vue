@@ -15,8 +15,9 @@ const props = withDefaults(
     manifest?: Record<string, unknown>;
     disabled?: boolean;
     affectedRecords?: number;
+    showReanalyze?: boolean;
   }>(),
-  { manifest: () => ({}), disabled: false, affectedRecords: 0 },
+  { manifest: () => ({}), disabled: false, affectedRecords: 0, showReanalyze: true },
 );
 const emit = defineEmits<{ save: [changes: Record<string, unknown>]; reanalyze: [] }>();
 const i18n = useI18nStore();
@@ -246,6 +247,7 @@ function reset() {
       </div>
       <div class="manifest-impact-side">
         <UiButton
+          v-if="props.showReanalyze"
           :label="i18n.t('pdf_corpus.reanalyze_document')"
           :disabled="props.disabled"
           :title="i18n.t('pdf_corpus.reanalyze_document_help')"
@@ -444,6 +446,13 @@ function reset() {
   gap: 18px;
   max-width: 900px;
   margin: 0 auto;
+}
+.manifest-editor :deep(.metadata-form-footer.is-sticky) {
+  /* The shared footer can bleed into a padded panel. This editor is itself the
+     width-constrained surface, so negative inline margins create real horizontal
+     overflow in Storybook and narrow containers. Keep the sticky behavior without
+     extending beyond the manifest form's inline bounds. */
+  margin-inline: 0;
 }
 .manifest-impact {
   display: flex;

@@ -90,6 +90,7 @@ class EnrichmentRerunsMixin:
             next_text: str = "",
             build_id: str = "",
             stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None = None,
+            family_executor: Any = None,
         ) -> dict[str, Any]: ...
 
 
@@ -147,18 +148,36 @@ class EnrichmentRerunsMixin:
             records = self.repo.load_records(build_id)
             manifest = build.get("manifest") or {}
             total = max(1, len(target_indices))
-            max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
+            max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
             operation = dict(build.get("metadata_operation") or {})
             operation["state"] = "running"
             self._update(build_id, metadata_operation=operation)
-            with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-retry") as pool:
+            with (
+                ThreadPoolExecutor(
+                    max_workers=max_workers,
+                    thread_name_prefix="pdf-corpus-meta-retry",
+                ) as pool,
+                ThreadPoolExecutor(
+                    max_workers=max_workers,
+                    thread_name_prefix="pdf-corpus-family-retry",
+                ) as family_pool,
+            ):
                 futures = {}
                 for index in target_indices:
                     record = dict(records[index])
                     previous_text = str(records[index - 1].get("text") or "") if index > 0 else ""
                     next_text = str(records[index + 1].get("text") or "") if index + 1 < len(records) else ""
                     before = list(record.get("metadata_incomplete_fields") or [])
-                    future = pool.submit(self._enrich_record, record, manifest, request, previous_text=previous_text, next_text=next_text, build_id=build_id)
+                    future = pool.submit(
+                        self._enrich_record,
+                        record,
+                        manifest,
+                        request,
+                        previous_text=previous_text,
+                        next_text=next_text,
+                        build_id=build_id,
+                        family_executor=family_pool,
+                    )
                     futures[future] = (index, before)
                 processed = 0
                 resolved = 0
@@ -561,7 +580,7 @@ class EnrichmentRerunsMixin:
         priority = [str(value) for value in build.get("metadata_priority_record_ids") or []]
         priority_indices = [index for value in priority for index, row in enumerate(snapshot) if str(row.get("record_id") or "") == value and index in indices]
         indices = priority_indices + [index for index in indices if index not in priority_indices]
-        max_workers = max(1, min(16, int(request.get("max_concurrent_requests") or 1)))
+        max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
         totals: Counter[str] = Counter()
         pass_schema = self._schema_for(build_id)
         epoch_at_start = self._provider_epoch.get(build_id, 0)
@@ -621,12 +640,22 @@ class EnrichmentRerunsMixin:
                     previous_text=neighbors["previous_text"],
                     next_text=neighbors["next_text"],
                     stage_callback=operation_stage_callback,
+                    family_executor=family_pool,
                 )
                 return enriched, request_used, record_started, None
             except Exception as exc:
                 return None, request_used, record_started, exc
 
-        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pdf-corpus-meta-enrich") as pool:
+        with (
+            ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="pdf-corpus-meta-enrich",
+            ) as pool,
+            ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="pdf-corpus-family-enrich",
+            ) as family_pool,
+        ):
             futures = {
                 pool.submit(candidate_for, index): (index, time.perf_counter())
                 for index in indices

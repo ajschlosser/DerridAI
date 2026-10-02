@@ -36,7 +36,8 @@ interface CorpusBuildLifecycleControllerOptions {
   requestedBuildId: () => string;
   runGuidancePayload: () => Record<string, unknown>;
   /** Reviewer-supplied document fields that detection on source load missed. */
-  documentMetadataPayload?: () => Record<string, string>;
+  documentMetadataPayload?: () => Record<string, unknown>;
+  topologyPolicyPayload?: () => Record<string, unknown>;
   applyBuildRequest: (request: Record<string, unknown>) => void;
   setMessage: (message: string, tone?: MessageTone) => void;
   resetReviewForBuildStart: () => void;
@@ -97,6 +98,8 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
       patch.metadata_tasks_running = summary.metadata_tasks_running;
     if (summary.metadata_tasks_queued !== undefined)
       patch.metadata_tasks_queued = summary.metadata_tasks_queued;
+    if (summary.metadata_active_tasks !== undefined)
+      patch.metadata_active_tasks = summary.metadata_active_tasks.map((task) => ({ ...task }));
     Object.assign(build, patch);
     syncBuildInRail(build);
   }
@@ -259,10 +262,11 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
           terminalPending = false;
           finished = true;
           await refreshBuilds();
-          // Completion can settle filtered queue membership; reconcile in place without
-          // resetting selection, scroll position, or the selected Record cache.
+          // Completion can settle filtered queue membership. Reconcile the page without
+          // forcing the old selected id: refreshRecords keeps it when still visible (or
+          // while a draft is open) and otherwise advances to the nearest valid row.
           await nextTick();
-          await options.refreshRecords(false, options.selectedRecordId.value);
+          await options.refreshRecords(false);
         }
       },
     });
@@ -279,8 +283,10 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     options.resetReviewForBuildStart();
     try {
       const documentMetadata = options.documentMetadataPayload?.() ?? {};
+      const topologyPolicy = options.topologyPolicyPayload?.() ?? {};
       const payload = {
         asset_id: options.selectedAssetId.value,
+        ...(Object.keys(topologyPolicy).length ? { topology_policy: topologyPolicy } : {}),
         auto_enrich_work_metadata: true,
         schema_id: options.schemaId.value,
         run_guidance: options.runGuidancePayload(),

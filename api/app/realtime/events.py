@@ -56,6 +56,7 @@ _CORPUS_SUMMARY_KEYS = (
     "metadata_tasks_skipped",
     "metadata_tasks_running",
     "metadata_tasks_queued",
+    "metadata_active_tasks",
     "unresolved_regions",
     "progress",
     "total",
@@ -72,6 +73,7 @@ _METADATA_KEYS = (
     "metadata_completed",
     "metadata_enriched_count",
     *(key for key in _CORPUS_SUMMARY_KEYS if key.startswith("metadata_tasks_")),
+    "metadata_active_tasks",
 )
 
 METADATA_NOTE_EVENTS = {
