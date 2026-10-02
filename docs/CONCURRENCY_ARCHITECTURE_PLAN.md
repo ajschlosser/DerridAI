@@ -316,31 +316,31 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 
 ### Phase A — shared capacity substrate
 
-- [~] Add process-wide concurrency/capacity coordinator with cancellable permits, stable provider keys, snapshots, wait timing, and leak-safe context management.
-- [ ] Add focused coordinator unit tests.
-- [ ] Migrate `LLMJobManager` provider gate.
-- [ ] Migrate `LLMToolJobManager` provider gate.
-- [ ] Migrate `RAGJobManager` provider-profile gate.
-- [ ] Move/bridge Ollama process gate into the coordinator.
-- [ ] Gate Corpus Builder structured provider calls through shared provider capacity.
-- [ ] Expose safe capacity snapshots to operational status.
+- [x] Add process-wide concurrency/capacity coordinator with cancellable permits, stable provider keys, snapshots, wait timing, and leak-safe context management.
+- [x] Add focused coordinator unit tests.
+- [x] Migrate `LLMJobManager` provider gate.
+- [x] Migrate `LLMToolJobManager` provider gate.
+- [x] Migrate `RAGJobManager` provider-profile gate.
+- [x] Move/bridge Ollama process gate into the coordinator.
+- [x] Gate Corpus Builder structured provider calls through shared provider capacity.
+- [~] Expose safe capacity snapshots to operational status (RAG status migrated; Corpus/UI surface still pending).
 
 ### Phase B — Corpus Builder scheduling
 
 - [ ] Separate build-level worker count, operation throttle, and provider capacity.
-- [ ] Introduce explicit metadata-family concurrency/dependency policy.
-- [ ] Execute independent built-in metadata families concurrently without nested unbounded pools.
-- [ ] Preserve Record-local staged checkpoint callbacks and deterministic reconciliation.
+- [~] Introduce explicit metadata-family concurrency/dependency policy (built-in discourse/quotation/indexing are explicitly parallel-safe; schema-extensible dependency metadata remains pending).
+- [x] Execute independent built-in metadata families concurrently with a bounded per-Record family pool plus process-wide provider gate; replacing the interim nested pool with a ready-work scheduler remains in this phase.
+- [x] Preserve Record-local staged checkpoint callbacks and deterministic reconciliation.
 - [ ] Add bounded-breadth/finish-started-record priority behavior.
 - [ ] Ensure targeted reruns/requeues receive priority without starving bulk work.
 - [ ] Add Record concurrency/barrier tests.
 
 ### Phase C — segmentation and document preparation
 
-- [ ] Parallelize independent boundary-classifier batches under provider capacity.
-- [ ] Parallelize bounded second-reader inference over immutable pair snapshots.
-- [ ] Merge/apply segmentation decisions in stable source order.
-- [ ] Make segmentation tracing safe under concurrent calls.
+- [x] Parallelize independent boundary-classifier batches under provider capacity.
+- [x] Parallelize bounded second-reader inference over immutable pair snapshots.
+- [x] Merge/apply segmentation decisions in stable source order.
+- [x] Make structured-stage tracing concurrency-safe with synchronized aggregate counters and thread-local call paths.
 - [ ] Identify Document Intelligence-independent Record preparation.
 - [ ] Overlap safe deterministic/retrieval preparation with Document Intelligence without changing prompt semantics.
 
@@ -375,3 +375,15 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 - Created `task/corpus-builder-concurrency` from latest `master@9f01334749bdca98915ce7f162f8d4b41855db3d`.
 - Re-audited current Corpus Builder scheduling, metadata-family execution, segmentation batching, RAG/LLM/tool provider gates, Pipeline Studio concurrency declarations, and the active enrichment latency plan.
 - Confirmed the first implementation slice should be the shared capacity substrate. Adding more Corpus Builder fan-out before a process-wide provider gate would permit aggregate oversubscription across independent managers.
+
+### 2026-10-01 / shared capacity and first Corpus fan-out slice
+
+- Added `api/app/concurrency.py` as the process-wide authority for named resource capacity. Permits are cancellable, context-managed, wait-timed, snapshot-capable, and secret-safe.
+- Added configured resource limits so the legacy server Ollama cap can be shared across RAG, Corpus Builder, LLM review jobs, and LLM tools instead of living inside RAG alone.
+- Migrated `LLMJobManager`, `LLMToolJobManager`, and `RAGJobManager` off independent provider counters. RAG operational status now reads shared coordinator snapshots.
+- Gated every Corpus Builder structured provider attempt through the same provider-profile capacity key; Ollama calls additionally pass through the shared runtime gate. Build metrics now distinguish provider/Ollama wait counts and wait milliseconds from provider service time.
+- Made `StructuredStageSession` safe for overlapping sibling calls: trace aggregation is locked, model work occurs outside the lock, and each thread retains its own last stage path for point-of-use provenance.
+- Enabled bounded overlap of the built-in discourse, quotation, and indexing metadata families. Results are consumed in schema order even when calls finish out of order; unknown/custom families remain exclusive.
+- Parallelized segmentation classifier batches and the bounded boundary second-reader pass. Inference uses immutable pair snapshots and authoritative boundary mutations are applied in document order.
+- Added barrier-based coordinator tests plus metadata-family scheduling tests. Full branch CI has not yet been triggered; a draft PR/check run is still pending after the next integration slice.
+- Remaining architectural debt in this slice: metadata family overlap currently uses a small nested per-Record executor. The target ready-work scheduler will remove that nested shape and provide bounded breadth/finish-started-Record prioritization.
