@@ -342,9 +342,9 @@ function fixBlocker(code?: string) {
           <b>{{ i18n.t("pdf_corpus.publish.readiness_title") }}</b>
           <small>
             {{
-              blockers.length
-                ? i18n.t("pdf_corpus.publication_waiting_help")
-                : i18n.t("pdf_corpus.publication_ready_help")
+              publishReady
+                ? i18n.t("pdf_corpus.publication_ready_help")
+                : i18n.t("pdf_corpus.publication_waiting_help")
             }}
           </small>
         </span>
