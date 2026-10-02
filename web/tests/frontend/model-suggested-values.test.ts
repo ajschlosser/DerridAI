@@ -90,6 +90,56 @@ describe("model-suggested values", () => {
     expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("criticize");
   });
 
+  it("keeps a pending model proposal in the real input instead of a read-only proposal paragraph", () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "stance",
+        value: "criticize",
+        control: "enum",
+        options: stance,
+        open: true,
+        status: {
+          status: "model_inferred",
+          method: "llm",
+          confidence: 0.76,
+          llm_value: "criticize",
+        },
+      },
+    });
+
+    expect(wrapper.get(".metadata-field").attributes("data-mode")).toBe("edit");
+    expect(wrapper.get(".metadata-field").attributes("data-review-state")).toBe("pending");
+    expect(wrapper.get(".field-review-state").text()).toContain("Pending review");
+    expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("criticize");
+    expect(wrapper.find(".proposal-view").exists()).toBe(false);
+    expect(wrapper.find(".proposal-value").exists()).toBe(false);
+  });
+
+  it("folds a field that does not need review into one editable summary row", () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "stance",
+        value: "criticize",
+        control: "enum",
+        options: stance,
+        open: false,
+        status: {
+          status: "model_inferred",
+          method: "llm",
+          verification_status: "auto_resolved",
+          autofilled: true,
+        },
+      },
+    });
+
+    expect(wrapper.get(".metadata-field").attributes("data-mode")).toBe("view");
+    expect(wrapper.get(".metadata-field").attributes("data-review-state")).toBe("settled");
+    expect(wrapper.get(".field-row").text()).toContain("criticize");
+    expect(wrapper.find("select").exists()).toBe(false);
+    expect(wrapper.find(".field-edit").exists()).toBe(true);
+    expect(wrapper.find(".proposal-view").exists()).toBe(false);
+  });
+
   it("selects a value whose options arrive after the field is mounted", async () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
       props: { field: "stance", value: "Question", control: "enum", options: [], open: true },
