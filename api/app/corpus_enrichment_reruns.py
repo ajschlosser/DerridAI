@@ -90,6 +90,7 @@ class EnrichmentRerunsMixin:
             next_text: str = "",
             build_id: str = "",
             stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None = None,
+            family_executor: Any = None,
         ) -> dict[str, Any]: ...
 
 
