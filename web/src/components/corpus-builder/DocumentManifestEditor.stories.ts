@@ -34,7 +34,7 @@ const meta = {
       },
     },
   },
-} satisfies Meta<typeof DocumentManifestEditor>;
+} satisfies Meta<typeof CorpusSetupDocumentMetadata>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
