@@ -19,8 +19,8 @@ const props = defineProps<{
 defineEmits<{ toggle: [section: CorpusSetupSectionId] }>();
 const i18n = useI18nStore();
 const requiredSections = computed(() => props.sections.filter((section) => section.id !== "advanced"));
-const configuredRequired = computed(
-  () => requiredSections.value.filter((section) => section.state !== "incomplete").length,
+const completedRequired = computed(
+  () => requiredSections.value.filter((section) => section.state === "complete").length,
 );
 const setupWarnings = computed(
   () => requiredSections.value.filter((section) => section.state === "warning").length,
@@ -55,8 +55,8 @@ const titleKeys: Record<CorpusSetupSectionId, [string, string]> = {
         role="group"
         :aria-label="i18n.t('pdf_corpus.build_configuration')"
       >
-        <span>{{ configuredRequired }} / {{ requiredSections.length }} {{ i18n.t("pdf_corpus.complete") }}</span>
-        <progress :max="requiredSections.length" :value="configuredRequired"></progress>
+        <span>{{ completedRequired }} / {{ requiredSections.length }} {{ i18n.t("pdf_corpus.complete") }}</span>
+        <progress :max="requiredSections.length" :value="completedRequired"></progress>
       </div>
     </header>
     <p v-if="props.existingBuildName" class="corpus-setup-next-build" role="note">
