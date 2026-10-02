@@ -53,7 +53,7 @@ The current implementation already contains several concurrency mechanisms, but 
 - RAG separately maintains an Ollama GPU-oriented process gate.
 - Metadata exemplar retrieval has its own bounded thread pool.
 - Vector-store pipeline execution already has a strategy-level concurrency declaration: `safe |
-  provider_limited | exclusive`.
+provider_limited | exclusive`.
 - Corpus Builder makes completed Records progressively reviewable, so throughput policy must
   preserve early Record completion rather than simply maximizing the number of partially started
   Records.
@@ -78,9 +78,9 @@ capacity.
 9. Retrieval/reranking similarity never becomes evidence authority merely because it ran in
    parallel.
 10. Fixed fake-provider outputs must produce equivalent scholarly state at concurrency 1 and
-   concurrency N.
+    concurrency N.
 11. Optional/local providers may legitimately benchmark best at concurrency 1. DerridAI must use
-   configured capacity, not silently force additional GPU parallelism.
+    configured capacity, not silently force additional GPU parallelism.
 12. Concurrency controls are operational state, not scholarly metadata.
 
 ## Target architecture
@@ -402,17 +402,17 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 ### Phase A — shared capacity substrate
 
 - [x] Add process-wide concurrency/capacity coordinator with cancellable permits, stable provider
-  keys, snapshots, wait timing, and leak-safe context management.
+      keys, snapshots, wait timing, and leak-safe context management.
 - [x] Add focused coordinator unit tests.
 - [x] Add a cross-workflow admission test proving LLM and RAG managers sharing one provider profile
-  share one process-wide limit; independent profiles do not block each other.
+      share one process-wide limit; independent profiles do not block each other.
 - [x] Migrate `LLMJobManager` provider gate.
 - [x] Migrate `LLMToolJobManager` provider gate.
 - [x] Migrate `RAGJobManager` provider-profile gate.
 - [x] Move/bridge Ollama process gate into the coordinator.
 - [x] Gate Corpus Builder structured provider calls through shared provider capacity.
 - [x] Expose safe capacity snapshots to operational status. RAG and Corpus build reads now report
-  shared provider capacity; Corpus live metadata status shows active/limit utilization.
+      shared provider capacity; Corpus live metadata status shows active/limit utilization.
 
 ### Phase B — Corpus Builder scheduling
 
@@ -423,8 +423,8 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
   discourse/quotation/indexing are explicitly parallel-safe; schema-extensible dependency metadata
   remains pending).
 - [x] Execute independent built-in metadata families concurrently. Build/retry/rerun orchestration
-  now supplies one shared family-work pool so active Records steal from the same bounded queue
-  instead of creating a family executor per Record.
+      now supplies one shared family-work pool so active Records steal from the same bounded queue
+      instead of creating a family executor per Record.
 - [x] Preserve Record-local staged checkpoint callbacks and deterministic reconciliation.
 - [ ] Add bounded-breadth/finish-started-record priority behavior.
 - [ ] Ensure targeted reruns/requeues receive priority without starving bulk work.
@@ -437,10 +437,10 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 - [x] Parallelize bounded second-reader inference over immutable pair snapshots.
 - [x] Merge/apply segmentation decisions in stable source order.
 - [x] Make structured-stage tracing concurrency-safe with synchronized aggregate counters and
-  thread-local call paths.
+      thread-local call paths.
 - [ ] Identify Document Intelligence-independent Record preparation.
 - [ ] Overlap safe deterministic/retrieval preparation with Document Intelligence without changing
-  prompt semantics.
+      prompt semantics.
 
 ### Phase D — retrieval/model resources
 
@@ -461,9 +461,9 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 
 - [ ] Add queue-time/utilization metrics separate from service time.
 - [ ] Surface provider active/limit/waiting and active Record/task counts in Corpus Builder
-  operational state.
+      operational state.
 - [ ] Make provider-profile capacity inheritance the normal UI behavior; keep explicit build
-  throttle advanced.
+      throttle advanced.
 - [ ] Add localized help/copy and WCAG 2.2 AA coverage for new controls/status.
 - [ ] Add benchmark harness/results for 1/2/4/8/16 and representative local/remote providers.
 - [ ] Update architecture/user/provider requirement docs after implementation is stable.
