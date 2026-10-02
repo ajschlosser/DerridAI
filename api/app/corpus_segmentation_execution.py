@@ -8,10 +8,13 @@ why every mixin's mypy stub block must be wrapped in `if TYPE_CHECKING:`).
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
+from .concurrency import provider_limit
 from .corpus_llm_helpers import _generation_options, _provider_roles, _stage_limits
 from .corpus_models import (
     SEGMENTATION_PROMPT_VERSION,
@@ -334,19 +337,46 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         pairs = pairs[:24]
         metrics = {"audited": 0, "keep": 0, "move": 0, "uncertain": 0, "failed": 0}
         decisions=[]
-        # One trace for the pass. If the pipeline cannot be resolved, each pair tries on its
-        # own and records that failure as an uncertain verdict without a model call.
         session: SegmentationSession | None = None
         if pairs:
             try:
                 session = SegmentationSession.open()
             except RuntimeError:
                 session = None
+
+        def ask(pair: tuple[int, dict[str, Any], dict[str, Any]]) -> dict[str, Any]:
+            _, left, right = pair
+            # Inference reads immutable snapshots. Authoritative Record topology is
+            # mutated only below, in source order, after every concurrent call settles.
+            return self._adjudicate_record_boundary_pair(
+                copy.deepcopy(left),
+                copy.deepcopy(right),
+                manifest,
+                request,
+                build_id,
+                session=session,
+            )
+
         try:
-            for _, left, right in pairs:
+            if self._cancelled(build_id):
+                raise InterruptedError("Corpus build cancelled")
+            workers = min(
+                len(pairs),
+                provider_limit(request.get("max_concurrent_requests"), default=1, maximum=16),
+            ) if pairs else 0
+            if session is not None and workers > 1:
+                with ThreadPoolExecutor(
+                    max_workers=workers,
+                    thread_name_prefix="pdf-corpus-boundary-audit",
+                ) as pool:
+                    futures = [pool.submit(ask, pair) for pair in pairs]
+                    ordered_decisions = [future.result() for future in futures]
+            else:
+                ordered_decisions = [ask(pair) for pair in pairs]
+
+            for (_, left, right), decision in zip(pairs, ordered_decisions):
                 if self._cancelled(build_id):
                     raise InterruptedError("Corpus build cancelled")
-                decision = self._adjudicate_record_boundary_pair(left, right, manifest, request, build_id, session=session)
                 decisions.append(decision)
                 metrics["audited"] += 1
                 choice = str(decision.get("decision") or "uncertain")
@@ -367,7 +397,6 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             session.finish()
         self.repo.save_checkpoint(build_id, "boundary_second_reader", {"decisions": decisions, "metrics": metrics, "completed_at": iso_now()})
         return metrics
-
 
     def _segment(self, blocks: list[dict[str, Any]], manifest: dict[str, Any], request: dict[str, Any], build_id: str) -> list[dict[str, Any]]:
         """Build topology with deterministic-first routing and bounded LLM work.
@@ -456,28 +485,77 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                 self._append_warning(build_id,f"{exc} {len(pending)} ambiguous boundary transition(s) were kept without a model call.")
                 pending=[]
         try:
-            for offset in range(0,len(pending),batch_size):
-                if self._cancelled(build_id): raise InterruptedError("Corpus build cancelled")
-                chunk=pending[offset:offset+batch_size]
-                batch=[item[0] for item in chunk]
-                results,failure=self._segment_candidate_batch(batch,blocks,manifest,request,build_id,session=session)
-                batch_call_count+=1
+            chunks = [
+                pending[offset:offset + batch_size]
+                for offset in range(0, len(pending), batch_size)
+            ]
+
+            def run_chunk(chunk: list[tuple[dict[str, Any], str]]) -> tuple[dict[str, dict[str, Any]], str | None, dict[str, Any]]:
+                if self._cancelled(build_id):
+                    raise InterruptedError("Corpus build cancelled")
+                batch = [item[0] for item in chunk]
+                results, failure = self._segment_candidate_batch(
+                    batch, blocks, manifest, request, build_id, session=session
+                )
+                return results, failure, session.identity() if session is not None else {}
+
+            workers = min(
+                len(chunks),
+                provider_limit(request.get("max_concurrent_requests"), default=1, maximum=16),
+            ) if chunks else 0
+            if session is not None and workers > 1:
+                with ThreadPoolExecutor(
+                    max_workers=workers,
+                    thread_name_prefix="pdf-corpus-boundary-batch",
+                ) as pool:
+                    futures = [pool.submit(run_chunk, chunk) for chunk in chunks]
+                    chunk_results = [future.result() for future in futures]
+            else:
+                chunk_results = [run_chunk(chunk) for chunk in chunks]
+
+            # Provider completion order is intentionally ignored. Cache/checkpoint
+            # decisions and topology progress are applied in source/batch order.
+            for chunk, (results, failure, pipeline_identity) in zip(chunks, chunk_results):
+                batch = [item[0] for item in chunk]
+                batch_call_count += 1
                 if failure:
-                    classifier_failures+=len(batch)
-                    self._increment_metric(build_id,"local_boundary_classifier_failures",len(batch))
-                for candidate,fingerprint in chunk:
-                    bid=str(candidate["after_block_id"])
-                    pair=results.get(bid) or {"after_block_id":bid,"decision":"keep","confidence":0.0,"changes":[],"source":"deterministic_keep_after_omission"}
-                    decisions[bid]={"pair":pair,"failure":failure,"fingerprint":fingerprint,"pipeline":session.identity()}
-                    if pair.get("decision")=="split" and float(pair.get("confidence") or 0)>=threshold:
-                        accepted.append({**candidate,**pair,"source":"local_batch_classifier"}); llm_split_count+=1
+                    classifier_failures += len(batch)
+                    self._increment_metric(build_id, "local_boundary_classifier_failures", len(batch))
+                for candidate, fingerprint in chunk:
+                    bid = str(candidate["after_block_id"])
+                    pair = results.get(bid) or {
+                        "after_block_id": bid,
+                        "decision": "keep",
+                        "confidence": 0.0,
+                        "changes": [],
+                        "source": "deterministic_keep_after_omission",
+                    }
+                    decisions[bid] = {
+                        "pair": pair,
+                        "failure": failure,
+                        "fingerprint": fingerprint,
+                        "pipeline": pipeline_identity,
+                    }
+                    if pair.get("decision") == "split" and float(pair.get("confidence") or 0) >= threshold:
+                        accepted.append({**candidate, **pair, "source": "local_batch_classifier"})
+                        llm_split_count += 1
                     else:
-                        llm_keep_count+=1
-                self.repo.save_checkpoint(build_id,"local_boundary_state",{"decisions":decisions})
-                completed+=len(chunk)
-                self._update(build_id,stage="segmenting",progress=0.12+0.23*(completed/max(1,len(llm_candidates))),boundary_candidates_completed=min(len(candidates),deterministic_split_count+deterministic_keep_count+completed),boundary_candidate_count=len(candidates))
+                        llm_keep_count += 1
+                self.repo.save_checkpoint(build_id, "local_boundary_state", {"decisions": decisions})
+                completed += len(chunk)
+                self._update(
+                    build_id,
+                    stage="segmenting",
+                    progress=0.12 + 0.23 * (completed / max(1, len(llm_candidates))),
+                    boundary_candidates_completed=min(
+                        len(candidates),
+                        deterministic_split_count + deterministic_keep_count + completed,
+                    ),
+                    boundary_candidate_count=len(candidates),
+                )
         except InterruptedError:
-            if session is not None: session.finish(cancelled=True)
+            if session is not None:
+                session.finish(cancelled=True)
             raise
         if session is not None: session.finish()
 
