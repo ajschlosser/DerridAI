@@ -6,8 +6,8 @@ GraphQL loads a build's Records once per request through
 ``graphql.loaders.RequestLoaders.corpus_build_records`` (see ``load_build_records``
 below) and passes that same list into every pure function here, so a queue page,
 a single Record read, ``rows`` and ``metadata_facets`` never each re-read the build
-from disk. REST's own ``PdfCorpusRepository.page_records`` calls
-``corpus_review_queue`` directly and does not go through this module.
+from disk. REST and GraphQL share repository-owned snapshot selections, while
+reviewer presentation still runs for every request.
 """
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from ..corpus_review_queue import (
     QueueFilter,
     empty_page,
     observed_metadata_values,
-    select_queue,
 )
 from ..corpus_review_state import _decorate_review_state
 from ..corpus_reviewer_helpers import _present_for_reviewer
@@ -70,7 +69,7 @@ def review_queue(
     if not resolved:
         return empty_page(offset, limit)
     with reviewer_scope(access):
-        selection = select_queue(resolved, filters, offset=offset, limit=limit)
+        selection = pdf_corpus_repository.select_review_queue(resolved, filters, offset=offset, limit=limit)
     return {
         "items": selection.items,
         "total": selection.total,

@@ -59,13 +59,7 @@ const emit = defineEmits<{
   complete: [];
 }>();
 const i18n = useI18nStore();
-type DraftEditor = InstanceType<typeof CorpusMetadataFieldEditor>;
-const editors = new Map<string, DraftEditor>();
 const dirtyFields = new Set<string>();
-function registerEditor(field: string, editor: unknown) {
-  if (editor) editors.set(field, editor as DraftEditor);
-  else editors.delete(field);
-}
 function fieldDirty(field: string, dirty: boolean) {
   if (dirty) dirtyFields.add(field);
   else dirtyFields.delete(field);
@@ -78,18 +72,6 @@ watch(
     emit("dirty", false);
   },
 );
-defineExpose({
-  saveDrafts: () => {
-    if ([...editors.values()].some((editor) => !editor.canSaveDraft())) return false;
-    return [...editors.values()].every((editor) => editor.saveDraft());
-  },
-  discardDrafts: () => {
-    for (const editor of editors.values()) editor.discardDraft();
-    dirtyFields.clear();
-    emit("dirty", false);
-  },
-});
-
 const MACHINE_VOCABULARY_LABELS = new Set(
   [
     "ADJ",
@@ -701,7 +683,6 @@ function displayValue(field: string) {
             }
           "
           @browse-evidence="(value) => emit('browseEvidence', field, value)"
-          :ref="(editor) => registerEditor(field, editor)"
           @dirty="(value) => fieldDirty(field, value)"
         >
           <template #policy>
@@ -764,7 +745,6 @@ function displayValue(field: string) {
               (value, note) => emit('resolveWithHumanSource', field, value, note)
             "
             @browse-evidence="(value) => emit('browseEvidence', field, value)"
-            :ref="(editor) => registerEditor(field, editor)"
             @dirty="(value) => fieldDirty(field, value)"
           >
             <template #policy>
@@ -812,7 +792,6 @@ function displayValue(field: string) {
               (value, note) => emit('resolveWithHumanSource', field, value, note)
             "
             @browse-evidence="(value) => emit('browseEvidence', field, value)"
-            :ref="(editor) => registerEditor(field, editor)"
             @dirty="(value) => fieldDirty(field, value)"
           >
             <template #policy>

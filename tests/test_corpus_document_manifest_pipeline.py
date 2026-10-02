@@ -11,6 +11,7 @@ legacy chain and the pipeline make, and check the trace, the identity checkpoint
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,7 @@ from app.pipelines.corpus_document_manifest import (
 from app.pipelines.defaults import built_in_assignment, built_in_pipeline
 from app.pipelines.manager import pipeline_manager
 from app.pipelines.service import PipelineService, pipeline_hash
+from app.source_audio import spans_from_transcript
 
 BUILT_IN = ("corpus.document_manifest.current", 1)
 REQUEST = {"provider": "ollama", "model": "primary-model"}
@@ -32,6 +34,46 @@ WITH_REVIEW = {**REQUEST, "_review_provider": {"provider": "ollama", "model": "r
 SOURCE = "A stable philosophical paragraph continues its argument."
 ASSET = {"asset_id": "a", "filename": "x.pdf", "metadata": {"title": "Embedded title"}, "media_kind": "pdf"}
 MANIFEST = '{"title": "Model title", "language": "fr"}'
+
+
+def test_audio_preparation_uses_time_locators_without_page_fields(manager, monkeypatch):
+    blocks = spans_from_transcript({
+        "text": "First spoken passage. Second spoken passage.",
+        "segments": [
+            {"start": 0, "end": 4.5, "text": "First spoken passage."},
+            {"start": 4.5, "end": 9, "text": "Second spoken passage."},
+        ],
+    }, [])
+    asset = {**ASSET, "filename": "lecture.wav", "media_kind": "audio", "pages": [],
+             "metadata": {"title": "Lecture", "author": "Source author"}}
+    cb._json_write(manager.repo.asset_meta_path("a"), asset)
+    manager.repo.asset_blocks_path("a").write_text(
+        "".join(json.dumps(block) + "\n" for block in blocks), encoding="utf-8",
+    )
+    calls = _provider(monkeypatch, {"primary-model": ['{"title":"Lecture","main_text_start_page":1}']})
+    build_id = _build(manager)
+    scope = manager._prepare_build_scope(build_id, {**REQUEST, "auto_enrich_work_metadata": False}, False)
+    assert scope is not None
+    assert scope.source_blocks == blocks
+    assert scope.manifest["main_text_start_page"] is None
+    assert scope.manifest["main_text_end_page"] is None
+    assert scope.manifest["document_author_source"] == "source_metadata"
+    assert scope.manifest["document_author"] == "Source author"
+    prompt = str(calls[0]["prompt"])
+    assert blocks[0]["time_label"] in prompt
+    assert "PDF p." not in prompt
+    assert "audio" in prompt
+    assert manager.repo.get_build(build_id)["stage"] == "segmenting"
+
+
+def test_audio_manifest_provider_failure_preserves_embedded_metadata(manager, monkeypatch):
+    _unresolvable(monkeypatch)
+    asset = {**ASSET, "filename": "lecture.wav", "media_kind": "audio"}
+    blocks = [{"block_id": "s1", "type": "paragraph", "start": 0, "end": 2, "text": SOURCE}]
+    result = manager._document_manifest(asset, blocks, REQUEST, _build(manager))
+    assert result["title"] == "Embedded title"
+    assert result["main_text_start_page"] is None
+    assert "source metadata" in result["notes"]
 
 
 @pytest.fixture
