@@ -18,7 +18,9 @@ const props = defineProps<{
 }>();
 defineEmits<{ toggle: [section: CorpusSetupSectionId] }>();
 const i18n = useI18nStore();
-const requiredSections = computed(() => props.sections.filter((section) => section.id !== "advanced"));
+const requiredSections = computed(() =>
+  props.sections.filter((section) => section.id !== "advanced"),
+);
 const completedRequired = computed(
   () => requiredSections.value.filter((section) => section.state === "complete").length,
 );
@@ -55,7 +57,9 @@ const titleKeys: Record<CorpusSetupSectionId, [string, string]> = {
         role="group"
         :aria-label="i18n.t('pdf_corpus.build_configuration')"
       >
-        <span>{{ completedRequired }} / {{ requiredSections.length }} {{ i18n.t("pdf_corpus.complete") }}</span>
+        <span>
+          {{ completedRequired }} / {{ requiredSections.length }} {{ i18n.t("pdf_corpus.complete") }}
+        </span>
         <progress
           :aria-label="i18n.t('pdf_corpus.build_configuration')"
           :max="requiredSections.length"
