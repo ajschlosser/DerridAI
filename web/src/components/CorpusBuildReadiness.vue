@@ -147,7 +147,10 @@ const sourceFacts = computed(() => {
       <div v-if="hasPages(mediaKind)">
         <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
         <dd>
-          <span>{{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}</span>
+          <span>
+            {{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}
+            <small>{{ i18n.t("pdf_corpus.readiness.record_size") }} · {{ sizing }}</small>
+          </span>
           <button
             type="button"
             class="build-plan-edit"
@@ -198,7 +201,7 @@ const sourceFacts = computed(() => {
           </button>
         </dd>
       </div>
-      <div>
+      <div v-if="!hasPages(mediaKind)">
         <dt>{{ i18n.t("pdf_corpus.readiness.record_size") }}</dt>
         <dd>
           <span>{{ sizing }}</span>
@@ -232,6 +235,21 @@ const sourceFacts = computed(() => {
       </div>
     </dl>
 
+    <div v-if="!contextSafe" class="readiness-alert" role="alert">
+      {{ i18n.t("pdf_corpus.context_unsafe") }}
+    </div>
+    <UiNoticeStack
+      v-if="warningNotices.length"
+      class="readiness-warnings"
+      :items="warningNotices"
+      :label="i18n.t('pdf_corpus.readiness_warnings_label')"
+      @dismiss="(id) => dismissWarnings([id])"
+      @dismiss-all="dismissWarnings"
+    />
+    <p v-if="activeBuildCount" class="capacity-note">
+      {{ i18n.tf("pdf_corpus.active_build_capacity", { count: activeBuildCount }) }}
+    </p>
+
     <div class="build-command-actions">
       <UiButton
         v-if="blocking"
@@ -254,54 +272,6 @@ const sourceFacts = computed(() => {
               )
         }}
       </UiButton>
-      <details class="build-command-details">
-        <summary>{{ i18n.t("pdf_corpus.readiness.review_setup", "Review setup") }}</summary>
-        <div class="build-command-popover">
-          <dl>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
-              <dd>
-                {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}
-                <small v-if="sourceFilename">
-                  <template v-if="hasPages(mediaKind)">
-                    {{ pageCount }} {{ i18n.t("pdf_corpus.pages") }} ·
-                  </template>
-                  {{ blockCount }} {{ i18n.t("pdf_corpus.blocks") }}
-                </small>
-              </dd>
-            </div>
-            <div v-if="hasPages(mediaKind)">
-              <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
-              <dd>{{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}</dd>
-            </div>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.readiness.enrichment") }}</dt>
-              <dd>{{ modeLabel }}</dd>
-            </div>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.readiness.llm") }}</dt>
-              <dd>{{ providerSummary }}</dd>
-            </div>
-            <div>
-              <dt>{{ i18n.t("pdf_corpus.readiness.record_size") }}</dt>
-              <dd>{{ sizing }}</dd>
-            </div>
-          </dl>
-          <div v-if="!contextSafe" class="readiness-alert" role="alert">
-            {{ i18n.t("pdf_corpus.context_unsafe") }}
-          </div>
-          <UiNoticeStack
-            class="readiness-warnings"
-            :items="warningNotices"
-            :label="i18n.t('pdf_corpus.readiness_warnings_label')"
-            @dismiss="(id) => dismissWarnings([id])"
-            @dismiss-all="dismissWarnings"
-          />
-          <p v-if="activeBuildCount" class="capacity-note">
-            {{ i18n.tf("pdf_corpus.active_build_capacity", { count: activeBuildCount }) }}
-          </p>
-        </div>
-      </details>
     </div>
   </section>
 </template>
@@ -427,83 +397,8 @@ const sourceFacts = computed(() => {
   gap: var(--space-2);
 }
 .build-command-actions :deep(.ui-button-wrap),
-.build-command-actions :deep(.ui-button),
-.build-command-details > summary {
+.build-command-actions :deep(.ui-button) {
   width: 100%;
-}
-.build-command-details {
-  position: relative;
-}
-.build-command-details > summary {
-  min-height: 2.5rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding-inline: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-card);
-  color: var(--text-secondary);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
-  cursor: pointer;
-  list-style: none;
-}
-.build-command-details > summary::-webkit-details-marker {
-  display: none;
-}
-.build-command-details > summary:hover {
-  color: var(--text-primary);
-}
-.build-command-details > summary:focus-visible {
-  outline: 3px solid var(--ui-accent-focus);
-  outline-offset: 1px;
-}
-.build-command-popover {
-  position: absolute;
-  z-index: 20;
-  inset-inline-end: 0;
-  top: calc(100% + var(--space-2));
-  width: min(38rem, calc(100vw - var(--space-6)));
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: var(--surface-overlay);
-  box-shadow: var(--shadow-overlay);
-}
-dl {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-  margin: 0;
-}
-dl > div {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-1);
-}
-dt {
-  color: var(--text-secondary);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-bold);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-dd {
-  min-width: 0;
-  margin: 0;
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
-  overflow-wrap: anywhere;
-}
-dd small {
-  display: block;
-  margin-top: var(--space-1);
-  color: var(--text-secondary);
-  font-size: var(--fs-xs);
-  font-weight: normal;
 }
 .readiness-alert {
   padding: var(--space-2) var(--space-3);
@@ -544,20 +439,11 @@ dd small {
   .build-command-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .build-command-details {
-    grid-column: 1 / -1;
-  }
 }
 @media (max-width: 720px) {
   .build-command-summary,
-  .build-command-actions,
-  dl {
+  .build-command-actions {
     grid-template-columns: 1fr;
-  }
-  .build-command-popover {
-    position: static;
-    width: auto;
-    margin-top: var(--space-2);
   }
 }
 </style>
