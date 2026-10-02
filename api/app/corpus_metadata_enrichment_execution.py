@@ -13,8 +13,8 @@ import logging
 import re
 import time
 import uuid
-from concurrent.futures import Executor, ThreadPoolExecutor
 from collections.abc import Callable
+from concurrent.futures import Executor, ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
@@ -22,8 +22,8 @@ from pydantic import BaseModel
 from . import experiment, operation_events
 from .autofill import decide as decide_autofill
 from .autofill import in_audit_sample
-from .config import APP_VERSION
 from .concurrency import provider_limit
+from .config import APP_VERSION
 from .corpus_llm_helpers import (
     StructuredOutputError,
     _context_window,
@@ -525,14 +525,23 @@ class MetadataEnrichmentExecutionMixin:
         )
         record_id = str(record.get("record_id") or "")
         operation_events.note_record_metadata(build_id, record_id, "record_started", precedents_used=example_count)
-        stage_results = self._execute_metadata_tasks(
-            record,
-            request,
-            tasks,
-            build_id,
-            stage_callback,
-            family_executor=family_executor,
-        )
+        if family_executor is None:
+            stage_results = self._execute_metadata_tasks(
+                record,
+                request,
+                tasks,
+                build_id,
+                stage_callback,
+            )
+        else:
+            stage_results = self._execute_metadata_tasks(
+                record,
+                request,
+                tasks,
+                build_id,
+                stage_callback,
+                family_executor=family_executor,
+            )
         return self._reconcile_metadata_results(
             record,
             profile,
