@@ -174,11 +174,8 @@ function taskLabel(task: string) {
         </li>
       </ul>
       <small v-if="hiddenActiveRecordCount" class="active-overflow">
-        {{
-          i18n.tf("pdf_corpus.more_records", {
-            count: hiddenActiveRecordCount,
-          })
-        }}
+        +{{ hiddenActiveRecordCount }}
+        {{ i18n.t("pdf_corpus.active_records_more", "more active Records") }}
       </small>
     </div>
 
