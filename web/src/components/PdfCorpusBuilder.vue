@@ -788,10 +788,7 @@ watch(fixRemaining, async (remaining, previous) => {
     returnToReadiness();
     return;
   }
-  if (
-    remediationAdvancing ||
-    !["source_quality", "source_validation"].includes(current.code)
-  ) {
+  if (remediationAdvancing || !["source_quality", "source_validation"].includes(current.code)) {
     return;
   }
   remediationAdvancing = true;
