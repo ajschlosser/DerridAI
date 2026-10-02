@@ -36,6 +36,9 @@ const props = withDefaults(
 const emit = defineEmits<{ workspace: [value: CorpusWorkspace] }>();
 const i18n = useI18nStore();
 const contextual = computed(() => Boolean(props.sourceFilename || props.buildId));
+const progressValue = computed(() =>
+  props.recordCount ? Math.min(props.recordCount, Math.max(0, props.acceptedCount)) : 0,
+);
 const progressLabel = computed(() => {
   if (!props.recordCount) return "";
   return i18n.tf("pdf_corpus.workspace.record_progress", "{accepted} of {total} Records accepted", {
@@ -116,11 +119,25 @@ function phaseLabel(phase: WorkspacePhase) {
         {{ i18n.t("pdf_corpus.subtitle") }}
       </p>
       <div v-else class="corpus-workspace-context">
-        <strong v-if="sourceFilename">{{ sourceFilename }}</strong>
-        <span v-if="status" class="corpus-workspace-stage" :data-tone="status.tone">
-          {{ status.label }}
+        <span class="corpus-workspace-source">
+          <strong v-if="sourceFilename">{{ sourceFilename }}</strong>
+          <span v-if="status" class="corpus-workspace-stage" :data-tone="status.tone">
+            {{ status.label }}
+          </span>
         </span>
-        <span v-if="progressLabel">{{ progressLabel }}</span>
+        <span
+          v-if="progressLabel"
+          class="corpus-workspace-progress"
+          role="group"
+          :aria-label="i18n.t('pdf_corpus.review_progress')"
+        >
+          <span>{{ progressLabel }}</span>
+          <progress
+            :max="Math.max(recordCount, 1)"
+            :value="progressValue"
+            :aria-label="progressLabel"
+          ></progress>
+        </span>
         <details v-if="buildId" class="corpus-workspace-build-details">
           <summary>{{ i18n.t("pdf_corpus.workspace.build_details") }}</summary>
           <dl>
@@ -139,7 +156,7 @@ function phaseLabel(phase: WorkspacePhase) {
       </div>
       <nav class="workspace-mode-nav" :aria-label="i18n.t('pdf_corpus.workspace.navigation')">
         <ol class="workspace-phase-list">
-          <li v-for="phase in phases" :key="phase.id">
+          <li v-for="(phase, index) in phases" :key="phase.id">
             <button
               type="button"
               :disabled="!phase.available"
@@ -149,7 +166,7 @@ function phaseLabel(phase: WorkspacePhase) {
               @click="emit('workspace', phase.target)"
             >
               <span class="step-mark" aria-hidden="true">{{
-                phase.state === "complete" ? "✓" : ""
+                phase.state === "complete" ? "✓" : index + 1
               }}</span>
               {{ phaseLabel(phase) }}
               <span v-if="phase.state === 'complete'" class="sr-only">
@@ -262,12 +279,44 @@ function phaseLabel(phase: WorkspacePhase) {
   color: var(--text-secondary);
   font-size: var(--fs-sm);
 }
+.corpus-workspace-source {
+  display: inline-flex;
+  min-width: 0;
+  gap: var(--space-2);
+  align-items: center;
+}
 .corpus-workspace-context strong {
-  max-width: min(38rem, 60vw);
+  max-width: min(34rem, 48vw);
   overflow: hidden;
   color: var(--text-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.corpus-workspace-progress {
+  display: grid;
+  min-width: 10rem;
+  gap: 3px;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.corpus-workspace-progress progress {
+  inline-size: 100%;
+  block-size: 5px;
+  overflow: hidden;
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: var(--border-subtle);
+}
+.corpus-workspace-progress progress::-webkit-progress-bar {
+  background: var(--border-subtle);
+}
+.corpus-workspace-progress progress::-webkit-progress-value {
+  background: var(--ui-accent);
+}
+.corpus-workspace-progress progress::-moz-progress-bar {
+  background: var(--ui-accent);
 }
 .corpus-workspace-stage {
   flex: 0 0 auto;
@@ -371,8 +420,27 @@ function phaseLabel(phase: WorkspacePhase) {
   background: var(--surface-raised);
   color: var(--text-primary);
 }
-.step-mark:empty {
-  display: none;
+.step-mark {
+  display: inline-grid;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: 1;
+}
+.workspace-mode-nav button[data-state="current"] .step-mark {
+  border-color: var(--ui-accent);
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+.workspace-mode-nav button[data-state="complete"] .step-mark {
+  border-color: var(--tone-ok-border);
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
 }
 .workspace-mode-nav button:focus-visible {
   outline: 3px solid var(--ui-accent-focus);
