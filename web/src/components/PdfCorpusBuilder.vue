@@ -370,6 +370,23 @@ const syntheticRecordPagesAvailable = computed(() => {
   if (["pdf", "image", "audio"].includes(mediaKind)) return false;
   return String(asset.page_number_detection?.status || "") !== "detected";
 });
+const topologySummary = computed(() => {
+  if (topologyPolicy.value.mode === "semantic") {
+    return i18n.t(
+      "pdf_corpus.topology.semantic_summary",
+      "Semantic boundaries determine Records",
+    );
+  }
+  const units = topologyPolicy.value.source_units_per_record;
+  const records =
+    units === 1
+      ? "1 SourceUnit → 1 Record"
+      : `${units.toLocaleString()} SourceUnits → 1 Record`;
+  const perPage = topologyPolicy.value.records_per_page;
+  return perPage && syntheticRecordPagesAvailable.value
+    ? `${records} → ${perPage.toLocaleString()} ${perPage === 1 ? "Record" : "Records"} per synthetic Page`
+    : records;
+});
 
 const error = ref("");
 const notice = ref("");
@@ -1576,6 +1593,7 @@ const {
     ),
     structureSummary: selectedStructureSummary.value,
     recordSizingValid: recordSizingValid.value,
+    topologySummary: topologySummary.value,
     targetChars: recordSizing.value.preferred_record_chars,
     toleranceChars: recordSizing.value.record_length_tolerance,
     schemaName: chosenSchema.value?.name || "",
@@ -2656,6 +2674,7 @@ defineExpose({
           :page-count="selectedAsset?.page_count || 0"
           :block-count="selectedAsset?.block_count || 0"
           :structure-summary="selectedStructureSummary"
+          :topology-summary="topologySummary"
           :provider-label="selectedProviderLabel"
           :model-label="selectedProfileModel || manualModel"
           :enrichment-mode="enrichmentMode"
