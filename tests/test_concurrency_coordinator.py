@@ -6,7 +6,6 @@ from __future__ import annotations
 import threading
 
 import pytest
-
 from app.concurrency import (
     CapacityCancelled,
     ConcurrencyCoordinator,
