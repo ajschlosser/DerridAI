@@ -548,7 +548,7 @@ def test_v1_v2_v3_exports_remain_readable_as_v3(version):
     }
     imported = ms.import_schema(payload)
     assert imported.format_version == 3
-    assert imported.group("ideas").repeatable is False
+    assert imported.by_name()["ideas"].type == "list"
     assert imported.fields_in("ideas")[0].name == "ideas"
 
 
