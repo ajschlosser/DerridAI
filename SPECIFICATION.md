@@ -136,21 +136,72 @@ Authoritative documentary and scholarly state MUST remain distinguishable from d
 
 The cELF Core profile establishes a documentary provenance spine rather than a complete source-to-claim pipeline:
 
-`SourceDocument -> SourceSpan(s) -> Record [-> RecordRevision]`
+```text
+SourceDocument
+      │
+      └── contains / locates ──> SourceSpan(s)
+                                     │
+                                     │ derive
+                                     ▼
+                                   Record
+                                     │
+                         ┌───────────┴───────────┐
+                         │                       │
+                    0..* ▼                  0..* ▼
+                 RecordRevision          FieldAssertion
+                         │                       ▲
+                         └───────────────────────┘
+                          FieldAssertion may be
+                       about Record or revision
+```
 
-A FieldAssertion attaches to the applicable Record or RecordRevision state; it is not a mandatory next step in a linear chain.
+The diagram is a provenance spine, not a required storage layout. RecordRevision is optional, and FieldAssertion attaches to the applicable Record or RecordRevision state rather than forming a mandatory next step in a linear chain.
 
-Additional profiles extend that spine into an auditable provenance graph. The principal typed relations are:
+Additional profiles extend that spine into an auditable provenance graph:
 
-`EvidenceAcquisitionRun --selects/produces--> EvidenceRef(s)`
+```text
+                          ResearchRun
+                (coordinates applicable branches)
 
-`RetrievalRun --may participate in--> EvidenceAcquisitionRun`
+RetrievalRun(s) ───────────────┐
+human selection ───────────────┤
+direct reference ──────────────┤
+deterministic lookup ──────────┤
+model-assisted location ───────┤
+import / other method ─────────┘
+                               ▼
+                    EvidenceAcquisitionRun
+                               │
+                       selects / produces
+                               ▼
+                         EvidenceRef(s)
+                           │       ▲
+              ordered into │       │ bound by
+                           ▼       │
+                     EvidencePacket│
+                           │       │
+                       used by     │
+                           ▼       │
+                      GenerationRun│
+                           │       │
+                       produces    │
+                           ▼       │
+                     GeneratedClaim
+                           │
+                          has
+                           ▼
+                     SupportBinding
+                           │
+                           └───────────────> EvidenceRef(s)
 
-`EvidenceRef(s) --ordered into--> EvidencePacket --used by--> GenerationRun --produces--> GeneratedClaim`
+EvidenceRef resolves back to documentary authority:
 
-`GeneratedClaim --has--> SupportBinding --binds to--> EvidenceRef(s)`
+  base `record`      -> Record [@ RecordRevision] -> SourceSpan(s) -> SourceDocument
+  base `source_span` -> SourceSpan(s) ---------------------------> SourceDocument
+  namespaced kind      -> exact documentary material --------------> SourceDocument
+```
 
-Human selection, direct reference, deterministic lookup, model-assisted location, import, and other declared non-retrieval methods MAY also participate in an EvidenceAcquisitionRun without a RetrievalRun.
+RetrievalRun is therefore one possible contributor to EvidenceAcquisitionRun, not its synonym. Human selection, direct reference, deterministic lookup, model-assisted location, import, and other declared non-retrieval methods MAY participate in an EvidenceAcquisitionRun without a RetrievalRun. ResearchRun coordinates or references the applicable acquisition, evidence, generation, validation, and evaluation state; it does not replace those objects or their typed relations.
 
 This graph distinguishes three questions that MUST NOT be collapsed: where documentary material comes from; how material entered a research operation as evidence; and which evidence is represented as supporting a particular generated claim. GenerationRun records generation provenance and EvidenceAcquisitionRun records acquisition provenance; neither object is required to traverse the direct support relation from a GeneratedClaim to its EvidenceRef.
 
