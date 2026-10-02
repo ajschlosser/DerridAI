@@ -151,7 +151,8 @@ test.describe("Corpus Builder composed workflow", () => {
     await expect(status.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "58");
     await expect(status.locator('[aria-current="step"]')).toContainText("Enrich");
     await expect(status.locator('[data-flow-state="ready"]')).toContainText("36");
-    await expect(status.locator('[data-flow-state="enriching"]')).toContainText("274");
+    await expect(status.locator('[data-flow-state="enriching"]')).toContainText("3");
+    await expect(status.locator('[data-flow-state="preparing"]')).toContainText("271");
     await expect(status.locator('[data-flow-state="attention"]')).toContainText("17");
     await expect(status.getByRole("button", { name: "Review 36 ready Records" })).toBeVisible();
     await expect(status.getByRole("button", { name: "Pause" })).toBeVisible();
@@ -206,17 +207,20 @@ test.describe("Corpus Builder composed workflow", () => {
     await expectWcag2AA(page, ".init-panel");
   });
 
-  test("actively enriching records use a spinner and explicit Enriching status", async ({
+  test("only the active processing Record is Enriching; queued work stays Preparing", async ({
     page,
   }) => {
     await page.goto(story("corpus-builder-review-record-queue--mixed-states"));
-    const preparing = page
-      .locator(".record-row")
-      .filter({ has: page.locator('[data-state="preparing"]') })
-      .first();
-    await expect(preparing).toContainText("Enriching");
-    await expect(preparing.locator(".record-processing-spinner")).toBeVisible();
-    await expect(preparing.locator(".record-state-icon svg")).toHaveCount(0);
+
+    const enriching = page.locator('.record-row:has([data-state="enriching"])').first();
+    await expect(enriching).toContainText("Enriching");
+    await expect(enriching.locator(".record-processing-spinner")).toBeVisible();
+    await expect(enriching.locator(".record-state-icon svg")).toHaveCount(0);
+
+    const preparing = page.locator('.record-row:has([data-state="preparing"])').first();
+    await expect(preparing).toContainText("Preparing");
+    await expect(preparing.locator(".record-processing-spinner")).toHaveCount(0);
+    await expect(preparing.locator(".record-state-icon svg")).toBeVisible();
     await expectWcag2AA(page, ".records-pane");
   });
 
