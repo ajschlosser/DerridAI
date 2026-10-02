@@ -24,8 +24,8 @@ from ..celf_queries import document_intelligence_reads as intelligence_reads
 from ..celf_queries import source_documents as document_queries
 from ..celf_queries.access import AccessContext, InvalidQuery, NotFound
 from ..claim_memory import validated_claims_citing
-from ..config import settings
 from ..concurrency import capacity_coordinator, provider_capacity_key, provider_limit
+from ..config import settings
 from ..corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from ..corpus_review_state import _queue_counts
 from ..http_auth import require_admin
