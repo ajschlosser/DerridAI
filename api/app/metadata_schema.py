@@ -419,6 +419,13 @@ class MetadataSchema(BaseModel):
         group_ids = [g.group_id for g in self.groups]
         if len(group_ids) != len(set(group_ids)):
             raise ValueError("Group identities must be different from each other.")
+        repeatable_keys = {group.key for group in self.groups if group.repeatable}
+        collisions = repeatable_keys & set(names)
+        if collisions:
+            raise ValueError(
+                "A repeatable group key cannot also be a field name: "
+                + ", ".join(sorted(collisions))
+            )
         for field in self.fields:
             if field.group not in keys:
                 raise ValueError(f"Field '{field.name}' is in a group ('{field.group}') the schema does not have.")
@@ -431,13 +438,6 @@ class MetadataSchema(BaseModel):
                     raise ValueError(
                         f"Every member of repeatable group '{group.key}' must use the same scope."
                     )
-        repeatable_keys = {group.key for group in self.groups if group.repeatable}
-        collisions = repeatable_keys & set(names)
-        if collisions:
-            raise ValueError(
-                "A repeatable group key cannot also be a field name: "
-                + ", ".join(sorted(collisions))
-            )
         known = set(self.field_identity_map().values()) | {field.field_id for field in self.fields}
         owners = [(f"field '{f.name}'", f.retrieval_profile, self.field_id(f.name)) for f in self.fields]
         owners += [(f"group '{g.key}'", g.retrieval_profile, None) for g in self.groups]
@@ -883,6 +883,7 @@ def normalize_legacy_cardinality(field: SchemaField, value: Any) -> tuple[Any, b
         return value[0], False
     return value, True
 
+
 def _annotation(field: SchemaField) -> Any:
     if field.type == "boolean":
         return bool | None
@@ -917,7 +918,7 @@ def _repeatable_annotation(group: SchemaGroup, fields: list[SchemaField]) -> Any
         return values
 
     return Annotated[
-        list[item],
+        list[item],  # type: ignore[valid-type]
         Field(max_length=group.max_items),
         AfterValidator(unique_instance_ids),
     ]
