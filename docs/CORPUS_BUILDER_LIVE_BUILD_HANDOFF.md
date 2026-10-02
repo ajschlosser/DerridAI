@@ -1,8 +1,8 @@
 # Corpus Builder live-build handoff UX
 
-Status: in progress  
-Branch: `ux/corpus-builder-live-build-handoff`  
-Scope: Corpus Builder Build workspace only; no backend workflow or persistence changes.
+- Status: validation in progress
+- Branch: `ux/corpus-builder-live-build-handoff`
+- Scope: Corpus Builder Build workspace only; no backend workflow or persistence changes.
 
 ## Objective
 
@@ -41,13 +41,13 @@ The Build workspace should answer, in order:
 - [x] Confirmed PR #403 is merged and the Review remediation/spinner work is on `master`.
 - [x] Audited the current Build workspace, primary status, activity timeline, workflow-presentation domain, and existing tests.
 - [x] Created this implementation branch and design log.
-- [x] Add progressive record counts to the primary status.
-- [x] Rebalance Build actions around progressive Review handoff.
-- [x] Collapse activity and diagnostics into secondary Run details.
-- [x] Extend unit/Storybook/E2E coverage.
-- [x] Run and fix all frontend quality gates.
-- [x] Correct processing semantics: only active task Records are Enriching; queued Records remain Preparing with the original icon.
-- [x] Record final validation and remaining follow-up work here.
+- [x] Added progressive record counts to the primary status.
+- [x] Rebalanced Build actions around progressive Review handoff.
+- [x] Collapsed activity and diagnostics into secondary Run details.
+- [x] Extended unit, Storybook, and E2E coverage.
+- [x] Corrected processing semantics: only active task Records are Enriching; queued Records remain Preparing with the original icon.
+- [ ] Clear the final formatting gate on the documentation-only closeout commit.
+- [ ] Record final green validation here.
 
 ## Implementation notes
 
@@ -64,7 +64,17 @@ The Build workspace should answer, in order:
 
 - Initial CI static/type failure: one updated unit test used `await` in a non-async callback. The callback was corrected; product code was unchanged.
 - Next CI unit failure: the attention-only handoff test asserted the generic class `primary`, while the shared `UiButton` contract uses `variant-primary`. The assertion was corrected; the Review button was already rendering the intended primary variant.
-- Formatting, lint, static/type checks, production build, and the second unit shard were green before the assertion-only correction.
+- Processing semantics were refined so queued backend `preparing` Records remain **Preparing** with the existing refresh icon; only Record IDs present in `metadata_active_tasks` render as **Enriching** with an animated spinner.
+- On head `8fa81073576c12a3b27ac8c687e1a14e68b96779`, lint, static/type checks, production build, both unit shards, both E2E shards, both legacy regression shards, the dedicated accessibility sweep, and all product behavior checks passed.
+- That run failed only `format-check` because this Markdown file was not Prettier-normalized. This document update is the formatting-only correction.
+
+## Active-processing coverage
+
+The processing semantics are covered at unit, Storybook/browser, and accessibility levels:
+
+- queued backend `preparing` Record → **Preparing**, original refresh icon, no animation
+- Record present in `metadata_active_tasks` → **Enriching**, animated spinner
+- Build handoff → separate Ready / Enriching / Preparing / Needs attention counts
 
 ## Non-goals
 
@@ -72,27 +82,6 @@ The Build workspace should answer, in order:
 - Changing corpus publication-readiness rules.
 - Adding new backend states or API fields.
 - Redesigning the Review or Publish workspaces again in this PR.
-
-
-## Final validation
-
-Validated on the final implementation state before this documentation-only closeout:
-
-- format-check: pass
-- frontend lint: pass
-- frontend static/type checks: pass
-- production frontend build: pass
-- frontend unit shards 1/2 and 2/2: pass
-- frontend E2E shards 1/2 and 2/2: pass
-- frontend legacy regression shards 1/2 and 2/2: pass
-- dedicated Corpus Builder WCAG 2.2 AA sweep: pass
-- aggregate frontend gate: pass
-
-The active-processing semantics are covered at unit, Storybook/browser, and accessibility levels:
-
-- queued backend `preparing` Record → **Preparing**, original refresh icon, no animation
-- Record present in `metadata_active_tasks` → **Enriching**, animated spinner
-- Build handoff → separate Ready / Enriching / Preparing / Needs attention counts
 
 ## Follow-up
 
