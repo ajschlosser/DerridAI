@@ -262,10 +262,11 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
           terminalPending = false;
           finished = true;
           await refreshBuilds();
-          // Completion can settle filtered queue membership; reconcile in place without
-          // resetting selection, scroll position, or the selected Record cache.
+          // Completion can settle filtered queue membership. Reconcile the page without
+          // forcing the old selected id: refreshRecords keeps it when still visible (or
+          // while a draft is open) and otherwise advances to the nearest valid row.
           await nextTick();
-          await options.refreshRecords(false, options.selectedRecordId.value);
+          await options.refreshRecords(false);
         }
       },
     });
