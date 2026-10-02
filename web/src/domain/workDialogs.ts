@@ -2,6 +2,7 @@
 
 import { openMessageDialog } from "../composables/messageDialog";
 import { openMixedWorkValuesDialog as openMixedWorkValues } from "../composables/mixedWorkValuesDialog";
+import { openRemoveWorkDialog } from "../composables/removeWorkDialog";
 import { esc, icon } from "./html";
 import {
   canonicalWorkSourceType,
@@ -493,38 +494,18 @@ export function createWorkDialogs(deps: Deps) {
   async function openRemoveWorkModal(work: Any, rows: Any) {
     const fileCounts = new Map();
     for (const row of rows) fileCounts.set(row.file, (fileCounts.get(row.file) || 0) + 1);
-    const dialog = document.createElement("dialog");
-    dialog.className = "message-dialog danger remove-work-dialog";
     const dbStore =
       state.activeStore && recordStores().some((store: Any) => store.name === state.activeStore)
         ? state.activeStore
         : "";
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("works.remove_entire"))}</h2><div class="dialog-subtitle">${esc(work)} · ${esc(tr("works.destructive_operation"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-    <div class="db remove-work-body"><div class="info warn">${esc(tr("works.remove_help"))}</div>
-    <div class="remove-work-files">${[...fileCounts].map(([file, count]) => `<label class="check-item"><input type="checkbox" data-remove-work-file="${esc(file.id)}" checked><span><b>${esc(file.name)}</b><small>${esc(trf("works.matching_records", { count: count.toLocaleString() }))}</small></span></label>`).join("")}</div>
-    <label class="check-item"><input type="checkbox" id="removeWorkDb" ${dbStore ? "" : `disabled data-disabled-reason="${esc(tr("works.select_or_create_db"))}" title="${esc(tr("works.select_or_create_db"))}"`}><span><b>${esc(tr("works.also_remove_chroma"))}</b><small>${dbStore ? esc(dbStore) : esc(tr("works.select_collection"))}</small></span></label></div>
-    <div class="da"><button class="btn" data-close>${esc(tr("ui.cancel"))}</button><button class="btn danger" id="confirmRemoveWork">${esc(tr("works.remove_work"))}</button></div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    dialog.querySelector("#confirmRemoveWork").onclick = async () => {
-      const fileIds = [...dialog.querySelectorAll("[data-remove-work-file]:checked")].map(
-        (input) => input.dataset.removeWorkFile,
-      );
-      const removeDb = Boolean(dialog.querySelector("#removeWorkDb")?.checked && dbStore);
-      if (!fileIds.length && !removeDb)
-        return toast(tr("works.select_file_or_chroma"), { tone: "warning" });
-      const button = dialog.querySelector("#confirmRemoveWork");
-      button.disabled = true;
-      button.textContent = tr("works.removing");
-      let localDeleted = 0,
-        dbDeleted = 0,
-        mirrored = 0;
-      try {
+    openRemoveWorkDialog({
+      work: String(work),
+      files: [...fileCounts].map(([file, count]) => ({ id: file.id, name: file.name, count })),
+      dbStore,
+      confirm: async ({ fileIds, removeDb }) => {
+        let localDeleted = 0,
+          dbDeleted = 0,
+          mirrored = 0;
         for (const fileId of fileIds) {
           const file = state.files.find((item: Any) => item.id === fileId);
           if (!file) continue;
@@ -555,7 +536,6 @@ export function createWorkDialogs(deps: Deps) {
           if (state.storePresenceIds[dbStore]) state.storePresenceIds[dbStore] = {};
           await refreshStores();
         }
-        close();
         persistPrefs();
         shell();
         renderView();
@@ -576,16 +556,8 @@ export function createWorkDialogs(deps: Deps) {
           }),
           { tone: "success" },
         );
-      } catch (error: Any) {
-        button.disabled = false;
-        button.textContent = tr("works.remove_work");
-        openMessageDialog({
-          title: tr("works.remove_failed"),
-          message: error.message,
-          tone: "danger",
-        });
-      }
-    };
+      },
+    });
   }
   async function openSeparateWorksModal() {
     const eligible = state.files.filter((file: Any) => {

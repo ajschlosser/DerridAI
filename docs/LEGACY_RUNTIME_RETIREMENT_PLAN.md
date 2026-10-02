@@ -188,7 +188,8 @@ Task branch for Step 1: `task/router-single-source-of-truth`
 
 - [ ] Step 3 dialogs, family by family (routes are already Vue views; `vueNative` is unread metadata)
   - [x] `workDialogs`: mixed-values dialog (`MixedWorkValuesDialog.vue` + `composables/mixedWorkValuesDialog.ts`)
-  - [ ] remaining `workDialogs`, then `recordDialogs`, `jobDialogs`
+  - [x] `workDialogs`: remove-work dialog (`RemoveWorkDialog.vue`; the deletion stays in the legacy forwarder as a `confirm` callback)
+  - [ ] remaining `workDialogs` (metadata editor, LLM, separate works), then `recordDialogs`, `jobDialogs`
 - [ ] Step 4 state slices and deletion
 
 Notes for the next session:
