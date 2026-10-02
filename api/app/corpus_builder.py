@@ -188,6 +188,7 @@ from .corpus_record_quality import (
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
 from .corpus_review_queue import (
     QueueFilter,
+    QueueSelectionCache,
     empty_page,
     observed_metadata_values,
     select_queue,
@@ -838,6 +839,7 @@ class PdfCorpusRepository:
             str, tuple[tuple[int, int], list[dict[str, Any]]]
         ] = {}
         self._review_records_cache_capacity = 4
+        self._queue_selection_cache = QueueSelectionCache()
         # (payload digest, schema signature) pairs known to be fixed points of
         # ``migrate_record_assertions``/``_migrate_status_vocabulary``. Migration is
         # idempotent and every writer already migrates, so re-running it on every read
@@ -2117,7 +2119,7 @@ class PdfCorpusRepository:
         records = self.review_records(build_id)
         if records is None:
             return empty_page(offset, limit)
-        selection = select_queue(records, filters, offset=offset, limit=limit)
+        selection = select_queue(records, filters, offset=offset, limit=limit, cache=self._queue_selection_cache)
         return {
             "items": selection.items,
             "total": selection.total,
@@ -2130,8 +2132,8 @@ class PdfCorpusRepository:
     def review_records(self, build_id: str) -> list[dict[str, Any]] | None:
         """Read-only parsed snapshot for review paging, cached across HTTP requests.
 
-        The queue still evaluates the whole corpus for authoritative counts and filters,
-        but it no longer reparses/migrates every JSON payload for each page navigation.
+        Queue selections may reuse this immutable snapshot across page navigation.
+        Record writes replace the snapshot, invalidating selections by identity.
         """
         self.get_build(build_id)
         if not self.build_records_path(build_id).exists() and not self.build_records_db_path(build_id).exists():

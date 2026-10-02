@@ -8,7 +8,7 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 - Branch: `perf/corpus-builder-throughput`.
 - Fetched master: `ebf30937` on 2026-10-02; includes #417 and #418.
-- Working scope: incremental persistence, audio preparation, review navigation, and document-editor regressions; queue and caching increments remain planned.
+- Working scope: incremental persistence, audio preparation, review navigation, and document-editor regressions; bounded REST queue reuse is implemented; persistent queue projection and dependency caching remain planned.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
 ## Checkpoints
@@ -21,7 +21,7 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 | Audio manifest preparation                 | Committed/pushed `6fff2e0e` | Transcript time locators and provider fallback                                                  |
 | Remove review navigation modal             | Committed/pushed `bb066a35` | 18 production-browser cases pass; local draft recovery retained                                 |
 | Restore document metadata editor           | Committed/pushed `0be91ae9` | Component-resolution regression and typechecks                                                  |
-| Queue projection                           | Pending                     | Next performance increment; preserve reviewer isolation                                         |
+| Queue projection                           | Pending                     | Bounded REST selection reuse implemented; persistent projection pending                         |
 | Dependency caching / incremental exemplars | Pending                     | Extend existing mechanisms                                                                      |
 | Readiness / scheduling                     | Pending                     | Preserve publication and ownership gates                                                        |
 | Evaluated learning / review assistance     | Pending                     | Requires held-out evaluation                                                                    |
@@ -32,8 +32,8 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 
 ## Next actions
 
-1. Characterize queue selection, reviewer overlays, and mutation invalidation before introducing a derived queue projection.
-2. Implement the smallest equivalent queue increment with restart and filter-equivalence tests.
+1. Extend the validated queue characterization to the persistent SQLite projection and shared REST/GraphQL selection contract.
+2. Replace post-mutation corpus scans with transactional projection updates; preserve reviewer isolation, substring search, and count semantics.
 3. Establish isolated timing baselines and measure preparation/review latency before claiming progress toward 50%.
 4. Continue the dependency-cache and evaluated-learning phases behind the plan's correctness gates.
 
@@ -77,3 +77,13 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 - 34 focused frontend tests passed, with app/SDK and test typechecks, touched-file ESLint, and a final production frontend build. No complete release/CI or Docker claim.
 - A real split during a running enrichment worker now has integration coverage: the parent remains retired, both successor IDs are requeued, text is conserved, lineage survives, and the returned handoff matches durable state. Together with record/source-unit restructuring suites: 34 backend tests passed, six optional benchmark cases skipped.
 - Review scope covered the reported audio failure, review modal and draft recovery, missing document editor, enrichment ownership/restart, and structural late-completion behavior. This is not an exhaustive audit of all Copilot-authored changes; no particular additional PR was specified.
+
+## Bounded queue navigation checkpoint (2026-10-02)
+
+- REST review paging now reuses matching topology positions and counts for immutable repository snapshots. Cache keys include snapshot identity, filters, and reviewer; records are copied and presented afresh for every request. Existing filter/search/count semantics are preserved.
+- Reuse is bounded to four entries and 40,000 retained record references per repository. Larger snapshots fall back to uncached selection. Writes replace snapshots; external writes are detected through the existing repository signature. The cache is disposable and stores no authoritative decisions.
+- Eleven characterization cases passed before implementation, while the new no-rescan regression failed as expected. After implementation: 43 queue/decision/persistence tests passed, six optional persistence benchmarks skipped. A separate visibility run passed 28 tests; GraphQL facade/indexed-read compatibility plus queue coverage passed 51 tests. Each skipped two optional queue benchmarks. Ruff passed.
+- Tests cover filter results, Unicode substring search, original topology positions, pre-queue-filter counts, per-record writes, structural replacement, external writes, restart, reviewer switching, independent response copies, eviction, oversized snapshots, and mutable callers using the uncached default.
+- Synthetic selection-only benchmark: 20 one-record pages, one unchanged snapshot, Unicode text search, three alternating uncached/cached samples per size, Python 3.12.14 on Windows. The cached run includes initial fill. Median totals: 1,000 records **0.1343 s -> 0.00676 s**; 10,000 records **1.3703 s -> 0.06846 s** (about 95% reduction in this component). Both benchmark cases passed. This excludes repository I/O, facets, HTTP, browser rendering, model calls, and human decisions; it is not a 95% end-to-end improvement.
+- Reproduce with `PYTHONPATH=api CORPUS_QUEUE_BENCHMARK=/absolute/output.jsonl python -m pytest -q tests/test_review_queue_navigation_cache.py -k benchmark`. Use a fresh output path. The uncached comparison uses the same selection implementation with reuse disabled, isolating the cache benefit.
+- Limitations: each mutation or filter/reviewer change can require a fresh scan. GraphQL keeps the uncached default. Persistent indexed projection, incremental counts/facets after edits, two-build cold-load measurements, and the 50% end-to-end target remain outstanding.
