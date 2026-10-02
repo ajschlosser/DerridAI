@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from api.app import corpus_builder as cb
-from api.app.corpus_manifest_workflow import _validated_document_metadata
-from api.app.corpus_segmentation import source_unit_record_boundaries
-from api.app.models import PdfCorpusBuildCreate
+from app import corpus_builder as cb
+from app.corpus_manifest_workflow import _validated_document_metadata
+from app.corpus_segmentation import source_unit_record_boundaries
+from app.models import PdfCorpusBuildCreate
 
 
 def test_topology_policy_accepts_fixed_sourceunit_groups_and_record_pages():
