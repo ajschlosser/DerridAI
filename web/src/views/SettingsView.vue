@@ -1767,7 +1767,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 }
 .settings-danger-zone {
   margin-top: 20px;
-  border-color: var(--danger);
+  padding: 16px;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  background: var(--panel-2);
 }
 .settings-danger-summary {
   margin: 0;
