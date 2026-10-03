@@ -51,4 +51,28 @@ export const {
   getDefaultProviderProfileId,
   defaultProviderProfile,
   providerDisplayName,
+  getProviderRequestConfigForUi,
+  saveProviderProfilesForUi,
+  addProviderProfileForUi,
+  removeProviderProfileForUi,
+  setDefaultProviderProfileForUi,
+  testProviderProfileForUi,
+  warmProviderProfileForUi,
+  getWarmOnStartForUi,
+  setWarmOnStartForUi,
+  getProviderStatusesForUi,
+  getProviderWarmupsForUi,
 } = providerProfilesService;
+
+/** Pushes the researcher-enabled profiles to the server and keeps the approved list it returns. */
+export async function syncResearcherProviderProfiles() {
+  const approved = providerProfilesService
+    .providerProfiles()
+    .filter((profile: { researcher_enabled?: boolean }) => profile.researcher_enabled)
+    .map((profile: object) => ({ ...profile }));
+  const result = await api("/api/system/researcher-providers", {
+    method: "PUT",
+    body: JSON.stringify({ profiles: approved }),
+  });
+  state.researcherProviderProfiles = result.profiles || [];
+}

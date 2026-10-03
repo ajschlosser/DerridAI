@@ -22,10 +22,20 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
-import * as runtime from "../runtime/runtime.js";
 import {
-  getProviderProfilesForUi,
+  addProviderProfileForUi,
   getDefaultProviderProfileId,
+  getProviderProfilesForUi,
+  getProviderStatusesForUi,
+  getProviderWarmupsForUi,
+  getWarmOnStartForUi,
+  removeProviderProfileForUi,
+  saveProviderProfilesForUi,
+  setDefaultProviderProfileForUi,
+  setWarmOnStartForUi,
+  syncResearcherProviderProfiles,
+  testProviderProfileForUi,
+  warmProviderProfileForUi,
 } from "../domain/sharedProviderProfiles";
 import ProviderProfileCard from "../components/providers/ProviderProfileCard.vue";
 import ProviderSaveBar from "../components/providers/ProviderSaveBar.vue";
@@ -65,16 +75,16 @@ function toggleKeyVisibility(id: string) {
 }
 const warmOnStart = ref(false);
 function setWarmOnStart(value: boolean) {
-  warmOnStart.value = Boolean(runtime.setWarmOnStartForUi?.(value));
+  warmOnStart.value = Boolean(setWarmOnStartForUi(value));
 }
 const snapshot = ref("[]");
 const dirty = computed(() => JSON.stringify(profiles.value) !== snapshot.value);
 
 function refreshStatuses() {
-  statuses.value = (runtime.getProviderStatusesForUi?.() || {}) as Record<string, ProviderStatus>;
-  warmups.value = (runtime.getProviderWarmupsForUi?.() || {}) as Record<string, ProviderWarmup>;
+  statuses.value = (getProviderStatusesForUi() || {}) as Record<string, ProviderStatus>;
+  warmups.value = (getProviderWarmupsForUi() || {}) as Record<string, ProviderWarmup>;
   defaultId.value = String(getDefaultProviderProfileId() || "");
-  warmOnStart.value = Boolean(runtime.getWarmOnStartForUi?.());
+  warmOnStart.value = Boolean(getWarmOnStartForUi());
 }
 function refresh() {
   profiles.value = (getProviderProfilesForUi() || []) as ProviderProfile[];
@@ -143,8 +153,8 @@ async function save() {
   saving.value = true;
   error.value = "";
   try {
-    runtime.saveProviderProfilesForUi?.(copyProfiles());
-    await runtime.syncResearcherProviderProfiles?.();
+    saveProviderProfilesForUi(copyProfiles());
+    await syncResearcherProviderProfiles();
     refresh();
     expanded.value = {};
     syncExpandedProfiles();
@@ -156,7 +166,7 @@ async function save() {
   }
 }
 function add(type: "ollama" | "openai") {
-  const created = runtime.addProviderProfileForUi?.(type) as ProviderProfile | undefined;
+  const created = addProviderProfileForUi(type) as ProviderProfile | undefined;
   const edits = profiles.value;
   refresh();
   const known = new Map(edits.map((item) => [item.id, item]));
@@ -175,7 +185,7 @@ async function remove(profile: ProviderProfile) {
   if (!window.confirm(i18n.tf("providers.remove_confirm", { name: profile.name || profile.id })))
     return;
   try {
-    runtime.removeProviderProfileForUi?.(profile.id);
+    removeProviderProfileForUi(profile.id);
     profiles.value = profiles.value.filter((item) => item.id !== profile.id);
     if (expanded.value[profile.id]) {
       const next = { ...expanded.value };
@@ -190,15 +200,15 @@ async function remove(profile: ProviderProfile) {
   }
 }
 function makeDefault(profile: ProviderProfile) {
-  runtime.setDefaultProviderProfileForUi?.(profile.id);
+  setDefaultProviderProfileForUi(profile.id);
   refreshStatuses();
 }
 async function run(profile: ProviderProfile, action: "test" | "warm") {
   setBusy(profile.id, action);
   error.value = "";
   try {
-    if (action === "test") await runtime.testProviderProfileForUi?.(profile.id);
-    else await runtime.warmProviderProfileForUi?.(profile.id);
+    if (action === "test") await testProviderProfileForUi(profile.id);
+    else await warmProviderProfileForUi(profile.id);
     refreshStatuses();
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);

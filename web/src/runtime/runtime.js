@@ -2268,17 +2268,6 @@ function touchupApplyResults(items, results, approvals, all = false, reviewOnly 
   return { appliedFields, reviewedRecords };
 }
 
-async function syncResearcherProviderProfiles() {
-  const approved = providerProfiles()
-    .filter((profile) => profile.researcher_enabled)
-    .map((profile) => ({ ...profile }));
-  const result = await api("/api/system/researcher-providers", {
-    method: "PUT",
-    body: JSON.stringify({ profiles: approved }),
-  });
-  state.researcherProviderProfiles = result.profiles || [];
-}
-
 function listSemanticMapSources() {
   const seen = new Set();
   const records = [];
@@ -2944,7 +2933,6 @@ export {
   setDefaultProviderProfileForUi,
   testProviderProfileForUi,
   warmProviderProfileForUi,
-  syncResearcherProviderProfiles,
   registerExternalJob,
   dbUnavailableReason,
   hasCorpusDb,
