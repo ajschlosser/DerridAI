@@ -89,14 +89,14 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
         assert archive.namelist() == ["index.html", "derridai-site.js"]
         index_html = archive.read("index.html").decode("utf-8")
-        site_runtime = archive.read("derridai-site.js").decode("utf-8")
+        published_site_script = archive.read("derridai-site.js").decode("utf-8")
 
     assert "A publication-safe passage." not in index_html
     assert index_html.count("<script ") == 1
     assert 'src="./derridai-site.js"' in index_html
     assert "connect-src 'self' http: https:" in index_html
 
-    package = _package_from_runtime(site_runtime)
+    package = _package_from_runtime(published_site_script)
     publication = package["manifest"]
     chunks = package["chunks"]
 
@@ -124,18 +124,18 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     decoded = _chunk_vectors(chunks[0], 3)[0]
     assert decoded == pytest.approx([0.1, 0.2, 0.3])
 
-    assert "createClient" in site_runtime
-    assert "DerridAI" in site_runtime
-    assert "__DERRIDAI_HOST_CAPABILITIES__" in site_runtime
-    assert "sdk.createClient" in site_runtime
-    assert "site.runtime.discover_models" in site_runtime
-    assert "derridai.site.providers." in site_runtime
-    assert "site.runtime.save_provider" in site_runtime
-    assert "site.runtime.provider_local_help" in site_runtime
+    assert "createClient" in published_site_script
+    assert "DerridAI" in published_site_script
+    assert "__DERRIDAI_HOST_CAPABILITIES__" in published_site_script
+    assert "sdk.createClient" in published_site_script
+    assert "site.runtime.discover_models" in published_site_script
+    assert "derridai.site.providers." in published_site_script
+    assert "site.runtime.save_provider" in published_site_script
+    assert "site.runtime.provider_local_help" in published_site_script
     # The shared browser client contains provider adapters but no provider profile, endpoint, or credential.
-    assert "https://models.example" not in site_runtime
-    assert "MUST-NOT-EXPORT" not in site_runtime
-    assert f"globalThis.{TRANSFORMERS_GLOBAL}=" in site_runtime
+    assert "https://models.example" not in published_site_script
+    assert "MUST-NOT-EXPORT" not in published_site_script
+    assert f"globalThis.{TRANSFORMERS_GLOBAL}=" in published_site_script
     assert "wasm-unsafe-eval" in index_html
     assert bundle.record_count == 2
     assert bundle.work_count == 2
@@ -239,8 +239,8 @@ def test_site_bundle_exports_only_selected_installed_languages_and_no_provider_p
     )
 
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
-        site_runtime = archive.read("derridai-site.js").decode("utf-8")
-    package = _package_from_runtime(site_runtime)
+        published_site_script = archive.read("derridai-site.js").decode("utf-8")
+    package = _package_from_runtime(published_site_script)
     manifest = package["manifest"]
 
     assert manifest["locale"] == "de-DE"
@@ -565,8 +565,8 @@ _FAKE_RUNTIME = {
 
 
 @pytest.fixture(autouse=True)
-def _runtime_without_network(monkeypatch: pytest.MonkeyPatch) -> list[int]:
-    """Exports must never reach the network in tests; the cache module has its own tests."""
+def _transformers_runtime_without_network(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Exports must never reach the network in tests; the Transformers runtime cache has its own tests."""
     calls: list[int] = []
 
     def fake_ensure_runtime() -> dict[str, bytes]:
@@ -724,25 +724,25 @@ def test_nginx_provider_proxy_rejects_unsafe_upstreams(upstream: str) -> None:
         site_publication._normalize_provider_proxy_upstream(upstream)
 
 
-def test_every_export_fetches_the_runtime(
-    monkeypatch: pytest.MonkeyPatch, _runtime_without_network: list[int]
+def test_every_export_fetches_the_transformers_runtime(
+    monkeypatch: pytest.MonkeyPatch, _transformers_runtime_without_network: list[int]
 ) -> None:
     _stub_projection(monkeypatch)
     site_publication.build_site_bundle(store_name="derrida-primary", works=["Glas"], title="Plain")
     site_publication.build_nginx_site_bundle(store_name="derrida-primary", works=["Glas"], title="Plain")
-    assert _runtime_without_network
+    assert _transformers_runtime_without_network
 
 
-def test_export_fails_before_corpus_work_when_the_runtime_cannot_be_downloaded(
+def test_export_fails_before_corpus_work_when_the_transformers_runtime_cannot_be_downloaded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.site_runtime_cache import RuntimeUnavailableError
+    from app.transformers_runtime_cache import RuntimeUnavailableError
 
     def unavailable() -> dict[str, bytes]:
         raise RuntimeUnavailableError("offline")
 
     def projection_must_not_run(*_args: object) -> dict:
-        raise AssertionError("corpus work started before the runtime was available")
+        raise AssertionError("corpus work started before the Transformers.js runtime was available")
 
     monkeypatch.setattr(site_publication, "ensure_runtime", unavailable)
     monkeypatch.setattr(site_publication.store, "export_site_projection", projection_must_not_run)
