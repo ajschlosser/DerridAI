@@ -59,7 +59,7 @@ export const NAV_TARGETS: Record<string, NavigationTarget> = {
   metadatamemory: { path: "/metadata-memory" },
   providers: { path: "/providers", runtimeView: "providers" },
   schemas: { path: "/schemas", runtimeView: "schemas" },
-  config: { path: "/settings/workspace", runtimeView: "config" },
+  config: { path: "/settings/overview", runtimeView: "config" },
   users: { path: "/users" },
   roles: { path: "/roles" },
   languages: { path: "/languages" },
