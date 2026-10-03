@@ -145,11 +145,22 @@ def build_plan(paths: list[str]) -> PreflightPlan:
             plan.frontend = plan.frontend_build = plan.legacy = True
         elif path == "web/tests/e2e/corpus-builder-theme-sweep.spec.ts":
             plan.frontend = plan.storybook = plan.a11y = plan.a11y_full = True
-        elif path.startswith("web/tests/e2e/static-site-"):
+        elif path == "web/tests/e2e/static-site-export.spec.ts":
             plan.frontend = True
+            plan.publication = True
+        elif path.startswith("web/tests/e2e/static-site-"):
+            plan.frontend = plan.frontend_build = plan.storybook = plan.e2e = True
             plan.publication = True
         elif path.startswith("web/tests/e2e/"):
             plan.frontend = plan.frontend_build = plan.storybook = plan.e2e = True
+        elif path == "web/playwright.config.ts":
+            plan.frontend = plan.frontend_build = plan.storybook = plan.e2e = True
+        elif path == "web/playwright.legacy.config.ts":
+            plan.frontend = plan.frontend_build = plan.legacy = True
+        elif path == "web/playwright.a11y.config.ts":
+            plan.frontend = plan.storybook = plan.a11y = plan.a11y_full = True
+        elif path == "web/playwright.publication.config.ts":
+            plan.frontend = plan.publication = True
         elif path.startswith("web/.storybook/") or path.startswith("web/.storybook"):
             plan.frontend = plan.storybook = plan.e2e = plan.a11y = plan.a11y_full = True
         elif path in {"web/vite.config.ts", "web/tsconfig.json", "web/tsconfig.tests.json"}:
