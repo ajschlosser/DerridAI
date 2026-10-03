@@ -17,13 +17,13 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-vi.mock("../../src/composables/messageDialog", () => ({
-  openMessageDialog: vi.fn(async () => false),
-}));
-
 import * as presence from "../../src/domain/sharedDbPresence";
 import { state } from "../../src/domain/sharedUrlState";
 import { jobsState } from "../../src/state/jobsState";
+
+vi.mock("../../src/composables/messageDialog", () => ({
+  openMessageDialog: vi.fn(async () => false),
+}));
 
 describe("shared database presence", () => {
   afterEach(() => {
