@@ -39,6 +39,8 @@ A policy is generated **in the language it is for**. The request names the insta
 
 ## Loading Works and Record detail
 
+Slow page navigation shows the destination while keeping the current page available. If a page module fails to load, the notice offers Retry or Reload page. Reload performs a full page navigation; save any work on the current page first.
+
 Works shows its title while the workspace loads. Once local records are hydrated, work cards are available while database and annotation preparation continues. A collection change clears the previous collection while the new one loads.
 
 Record detail keeps the reading pane and open edit draft mounted during a same-record refresh. Traceability loads independently of the record text. A failed refresh shows an error and Retry alongside the previously loaded record; a different selection clears the old record immediately. Search within the current record does not reload the workspace.

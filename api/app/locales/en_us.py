@@ -1,7 +1,10 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 # Canonical built-in locale. Keep keys synchronized with the paired locale module.
 
-EN_US: dict[str, str] = {'loading.updating': "Updating…",
+EN_US: dict[str, str] = {'loading.navigation': "Opening {destination}…",
+ 'loading.navigation_failed': "Could not open {destination}. Your current page is still available.",
+ 'loading.reload_page': "Reload page",
+ 'loading.updating': "Updating…",
  'loading.stale': "The refresh failed. Previously loaded content is shown.",
  'loading.record_frame': "Record",
  'common.apply': 'Apply',

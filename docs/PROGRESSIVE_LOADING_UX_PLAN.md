@@ -108,3 +108,21 @@ Validation: four new behavioral regressions failed against the original implemen
 Remaining work: complete navigation/chunk-error feedback and readiness measurements (increment 1); extend pilot coverage to cold/warm/back navigation, partial secondary failure, offline/cancellation, responsive themes/zoom, and refresh freshness policies (increment 2); then proceed through increments 3–5. Do not describe this checkpoint as completion of the plan. Shared runtime-backed preparation still bundles some secondary reads; researcher collection summaries await their authorized read. The Corpus Builder portion must remain deferred while its performance work is active.
 
 Resume: fetch and merge current master, inspect the latest Corpus Builder performance tracker and branch diff, then continue in this branch. Frontend dependencies are installed locally with `npm ci`. Run the five targeted suites (`record-progressive-loading`, `works-view`, `ui-loading-state`, `works-workspace`, `record-workspace`), typechecks, builds, and `progressive-loading.spec.ts` / `works.spec.ts` in Playwright. Use isolated app/Storybook ports; the verified run used `APP_PORT=5297`, `STORYBOOK_PORT=6297`, and `CI=1` to serve production artifacts. Keep generated SDK build output out of the commit unless its content actually changes.
+
+### Route feedback and stopping checkpoint
+
+The next increment adds delayed, localized destination feedback for route-module loading while keeping the current page mounted. Failed imports expose Retry and Reload page. Superseded navigation cannot clear the newer destination status; fast and same-page query navigation do not flash a notice. The notice is rendered outside shell layout constraints. No startup dependency or data-query behavior changed.
+
+Route validation: 11 route/history unit tests, app/SDK and test typechecks, touched-file lint, six locale tests, and production/Storybook builds passed. The combined production browser run passed 21/22 cases and revealed a notice-placement defect blocking Reload; the overlay repair then passed all four focused route-browser tests, including reload recovery and narrow light/dark layouts. The pilot's 18 browser tests passed in that combined run.
+
+The user requested a checkpoint at approximately 5% of the five-hour usage window remaining; the last check before wrapping up showed 6% remaining. Work resumed after the usage window reset; reconcile with current master before the next increment.
+
+Pick up here:
+
+1. Fetch current master and inspect `CORPUS_BUILDER_PERFORMANCE_PLAN.md` / `CORPUS_BUILDER_PERFORMANCE_PROGRESS.md` and any active performance branch before touching builder-related code.
+2. Finish the baseline/readiness measurement and pilot matrix described above; do not claim increments 1–2 fully complete yet. The tests prove behavior under synthetic delays, not a production speedup.
+3. Next independent target: `VectorStoresView.vue` combines collections, health, and provider discovery in one query and hides collection content on errors. Split independently useful regions using existing `useDataQuery` detail keys and shared invalidation; preserve provider failure as unavailable. Only inspected; no Vector Stores changes have been made.
+4. Then proceed through research workspaces and remaining route inventory; defer builder queues/reconciliation to avoid overlapping performance work.
+5. Resolve the documented preflight environment/Windows limitations before claiming full CI readiness. The earlier push used the repository's explicit preflight bypass after recording the failed full attempt; targeted validation remains separate.
+
+Working checkout: `C:\Users\aaron\Documents\Codex\2026-10-02\get\work\DerridAI`. This is an isolated clone because managed worktree creation was unavailable from the projectless chat. Commits `9d079838` and `a15bf6c9` were already pushed. Continue on `feat/progressive-loading-ux`; do not work in the shared original checkout.
