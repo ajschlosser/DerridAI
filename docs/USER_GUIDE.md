@@ -1120,6 +1120,8 @@ Research memory is stored separately from that deterministic response cache. Two
 
 Neither setting adds remembered text to the evidence packet or lets it supply a citation. Both match by meaning through derived, rebuildable projections; if the embedding service is unavailable they fall back to shared-word matching and the run's warnings say so. The run records which prior responses and claims steered it.
 
+The **Response Library** opens its page frame and archive controls while saved responses load. Initial reads show placeholders rather than a zero-question count. Refresh keeps the selected answer and evidence visible; a failed refresh shows an out-of-date warning and Retry. Searching or paging the archive updates its rows independently of the answer being read. A new response selection replaces the answer and its evidence together. Fresh revisits use the shared server-data cache, and access loss clears retained responses.
+
 The **Response Library** page provides:
 
 - question/answer browsing

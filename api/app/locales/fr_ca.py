@@ -367,6 +367,8 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'export.current': 'Fichier actuel',
  'export.nothing': "Il n'y a aucun fichier à exporter.",
  'export.title': 'Exporter en JSONL',
+ 'faq.read_failed': 'Could not load saved responses: {message}',
+ 'faq.refresh_failed': 'Saved responses may be out of date. Refresh failed: {message}',
  'faq.archive_help': 'Parcourez ou recherchez les questions enregistrées, puis ouvrez-en une pour revoir sa réponse et '
                      'ses preuves.',
  'faq.browse_archive': 'Parcourir les recherches enregistrées',
