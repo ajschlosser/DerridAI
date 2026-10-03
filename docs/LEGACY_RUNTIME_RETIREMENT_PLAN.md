@@ -203,7 +203,8 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] `jobDialogs`: LLM tool result (`LlmToolResultDialog.vue` + `composables/llmToolResultDialog.ts`; the forwarder builds a typed body and one optional follow-up `action`, which runs after the dialog closes; `llmToolResultBody`/`llmToolResultDialogHtml` are gone. The grade view still arrives as escaped `gradeHtml` from the shared renderer)
   - [x] `jobDialogs`: PDF draft record (`PdfDraftRecordDialog.vue` + `composables/pdfDraftRecordDialog.ts`; the component owns the JSON text and destinations, the forwarder's `save` validates, writes and resolves true to close, so a rejected draft keeps its edits; `pdfDraftRecordHtml` is gone)
   - [x] `jobDialogs`: job details (`JobDetailsDialog.vue` + `composables/jobDetailsDialog.ts`; the forwarder composes plain-data facts, events and JSON summaries, and supplies `onCancel` / `openResult` callbacks that run after the dialog closes; baselines `dialog-job-details-0..2` retired)
-  - [ ] remaining `jobDialogs` (job results, task launcher, touch-up), each with its markup helper in `domain/job*Markup.ts`
+  - [x] `jobDialogs`: job results review (`JobReviewDialog.vue` + `composables/jobReviewDialog.ts`; the forwarder builds a plain-data `JobReviewView` and republishes it through the returned handle on every refresh, realtime event or resolution. The component owns the selection (indices into the rows, kept across republishes, default is every field but `text`); `apply` / `rejectSelected` / `discard` stay in the forwarder and resolve true when they changed something. Diffs still arrive as escaped HTML from `reviewDiffSides`. `jobReviewMarkup.ts` and baseline `dialog-job-results-review` retired; the footer buttons lost their icons)
+  - [ ] remaining `jobDialogs` (task launcher, touch-up), each with its markup helper in `domain/*Markup.ts`
 - [ ] Step 4 state slices and deletion
 
 Notes for the next session:

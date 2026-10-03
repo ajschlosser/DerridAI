@@ -20,7 +20,7 @@ const REFRESH_CONTROL_ALLOWED = new Set([
   "components/research/ResearchRunsDrawer.vue",
   "components/system-data/SystemDataAdvanced.vue",
   "components/system-data/SystemDataDatabases.vue",
-  "domain/jobReviewMarkup.ts",
+  "components/JobReviewDialog.vue",
   "domain/operationsPanelBridge.ts",
   "views/SourcesView.vue",
 ]);

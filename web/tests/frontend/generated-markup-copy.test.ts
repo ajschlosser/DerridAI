@@ -1,7 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { describe, expect, it } from "vitest";
 import { createPdfExplorerCopy } from "../../src/domain/pdfExplorerCopy";
-import { llmReviewDialogHtml } from "../../src/domain/jobReviewMarkup";
 
 describe("PDF explorer copy module", () => {
   it("owns explorer strings so the Vue surface does not hardcode English", () => {
@@ -34,50 +33,6 @@ describe("PDF explorer copy module", () => {
     );
     expect(copy.sourcePdfJsPage(4)).toBe("PDF.js (browser), page 4");
     expect(copy.pageMarker(2)).toBe("--- Page 2 ---");
-  });
-});
-
-describe("LLM review markup module", () => {
-  it("renders the dialog title from tr", () => {
-    const html = llmReviewDialogHtml(
-      {
-        job: {
-          mode: "review",
-          completed: 2,
-          total: 4,
-          accepted_results: 0,
-          accepted_fields: 0,
-          rejected_results: 0,
-          rejected_fields: 0,
-          resolution_state: "pending",
-        },
-        flattened: [],
-        unchanged: [],
-        failures: [],
-        selections: new Set(),
-        successful: [],
-        active: false,
-        remaining: 0,
-        pendingResults: 0,
-        pendingChanges: 0,
-        noChangeCount: 2,
-        statusText: "done",
-      },
-      {
-        tr: (key, fallback = "") =>
-          key === "jobs.review.title" ? "Modifications de la revue LLM" : fallback,
-        trf: (_key, fallback, values = {}) =>
-          Object.entries(values).reduce(
-            (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
-            fallback,
-          ),
-        label: (key) => key,
-        reviewDiffSides: () => ({ left: "", right: "" }),
-        reviewKey: () => "k",
-      },
-    );
-    expect(html).toContain("Modifications de la revue LLM");
-    expect(html).not.toContain("LLM review changes");
   });
 });
 
