@@ -422,20 +422,38 @@ Do not weaken tests, suppress axe rules, or add broad exceptions merely to obtai
 
 ### 2026-10-03 — kickoff
 
-- [x] Created branch `task/metadata-schemas-refactor` from current `master`.
+- [x] Created branch `task/metadata-schemas-refactor` from current `master` (`1619f03f7fd87cb30b0a7f048359c4b513e1fa2e`).
 - [x] Added this implementation plan and progress log.
-- [x] Confirmed the current feature uses `UiField`, `UiCombobox`, and `UiTagPicker` but lacks general `UiInput`, `UiSelect`, and `UiTextarea` primitives.
-- [x] Confirmed Metadata Schemas still contains many direct native form controls and local control-sizing CSS.
-- [x] Confirmed the current Fields surface expands the full `SchemaFieldForm` inside table rows.
-- [x] Confirmed the repository's requirements explicitly target WCAG 2.2 AA and require en-US/fr-CA key/placeholder parity.
-- [ ] Establish branch-specific regression baseline.
-- [ ] Implement canonical form primitives.
-- [ ] Add regression guards.
-- [ ] Refactor workspace shell.
-- [ ] Refactor field navigator/inspector.
-- [ ] Reorganize field inspector.
-- [ ] Complete i18n audit and tests.
-- [ ] Add Storybook coverage.
-- [ ] Add E2E accessibility/regression coverage.
-- [ ] Remove obsolete local styles.
-- [ ] Run full validation and open PR.
+- [x] Confirmed the current feature used `UiField`, `UiCombobox`, and `UiTagPicker` but lacked general `UiInput`, `UiSelect`, and `UiTextarea` primitives.
+- [x] Confirmed Metadata Schemas contained direct native form controls and feature-local control sizing.
+- [x] Confirmed the Fields surface expanded the full `SchemaFieldForm` inside table rows.
+- [x] Confirmed the repository requirements explicitly target WCAG 2.2 AA and require en-US/fr-CA key/placeholder parity.
+
+### 2026-10-03 — form foundation and first workspace refactor
+
+- [x] Added a canonical ordinary-control stylesheet backed by semantic design tokens.
+- [x] Added native-semantic `UiInput`, `UiSelect`, `UiTextarea`, and `UiCheckbox` primitives.
+- [x] Added Storybook stories and focused primitive tests for the new form controls.
+- [x] Extended `UiField` so visible labels can explicitly target native/simple composite controls instead of wrapping arbitrary interactive descendants.
+- [x] Extended `UiTagPicker` with explicit input IDs, descriptions, invalid state, and visible-label integration.
+- [x] Replaced the expanding field-table editor with a grouped field navigator and persistent field inspector.
+- [x] Added deterministic focus behavior for adding and removing fields.
+- [x] Reorganized field configuration into Basics, Extraction, Evidence & review, Linguistic guidance, Value matching, and Memory & retrieval, using native disclosure for advanced sections.
+- [x] Migrated Metadata Schema identity, field, prompt-group, preview, and document-policy ordinary controls onto the shared primitives.
+- [x] Removed feature-local `.control` sizing rules from the migrated Metadata Schemas components.
+- [x] Replaced the schema-library table/clickable rows with semantic navigation and real buttons.
+- [x] Added a desktop master/detail layout for schema library + editor with narrow-screen stacking.
+- [x] Renamed the primary concepts in UI copy from generic “Prompts” / “Try it” toward “Prompt groups” / “Test schema”.
+- [x] Added en-US and fr-CA copy for the new workflow and synchronized `enUsDefaults.json`.
+- [x] Added a schema-specific i18n test for scoped literal keys plus generated document-field, POS/NER, and value-matching key families.
+- [x] Added a regression test that rejects ordinary raw form controls and legacy local `.control` skins in Metadata Schemas, with the hidden file-import input as the documented exception.
+- [x] Updated existing metadata-schema frontend tests for navigator/inspector semantics and readonly navigation.
+- [ ] Extend `UiCombobox` with the same explicit visible-label/description contract where needed.
+- [ ] Complete the remaining copy/ARIA audit and verify every helper/error relationship.
+- [ ] Add representative Metadata Schemas Storybook states beyond the primitive stories.
+- [ ] Add dedicated routed Playwright coverage for keyboard, axe, narrow reflow, text spacing, themes, increased contrast, forced colors, reduced motion, and fr-CA.
+- [ ] Update user/developer documentation and requirements traceability after behavior stabilizes.
+- [ ] Run formatter, typecheck, unit, locale, design-token, Storybook, production build, targeted Playwright/axe, and full CI validation.
+- [ ] Open the PR once the first validation pass has identified and fixed compile/test regressions.
+
+Validation note: this connector session can edit the GitHub branch but does not provide an executable repository checkout, so command-line validation has not yet been run here. The next validation pass will use repository CI and any available GitHub check results rather than treating code inspection as proof of a green build.
