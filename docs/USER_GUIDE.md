@@ -65,6 +65,8 @@ Record detail keeps the reading pane and open edit draft mounted during a same-r
 
 Vector Stores loads collections, storage health, and provider choices independently. A slow or unavailable provider service does not block collection browsing. Provider-dependent creation and embedding controls wait for successful discovery, with a local Retry action on failure. Failed collection refreshes retain the current list and filter with an out-of-date notice; a successful retry clears it. Unsaved provider/model settings remain intact during same-collection updates.
 
+Search shows its title and a placeholder before the workspace read lands, then keeps the header, filters, and results mounted while it refreshes; a failed refresh keeps what you were reading and offers Retry instead of replacing the page. Results stay tied to the search they came from: editing the query box says which submitted query the visible results belong to, and submitting a different query clears them rather than letting them stand in as the new result. A corpus-database search that fails is reported as a failure with Retry — it is never presented as zero matches, and no result count is claimed.
+
 ## Dashboard
 
 Dashboard shows:

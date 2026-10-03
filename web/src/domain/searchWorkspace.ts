@@ -386,6 +386,7 @@ export function createSearchWorkspace(deps: Deps) {
       loading: Boolean(state.storeSearchLoading),
       search_has_run:
         scope === "loaded" || Boolean(state.searchDatabaseRan || state.storeSearchResults.length),
+      search_error: scope === "database" ? String(state.storeSearchError || "") : "",
       capabilities: {
         can_select: scope === "loaded" && canUse("editLocalRecords"),
         can_review: scope === "loaded" && canUse("editLocalRecords"),
@@ -401,6 +402,7 @@ export function createSearchWorkspace(deps: Deps) {
     state.globalPage = 1;
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
+    state.storeSearchError = "";
     persistPrefs();
     syncUrl({ replace: false });
     shell();
@@ -440,6 +442,7 @@ export function createSearchWorkspace(deps: Deps) {
     state.dbSearchMethod = method;
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
+    state.storeSearchError = "";
     state.globalPage = 1;
     persistPrefs();
     syncUrl({ replace: true });
@@ -450,6 +453,7 @@ export function createSearchWorkspace(deps: Deps) {
       : recordStores()[0]?.name || "";
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
+    state.storeSearchError = "";
     state.globalPage = 1;
     persistPrefs();
     syncUrl({ replace: true });
@@ -536,6 +540,7 @@ export function createSearchWorkspace(deps: Deps) {
     state.globalPage = 1;
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
+    state.storeSearchError = "";
     persistPrefs();
     syncUrl({ replace: true });
   }
@@ -550,6 +555,7 @@ export function createSearchWorkspace(deps: Deps) {
       state.dbSearchWhere = next;
       state.storeSearchResults = [];
       state.searchDatabaseRan = false;
+      state.storeSearchError = "";
     } else {
       const nextOp = filterOpsForField(field).some(([candidate]: Any) => candidate === op)
         ? op
@@ -572,6 +578,7 @@ export function createSearchWorkspace(deps: Deps) {
       state.dbSearchWhere = next;
       state.storeSearchResults = [];
       state.searchDatabaseRan = false;
+      state.storeSearchError = "";
     } else
       state.globalFilters = (state.globalFilters || []).filter(
         (filter: Any) => String(filter.id) !== String(id),
@@ -603,6 +610,7 @@ export function createSearchWorkspace(deps: Deps) {
     state.dbSearchLambda = Math.max(0, Math.min(1, Number(state.dbSearchLambda ?? 0.7)));
     state.storeSearchLoading = true;
     state.searchDatabaseRan = true;
+    state.storeSearchError = "";
     state.globalPage = 1;
     persistPrefs();
     syncUrl({ replace: true });
@@ -624,6 +632,9 @@ export function createSearchWorkspace(deps: Deps) {
       state.storeSearchResults = Array.isArray(data?.results) ? data.results : [];
     } catch (error) {
       state.storeSearchResults = [];
+      // A failed search is not an empty corpus. Keep the reason so the view can report the
+      // failure instead of presenting zero matches as a successful result.
+      state.storeSearchError = (error as Error).message || String(error);
       if (!silent)
         toast(`${tr("research.search_failed")}: ${(error as Error).message}`, {
           tone: "danger",
@@ -723,6 +734,7 @@ export function createSearchWorkspace(deps: Deps) {
     if (store) state.activeStore = store;
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
+    state.storeSearchError = "";
     if (searchScope() === "database" && (state.globalSearch || Object.keys(dbSearchWhere()).length))
       state.globalSearchAutoRun = true;
     persistPrefs();

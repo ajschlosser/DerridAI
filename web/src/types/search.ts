@@ -108,6 +108,8 @@ export interface SearchWorkspaceSnapshot {
   selected_evidence_count: number;
   loading: boolean;
   search_has_run: boolean;
+  /** Why the last corpus-database search failed. A failed search must never be read as zero matches. */
+  search_error: string;
   capabilities: {
     can_select: boolean;
     can_review: boolean;
