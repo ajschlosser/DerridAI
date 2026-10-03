@@ -31,6 +31,8 @@ Two built-in roles ship with the application:
 
 ### Annotations
 
+The Annotations toolbar remains visible while the feed loads. Refreshes retain loaded annotations with an Updating status; a failed refresh marks the retained feed out of date and offers Retry. Initial failures show Retry without claiming there are no annotations.
+
 Annotations can target selected text, an entire Record, or an entire work. Selected-text annotations retain the quoted passage; Record and work annotations retain their durable target without requiring a quotation. From an annotation form, add comma-separated Record IDs to link the same discussion to additional records. Linked and work-scoped annotations appear in each applicable Record and in the global Annotations workspace without creating duplicate annotation identities.
 
 Replies are stored as part of an annotation thread. Threads with replies start collapsed and can be expanded. Deleting a thread root preserves a visible deleted-root placeholder so the replies and discussion history remain understandable. Annotation visibility and linked-record access are enforced by the API for the selected corpus store.
@@ -50,6 +52,8 @@ Session cookies are `HttpOnly` and `SameSite=Lax`. Set `SESSION_COOKIE_SECURE=tr
 Browser workspace persistence is isolated for researcher accounts so a researcher using the same browser profile does not inherit an administrator's loaded JSONL files, provider credentials, or other IndexedDB workspace state. Full backups include the logical user database (roles and password hashes, but not active session tokens), so backup ZIPs should be treated as credential-sensitive.
 
 Researcher-authored text (queries, notes, tags, and filters) is checked against a per-locale forbidden-term policy. Those terms are not shipped in the application source. After the first administrator account exists, generate a policy for each built-in locale from **System → Languages** using a provider profile. Installing a new interface language generates a policy as part of that job. Until at least one locale has a ready policy, the API rejects researcher-authored text. Enforcement uses the union of every generated locale list, so English and French (or any later locale) are checked together. Administrators can review, edit, and regenerate the stored terms; researcher sessions receive only hashed terms for immediate browser feedback.
+
+The **Languages** dictionary editor becomes usable before its text-policy read finishes. Policy failures show a local Retry and do not imply that a policy is missing. Same-dictionary refreshes preserve the editor and unsaved changes; switching locales clears the previous dictionary while the new one loads. Initial read failures offer Retry and withhold unconfirmed counts.
 
 The **Languages** dictionary editor groups keys by their dotted namespace, so administrators can work category by category instead of scanning the complete dictionary. The editor can export the full dictionary or the selected category as JSON, and can import a validated JSON dictionary for review before saving. Researcher text-policy terms are intentionally hidden until the administrator explicitly expands the sensitive-terms section.
 
@@ -110,6 +114,8 @@ Open it from **Record view** or from **More tools → Semantic map**. Administra
 The choice is remembered in this browser.
 
 ## Relationship-map controls
+
+The Relationships workspace loads the retained record trace independently of the cELF model. Model failure has its own Retry and does not remove the trace. Same-record refresh retains the focused graph with Updating or an out-of-date error; changing record or store clears the previous trace.
 
 DerridAI uses the same interaction model for relational diagrams even when the domain and layout differ. The corpus term map uses movable chips, the build-wide semantic content graph uses a force layout with entity dots, the Record semantic map uses a radial layout, Traceability uses source-to-claim lanes with cards, and Pipeline Studio uses a directed stage graph. Their domain meanings remain separate; moving a card or node changes only the presentation, not the Record, cELF relationship, semantic assertion, pipeline definition, or other authoritative data.
 
@@ -1312,8 +1318,12 @@ store without treating every store as a database.
 - **Metadata memory** (its own System page) is the audit view over the same
   index: each precedent is joined to its record revision, bound evidence, and
   whether the source is still current. Filters apply as you change them, and
-  long evidence expands on demand. **Metadata examples** shows the raw index
-  rows without those joins, for debugging the index itself.
+  long evidence expands on demand. The page revalidates the projection whenever
+  it is opened; an older empty cache is not presented as current. If a refresh
+  fails, the last successfully loaded precedents remain visible with an explicit
+  out-of-date warning and retry action instead of being replaced by an empty
+  state. **Metadata examples** shows the raw index rows without those joins, for
+  debugging the index itself.
   Pending blind second-opinion values are excluded from shared examples and
   cross-field matching until resolved; disputed, invalid, and unresolved
   assertions are not trusted precedents.

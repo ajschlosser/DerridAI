@@ -220,6 +220,56 @@ def test_inspector_fails_open_when_memory_backend_is_unavailable():
 
 
 
+def test_inspector_reads_live_pages_without_trusting_a_separate_count_snapshot():
+    class StaleCountCollection(FakeCollection):
+        def count(self):
+            raise AssertionError("metadata memory inspection must not use a separate count snapshot")
+
+    service = MetadataMemoryService(
+        FakeStore(
+            [
+                StaleCountCollection(
+                    "derridai_metadata_exemplars",
+                    "metadata_exemplars",
+                    [progressive_row()],
+                )
+            ]
+        )
+    )
+
+    payload = service.list_entries()
+
+    assert payload["available"] is True
+    assert payload["total"] == 1
+    assert payload["items"][0]["record_id"] == "r1"
+
+
+def test_inspector_reports_projection_read_failure_as_unavailable_not_empty():
+    class BrokenCollection(FakeCollection):
+        def get(self, *, limit=500, offset=0, include=None):
+            raise RuntimeError("projection read failed")
+
+    service = MetadataMemoryService(
+        FakeStore(
+            [
+                BrokenCollection(
+                    "derridai_metadata_exemplars",
+                    "metadata_exemplars",
+                    [progressive_row()],
+                )
+            ]
+        )
+    )
+
+    payload = service.list_entries()
+
+    assert payload["available"] is False
+    assert payload["items"] == []
+    assert payload["total"] == 0
+    assert payload["summary"]["backends"] == 1
+    assert "projection read failed" in payload["error"]
+
+
 def test_inspector_marks_changed_evidence_as_not_current():
     row = progressive_row()
     row["metadata"]["evidence_hash"] = "not-the-current-evidence-hash"

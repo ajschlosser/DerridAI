@@ -19,18 +19,29 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { ref } from "vue";
 import AppIcon from "./AppIcon.vue";
+import UiLoadingState from "./ui/UiLoadingState.vue";
 import UiPageHeader from "./ui/UiPageHeader.vue";
 import { useI18nStore } from "../stores/i18n";
 
 const props = withDefaults(
   defineProps<{
+    pending?: boolean;
+    ready?: boolean;
     languageCount?: number;
     keyCount?: number;
     policyPendingCount?: number;
     title?: string;
     description?: string;
   }>(),
-  { languageCount: 0, keyCount: 0, policyPendingCount: 0, title: "", description: "" },
+  {
+    pending: false,
+    ready: true,
+    languageCount: 0,
+    keyCount: 0,
+    policyPendingCount: 0,
+    title: "",
+    description: "",
+  },
 );
 const emit = defineEmits<{ install: [] }>();
 const i18n = useI18nStore();
@@ -48,7 +59,12 @@ defineExpose({ focusInstall: () => installButton.value?.focus() });
     :actions-label="i18n.t('language.page_actions')"
   >
     <template #actions>
-      <div class="language-workspace-stats" :aria-label="i18n.t('language.localization_summary')">
+      <UiLoadingState v-if="props.pending" variant="inline" :label="i18n.t('ui.loading')" />
+      <div
+        v-else
+        class="language-workspace-stats"
+        :aria-label="i18n.t('language.localization_summary')"
+      >
         <span
           ><b>{{ props.languageCount }}</b
           >{{ i18n.t("language.locales") }}</span
