@@ -35,6 +35,7 @@ const props = withDefaults(
     busy?: boolean;
     /** The review is still being prepared: only accept waits. */
     locked?: boolean;
+    textLocked?: boolean;
     saving?: boolean;
     saveDisabled?: boolean;
     blockingCount?: number;
@@ -48,6 +49,7 @@ const props = withDefaults(
     editing: false,
     busy: false,
     locked: false,
+    textLocked: undefined,
     saving: false,
     saveDisabled: false,
     blockingCount: 0,
@@ -96,7 +98,7 @@ defineExpose({ focusAccept: () => acceptButton.value?.focus({ preventScroll: tru
         <button
           type="button"
           class="btn small primary"
-          :disabled="props.busy || props.saveDisabled"
+          :disabled="props.busy || (props.textLocked ?? props.locked) || props.saveDisabled"
           @click="emit('saveText')"
         >
           {{ props.saving ? i18n.t("ui.saving") : i18n.t("pdf_corpus.save_and_mark_reviewed") }}

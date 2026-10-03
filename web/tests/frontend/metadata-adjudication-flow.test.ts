@@ -131,6 +131,28 @@ describe("adjudicating a record's metadata", () => {
     );
     wrapper.unmount();
   });
+
+  it("focuses No value when the next field has no proposal and advances after that decision", async () => {
+    const wrapper = mountPanel();
+    const [first, second, third] = cards(wrapper);
+    if (!first || !second || !third) throw new Error("Three pending fields are required.");
+    await wrapper.setProps({ record: record({ [second]: "" }) });
+    await wrapper.get(`[data-field="${first}"] [data-primary-action]`).trigger("click");
+    await nextTick();
+    await nextTick();
+    const noValue = wrapper.get(`[data-field="${second}"] [data-no-value-action]`);
+    expect(document.activeElement).toBe(noValue.element);
+    expect(noValue.attributes("data-primary-action")).toBeDefined();
+    expect(wrapper.emitted("noValue")).toBeUndefined();
+    await noValue.trigger("click");
+    await nextTick();
+    await nextTick();
+    expect(wrapper.emitted("noValue")).toEqual([[second]]);
+    expect(document.activeElement).toBe(
+      wrapper.get(`[data-field="${third}"] [data-primary-action]`).element,
+    );
+    wrapper.unmount();
+  });
 });
 
 describe("a field's decision controls", () => {
@@ -151,6 +173,58 @@ describe("a field's decision controls", () => {
     expect(wrapper.emitted("save")).toEqual([["affirm"]]);
     wrapper.unmount();
   });
+
+  it.each([{ value: "" }, { value: null }, { value: [] }])(
+    "defaults an empty proposal $value to No value",
+    async ({ value }) => {
+      const wrapper = mount(CorpusMetadataFieldEditor, {
+        props: { field: "topics", value, control: "multi-combobox", open: true, status: pending },
+      });
+      expect(wrapper.get("[data-primary-action]").attributes("data-no-value-action")).toBeDefined();
+      expect(wrapper.emitted("noValue")).toBeUndefined();
+      await wrapper.get("textarea").trigger("keydown", { key: "Enter", ctrlKey: true });
+      expect(wrapper.emitted("noValue")).toEqual([[]]);
+      expect(wrapper.emitted("save")).toBeUndefined();
+      wrapper.unmount();
+    },
+  );
+
+  it.each([
+    { value: false, control: "boolean" as const },
+    { value: 0, control: "number" as const },
+  ])("keeps a false/zero proposal $value on its value decision", ({ value, control }) => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: { field: "custom", value, control, open: true },
+    });
+    expect(wrapper.get("[data-primary-action]").attributes("data-no-value-action")).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it("switches the primary decision to Save when the reviewer supplies a value", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: { field: "speaker", value: "", control: "text", open: true, status: pending },
+    });
+    expect(wrapper.get("[data-primary-action]").attributes("data-no-value-action")).toBeDefined();
+    await wrapper.get("textarea").setValue("Reviewed speaker");
+    expect(wrapper.get("[data-primary-action]").attributes("data-no-value-action")).toBeUndefined();
+    await wrapper.get("textarea").trigger("keydown", { key: "Enter", metaKey: true });
+    expect(wrapper.emitted("save")).toEqual([["Reviewed speaker"]]);
+    expect(wrapper.emitted("noValue")).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it.each([{ busy: true }, { saving: true }])(
+    "does not confirm absence while a decision is unavailable: %j",
+    async (availability) => {
+      const wrapper = mount(CorpusMetadataFieldEditor, {
+        props: { field: "speaker", value: "", control: "text", open: true, ...availability },
+      });
+      expect(wrapper.get("[data-primary-action]").attributes("disabled")).toBeDefined();
+      await wrapper.get("textarea").trigger("keydown", { key: "Enter", ctrlKey: true });
+      expect(wrapper.emitted("noValue")).toBeUndefined();
+      wrapper.unmount();
+    },
+  );
 
   it("says Confirm for a proposed value and Save once the reviewer changes it", async () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {

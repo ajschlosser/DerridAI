@@ -318,6 +318,7 @@ const canSave = computed(
     draft.value !== undefined &&
     !(props.required && draft.value === null),
 );
+const hasDraftValue = computed(() => hasValue(normalized()));
 /** One confirm action: it cites the reviewer's own knowledge, the selected text, or nothing extra, in that order. */
 function save() {
   if (!canSave.value) return;
@@ -349,7 +350,8 @@ function cancelEdit() {
 function onKeydown(event: KeyboardEvent) {
   if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey) || !editing.value) return;
   event.preventDefault();
-  save();
+  if (hasDraftValue.value) save();
+  else if (!props.busy && !props.saving) emit("noValue");
 }
 function saveWithSelection() {
   if (!canSave.value) return;
@@ -778,7 +780,7 @@ const traceRows = computed(() => {
         <button
           type="button"
           class="btn small primary"
-          data-primary-action
+          :data-primary-action="hasDraftValue ? '' : undefined"
           :disabled="!canSave"
           aria-keyshortcuts="Control+Enter Meta+Enter"
           @click="save"
@@ -792,7 +794,14 @@ const traceRows = computed(() => {
           :content-focusable="Boolean(busy)"
           placement="bottom"
         >
-          <button type="button" class="btn small" :disabled="busy" @click="emit('noValue')">
+          <button
+            type="button"
+            class="btn small"
+            data-no-value-action
+            :data-primary-action="!hasDraftValue ? '' : undefined"
+            :disabled="busy || saving"
+            @click="emit('noValue')"
+          >
             {{ i18n.t("pdf_corpus.no_value_short") }}
           </button>
         </UiTooltip>

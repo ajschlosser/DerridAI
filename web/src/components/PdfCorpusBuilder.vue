@@ -488,6 +488,7 @@ const {
   topologyIssueCount,
   buildRunning,
   reviewLocked,
+  textReviewLocked,
   structuralReviewLocked,
   canResume,
   segmentationNeedsReview,
@@ -719,6 +720,7 @@ const {
   refreshBuild,
   refreshRecords,
   recordMetadata,
+  formatMetadataDraft: formatAdvancedMetadata,
   metadataDraftKey,
   setMessage,
   t: (key, fallback) => i18n.t(key, fallback),
@@ -788,6 +790,16 @@ async function resolveMetadataWithSelectionEvidence(
   value: unknown,
   selectedText: string,
 ) {
+  if (loadedSourceBlockContext !== sourceBlockContext.value) {
+    const context = sourceBlockContext.value;
+    try {
+      await refreshBlocks(context, ++sourceBlockRequestVersion, true);
+    } catch (exc: unknown) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+      return;
+    }
+    if (sourceBlockContext.value !== context || loadedSourceBlockContext !== context) return;
+  }
   const block = evidenceBlockForSelection(selectedText);
   if (!block?.block_id) {
     // Nothing in this record matches the selection: keep the value, say why, and bind no evidence.
@@ -1755,6 +1767,12 @@ function recordMetadata(record: CorpusRecord) {
     currentBuild.value?.schema || selectedSchema.value,
   );
 }
+function formatAdvancedMetadata(record: CorpusRecord) {
+  return advancedMetadataDirty.value ||
+    (advancedMetadataOpen.value && metadataInspectorActive.value)
+    ? JSON.stringify(recordMetadata(record), null, 2)
+    : "";
+}
 function applyAuthoritativeRecord(record: CorpusRecord, build?: CorpusBuild | null) {
   const id = record.record_id;
   // A later save is already queued and shown optimistically; this older response would briefly revert it.
@@ -1763,7 +1781,7 @@ function applyAuthoritativeRecord(record: CorpusRecord, build?: CorpusBuild | nu
     applyRecordToQueue(record);
     if (selectedRecordId.value === id) {
       selectedRecord.value = record;
-      metadataDraft.value = JSON.stringify(recordMetadata(record), null, 2);
+      metadataDraft.value = formatAdvancedMetadata(record);
     }
   }
   if (build && currentBuild.value?.build_id === build.build_id) {
@@ -1877,7 +1895,33 @@ function offerFirstSourceProblem(rows: CorpusQueueRow[]) {
   }
 }
 
-async function refreshBlocks() {
+const sourceBlocksActive = computed(
+  () =>
+    ((focusView.value ||
+      (workspaceMode.value === "review" && reviewWorkspaceMode.value === "record")) &&
+      (reviewInspectorTab.value === "evidence" || reviewInspectorTab.value === "source")) ||
+    (!focusView.value &&
+      workspaceMode.value === "review" &&
+      reviewWorkspaceMode.value === "source"),
+);
+let sourceBlockRequestVersion = 0;
+let loadedSourceBlockContext = "";
+onBeforeUnmount(() => {
+  ++sourceBlockRequestVersion;
+});
+const sourceBlockContext = computed(() =>
+  JSON.stringify([
+    useAuthStore().user?.id,
+    selectedBuildId.value,
+    selectedAssetId.value,
+    selectedRecord.value?.record_id,
+    selectedRecord.value?.record_revision,
+    selectedRecord.value?.source_block_ids,
+    selectedRecord.value?.source_unit_ids,
+    selectedRecord.value?.source_spans,
+  ]),
+);
+async function refreshBlocks(context: string, requestVersion: number, explicitDemand = false) {
   const buildId = selectedBuildId.value;
   const assetId = selectedAssetId.value;
   const record = selectedRecord.value;
@@ -1893,16 +1937,38 @@ async function refreshBlocks() {
     .filter((id, index, all) => all.indexOf(id) === index);
   if (!selectedAssetId.value || !ids.length) {
     sourceBlocks.value = [];
+    loadedSourceBlockContext = context;
     return;
   }
   const result = await corpusBuilderApi.blocks(assetId, 0, Math.min(1000, ids.length), ids);
   if (
     selectedBuildId.value === buildId &&
     selectedAssetId.value === assetId &&
-    selectedRecord.value?.record_id === recordId
-  )
+    selectedRecord.value?.record_id === recordId &&
+    sourceBlockContext.value === context &&
+    (sourceBlocksActive.value || explicitDemand) &&
+    sourceBlockRequestVersion === requestVersion
+  ) {
     sourceBlocks.value = result.items;
+    loadedSourceBlockContext = context;
+  }
 }
+watch(
+  [sourceBlocksActive, sourceBlockContext],
+  ([active, context], previous) => {
+    const requestVersion = ++sourceBlockRequestVersion;
+    if (context !== previous?.[1]) {
+      sourceBlocks.value = [];
+      loadedSourceBlockContext = "";
+    }
+    if (!active || loadedSourceBlockContext === context) return;
+    void refreshBlocks(context, requestVersion).catch((exc: unknown) => {
+      if (sourceBlockRequestVersion === requestVersion && sourceBlocksActive.value)
+        setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    });
+  },
+  { immediate: true },
+);
 async function ensureReviewHydrated(preferredId = "") {
   if (!selectedBuildId.value || !currentBuild.value || awaitingManifestReview.value) return;
   const expected = Number(
@@ -1920,7 +1986,6 @@ async function ensureReviewHydrated(preferredId = "") {
   // Background topology hydration must reconcile in place. A reset clears the selected
   // Record cache and pagination, which makes live enrichment look like a page refresh.
   await refreshRecords(false, preferredId);
-  if (selectedRecord.value && !sourceBlocks.value.length) await refreshBlocks();
 }
 let reviewHydrationRetryTimer: number | undefined;
 
@@ -2009,21 +2074,18 @@ function activateRecord(record: CorpusRecord) {
     editingText.value = Boolean(saved && saved !== String(record.text || ""));
   }
   resolveSourceOnTextSave.value = Boolean(record.source_quality_issues?.length);
-  const fallback = JSON.stringify(recordMetadata(record), null, 2);
   if (!sameRecord || !advancedMetadataDirty.value) {
+    let saved = "";
     try {
-      metadataDraft.value =
-        localStorage.getItem(metadataDraftKey(selectedBuildId.value, record.record_id)) || fallback;
+      saved = localStorage.getItem(metadataDraftKey(selectedBuildId.value, record.record_id)) || "";
     } catch {
-      metadataDraft.value = fallback;
+      // Browser storage is optional.
     }
-    advancedMetadataDirty.value = metadataDraft.value !== fallback;
+    advancedMetadataDirty.value =
+      Boolean(saved) && saved !== JSON.stringify(recordMetadata(record), null, 2);
+    metadataDraft.value = saved || formatAdvancedMetadata(record);
   }
 
-  if (!sameRecord)
-    void refreshBlocks().catch((exc: unknown) =>
-      setMessage(exc instanceof Error ? exc.message : String(exc), "error"),
-    );
   void restoreReviewViewport(viewport, { record: !sameRecord });
 }
 function toggleReviewSelection(recordId: string, checked: boolean) {
@@ -2169,7 +2231,7 @@ function reviewShortcut(event: KeyboardEvent) {
     !focusView.value // Focus View handles its own Ctrl/Cmd+S.
   ) {
     event.preventDefault();
-    if (!reviewLocked.value && textDraft.value.trim()) void saveReviewedText();
+    if (!textReviewLocked.value && textDraft.value.trim()) void saveReviewedText();
     return;
   }
   const command = corpusReviewCommandFromKeydown(event);
@@ -2215,17 +2277,45 @@ watch(selectedProviderId, (profileId) => {
 });
 let settingReviewFilters = false;
 const advancedMetadataDirty = ref(false);
+const advancedMetadataOpen = ref(false);
+watch([advancedMetadataOpen, metadataInspectorActive], ([open, active]) => {
+  if (open && active && selectedRecord.value && !advancedMetadataDirty.value)
+    metadataDraft.value = formatAdvancedMetadata(selectedRecord.value);
+});
 function trackMetadataSave(request: Promise<unknown>) {
   void request.catch((exc) =>
     setMessage(exc instanceof Error ? exc.message : String(exc), "error"),
   );
 }
 async function saveAdvancedMetadata() {
+  if (!advancedMetadataDirty.value && selectedRecord.value)
+    metadataDraft.value = JSON.stringify(recordMetadata(selectedRecord.value), null, 2);
   const id = selectedRecordId.value;
+  const buildId = selectedBuildId.value;
+  const submittedDraft = metadataDraft.value;
   error.value = "";
   await saveMetadata();
   await recordSaveQueue.waitFor(id);
-  if (selectedRecordId.value === id && !error.value) advancedMetadataDirty.value = false;
+  const sameContext = selectedBuildId.value === buildId && selectedRecordId.value === id;
+  const newerDraft =
+    sameContext &&
+    advancedMetadataDirty.value &&
+    selectedRecord.value &&
+    metadataDraft.value !== JSON.stringify(recordMetadata(selectedRecord.value), null, 2);
+  if (error.value) {
+    let recoveryDraft = newerDraft ? metadataDraft.value : submittedDraft;
+    try {
+      if (!sameContext)
+        recoveryDraft = localStorage.getItem(metadataDraftKey(buildId, id)) || submittedDraft;
+      localStorage.setItem(metadataDraftKey(buildId, id), recoveryDraft);
+    } catch {
+      // Browser storage is optional.
+    }
+    if (sameContext) {
+      metadataDraft.value = recoveryDraft;
+      advancedMetadataDirty.value = true;
+    }
+  } else if (sameContext && !newerDraft) advancedMetadataDirty.value = false;
 }
 function changeReviewQueue(queue: ReviewQueue) {
   reviewQueue.value = queue;
@@ -2437,7 +2527,14 @@ watch([reviewQueue, recordQuery, selectedBuildId], () => {
 watch(
   metadataDraft,
   (value) => {
-    if (!selectedBuildId.value || !selectedRecordId.value) return;
+    if (
+      !advancedMetadataDirty.value ||
+      !selectedBuildId.value ||
+      !selectedRecordId.value ||
+      (selectedRecord.value &&
+        value === JSON.stringify(recordMetadata(selectedRecord.value), null, 2))
+    )
+      return;
     try {
       localStorage.setItem(metadataDraftKey(selectedBuildId.value, selectedRecordId.value), value);
     } catch {
@@ -3002,7 +3099,9 @@ defineExpose({
           :queue-collapsed="reviewQueueCollapsed"
           :editing="editingText"
           :busy="busy !== ''"
-          :locked="reviewLocked"
+          :locked="textReviewLocked"
+          :assistance-locked="reviewLocked"
+          :text-preparation-ready="reviewLocked && !textReviewLocked"
           :activity-summary="selectedRecordActivitySummary"
           :popout="recordPopout"
           @root-change="reviewPaneEl = $event"
@@ -3085,6 +3184,7 @@ defineExpose({
               @clear-cache="clearMetadataSuggestionCache"
               @edit-document-metadata="documentMetadataOpen = true"
               @dirty="advancedMetadataDirty = true"
+              @disclosure="advancedMetadataOpen = $event"
               @save="saveAdvancedMetadata"
               @rerun="rerunMetadata()"
               @requeue="requeueCurrentRecord"
@@ -3204,6 +3304,7 @@ defineExpose({
           :editing="editingText"
           :busy="busy !== ''"
           :locked="reviewLocked"
+          :text-locked="textReviewLocked"
           :saving="busy === 'text'"
           :save-disabled="!textDraft.trim()"
           :blocking-count="selectedMetadataBlockingFields.length"
@@ -3479,6 +3580,7 @@ defineExpose({
         :schema="currentBuild?.schema"
         :busy="busy !== ''"
         :locked="reviewLocked"
+        :text-locked="textReviewLocked"
         :region-types="regionTypes"
         :discourse-roles="discourseRoles"
         :confidence-calibration="currentBuild?.llm_confidence_calibration || {}"

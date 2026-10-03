@@ -135,7 +135,7 @@ describe("reviewed precedents in Record Review", () => {
     await toggle.trigger("click");
     await flushPromises();
 
-    expect(load).toHaveBeenCalledWith("b1", "r1", "mood", false);
+    expect(load).toHaveBeenCalledWith("b1", "r1", "mood", false, expect.any(AbortSignal));
     expect(toggle.attributes("aria-expanded")).toBe("true");
     expect(wrapper.get(`#${toggle.attributes("aria-controls")}`).text()).toContain(
       "Measured tone.",
@@ -157,7 +157,7 @@ describe("reviewed precedents in Record Review", () => {
     expect(load).toHaveBeenCalledTimes(1);
     await wrapper.setProps({ active: true });
     await flushPromises();
-    expect(load).toHaveBeenLastCalledWith("b1", "r3", "mood", false);
+    expect(load).toHaveBeenLastCalledWith("b1", "r3", "mood", false, expect.any(AbortSignal));
     expect(load).toHaveBeenCalledTimes(2);
     await wrapper.setProps({ active: false });
     await wrapper.setProps({ active: true });
@@ -209,6 +209,89 @@ describe("reviewed precedents in Record Review", () => {
     );
   });
 
+  it("ranks kept candidates only when their field disclosure opens and reuses the result", async () => {
+    const load = vi.fn().mockResolvedValue({ ...precedents, source: "enrichment" });
+    const wrapper = mount(CorpusFieldPrecedents, {
+      props: {
+        buildId: "b1",
+        recordId: "r1",
+        field: "mood",
+        fieldLabel: "Mood",
+        load,
+        preloaded: { ...precedents, source: "enrichment", candidates_pending: true },
+      },
+    });
+    expect(wrapper.get("button").text()).toContain("1 found");
+    expect(load).not.toHaveBeenCalled();
+    await wrapper.get("button").trigger("click");
+    await flushPromises();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledWith("b1", "r1", "mood", false, expect.any(AbortSignal));
+    await wrapper.get("button").trigger("click");
+    await wrapper.get("button").trigger("click");
+    await wrapper.setProps({ active: false });
+    await wrapper.setProps({ active: true });
+    await flushPromises();
+    expect(load).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it.each(["hide", "close", "context", "unmount"])(
+    "aborts an obsolete candidate transport on %s and rejects late success",
+    async (action) => {
+      let release!: (result: MetadataPrecedents) => void;
+      let signal!: AbortSignal;
+      const load = vi
+        .fn()
+        .mockImplementation((_build, _record, _field, _refresh, incomingSignal: AbortSignal) => {
+          signal = incomingSignal;
+          return new Promise<MetadataPrecedents>((resolve) => (release = resolve));
+        });
+      const wrapper = mount(CorpusFieldPrecedents, {
+        props: { buildId: "b1", recordId: "r1", field: "mood", fieldLabel: "Mood", load },
+      });
+      await wrapper.get("button").trigger("click");
+      const originalSignal = signal;
+      if (action === "hide") await wrapper.setProps({ active: false });
+      else if (action === "close") await wrapper.get("button").trigger("click");
+      else if (action === "context") {
+        await wrapper.setProps({ active: false, recordId: "r3" });
+      } else wrapper.unmount();
+      expect(originalSignal.aborted).toBe(true);
+      release(precedents);
+      await flushPromises();
+      if (action !== "unmount") {
+        expect(wrapper.text()).not.toContain("Measured tone.");
+        wrapper.unmount();
+      }
+    },
+  );
+
+  it("reports a current candidate failure and permits an explicit retry", async () => {
+    const load = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Candidate service unavailable"))
+      .mockResolvedValueOnce({ ...precedents, source: "enrichment" });
+    const wrapper = mount(CorpusFieldPrecedents, {
+      props: {
+        buildId: "b1",
+        recordId: "r1",
+        field: "mood",
+        fieldLabel: "Mood",
+        load,
+        preloaded: { ...precedents, source: "enrichment", candidates_pending: true },
+      },
+    });
+    await wrapper.get("button").trigger("click");
+    await flushPromises();
+    expect(wrapper.get("[role=alert]").text()).toContain("Candidate service unavailable");
+    await wrapper.get("[role=alert] button").trigger("click");
+    await flushPromises();
+    expect(wrapper.find("[role=alert]").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Measured tone.");
+    wrapper.unmount();
+  });
+
   it("is not offered when enrichment kept no precedents for the field", () => {
     const wrapper = mount(CorpusFieldPrecedents, {
       props: {
@@ -252,7 +335,7 @@ describe("reviewed precedents in Record Review", () => {
     const again = wrapper.findAll("button").find((button) => button.text() === "Search again")!;
     await again.trigger("click");
     await flushPromises();
-    expect(load).toHaveBeenCalledWith("b1", "r1", "mood", true);
+    expect(load).toHaveBeenCalledWith("b1", "r1", "mood", true, expect.any(AbortSignal));
     expect(wrapper.get("button").text()).toContain("0 found");
   });
 

@@ -91,6 +91,7 @@ class EditorialMemoryMixin:
         use_progressive: bool = True,
         include_canonical: bool = False,
         field_filter: set[str] | None = None,
+        record_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """Build advisory context from human decisions and the last enrichment pass.
 
@@ -106,7 +107,10 @@ class EditorialMemoryMixin:
         are actually scheduled for this Record.
         """
         try:
-            rows = self.repo.load_records(build_id)
+            rows = (
+                self.repo.load_records(build_id) if record_ids is None
+                else [row for row in self.repo.get_records(build_id, record_ids) if row is not None]
+            )
             build = self.repo.get_build(build_id)
         except Exception as exc:
             # Editorial memory only supplies advisory few-shot context; records
@@ -121,9 +125,17 @@ class EditorialMemoryMixin:
         asset_id = str(build.get("asset_id") or "")
         if asset_id:
             try:
+                selected_ids = list(dict.fromkeys(
+                    str(block_id) for row in rows
+                    for block_id in (row.get("source_unit_ids") or row.get("source_block_ids") or [])
+                ))
+                blocks = (
+                    self.repo.load_blocks(asset_id) if record_ids is None
+                    else self.repo.load_selected_blocks(asset_id, selected_ids)
+                )
                 blocks_by_id = {
                     str(block.get("block_id") or ""): block
-                    for block in self.repo.load_blocks(asset_id)
+                    for block in blocks
                     if isinstance(block, dict) and str(block.get("block_id") or "")
                 }
             except Exception:  # noqa: BLE001 - lexical editorial memory remains the safe fallback
@@ -669,13 +681,15 @@ class EditorialMemoryMixin:
             for field in sorted(self._editable_fields(build_id))
             if (cached := cached_field(record, field)) is not None
         }
-        return {"record_id": record_id, "fields": self._cached_precedents(build_id, record, kept) if kept else {}}
+        return {"record_id": record_id, "fields": self._cached_precedents(build_id, record, kept, include_candidates=False) if kept else {}}
 
     def _cached_precedents(
         self,
         build_id: str,
         record: dict[str, Any],
         kept: dict[str, tuple[dict[str, Any], dict[str, Any]]],
+        *,
+        include_candidates: bool = True,
     ) -> dict[str, dict[str, Any]]:
         """Resolve kept precedent refs and lazily rank this Record's possible evidence.
 
@@ -685,6 +699,15 @@ class EditorialMemoryMixin:
         critical path while preserving the same suggestions when the panel is actually used.
         """
         record_id = str(record.get("record_id") or "")
+        refs = [
+            ref for entry, _cache in kept.values() for ref in entry.get("refs") or []
+            if isinstance(ref, dict)
+        ]
+        # Version 2 references lack Record identity and retain their legacy resolution path.
+        selected_ids = (
+            list(dict.fromkeys(str(ref["record_id"]) for ref in refs))
+            if all(ref.get("record_id") for ref in refs) else None
+        )
         memory = self._editorial_memory(
             build_id,
             current_record=record,
@@ -692,6 +715,8 @@ class EditorialMemoryMixin:
             use_global=False,
             use_progressive=False,
             include_canonical=True,
+            field_filter=set(kept),
+            record_ids=selected_ids,
         )
         canonical = memory.get("canonical_exemplars") or {}
         out: dict[str, dict[str, Any]] = {}
@@ -709,10 +734,21 @@ class EditorialMemoryMixin:
             }
 
         fields_with_items = [field for field, payload in out.items() if payload["items"]]
+        if not include_candidates:
+            for field in fields_with_items:
+                for item in out[field]["items"]:
+                    item.pop("candidate_source_units", None)
+                out[field]["candidates_pending"] = True
+            return out
         if not fields_with_items:
             return out
         try:
-            blocks = self._blocks_for(build_id)
+            build = self.repo.get_build(build_id)
+            unit_ids = list(dict.fromkeys(map(str, record.get("source_unit_ids") or record.get("source_block_ids") or [])))
+            blocks = {
+                str(block["block_id"]): block
+                for block in self.repo.load_selected_blocks(str(build.get("asset_id") or ""), unit_ids)
+            }
         except (KeyError, OSError):
             blocks = {}
         if not blocks:
