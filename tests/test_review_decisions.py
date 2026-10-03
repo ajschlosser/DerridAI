@@ -30,6 +30,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 try:
     import chromadb  # type: ignore  # noqa: F401
 except ModuleNotFoundError:
@@ -40,6 +42,8 @@ sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
 from app import corpus_review_actions as review_actions
+
+pytestmark = pytest.mark.usefixtures("isolated_metadata_projection")
 
 
 def install_repo(tmp_path: Path, records: list[dict]):
@@ -83,6 +87,56 @@ def test_review_decision_is_atomic_and_returns_next(tmp_path: Path):
     assert result["next_record"]["record_id"] == "r2"
     assert result["build"]["accepted_count"] == 1
     assert result["build"]["publication_readiness"]["records_pending"] == 1
+
+
+def test_text_save_returns_its_committed_payload_and_operational_version(tmp_path, monkeypatch):
+    repo, build = install_repo(tmp_path, [rec("r1", "b1")])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build_id = build["build_id"]
+    try:
+        result = manager.patch_record_text(build_id, "r1", "Reviewed correction.", expected_revision=1)
+        stored = repo.get_record(build_id, "r1", include_queue_version=True)
+        assert result["queue_state_version"] == stored["queue_state_version"]
+        assert result["text"] == stored["text"] == "Reviewed correction."
+        assert result["record_revision"] == stored["record_revision"] == 2
+        assert "queue_state_version" not in repo.get_record(build_id, "r1")
+
+        def later_write(_build_id):
+            monkeypatch.setattr(repo, "_metadata_projection_callback", None)
+            current = repo.get_record(build_id, "r1")
+            current["operational_test_marker"] = "later completion"
+            repo.update_record(build_id, current)
+
+        monkeypatch.setattr(repo, "_metadata_projection_callback", later_write)
+        saved = repo.update_record(build_id, {**stored, "text": "Second correction."})
+        newer = repo.get_record(build_id, "r1", include_queue_version=True)
+        assert saved["text"] == newer["text"] == "Second correction."
+        assert saved["queue_state_version"] < newer["queue_state_version"]
+        assert "operational_test_marker" not in saved
+        assert newer["operational_test_marker"] == "later completion"
+        repo.refresh_records_projection(build_id)
+        assert "queue_state_version" not in json.loads(
+            repo.build_records_path(build_id).read_text().splitlines()[0]
+        )
+    finally:
+        manager._executor.shutdown(wait=True)
+
+
+@pytest.mark.parametrize("absent", [False, True])
+def test_metadata_decision_returns_current_operational_version(tmp_path, absent):
+    repo, build = install_repo(tmp_path, [rec("r1", "b1", blocked=True)])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    try:
+        result = manager.metadata_decision(
+            build["build_id"], "r1", "primary_text", True,
+            expected_revision=1, confirm_no_supported_value=absent,
+        )
+        stored = repo.get_record(build["build_id"], "r1", include_queue_version=True)
+        assert result["record"]["queue_state_version"] == stored["queue_state_version"]
+        assert result["record"]["record_revision"] == stored["record_revision"]
+        assert result["record"]["primary_text"] == stored["primary_text"]
+    finally:
+        manager._executor.shutdown(wait=True)
 
 
 def test_set_disposition_persists_promoted_metadata_memory(tmp_path: Path, monkeypatch):

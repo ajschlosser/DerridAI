@@ -26,7 +26,8 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 - Continuation baseline: merged #455 at `6312cedc`, with merged #454 at workspace HEAD `c9377472`. Earlier checkpoint descriptions below retain their historical validation scope.
 - Integrated merged #427 at `c8e671cd` before the scheduling continuation; local performance and refresh changes reapplied without conflicts.
 - PR preparation integrated current `origin/master` through `78ea96ae`. Reviewer changes are committed at `d5c9543e`; the locale-export regression fix is committed separately at `905ddce1`.
-- Working scope: demand-gated reviewer work, bounded precedent resolution, shared reads, clean repository read transactions, explicit keyboard absence decisions, and validated text-only preparation readiness. Earlier metadata/structural and resumed-topology readiness, broader computational caching, live end-to-end contention measurements, and evaluated review assistance remain open.
+- Merged #464 delivers the demand-gated reviewer and fresh-topology text-readiness work described below. The current follow-up extends text-only readiness to revalidated existing topology on resume.
+- Working scope: demand-gated reviewer work, bounded precedent resolution, shared reads, clean repository read transactions, explicit keyboard absence decisions, and validated text-only preparation readiness. Earlier metadata/structural readiness, broader computational caching, live end-to-end contention measurements, and evaluated review assistance remain open.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
 ## Checkpoints
@@ -138,7 +139,7 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 
 ## Remaining implementation and acceptance gates
 
-- **Engineering still open:** earlier metadata/structural and existing-topology resume readiness; wider non-family dependency caching; cancellation of dispatched precedent server/provider work; per-build writer coordination; measured capacity reservation; and previewable/version-checked review assistance and auditable reversals. Text-only readiness, disclosure-local candidate demand, and obsolete client transport cancellation are narrower delivered increments, not completion of these broader gates.
+- **Engineering still open:** earlier metadata/structural readiness; wider non-family dependency caching; cancellation of dispatched precedent server/provider work; per-build writer coordination; measured capacity reservation; and previewable/version-checked review assistance and auditable reversals. Text-only readiness, including revalidated existing-topology resume, disclosure-local candidate demand, and obsolete client transport cancellation are narrower delivered increments, not completion of these broader gates.
 - **Measurement/evaluation inputs still needed:** representative authorized source material, reproducible local/hosted model configurations, held-out document-level reviewed judgments, independent high-severity quality assessment, and a human-review timing protocol. This checkout contains no real source-media fixtures for those studies. Synthetic timings and agent-operated browser checks cannot replace them.
 - **Unverified targets:** 50% first-reviewable reduction, 30–50% full-preparation reduction, 50% active human-review reduction, live one/two-build cold-open/save-tail bounds, and no increase in high-severity errors on held-out material. No learning/routing policy has been promoted or required analysis suppressed to claim those targets.
 
@@ -147,6 +148,28 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 1. Establish isolated real-source and end-to-end timing baselines, including browser/save tail latency, before claiming progress toward 50%.
 2. Extend exact reuse to other computational stages and refine consumed-dependency scopes. Record-local source lookup, bounded in-flight sharing, and materialized family checking are implemented below; real-source/cold-load/contention validation remains outstanding.
 3. Evaluate earlier readiness, scheduling, and review assistance separately from repository queue improvements.
+
+## Resume readiness and save reuse PR preparation
+
+- The two follow-up increments below are committed at `acbbe1c1`, after integrating `origin/master` through `86deeaf3`. Their earlier uncommitted-state notes describe the implementation checkpoints, not the current branch.
+- The first full preflight passed backend lint/types/syntax, 15 REST/GraphQL contracts, frontend lint/typechecks, selected frontend suites, and the production application build. Backend regression results were 2,184 passed, 21 skipped, and 16 failed.
+- Seven hook-test failures were caused by CRLF in the temporary Linux validation checkout; restoring the tracked LF content made those hook tests pass. The remaining scheduling/read-count failure classes also reproduced against current master.
+- With user approval, the review-decision, bulk-review, and enrichment-handoff suites now opt into a shared fixture that disables asynchronous exemplar scheduling before manager construction. Operation-specific scheduling spies and assertions remain intact; production scheduling and dedicated projection-worker coverage are unchanged. The affected suites plus incremental/exemplar projection coverage passed 134 cases with four opt-in benchmarks skipped; touched-test Ruff passed.
+- Production application and Storybook builds and all ten focused Chromium cases passed during implementation. Six text-readiness cases verify save reconciliation without a redundant full-Record request. Full preflight must pass again before publishing; no live latency gain, release readiness, or whole-plan completion is claimed.
+
+## Version-certified review-save reuse continuation (2026-10-03)
+
+- Targeted review writes return the committed normalized payload and `queue_state_version` captured inside its SQLite transaction. A later callback/write cannot relabel that older payload with a newer version. Metadata decisions that need no additional write read the payload/version in one coherent snapshot. Existing canonical encoders and publication exclusions keep the operational field out of scholarly storage and exports.
+- The frontend retains a server response's exact operational version, while optimistic edits deliberately clear cache certification. Reconciliation still reads queue membership/counts and compares revision/version; only an exact match avoids the second full-Record fetch. Changed versions (including same-revision enrichment), unversioned responses, and topology/reviewer/build invalidations retain current reads. No save-success assumption replaces a freshness check.
+- Validation: 96 frontend cases passed across review-record, domain, adjudication, and builder-characterization suites; application/SDK/test typechecks, touched ESLint, backend Ruff, and builder/review-action mypy passed. Production application and Storybook builds passed, followed by all ten focused Chromium review cases. The six light/dark text-save cases verify queue reconciliation without another full-Record request. Fixtures remain mocked, not live API/provider timing.
+- The final related backend run passed 114 cases with six opt-in benchmarks skipped and one failure in the existing evidence-edit exemplar-scheduling count assertion. The same selector on clean HEAD reproduced that failure and the confirmed-absence variant. An earlier changed-tree run also saw the disposition variant; that intermittent symptom was not reproduced by these clean-HEAD runs. No assertion was weakened or excluded. New save-version tests passed, including callback-induced later writes and canonical/JSONL exclusion. Full-preflight and live save-tail acceptance remain unclaimed.
+- Changes remain uncommitted and unpushed. This increment removes a demonstrated redundant read; it does not establish a percentage improvement, per-build writer decomposition, or whole-plan completion.
+
+## Existing-topology resume text readiness continuation (2026-10-03)
+
+- Resume clears the previous text-readiness milestone, then checks current canonical Records against the current source scope before optional Document Intelligence. Valid coverage exposes the existing text-only controls; missing, overlapping, reordered, unknown-source, or empty coverage retains the lock and a current topology report. This conservative check does not certify overlapping source-unit bindings created by finer human splits.
+- Existing reviewed text, revision identity, and topology remain authoritative. Resume neither reconstructs those Records nor repeats automatic cleanup. Text edits during resumed preparation preserve the running stage and survive the subsequent optional-stage merge; metadata and structural decisions remain locked.
+- Validation: 76 backend cases passed across resilience, document-prefill, and review-queue suites; nine opt-in benchmark cases skipped. Touched Python Ruff and builder mypy passed in a disposable Linux container using the existing API image. No frontend behavior or transport contract changed; browser, live-source/model, contention, and human-review measurements were not run. No latency improvement or whole-plan completion is claimed. Changes are uncommitted and unpushed.
 
 ## Text readiness and explicit absence continuation (2026-10-03)
 

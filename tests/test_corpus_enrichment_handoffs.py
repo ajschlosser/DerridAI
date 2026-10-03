@@ -37,12 +37,12 @@ from app.metadata_schema import default_schema
 from test_enrichment_cycles import make_manager, proposal
 from test_review_queues import install_repo, ready_record
 
+pytestmark = pytest.mark.usefixtures("isolated_metadata_projection")
+
 
 @pytest.fixture
-def prepared(tmp_path, monkeypatch):
+def prepared(tmp_path):
     repo, build = install_repo(tmp_path, [ready_record("r1", "b1"), ready_record("r2", "b2")])
-    # Isolate canonical handoffs from asynchronous vector-provider retries.
-    monkeypatch.setattr(cb.PdfCorpusBuildManager, "_schedule_metadata_exemplar_projection", lambda *args: None)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     yield repo, build["build_id"], manager
     manager._executor.shutdown(wait=True)

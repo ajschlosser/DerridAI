@@ -29,6 +29,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 try:
     import chromadb  # type: ignore  # noqa: F401
 except ModuleNotFoundError:
@@ -39,6 +41,8 @@ sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app import corpus_review_actions as review_actions
 from app.config import APP_VERSION
+
+pytestmark = pytest.mark.usefixtures("isolated_metadata_projection")
 
 
 def install(tmp_path:Path):
@@ -121,7 +125,6 @@ def test_bulk_accept_persists_promoted_metadata_memory(tmp_path:Path, monkeypatc
         ('r2','discourse_role','analysis'),
     ]
     assert scheduled==[build['build_id']]
-
 
 
 

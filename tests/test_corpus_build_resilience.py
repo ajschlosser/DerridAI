@@ -577,6 +577,29 @@ def test_resume_executes_saved_topology_and_preserves_reviewed_text(monkeypatch,
     repo.save_build(saved)
     first._executor.shutdown(wait=True)
     restarted = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    resumed_text_edits = []
+    run_document_intelligence = restarted._run_document_intelligence
+
+    def review_during_resumed_preparation(build_id, current_records, manifest, current_request):
+        snapshot = repo.get_build(build_id)
+        assert snapshot["stage"] == "document_intelligence"
+        assert snapshot["text_review_available_at"]
+        assert snapshot["topology_validation"]["valid"] is True
+        target = repo.get_record(build_id, records[0]["record_id"])
+        assert target["text"] == records[0]["text"]
+        assert target["record_revision"] == 7
+        resumed_text_edits.append(restarted.patch_record_text(
+            build_id, target["record_id"], "Another human correction during resumed preparation.",
+            expected_revision=7,
+        ))
+        assert repo.get_build(build_id)["stage"] == "document_intelligence"
+        with pytest.raises(ValueError, match="not editable"):
+            restarted.patch_metadata(build_id, target["record_id"], {"primary_text": True})
+        with pytest.raises(ValueError, match="not editable"):
+            restarted._assert_human_review_available(build_id, structural=True, text_only=True)
+        return run_document_intelligence(build_id, current_records, manifest, current_request)
+
+    monkeypatch.setattr(restarted, "_run_document_intelligence", review_during_resumed_preparation)
     submitted = []
     submit = restarted._executor.submit
     def capture(*args, **kwargs):
@@ -588,10 +611,58 @@ def test_resume_executes_saved_topology_and_preserves_reviewed_text(monkeypatch,
     submitted[0].result(timeout=30)
     final = repo.get_build(build["build_id"])
     assert final["status"] == "awaiting_review", final.get("error")
-    assert repo.get_record(build["build_id"], records[0]["record_id"])["text"] == records[0]["text"]
-    assert repo.get_record(build["build_id"], records[0]["record_id"])["record_revision"] == 7
+    assert len(resumed_text_edits) == 1
+    assert repo.get_record(build["build_id"], records[0]["record_id"])["text"] == resumed_text_edits[0]["text"]
+    assert repo.get_record(build["build_id"], records[0]["record_id"])["record_revision"] >= resumed_text_edits[0]["record_revision"]
     assert final["request"]["topology_policy"] == request["topology_policy"]
     restarted._executor.shutdown(wait=True)
+
+
+@pytest.mark.parametrize("damage", ["gap", "overlap", "order", "unknown_source", "empty_text"])
+def test_resume_rechecks_topology_before_exposing_text_review(monkeypatch, tmp_path, damage):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    blocks = _blocks(3)
+    _install_asset(repo, blocks)
+    build = _build(repo, blocks=3)
+    records = cb._construct_records(repo.get_asset(build["asset_id"]), blocks, [
+        {"after_block_id": block["block_id"], "decision": "split"} for block in blocks[:-1]
+    ])
+    if damage == "gap":
+        records.pop()
+    elif damage == "overlap":
+        records[1]["source_block_ids"] = records[0]["source_block_ids"]
+    elif damage == "order":
+        records.reverse()
+    elif damage == "unknown_source":
+        records[0]["source_block_ids"].append("missing-source-unit")
+    else:
+        records[0]["text"] = ""
+    repo.save_records(build["build_id"], records)
+    build.update(topology_validation={"valid": True}, text_review_available_at="2026-10-03T00:00:00Z")
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    inspected = []
+
+    def inspect_preparation(build_id, *args):
+        snapshot = repo.get_build(build_id)
+        inspected.append(snapshot)
+        assert snapshot["text_review_available_at"] is None
+        assert snapshot["topology_validation"]["valid"] is False
+        with pytest.raises(ValueError, match="not editable"):
+            manager._assert_human_review_available(build_id, text_only=True)
+        raise RuntimeError("Stop after checking resumed readiness")
+
+    monkeypatch.setattr(manager, "_run_document_intelligence", inspect_preparation)
+    try:
+        manager._run(build["build_id"], {
+            "topology_policy": {"mode": "source_units", "source_units_per_record": 1},
+            "document_intelligence_profile": "none", "memory_prefill": False,
+        }, resume=True)
+        assert len(inspected) == 1
+        assert "Stop after checking resumed readiness" in repo.get_build(build["build_id"])["error"]
+        assert repo.load_records(build["build_id"]) == records
+    finally:
+        manager._executor.shutdown(wait=True)
 
 
 def test_topology_is_durable_before_optional_embedding_work(monkeypatch, tmp_path):

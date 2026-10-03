@@ -33,6 +33,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 _repo_root = Path(__file__).resolve().parents[1]
 _api_root = str(_repo_root / "api")
 if _api_root not in sys.path:
@@ -62,6 +64,15 @@ for _name, _value in _storage.items():
 # network by default; a test exercising the LLM stage stubs `_chat_json` and opts back in via
 # the request's own `evidence_cascade_llm_enabled` flag.
 os.environ.setdefault("METADATA_EVIDENCE_CASCADE_LLM_ENABLED", "false")
+
+@pytest.fixture
+def isolated_metadata_projection(monkeypatch):
+    """Keep canonical-operation assertions independent of derived-index workers."""
+    from app.corpus_builder import PdfCorpusBuildManager
+
+    monkeypatch.setattr(
+        PdfCorpusBuildManager, "_schedule_metadata_exemplar_projection", lambda *args: None,
+    )
 
 def pytest_report_header() -> str:
     """Expose the isolated storage root in verbose local runs."""
