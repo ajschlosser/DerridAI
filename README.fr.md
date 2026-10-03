@@ -20,13 +20,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ![Logo DerridAI](https://repository-images.githubusercontent.com/1336867942/1ef2d928-ee57-480e-addb-5caf6acc1754)
 
-[English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [العربية](README.ar.md)
+[English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [বাংলা](README.bn.md) · [العربية](README.ar.md) · [简体中文](README.zh-CN.md)
 
 DerridAI est un environnement de recherche axé sur l’exécution locale et la préservation de la provenance, conçu pour créer, réviser, rechercher et interroger des corpus savants. Il réunit l’ingestion de sources, la construction de corpus avec validation humaine, l’enrichissement de métadonnées lié aux preuves, des index de recherche/vectoriels dérivés et une génération augmentée par récupération (RAG) fondée sur les preuves dans une seule application Docker.
 
 DerridAI est aussi l’implémentation de référence d’origine de **cELF 1.0 — Capta-Enriched Lexical Format**, une architecture d’information qui préserve la provenance pour la recherche documentaire assistée par IA. L’implémentation maintient séparément l’identité des sources, l’identité et les révisions des notices, les assertions de métadonnées, les preuves, les affirmations générées et leurs liens de support, plutôt que de les aplatir dans une base vectorielle opaque.
 
-Version actuelle : **0.81.0 — Fall River** ([notes de version](docs/notes/0.81.0.md)). Ce README décrit l’architecture actuelle de `master`, y compris les travaux postérieurs à Exeter déjà fusionnés dans le dépôt.
+Version actuelle : **0.81.0 — Fall River** ([notes de version](docs/notes/0.81.0.md)). La version de l’application n’a pas été incrémentée depuis Fall River ; ce README décrit la branche `master` actuelle, y compris les travaux postérieurs à 0.81.0 qui ne font pas partie de la version balisée.
+
+## État actuel de `master`
+
+La branche actuelle a beaucoup évolué depuis le tag 0.81.0 tout en conservant le numéro de version 0.81.0. Le résumé ci-dessous décrit le produit actuel, et non de nouvelles notes de version.
+
+- **Corpus Builder suit désormais un flux progressif Configuration → Construction → Révision → Publication.** Il prend en charge l’enrichissement concurrent borné, les choix explicites de topologie du corpus et de taille des Records, la reprise et la révision sensibles aux révisions, des files de révision persistantes et locales au Record, des sessions ciblées de correction des blocages de publication, des groupes de métadonnées répétables, l’affectation des locuteurs audio et la révision sûre du texte pendant une préparation vérifiée.
+- **Le traitement des métadonnées et des preuves sollicite moins le modèle tout en renforçant la sémantique.** Le routage déterministe et centré sur les candidats, l’identité sémantique et l’équivalence des valeurs, la cascade de preuves v2 validée par le support, la réparation/classification des sorties structurées et la réconciliation incrémentale de Metadata Memory réduisent la latence sans transformer la pertinence de recherche ou une sortie mal formée en preuve.
+- **Pipeline Studio modélise explicitement le calcul exécutable.** Finalités gérées par le serveur, familles de stratégies, effets savants, ports typés, câblage résolu, traces d’étapes, métriques d’échelle/complexité, paramètres de recherche réglables et comparaisons non persistantes couvrent davantage de chemins de Search, Research, preuve de révision, récupération, segmentation et enrichissement.
+- **Works peut publier des sites de recherche portables.** Les exports statiques combinent le SDK DerridAI et un runtime Vue dédié pour la navigation, les annotations, l’indexation sémantique dans le navigateur, les fournisseurs configurés par le lecteur et Research avec citations liées aux preuves, sans transformer l’export en état canonique du corpus.
+- **L’invalidation temps réel et le chargement progressif remplacent davantage de polling et de rafraîchissements qui vidaient l’écran.** Works, Record, Search, Research, Response Library, Languages, Relationships, Accounts/Roles, Metadata Memory et d’autres surfaces conservent le contenu utile, proposent des reprises locales et rejettent les réponses obsolètes.
+- **Le frontend poursuit le retrait du runtime historique.** Navigation gérée par le routeur, dialogues et notifications Vue, modules de domaine/état partagés, tranches Pinia et helpers extraits réduisent le couplage ; le code de compatibilité restant demeure isolé.
+- **cELF et l’infrastructure de développement ont été resserrés.** La spécification est indépendante du produit et orientée profils/provenance avec des localisateurs `EvidenceRef` généralisés ; des cartes d’architecture documentent les frontières critiques ; la sélection CI/pré-push, l’hygiène du dépôt et l’application des en-têtes de copyright ont été renforcées.
 
 ## Ce que fait DerridAI
 
