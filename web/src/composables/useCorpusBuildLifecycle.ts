@@ -1,3 +1,4 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
 import { computed, type Ref } from "vue";
 import type { CorpusBuild } from "../api/pdfCorpus";
 import type { ReviewQueue } from "../types/corpus";
@@ -35,6 +36,7 @@ export function useCorpusBuildLifecycle(
     "enriching",
     "metadata_retry",
     "metadata_enrichment_rerun",
+    "finalizing_review",
   ]);
   const reviewLocked = computed(() =>
     Boolean(
@@ -44,9 +46,13 @@ export function useCorpusBuildLifecycle(
   const structuralReviewLocked = computed(
     () =>
       buildRunning.value &&
-      !["enriching", "metadata_retry", "metadata_enrichment_rerun", "review"].includes(
-        String(currentBuild.value?.stage || ""),
-      ),
+      ![
+        "enriching",
+        "metadata_retry",
+        "metadata_enrichment_rerun",
+        "finalizing_review",
+        "review",
+      ].includes(String(currentBuild.value?.stage || "")),
   );
   const canResume = computed(() =>
     Boolean(

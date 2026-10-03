@@ -26,7 +26,7 @@ import uuid
 from collections import Counter
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -2056,13 +2056,25 @@ class PdfCorpusRepository:
 
     def reconcile_records(
         self, build_id: str, reconcile: Callable[[list[dict[str, Any]]], None], *,
-        record_ids: list[str] | None = None,
+        record_ids: list[str] | None = None, optimistic: bool = False,
+        coordination_lock: AbstractContextManager[Any] | None = None,
+        is_current: Callable[[], bool] | None = None,
+        on_commit: Callable[[], None] | None = None,
     ) -> list[dict[str, Any]]:
-        """Apply a deterministic reconciliation to current rows in one writer transaction.
+        """Reconcile current rows, atomically committing only changed payloads.
 
-        The callback must not call a provider or write other durable state. Full-scope
-        validation still reads all Records, but only changed rows are persisted.
+        The callback must not call a provider or write other durable state. Optimistic
+        callbacks run outside locks and may be retried. An optional reusable
+        coordination lock guards capture/commit, including a current-state check
+        and post-commit handoff; it is always acquired before the repository lock.
         """
+        if optimistic:
+            return self._reconcile_records_optimistic(
+                build_id, reconcile, record_ids=record_ids, coordination_lock=coordination_lock,
+                is_current=is_current, on_commit=on_commit,
+            )
+        if coordination_lock is not None or is_current is not None or on_commit is not None:
+            raise ValueError("Coordination hooks require optimistic reconciliation.")
         schema = self._record_schema(build_id)
         signature = self._schema_signature(schema)
         changed: list[tuple[int, dict[str, Any], str]] = []
@@ -2092,16 +2104,7 @@ class PdfCorpusRepository:
                     if record != original:
                         migrated, payload = self._encode_migrated(record, schema, signature)
                         changed.append((int(row[1]), migrated, payload))
-                if changed:
-                    self._set_records_projection_state(build_id, dirty=True)
-                    connection.executemany(
-                        "UPDATE corpus_records SET payload=? WHERE record_id=?",
-                        [(payload, str(record["record_id"])) for _ordinal, record, payload in changed],
-                    )
-                    corpus_document_context.ensure(connection)
-                    corpus_queue_projection.update_rows(
-                        connection, [(ordinal, record) for ordinal, record, _payload in changed],
-                    )
+                self._write_reconciled_rows(connection, build_id, changed)
                 connection.commit()
             if changed:
                 self._invalidate_review_records_cache(build_id)
@@ -2110,6 +2113,90 @@ class PdfCorpusRepository:
             system_store.mark_semantic_map_dirty(build_id, reason="records_reconciled")
             self._notify_metadata_projection(build_id)
         return records
+
+    def _write_reconciled_rows(
+        self, connection: sqlite3.Connection, build_id: str,
+        changed: list[tuple[int, dict[str, Any], str]],
+    ) -> None:
+        if not changed:
+            return
+        self._set_records_projection_state(build_id, dirty=True)
+        connection.executemany(
+            "UPDATE corpus_records SET payload=? WHERE record_id=?",
+            [(payload, str(record["record_id"])) for _ordinal, record, payload in changed],
+        )
+        corpus_document_context.ensure(connection)
+        corpus_queue_projection.update_rows(
+            connection, [(ordinal, record) for ordinal, record, _payload in changed],
+        )
+
+    def _reconcile_records_optimistic(
+        self, build_id: str, reconcile: Callable[[list[dict[str, Any]]], None], *,
+        record_ids: list[str] | None,
+        coordination_lock: AbstractContextManager[Any] | None,
+        is_current: Callable[[], bool] | None,
+        on_commit: Callable[[], None] | None,
+    ) -> list[dict[str, Any]]:
+        guard = coordination_lock if coordination_lock is not None else nullcontext()
+        with guard, self._lock:
+            self._bootstrap_records_db(build_id)
+        for _attempt in range(3):
+            with self._records_db(build_id) as connection:
+                with guard, self._lock:
+                    connection.execute("BEGIN IMMEDIATE")
+                    self._ensure_review_projection(connection, build_id)
+                    schema = self._record_schema(build_id)
+                    signature = self._schema_signature(schema)
+                    # data_version is comparable only on this same open connection.
+                    # It detects external commits even if projection counters reset.
+                    version = connection.execute("PRAGMA data_version").fetchone()[0]
+                    if record_ids is None:
+                        rows = connection.execute(
+                            "SELECT record_id, ordinal, payload FROM corpus_records ORDER BY ordinal"
+                        ).fetchall()
+                    else:
+                        rows = [
+                            row for record_id in dict.fromkeys(record_ids)
+                            if (row := connection.execute(
+                                "SELECT record_id, ordinal, payload FROM corpus_records WHERE record_id=?",
+                                (record_id,),
+                            ).fetchone()) is not None
+                        ]
+                    connection.commit()
+                records = [self._decode_migrated(str(row[2]), schema, signature) for row in rows]
+                before = json.loads(json.dumps(records))
+                reconcile(records)
+                if [record.get("record_id") for record in records] != [row[0] for row in rows]:
+                    raise ValueError("Reconciliation cannot change Record identities or topology.")
+                changed = []
+                for row, original, record in zip(rows, before, records):
+                    if record != original:
+                        migrated, payload = self._encode_migrated(record, schema, signature)
+                        changed.append((int(row[1]), migrated, payload))
+                with guard:
+                    with self._lock:
+                        connection.execute("BEGIN IMMEDIATE")
+                        if (
+                            connection.execute("PRAGMA data_version").fetchone()[0] != version
+                            or self._record_schema(build_id) != schema
+                            or (is_current is not None and not is_current())
+                        ):
+                            connection.rollback()
+                            continue
+                        self._write_reconciled_rows(connection, build_id, changed)
+                        connection.commit()
+                        if changed:
+                            self._invalidate_review_records_cache(build_id)
+                    try:
+                        if on_commit is not None:
+                            on_commit()
+                    finally:
+                        if changed:
+                            note_resource_changed("corpus_records")
+                            system_store.mark_semantic_map_dirty(build_id, reason="records_reconciled")
+                            self._notify_metadata_projection(build_id)
+            return records
+        raise RecordStateConflict("Records changed during validation; retry against the current corpus.")
 
     def document_context(
         self, build_id: str, records: list[dict[str, Any]] | None = None,
@@ -4625,45 +4712,40 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
 
     def _finalize_build_review(self, build_id: str, scope: BuildScope, records: list[dict[str, Any]]) -> None:
         """Revalidate settled records and publish the authoritative handoff to review."""
-        build, source_blocks = scope.build, scope.source_blocks
         # All automatic workers have now settled. Recompute the authoritative
         # record/metadata queues once before handing control to human review so
         # the first review screen is already internally consistent.
         self._reconcile_and_validate(build_id)
-        records = self.repo.load_records(build_id)
-        profile = self._profile_of_build(build)
-        validation = self.validate_records(source_blocks, records, profile)
-        needs_review = sum(1 for record in records if record.get("needs_review"))
-        boundary_review_count = len(self.repo.get_build(build_id).get("segmentation_boundary_reviews") or [])
-        # Construction is complete, but the corpus lifecycle is not complete
-        # until review/acceptance and publication finish. Keep a clear 90%
-        # handoff into human review instead of declaring 100% prematurely.
-        status = "awaiting_review"
-        current = self.repo.get_build(build_id)
-        existing_op = current.get("metadata_operation") if isinstance(current.get("metadata_operation"), dict) else {}
-        if str(existing_op.get("state") or "") in {"queued", "running"}:
-            operation = existing_op
-        else:
-            operation = _initial_enrichment_operation(
-                build_id, records, started_at=str(current.get("metadata_started_at") or "") or None,
+        with self._lock:
+            if self._cancelled(build_id):
+                raise InterruptedError("Corpus build cancelled")
+            current = self.repo.get_build(build_id)
+            records = self.repo.load_records(build_id)
+            existing_op = current.get("metadata_operation") if isinstance(current.get("metadata_operation"), dict) else {}
+            if str(existing_op.get("state") or "") in {"queued", "running"}:
+                operation = existing_op
+            else:
+                operation = _initial_enrichment_operation(
+                    build_id, records, started_at=str(current.get("metadata_started_at") or "") or None,
+                )
+            # Keep the coherent validation already saved, including any later
+            # targeted human edit; the worker's BuildScope is not current truth.
+            self._update(
+                build_id,
+                status="awaiting_review",
+                stage="review",
+                progress=0.90,
+                finished_at=iso_now(),
+                record_count=len(records),
+                needs_review_count=sum(1 for record in records if record.get("needs_review")),
+                boundary_review_count=len(current.get("segmentation_boundary_reviews") or []),
+                accepted_count=sum(1 for record in records if record.get("accepted")),
+                rejected_count=sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected"),
+                source_problem_count=sum(1 for record in records if record.get("source_quality_issues")),
+                resumable=False,
+                retrying_segmentation=False,
+                metadata_operation=operation,
             )
-        self._update(
-            build_id,
-            status=status,
-            stage="review",
-            progress=0.90,
-            finished_at=iso_now(),
-            record_count=len(records),
-            needs_review_count=needs_review,
-            boundary_review_count=boundary_review_count,
-            accepted_count=sum(1 for record in records if record.get("accepted")),
-            rejected_count=sum(1 for record in records if str(record.get("review_disposition") or "") == "rejected"),
-            source_problem_count=sum(1 for record in records if record.get("source_quality_issues")),
-            validation=validation,
-            resumable=False,
-            retrying_segmentation=False,
-            metadata_operation=operation,
-        )
 
 
     def _rewrite_and_validate(
@@ -4682,14 +4764,25 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
 
     def _reconcile_and_validate(self, build_id: str) -> dict[str, Any]:
         """Validate current topology without restoring a settled worker snapshot."""
-        with self._lock:
-            build = self.repo.get_build(build_id)
-            self.repo.reconcile_records(
-                build_id, lambda records: self._validate_record_states(build, records),
-            )
+        base: dict[str, Any] = {}
+        build: dict[str, Any] = {}
+
+        def validate_current(records: list[dict[str, Any]]) -> None:
+            nonlocal base, build
+            with self._lock:
+                base = self.repo.get_build(build_id)
+            build = json.loads(json.dumps(base))
+            self._validate_record_states(build, records)
+
+        def committed() -> None:
             build["records_projection"] = self.repo.get_build(build_id).get("records_projection")
             self.repo.save_build(build)
-            return build
+
+        self.repo.reconcile_records(
+            build_id, validate_current, optimistic=True, coordination_lock=self._lock,
+            is_current=lambda: self.repo.get_build(build_id) == base, on_commit=committed,
+        )
+        return build
 
     def _validate_record_states(self, build: dict[str, Any], records: list[dict[str, Any]]) -> None:
         """Derive validation and review state without performing durable writes."""

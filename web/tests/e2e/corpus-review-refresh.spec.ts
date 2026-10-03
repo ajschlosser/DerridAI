@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { expect, test } from "@playwright/test";
+import { runAxe } from "./support/axe";
 import { CORPUS_BUILD, CORPUS_BUILD_ID, CORPUS_RECORDS, mockBackend } from "./support/mock-backend";
 
 const APP = `http://127.0.0.1:${process.env.APP_PORT || "5199"}`;
@@ -117,3 +118,77 @@ test("background completion retains the reader, active inspector and a later dra
   await expect(editor).toBeFocused();
   await expect(page.locator("#review-tab-evidence")).toHaveAttribute("aria-selected", "true");
 });
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test(`final validation keeps reviewed-text editing and saving available (${colorScheme})`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    const original = CORPUS_RECORDS.find((record) => record.review_state === "metadata")!;
+    let record = { ...original };
+    let savedText = "";
+    await mockBackend(page, {
+      fixtures: {
+        [`/api/pdf/corpus-builds/${CORPUS_BUILD_ID}`]: {
+          ...CORPUS_BUILD,
+          status: "running",
+          stage: "finalizing_review",
+          record_count: 1,
+          metadata_total: 1,
+        },
+        [`/api/pdf/corpus-builds/${CORPUS_BUILD_ID}/records`]: () => ({
+          items: [record],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        }),
+      },
+    });
+    await page.route(
+      (url) =>
+        url.pathname ===
+        `/api/pdf/corpus-builds/${CORPUS_BUILD_ID}/records/${original.record_id}/text`,
+      async (route) => {
+        const payload = route.request().postDataJSON() as {
+          text: string;
+          expected_revision: number;
+        };
+        expect(route.request().method()).toBe("PATCH");
+        expect(payload.expected_revision).toBe(Number(original.record_revision || 1));
+        savedText = payload.text;
+        record = {
+          ...record,
+          text: savedText,
+          text_length: savedText.length,
+          record_revision: payload.expected_revision + 1,
+        };
+        await route.fulfill({ json: record });
+      },
+    );
+    await page.goto(`${APP}/pdf?workspace=review&build=${CORPUS_BUILD_ID}`);
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", colorScheme);
+    const reader = page.locator(".record-primary-text");
+    await expect(reader).toContainText(original.text);
+    const edit = page.getByRole("button", { name: "Edit text", exact: true });
+    await expect(edit).toBeEnabled();
+    await edit.focus();
+    await edit.press("Enter");
+    const editor = page.locator(".record-review-pane textarea");
+    await expect(editor).toBeVisible();
+    await editor.fill("A reviewed correction saved during final validation.");
+    await expect(editor).toBeFocused();
+    const accessibility = await runAxe(page, (builder) =>
+      builder
+        .include(".record-review-pane")
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]),
+    );
+    expect(accessibility.violations, JSON.stringify(accessibility.violations, null, 2)).toEqual([]);
+    await page
+      .locator(".record-review-pane")
+      .getByRole("button", { name: "Save", exact: true })
+      .click();
+    await expect.poll(() => savedText).toBe("A reviewed correction saved during final validation.");
+    await expect(editor).toHaveCount(0);
+    await expect(reader).toContainText(savedText);
+  });
+}
