@@ -26,7 +26,12 @@ export type PipelineScholarlyEffect =
   | "evaluation";
 
 export type PipelineWorkflowCategory =
-  "research" | "evidence" | "search" | "metadata" | "memory" | "corpus";
+  | "research"
+  | "evidence"
+  | "search"
+  | "metadata"
+  | "memory"
+  | "corpus";
 
 /** How a registered strategy fits one purpose's runtime adapter. */
 export type PipelineStrategyFit = "supported" | "inspect_only" | "output_contract";
@@ -52,7 +57,13 @@ export type PipelineWorkflowVocabulary = {
 
 /** What flows between stages. A port declares one; the server refuses other wiring. */
 export type PipelineDataType =
-  "query" | "candidate_set" | "context_packet" | "model_output" | "evaluation" | "number" | "any";
+  | "query"
+  | "candidate_set"
+  | "context_packet"
+  | "model_output"
+  | "evaluation"
+  | "number"
+  | "any";
 
 export type PipelinePort = {
   name: string;
@@ -67,7 +78,11 @@ export type PipelinePort = {
 };
 
 export type PipelineCostDriver =
-  "cpu" | "storage" | "embedding" | "model_inference" | "llm_generation";
+  | "cpu"
+  | "storage"
+  | "embedding"
+  | "model_inference"
+  | "llm_generation";
 
 /** Declared algorithmic cost of a strategy, in the variables n, N, k, L, q, g, P, d, S. */
 export type PipelineComplexity = {
