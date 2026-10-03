@@ -16,6 +16,7 @@
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -70,17 +71,53 @@ def test_language_guess():
     assert dp.guess_language("short") == ""
 
 
-def test_nlp_places_the_place_of_publication_beside_the_publisher():
-    spacy = pytest.importorskip("spacy")
-    try:
-        spacy.load("en_core_web_sm", exclude=["parser", "lemmatizer"])
-    except Exception:
-        pytest.skip("English model not installed")
+def test_nlp_places_the_place_of_publication_beside_the_publisher(monkeypatch):
+    from app import nlp_annotations
+
+    def entity(text, label, start):
+        return SimpleNamespace(text=text, label_=label, start_char=start, end_char=start + len(text))
+
+    publisher_text = "The Johns Hopkins University Press"
+    entities = [
+        entity(publisher_text, "ORG", TITLE_PAGE.index(publisher_text)),
+        entity("Baltimore", "GPE", TITLE_PAGE.index("Baltimore")),
+        entity("London", "GPE", TITLE_PAGE.index("London")),
+        entity(publisher_text, "ORG", TITLE_PAGE.rindex(publisher_text)),
+    ]
+    monkeypatch.setattr(nlp_annotations, "load_pipeline", lambda language: lambda text: SimpleNamespace(ents=entities))
+    monkeypatch.setattr(nlp_annotations, "_model_name", lambda language: "test-model")
     found = by_field(dp.nlp_candidates(TITLE_PAGE, "English"))
     publisher = found["publisher"][0]
-    assert "Press" in publisher.value and publisher.derivation == "nlp_derived"
-    assert publisher.method.startswith("nlp:spacy:") and publisher.confidence < 0.8
-    assert found["publication_place"][0].value == "Baltimore"
+    assert publisher.value == publisher_text and publisher.derivation == "nlp_derived"
+    assert publisher.method == "nlp:spacy:test-model:org_publisher_word" and publisher.confidence < 0.8
+    places = found["publication_place"]
+    assert [place.value for place in places] == ["Baltimore", "London"]
+    assert places[0].confidence > places[1].confidence
+    for candidate in [publisher, *places]:
+        assert TITLE_PAGE[slice(*candidate.span)] == candidate.value
+
+
+def test_real_nlp_prefill_preserves_provider_spans_when_installed(monkeypatch):
+    from app import nlp_annotations
+
+    spacy = pytest.importorskip("spacy")
+    try:
+        pipeline = spacy.load(nlp_annotations.DEFAULT_MODELS["en"], exclude=["parser"])
+    except OSError:
+        pytest.skip("English model not installed")
+    monkeypatch.setattr(nlp_annotations, "load_pipeline", lambda language: pipeline)
+    doc = pipeline(TITLE_PAGE)
+    spans = {
+        "publisher": {(ent.start_char, ent.end_char) for ent in doc.ents if ent.label_ == "ORG"},
+        "publication_place": {(ent.start_char, ent.end_char) for ent in doc.ents if ent.label_ in {"GPE", "LOC"}},
+    }
+    found = by_field(dp.nlp_candidates(TITLE_PAGE, "English"))
+    assert found.keys() == spans.keys()
+    for field, candidates in found.items():
+        for candidate in candidates:
+            assert candidate.span in spans[field]
+            assert candidate.value == " ".join(TITLE_PAGE[slice(*candidate.span)].split())
+            assert candidate.derivation == "nlp_derived" and candidate.confidence < 0.8
 
 
 def test_extract_is_safe_when_models_are_missing(monkeypatch):
