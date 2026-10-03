@@ -68,6 +68,7 @@ FRONTEND_UI_PREFIXES = (
     "web/src/stores/",
     "web/src/composables/",
     "web/src/runtime/",
+    "web/src/styles/",
 )
 
 A11Y_FULL_PATHS = {
@@ -186,9 +187,14 @@ def build_plan(paths: list[str]) -> PreflightPlan:
                 if path.startswith("web/src/runtime/") or path == "web/src/App.vue":
                     plan.legacy = True
 
-        if path in A11Y_FULL_PATHS or path.startswith("web/src/components/ui/"):
+        if (
+            path in A11Y_FULL_PATHS
+            or path.startswith("web/src/components/ui/")
+            or path.startswith("web/src/styles/")
+        ):
             plan.a11y = plan.a11y_full = True
             plan.storybook = True
+            plan.e2e = True
 
         if path in {
             "README.md",
