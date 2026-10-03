@@ -353,7 +353,7 @@ describe("sidebar at sign-in", () => {
     const crumbs = wrapper.find(".vue-breadcrumb-path");
     expect(crumbs.text()).toContain("System");
     expect(crumbs.text()).toContain("Settings");
-    expect(crumbs.text()).toContain("Workspace");
+    expect(crumbs.text()).toContain("Preferences");
     expect(crumbs.findAll("a").map((link) => link.text())).toEqual(["DerridAI", "System"]);
   });
 
