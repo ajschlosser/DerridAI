@@ -301,12 +301,12 @@ describe("the schema editor", () => {
   });
 
   it("keeps every built-in profile read-only", async () => {
-    const w = await mountEditor();
-    const fiction = w
-      .findAll("button.schema-name")
-      .find((item) => item.text().includes("Fiction"))!;
-    await fiction.trigger("click");
+    const w = mount(MetadataSchemaEditor, {
+      props: { initialSchemaId: "derridai-fiction" },
+      attachTo: document.body,
+    });
     await flushPromises();
+    expect(metadataSchemasApi.get).toHaveBeenCalledWith("derridai-fiction");
     expect(button(w, "Save schema").attributes("disabled")).toBeDefined();
     expect(button(w, "Delete").attributes("disabled")).toBeDefined();
     expect(w.get("fieldset").attributes("disabled")).toBeDefined();
