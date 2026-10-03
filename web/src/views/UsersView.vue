@@ -35,24 +35,33 @@ const auth = useAuthStore();
 const router = useRouter();
 const i18n = useI18nStore();
 // Server state lives in the query cache; realtime invalidation refreshes it (no manual reload).
-const usersQuery = useDataQuery("users", () => authApi.listUsers());
-const rolesQuery = useDataQuery("roles", () => authApi.listRoles());
-const users = computed<AuthUser[]>(() => usersQuery.data.value?.users ?? []);
-const roles = computed<RoleDefinition[]>(() => rolesQuery.data.value?.roles ?? []);
-const loading = computed(() => usersQuery.isPending.value || rolesQuery.isPending.value);
+const scope = computed(() => [auth.user?.id ?? "anonymous", auth.user?.role ?? ""]);
+const usersQuery = useDataQuery("users", () => authApi.listUsers(), { detail: scope });
+const rolesQuery = useDataQuery("roles", () => authApi.listRoles(), { detail: scope });
+function denied(exc: unknown) {
+  return Boolean(
+    exc && typeof exc === "object" && "status" in exc && [401, 403].includes(Number(exc.status)),
+  );
+}
+const accessDenied = computed(
+  () => denied(usersQuery.error.value) || denied(rolesQuery.error.value),
+);
+const users = computed<AuthUser[]>(() =>
+  accessDenied.value ? [] : (usersQuery.data.value?.users ?? []),
+);
+const roles = computed<RoleDefinition[]>(() =>
+  accessDenied.value ? [] : (rolesQuery.data.value?.roles ?? []),
+);
+const usersLoaded = computed(() => !accessDenied.value && usersQuery.data.value !== undefined);
 const dataCurrent = computed(() => usersQuery.isSuccess.value && rolesQuery.isSuccess.value);
 const actionError = ref("");
-const error = computed(
-  () =>
-    actionError.value ||
-    (usersQuery.error.value || rolesQuery.error.value
-      ? localizedAuthError(usersQuery.error.value || rolesQuery.error.value, (key, fallback) =>
-          i18n.t(key, fallback),
-        )
-      : ""),
-);
+function readError(exc: unknown) {
+  return exc ? localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback)) : "";
+}
+const usersError = computed(() => readError(usersQuery.error.value));
+const rolesError = computed(() => readError(rolesQuery.error.value));
 function setUsers(update: (current: AuthUser[]) => AuthUser[]) {
-  queryClient.setQueryData(dataKey("users"), { users: update(users.value) });
+  queryClient.setQueryData(dataKey("users", ...scope.value), { users: update(users.value) });
 }
 const username = ref("");
 const password = ref("");
@@ -64,9 +73,18 @@ const dialogUser = ref<AuthUser | null>(null);
 const newPassword = ref("");
 const dialogBusy = ref(false);
 
-function refresh() {
-  void Promise.all([usersQuery.refetch(), rolesQuery.refetch()]);
-}
+watch(
+  () => scope.value.join(":"),
+  () => {
+    dialogRef.value?.close();
+    dialogUser.value = null;
+    username.value = "";
+    password.value = "";
+    newPassword.value = "";
+    actionError.value = "";
+  },
+);
+
 watch(
   roles,
   (list) => {
@@ -177,8 +195,8 @@ function openRoles() {
       :title="i18n.t('users.title')"
       :description="i18n.t('users.description')"
     />
-    <div v-if="error" class="info error" role="alert">{{ error }}</div>
-    <section class="card user-create-card" :aria-busy="!dataCurrent">
+    <div v-if="actionError" class="info error" role="alert">{{ actionError }}</div>
+    <section class="card user-create-card" :aria-busy="rolesQuery.isFetching.value">
       <div class="cardhead">
         <div>
           <b>{{ i18n.t("users.create") }}</b>
@@ -186,6 +204,22 @@ function openRoles() {
             {{ i18n.t("users.create_help") }}
           </div>
         </div>
+      </div>
+      <UiLoadingState
+        v-if="rolesQuery.isFetching.value"
+        :label="i18n.t(rolesQuery.data.value ? 'loading.updating' : 'roles.loading')"
+      />
+      <div v-if="rolesError" class="info error users-role-error" role="alert">
+        <p v-if="roles.length">{{ i18n.t("loading.stale") }}</p>
+        <p>{{ rolesError }}</p>
+        <button
+          class="btn"
+          type="button"
+          :disabled="rolesQuery.isFetching.value"
+          @click="rolesQuery.refetch()"
+        >
+          {{ i18n.t("ui.retry") }}
+        </button>
       </div>
       <form class="user-create-grid" @submit.prevent="createUser">
         <div class="field">
@@ -235,11 +269,11 @@ function openRoles() {
         </button>
       </form>
     </section>
-    <section class="card users-table-card">
+    <section class="card users-table-card" :aria-busy="usersQuery.isFetching.value">
       <div class="cardhead">
         <div>
           <b id="users-accounts-title">{{ i18n.t("users.accounts") }}</b>
-          <div class="note">
+          <div v-if="usersLoaded" class="note">
             {{
               i18n.tf(
                 users.length === 1
@@ -252,20 +286,36 @@ function openRoles() {
           </div>
         </div>
       </div>
-      <div v-if="loading && !dataCurrent" class="users-loading">
+      <UiLoadingState
+        v-if="usersLoaded && usersQuery.isFetching.value"
+        :label="i18n.t('loading.updating')"
+      />
+      <div v-if="usersError && usersLoaded" class="info error" role="alert">
+        <p>{{ i18n.t("loading.stale") }}</p>
+        <p>{{ usersError }}</p>
+        <button
+          class="btn"
+          type="button"
+          :disabled="usersQuery.isFetching.value"
+          @click="usersQuery.refetch()"
+        >
+          {{ i18n.t("ui.retry") }}
+        </button>
+      </div>
+      <div v-if="usersQuery.isPending.value && !usersLoaded" class="users-loading">
         <UiLoadingState :label="i18n.t('users.loading')" />
       </div>
       <AccessibleEmptyState
-        v-else-if="error && !users.length"
+        v-else-if="(usersError || rolesError) && !usersLoaded"
         icon="users"
         icon-tone="neutral"
         :title="i18n.t('users.title')"
-        :description="error"
+        :description="usersError || rolesError"
         :action-label="i18n.t('ui.retry')"
-        @action="refresh"
+        @action="usersError ? usersQuery.refetch() : rolesQuery.refetch()"
       />
       <AccessibleEmptyState
-        v-else-if="!users.length && !error"
+        v-else-if="usersLoaded && !users.length"
         icon="users"
         icon-tone="neutral"
         :title="i18n.t('users.empty_title')"

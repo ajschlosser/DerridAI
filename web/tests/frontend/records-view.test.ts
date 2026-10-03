@@ -184,6 +184,65 @@ describe("RecordsView", () => {
     useShellStore().snapshot.files = snap.files as never;
   });
 
+  it("shows placeholders without an empty-workspace claim during initial hydration", async () => {
+    let release!: () => void;
+    runtime.ensureCorpusWorkspaceLoaded.mockReturnValueOnce(
+      new Promise<undefined>((resolve) => {
+        release = () => resolve(undefined);
+      }),
+    );
+    runtime.getRecordsListSnapshot.mockReturnValue({
+      ...baseSnapshot(),
+      files: [],
+      file: null,
+      rows: [],
+      total: 0,
+    });
+    const wrapper = await mountRecords();
+    expect(wrapper.find("#records-page-title").exists()).toBe(true);
+    expect(wrapper.find(".records-hydration .is-skeleton").exists()).toBe(true);
+    expect(wrapper.find(".records-stats").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Open a workspace");
+    release();
+    await flushPromises();
+    wrapper.unmount();
+  });
+
+  it("shows hydration failure and retries without claiming an empty workspace", async () => {
+    runtime.getRecordsListSnapshot.mockReturnValue({
+      ...baseSnapshot(),
+      files: [],
+      file: null,
+      rows: [],
+    });
+    runtime.ensureCorpusWorkspaceLoaded.mockRejectedValueOnce(new Error("Corpus unavailable"));
+    const wrapper = await mountRecords();
+    expect(wrapper.find(".records-hydration-error").text()).toContain("Corpus unavailable");
+    runtime.getRecordsListSnapshot.mockReturnValue(baseSnapshot());
+    await wrapper.find(".records-hydration-error button").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".records-hydration-error").exists()).toBe(false);
+    expect(wrapper.text()).toContain("différance");
+    wrapper.unmount();
+  });
+
+  it("retains loaded rows while activation is pending and when it fails", async () => {
+    let reject!: (error: Error) => void;
+    runtime.ensureCorpusWorkspaceLoaded.mockReturnValueOnce(
+      new Promise<undefined>((_, no) => {
+        reject = no;
+      }),
+    );
+    const wrapper = await mountRecords();
+    const table = wrapper.find("table").element;
+    expect(wrapper.find(".records-hydration .is-inline").exists()).toBe(true);
+    reject(new Error("Unavailable"));
+    await flushPromises();
+    expect(wrapper.find("table").element).toBe(table);
+    expect(wrapper.find(".records-hydration-error").text()).toContain("Unavailable");
+    wrapper.unmount();
+  });
+
   it("renders the loaded table and opens a record from the row", async () => {
     const wrapper = await mountRecords();
     expect(wrapper.get("#records-page-title").text()).toContain("Records");

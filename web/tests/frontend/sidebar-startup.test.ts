@@ -44,6 +44,7 @@ const NAV = [
 
 const navigation = vi.hoisted(() => ({ navigateTo: vi.fn() }));
 vi.mock("../../src/domain/sharedNavigation", () => navigation);
+vi.mock("../../src/domain/jobsPause", () => ({ pauseRuntime: vi.fn() }));
 
 const runtime = vi.hoisted(() => ({
   getNavItems: vi.fn(),
@@ -52,7 +53,6 @@ const runtime = vi.hoisted(() => ({
   setUserContext: vi.fn(),
   setShellRefreshHook: vi.fn(),
   setUrlSyncHook: vi.fn(),
-  pauseRuntime: vi.fn(),
   syncFromLocation: vi.fn(),
   repaintAfterLocationChange: vi.fn(),
   viewForPath: vi.fn(),

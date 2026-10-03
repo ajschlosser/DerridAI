@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
+import UiLoadingState from "../ui/UiLoadingState.vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { ResponseFaqRecord } from "../../types/research";
@@ -30,6 +31,8 @@ const props = withDefaults(
     selectedId?: string;
     search?: string;
     loading?: boolean;
+    ready?: boolean;
+    error?: string;
     count?: number;
     total?: number;
     page?: number;
@@ -41,6 +44,8 @@ const props = withDefaults(
     selectedId: "",
     search: "",
     loading: false,
+    ready: true,
+    error: "",
     count: 0,
     total: 0,
     page: 1,
@@ -52,6 +57,7 @@ const emit = defineEmits<{
   select: [record: ResponseFaqRecord];
   search: [value: string];
   page: [delta: number];
+  retry: [];
 }>();
 const i18n = useI18nStore();
 const dialog = ref<HTMLDialogElement | null>(null);
@@ -134,7 +140,7 @@ function choose(record: ResponseFaqRecord) {
           <strong>{{ i18n.t("faq.questions_label") }}</strong
           ><span>{{ i18n.t("faq.questions_help") }}</span>
         </div>
-        <div class="response-archive-count" aria-live="polite">
+        <div v-if="ready" class="response-archive-count">
           <strong>{{ (search ? count : total).toLocaleString(i18n.locale) }}</strong
           ><span>{{
             search ? i18n.t("faq.question_matches") : i18n.t("faq.saved_questions")
@@ -142,9 +148,20 @@ function choose(record: ResponseFaqRecord) {
         </div>
       </div>
 
-      <div class="response-archive-body">
+      <div class="response-archive-body" :aria-busy="loading">
+        <div v-if="error" class="response-archive-empty" role="alert">
+          <p>{{ i18n.tf(ready ? "faq.refresh_failed" : "faq.read_failed", { message: error }) }}</p>
+          <button type="button" :disabled="loading" @click="emit('retry')">
+            {{ i18n.t("ui.retry") }}
+          </button>
+        </div>
+        <UiLoadingState
+          v-else-if="loading"
+          :variant="ready ? 'inline' : 'skeleton'"
+          :label="i18n.t(ready ? 'loading.updating' : 'faq.loading')"
+        />
         <div
-          v-if="search && !records.length && !loading"
+          v-if="ready && search && !records.length && !loading && !error"
           class="response-archive-empty"
           role="status"
         >
@@ -156,7 +173,7 @@ function choose(record: ResponseFaqRecord) {
           </button>
         </div>
         <ResponseFaqList
-          v-else
+          v-else-if="ready"
           :records="records"
           :selected-id="selectedId"
           :search="search"

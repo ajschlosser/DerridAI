@@ -25,6 +25,8 @@ import { FALLBACK_POLL_MS, realtime as defaultRealtime } from "../realtime";
 import type { RealtimeClient } from "../realtime/client";
 import { TERMINAL_JOB_STATUSES, type JobEvent } from "../realtime/protocol";
 import { toast } from "../composables/notifications";
+import { registerJobsActions } from "./jobsActions";
+import { registerJobsPause } from "./jobsPause";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -226,6 +228,7 @@ export function createJobsWorkspace(deps: Deps) {
     // Logout, session expiry and account switches all pause the runtime: close the socket too.
     realtime.stop();
   }
+  registerJobsPause(pauseRuntime);
   function pruneClientJobState(jobId: Any, { removeHistory = true } = {}) {
     state.jobs = state.jobs.filter((job: Any) => job.id !== jobId);
     delete state.jobApplied?.[jobId];
@@ -516,7 +519,7 @@ export function createJobsWorkspace(deps: Deps) {
     }
     updateOperationStackCount();
   }
-  return {
+  const actions = {
     refreshJobs,
     reconcileJobs,
     applyJobEvent,
@@ -533,4 +536,6 @@ export function createJobsWorkspace(deps: Deps) {
     maybeDesktopNotify,
     syncJobProgressToasts,
   };
+  registerJobsActions(actions);
+  return actions;
 }

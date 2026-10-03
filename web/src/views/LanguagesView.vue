@@ -57,6 +57,13 @@ const loading = ref(true);
 const saving = ref(false);
 const installing = ref(false);
 const error = ref("");
+const readError = ref("");
+const workspaceReady = ref(false);
+const policyLoading = ref(false);
+const policyError = ref("");
+let dictionaryRequest = 0;
+let policyRequest = 0;
+let disposed = false;
 const installOpen = ref(false);
 const installCloseConfirm = ref(false);
 const manageProvidersConfirm = ref(false);
@@ -365,14 +372,29 @@ function syncRouteState() {
 }
 
 async function load(code = selectedCode.value, resetFilters = true) {
+  if (disposed) return;
+  const request = ++dictionaryRequest;
+  const sameDictionary = current.value?.code === code;
+  selectedCode.value = code;
+  if (!sameDictionary) {
+    current.value = null;
+    baseline.value = "";
+    contentPolicy.value = null;
+    policyError.value = "";
+    policyLoading.value = false;
+    policyRequest += 1;
+  }
   loading.value = true;
-  error.value = "";
+  readError.value = "";
   try {
-    selectedCode.value = code;
     const value = await systemApi.language(code);
-    current.value = { ...value, flag: flagFor(value.code, value.flag) };
-    baseline.value = snapshotCurrent();
-    if (resetFilters) {
+    if (request !== dictionaryRequest || disposed) return;
+    // Same-resource refresh may complete after the user starts editing.
+    if (!sameDictionary || !dirty.value) {
+      current.value = { ...value, flag: flagFor(value.code, value.flag) };
+      baseline.value = snapshotCurrent();
+    }
+    if (resetFilters && !sameDictionary) {
       keyQuery.value = "";
       activeCategory.value = categories.value[1]?.id || "all";
       statusFilter.value = "all";
@@ -382,19 +404,48 @@ async function load(code = selectedCode.value, resetFilters = true) {
     ) {
       activeCategory.value = "all";
     }
-    await loadContentPolicy(code);
+    void loadContentPolicy(code);
     syncRouteState();
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    if (request !== dictionaryRequest || disposed) return;
+    if (
+      exc &&
+      typeof exc === "object" &&
+      "status" in exc &&
+      [401, 403].includes(Number(exc.status))
+    ) {
+      current.value = null;
+      contentPolicy.value = null;
+      policyRequest += 1;
+      policyLoading.value = false;
+    }
+    readError.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
-    loading.value = false;
+    if (request === dictionaryRequest && !disposed) loading.value = false;
   }
 }
 async function loadContentPolicy(code = selectedCode.value) {
+  if (disposed || code !== selectedCode.value) return;
+  const request = ++policyRequest;
+  const before = JSON.stringify(contentPolicy.value);
+  policyLoading.value = true;
+  policyError.value = "";
   try {
-    contentPolicy.value = await systemApi.languageContentPolicy(code);
-  } catch {
-    contentPolicy.value = { code, status: "missing", blocked_terms: [], contextual_terms: [] };
+    const value = await systemApi.languageContentPolicy(code);
+    if (request !== policyRequest || code !== selectedCode.value || disposed) return;
+    if (JSON.stringify(contentPolicy.value) === before) contentPolicy.value = { ...value, code };
+  } catch (exc) {
+    if (request !== policyRequest || code !== selectedCode.value || disposed) return;
+    if (
+      exc &&
+      typeof exc === "object" &&
+      "status" in exc &&
+      [401, 403].includes(Number(exc.status))
+    )
+      contentPolicy.value = null;
+    policyError.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    if (request === policyRequest && !disposed) policyLoading.value = false;
   }
 }
 /** Read the content-policy job once; true when it has settled. */
@@ -1014,20 +1065,31 @@ watch(
   },
 );
 
-onMounted(async () => {
+async function initialize() {
+  if (disposed) return;
+  loading.value = true;
+  readError.value = "";
   try {
     refreshProviderProfiles();
     const base = await systemApi.language("en-US");
+    if (disposed) return;
     referenceDictionary.value = base.dictionary || {};
     await refreshLanguages();
+    if (disposed) return;
+    workspaceReady.value = true;
     await load(selectedCode.value, false);
-    await restoreLanguageTranslationJob();
+    if (!disposed) await restoreLanguageTranslationJob();
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    if (disposed) return;
+    readError.value = exc instanceof Error ? exc.message : String(exc);
     loading.value = false;
   }
-});
+}
+onMounted(() => void initialize());
 onUnmounted(() => {
+  disposed = true;
+  dictionaryRequest += 1;
+  policyRequest += 1;
   stopInstallFollow?.();
   stopPolicyFollow?.();
 });
@@ -1037,12 +1099,25 @@ onUnmounted(() => {
   <main class="vue-native-page languages-page language-studio">
     <LanguageWorkspaceHeader
       ref="headerRef"
+      :pending="!workspaceReady && loading"
+      :ready="workspaceReady"
       :language-count="languages.length"
       :key-count="Object.keys(referenceDictionary).length"
       :policy-pending-count="pendingPolicyCount"
       @install="openInstallDialog"
     />
 
+    <div v-if="readError" class="language-alert error language-read-error" role="alert">
+      <span>{{ readError }}</span>
+      <span v-if="current">{{ i18n.t("loading.stale") }}</span>
+      <button
+        type="button"
+        class="btn"
+        @click="workspaceReady ? load(selectedCode, false) : initialize()"
+      >
+        {{ i18n.t("ui.retry") }}
+      </button>
+    </div>
     <div v-if="error" class="language-alert error" role="alert">
       <AppIcon name="warning" /><span>{{ error }}</span
       ><button type="button" :aria-label="i18n.t('ui.close')" @click="error = ''">×</button>
@@ -1103,7 +1178,7 @@ onUnmounted(() => {
             <p>{{ i18n.t("language.locale_library") }}</p>
             <h2>{{ i18n.t("language.installed") }}</h2>
           </div>
-          <span>{{ languages.length }}</span>
+          <span v-if="workspaceReady">{{ languages.length }}</span>
         </div>
         <label class="language-search-field"
           ><span class="sr-only">{{ i18n.t("language.search_locales") }}</span
@@ -1112,7 +1187,12 @@ onUnmounted(() => {
             type="search"
             :placeholder="i18n.t('language.search_locales')"
         /></label>
-        <div class="language-locale-list">
+        <UiLoadingState
+          v-if="!workspaceReady && loading"
+          variant="skeleton"
+          :label="i18n.t('ui.loading')"
+        />
+        <div v-if="workspaceReady" class="language-locale-list">
           <button
             v-for="item in filteredLanguages"
             :key="item.code"
@@ -1147,10 +1227,15 @@ onUnmounted(() => {
       </aside>
 
       <section class="language-editor-workspace" aria-live="polite">
-        <div v-if="loading" class="language-loading">
-          <UiLoadingState :label="i18n.t('ui.loading_dictionary')" />
+        <div v-if="loading && !current" class="language-loading">
+          <UiLoadingState variant="skeleton" :label="i18n.t('ui.loading_dictionary')" />
         </div>
-        <template v-else-if="current">
+        <UiLoadingState
+          v-if="loading && current"
+          variant="inline"
+          :label="i18n.t('loading.updating')"
+        />
+        <template v-if="current">
           <header class="language-editor-hero">
             <div class="language-editor-identity">
               <LanguageFlag
@@ -1232,12 +1317,24 @@ onUnmounted(() => {
           >
             <div class="language-policy-copy">
               <p>{{ i18n.t("language.content_policy") }}</p>
-              <b>{{
+              <UiLoadingState
+                v-if="policyLoading"
+                variant="inline"
+                :label="i18n.t(contentPolicy ? 'loading.updating' : 'ui.loading')"
+              />
+              <div v-if="policyError" role="alert">
+                <p>{{ policyError }}</p>
+                <p v-if="contentPolicy">{{ i18n.t("loading.stale") }}</p>
+                <button type="button" class="btn" @click="loadContentPolicy()">
+                  {{ i18n.t("ui.retry") }}
+                </button>
+              </div>
+              <b v-if="contentPolicy">{{
                 policyReady
                   ? i18n.t("language.content_policy_ready")
                   : i18n.t("language.content_policy_missing")
               }}</b>
-              <span>{{
+              <span v-if="contentPolicy">{{
                 policyReady
                   ? i18n.tf("language.content_policy_count", {
                       count: (contentPolicy?.blocked_terms?.length || 0).toLocaleString(
@@ -1338,7 +1435,7 @@ onUnmounted(() => {
               <button
                 type="button"
                 class="btn primary"
-                :disabled="policyBusy || !selectedProvider"
+                :disabled="policyLoading || Boolean(policyError) || policyBusy || !selectedProvider"
                 @click="generateContentPolicy"
               >
                 {{

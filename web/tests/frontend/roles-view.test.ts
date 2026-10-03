@@ -179,6 +179,69 @@ describe("RolesView", () => {
     });
   });
 
+  it("marks a failed atomic refresh stale, retains the editor and retries", async () => {
+    const { wrapper } = await mountView();
+    const editor = wrapper.find(".role-editor").element;
+    const refresh = wrapper.findAll("button").find((b) => b.text() === "Refresh");
+    expect(refresh).toBeDefined();
+    authApi.listUsers.mockRejectedValueOnce(new Error("offline"));
+    await refresh!.trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".role-editor").element).toBe(editor);
+    expect(wrapper.text()).toContain("The refresh failed. Previously loaded content is shown.");
+    expect(
+      wrapper
+        .findAll("button")
+        .find((b) => b.text() === "Create role")
+        ?.attributes("disabled"),
+    ).toBeDefined();
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Retry")!
+      .trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".role-editor").element).toBe(editor);
+    expect(
+      wrapper
+        .findAll("button")
+        .find((b) => b.text() === "Create role")
+        ?.attributes("disabled"),
+    ).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it("keeps an unsaved permission draft during atomic refresh", async () => {
+    const { wrapper } = await mountView();
+    const checkbox = wrapper.findAll("input[type=checkbox]")[1]!;
+    await checkbox.setValue(false);
+    const refresh = wrapper.findAll("button").find((b) => b.text() === "Refresh");
+    expect(refresh).toBeDefined();
+    await refresh!.trigger("click");
+    await flushPromises();
+    expect((wrapper.findAll("input[type=checkbox]")[1]!.element as HTMLInputElement).checked).toBe(
+      false,
+    );
+    wrapper.unmount();
+  });
+
+  it("clears the retained role snapshot on forbidden refresh", async () => {
+    const { wrapper } = await mountView();
+    authApi.listUsers.mockRejectedValueOnce(Object.assign(new Error("forbidden"), { status: 403 }));
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Refresh")!
+      .trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".role-editor").exists()).toBe(false);
+    expect(
+      wrapper
+        .findAll("button")
+        .find((b) => b.text() === "Create role")
+        ?.attributes("disabled"),
+    ).toBeDefined();
+    wrapper.unmount();
+  });
+
   it("localizes built-in role descriptions", async () => {
     const { wrapper } = await mountView({
       "roles.admin_description": "Accès administratif entièrement localisé.",

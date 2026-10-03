@@ -32,3 +32,20 @@ export function hasCapability(capability: string): boolean {
 export function canAccessPage(view: string): boolean {
   return canAccessView(sessionState.userContext, view);
 }
+
+export function userCapabilities() {
+  return {
+    viewSharedPages: hasCapability("page.dashboard"),
+    annotate: hasCapability("annotations.write"),
+    compare: hasCapability("page.compare"),
+    research: hasCapability("rag.run"),
+    editLocalRecords: hasCapability("records.edit"),
+    manageCorpus: hasCapability("corpus.manage"),
+    manageUsers: hasCapability("users.manage"),
+    configureProviders: hasCapability("providers.manage"),
+  };
+}
+
+export function canUse(feature: string): boolean {
+  return Boolean((userCapabilities() as Record<string, boolean>)[feature]);
+}

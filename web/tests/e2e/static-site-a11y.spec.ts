@@ -479,6 +479,8 @@ async function mountProviderSite(page: Page, extraFeatures: Record<string, unkno
       source_spans: [{ source_document_id: "source-1", source_unit_id: "unit-r1" }],
       work: "Glas",
       citation: "Derrida, Jacques. Glas.",
+      inline_citation: "(Derrida 1967: 12)",
+      full_citation: "Derrida, Jacques. Glas. 1967.",
       text: "Hospitality exceeds the economy of conditional exchange.",
       speaker: "Derrida",
       position_holder: "Derrida",
@@ -648,7 +650,33 @@ test("a provider the reader configures powers vector + LLM Research with method 
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");
   await page.getByRole("button", { name: "Ask" }).click();
 
-  await expect(page.getByText("Hospitality exceeds conditional exchange [E1].")).toBeVisible();
+  const answer = page.locator(".answer");
+  await expect(answer).toContainText(
+    "Hospitality exceeds conditional exchange (Derrida 1967: 12).",
+  );
+  await expect(answer).not.toContainText("[E1]");
+  const inlineCitation = answer.locator('a.inline-citation[data-evidence-id="E1"]');
+  await expect(inlineCitation).toHaveText("(Derrida 1967: 12)");
+  await expect(inlineCitation).toHaveAttribute("href", "#research-evidence-E1");
+
+  const evidenceItem = page.locator("#research-evidence-E1");
+  await expect(evidenceItem).toContainText("[E1] Glas");
+  const evidencePane = page.locator(".research-evidence-pane");
+  const evidencePanel = page.locator(".research-evidence-panel");
+  expect(
+    await evidencePane.evaluate((element) => getComputedStyle(element).alignSelf),
+  ).toBe("start");
+  expect(
+    await evidencePane.evaluate((element) => getComputedStyle(element).position),
+  ).toBe("sticky");
+  expect(
+    await evidencePanel.evaluate((element) => getComputedStyle(element).alignContent),
+  ).toBe("start");
+
+  await inlineCitation.click();
+  await expect(page).toHaveURL(/#research-evidence-E1$/);
+  await expect(evidenceItem).toBeVisible();
+
   const methods = page.getByRole("group", { name: "Technology used for this operation" });
   await expect(methods).toContainText("Text search");
   await expect(methods).toContainText("Vector search (embeddings)");

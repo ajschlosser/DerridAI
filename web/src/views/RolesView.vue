@@ -28,6 +28,7 @@ import {
 } from "../api/auth";
 import { expandPermissions, samePermissions } from "../domain/roles";
 import { useI18nStore } from "../stores/i18n";
+import { useAuthStore } from "../stores/auth";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import RolePermissionMatrix from "../components/RolePermissionMatrix.vue";
 import RoleSelector, { type RoleChoice } from "../components/RoleSelector.vue";
@@ -46,6 +47,7 @@ import type { SaveStatus } from "../domain/settings";
 type ConfirmKind = "delete" | "leave" | "switch";
 
 const i18n = useI18nStore();
+const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const roles = ref<RoleDefinition[]>([]);
@@ -55,6 +57,8 @@ const selectedRole = ref<UserRole>(String(route.query.role || "researcher"));
 const permissions = ref<string[]>([]);
 const loading = ref(true);
 const dataCurrent = ref(false);
+const snapshotLoaded = ref(false);
+let readRequest = 0;
 const saving = ref(false);
 const creating = ref(false);
 const deleting = ref(false);
@@ -167,6 +171,9 @@ function applyRole(id: UserRole, resetFilter = true) {
 }
 
 async function refresh(preferred?: string) {
+  const request = ++readRequest;
+  const draftRole = selectedRole.value;
+  const keepDraft = dirty.value && !preferred;
   loading.value = true;
   // Account assignments are part of the role-delete safety check. Treat both
   // datasets as one snapshot so a partial request can never imply zero users.
@@ -174,20 +181,45 @@ async function refresh(preferred?: string) {
   error.value = "";
   try {
     const [roleData, userData] = await Promise.all([authApi.listRoles(), authApi.listUsers()]);
+    if (request !== readRequest) return;
     roles.value = roleData.roles;
     capabilities.value = roleData.capabilities;
     users.value = userData.users;
     dataCurrent.value = true;
+    snapshotLoaded.value = true;
     const next = preferred || selectedRole.value;
     const fallback =
       roles.value.find((item) => item.id === "researcher")?.id ||
       roles.value[0]?.id ||
       "researcher";
-    applyRole(roles.value.some((item) => item.id === next) ? next : fallback);
+    if (
+      !(
+        keepDraft &&
+        selectedRole.value === draftRole &&
+        roles.value.some((item) => item.id === draftRole)
+      )
+    ) {
+      applyRole(roles.value.some((item) => item.id === next) ? next : fallback, false);
+    }
   } catch (exc) {
+    if (request !== readRequest) return;
+    if (
+      exc &&
+      typeof exc === "object" &&
+      "status" in exc &&
+      [401, 403].includes(Number(exc.status))
+    ) {
+      roles.value = [];
+      capabilities.value = [];
+      users.value = [];
+      permissions.value = [];
+      snapshotLoaded.value = false;
+      createOpen.value = false;
+      confirm.value = null;
+    }
     error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
-    loading.value = false;
+    if (request === readRequest) loading.value = false;
   }
 }
 
@@ -372,6 +404,23 @@ onBeforeRouteLeave(() => {
 
 watch(permissionFilter, () => syncRouteState());
 watch(
+  () => `${auth.user?.id}:${auth.user?.role}`,
+  () => {
+    readRequest += 1;
+    roles.value = [];
+    capabilities.value = [];
+    users.value = [];
+    permissions.value = [];
+    snapshotLoaded.value = false;
+    dataCurrent.value = false;
+    createOpen.value = false;
+    confirm.value = null;
+    error.value = "";
+    if (auth.user) void refresh();
+    else loading.value = false;
+  },
+);
+watch(
   () => route.query.role,
   (value) => {
     const requested = String(value || "");
@@ -389,7 +438,10 @@ onMounted(() => {
   window.addEventListener("beforeunload", onBeforeUnload);
   void refresh(String(route.query.role || ""));
 });
-onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload));
+onBeforeUnmount(() => {
+  readRequest += 1;
+  window.removeEventListener("beforeunload", onBeforeUnload);
+});
 </script>
 
 <template>
@@ -403,7 +455,16 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       :actions-label="i18n.t('roles.page_actions')"
     >
       <template #actions>
-        <SettingsSaveState :status="saveStatus" :label="statusLabel(saveStatus)" />
+        <UiButton
+          :label="i18n.t('common.refresh')"
+          :disabled="loading || saving || creating || deleting"
+          @click="refresh()"
+        />
+        <SettingsSaveState
+          v-if="snapshotLoaded"
+          :status="saveStatus"
+          :label="statusLabel(saveStatus)"
+        />
         <UiButton icon="users" :label="i18n.t('nav.users')" @click="openUsers" />
         <UiButton
           variant="primary"
@@ -414,8 +475,18 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
         />
       </template>
     </UiPageHeader>
-    <p v-if="error" class="info error" role="alert">{{ error }}</p>
-    <section v-if="loading && !roles.length" class="roles-loading">
+    <UiLoadingState v-if="loading && snapshotLoaded" :label="i18n.t('loading.updating')" />
+    <div v-if="error" class="info error" role="alert">
+      <p v-if="snapshotLoaded && !dataCurrent">{{ i18n.t("loading.stale") }}</p>
+      <p>{{ error }}</p>
+      <UiButton
+        v-if="snapshotLoaded && !dataCurrent"
+        :label="i18n.t('ui.retry')"
+        :disabled="loading"
+        @click="refresh()"
+      />
+    </div>
+    <section v-if="loading && !snapshotLoaded" class="roles-loading">
       <UiLoadingState :label="i18n.t('roles.loading')" />
     </section>
     <AccessibleEmptyState

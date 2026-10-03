@@ -31,6 +31,8 @@ Two built-in roles ship with the application:
 
 ### Annotations
 
+The Annotations toolbar remains visible while the feed loads. Refreshes retain loaded annotations with an Updating status; a failed refresh marks the retained feed out of date and offers Retry. Initial failures show Retry without claiming there are no annotations.
+
 Annotations can target selected text, an entire Record, or an entire work. Selected-text annotations retain the quoted passage; Record and work annotations retain their durable target without requiring a quotation. From an annotation form, add comma-separated Record IDs to link the same discussion to additional records. Linked and work-scoped annotations appear in each applicable Record and in the global Annotations workspace without creating duplicate annotation identities.
 
 Replies are stored as part of an annotation thread. Threads with replies start collapsed and can be expanded. Deleting a thread root preserves a visible deleted-root placeholder so the replies and discussion history remain understandable. Annotation visibility and linked-record access are enforced by the API for the selected corpus store.
@@ -38,6 +40,8 @@ Replies are stored as part of an annotation thread. Threads with replies start c
 Administrators can create additional **custom roles**. A custom role starts from Researcher (or another non-admin role) and then enables or disables individual researcher-safe pages and features. Administration capabilities — Users, Roles, Languages, LLM profiles, loaded-record management, PDF tools, the Response Library, corpus mutation, and similar — cannot be granted to any non-admin role. Custom roles cannot be deleted while accounts still use them; reassign those users first.
 
 Role capabilities are enforced by both navigation and the API. Unsaved permission changes stay visible until you save, and leaving the page or switching roles asks for confirmation.
+
+Users shows account rows as soon as they load, even while role choices are pending. Account and role-choice failures have separate Retry controls. Failed account refreshes retain the previous rows with an out-of-date notice. Roles refreshes permissions and account assignments together; failed refreshes keep the previous editor visible and disable mutations until Retry succeeds. Refresh preserves unsaved permission changes. Authorization failures clear retained administrative data.
 
 Researcher-visible corpus text is transformed on the API before it is returned to the browser. `text` is passed through a dependency-free Edmundson-style extractive summarizer with values from `topics`, `concepts`, and `persons` treated as bonus terms. Summaries contain at most 2–3 selected sentence extracts joined by `[...]` and respect `RESEARCHER_TEXT_MAX_CHARS` (default `1600`). Text-valued entries inside the record `updates` audit history are sanitized by the same policy. The full corpus text remains available internally to the RAG pipeline for retrieval/generation, but is not exposed in researcher job results or read-only corpus search.
 
@@ -50,6 +54,8 @@ Session cookies are `HttpOnly` and `SameSite=Lax`. Set `SESSION_COOKIE_SECURE=tr
 Browser workspace persistence is isolated for researcher accounts so a researcher using the same browser profile does not inherit an administrator's loaded JSONL files, provider credentials, or other IndexedDB workspace state. Full backups include the logical user database (roles and password hashes, but not active session tokens), so backup ZIPs should be treated as credential-sensitive.
 
 Researcher-authored text (queries, notes, tags, and filters) is checked against a per-locale forbidden-term policy. Those terms are not shipped in the application source. After the first administrator account exists, generate a policy for each built-in locale from **System → Languages** using a provider profile. Installing a new interface language generates a policy as part of that job. Until at least one locale has a ready policy, the API rejects researcher-authored text. Enforcement uses the union of every generated locale list, so English and French (or any later locale) are checked together. Administrators can review, edit, and regenerate the stored terms; researcher sessions receive only hashed terms for immediate browser feedback.
+
+The **Languages** dictionary editor becomes usable before its text-policy read finishes. Policy failures show a local Retry and do not imply that a policy is missing. Same-dictionary refreshes preserve the editor and unsaved changes; switching locales clears the previous dictionary while the new one loads. Initial read failures offer Retry and withhold unconfirmed counts.
 
 The **Languages** dictionary editor groups keys by their dotted namespace, so administrators can work category by category instead of scanning the complete dictionary. The editor can export the full dictionary or the selected category as JSON, and can import a validated JSON dictionary for review before saving. Researcher text-policy terms are intentionally hidden until the administrator explicitly expands the sensitive-terms section.
 
@@ -110,6 +116,8 @@ Open it from **Record view** or from **More tools → Semantic map**. Administra
 The choice is remembered in this browser.
 
 ## Relationship-map controls
+
+The Relationships workspace loads the retained record trace independently of the cELF model. Model failure has its own Retry and does not remove the trace. Same-record refresh retains the focused graph with Updating or an out-of-date error; changing record or store clears the previous trace.
 
 DerridAI uses the same interaction model for relational diagrams even when the domain and layout differ. The corpus term map uses movable chips, the build-wide semantic content graph uses a force layout with entity dots, the Record semantic map uses a radial layout, Traceability uses source-to-claim lanes with cards, and Pipeline Studio uses a directed stage graph. Their domain meanings remain separate; moving a card or node changes only the presentation, not the Record, cELF relationship, semantic assertion, pipeline definition, or other authoritative data.
 
@@ -297,6 +305,8 @@ Model-kind filters remain a UI discovery aid; the backend still sends a standard
 After workspace restoration and API health checks, the configured default model receives a minimal warmup request. Ollama warmup respects `keep_alive`.
 
 ## JSONL workspace
+
+Records shows its title and import controls while its initial corpus tab loads. Until that read succeeds, it shows placeholders and withholds empty-workspace claims and counts. A failed initial corpus read offers Retry. Existing file rows remain visible while workspace activation is pending or fails; importing a file while collection discovery is pending takes precedence over automatic collection selection.
 
 Multiple JSONL files remain open as a local working set and persist through browser IndexedDB, including:
 
@@ -1126,6 +1136,8 @@ Research memory is stored separately from that deterministic response cache. Two
 
 Neither setting adds remembered text to the evidence packet or lets it supply a citation. Both match by meaning through derived, rebuildable projections; if the embedding service is unavailable they fall back to shared-word matching and the run's warnings say so. The run records which prior responses and claims steered it.
 
+The **Response Library** opens its page frame and archive controls while saved responses load. Initial reads show placeholders rather than a zero-question count. Refresh keeps the selected answer and evidence visible; a failed refresh shows an out-of-date warning and Retry. Searching or paging the archive updates its rows independently of the answer being read. A new response selection replaces the answer and its evidence together. Fresh revisits use the shared server-data cache, and access loss clears retained responses.
+
 The **Response Library** page provides:
 
 - question/answer browsing
@@ -1166,13 +1178,23 @@ Compare is a Vue-native two-column workspace at **Tools → Compare**. Each colu
 
 ## Help center
 
-The **?** button in the top bar opens a short help dialog; **Open the help center** opens the full Help Center. It now has three coordinated ways to find an answer:
+The **?** button in the top bar opens concise contextual help; **Open the help center** opens the full, role-aware Help Center. The full page is designed around the question a user is most likely to have first—_what am I trying to do?_—rather than around DerridAI's implementation vocabulary.
 
-- **Guides for every page** — every application route that renders a page has a Help Center guide explaining what that page is for and its main tasks. A separate **What this affects** callout appears only where actions on that page can persist, publish, configure, or otherwise change downstream state. Read-only and explanatory guides do not repeat an artificial impact section. The list follows the same role and capability boundaries as the application, so administrator-only workspaces are not advertised to users who cannot open them.
-- **Glossary & parameter reference** — technical concepts used by Search, Research, Corpus Builder, Pipeline Studio, metadata memory, and vector storage are defined for non-technical academic users. Concepts such as LLMs, embeddings, RAG, MMR, reranking, cross-encoders, reciprocal-rank fusion, provenance, FieldAssertion, SourceSpan, Chroma, and derived indexes are shown as scan-first definitions. Tunable controls such as `top_k`, `fetch_k`, MMR lambda, similarity thresholds, and evidence budgets are separated into a parameter reference that explains what each control changes and its typical trade-off.
-- **Common workflow questions** — the FAQ covers recurring user tasks and failure modes as well as provenance-sensitive decisions: when to use Search versus Research, why Search returns nothing, how evidence selection works, retrieval modes, missing citations, reruns, model choice, slow runs, provider/model unavailability, Corpus Builder review states, missing confidence, retry versus rerun, requeueing, publication visibility, metadata failures, record review, memory, grading, and claim validation. Downstream-impact callouts appear only when the action actually changes later behavior.
+At the top of the page, a prominent search field searches the whole help corpus at once. Press **/** from anywhere on the page (unless you are already editing a form control) to focus it. Search accepts page names, tasks, settings, error language, and technical terms; examples include “build a corpus,” “why is my run queued?”, “FieldAssertion,” “MMR,” and “backup.” Results are highlighted and opened automatically so the matching context is visible, and the result count is announced to assistive technology. **Escape** clears the field. The URL keeps the search under `?q=`, so a filtered Help Center view can be bookmarked or shared.
 
-One search box searches page titles and descriptions, page tasks and downstream effects, glossary concepts and parameter definitions (including aliases such as “cross-encoder” and “nucleus sampling”), and workflow questions. Concept filters narrow definitions to AI & models, retrieval & ranking, evidence & provenance, or storage & indexes; parameter settings remain in their own reference section. Search result counts are announced to assistive technology, the page has keyboard-visible focus states, and the layout collapses to one column on smaller screens.
+When no search is active, **Popular workflows** gives task-first shortcuts to the most common destinations. Researchers see actions such as finding a passage, asking a Research question, browsing works, and opening the glossary. Administrators additionally see corpus-building and metadata-review workflows. The Help Center never advertises an administrator-only action to an account that cannot use it; application and API authorization remain the actual security boundary.
+
+The page then provides three coordinated reference layers:
+
+- **Product guide** — every substantive application route has a guide appropriate to the current user's role and capabilities. Each guide explains what the page is for and the primary work it supports. A separate **What this affects** explanation appears only when actions on that page can persist, publish, configure, or otherwise change later behavior. This keeps read-only pages from being cluttered with artificial warnings while making consequential actions explicit.
+- **Technical glossary & parameter reference** — the glossary is a visible, scan-first reference rather than another accordion. Categories cover **Corpus & review**, **AI & models**, **Retrieval & ranking**, **Evidence & provenance**, **Storage & indexes**, and **Pipelines & operations**. It defines product concepts such as Corpus, Work, Record, review state, speaker, position holder, stance, proposition, Generated claim, SupportBinding, EvidencePacket, FieldAssertion, SourceSpan, cELF, canonical/derived state, Metadata memory, Response Library, System Data, Document Intelligence, Semantic Content Graph, pipeline traces, jobs, and benchmarks. Retrieval and generation parameters are kept in a separate reference so a control is not confused with a concept; for example, **retrieval `top_k` / k** is explicitly distinguished from a provider's **sampling `top_k`**.
+- **Common workflow questions** — the FAQ covers normal research and administrative work as well as failure and recovery states. Current topics include Search versus Research, evidence selection, retrieval modes, memory versus evidence, reruns and changing results, citations, grading and claim validation, roles and missing pages, browser-local versus server state, automatic live updates, provider queues, supported source media, safe ingestion, extraction provenance, Corpus Builder review states, retry/requeue behavior, autonomous suggestions-as-is publication, metadata precedents, calibrated autofill, pipeline assignments and traces, operation cancellation/restart behavior, System Data versus Corpus Data, data retention, backup/restore, and static-site publication.
+
+Glossary category selection is bookmarkable under `?topic=`. Individual product guides, workflow questions, and glossary terms also have stable anchors (`#help-page-…`, `#help-question-…`, and `#help-term-…`) so links can point directly to the relevant explanation. Opening a term link clears an incompatible glossary filter, and opening an anchored result clears an obsolete search query if that query would otherwise hide the target.
+
+The Help Center's central authority model matches the rest of DerridAI. Source assets and canonical reviewed corpus state—Record revisions, review decisions, FieldAssertions, and bound evidence—govern scholarly state. Reviewer judgments on generated claims are retained as review judgments. Saved Research responses and grades are auditable operational history, not corpus evidence. Embeddings, vector collections, metadata-example and metadata-memory projections, response/claim memory indexes, semantic graphs, and pipeline traces are derived or operational state and never become authoritative merely because they are convenient to retrieve.
+
+The layout uses a sticky contents rail on wide screens and a horizontally scrollable jump bar at smaller widths. Native `details` controls preserve expected keyboard behavior for expandable product guides and questions. Search, filters, task cards, navigation, and disclosure controls retain visible focus, use text rather than color alone to communicate state, honor reduced-motion preferences, reflow to a single column on narrow screens, and provide forced-colors/high-contrast treatment. English (en-US) and Canadian French (fr-CA) carry the same Help Center key and placeholder contract; new Help copy is required in both before release.
 
 ## Settings
 
@@ -1312,8 +1334,12 @@ store without treating every store as a database.
 - **Metadata memory** (its own System page) is the audit view over the same
   index: each precedent is joined to its record revision, bound evidence, and
   whether the source is still current. Filters apply as you change them, and
-  long evidence expands on demand. **Metadata examples** shows the raw index
-  rows without those joins, for debugging the index itself.
+  long evidence expands on demand. The page revalidates the projection whenever
+  it is opened; an older empty cache is not presented as current. If a refresh
+  fails, the last successfully loaded precedents remain visible with an explicit
+  out-of-date warning and retry action instead of being replaced by an empty
+  state. **Metadata examples** shows the raw index rows without those joins, for
+  debugging the index itself.
   Pending blind second-opinion values are excluded from shared examples and
   cross-field matching until resolved; disputed, invalid, and unresolved
   assertions are not trusted precedents.

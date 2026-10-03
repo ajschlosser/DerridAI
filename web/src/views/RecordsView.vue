@@ -29,6 +29,7 @@ import RecordsWorkspaceHeader from "../components/records/RecordsWorkspaceHeader
 import RecordsFileRail from "../components/records/RecordsFileRail.vue";
 import UiTableColumnsDialog from "../components/ui/UiTableColumnsDialog.vue";
 import RecordsSubsetDialog from "../components/records/RecordsSubsetDialog.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
 import { statusTone } from "../domain/status";
 import {
@@ -45,6 +46,10 @@ const i18n = useI18nStore();
 const shell = useShellStore();
 const records = useRecordsWorkspace();
 const { snapshot } = records;
+const hasLoadedFiles = computed(() => Boolean(snapshot.value?.files.length));
+const hydrationReady = computed(
+  () => hasLoadedFiles.value || (!records.loading.value && !records.error.value),
+);
 const query = ref("");
 const columnsDialog = ref<{ open: () => void; close: () => void } | null>(null);
 const draftColumns = ref<string[]>([]);
@@ -380,6 +385,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
 <template>
   <main class="records-page" aria-labelledby="records-page-title">
     <RecordsWorkspaceHeader
+      :ready="hydrationReady"
       :file-name="snapshot?.file?.name || ''"
       :matched="snapshot?.matched || 0"
       :total="snapshot?.total || 0"
@@ -390,8 +396,25 @@ onBeforeUnmount(() => tableObserver?.disconnect());
       @import="run('import')"
     />
 
+    <div v-if="records.error.value" class="records-hydration-error" role="alert">
+      <p>{{ i18n.tf("records.hydration_failed", { message: records.error.value }) }}</p>
+      <button
+        class="btn"
+        type="button"
+        :disabled="records.loading.value"
+        @click="records.activate()"
+      >
+        {{ i18n.t("ui.retry") }}
+      </button>
+    </div>
+    <div v-if="records.loading.value" class="records-hydration" :aria-busy="true">
+      <UiLoadingState
+        :variant="hasLoadedFiles ? 'inline' : 'skeleton'"
+        :label="i18n.t(hasLoadedFiles ? 'loading.updating' : 'records.hydration_loading')"
+      />
+    </div>
     <AccessibleEmptyState
-      v-if="!(snapshot?.files || []).length"
+      v-if="hydrationReady && !hasLoadedFiles"
       icon="upload"
       :title="
         snapshot?.shared
@@ -407,7 +430,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
       @action="run('import')"
     />
 
-    <div v-else-if="snapshot" class="records-layout">
+    <div v-else-if="snapshot && hasLoadedFiles" class="records-layout">
       <RecordsFileRail
         :files="snapshot.files"
         :can-manage="snapshot.capabilities.can_import"

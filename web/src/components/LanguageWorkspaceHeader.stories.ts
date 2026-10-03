@@ -37,3 +37,7 @@ export const PolicyPending: Story = {
     policyPendingCount: 2,
   },
 };
+
+export const Pending: Story = { args: { pending: true, ready: false } };
+
+export const Unavailable: Story = { args: { ready: false } };

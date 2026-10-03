@@ -20,10 +20,10 @@ import { computed, ref, type Ref } from "vue";
 import type { CorpusBuild } from "../../../api/corpus";
 import { systemApi, type ProviderProfile } from "../../../api/system";
 import type { RecordSizingPolicy } from "../../../types/corpus";
-import * as runtime from "../../../runtime/runtime.js";
 import {
-  getProviderProfilesForUi,
   getDefaultProviderProfileId,
+  getProviderProfilesForUi,
+  getProviderRequestConfigForUi,
 } from "../../../domain/sharedProviderProfiles";
 
 const TEXT_CLEANUP_RULES = [
@@ -87,7 +87,7 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
   const llmAssessTextNoise = ref(false);
 
   function directProfilePayload(profileId: string): Record<string, unknown> | null {
-    const config = runtime.getProviderRequestConfigForUi?.(profileId, {
+    const config = getProviderRequestConfigForUi(profileId, {
       textReview: false,
     }) as Record<string, unknown> | null;
     if (!config) return null;

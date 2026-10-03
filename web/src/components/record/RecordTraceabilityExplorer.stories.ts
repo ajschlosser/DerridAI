@@ -227,3 +227,12 @@ export const WithResearchUse: Story = {
     },
   },
 };
+
+export const UpdatingTrace: Story = { args: { loading: true } };
+export const FailedTraceRefresh: Story = { args: { error: "Source read unavailable" } };
+export const ModelPending: Story = {
+  args: { model: null, modelLoading: true, initialMode: "model" },
+};
+export const ModelUnavailable: Story = {
+  args: { model: null, modelError: "Model read unavailable", initialMode: "model" },
+};
