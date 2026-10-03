@@ -26,7 +26,8 @@ import UiTextarea from "../../src/components/ui/UiTextarea.vue";
 describe("ordinary form primitives", () => {
   it("keeps native input semantics and emits typed number values", async () => {
     const wrapper = mount(UiInput, {
-      props: { modelValue: 0, type: "number", id: "threshold", min: 0, max: 1 },
+      props: { modelValue: 0, type: "number" },
+      attrs: { id: "threshold", min: 0, max: 1 },
     });
     const input = wrapper.get("input");
     expect(input.attributes("id")).toBe("threshold");
@@ -53,7 +54,11 @@ describe("ordinary form primitives", () => {
 
   it("gives a checkbox a visible native label and optional description", async () => {
     const wrapper = mount(UiCheckbox, {
-      props: { modelValue: false, label: "Require evidence", description: "A source span is required." },
+      props: {
+        modelValue: false,
+        label: "Require evidence",
+        description: "A source span is required.",
+      },
     });
     const input = wrapper.get('input[type="checkbox"]');
     expect(wrapper.get("label").attributes("for")).toBe(input.attributes("id"));
