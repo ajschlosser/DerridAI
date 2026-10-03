@@ -483,6 +483,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
                 limit,
                 cancelled=cancelled_while_waiting,
                 on_wait=waiting,
+                priority="foreground",
             )
         except CapacityCancelled:
             with self._lock:
@@ -532,6 +533,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
                         ollama_limit,
                         cancelled=ollama_cancelled,
                         on_wait=ollama_waiting,
+                        priority="foreground",
                     )
                 except CapacityCancelled:
                     with self._lock:
@@ -747,4 +749,3 @@ class LLMToolJobManager(PersistentJobStateMixin):
         elif "events" in out:
             out["events"] = list(out.get("events") or [])[-12:]
         return out
-

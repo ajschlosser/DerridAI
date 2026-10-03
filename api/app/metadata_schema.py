@@ -778,6 +778,7 @@ class FieldEvidence(BaseModel):
 
 
 AssessmentOutcome = Literal["supported_value", "no_supported_value", "uncertain"]
+_ASSESSMENT_CONTROL_VALUES = frozenset({"supported_value", "no_supported_value"})
 
 
 class FieldAssessment(BaseModel):
@@ -808,6 +809,13 @@ class MetadataResponseBase(BaseModel):
         def missing(value: Any) -> bool:
             return value is None or value == "" or value == []
 
+        def leaked(candidate: str, forbidden: frozenset[str]) -> bool:
+            normalized = candidate.strip().casefold()
+            return normalized in forbidden or any(
+                part.strip() in forbidden & _ASSESSMENT_CONTROL_VALUES
+                for part in re.split(r"[,;|]", normalized)
+            )
+
         # POS/NER labels and another field's closed-vocabulary tokens are prompt/schema
         # instructions, not scholarly metadata. Small models sometimes copy those tokens
         # verbatim into an open text/list field. Reject that structural leakage here before
@@ -816,13 +824,14 @@ class MetadataResponseBase(BaseModel):
             for field, forbidden in self.forbidden_values_for_validation.items():
                 value = getattr(metadata_obj, field, None)
                 rejected: list[str] = []
-                if isinstance(value, str) and value.strip().casefold() in forbidden:
+
+                if isinstance(value, str) and leaked(value, forbidden):
                     rejected = [value.strip()]
                     setattr(metadata_obj, field, None)
                 elif isinstance(value, list):
                     kept: list[Any] = []
                     for item in value:
-                        if isinstance(item, str) and item.strip().casefold() in forbidden:
+                        if isinstance(item, str) and leaked(item, forbidden):
                             rejected.append(item.strip())
                         else:
                             kept.append(item)
@@ -840,7 +849,7 @@ class MetadataResponseBase(BaseModel):
                         prior_reason = str(getattr(assessment_model, "reason", "") or "").strip()
                         labels = ", ".join(repr(item) for item in rejected[:4])
                         assessment_model.reason = (
-                            "Rejected structured-vocabulary leakage from POS/NER tags or another "
+                            "Rejected structured-vocabulary leakage from assessment states, POS/NER tags or another "
                             f"field's closed choices: {labels}."
                             + (f" {prior_reason}" if prior_reason else "")
                         )[:500]
@@ -933,7 +942,7 @@ def normalize_legacy_cardinality(field: SchemaField, value: Any) -> tuple[Any, b
     return value, True
 
 
-def _annotation(field: SchemaField) -> Any:
+def _annotation(field: SchemaField | SchemaMember) -> Any:
     if field.type == "boolean":
         return bool | None
     if field.type == "number":
@@ -961,7 +970,7 @@ def _repeatable_annotation(field: SchemaField) -> Any:
     )
 
     def unique_instance_ids(values: list[BaseModel]) -> list[BaseModel]:
-        ids = [value.instance_id for value in values]
+        ids = [value.model_dump(include={"instance_id"})["instance_id"] for value in values]
         if len(ids) != len(set(ids)):
             raise ValueError("Repeatable metadata instance_id values must be unique.")
         return values
@@ -1079,7 +1088,9 @@ def response_model_for(
             for item in schema_field.values
             if str(item.value).strip()
         }
-        forbidden[schema_field.name] = frozenset(machine_labels | (closed_values - own_values))
+        forbidden[schema_field.name] = frozenset(
+            machine_labels | ((closed_values | _ASSESSMENT_CONTROL_VALUES) - own_values)
+        )
     response.forbidden_values_for_validation = forbidden
     return response
 

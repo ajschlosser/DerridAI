@@ -934,3 +934,68 @@ def test_open_fields_reject_pos_ner_and_foreign_closed_vocabulary_leakage():
     assert parsed.field_assessments.quotation_chain.outcome == "uncertain"
     assert parsed.field_assessments.quotation_chain.needs_review is True
     assert "structured-vocabulary leakage" in parsed.field_assessments.quotation_chain.reason
+
+
+@pytest.mark.parametrize(
+    "leaked",
+    [
+        "no_supported_value",
+        "SUPPORTED_VALUE",
+        "true, no_supported_value, no_supported_value, no_supported_value",
+    ],
+)
+@pytest.mark.parametrize("valid_values", [[], ["responsibility"]])
+def test_assessment_states_cannot_populate_open_metadata_values(leaked, valid_values):
+    schema = ms.default_schema()
+    response = ms.response_model_for(schema, "indexing")
+    field_names = [field.name for field in schema.fields_in("indexing")]
+    payload = {
+        "metadata": {
+            **{name: [] for name in field_names},
+            "concepts": [*valid_values, leaked],
+        },
+        "field_assessments": {
+            name: {
+                "confidence": 0.9, "needs_review": False, "reason": "candidate",
+                "outcome": "supported_value" if name == "concepts" else "no_supported_value",
+            }
+            for name in field_names
+        },
+        "review_reason": "",
+    }
+    parsed = response.model_validate(payload)
+    assert parsed.metadata.concepts == valid_values
+    assessment = parsed.field_assessments.concepts
+    assert assessment.outcome == "uncertain"
+    assert assessment.needs_review is True
+    assert leaked in assessment.reason
+
+
+def test_composite_assessment_states_cannot_populate_scalar_metadata():
+    schema = ms.default_schema()
+    response = ms.response_model_for(schema, "discourse", field_names={"speaker"})
+    leaked = "true, no_supported_value, no_supported_value"
+    parsed = response.model_validate({
+        "metadata": {
+            **{name: None for name in ms.CORE_FIELDS},
+            "speaker": leaked,
+        },
+        "field_assessments": {
+            **{
+                name: {
+                    "confidence": 0.9, "needs_review": False, "reason": "no candidate",
+                    "outcome": "no_supported_value",
+                }
+                for name in ms.CORE_FIELDS
+            },
+            "speaker": {
+                "confidence": 0.9, "needs_review": False, "reason": "candidate",
+                "outcome": "supported_value",
+            },
+        },
+        "field_evidence": {},
+        "review_reason": "",
+    })
+    assert parsed.metadata.speaker is None
+    assert parsed.field_assessments.speaker.outcome == "uncertain"
+    assert parsed.field_assessments.speaker.needs_review is True

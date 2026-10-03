@@ -8,6 +8,7 @@ export default ts.config(
     ignores: [
       "node_modules/**",
       "dist/**",
+      "sdk/dist/**",
       "storybook-static/**",
       "playwright-report/**",
       "test-results/**",
