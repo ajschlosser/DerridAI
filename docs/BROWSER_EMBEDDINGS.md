@@ -65,6 +65,14 @@ The model is multilingual and places supported languages in one embedding space.
 
 The generated `EMBEDDER_INFO` object records the model revision, model/runtime file sizes, SHA-256 digests, dimensions, pooling/normalization policy, prefixes, and runtime versions. Persist that information with any derived embedding index that depends on this artifact.
 
+## Static-site publication
+
+Static research sites use the same pinned multilingual E5 semantic contract without embedding the full model weights in the publication. In **Works → Create site**, **Publish browser-ready vectors** is the recommended option: the DerridAI API downloads and verifies the pinned tokenizer and q8 ONNX artifact in its model cache, embeds the selected Records with the E5 `passage: ` prefix, and writes those derived vectors into the publication. The exported manifest records the model revision, dimension, prefixes, pooling, normalization, and dtype as one vector-compatibility contract.
+
+The published site then downloads the same small model in the visitor browser only when it needs to embed a query. Because the query provider advertises the matching `query: `/ `passage: ` variant, the SDK can use the published Record vectors directly and does not ask the visitor to rebuild the whole Record index. The alternative **Use current database vectors** keeps the source collection's existing vector contract, while **Build vectors in each visitor's browser** omits Record vectors entirely and creates a local IndexedDB projection per visitor.
+
+This keeps model weights outside the static package: the publication grows only by the Record vectors themselves, not by the roughly 135 MB tokenizer/model download.
+
 ## Runtime API
 
 Serve or otherwise import the generated module as an ES module:
