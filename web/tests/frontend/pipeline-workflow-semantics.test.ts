@@ -358,6 +358,21 @@ describe("strategies workspace", () => {
     );
   });
 
+  it("keeps the strategy catalog scannable with four grouped columns", () => {
+    const wrapper = mountCatalog();
+    expect(
+      wrapper
+        .findAll(".strategy-table thead th")
+        .map((column) => column.attributes("data-column")),
+    ).toEqual(["strategy", "family", "flow", "usage"]);
+
+    const row = wrapper.get('tr[data-strategy="retrieve.chroma_similarity"]');
+    expect(row.findAll("[data-column]")).toHaveLength(4);
+    expect(row.find("[data-column=\"strategy\"] .strategy-effect").exists()).toBe(true);
+    expect(row.find("[data-column=\"family\"] .computation-label").exists()).toBe(true);
+    expect(row.findAll("[data-column=\"flow\"] .type-chip")).toHaveLength(2);
+  });
+
   it("selects a row from the keyboard-focusable control and emits the strategy", async () => {
     const wrapper = mountCatalog();
     await wrapper.get('tr[data-strategy="validate.evidence_support"] .row-select').trigger("click");
