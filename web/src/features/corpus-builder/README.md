@@ -26,8 +26,7 @@ The visual workspaces live in [`components/corpus-builder/`](../../components/co
 
 ```mermaid
 flowchart LR
-    Owner["PdfCorpusBuilder.vue
-mutation + feature owner"]
+    Owner["PdfCorpusBuilder.vue<br/>mutation + feature owner"]
     Nav["useCorpusWorkspaceNavigation"]
     Setup["Setup workspace"]
     Build["Build workspace"]
@@ -35,14 +34,10 @@ mutation + feature owner"]
     Publish["Publish workspace"]
 
     subgraph Feature["features/corpus-builder"]
-        Composables["composables/
-lifecycle · review · publication · source config"]
-        Domain["domain/
-setup · workflow presentation · queue rows · readiness"]
-        RESTReads["api/
-focused reads"]
-        GQL["graphql/
-queue + review + document-intelligence reads"]
+        Composables["composables/<br/>lifecycle · review · publication · source config"]
+        Domain["domain/<br/>setup · workflow presentation · queue rows · readiness"]
+        RESTReads["api/<br/>focused reads"]
+        GQL["graphql/<br/>queue + review + document-intelligence reads"]
     end
 
     Backend["FastAPI Corpus Builder"]
