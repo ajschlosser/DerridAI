@@ -17,6 +17,16 @@
  */
 
 export type SettingsSectionId =
+  | "overview"
+  | "preferences"
+  | "research"
+  | "retrieval"
+  | "services"
+  | "data"
+  | "access"
+  | "troubleshooting";
+
+export type LegacySettingsSectionId =
   | "workspace"
   | "language"
   | "research"
@@ -47,6 +57,7 @@ export interface SettingsFieldIndex {
   helpFallback?: string;
   keywords?: string[];
   advanced?: boolean;
+  targetId?: string;
 }
 
 export interface ReviewSettingsDraft {
@@ -90,83 +101,111 @@ export interface FieldError {
   messageFallback: string;
 }
 
-export const SETTINGS_SECTIONS: Array<{
+export interface SettingsSectionDefinition {
   id: SettingsSectionId;
   labelKey: string;
   labelFallback: string;
   descriptionKey: string;
   descriptionFallback: string;
-}> = [
+  adminOnly?: boolean;
+}
+
+export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
   {
-    id: "workspace",
-    labelKey: "settings.nav.workspace",
-    labelFallback: "Workspace and appearance",
-    descriptionKey: "settings.nav.workspace_help",
-    descriptionFallback: "Theme, color scheme, and contrast for this browser.",
+    id: "overview",
+    labelKey: "settings.nav.overview",
+    labelFallback: "Overview",
+    descriptionKey: "settings.nav.overview_help",
+    descriptionFallback:
+      "Find settings by task, review important defaults, and jump to related workspaces.",
   },
   {
-    id: "language",
-    labelKey: "settings.nav.language",
-    labelFallback: "Language and accessibility",
-    descriptionKey: "settings.nav.language_help",
-    descriptionFallback: "Interface language and reading preferences.",
+    id: "preferences",
+    labelKey: "settings.nav.preferences",
+    labelFallback: "Preferences",
+    descriptionKey: "settings.nav.preferences_help",
+    descriptionFallback:
+      "Appearance, interface language, accessibility, notifications, and viewer behavior.",
   },
   {
     id: "research",
-    labelKey: "settings.nav.research",
-    labelFallback: "Research defaults",
-    descriptionKey: "settings.nav.research_help",
-    descriptionFallback: "Starting points for evidence-grounded research runs.",
-  },
-  {
-    id: "review",
-    labelKey: "settings.nav.review",
-    labelFallback: "Review and AI behavior",
-    descriptionKey: "settings.nav.review_help",
-    descriptionFallback: "Default provider, review preset, and how LLM review runs.",
-  },
-  {
-    id: "providers",
-    labelKey: "settings.nav.providers",
-    labelFallback: "Providers and models",
-    descriptionKey: "settings.nav.providers_help",
-    descriptionFallback: "Endpoints, models, and concurrency live on the Providers page.",
+    labelKey: "settings.nav.research_review",
+    labelFallback: "Research & review",
+    descriptionKey: "settings.nav.research_review_help",
+    descriptionFallback: "Defaults for research output, review execution, and evaluation behavior.",
   },
   {
     id: "retrieval",
-    labelKey: "settings.nav.retrieval",
-    labelFallback: "Vector stores and retrieval",
-    descriptionKey: "settings.nav.retrieval_help",
-    descriptionFallback: "Embedding defaults and RAG retrieval budgets.",
+    labelKey: "settings.nav.retrieval_indexing",
+    labelFallback: "Retrieval & indexing",
+    descriptionKey: "settings.nav.retrieval_indexing_help",
+    descriptionFallback:
+      "Embedding defaults, retrieval strategy, reranking, evidence budgets, and scope.",
+    adminOnly: true,
   },
   {
-    id: "security",
-    labelKey: "settings.nav.security",
-    labelFallback: "Security, users, and permissions",
-    descriptionKey: "settings.nav.security_help",
-    descriptionFallback: "Accounts and role capabilities are managed on dedicated pages.",
+    id: "services",
+    labelKey: "settings.nav.ai_language_services",
+    labelFallback: "AI & language services",
+    descriptionKey: "settings.nav.ai_language_services_help",
+    descriptionFallback: "Provider health, audio transcription, and document NLP resources.",
+    adminOnly: true,
   },
   {
-    id: "system",
-    labelKey: "settings.nav.system",
-    labelFallback: "System and operations",
-    descriptionKey: "settings.nav.system_help",
-    descriptionFallback: "Backup, restore, workspace reset, and destructive controls.",
+    id: "data",
+    labelKey: "settings.nav.data_storage",
+    labelFallback: "Data & storage",
+    descriptionKey: "settings.nav.data_storage_help",
+    descriptionFallback: "Retention, backup and restore, and links to system and corpus data.",
+    adminOnly: true,
+  },
+  {
+    id: "access",
+    labelKey: "settings.nav.access_permissions",
+    labelFallback: "Access & permissions",
+    descriptionKey: "settings.nav.access_permissions_help",
+    descriptionFallback: "Users, roles, and capability management.",
+    adminOnly: true,
+  },
+  {
+    id: "troubleshooting",
+    labelKey: "settings.nav.troubleshooting",
+    labelFallback: "Troubleshooting & recovery",
+    descriptionKey: "settings.nav.troubleshooting_help",
+    descriptionFallback: "Interface recovery, local cleanup, and destructive workspace reset.",
+    adminOnly: true,
   },
 ];
+
+export const SETTINGS_SECTION_ALIASES: Record<LegacySettingsSectionId, SettingsSectionId> = {
+  workspace: "preferences",
+  language: "preferences",
+  research: "research",
+  review: "research",
+  providers: "services",
+  retrieval: "retrieval",
+  security: "access",
+  system: "data",
+};
+
+export function resolveSettingsSectionId(value: string): SettingsSectionId | null {
+  if (SETTINGS_SECTIONS.some((section) => section.id === value)) return value as SettingsSectionId;
+  return SETTINGS_SECTION_ALIASES[value as LegacySettingsSectionId] || null;
+}
 
 export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
   {
     id: "theme",
-    section: "workspace",
+    section: "preferences",
     labelKey: "settings.color_theme",
     labelFallback: "Color theme",
     helpKey: "settings.appearance_help",
     helpFallback: "Choose the interface color theme for your workspace.",
+    targetId: "settings-heading-workspace",
   },
   {
     id: "scheme",
-    section: "workspace",
+    section: "preferences",
     labelKey: "settings.color_scheme",
     labelFallback: "Color scheme",
     helpKey: "settings.color_scheme_help",
@@ -174,7 +213,7 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
   },
   {
     id: "contrast",
-    section: "workspace",
+    section: "preferences",
     labelKey: "settings.contrast",
     labelFallback: "Contrast",
     helpKey: "settings.contrast_help",
@@ -182,16 +221,17 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
   },
   {
     id: "about",
-    section: "workspace",
+    section: "overview",
     labelKey: "about.title",
     labelFallback: "About DerridAI",
     helpKey: "about.help",
     helpFallback:
       "Release version of this instance. The git commit is shown for administrators and on the sign-in screen.",
+    targetId: "settings-overview-title",
   },
   {
     id: "locale",
-    section: "language",
+    section: "preferences",
     labelKey: "settings.interface_language",
     labelFallback: "Interface language",
     helpKey: "settings.interface_language_help",
@@ -199,19 +239,19 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
   },
   {
     id: "review-provider",
-    section: "review",
+    section: "research",
     labelKey: "settings.default_provider",
     labelFallback: "Default provider profile",
   },
   {
     id: "review-preset",
-    section: "review",
+    section: "research",
     labelKey: "settings.review_preset",
     labelFallback: "Default review preset",
   },
   {
     id: "review-mode",
-    section: "review",
+    section: "research",
     labelKey: "settings.run_mode",
     labelFallback: "Default run mode",
   },
@@ -333,37 +373,101 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
   },
   {
     id: "rag-auto-grade",
-    section: "review",
+    section: "research",
     labelKey: "settings.rag_auto_grade",
     labelFallback: "Auto-grade cached research answers",
   },
   {
     id: "notifications",
-    section: "system",
+    section: "preferences",
     labelKey: "settings.desktop_notifications",
     labelFallback: "Desktop notifications",
   },
   {
+    id: "data-workspaces",
+    section: "data",
+    labelKey: "settings.data_workspaces_title",
+    labelFallback: "Data workspaces",
+    helpKey: "settings.data_workspaces_help",
+    helpFallback:
+      "Inspect operational System Data or open Corpus Data without duplicating those workspaces inside Settings.",
+    keywords: ["system data", "corpus data", "databases", "stores", "vector stores"],
+    targetId: "settings-heading-data-workspaces",
+  },
+  {
     id: "data-retention",
-    section: "system",
+    section: "data",
     labelKey: "settings.retention_title",
     labelFallback: "Data retention",
     helpKey: "settings.retention_help",
     helpFallback:
       "Choose how long DerridAI keeps operational history: pipeline traces, benchmark results, finished jobs, and saved Research responses.",
     keywords: ["retention", "expire", "traces", "job history", "disk space", "gigabytes"],
+    targetId: "settings-heading-data-retention",
   },
   {
     id: "backup",
-    section: "system",
+    section: "data",
     labelKey: "settings.backup",
     labelFallback: "Backup and restore",
+    targetId: "settings-heading-backup",
   },
   {
     id: "nuke",
-    section: "system",
+    section: "troubleshooting",
     labelKey: "config.nuke.title",
     labelFallback: "Start from scratch",
+  },
+  {
+    id: "providers",
+    section: "services",
+    labelKey: "settings.providers_title",
+    labelFallback: "Provider status",
+    helpKey: "settings.providers_help",
+    helpFallback:
+      "Review configured LLM provider health and open the Providers workspace to manage profiles.",
+    keywords: ["provider", "model", "ollama", "openai", "health"],
+    targetId: "settings-section-providers",
+  },
+  {
+    id: "audio",
+    section: "services",
+    labelKey: "settings.audio_title",
+    labelFallback: "Audio transcription",
+    helpKey: "settings.audio_help",
+    helpFallback: "Configure and test the audio transcription service used for media ingestion.",
+    keywords: ["audio", "transcription", "speech", "api key", "model"],
+    targetId: "settings-heading-audio",
+  },
+  {
+    id: "nlp-packs",
+    section: "services",
+    labelKey: "settings.nlp_packs_title",
+    labelFallback: "Document NLP resources",
+    helpKey: "settings.nlp_packs_help",
+    helpFallback: "Install and manage language resources used for document NLP.",
+    keywords: ["nlp", "language pack", "pos", "ner", "spacy"],
+    targetId: "settings-heading-language-packs",
+  },
+  {
+    id: "access",
+    section: "access",
+    labelKey: "settings.security_title",
+    labelFallback: "Users, roles, and permissions",
+    helpKey: "settings.security_help",
+    helpFallback: "Open the dedicated Users and Roles workspaces to manage access.",
+    keywords: ["users", "roles", "permissions", "capabilities", "access"],
+    targetId: "settings-heading-security",
+  },
+  {
+    id: "interface-reset",
+    section: "troubleshooting",
+    labelKey: "settings.viewer_title",
+    labelFallback: "Interface recovery",
+    helpKey: "settings.viewer_help",
+    helpFallback: "Reset local table, panel, sidebar, and update-history state.",
+    keywords: ["reset", "columns", "panels", "sidebar", "updates", "upsert"],
+    targetId: "settings-heading-viewer",
   },
 ];
 

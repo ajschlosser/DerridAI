@@ -360,7 +360,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
   {
     id: "settings",
     routeName: "settings-section",
-    path: "/settings/workspace",
+    path: "/settings/overview",
     group: "system",
     showImpact: true,
     capability: "page.settings",

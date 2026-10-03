@@ -252,8 +252,10 @@ onMounted(load);
     <p v-if="busy === 'load' && !overview" role="status">{{ t("common.loading", "Loading") }}</p>
 
     <template v-if="draft && overview">
-      <details class="retention-canonical">
-        <summary>{{ t("settings.retention_canonical_title", "Kept permanently") }}</summary>
+      <section class="retention-canonical" aria-labelledby="retention-canonical-title">
+        <h3 id="retention-canonical-title">
+          {{ t("settings.retention_canonical_title", "Kept permanently") }}
+        </h3>
         <p>
           {{
             t(
@@ -262,7 +264,7 @@ onMounted(load);
             )
           }}
         </p>
-      </details>
+      </section>
 
       <fieldset class="retention-system">
         <legend>{{ t("settings.retention_system_legend", "System-wide policy") }}</legend>
@@ -542,6 +544,20 @@ onMounted(load);
 .retention {
   display: grid;
   gap: 12px;
+}
+.retention-canonical {
+  padding: 12px 14px;
+  border-inline-start: 3px solid var(--accent);
+  background: var(--panel-2);
+}
+.retention-canonical h3 {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.retention-canonical p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 .retention-system {
   display: grid;

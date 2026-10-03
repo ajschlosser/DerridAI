@@ -347,14 +347,18 @@ describe("sidebar at sign-in", () => {
 
   it("places Settings breadcrumbs under System on direct loads", async () => {
     const { wrapper, router } = await signIn("admin");
-    await router.push("/settings/workspace");
+    await router.push("/settings/preferences");
     await flushPromises();
 
     const crumbs = wrapper.find(".vue-breadcrumb-path");
     expect(crumbs.text()).toContain("System");
     expect(crumbs.text()).toContain("Settings");
-    expect(crumbs.text()).toContain("Workspace");
-    expect(crumbs.findAll("a").map((link) => link.text())).toEqual(["DerridAI", "System"]);
+    expect(crumbs.text()).toContain("Preferences");
+    expect(crumbs.findAll("a").map((link) => link.text())).toEqual([
+      "DerridAI",
+      "System",
+      "Settings",
+    ]);
   });
 
   it("filters navigation without hiding its information architecture", async () => {

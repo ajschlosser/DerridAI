@@ -126,8 +126,8 @@ describe("shareable URL state", () => {
   it("keeps the sub-path the router owns for Settings and System Data", () => {
     const { state, navigation } = setup();
     state.view = "config";
-    visit("/settings/providers");
-    expect(navigation.urlFromState().startsWith("/settings/providers")).toBe(true);
+    visit("/settings/services");
+    expect(navigation.urlFromState().startsWith("/settings/services")).toBe(true);
     state.view = "responsecache";
     visit("/system-data/responses");
     expect(navigation.urlFromState().startsWith("/system-data/responses")).toBe(true);

@@ -253,7 +253,10 @@ async function refresh() {
   }
 
   await nextTick();
-  if (mainEl.value) runtime.decorateDisabledControls(mainEl.value);
+  if (mainEl.value) {
+    runtime.enhanceCollapsibles(mainEl.value);
+    runtime.decorateDisabledControls(mainEl.value);
+  }
 }
 
 function corpusBuildStatusLabel(job: Any) {
