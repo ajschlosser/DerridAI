@@ -226,7 +226,7 @@ test("schema authoring is keyboard-operable and announces a save", async ({ page
   await builtInFields.nth(1).focus();
   await page.keyboard.press("Enter");
   await expect(builtInFields.nth(1)).toHaveAttribute("aria-current", "true");
-  await expect(page.locator(".field-inspector fieldset")).toBeDisabled();
+  await expect(page.locator(".field-inspector fieldset")).toHaveAttribute("disabled", "");
 
   await page.getByRole("button", { name: "Duplicate", exact: true }).click();
   await expect(page.getByText("Not saved yet")).toBeVisible();
