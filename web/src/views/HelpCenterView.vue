@@ -20,14 +20,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
+import HelpContentsNav, {
+  type HelpContentsLink,
+} from "../components/help/HelpContentsNav.vue";
+import HelpQuickStart from "../components/help/HelpQuickStart.vue";
+import HelpSearchHero from "../components/help/HelpSearchHero.vue";
 import HelpHighlight from "../components/HelpHighlight.vue";
-import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import {
   type HelpGlossaryCategory,
   type HelpPageGroup,
   visibleGlossary,
   visibleHelp,
   visiblePageGuides,
+  visibleStarters,
 } from "../domain/helpTopics";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
@@ -39,8 +44,20 @@ const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const query = ref(String(route.query.q || ""));
-const glossaryCategory = ref<HelpGlossaryCategory>("all");
-const searchInput = ref<HTMLInputElement | null>(null);
+const glossaryCategoryValues: HelpGlossaryCategory[] = [
+  "all",
+  "core",
+  "ai",
+  "retrieval",
+  "provenance",
+  "storage",
+  "operations",
+];
+const initialCategory = String(route.query.topic || "all") as HelpGlossaryCategory;
+const glossaryCategory = ref<HelpGlossaryCategory>(
+  glossaryCategoryValues.includes(initialCategory) ? initialCategory : "all",
+);
+const searchHero = ref<{ focusSearch: () => void } | null>(null);
 const contentRoot = ref<HTMLElement | null>(null);
 const activeSection = ref<SectionId>("help-pages");
 const openKeys = ref(new Set<string>());
@@ -57,13 +74,33 @@ const groupOrder: HelpPageGroup[] = [
   "support",
 ];
 
-const glossaryCategories: HelpGlossaryCategory[] = [
-  "all",
-  "ai",
-  "retrieval",
-  "provenance",
-  "storage",
-];
+const glossaryCategories = glossaryCategoryValues;
+
+const starters = computed(() =>
+  visibleStarters(
+    auth.isAdmin,
+    (capability) => auth.can(capability),
+    (key, fallback) => i18n.t(key, fallback),
+  ),
+);
+
+const allPageGuides = computed(() =>
+  visiblePageGuides(
+    auth.isAdmin,
+    (capability) => auth.can(capability),
+    "",
+    (key, fallback) => i18n.t(key, fallback),
+  ),
+);
+const allGlossary = computed(() =>
+  visibleGlossary("", "all", (key, fallback) => i18n.t(key, fallback)),
+);
+const allQuestionCount = computed(() =>
+  visibleHelp(auth.isAdmin, "", (key, fallback) => i18n.t(key, fallback)).reduce(
+    (total, section) => total + section.entries.length,
+    0,
+  ),
+);
 
 const pageGuides = computed(() =>
   visiblePageGuides(
@@ -108,8 +145,8 @@ const questionKeys = computed(() =>
   sections.value.flatMap((section) => section.entries.map((entry) => `q:${entry.id}`)),
 );
 
-const railLinks = computed(() => {
-  const links: { id: SectionId; icon: string; label: string; count: number }[] = [];
+const railLinks = computed<HelpContentsLink[]>(() => {
+  const links: HelpContentsLink[] = [];
   if (pageGroups.value.length) {
     links.push({
       id: "help-pages",
@@ -162,25 +199,40 @@ function toggleAll(keys: string[]) {
 
 function clearSearch() {
   query.value = "";
-  searchInput.value?.focus();
+  void nextTick(() => searchHero.value?.focusSearch());
+}
+
+function syncRouteState() {
+  if (applyingRouteState) return;
+  const trimmed = query.value.trim();
+  void router.replace({
+    name: "help",
+    query: {
+      ...route.query,
+      q: trimmed || undefined,
+      topic: !trimmed && glossaryCategory.value !== "all" ? glossaryCategory.value : undefined,
+    },
+    hash: route.hash,
+  });
 }
 
 watch(query, (value) => {
-  if (value.trim()) glossaryCategory.value = "all";
-  if (applyingRouteState) return;
-  void router.replace({
-    name: "help",
-    query: { ...route.query, q: value.trim() || undefined },
-  });
+  if (value.trim() && glossaryCategory.value !== "all") glossaryCategory.value = "all";
+  syncRouteState();
 });
 
+watch(glossaryCategory, () => syncRouteState());
+
 watch(
-  () => route.query.q,
-  (value) => {
-    const next = String(value || "");
-    if (next === query.value) return;
+  () => [route.query.q, route.query.topic] as const,
+  ([routeQuery, routeTopic]) => {
+    const nextQuery = String(routeQuery || "");
+    const candidate = String(routeTopic || "all") as HelpGlossaryCategory;
+    const nextCategory = glossaryCategoryValues.includes(candidate) ? candidate : "all";
+    if (nextQuery === query.value && nextCategory === glossaryCategory.value) return;
     applyingRouteState = true;
-    query.value = next;
+    query.value = nextQuery;
+    glossaryCategory.value = nextQuery ? "all" : nextCategory;
     applyingRouteState = false;
   },
 );
@@ -223,19 +275,42 @@ function onGlobalKeydown(event: KeyboardEvent) {
   const target = event.target as HTMLElement | null;
   if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
   event.preventDefault();
-  searchInput.value?.focus();
+  searchHero.value?.focusSearch();
 }
 
 function openFromHash() {
   const id = decodeURIComponent(route.hash.replace(/^#/, ""));
   if (!id) return;
-  const prefixes: [string, string][] = [["help-page-", "page:"]];
+  const prefixes: [string, string][] = [
+    ["help-page-", "page:"],
+    ["help-question-", "q:"],
+  ];
   for (const [prefix, key] of prefixes) {
-    if (id.startsWith(prefix))
+    if (id.startsWith(prefix)) {
       openKeys.value = new Set(openKeys.value).add(key + id.slice(prefix.length));
+    }
   }
-  void nextTick(() => document.getElementById(id)?.scrollIntoView?.({ block: "start" }));
+  if (id.startsWith("help-term-") && glossaryCategory.value !== "all") {
+    glossaryCategory.value = "all";
+  }
+  void nextTick(() => {
+    const target = document.getElementById(id);
+    if (target) {
+      target.scrollIntoView?.({ block: "start" });
+      return;
+    }
+    // A shareable anchor must remain useful even when an old search query hides it.
+    if (query.value) {
+      query.value = "";
+      void nextTick(() => document.getElementById(id)?.scrollIntoView?.({ block: "start" }));
+    }
+  });
 }
+
+watch(
+  () => route.hash,
+  () => openFromHash(),
+);
 
 onMounted(() => {
   document.addEventListener("keydown", onGlobalKeydown);
@@ -253,66 +328,27 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="help-center">
-    <UiPageHeader :title="i18n.t('help.title')" :description="i18n.t('help.intro')" />
+  <section class="help-center" aria-labelledby="help-center-title">
+    <HelpSearchHero
+      ref="searchHero"
+      v-model="query"
+      :searching="searching"
+      :match-count="matchCount"
+      :page-count="allPageGuides.length"
+      :term-count="allGlossary.length"
+      :question-count="allQuestionCount"
+      :is-admin="auth.isAdmin"
+    />
 
-    <div class="help-search-bar" role="search">
-      <label class="help-search" for="help-search-input">
-        <span class="sr-only">{{ i18n.t("help.search") }}</span>
-        <span class="help-search-control">
-          <AppIcon name="search" aria-hidden="true" />
-          <input
-            id="help-search-input"
-            ref="searchInput"
-            v-model="query"
-            class="control"
-            type="search"
-            :placeholder="i18n.t('help.search_placeholder')"
-            autocomplete="off"
-            aria-describedby="help-search-status"
-            @keydown.esc="query = ''"
-          />
-          <button
-            v-if="query"
-            type="button"
-            class="help-search-clear"
-            :aria-label="i18n.t('help.clear_search')"
-            @click="clearSearch"
-          >
-            <AppIcon name="close" aria-hidden="true" />
-          </button>
-          <kbd v-else class="help-kbd" :title="i18n.t('help.search_shortcut')" aria-hidden="true">
-            /
-          </kbd>
-        </span>
-      </label>
-      <p id="help-search-status" class="help-search-status" role="status" aria-live="polite">
-        {{
-          searching
-            ? i18n.tf("help.results_found", { count: matchCount })
-            : i18n.t("help.search_hint")
-        }}
-      </p>
-    </div>
+    <HelpQuickStart v-if="!searching" :items="starters" />
 
     <div class="help-layout">
-      <aside class="help-toc">
-        <nav :aria-label="i18n.t('help.contents')">
-          <p class="help-toc-title">{{ i18n.t("help.contents") }}</p>
-          <a
-            v-for="link in railLinks"
-            :key="link.id"
-            :href="`#${link.id}`"
-            :aria-current="activeSection === link.id ? 'location' : undefined"
-            :class="{ active: activeSection === link.id }"
-            @click="activeSection = link.id"
-          >
-            <AppIcon :name="link.icon" aria-hidden="true" />
-            <span class="help-toc-label">{{ link.label }}</span>
-            <span class="help-toc-count">{{ link.count }}</span>
-          </a>
-        </nav>
-      </aside>
+      <HelpContentsNav
+        v-if="hasResults"
+        :links="railLinks"
+        :active-section="activeSection"
+        @activate="activeSection = $event as SectionId"
+      />
 
       <div ref="contentRoot" class="help-content">
         <section v-if="!hasResults" class="help-empty">
@@ -531,6 +567,7 @@ onBeforeUnmount(() => {
             </h3>
             <details
               v-for="entry in section.entries"
+              :id="`help-question-${entry.id}`"
               :key="entry.id"
               class="help-entry"
               :open="isOpen(`q:${entry.id}`)"
@@ -564,99 +601,6 @@ onBeforeUnmount(() => {
   padding-block-end: var(--space-7);
 }
 
-/* Keep search visually integrated with the page. Only the input owns a surface. */
-.help-search-bar {
-  display: grid;
-  gap: 6px;
-  padding-block-end: var(--space-2);
-}
-
-.help-search {
-  display: block;
-  max-inline-size: 46rem;
-}
-
-.help-search-control {
-  position: relative;
-  display: block;
-}
-
-.help-search-control > :deep(svg) {
-  position: absolute;
-  inset-block-start: 50%;
-  inset-inline-start: 14px;
-  inline-size: 18px;
-  block-size: 18px;
-  color: var(--text-tertiary);
-  pointer-events: none;
-  transform: translateY(-50%);
-}
-
-.help-search-control input {
-  inline-size: 100%;
-  min-block-size: 48px;
-  padding-inline: 44px 48px;
-  border-radius: var(--radius-card);
-  font-size: 1rem;
-}
-
-.help-search-control input::-webkit-search-cancel-button {
-  display: none;
-}
-
-.help-kbd {
-  position: absolute;
-  inset-block-start: 50%;
-  inset-inline-end: 12px;
-  min-inline-size: 24px;
-  padding: 2px 7px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: var(--surface-inset);
-  color: var(--text-secondary);
-  font: inherit;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  text-align: center;
-  pointer-events: none;
-  transform: translateY(-50%);
-}
-
-.help-search-clear {
-  position: absolute;
-  inset-block-start: 50%;
-  inset-inline-end: 6px;
-  display: grid;
-  place-items: center;
-  inline-size: 36px;
-  block-size: 36px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transform: translateY(-50%);
-}
-
-.help-search-clear:hover {
-  background: var(--surface-hover);
-  color: var(--text-primary);
-}
-
-.help-search-clear :deep(svg) {
-  inline-size: 16px;
-  block-size: 16px;
-}
-
-.help-search-status {
-  margin: 0;
-  min-block-size: 1.25rem;
-  color: var(--text-tertiary);
-  font-size: 0.8125rem;
-  line-height: var(--lh-normal);
-}
-
 .help-section-heading h2,
 .help-section-heading p,
 .help-page-group h3,
@@ -677,80 +621,6 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr);
   gap: clamp(20px, 3vw, 40px);
   align-items: start;
-}
-
-.help-toc {
-  position: sticky;
-  inset-block-start: 5rem;
-}
-
-.help-toc nav {
-  display: grid;
-  gap: 2px;
-}
-
-.help-toc-title {
-  margin: 0;
-  padding: 0 10px 6px;
-  color: var(--text-tertiary);
-  font-size: 0.75rem;
-  font-weight: var(--fw-bold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.help-toc a {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  min-block-size: 40px;
-  padding: 8px 10px;
-  border-inline-start: 3px solid transparent;
-  border-radius: var(--radius-control);
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  font-weight: 650;
-  text-decoration: none;
-}
-
-.help-toc a:hover {
-  background: var(--surface-hover);
-  color: var(--text-primary);
-}
-
-.help-toc a.active {
-  border-inline-start-color: var(--accent-fg);
-  background: var(--surface-selected);
-  color: var(--text-primary);
-}
-
-.help-toc-count,
-.help-group-count {
-  padding: 1px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-inset);
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-weight: var(--fw-bold);
-  letter-spacing: 0;
-}
-
-.help-toc a:focus-visible,
-.help-text-button:focus-visible,
-.help-toggle-all:focus-visible,
-.help-search-clear:focus-visible,
-.help-filter:focus-visible,
-.help-open-page:focus-visible,
-.help-guide-card summary:focus-visible,
-.help-entry summary:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
-.help-toc :deep(svg) {
-  inline-size: 16px;
-  block-size: 16px;
 }
 
 .help-content {
@@ -1182,6 +1052,10 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+.help-entry {
+  scroll-margin-block-start: 5rem;
+}
+
 .help-entry summary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1230,38 +1104,6 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  /* The contents rail becomes a compact jump bar on smaller screens. */
-  .help-toc {
-    position: static;
-    inset-block-start: auto;
-    z-index: 4;
-    padding-block: 4px;
-    background: var(--surface-page, var(--bg, #fff));
-  }
-
-  .help-toc nav {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-  }
-
-  .help-toc-title {
-    display: none;
-  }
-
-  .help-toc a {
-    flex: 0 0 auto;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-pill);
-  }
-
-  .help-toc a.active {
-    border-color: var(--border-interactive);
-  }
-
-  .help-toc .help-toc-label {
-    white-space: nowrap;
-  }
 }
 
 @media (max-width: 680px) {
@@ -1282,6 +1124,20 @@ onBeforeUnmount(() => {
 
   .help-category-badge {
     display: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .help-guide-card,
+  .help-glossary-entry,
+  .help-parameter-entry,
+  .help-entry,
+  .help-empty {
+    border-color: CanvasText;
+  }
+
+  .help-filter.active {
+    border-color: Highlight;
   }
 }
 
