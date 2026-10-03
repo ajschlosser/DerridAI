@@ -74,6 +74,7 @@ class EditorialMemoryMixin:
         _global_learning: Any
         _progressive_metadata_index: Any
         _progressive_metadata_warning_builds: set[str]
+        _cache_lock: Any
 
         def _append_warning(self, build_id: str, message: str) -> None: ...
         def _blocks_for(self, build_id: str) -> dict[str, dict[str, Any]]: ...
@@ -582,20 +583,22 @@ class EditorialMemoryMixin:
                         **prompt_budget_kwargs,
                     )
                 if retrieval_telemetry.get("fallback_reason"):
-                    warned: set[str] = getattr(
-                        self,
-                        "_progressive_metadata_warning_builds",
-                        set(),
-                    )
-                    if build_id not in warned:
-                        self._append_warning(
-                            build_id,
-                            "Progressive semantic metadata memory was unavailable; "
-                            "enrichment used deterministic editorial-memory fallback "
-                            f"({retrieval_telemetry['fallback_reason']}).",
-                        )
+                    with self._cache_lock:
+                        warned = self._progressive_metadata_warning_builds
+                        first_warning = build_id not in warned
                         warned.add(build_id)
-                        self._progressive_metadata_warning_builds = warned
+                    if first_warning:
+                        try:
+                            self._append_warning(
+                                build_id,
+                                "Progressive semantic metadata memory was unavailable; "
+                                "enrichment used deterministic editorial-memory fallback "
+                                f"({retrieval_telemetry['fallback_reason']}).",
+                            )
+                        except Exception:
+                            with self._cache_lock:
+                                warned.discard(build_id)
+                            raise
 
         example_token_estimate = prompt_example_token_estimate(examples)
 

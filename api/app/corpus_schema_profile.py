@@ -52,6 +52,7 @@ class SchemaProfileMixin:
     if TYPE_CHECKING:
         repo: Any
         _lock: Any
+        _cache_lock: Any
         _ledger: Any
         _schema_cache: dict[str, MetadataSchema]
         _suspended: set[tuple[str, str]]
@@ -60,13 +61,15 @@ class SchemaProfileMixin:
     def _schema_of_build(self, build: dict[str, Any]) -> MetadataSchema:
         """The schema a build was started with. It is a copy stored on the build, so editing or deleting the saved one changes nothing."""
         build_id = str(build.get("build_id") or "")
-        cached = self._schema_cache.get(build_id)
-        if cached is not None:
-            return cached
+        with self._cache_lock:
+            cached = self._schema_cache.get(build_id)
+            if cached is not None:
+                return cached
         raw = build.get("schema")
         schema = MetadataSchema.model_validate(raw) if isinstance(raw, dict) and raw else default_schema()
         if build_id:
-            self._schema_cache[build_id] = schema
+            with self._cache_lock:
+                return self._schema_cache.setdefault(build_id, schema)
         return schema
 
 
@@ -113,4 +116,3 @@ class SchemaProfileMixin:
     def active_count(self) -> int:
         listing = self.repo.list_builds(offset=0, limit=10000)
         return sum(1 for build in listing["items"] if build.get("status") in {"queued", "running"})
-

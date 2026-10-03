@@ -92,6 +92,7 @@ class BuildLifecycleMixin:
     if TYPE_CHECKING:
         repo: Any
         _lock: Any
+        _cache_lock: Any
         _executor: Any
         _ledger: Any
         _cancel: set[str]
@@ -699,15 +700,18 @@ class BuildLifecycleMixin:
     def _ollama_loaded_models(self, base_url: str) -> set[str] | None:
         """Names Ollama has in memory right now (its /api/ps), cached for a few seconds. None if it cannot be asked."""
         now = time.monotonic()
-        cached_at, cached_url, cached = self._loaded_models_cache
-        if cached_url == base_url and now - cached_at < 3.0:
-            return cached
+        with self._cache_lock:
+            cached_at, cached_url, cached = self._loaded_models_cache
+            if cached_url == base_url and now - cached_at < 3.0:
+                return set(cached)
         try:
             with urllib.request.urlopen(base_url.rstrip("/") + "/api/ps", timeout=1.5) as response:  # noqa: S310 - the operator's configured Ollama URL
                 names = {str(m.get("name") or m.get("model") or "") for m in json.loads(response.read()).get("models", []) if isinstance(m, dict)}
         except Exception:  # noqa: BLE001 - the status line is a courtesy; never let it break a build read
             return None
-        self._loaded_models_cache = (now, base_url, names)
+        with self._cache_lock:
+            if now >= self._loaded_models_cache[0]:
+                self._loaded_models_cache = (now, base_url, set(names))
         return names
 
 

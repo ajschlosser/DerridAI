@@ -1751,6 +1751,8 @@ class PdfCorpusRepository:
             identity = (stat.st_dev, stat.st_ino, int(connection.execute("PRAGMA schema_version").fetchone()[0]))
             if self._initialized_record_databases.get(build_id) != identity:
                 with self._lock:
+                    stat = path.stat()
+                    identity = (stat.st_dev, stat.st_ino, int(connection.execute("PRAGMA schema_version").fetchone()[0]))
                     if self._initialized_record_databases.get(build_id) != identity:
                         self._initialize_records_db(connection)
                     identity = (stat.st_dev, stat.st_ino, int(connection.execute("PRAGMA schema_version").fetchone()[0]))
@@ -1887,10 +1889,11 @@ class PdfCorpusRepository:
         if not self._SAFE_ID.match(build_id):
             raise KeyError(build_id)
         target = self.root / "builds" / build_id
-        if not target.is_dir():
-            raise KeyError(build_id)
-        shutil.rmtree(target)
-        self._invalidate_review_records_cache(build_id)
+        with self._lock:
+            if not target.is_dir():
+                raise KeyError(build_id)
+            shutil.rmtree(target)
+            self._invalidate_review_records_cache(build_id)
 
     def delete_asset_files(self, asset_id: str) -> None:
         """Remove a source asset's metadata, extracted blocks and stored bytes."""
@@ -1918,7 +1921,8 @@ class PdfCorpusRepository:
     def _record_schema(
         self, build_id: str, *, build_snapshot: dict[str, Any] | None = None,
     ) -> MetadataSchema | None:
-        build = build_snapshot if build_snapshot is not None else self.get_build(build_id)
+        # Schema lookup needs one atomic JSON snapshot, not a writer reservation.
+        build = build_snapshot if build_snapshot is not None else self._read_build_snapshot(build_id)
         raw_schema = build.get("schema") if isinstance(build, dict) else None
         if not isinstance(raw_schema, dict):
             return None
@@ -1950,7 +1954,8 @@ class PdfCorpusRepository:
         return {"items": items[offset:offset + limit], "total": total, "offset": offset, "limit": limit}
 
     def _invalidate_review_records_cache(self, build_id: str) -> None:
-        self._review_records_cache.pop(str(build_id), None)
+        with self._lock:
+            self._review_records_cache.pop(str(build_id), None)
 
     def _records_snapshot_signature(self, build_id: str) -> tuple[int, int]:
         """Cheap cross-process identity for the interactive SQLite record store."""
@@ -2090,7 +2095,6 @@ class PdfCorpusRepository:
         payload = json.dumps(record, ensure_ascii=False)
         with self._lock:
             self._bootstrap_records_db(build_id)
-            self._set_records_projection_state(build_id, dirty=True)
             with self._records_db(build_id) as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 self._ensure_review_projection(connection, build_id)
@@ -2106,6 +2110,7 @@ class PdfCorpusRepository:
                     ).fetchone()
                     if version is None or int(version[0]) != expected_queue_version:
                         raise RecordStateConflict("Record changed during preparation; retry the merge against current state.")
+                self._set_records_projection_state(build_id, dirty=True)
                 connection.execute(
                     "UPDATE corpus_records SET payload = ? WHERE record_id = ?",
                     (payload, record_id),
@@ -2280,14 +2285,13 @@ class PdfCorpusRepository:
         self, build_id: str, records: list[dict[str, Any]] | None = None,
     ) -> str | None:
         """Read the current annotation epoch; optionally verify a captured scope."""
-        with self._lock:
-            self._bootstrap_records_db(build_id)
-            with self._records_db(build_id) as connection:
-                connection.execute("BEGIN IMMEDIATE")
-                epoch = corpus_document_context.ensure(connection)
-                if records is not None and not corpus_document_context.matches(connection, records):
-                    return None
-                return epoch
+        with self._review_read_db(build_id) as (connection, _schema, _signature):
+            row = connection.execute("SELECT epoch FROM document_context_state WHERE id=1").fetchone()
+            if row is None or not row[0]:
+                raise RuntimeError("Document context snapshot requires an initialized annotation epoch.")
+            if records is not None and not corpus_document_context.matches(connection, records):
+                return None
+            return str(row[0])
 
     def invalidate_metadata_exemplars(self, build_id: str, *, schedule: bool = True) -> None:
         self._bootstrap_records_db(build_id)
@@ -2297,13 +2301,11 @@ class PdfCorpusRepository:
             self._notify_metadata_projection(build_id)
 
     def metadata_exemplar_dirty(self, build_id: str, *, limit: int = 100) -> list[dict[str, str]]:
-        self._bootstrap_records_db(build_id)
-        with self._lock, self._records_db(build_id) as connection:
+        with self._record_store_read_db(build_id) as connection:
             return metadata_exemplar_journal.dirty(connection, limit)
 
     def metadata_exemplar_dirty_count(self, build_id: str) -> int:
-        self._bootstrap_records_db(build_id)
-        with self._lock, self._records_db(build_id) as connection:
+        with self._record_store_read_db(build_id) as connection:
             return int(connection.execute("SELECT COUNT(*) FROM metadata_exemplar_dirty").fetchone()[0])
 
     def complete_metadata_exemplar_dirty(self, build_id: str, items: list[dict[str, Any]]) -> int:
@@ -2311,10 +2313,22 @@ class PdfCorpusRepository:
             return metadata_exemplar_journal.complete(connection, items)
 
     def metadata_exemplar_state(self, build_id: str) -> tuple[str, str]:
-        self._bootstrap_records_db(build_id)
-        with self._lock, self._records_db(build_id) as connection:
+        with self._record_store_read_db(build_id) as connection:
             row = connection.execute("SELECT epoch,context FROM metadata_exemplar_state WHERE singleton=1").fetchone()
+            if row is None:
+                raise RuntimeError("Metadata exemplar journal requires an initialized state row.")
             return str(row[0]), str(row[1])
+
+    @contextmanager
+    def _record_store_read_db(self, build_id: str) -> Iterator[sqlite3.Connection]:
+        """Read raw canonical/journal rows without repairing derived projections."""
+        self._read_build_snapshot(build_id)
+        if not self.build_records_db_path(build_id).exists():
+            with self._lock:
+                self._bootstrap_records_db(build_id)
+        with self._records_db(build_id) as connection:
+            connection.execute("BEGIN")
+            yield connection
 
     def save_metadata_exemplar_state(self, build_id: str, epoch: str, context: str) -> None:
         with self._lock, self._records_db(build_id) as connection:
@@ -2327,10 +2341,13 @@ class PdfCorpusRepository:
         """Rebuild the JSONL publication projection from the transactional index."""
         with self._lock:
             self._bootstrap_records_db(build_id)
+            self._set_records_projection_state(build_id, dirty=True)
             with self._records_db(build_id) as connection:
+                connection.execute("BEGIN")
                 rows = connection.execute(
                     "SELECT payload FROM corpus_records ORDER BY ordinal"
                 ).fetchall()
+                connection.commit()
             path = self.build_records_path(build_id)
             path.parent.mkdir(parents=True, exist_ok=True)
             fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
@@ -2347,7 +2364,16 @@ class PdfCorpusRepository:
                     tmp.unlink(missing_ok=True)
                 except OSError:
                     pass
-            self._set_records_projection_state(build_id, dirty=False)
+            with self._records_db(build_id) as connection:
+                # A different connection cannot compare SQLite data_version
+                # values. Compare the captured payloads under a writer reservation.
+                connection.execute("BEGIN IMMEDIATE")
+                current_rows = connection.execute(
+                    "SELECT payload FROM corpus_records ORDER BY ordinal"
+                ).fetchall()
+                if current_rows != rows:
+                    raise RecordStateConflict("Records changed while refreshing JSONL; retry the projection refresh.")
+                self._set_records_projection_state(build_id, dirty=False)
 
     def get_records(
         self, build_id: str, record_ids: list[str] | tuple[str, ...], *,
@@ -2405,25 +2431,22 @@ class PdfCorpusRepository:
         Only what a reader needs is returned (identity, text, pages, state): never metadata or
         review internals. ``max_chars`` bounds the total text so a request stays small.
         """
-        self.get_build(build_id)
         before, after = max(0, min(30, int(before))), max(0, min(30, int(after)))
-        with self._lock:
-            self._bootstrap_records_db(build_id)
-            with self._records_db(build_id) as connection:
-                row = connection.execute(
-                    "SELECT ordinal FROM corpus_records WHERE record_id = ?", (str(record_id),)
-                ).fetchone()
-                if row is None:
-                    raise KeyError(record_id)
-                ordinal = int(row[0])
-                previous = connection.execute(
-                    "SELECT payload FROM corpus_records WHERE ordinal < ? ORDER BY ordinal DESC LIMIT ?",
-                    (ordinal, before),
-                ).fetchall()
-                following = connection.execute(
-                    "SELECT payload FROM corpus_records WHERE ordinal > ? ORDER BY ordinal ASC LIMIT ?",
-                    (ordinal, after),
-                ).fetchall()
+        with self._record_store_read_db(build_id) as connection:
+            row = connection.execute(
+                "SELECT ordinal FROM corpus_records WHERE record_id = ?", (str(record_id),)
+            ).fetchone()
+            if row is None:
+                raise KeyError(record_id)
+            ordinal = int(row[0])
+            previous = connection.execute(
+                "SELECT payload FROM corpus_records WHERE ordinal < ? ORDER BY ordinal DESC LIMIT ?",
+                (ordinal, before),
+            ).fetchall()
+            following = connection.execute(
+                "SELECT payload FROM corpus_records WHERE ordinal > ? ORDER BY ordinal ASC LIMIT ?",
+                (ordinal, after),
+            ).fetchall()
         total_budget = max(0, int(max_chars))
         before_budget = total_budget // 2 if previous and following else total_budget
         after_budget = total_budget - before_budget if previous else total_budget
@@ -2471,15 +2494,13 @@ class PdfCorpusRepository:
         }
 
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
-        schema = self._record_schema(build_id)
-        with self._lock:
-            self._bootstrap_records_db(build_id)
-            with self._records_db(build_id) as connection:
-                rows = connection.execute(
-                    "SELECT payload FROM corpus_records ORDER BY ordinal"
-                ).fetchall()
-                signature = self._schema_signature(schema)
-                records = [self._decode_migrated(payload, schema, signature) for (payload,) in rows]
+        with self._record_store_read_db(build_id) as connection:
+            schema = self._record_schema(build_id)
+            rows = connection.execute(
+                "SELECT payload FROM corpus_records ORDER BY ordinal"
+            ).fetchall()
+        signature = self._schema_signature(schema)
+        records = [self._decode_migrated(payload, schema, signature) for (payload,) in rows]
         for record in records:
             if any(
                 isinstance(status, dict) and status.get("recheck")
@@ -2570,23 +2591,20 @@ class PdfCorpusRepository:
                 return page
 
     def review_queue_summary(self, build_id: str, record_id: str, review_queue: str | None = None) -> tuple[dict[str, int], dict[str, Any] | None]:
-        with self._lock:
-            self._bootstrap_records_db(build_id)
-            with self._records_db(build_id) as connection:
-                connection.execute("BEGIN IMMEDIATE")
-                self._ensure_review_projection(connection, build_id)
-                _, page = corpus_queue_projection.select(
-                    connection, build_id, QueueFilter(), offset=0, limit=0, cursor=None, direction="forward",
-                )
-                next_id = corpus_queue_projection.next_pending(connection, record_id, review_queue)
-                if next_id is None:
-                    return page["queue_counts"], None
-                payload = connection.execute("SELECT payload FROM corpus_records WHERE record_id=?", (next_id,)).fetchone()
-                schema = self._record_schema(build_id)
-                record = corpus_queue_projection._transport_record(self._decode_migrated(payload[0], schema, self._schema_signature(schema)))
-                _decorate_review_state(record)
-                _present_for_reviewer(record)
-                return page["queue_counts"], record
+        with self._review_read_db(build_id) as (connection, schema, signature):
+            _, page = corpus_queue_projection.select(
+                connection, build_id, QueueFilter(), offset=0, limit=0, cursor=None, direction="forward",
+            )
+            next_id = corpus_queue_projection.next_pending(connection, record_id, review_queue)
+            if next_id is None:
+                return page["queue_counts"], None
+            payload = connection.execute("SELECT payload FROM corpus_records WHERE record_id=?", (next_id,)).fetchone()
+            if payload is None:
+                raise RuntimeError("Selected review queue Record is missing from its canonical snapshot.")
+        record = corpus_queue_projection._transport_record(self._decode_migrated(payload[0], schema, signature))
+        _decorate_review_state(record)
+        _present_for_reviewer(record)
+        return page["queue_counts"], record
 
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "", cursor: str | None = None, direction: str = "forward") -> dict[str, Any]:
         """REST's composite review page: full presented Records, queue counts and observed values.
@@ -2649,6 +2667,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
     def __init__(self, repository: PdfCorpusRepository | None = None, max_workers: int = 2) -> None:
         self.repo = repository or PdfCorpusRepository()
         self._lock = threading.RLock()
+        # Cache/registry admission never acquires the manager or repository writer
+        # locks. Release it before I/O or entering manager -> repository order.
+        self._cache_lock = threading.RLock()
         self._cancel: set[str] = set()
         # Resolved provider requests may contain server-owned credentials and must
         # never be serialized into build.json. Keep the current execution contract
@@ -2861,7 +2882,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         )
 
     def _semantic_projection_lock(self, build_id: str) -> threading.RLock:
-        with self._lock:
+        with self._cache_lock:
             return self._semantic_projection_locks.setdefault(str(build_id), threading.RLock())
 
     @staticmethod
@@ -2890,7 +2911,8 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 and int(existing.get("generation") or 0) == generation
             ):
                 graph = existing["payload"]
-                self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
+                with self._cache_lock:
+                    self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
                 return generation, graph
 
             records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
@@ -2961,7 +2983,8 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             )
             system_store.put_semantic_map_projections(projection_rows)
 
-            self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
+            with self._cache_lock:
+                self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
             system_store.mark_semantic_map_clean(build_id, generation)
             return generation, graph
 
@@ -3265,7 +3288,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         if not family:
             return
         key = "human_accepted_fields" if kept else "human_corrected_fields"
-        with self._lock:
+        with self._lock, self.repo._lock:
             try:
                 build = self.repo.get_build(build_id)
             except Exception:
@@ -3302,7 +3325,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # Metadata workers update telemetry and warnings concurrently. Serialize
         # read/modify/write of build.json so one worker cannot erase another
         # worker's metric, progress, or recovery flag.
-        with self._lock:
+        with self._lock, self.repo._lock:
             build = self.repo.get_build(build_id)
             prior_stage = str(build.get("stage") or "")
             prior_status = str(build.get("status") or "")
@@ -3341,7 +3364,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
     def _increment_metric(self, build_id: str, key: str, amount: int = 1) -> None:
         if not build_id:
             return
-        with self._lock:
+        with self._lock, self.repo._lock:
             build = self.repo.get_build(build_id)
             metrics = dict(build.get("llm_metrics") or {})
             metrics[key] = int(metrics.get(key) or 0) + int(amount)
@@ -4606,7 +4629,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
     def _initialize_build_enrichment(
         self, build_id: str, request: dict[str, Any],
     ) -> list[dict[str, Any]]:
-        """Reset current operational queue state outside review locks, then commit one batch."""
+        """Recover interrupted work without requeueing completed review-pending passes."""
         updates: dict[str, Any] = {}
 
         def check_cancelled() -> bool:
@@ -4618,7 +4641,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             nonlocal updates
             check_cancelled()
             for record in rows:
-                if record.get("metadata_complete"):
+                if record.get("metadata_complete") or record.get("metadata_enrichment_state") == "complete":
                     record["metadata_enrichment_state"] = "complete"
                 else:
                     # Restarted workers do not survive; their family checkpoints do.
@@ -4626,7 +4649,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     record.setdefault("metadata_stage_status", {})
             states = _metadata_family_states(rows)
             updates = {
-                "metadata_enriched_count": sum(1 for row in rows if row.get("metadata_complete")),
+                "metadata_enriched_count": sum(
+                    1 for row in rows if row.get("metadata_enrichment_state") == "complete"
+                ),
                 "metadata_enrichment_total": len(rows),
                 "metadata_concurrency": max(1, min(64, int(request.get("max_concurrent_requests") or 1))),
                 "metadata_tasks_total": len(rows) * 3,
@@ -4660,10 +4685,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
     def _schedule_build_enrichment(
         self, build_id: str, request: dict[str, Any], manifest: dict[str, Any], records: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Schedule incomplete records and merge worker checkpoints with live human edits."""
+        """Schedule unfinished passes, not completed passes awaiting scholarly review."""
         records = self._initialize_build_enrichment(build_id, request)
         total = max(1, len(records))
-        pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
+        pending = [
+            index for index, record in enumerate(records)
+            if record.get("metadata_enrichment_state") != "complete"
+        ]
         priority_ids = {str(value) for value in request.get("_priority_record_ids", [])}
         pending.sort(key=lambda index: (0 if str(records[index].get("record_id") or "") in priority_ids else 1, index))
         already_complete = len(records) - len(pending)
@@ -5339,7 +5367,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
     @_serialize_record_mutation
     def acknowledge_warnings(self, build_id: str, warnings: list[str], actor: str) -> dict[str, Any]:
         """Record that a person has seen these build warnings. The warnings stay; they travel with the corpus."""
-        with self._lock:
+        with self._lock, self.repo._lock:
             build = self.repo.get_build(build_id)
             current = {str(item) for item in build.get("warnings") or []}
             unknown = [text for text in warnings if text not in current]

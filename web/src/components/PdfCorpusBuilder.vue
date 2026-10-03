@@ -1828,7 +1828,6 @@ async function switchBuildProvider(profileId: string, modelOverride = "") {
   try {
     const direct = directProfilePayload(profileId);
     const payload: Record<string, unknown> = { provider_profile_id: profileId };
-    if (modelOverride.trim()) payload.model = modelOverride.trim();
     // Always send the browser endpoint and key. The API uses a stored key only
     // when this request leaves them out.
     if (direct) {
@@ -1840,6 +1839,7 @@ async function switchBuildProvider(profileId: string, modelOverride = "") {
         }
       }
     }
+    if (modelOverride.trim()) payload.model = modelOverride.trim();
     if (selectedReviewProviderId.value && selectedReviewProviderId.value !== profileId) {
       payload.review_provider_profile_id = selectedReviewProviderId.value;
       const review = directProfilePayload(selectedReviewProviderId.value);
@@ -1865,7 +1865,7 @@ async function switchBuildProvider(profileId: string, modelOverride = "") {
     setMessage(
       i18n.tf("pdf_corpus.profile_model_switched", {
         profile: profile?.name || profileId,
-        model: modelOverride || profile?.model || "—",
+        model: currentBuild.value.model || "—",
       }),
     );
   } catch (exc) {
