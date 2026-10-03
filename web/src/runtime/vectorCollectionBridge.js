@@ -39,15 +39,6 @@ export function createVectorCollectionBridge({
   function notifyVectorStoresChanged() {
     window.dispatchEvent(new CustomEvent("derridai:vector-stores-changed"));
   }
-  function openDatabaseCreationFromResearch() {
-    state.vectorAutoCreateRequested = true;
-    window.dispatchEvent(
-      new CustomEvent("derridai:navigate-native", {
-        detail: { path: "/databases", runtimeView: "vector" },
-      }),
-    );
-  }
-
   function collectionSyncableWorks() {
     return [...workIndex().values()]
       .sort((a, b) => String(a.work).localeCompare(String(b.work)))
@@ -343,7 +334,6 @@ export function createVectorCollectionBridge({
 
   return {
     notifyVectorStoresChanged,
-    openDatabaseCreationFromResearch,
     openCollectionCreationWizard,
   };
 }

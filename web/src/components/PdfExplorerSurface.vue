@@ -22,7 +22,9 @@ import { openMessageDialog } from "../composables/messageDialog";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
 import { isEvidenceSelected, reviewKey } from "../domain/evidenceSelection";
-import { navigateTo } from "../domain/sharedNavigation";
+import { enhanceCollapsibles } from "../domain/collapsiblePanels";
+import { persistCurrentPdfAsset } from "../domain/pdfAssetPersistence";
+import { navigateTo, syncUrl } from "../domain/sharedNavigation";
 import { fullCitation } from "../domain/citations";
 import { highlight } from "../domain/recordFormatting";
 import AppIcon from "./AppIcon.vue";
@@ -187,7 +189,7 @@ async function refresh() {
   // in-flight canvas render -- not on anything about the action itself. Checked this against the legacy source
   // before changing it: nothing else reads or depends on that inconsistency, so it is a bug, not a feature. Calling
   // it after every refresh makes the affordance reliably present whenever a card is actually tall enough for it.
-  runtime.enhanceCollapsibles(mainEl.value);
+  enhanceCollapsibles(mainEl.value);
   runtime.decorateDisabledControls(mainEl.value);
   runtime.translateLegacyDom(mainEl.value);
   if (canRender.value) void renderCanvas();
@@ -234,7 +236,7 @@ async function onFileChange(event: Event) {
       state.pdf.doc = null;
       state.pdf.extractError = copy.value.jsInitFailed(error.message);
     }
-    await runtime.persistCurrentPdfAsset();
+    await persistCurrentPdfAsset();
     runtime.shell();
     await refresh();
   } catch (error: Any) {
@@ -256,8 +258,8 @@ async function setPage(page: Any) {
   state.pdf.text = "";
   state.pdf.extractError = "";
   state.pdf.extractionSource = "";
-  await runtime.persistCurrentPdfAsset();
-  runtime.syncUrl({ replace: true });
+  await persistCurrentPdfAsset();
+  syncUrl({ replace: true });
   await refresh();
 }
 
@@ -278,12 +280,12 @@ function onPageInputKeydown(event: KeyboardEvent) {
 
 async function rotateLeft() {
   state.pdf.rotation = (Number(state.pdf.rotation || 0) + 270) % 360;
-  await runtime.persistCurrentPdfAsset();
+  await persistCurrentPdfAsset();
   await refresh();
 }
 async function rotateRight() {
   state.pdf.rotation = (Number(state.pdf.rotation || 0) + 90) % 360;
-  await runtime.persistCurrentPdfAsset();
+  await persistCurrentPdfAsset();
   await refresh();
 }
 
@@ -405,7 +407,7 @@ watch(
 );
 
 onMounted(async () => {
-  runtime.syncUrl({ replace: true });
+  syncUrl({ replace: true });
   await refresh();
   document.addEventListener("click", onDocumentClick);
   window.addEventListener("derridai:pdf-explorer-refresh", onPdfExplorerRefreshRequested);

@@ -49,7 +49,6 @@ const runtime = vi.hoisted(() => ({
   clearSearchSelection: vi.fn(),
   runSearchSelectionAction: vi.fn(),
   getSearchShareHref: vi.fn(() => "http://localhost/search"),
-  openDatabaseCreationFromResearch: vi.fn(),
   notifyToast: vi.fn(),
   getShellSnapshot: vi.fn(() => ({})),
 }));
