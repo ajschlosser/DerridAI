@@ -1405,7 +1405,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   :aria-invalid="Boolean(ragErrors.evidence_total_char_limit)"
                 />
               </UiField>
-              <fieldset class="field field-full">
+              <fieldset id="settings-field-rag-locales" class="field field-full">
                 <legend>{{ i18n.t("settings.rag_locales") }}</legend>
                 <div class="language-checks">
                   <label
@@ -1439,7 +1439,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   {{ ragErrors.locales }}
                 </p>
               </fieldset>
-              <fieldset class="field field-full">
+              <fieldset id="settings-field-rag-routes" class="field field-full">
                 <legend>{{ i18n.t("settings.rag_routes") }}</legend>
                 <div class="language-checks">
                   <label
@@ -1494,6 +1494,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   :error="ragErrors.fetch_k"
                 >
                   <input
+                    id="settings-field-rag-fetch-k"
                     class="control"
                     type="number"
                     min="1"
@@ -1507,6 +1508,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   :tooltip="i18n.t('help.glossary.mmr_lambda.definition')"
                 >
                   <input
+                    id="settings-field-rag-lambda"
                     class="control"
                     type="number"
                     min="0"
@@ -1519,19 +1521,30 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   :label="i18n.t('settings.rag_rrf_k')"
                   :tooltip="i18n.t('help.glossary.rrf_k.definition')"
                 >
-                  <input class="control" type="number" min="1" v-model.number="ragDraft.rrf_k" />
+                  <input
+                    id="settings-field-rag-rrf"
+                    class="control"
+                    type="number"
+                    min="1"
+                    v-model.number="ragDraft.rrf_k"
+                  />
                 </UiField>
                 <UiField
                   :label="i18n.t('settings.rag_cross_encoder')"
                   :tooltip="i18n.t('help.glossary.cross_encoder.definition')"
                 >
-                  <input class="control" v-model="ragDraft.cross_encoder_model" />
+                  <input
+                    id="settings-field-rag-cross-encoder"
+                    class="control"
+                    v-model="ragDraft.cross_encoder_model"
+                  />
                 </UiField>
                 <UiField
                   :label="i18n.t('settings.rag_decompose')"
                   :tooltip="i18n.t('help.glossary.query_decomposition.definition')"
                 >
                   <input
+                    id="settings-field-rag-decompose"
                     class="control"
                     type="number"
                     min="64"
