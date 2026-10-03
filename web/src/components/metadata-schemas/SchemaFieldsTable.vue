@@ -243,7 +243,6 @@ function isEdge(field: SchemaField, by: -1 | 1) {
               <div class="field-actions" :aria-label="t('actions', 'Actions')">
                 <UiButton
                   icon-only
-                  size="small"
                   icon="download"
                   button-class="flip"
                   :label="t('up', 'Move up')"
@@ -252,7 +251,6 @@ function isEdge(field: SchemaField, by: -1 | 1) {
                 />
                 <UiButton
                   icon-only
-                  size="small"
                   icon="download"
                   :label="t('down', 'Move down')"
                   :disabled="readonly || isEdge(field, 1)"
@@ -260,7 +258,6 @@ function isEdge(field: SchemaField, by: -1 | 1) {
                 />
                 <UiButton
                   icon-only
-                  size="small"
                   icon="trash"
                   :label="t('remove_field', 'Remove field')"
                   :disabled="readonly"
