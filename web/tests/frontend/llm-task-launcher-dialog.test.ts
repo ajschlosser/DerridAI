@@ -67,6 +67,20 @@ function open(over: Partial<LlmTaskLauncherRequest> = {}) {
 }
 
 describe("LlmTaskLauncherDialog", () => {
+  it("does not leave an inactive launcher dialog in the application DOM", async () => {
+    const wrapper = mount(LlmTaskLauncherDialog, { attachTo: document.body });
+    expect(wrapper.find("dialog").exists()).toBe(false);
+
+    open();
+    await flushPromises();
+    expect(wrapper.find("dialog[open]").exists()).toBe(true);
+
+    closeLlmTaskLauncherDialog();
+    await flushPromises();
+    expect(wrapper.find("dialog").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it("submits the raw form values and closes when the run succeeds", async () => {
     const wrapper = mount(LlmTaskLauncherDialog, { attachTo: document.body });
     const request = open();
@@ -85,7 +99,7 @@ describe("LlmTaskLauncherDialog", () => {
         extraOptions: "{}",
       }),
     );
-    expect(wrapper.find("dialog").attributes("open")).toBeUndefined();
+    expect(wrapper.find("dialog").exists()).toBe(false);
     wrapper.unmount();
   });
 
