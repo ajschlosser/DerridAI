@@ -151,4 +151,66 @@ def test_builtin_dictionaries_bootstrap_current_values_and_preserve_admin_edits(
     preserved = store_module.SystemStore().snapshot()
     assert preserved["languages"]["fr-CA"]["dictionary"]["app.subtitle"] == "Mon libellé personnalisé"
 
+def test_metadata_schema_copy_keys_exist_in_both_builtins():
+    """Metadata-schema scoped copy, including generated key families, is complete.
+
+    useSchemaCopy prefixes local t/tf calls with schemas. The general frontend
+    key scanner cannot see that indirection or template-string key families,
+    so this test owns the feature-specific contract.
+    """
+    dictionaries = _translation_dicts()
+    english = dictionaries["DEFAULT_EN_US"]
+    french = dictionaries["DEFAULT_FR_CA"]
+    feature_root = ROOT / "web/src/components/metadata-schemas"
+    sources = [
+        ROOT / "web/src/components/MetadataSchemaEditor.vue",
+        *sorted(feature_root.glob("*.vue")),
+    ]
+
+    required: set[str] = set()
+    literal_pattern = re.compile(r"\b(?:t|tf)\(\s*['\"]([^'\"]+)['\"]")
+    for path in sources:
+        source = path.read_text(encoding="utf-8")
+        required.update(f"schemas.{key}" for key in literal_pattern.findall(source))
+
+    metadata_api = (ROOT / "web/src/api/metadataSchemas.ts").read_text(encoding="utf-8")
+    document_block = re.search(
+        r"export const DOCUMENT_FIELD_NAMES\s*=\s*\[(.*?)\]\s*as const",
+        metadata_api,
+        re.DOTALL,
+    )
+    assert document_block
+    document_fields = re.findall(r'"([^"]+)"', document_block.group(1))
+    required.update(f"schemas.document_field.{name}" for name in document_fields)
+    required.update({"schemas.required_for_evidence", "schemas.required_for_publication"})
+
+    nlp_source = (ROOT / "web/src/domain/nlpTags.ts").read_text(encoding="utf-8")
+    for constant, prefix in (
+        ("UNIVERSAL_POS_TAG_OPTIONS", "pos_tag"),
+        ("NER_TAG_OPTIONS", "ner_tag"),
+    ):
+        block = re.search(
+            rf"export const {constant}.*?=\s*\[(.*?)\];",
+            nlp_source,
+            re.DOTALL,
+        )
+        assert block
+        values = re.findall(r'value:\s*"([^"]+)"', block.group(1))
+        required.update(f"schemas.{prefix}.{value.lower()}" for value in values)
+
+    field_form = (feature_root / "SchemaFieldForm.vue").read_text(encoding="utf-8")
+    matching_block = re.search(
+        r"const MATCHING_MODES.*?=\s*\[(.*?)\];",
+        field_form,
+        re.DOTALL,
+    )
+    assert matching_block
+    matching_modes = re.findall(r'"([^"]+)"', matching_block.group(1))
+    required.add("schemas.value_matching_default_note")
+    for mode in matching_modes:
+        required.add(f"schemas.value_matching_{mode}")
+        required.add(f"schemas.value_matching_{mode}_note")
+
+    assert required - set(english) == set()
+    assert required - set(french) == set()
 
