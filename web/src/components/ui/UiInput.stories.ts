@@ -22,12 +22,30 @@ import UiInput from "./UiInput.vue";
 const meta = {
   title: "Foundations/Forms/Input",
   component: UiInput,
-  args: { modelValue: "Jacques Derrida", "aria-label": "Document author" },
+  render: (args) => ({
+    components: { UiInput },
+    setup: () => ({ args }),
+    template: '<UiInput v-bind="args" aria-label="Document author" />',
+  }),
+  args: { modelValue: "Jacques Derrida" },
 } satisfies Meta<typeof UiInput>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
-export const Invalid: Story = { args: { invalid: true, "aria-label": "Document author, invalid" } };
-export const Disabled: Story = { args: { disabled: true } };
-export const Number: Story = { args: { modelValue: 0.75, type: "number", min: 0, max: 1, step: 0.05, "aria-label": "Similarity threshold" } };
+export const Invalid: Story = { args: { invalid: true } };
+export const Disabled: Story = {
+  render: (args) => ({
+    components: { UiInput },
+    setup: () => ({ args }),
+    template: '<UiInput v-bind="args" aria-label="Document author" disabled />',
+  }),
+};
+export const Number: Story = {
+  args: { modelValue: 0.75, type: "number" },
+  render: (args) => ({
+    components: { UiInput },
+    setup: () => ({ args }),
+    template: '<UiInput v-bind="args" aria-label="Similarity threshold" min="0" max="1" step="0.05" />',
+  }),
+};
