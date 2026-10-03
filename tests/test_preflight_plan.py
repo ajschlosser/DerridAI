@@ -80,6 +80,22 @@ def test_legacy_and_publication_paths_select_specialized_acceptance_gates():
     assert not plan.e2e
 
 
+
+def test_static_site_browser_test_stays_in_composed_browser_and_publication_gates():
+    plan = build_plan(["web/tests/e2e/static-site-a11y.spec.ts"])
+
+    assert plan.publication
+    assert plan.frontend_build
+    assert plan.storybook
+    assert plan.e2e
+
+
+def test_publication_export_browser_test_does_not_force_general_app_e2e():
+    plan = build_plan(["web/tests/e2e/static-site-export.spec.ts"])
+
+    assert plan.publication
+    assert not plan.e2e
+
 def test_preflight_script_change_tests_automation_without_every_frontend_gate():
     plan = build_plan(["scripts/preflight.sh"])
 
