@@ -36,9 +36,9 @@ import UiButton from "../components/ui/UiButton.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
 import UiField from "../components/ui/UiField.vue";
 import UiHealthChip from "../components/ui/UiHealthChip.vue";
-import DataRetentionSettings from "../components/settings/DataRetentionSettings.vue";
 import DocumentNlpLanguagePacks from "../components/settings/DocumentNlpLanguagePacks.vue";
 import SettingsAccessPanel from "../components/settings/SettingsAccessPanel.vue";
+import SettingsDataPanel from "../components/settings/SettingsDataPanel.vue";
 import SettingsNav from "../components/settings/SettingsNav.vue";
 import SettingsOverview from "../components/settings/SettingsOverview.vue";
 import SettingsTroubleshootingPanel from "../components/settings/SettingsTroubleshootingPanel.vue";
@@ -119,7 +119,6 @@ const confirm = ref<{
   message: string;
 } | null>(null);
 const restoreFile = ref<File | null>(null);
-const restoreInput = ref<HTMLInputElement | null>(null);
 const routeGuardResolve = ref<((allow: boolean) => void) | null>(null);
 const busy = ref("");
 
@@ -552,14 +551,7 @@ function openBackup() {
       : i18n.t("settings.backup_confirm_message"),
   };
 }
-function openRestore() {
-  restoreInput.value?.click();
-}
-function onRestoreFile(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0] || null;
-  input.value = "";
-  if (!file) return;
+function onRestoreFile(file: File) {
   restoreFile.value = file;
   confirm.value = {
     kind: "restore",
@@ -1648,26 +1640,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           id="settings-system-groups"
         >
           <SettingsSection
-            v-if="section === 'data'"
-            section-id="data-workspaces"
-            :title="i18n.t('settings.data_workspaces_title')"
-            :description="i18n.t('settings.data_workspaces_help')"
-            :persistence="persistKind('link')"
-          >
-            <template #actions>
-              <UiButton
-                icon="database"
-                :label="i18n.t('runtime.system_data')"
-                @click="go('/system-data')"
-              />
-              <UiButton
-                icon="database"
-                :label="i18n.t('nav.vector')"
-                @click="go('/databases', 'vector')"
-              />
-            </template>
-          </SettingsSection>
-          <SettingsSection
             v-if="section === 'services'"
             section-id="language-packs"
             :title="i18n.t('settings.nlp_packs_title')"
@@ -1676,55 +1648,15 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           >
             <DocumentNlpLanguagePacks />
           </SettingsSection>
-          <SettingsSection
-            v-if="section === 'data'"
-            section-id="data-retention"
-            :title="i18n.t('settings.retention_title')"
-            :description="i18n.t('settings.retention_help')"
-            :persistence="persistKind('backend')"
-          >
-            <DataRetentionSettings />
-          </SettingsSection>
-          <SettingsSection
-            v-if="section === 'data'"
-            section-id="backup"
-            :title="i18n.t('settings.backup')"
-            :description="i18n.t('settings.backup_help')"
-            :persistence="persistKind('browser')"
-          >
-            <p class="info warn">{{ i18n.t("settings.backup_keys_warning") }}</p>
-            <p class="backup-summary">
-              <span
-                ><b>{{ backupCounts.files.toLocaleString(i18n.locale) }}</b>
-                {{ i18n.t("settings.jsonl_tabs") }}</span
-              >
-              <span
-                ><b>{{ backupCounts.jobs.toLocaleString(i18n.locale) }}</b>
-                {{ i18n.t("settings.active_jobs") }}</span
-              >
-            </p>
-            <input
-              ref="restoreInput"
-              type="file"
-              accept=".zip,application/zip"
-              hidden
-              @change="onRestoreFile"
-            />
-            <template #actions>
-              <UiButton
-                variant="primary"
-                icon="download"
-                :label="i18n.t('settings.download_backup')"
-                @click="openBackup"
-              />
-              <UiButton
-                icon="upload"
-                :label="i18n.t('settings.restore_backup')"
-                @click="openRestore"
-              />
-            </template>
-          </SettingsSection>
         </div>
+
+        <SettingsDataPanel
+          v-if="isAdmin && section === 'data'"
+          :backup-counts="backupCounts"
+          @backup="openBackup"
+          @restore-file="onRestoreFile"
+          @navigate="go"
+        />
 
         <SettingsTroubleshootingPanel
           v-if="isAdmin && section === 'troubleshooting'"
@@ -1890,13 +1822,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 }
 .settings-advanced .config-grid {
   margin-top: 10px;
-}
-.backup-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 0;
-  color: var(--muted);
 }
 .field-full {
   grid-column: 1/-1;
