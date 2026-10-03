@@ -44,7 +44,6 @@ import {
   parseJsonl,
   valueMatches,
 } from "../domain/recordQuery";
-import { deleteAllDerridaiBrowserState as deleteAllDerridaiBrowserStateCompat } from "../services/workspaceDb";
 import {
   finiteResearchNumber,
   normalizedResearchConfig,
@@ -159,7 +158,6 @@ import {
 } from "../domain/sharedNavigation";
 import { selectedIndex, sharedUrlStateCodec } from "../domain/sharedUrlState";
 import { pathViewMap, viewFromPath, viewPathMap } from "../domain/navigation";
-import { cancelPendingPrefs } from "../domain/prefsPersistence";
 import {
   workspaceDb,
   workspacePrefs,
@@ -186,7 +184,6 @@ import { createAppLifecycle } from "../domain/appLifecycle";
 import { compareSearchIndex, lookupRecord } from "../domain/sharedCompareLibrary";
 import { recordOptionLabel } from "../domain/recordOptionLabel";
 import { loadStorePage, researcherDbRecords } from "../domain/sharedStoreRecords";
-import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
 import { slimSemanticSource } from "../domain/semanticMap";
@@ -640,18 +637,6 @@ const {
   trf: (...args) => trf(...args),
   updateDbStatusElements: (...args) => updateDbStatusElements(...args),
   updateOperationStackCount: (...args) => updateOperationStackCount(...args),
-});
-const { backupContainsCredentials, downloadFullBackup, restoreFullBackup } = createBackupWorkspace({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  deleteWorkspaceDatabase: (...args) => deleteWorkspaceDatabase(...args),
-  idbPut: (...args) => idbPut(...args),
-  persistFileNow: (...args) => persistFileNow(...args),
-  providerProfiles: (...args) => providerProfiles(...args),
-  serializableFile: (...args) => serializableFile(...args),
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-  workspacePrefs: (...args) => workspacePrefs(...args),
 });
 const {
   openSharedAnnotationRecord,
@@ -1464,14 +1449,6 @@ const idbGetAll = workspaceDb.getAll;
 const idbGet = workspaceDb.get;
 const idbPut = workspaceDb.put;
 const idbDelete = workspaceDb.remove;
-async function deleteWorkspaceDatabase() {
-  cancelPendingPrefs();
-  for (const timer of fileTimers.values()) clearTimeout(timer);
-  fileTimers.clear();
-  await workspaceDb.drop();
-}
-const deleteAllDerridaiBrowserState = () =>
-  deleteAllDerridaiBrowserStateCompat(deleteWorkspaceDatabase);
 function serializableFile(file) {
   return serializableRecordsFile(file);
 }
@@ -3037,11 +3014,7 @@ export {
   label,
   flushWorkspacePrefs,
   applyAppearance,
-  downloadFullBackup,
-  restoreFullBackup,
   clearAllUpdates,
-  deleteAllDerridaiBrowserState,
-  backupContainsCredentials,
   pendingUpsertRows,
   decorateDisabledControls,
   translateLegacyDom,

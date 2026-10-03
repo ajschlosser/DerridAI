@@ -31,6 +31,12 @@ const systemApi = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/api/system", () => ({ systemApi }));
+vi.mock("../../src/domain/sharedBackup", () => ({
+  downloadFullBackup: vi.fn(),
+  restoreFullBackup: vi.fn(),
+  deleteAllDerridaiBrowserState: vi.fn(),
+  backupContainsCredentials: vi.fn(() => false),
+}));
 vi.mock("../../src/domain/sharedAppearance", () => ({ applyAppearance: vi.fn() }));
 
 const runtime = vi.hoisted(() => ({
@@ -41,11 +47,7 @@ const runtime = vi.hoisted(() => ({
   ]),
   getDefaultProviderProfileId: vi.fn(() => "p1"),
   toggleSidebar: vi.fn(),
-  downloadFullBackup: vi.fn(),
-  restoreFullBackup: vi.fn(),
   clearAllUpdates: vi.fn(),
-  deleteAllDerridaiBrowserState: vi.fn(),
-  backupContainsCredentials: vi.fn(() => false),
   getShellSnapshot: vi.fn(() => ({})),
   state: {
     storageReady: true,
