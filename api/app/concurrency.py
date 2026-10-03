@@ -15,8 +15,63 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Iterator
+from concurrent.futures import FIRST_COMPLETED, Future, wait
 from dataclasses import dataclass
+from typing import Literal
+
+CapacityPriority = Literal["foreground", "background"]
+
+
+@dataclass(eq=False)
+class _CapacityWaiter:
+    priority: CapacityPriority
+
+
+def bounded_as_completed[WorkItem, WorkResult](
+    items: Iterable[WorkItem],
+    submit: Callable[[WorkItem], Future[WorkResult]],
+    *,
+    max_pending: int,
+    cancelled: Callable[[], bool] | None = None,
+) -> Iterator[tuple[WorkItem, Future[WorkResult]]]:
+    """Admit a bounded window, refilling only after the consumer handles results.
+
+    Cancellation stops admission and attempts to cancel submitted work. Running
+    tasks retain their owning executor's normal cancellation/shutdown behavior.
+    """
+    if max_pending < 1:
+        raise ValueError("The pending task window must be positive.")
+    source = iter(items)
+    pending: dict[Future[WorkResult], tuple[int, WorkItem]] = {}
+    sequence = 0
+
+    def stopped() -> bool:
+        return cancelled is not None and cancelled()
+
+    def fill() -> None:
+        nonlocal sequence
+        while len(pending) < max_pending and not stopped():
+            try:
+                item = next(source)
+            except StopIteration:
+                return
+            pending[submit(item)] = (sequence, item)
+            sequence += 1
+
+    try:
+        fill()
+        while pending and not stopped():
+            done, _ = wait(pending, timeout=0.25, return_when=FIRST_COMPLETED)
+            for future in sorted(done, key=lambda value: pending[value][0]):
+                if stopped():
+                    return
+                _, item = pending.pop(future)
+                yield item, future
+            fill()
+    finally:
+        for future in pending:
+            future.cancel()
 
 
 class CapacityCancelled(InterruptedError):
@@ -78,6 +133,8 @@ class ConcurrencyCoordinator:
         self._active: dict[tuple[str, str], int] = {}
         self._waiting: dict[tuple[str, str], int] = {}
         self._limits: dict[tuple[str, str], int] = {}
+        self._queues: dict[tuple[str, str], list[_CapacityWaiter]] = {}
+        self._foreground_streak: dict[tuple[str, str], int] = {}
 
     @staticmethod
     def _limit(value: int) -> int:
@@ -148,21 +205,30 @@ class ConcurrencyCoordinator:
         cancelled: Cancelled | None = None,
         on_wait: WaitCallback | None = None,
         poll_seconds: float = 0.25,
+        priority: CapacityPriority = "background",
     ) -> CapacityPermit:
         """Wait for one slot and return a context-managed permit.
 
         No application/repository lock is held by this class. The on_wait callback is
         called at most once and always outside the coordinator lock, so callers may
         safely update job/build progress from it.
+
+        Foreground work may overtake queued background work, but at most three
+        foreground admissions occur while background work waits. Each class is FIFO;
+        running work is never preempted and configured limits remain authoritative.
         """
 
         identity = self._identity(resource, key)
+        if priority not in ("foreground", "background"):
+            raise ValueError("Unknown execution capacity priority.")
+        waiter = _CapacityWaiter(priority)
         requested_limit = self._limit(limit)
         started = time.monotonic()
         notified_wait = False
 
         with self._condition:
             self._waiting[identity] = self._waiting.get(identity, 0) + 1
+            self._queues.setdefault(identity, []).append(waiter)
 
         try:
             while True:
@@ -179,8 +245,28 @@ class ConcurrencyCoordinator:
                     # value when the wait began.
                     bounded = int(self._limits.get(identity, requested_limit))
                     active = int(self._active.get(identity, 0))
-                    if active < bounded:
+                    queue = self._queues[identity]
+                    foreground = next((item for item in queue if item.priority == "foreground"), None)
+                    background = next((item for item in queue if item.priority == "background"), None)
+                    selected = (
+                        background
+                        if background is not None and self._foreground_streak.get(identity, 0) >= 3
+                        else foreground or background
+                    )
+                    if active < bounded and selected is waiter:
+                        queue.remove(waiter)
+                        if not queue:
+                            self._queues.pop(identity)
+                            self._foreground_streak.pop(identity, None)
+                        elif foreground is not None and background is not None:
+                            self._foreground_streak[identity] = (
+                                self._foreground_streak.get(identity, 0) + 1
+                                if priority == "foreground" else 0
+                            )
+                        else:
+                            self._foreground_streak.pop(identity, None)
                         self._active[identity] = active + 1
+                        self._condition.notify_all()
                         waiting = max(0, int(self._waiting.get(identity, 1)) - 1)
                         if waiting:
                             self._waiting[identity] = waiting
@@ -208,9 +294,15 @@ class ConcurrencyCoordinator:
                     on_wait(wait_snapshot)
 
                 with self._condition:
-                    self._condition.wait(timeout=max(0.01, float(poll_seconds)))
+                        self._condition.wait(timeout=max(0.01, float(poll_seconds)))
         except BaseException:
             with self._condition:
+                queue = self._queues.get(identity, [])
+                if waiter in queue:
+                    queue.remove(waiter)
+                if not queue:
+                    self._queues.pop(identity, None)
+                    self._foreground_streak.pop(identity, None)
                 waiting = max(0, int(self._waiting.get(identity, 1)) - 1)
                 if waiting:
                     self._waiting[identity] = waiting
@@ -236,6 +328,8 @@ class ConcurrencyCoordinator:
             self._active.clear()
             self._waiting.clear()
             self._limits.clear()
+            self._queues.clear()
+            self._foreground_streak.clear()
             self._condition.notify_all()
 
 

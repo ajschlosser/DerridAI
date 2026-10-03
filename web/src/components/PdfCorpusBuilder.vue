@@ -1946,9 +1946,13 @@ function activateRecord(record: CorpusRecord) {
   if (!sameRecord) metadataEditorDirty.value = false;
   selectedRecordId.value = record.record_id;
   selectedRecord.value = record;
-  selectedEvidenceField.value = "";
-  selectedPdfPage.value = Number(record.pdf_pages?.[0] || 1);
-  reviewInspectorTab.value = selectedMetadataBlocked.value ? "metadata" : reviewInspectorTab.value;
+  if (!sameRecord) {
+    selectedEvidenceField.value = "";
+    selectedPdfPage.value = Number(record.pdf_pages?.[0] || 1);
+    reviewInspectorTab.value = selectedMetadataBlocked.value
+      ? "metadata"
+      : reviewInspectorTab.value;
+  }
   if (!preserveActiveDraft) {
     let saved = "";
     try {

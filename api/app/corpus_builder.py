@@ -25,7 +25,7 @@ import unicodedata
 import uuid
 from collections import Counter
 from collections.abc import Callable, Iterator
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -36,7 +36,12 @@ from pydantic import BaseModel, ValidationError
 from . import corpus_queue_projection, metadata_exemplar_journal
 from .autonomous import Policy as AutonomousPolicy
 from .celf_conformance import evaluate_celf_conformance
-from .concurrency import capacity_coordinator, provider_capacity_key, provider_limit
+from .concurrency import (
+    bounded_as_completed,
+    capacity_coordinator,
+    provider_capacity_key,
+    provider_limit,
+)
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
 from .corpus_build_lifecycle import BuildLifecycleMixin
@@ -3210,6 +3215,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                         capacity_limit,
                         cancelled=cancelled if build_id else None,
                         on_wait=waiting,
+                        priority="foreground" if request.get("_capacity_priority") == "foreground" else "background",
                     ) as permit:
                         if build_id and permit.waited_seconds > 0:
                             self._increment_metric(
@@ -3258,6 +3264,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                                 ollama_limit,
                                 cancelled=cancelled if build_id else None,
                                 on_wait=waiting_ollama,
+                                priority="foreground" if request.get("_capacity_priority") == "foreground" else "background",
                             ) as ollama_permit:
                                 if build_id and ollama_permit.waited_seconds > 0:
                                     self._increment_metric(
@@ -4306,14 +4313,11 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     thread_name_prefix="pdf-corpus-family",
                 ) as family_pool,
             ):
-                futures = {}
-                for index in pending:
-                    if self._cancelled(build_id):
-                        raise InterruptedError("Corpus build cancelled")
+                def submit_record(index: int):
                     record = dict(records[index])
                     previous_text = str(records[index - 1].get("text") or "") if index > 0 else ""
                     next_text = str(records[index + 1].get("text") or "") if index + 1 < len(records) else ""
-                    future = pool.submit(
+                    return pool.submit(
                         self._enrich_record,
                         record,
                         manifest,
@@ -4324,14 +4328,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         stage_callback=persist_metadata_stage,
                         family_executor=family_pool,
                     )
-                    futures[future] = index
                 completed = already_complete
-                for future in as_completed(futures):
+                for index, future in bounded_as_completed(
+                    pending, submit_record, max_pending=max_workers,
+                    cancelled=lambda: self._cancelled(build_id),
+                ):
                     if self._cancelled(build_id):
-                        for outstanding in futures:
-                            outstanding.cancel()
                         raise InterruptedError("Corpus build cancelled")
-                    index = futures[future]
                     try:
                         completed_record = future.result()
                         completed_record["metadata_enrichment_state"] = "complete"
@@ -4408,6 +4411,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         metadata_total=len(records),
                         metadata_concurrency=max_workers,
                     )
+                if self._cancelled(build_id):
+                    raise InterruptedError("Corpus build cancelled")
 
         settled_records = self.repo.load_records(build_id)
         requeued = [row for row in settled_records if row.get("metadata_requeue_requested")]

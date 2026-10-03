@@ -142,6 +142,66 @@ def test_completion_does_not_rewrite_the_corpus(build_factory, monkeypatch):
     assert len(loads) == 1  # One final authoritative handoff, not one read per completion.
 
 
+@pytest.mark.parametrize("workers", [1, 3])
+def test_build_submission_window_is_bounded_until_durable_completion(
+    build_factory, monkeypatch, workers,
+):
+    repo, build_id, manager = build_factory(count=20)
+    submitted = []
+    completed = []
+    original_pool = cb.ThreadPoolExecutor
+
+    class TrackingPool(original_pool):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.is_record_pool = kwargs.get("thread_name_prefix") == "pdf-corpus-meta"
+
+        def submit(self, fn, *args, **kwargs):
+            if self.is_record_pool:
+                submitted.append(args[0]["record_id"])
+                assert len(submitted) - len(completed) <= workers
+            return super().submit(fn, *args, **kwargs)
+
+    def notification(_build, record_id, event):
+        assert event == "record_completed"
+        assert repo.get_record(build_id, record_id)["metadata_complete"]
+        completed.append(record_id)
+
+    monkeypatch.setattr(cb, "ThreadPoolExecutor", TrackingPool)
+    monkeypatch.setattr(cb, "note_record_metadata", notification)
+    result = manager._schedule_build_enrichment(
+        build_id, {"max_concurrent_requests": workers}, {}, repo.load_records(build_id),
+    )
+    assert len(submitted) == len(completed) == 20
+    assert len(set(completed)) == 20
+    assert all(row["metadata_complete"] for row in result)
+    assert submitted == [f"r{index}" for index in range(1, 21)]
+
+
+def test_build_cancellation_does_not_admit_the_remaining_corpus(build_factory, monkeypatch):
+    repo, build_id, manager = build_factory(count=20)
+    admitted = []
+    stop = False
+
+    def enrich(record, *_args, **_kwargs):
+        admitted.append(record["record_id"])
+        return _completed(record)
+
+    def notification(_build, record_id, event):
+        nonlocal stop
+        assert repo.get_record(build_id, record_id)["metadata_complete"]
+        stop = True
+
+    monkeypatch.setattr(manager, "_enrich_record", enrich)
+    monkeypatch.setattr(manager, "_cancelled", lambda _build: stop)
+    monkeypatch.setattr(cb, "note_record_metadata", notification)
+    with pytest.raises(InterruptedError, match="cancelled"):
+        manager._schedule_build_enrichment(build_id, {"max_concurrent_requests": 1}, {}, repo.load_records(build_id))
+    assert admitted == ["r1"]
+    assert repo.get_record(build_id, "r1")["metadata_complete"]
+    assert not repo.get_record(build_id, "r2")["metadata_complete"]
+
+
 def test_retired_record_completion_does_not_restore_old_topology(build_factory, monkeypatch):
     repo, build_id, manager = build_factory(count=1)
 

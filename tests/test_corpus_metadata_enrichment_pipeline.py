@@ -11,6 +11,7 @@ escalates only after validation/provider failure.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -98,6 +99,148 @@ def _enrich(manager, request):
     return record, results[0]
 
 
+def test_exact_family_checkpoint_reuses_validated_result(monkeypatch, manager, traces):
+    calls = _provider(monkeypatch, {"primary-model": [VALID]})
+    record, (_, first, error) = _enrich(manager, REQUEST)
+    assert error is None
+    result = manager._execute_metadata_tasks(
+        record, {**REQUEST, "run_id": "another-run", "max_concurrent_requests": 4},
+        [("discourse", PROMPT, Answer, 512, SCHEMA)], "", None,
+    )
+    assert result == [("discourse", first, None)]
+    assert len(calls) == 1
+    ledger = record["metadata_execution_ledger"]["discourse"]
+    assert ledger["reuse_count"] == 1
+    assert ledger["dependency_fingerprint"]
+    assert ledger["reused_at"]
+    assert ledger["model_invocations"] == 1
+
+
+@pytest.mark.parametrize("change", [
+    "prompt", "text", "spans", "revision", "model", "generation",
+    "model_version", "pipeline", "response_schema", "tokens", "legacy", "invalid",
+    "endpoint", "review_provider", "schema_name", "explicit_retry", "malformed",
+])
+def test_family_checkpoint_invalidates_changed_dependencies(
+    monkeypatch, manager, traces, change,
+):
+    calls = _provider(monkeypatch, {"primary-model": [VALID, VALID], "changed-model": [VALID]})
+    record, (_, _, error) = _enrich(manager, REQUEST)
+    assert error is None
+    request = dict(REQUEST)
+    prompt, model, tokens, schema_name = PROMPT, Answer, 512, SCHEMA
+    if change == "prompt":
+        prompt += " Revised attribution guidance."
+    elif change == "text":
+        record["text"] = "Changed source text."
+    elif change == "spans":
+        record["source_spans"] = [{"block_id": "new-block"}]
+    elif change == "revision":
+        record["record_revision"] = 2
+    elif change == "model":
+        request["model"] = "changed-model"
+    elif change == "generation":
+        request["generation"] = {"temperature": 0.2}
+    elif change == "model_version":
+        request["model_version"] = "new-digest"
+    elif change == "pipeline":
+        _use(monkeypatch, [{"settings": {"provider_role": "primary", "attempts": 2}}, {}])
+    elif change == "response_schema":
+        class RevisedAnswer(BaseModel):
+            label: str
+            qualifier: str = "unknown"
+        model = RevisedAnswer
+    elif change == "tokens":
+        tokens = 1024
+    elif change == "legacy":
+        record["metadata_execution_ledger"]["discourse"].pop("dependency_fingerprint", None)
+    elif change == "invalid":
+        record["metadata_stage_results"]["discourse"] = {"unrecognised": "value"}
+    elif change == "endpoint":
+        request["base_url"] = "http://different-local-provider:11434"
+    elif change == "review_provider":
+        request["_review_provider"] = {"provider": "ollama", "model": "review-model"}
+    elif change == "schema_name":
+        schema_name += "_v2"
+    elif change == "explicit_retry":
+        record["metadata_stage_status"]["discourse"] = "queued"
+    elif change == "malformed":
+        record["metadata_stage_results"]["discourse"] = []
+    result = manager._execute_metadata_tasks(
+        record, request, [("discourse", prompt, model, tokens, schema_name)], "", None,
+    )
+    assert len(calls) == 2
+    assert result[0][2] is None
+    assert result[0][1]["label"] == "ok"
+
+
+def test_failed_family_is_not_reused_as_success(monkeypatch, manager, traces):
+    calls = _provider(monkeypatch, {"primary-model": ["invalid JSON"]})
+    record, (_, first, error) = _enrich(manager, REQUEST)
+    assert first is None and error is not None
+    result = manager._execute_metadata_tasks(
+        record, REQUEST, [("discourse", PROMPT, Answer, 512, SCHEMA)], "", None,
+    )
+    assert result[0][1] is None and result[0][2] is not None
+    assert len(calls) == 1
+    assert not record["metadata_execution_ledger"]["discourse"].get("dependency_fingerprint")
+
+
+def test_checkpoint_reuse_survives_serialization_and_excludes_secrets(
+    monkeypatch, manager, traces,
+):
+    import json
+
+    calls = _provider(monkeypatch, {"primary-model": [VALID]})
+    record, (_, _, error) = _enrich(manager, {**REQUEST, "api_key": "never-retain-this-key"})
+    assert error is None
+    restored = json.loads(json.dumps(record))
+    assert "never-retain-this-key" not in json.dumps(restored)
+    callbacks = []
+    result = manager._execute_metadata_tasks(
+        restored, REQUEST, [("discourse", PROMPT, Answer, 512, SCHEMA)], "",
+        lambda snapshot, task, state, error: callbacks.append((task, state, error)),
+    )
+    assert result == [("discourse", {"label": "ok"}, None)]
+    assert len(calls) == 1
+    assert callbacks == [("discourse", "complete", None)]
+
+
+def test_checkpoint_invalidation_is_family_local(monkeypatch, manager, traces):
+    calls = _provider(monkeypatch, {"primary-model": [VALID, VALID, VALID]})
+    record = {"record_id": "r1", "text": "Text."}
+    tasks = [
+        ("discourse", PROMPT, Answer, 512, SCHEMA),
+        ("quotation", "Identify quotations.", Answer, 512, "derridai_record_quotation"),
+    ]
+    manager._execute_metadata_tasks(record, REQUEST, tasks, "", None)
+    tasks[1] = ("quotation", "Identify quotations with new guidance.", Answer, 512, "derridai_record_quotation")
+    result = manager._execute_metadata_tasks(record, REQUEST, tasks, "", None)
+    assert len(calls) == 3
+    assert all(row[2] is None for row in result)
+    assert record["metadata_execution_ledger"]["discourse"]["reuse_count"] == 1
+    assert record["metadata_execution_ledger"]["quotation"]["checkpoint_invalidation_reason"]
+
+
+def test_unavailable_pipeline_cannot_reuse_a_raw_checkpoint(monkeypatch, manager, traces):
+    calls = _provider(monkeypatch, {"primary-model": [VALID]})
+    record, (_, _, error) = _enrich(manager, REQUEST)
+    assert error is None
+
+    def unavailable(_feature):
+        raise RuntimeError("Assignment unavailable.")
+
+    monkeypatch.setattr(manager_module.pipeline_manager, "resolve", unavailable)
+    result = manager._execute_metadata_tasks(
+        record, REQUEST, [("discourse", PROMPT, Answer, 512, SCHEMA)], "", None,
+    )
+    assert len(calls) == 1
+    assert result[0][1] is None
+    assert "Assignment unavailable" in str(result[0][2])
+    assert "discourse" not in record["metadata_stage_results"]
+    assert record["metadata_execution_ledger"]["discourse"]["state"] != "complete"
+
+
 SCENARIOS = {
     "primary answers": {"primary-model": [VALID]},
     "review answers after primary validation failure": {"primary-model": ["no"], "review-model": [VALID]},
@@ -156,6 +299,17 @@ def test_truncated_primary_output_gets_one_bounded_recovery_call(
     assert ledger["model_invocations"] == 2
 
 
+def test_runtime_provider_switch_preserves_server_owned_priority(manager) -> None:
+    manager._runtime_requests["priority-build"] = {"provider": "openai", "model": "new-model"}
+    resolved = manager._latest_runtime_request(
+        "priority-build",
+        {"provider": "ollama", "model": "old-model", "_capacity_priority": "foreground"},
+    )
+    assert resolved["model"] == "new-model"
+    assert resolved["_capacity_priority"] == "foreground"
+    assert "_capacity_priority" not in manager._runtime_requests["priority-build"]
+
+
 def test_assessment_contradiction_gets_one_consistency_repair_call(
     monkeypatch,
     manager,
@@ -182,6 +336,9 @@ def test_assessment_contradiction_gets_one_consistency_repair_call(
     assert result is not None
     assert [call["model"] for call in calls] == ["primary-model", "primary-model"]
     assert "STRUCTURED OUTPUT CONSISTENCY REPAIR" in str(calls[1]["prompt"])
+    repair_data = json.loads(str(calls[1]["prompt"]).rsplit("\n", 1)[1])
+    assert repair_data["proposition_status"]["metadata_value"] is None
+    assert repair_data["proposition_status"]["assessment"] == json.loads(first)["field_assessments"]["proposition_status"]
     ledger = record["metadata_execution_ledger"]["discourse"]
     assert ledger["recovery_kind"] == "assessment_contradiction"
     assert ledger["recovery_fields"] == ["proposition_status"]
@@ -227,6 +384,9 @@ def test_residual_assessment_contradiction_gets_one_final_repair_call(
     ]
     assert "STRUCTURED OUTPUT CONSISTENCY REPAIR" in str(calls[1]["prompt"])
     assert "FINAL STRUCTURED OUTPUT CONSISTENCY REPAIR" in str(calls[2]["prompt"])
+    assert json.loads(str(calls[2]["prompt"]).rsplit("\n", 1)[1]) == json.loads(
+        str(calls[1]["prompt"]).rsplit("\n", 1)[1]
+    )
     ledger = record["metadata_execution_ledger"]["discourse"]
     assert ledger["recovery_kind"] == "assessment_contradiction"
     assert ledger["recovery_calls"] == 2

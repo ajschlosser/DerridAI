@@ -286,6 +286,40 @@ describe("PdfCorpusBuilder characterization", () => {
       expect(wrapper.router.currentRoute.value.query.workspace).toBe("review");
       wrapper.unmount();
     });
+
+    it("preserves the active inspector, evidence field and source page during refresh", async () => {
+      const wrapper = await mountBuilder("?workspace=review&build=build-1");
+      const exposed = wrapper.vm as unknown as {
+        selectedRecord: typeof reviewRecord | null;
+        selectedEvidenceField: string;
+        selectedPdfPage: number;
+        reviewInspectorTab: string;
+        reviewRecords: { refreshRecord: (id: string) => Promise<void> };
+      };
+      exposed.reviewInspectorTab = "evidence";
+      exposed.selectedEvidenceField = "speaker";
+      exposed.selectedPdfPage = 4;
+      await flushPromises();
+      const sourceReads = pdfCorpusApi.blocks.mock.calls.length;
+      const viewed = pdfCorpusApi.markViewed.mock.calls.length;
+      let release!: (records: unknown[]) => void;
+      corpusReviewReads.records.mockImplementationOnce(
+        () => new Promise((resolve) => (release = resolve)),
+      );
+      const refreshing = exposed.reviewRecords.refreshRecord("record-1");
+      await flushPromises();
+      expect(exposed.selectedRecord?.record_id).toBe("record-1");
+      release([{ ...reviewRecord, record_revision: 2, text: "Refreshed text" }]);
+      await refreshing;
+      await flushPromises();
+      expect(exposed.selectedRecord?.text).toBe("Refreshed text");
+      expect(exposed.reviewInspectorTab).toBe("evidence");
+      expect(exposed.selectedEvidenceField).toBe("speaker");
+      expect(exposed.selectedPdfPage).toBe(4);
+      expect(pdfCorpusApi.blocks).toHaveBeenCalledTimes(sourceReads);
+      expect(pdfCorpusApi.markViewed).toHaveBeenCalledTimes(viewed);
+      wrapper.unmount();
+    });
   });
 
   it("keeps working on the built-in schema when the schema list comes back without items", async () => {

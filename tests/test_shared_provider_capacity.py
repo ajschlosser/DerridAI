@@ -142,3 +142,63 @@ def test_independent_provider_profiles_do_not_block_each_other(monkeypatch) -> N
 
     llm_permit.release()
     rag_permit.release()
+
+
+def test_research_overtakes_waiting_background_work_at_real_manager_gate(monkeypatch) -> None:
+    coordinator = ConcurrencyCoordinator()
+    monkeypatch.setattr(job_rag, "capacity_coordinator", coordinator)
+    rag = _rag_manager()
+    body = RAGRunRequest(
+        prompt="Question",
+        provider="openai",
+        provider_profile_id="priority-profile",
+        max_concurrent_requests=1,
+    )
+    key = rag._provider_key(body)
+    held = coordinator.acquire("provider_generation", key, 1)
+    background_waiting = threading.Event()
+    order: list[str] = []
+    failures: list[BaseException] = []
+
+    def background() -> None:
+        try:
+            with coordinator.acquire(
+                "provider_generation", key, 1,
+                on_wait=lambda _: background_waiting.set(),
+            ):
+                order.append("background")
+        except BaseException as exc:
+            failures.append(exc)
+
+    def research() -> None:
+        try:
+            permit = rag._acquire_provider_slot("rag-job", body)
+            assert permit is not None
+            with permit:
+                order.append("research")
+        except BaseException as exc:
+            failures.append(exc)
+
+    background_thread = threading.Thread(target=background)
+    research_thread = threading.Thread(target=research)
+    background_thread.start()
+    try:
+        assert background_waiting.wait(timeout=3)
+        research_thread.start()
+        for _ in range(300):
+            if coordinator.snapshot("provider_generation", key).waiting == 2:
+                break
+            threading.Event().wait(0.01)
+        else:
+            raise AssertionError("Research did not reach the provider queue")
+    finally:
+        held.release()
+        background_thread.join(timeout=5)
+        if research_thread.ident is not None:
+            research_thread.join(timeout=5)
+
+    assert not failures
+    assert not background_thread.is_alive()
+    assert not research_thread.is_alive()
+    assert order == ["research", "background"]
+    assert coordinator.snapshot("provider_generation", key).active == 0

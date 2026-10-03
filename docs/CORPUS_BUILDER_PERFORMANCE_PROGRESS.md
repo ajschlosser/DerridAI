@@ -6,9 +6,10 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 ## Baseline and branch
 
-- Current continuation branch: `ajschlosser-corpus-builder-performance-264`; earlier checkpoints used `ajschlosser-corpus-builder-performance` and `perf/corpus-builder-throughput`.
-- Continuation baseline: merged #425 at `5748c42a`, including the queue projection and earlier persistence checkpoints below.
-- Working scope: complete record-level metadata-exemplar reconciliation, durable invalidation, coalesced background indexing, and focused repository measurements. Broader enrichment caching and later performance phases remain planned.
+- Current continuation branch: `ajschlosser-corpus-builder-performance-f8e`; the previous increment used `ajschlosser-corpus-builder-performance-264`.
+- Continuation baseline: merged #428 at `266b806d`, including incremental metadata exemplars and the earlier checkpoints below.
+- Integrated merged #427 at `c8e671cd` before the scheduling continuation; local performance and refresh changes reapplied without conflicts.
+- Working scope: bounded source-embedding projection reads, exact raw metadata-family checkpoint reuse, bounded Record-task admission, and stable background review refreshes. Broader caching and scheduling priorities remain planned.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
 ## Checkpoints
@@ -22,9 +23,11 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 | Remove review navigation modal         | Committed/pushed `bb066a35` | 18 production-browser cases pass; local draft recovery retained                                       |
 | Restore document metadata editor       | Committed/pushed `0be91ae9` | Component-resolution regression and typechecks                                                        |
 | Queue projection                       | Merged #425                 | Transactional SQLite projection, live cursors, scoped reconciliation, repository scaling measurements |
-| Incremental metadata exemplars         | Local continuation          | Record-local reconciliation, recoverable invalidation, unchanged-vector reuse; measurements below     |
-| Dependency-aware enrichment caching    | Pending                     | Extend existing mechanisms without competing caches                                                   |
-| Readiness / scheduling                 | Pending                     | Preserve publication and ownership gates                                                              |
+| Incremental metadata exemplars         | Merged #428                 | Record-local reconciliation, recoverable invalidation, unchanged-vector reuse; measurements below     |
+| Bounded source-embedding cache reads   | Local continuation          | Selected-ID batches, warm reuse, document isolation; deterministic work counts below                  |
+| Dependency-aware enrichment caching    | Partial                     | Exact raw-family checkpoint fingerprints and revalidation; broader caching remains planned            |
+| Readiness / scheduling                 | Partial                     | Bounded initial/retry/rerun admission; readiness and scheduling priorities remain planned             |
+| Review refresh continuity              | Local continuation          | Same-Record refresh preserves mounted panes, evidence/page selection, and in-flight drafts            |
 | Evaluated learning / review assistance | Pending                     | Requires held-out evaluation                                                                          |
 
 ## Validation and measurements
@@ -36,6 +39,45 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 1. Establish isolated real-source and end-to-end timing baselines, including browser/save tail latency, before claiming progress toward 50%.
 2. Continue dependency-aware enrichment caching; measure remaining full-asset source-block loading before deciding whether to add source indexing.
 3. Evaluate earlier readiness, scheduling, and review assistance separately from repository queue improvements.
+
+## Bounded source-embedding cache reads checkpoint (2026-10-02)
+
+- Continued from merged #428 without adding a competing cache. Partial source synchronization (`prune=False`) reads metadata only for requested source-unit storage IDs; selected-vector lookup reads only requested IDs and embeddings. Both retain the document filter and batch requests by the existing application/backend limit. Full-snapshot synchronization still reads the document's complete metadata set so removed units can be pruned.
+- Empty vector selections do not open or rebuild the collection. Duplicate requested IDs are coalesced. The non-Chroma adapter now keys rows by document-plus-unit identity, matching the persistent projection, so shared local unit IDs cannot overwrite another document's vectors.
+- Deterministic regressions use 1,000 and 10,000 source units with a three-ID backend batch limit. A warm partial sync of five units followed by lookup of those units (plus a duplicate and a missing ID) returns **10 rows in four bounded requests**, versus **2,000 / 20,000 rows** before the change. It makes **zero embedding calls**, preserves all unselected rows, and returns the same vectors. These are in-memory vector-double work counts, not measured Chroma latency or end-to-end speedups.
+- Four new regression cases failed before implementation; the final focused source/evidence/prefill suite passes **75 tests**, and build resilience passes **23 tests** in a separate process. These suites must run separately because the resilience module installs an `app.rag` stub that changes citation behavior during collection. Touched-file Ruff and source-module mypy pass. A local Python environment was restored after missing test dependencies; no dependency manifests changed.
+- Full-asset source-block loading, exact semantic-stage dependency fingerprints, concurrent request coalescing, model-revision contract expansion, real-source timing, browser/save tail latency, and human-review measurements remain outstanding. No frontend, Docker, full-preflight, or release-readiness claim is made.
+- Reproduce the work-count regression with `python -m pytest -q tests/test_source_embeddings.py -k partial_source_cache_reads_only_requested_units`.
+
+## Exact raw metadata-family checkpoint reuse checkpoint (2026-10-02)
+
+- Extended the existing Record-scoped raw-family checkpoints rather than adding a second cache. Each successful, assessment-consistent response retains an opaque `metadata-family-checkpoint-v1` dependency fingerprint in its existing family execution ledger.
+- Fingerprints bind authoritative Record identity/text/revision/source locators, the exact family prompt (including consumed neighbours, instructions and advisory precedents), response JSON Schema and contract name, output budget, primary/review provider configuration and supplied model version, generation options, timeout, immutable assigned pipeline identity/hash, and application-version validator identity. Provider credentials, source text, prompt bodies and raw dependency snapshots are not added to the ledger.
+- A matching raw response must pass response-model validation and assessment-consistency checks again before reuse. Reuse retains original provider-call provenance and records a reuse count/time through the existing durable family callback. Dependency changes, malformed stored shapes, failed validation, unknown legacy fingerprint, explicit queued retry, or unavailable pipeline prevent raw reuse; invalidation reasons are recorded. Changes to one family's prompt do not invalidate a sibling's raw checkpoint.
+- Existing materialized completed-family resume behavior and explicit failure/review settlement remain unchanged. This increment does not cache completed normalized families, change human ownership, introduce cross-Record/provider request coalescing, or change publication gates. Older raw responses without exact provenance are recomputed; user guidance now describes this compatibility boundary.
+- Thirteen new checkpoint regressions failed before implementation. Final combined validation: **147 passed, six opt-in persistence benchmarks skipped**, covering source caching, checkpoint reuse/invalidation, family concurrency, ownership, reruns, guidance, persistence, adaptive enrichment, schemas and autofill. Touched-file Ruff and both changed source modules' mypy checks passed. The inherited source-cache checkpoint's separately run resilience suite passed **23 tests**. No live model, elapsed-time target, frontend/browser, Docker, full-preflight, or release-readiness claim is made.
+- Warm raw-checkpoint reuse makes **one provider call across two identical executions** rather than repeating generation; a family-local prompt change reruns only that family. Serialization/restoration preserves reuse, while credential values are absent from retained checkpoint metadata. These are scripted-provider behavioral checks, not end-to-end timing measurements.
+- Remaining work includes exact reuse of already materialized stage outputs, bounded/coalesced in-flight requests, deeper dependency invalidation, source-block loading measurements, and the real-source/browser/human-review gates. No whole-plan completion is claimed.
+
+## Bounded Record-task admission checkpoint
+
+- Initial enrichment, metadata retries, and rerun passes admit at most their Record-worker count of pending tasks rather than submitting the whole corpus. The shared family pools and provider concurrency gates are unchanged. Cancellation stops new admission and cancels pending work where possible; existing operation-specific failure/partial-result handling remains.
+- Deterministic 1,000/10,000-item tests cover bounded admission, completion ordering, cancellation, and submission/consumer failures. Actual-build integration covers durable completion and cancellation after the first result. Focused backend validation passed **58 tests**, with **six opt-in benchmarks skipped**; touched-file Ruff and three source-module mypy checks passed.
+- This bounds executor backlog, not corpus loading or total runtime. Earlier readiness, foreground priority, starvation protection, and end-to-end timing remain outstanding.
+
+## Review refresh continuity checkpoint
+
+- Reproduced refresh flicker caused by temporarily clearing the selected Record during an authoritative reread, repeated activation of unchanged cached Records, and replacement of a draft started while a reread was in flight.
+- Same-Record refresh now keeps the reader mounted, skips unchanged cached activation, and checks draft state again before applying fetched content. Parent activation preserves the active inspector, selected evidence field, and source page unless navigation switches Records. Queue reconciliation and authoritative refresh remain enabled; existing filtered-queue advancement and explicit navigation/draft restoration are preserved.
+- Regression coverage includes composable races, mounted-parent evidence/source state, and repeated production-browser realtime completion events followed by an unsaved draft. **80 related frontend tests** and **20 browser tests** passed, including immediate navigation, draft recovery, French keyboard controls, and responsive review layouts. Touched-file ESLint, app/test typechecks, and the production frontend build passed.
+- This is a focused repair of the reported refresh regression, not a whole-application refresh audit. No Docker, complete preflight, live-model timing, or 50% improvement claim is made.
+
+## Provider scheduling and assessment-repair continuation
+
+- Shared provider and Ollama runtime queues prioritize reviewer-triggered retries/reruns (including requeued Records), Research, and tools over automatic corpus work. Each priority class is FIFO. After at most three foreground admissions while background work waits, a background waiter receives its turn; active calls are never preempted and existing capacity limits remain authoritative. Runtime provider switches preserve the operation's server-owned priority.
+- Final combined checkpoint/schema/admission/persistence/shared-provider/family-concurrency validation passed **129 tests**, with **six optional benchmarks skipped**, after restoring the missing declared Strawberry dependency. This includes cancellation in both priority classes and priority preservation across runtime provider switches. Touched-file Ruff and six source-module mypy checks passed. After integrating #427, **50 related frontend tests** and the app typecheck passed. Full preflight and real responsiveness measurements remain outstanding.
+- A reported residual `supported_value`/empty-value contradiction revealed that existing consistency retries did not include the failed field payload. Both bounded repair attempts now receive exact failed values, assessments, and evidence for the affected fields as inert data, with instructions to re-evaluate against the current source. They do not derive values from explanatory reasons or manufacture supported absence. Repair identity is `assessment-repair-v2`; raw checkpoint dependency identity advances to `metadata-family-checkpoint-v2`.
+- No failing live trace was supplied, so the exact cause of the reported model output remains unconfirmed. Scripted-provider recovery coverage verifies the repair context; persistent model contradictions still remain visible and unresolved rather than being suppressed.
 
 ## Persistence checkpoint (2026-10-02)
 

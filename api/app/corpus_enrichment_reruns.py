@@ -16,9 +16,10 @@ import time
 import uuid
 from collections import Counter
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
+from .concurrency import bounded_as_completed
 from .config import settings
 from .corpus_enrichment_feedback import enrichment_informational_event
 from .corpus_enrichment_helpers import (
@@ -143,6 +144,7 @@ class EnrichmentRerunsMixin:
 
 
     def _retry_metadata_worker(self, build_id: str, request: dict[str, Any], operation_id: str, target_indices: list[int], target_fields: dict[str, list[str]]) -> None:
+        request = {**request, "_capacity_priority": "foreground"}
         try:
             build = self.repo.get_build(build_id)
             records = self.repo.load_records(build_id)
@@ -162,13 +164,11 @@ class EnrichmentRerunsMixin:
                     thread_name_prefix="pdf-corpus-family-retry",
                 ) as family_pool,
             ):
-                futures = {}
-                for index in target_indices:
+                def submit_record(index: int):
                     record = dict(records[index])
                     previous_text = str(records[index - 1].get("text") or "") if index > 0 else ""
                     next_text = str(records[index + 1].get("text") or "") if index + 1 < len(records) else ""
-                    before = list(record.get("metadata_incomplete_fields") or [])
-                    future = pool.submit(
+                    return pool.submit(
                         self._enrich_record,
                         record,
                         manifest,
@@ -178,11 +178,13 @@ class EnrichmentRerunsMixin:
                         build_id=build_id,
                         family_executor=family_pool,
                     )
-                    futures[future] = (index, before)
                 processed = 0
                 resolved = 0
-                for future in as_completed(futures):
-                    index, before = futures[future]
+                for index, future in bounded_as_completed(
+                    target_indices, submit_record, max_pending=max_workers,
+                    cancelled=lambda: self._cancelled(build_id),
+                ):
+                    before = list(records[index].get("metadata_incomplete_fields") or [])
                     try:
                         updated = future.result()
                     except Exception as exc:
@@ -210,6 +212,8 @@ class EnrichmentRerunsMixin:
                         "fields_remaining": max(0, int(op.get("fields_total") or 0) - resolved),
                     })
                     self._update(build_id, status="running", stage="metadata_retry", progress=min(0.979, 0.96 + 0.019 * (processed / total)), metadata_operation=op)
+                if self._cancelled(build_id):
+                    raise InterruptedError("Metadata retry cancelled")
             final_build = self._rewrite_and_validate(build_id, records)
             target_remaining = 0
             for record in records:
@@ -572,6 +576,7 @@ class EnrichmentRerunsMixin:
         on_progress: Callable[[dict[str, int], int], None], pass_number: int = 1,
     ) -> dict[str, int]:
         """Run one pass over the records currently in scope, merging results into live state."""
+        request = {**request, "_capacity_priority": "foreground"}
         build = self.repo.get_build(build_id)
         manifest = build.get("manifest") or {}
         profile = self._profile_of_build(build)
@@ -656,16 +661,19 @@ class EnrichmentRerunsMixin:
                 thread_name_prefix="pdf-corpus-family-enrich",
             ) as family_pool,
         ):
-            futures = {
-                pool.submit(candidate_for, index): (index, time.perf_counter())
-                for index in indices
-            }
-            for future in as_completed(futures):
+            submitted: dict[int, float] = {}
+
+            def submit_candidate(index: int):
+                submitted[index] = time.perf_counter()
+                return pool.submit(candidate_for, index)
+
+            for index, future in bounded_as_completed(
+                indices, submit_candidate, max_pending=max_workers,
+                cancelled=lambda: self._cancelled(build_id),
+            ):
                 if self._cancelled(build_id):
-                    for outstanding in futures:
-                        outstanding.cancel()
                     break
-                index, submitted_at = futures[future]
+                submitted_at = submitted.pop(index)
                 record_id = str(snapshot[index].get("record_id") or "")
                 try:
                     candidate, request_used, record_started, candidate_error = future.result()
@@ -878,6 +886,7 @@ class EnrichmentRerunsMixin:
         rerun_request = dict(request)
         rerun_request["families"] = families
         rerun_request["_interactive_provider_override"] = True
+        rerun_request["_capacity_priority"] = "foreground"
         index = records.index(target)
         self._enrich_record(
             target,
