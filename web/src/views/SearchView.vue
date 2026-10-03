@@ -67,8 +67,29 @@ const route = useRoute();
 const i18n = useI18nStore();
 const shell = useShellStore();
 const snapshot = ref<SearchWorkspaceSnapshot | null>(null);
-const loading = ref(true);
+/**
+ * Workspace read state. `refreshing` and `stale` keep the already-loaded workspace mounted, so a
+ * slow or failed refresh never replaces content the reviewer is working in; `pending` and `error`
+ * are only reachable before anything has loaded (or after access is withdrawn).
+ */
+type ReadPhase = "pending" | "refreshing" | "ready" | "error" | "stale";
+const phase = ref<ReadPhase>("pending");
+const busy = computed(() => phase.value === "pending" || phase.value === "refreshing");
 const error = ref("");
+/**
+ * Request identity for every workspace read. A response from a superseded read must never
+ * overwrite the newer one, so scope, store, locale and navigation changes cannot resurrect
+ * results the reviewer has already moved on from.
+ */
+let readRequest = 0;
+/**
+ * The submitted corpus-database query the visible results belong to, or `null` when no search has
+ * run. Typing in the input does not change it, so edited text cannot make older results look current.
+ */
+const shownQuery = ref<string | null>(null);
+/** Local state of an explicit corpus-database search, independent of the workspace read. */
+const searchPhase = ref<"idle" | "pending" | "refreshing">("idle");
+let searchTicket = 0;
 const query = ref("");
 const facetDrawerOpen = ref(false);
 const columnsDialog = ref<{ open: () => void; close: () => void } | null>(null);
@@ -87,7 +108,14 @@ const columnWidths = reactive<Record<string, number>>(loadColumnWidths());
 let localSearchTimer = 0;
 let recentTimer = 0;
 let redirectedForDatabase = false;
-const noDatabase = ref(false);
+/**
+ * Derived from the applied snapshot rather than assigned after it, so the workspace is never
+ * rendered for one frame as though a corpus were available.
+ */
+const noDatabase = computed(
+  () =>
+    Boolean(snapshot.value) && !snapshot.value?.has_database && !snapshot.value?.has_loaded_records,
+);
 
 const scope = computed<SearchScope>(() => snapshot.value?.scope || "loaded");
 const databaseMode = computed(() => scope.value === "database");
@@ -120,7 +148,15 @@ const activeFacetChips = computed(
 const hasFilters = computed(() =>
   Boolean(activeFacetChips.value.length || snapshot.value?.filters.length),
 );
+/** Set only when the corpus-database search itself failed; its zero results are not a count. */
+const searchErrorMessage = computed(() =>
+  databaseMode.value ? snapshot.value?.search_error || "" : "",
+);
+const resultsArePrevious = computed(
+  () => databaseMode.value && shownQuery.value !== null && shownQuery.value !== query.value.trim(),
+);
 const resultSummary = computed(() => {
+  if (searchErrorMessage.value) return i18n.t("search.result_count_unavailable");
   const total = snapshot.value?.total || 0;
   return total === 1
     ? i18n.tf("search.result_count_one", { count: total.toLocaleString(i18n.locale) })
@@ -231,41 +267,82 @@ function persistRecent() {
   }
 }
 
-async function load(options: { refresh?: boolean; autoRun?: boolean } = {}) {
-  loading.value = !snapshot.value;
-  error.value = "";
+function accessWithdrawn(cause: unknown) {
+  return (
+    Boolean(cause) &&
+    typeof cause === "object" &&
+    "status" in (cause as object) &&
+    [401, 403].includes(Number((cause as { status?: unknown }).status))
+  );
+}
+
+function applySnapshot(next: SearchWorkspaceSnapshot) {
+  snapshot.value = next;
+  query.value = next.query;
+  advancedOpen.value = next.advanced_open;
+  // Loaded-record results are recomputed for the current query on every read, so they always
+  // belong to it. Corpus-database results belong to the last submitted search; adopt the query
+  // only when a search has actually run and no submitted query is being tracked yet.
+  if (next.scope !== "database") shownQuery.value = next.query;
+  else if (!next.search_has_run) shownQuery.value = null;
+  else if (shownQuery.value === null) shownQuery.value = next.query.trim();
+  shell.sync();
+}
+
+/**
+ * Run one workspace read under a fresh request identity. A superseded response is dropped, and a
+ * failure keeps any workspace already on screen instead of replacing the page.
+ */
+async function readSnapshot(operation: () => Promise<unknown>) {
+  const request = ++readRequest;
+  phase.value = snapshot.value ? "refreshing" : "pending";
   try {
-    const next = (await runtime.getSearchWorkspaceSnapshot({
-      refresh: options.refresh !== false,
-      autoRun: options.autoRun !== false,
-    })) as SearchWorkspaceSnapshot;
-    snapshot.value = next;
-    query.value = next.query;
-    advancedOpen.value = next.advanced_open;
-    shell.sync();
-    const mustCreateDatabase =
-      !next.has_database && (next.scope === "database" || !next.has_loaded_records);
-    noDatabase.value = !next.has_database && !next.has_loaded_records;
-    if (noDatabase.value) return;
-    if (mustCreateDatabase && next.capabilities.can_manage_database && !redirectedForDatabase) {
-      redirectedForDatabase = true;
-      toast(i18n.t("search.redirect_database"), { tone: "info" });
-      runtime.openDatabaseCreationFromResearch();
-      return;
-    }
-    redirectedForDatabase = false;
-    await syncFilterSchema(next);
-    if (
-      !newFilterField.value ||
-      !schemaFilterFields.value.some((field) => field.key === newFilterField.value)
-    )
-      newFilterField.value =
-        schemaFilterFields.value[0]?.key || next.filter_fields[0]?.key || "work";
+    const next = (await operation()) as SearchWorkspaceSnapshot;
+    if (request !== readRequest) return null;
+    applySnapshot(next);
+    phase.value = "ready";
+    error.value = "";
+    return next;
   } catch (exc) {
+    if (request !== readRequest) return null;
     error.value = exc instanceof Error ? exc.message : String(exc);
-  } finally {
-    loading.value = false;
+    if (accessWithdrawn(exc)) {
+      snapshot.value = null;
+      shownQuery.value = null;
+    }
+    phase.value = snapshot.value ? "stale" : "error";
+    return null;
   }
+}
+
+async function load(options: { refresh?: boolean; autoRun?: boolean } = {}) {
+  const next = await readSnapshot(() =>
+    Promise.resolve(
+      runtime.getSearchWorkspaceSnapshot({
+        refresh: options.refresh !== false,
+        autoRun: options.autoRun !== false,
+      }),
+    ),
+  );
+  if (!next) return;
+  const request = readRequest;
+  const mustCreateDatabase =
+    !next.has_database && (next.scope === "database" || !next.has_loaded_records);
+  if (noDatabase.value) return;
+  if (mustCreateDatabase && next.capabilities.can_manage_database && !redirectedForDatabase) {
+    redirectedForDatabase = true;
+    toast(i18n.t("search.redirect_database"), { tone: "info" });
+    runtime.openDatabaseCreationFromResearch();
+    return;
+  }
+  redirectedForDatabase = false;
+  await syncFilterSchema(next);
+  if (request !== readRequest) return;
+  if (
+    !newFilterField.value ||
+    !schemaFilterFields.value.some((field) => field.key === newFilterField.value)
+  )
+    newFilterField.value = schemaFilterFields.value[0]?.key || next.filter_fields[0]?.key || "work";
 }
 function applyQuery(value: string) {
   query.value = value;
@@ -280,9 +357,17 @@ function applyQuery(value: string) {
 }
 async function runSearch() {
   if (!snapshot.value) return;
+  const submitted = query.value.trim();
   runtime.updateSearchQuery(query.value, { replace: true });
-  const next = (await runtime.runSearchWorkspace()) as SearchWorkspaceSnapshot;
-  snapshot.value = next;
+  // Re-running the same query may keep its rows visible; a different query must not leave the
+  // previous results standing in as the current result.
+  const ticket = ++searchTicket;
+  searchPhase.value = shownQuery.value === submitted ? "refreshing" : "pending";
+  const next = await readSnapshot(() => Promise.resolve(runtime.runSearchWorkspace()));
+  if (ticket !== searchTicket) return;
+  searchPhase.value = "idle";
+  if (!next) return;
+  shownQuery.value = submitted;
   recordRecentSearch();
 }
 
@@ -290,10 +375,9 @@ async function clearQuery() {
   query.value = "";
   runtime.updateSearchQuery("", { replace: true });
   if (databaseMode.value) {
-    snapshot.value = (await runtime.getSearchWorkspaceSnapshot({
-      refresh: false,
-      autoRun: false,
-    })) as SearchWorkspaceSnapshot;
+    await readSnapshot(() =>
+      Promise.resolve(runtime.getSearchWorkspaceSnapshot({ refresh: false, autoRun: false })),
+    );
     return;
   }
   await load({ refresh: false, autoRun: false });
@@ -303,17 +387,15 @@ async function updateMmrOption(key: "fetch_k" | "lambda_mult", value: number) {
   await load({ refresh: false, autoRun: false });
 }
 async function changeScope(next: SearchScope) {
-  snapshot.value = (await runtime.setSearchScope(next)) as SearchWorkspaceSnapshot;
-  await syncFilterSchema(snapshot.value);
-  if (
-    next === "database" &&
-    !snapshot.value.has_database &&
-    snapshot.value.capabilities.can_manage_database
-  ) {
+  searchTicket += 1;
+  searchPhase.value = "idle";
+  const applied = await readSnapshot(() => Promise.resolve(runtime.setSearchScope(next)));
+  if (!applied) return;
+  const request = readRequest;
+  await syncFilterSchema(applied);
+  if (request !== readRequest) return;
+  if (next === "database" && !applied.has_database && applied.capabilities.can_manage_database)
     runtime.openDatabaseCreationFromResearch();
-    return;
-  }
-  query.value = snapshot.value.query;
 }
 async function changeStore(value: string) {
   runtime.setSearchStore(value);
@@ -502,8 +584,11 @@ function saveCurrentView() {
 }
 async function openSavedView(view: SavedSearchView | RecentSearchEntry) {
   viewsDialog.value?.close();
-  snapshot.value = (await runtime.restoreSearchViewFromHref(view.href)) as SearchWorkspaceSnapshot;
-  query.value = snapshot.value.query;
+  searchTicket += 1;
+  searchPhase.value = "idle";
+  // A restored view describes a different search; its results are not yet known.
+  shownQuery.value = null;
+  await readSnapshot(() => Promise.resolve(runtime.restoreSearchViewFromHref(view.href)));
 }
 function removeSavedView(id: string) {
   savedViews.value = savedViews.value.filter((item) => item.id !== id);
@@ -628,45 +713,35 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.clearTimeout(localSearchTimer);
   window.clearTimeout(recentTimer);
+  // Drop responses that are still in flight; the view they would have updated is gone.
+  readRequest += 1;
+  searchTicket += 1;
 });
 </script>
 
 <template>
   <main
     class="vue-native-page search-native-page"
-    :aria-busy="loading"
+    :aria-busy="busy"
     aria-labelledby="search-page-title"
     @wheel="forwardVerticalWheelToDocument"
   >
     <NewerDataBanner :visible="newer.hasNewer.value" @load="loadNewer" />
-    <div v-if="loading && !snapshot" class="search-page-loading">
-      <UiLoadingState :label="i18n.t('search.loading')" />
-    </div>
-    <section v-else-if="error" class="search-page-error">
-      <h1>{{ i18n.t("search.load_failed") }}</h1>
-      <p>{{ error }}</p>
+    <section v-if="!snapshot && phase === 'error'" class="search-page-error">
+      <h1 id="search-page-title">{{ i18n.t("search.load_failed") }}</h1>
+      <p role="alert">{{ error }}</p>
       <button type="button" class="btn" @click="load()">{{ i18n.t("ui.retry") }}</button>
     </section>
-    <AccessibleEmptyState
-      v-else-if="noDatabase"
-      icon="database"
-      :title="i18n.t('search.nothing_to_search_title')"
-      :description="
-        snapshot?.capabilities.can_manage_database
-          ? i18n.t('search.nothing_to_search_help')
-          : i18n.t('search.empty_state_denied')
-      "
-      :action-label="
-        snapshot?.capabilities.can_manage_database ? i18n.t('search.empty_state_action') : ''
-      "
-      @action="runtime.openDatabaseCreationFromResearch()"
-    />
-    <template v-else-if="snapshot">
+    <div v-else-if="!snapshot" class="search-page-loading">
+      <h1 id="search-page-title">{{ i18n.t("loading.search_frame") }}</h1>
+      <UiLoadingState :label="i18n.t('search.loading')" variant="skeleton" :skeleton-count="2" />
+    </div>
+    <template v-else>
       <SearchWorkspaceHeader
         :scope="snapshot.scope"
         :researcher="snapshot.is_researcher"
         :total-loaded="snapshot.total_loaded_records"
-        :database-count="snapshot.stores.length"
+        :database-count="snapshot.stores?.length || 0"
         :selected-evidence="snapshot.selected_evidence_count"
         :can-use-loaded="snapshot.has_loaded_records"
         @update:scope="changeScope"
@@ -675,744 +750,824 @@ onBeforeUnmount(() => {
         @views="openSavedViews"
       />
 
-      <section class="search-command-surface" :aria-label="i18n.t('search.search_controls')">
-        <div v-if="databaseMode" class="search-database-context">
-          <label
-            ><span>{{ i18n.t("search.corpus_database") }}</span
-            ><select
-              class="control"
-              :value="snapshot.active_store"
-              @change="changeStore(($event.target as HTMLSelectElement).value)"
-            >
-              <option v-for="store in snapshot.stores" :key="store.name" :value="store.name">
-                {{ store.name }} · {{ store.count.toLocaleString(i18n.locale) }}
-                {{ i18n.t("dynamic.records") }}
-              </option>
-            </select></label
-          >
-          <span class="search-database-note">{{ i18n.t("search.database_context_help") }}</span>
-        </div>
-        <form
-          class="search-command-row"
-          @submit.prevent="databaseMode ? runSearch() : recordRecentSearch()"
-        >
-          <label class="search-command-input">
-            <span class="sr-only">{{ i18n.t("search.query") }}</span>
-            <AppIcon name="search" />
-            <input
-              :value="query"
-              type="search"
-              :disabled="databaseMode && snapshot.method === 'filter'"
-              :placeholder="searchPlaceholder"
-              autocomplete="off"
-              @input="applyQuery(($event.target as HTMLInputElement).value)"
-            />
-            <button
-              v-if="query"
-              type="button"
-              class="search-query-clear"
-              :aria-label="i18n.t('search.clear_query')"
-              v-text="'×'"
-              @click="clearQuery"
-            ></button>
-          </label>
-          <button
-            v-if="databaseMode"
-            type="submit"
-            class="btn primary search-run-button"
-            :disabled="
-              snapshot.loading ||
-              !snapshot.has_database ||
-              (snapshot.method !== 'filter' && !query.trim())
-            "
-          >
-            <AppIcon name="search" />{{
-              snapshot.loading ? i18n.t("search.searching") : i18n.t("ui.search")
-            }}
-          </button>
-        </form>
-        <div
-          v-if="activeFacetChips.length || snapshot.filters.length"
-          class="search-active-filters"
-          :aria-label="i18n.t('search.active_filters')"
-        >
-          <button
-            v-for="chip in activeFacetChips"
-            :key="`facet:${chip.field}:${chip.value}`"
-            type="button"
-            class="search-filter-chip"
-            @click="removeFacet(chip.field, chip.value)"
-          >
-            <span>{{ chip.fieldLabel }}: {{ chip.label }}</span
-            ><span aria-hidden="true">×</span><span class="sr-only">{{ i18n.t("ui.remove") }}</span>
-          </button>
-          <button
-            v-for="filter in snapshot.filters"
-            :key="filter.id"
-            type="button"
-            class="search-filter-chip advanced"
-            @click="removeAdvancedFilter(filter)"
-          >
-            <span>{{ filter.field_label }} {{ filter.op_label }} {{ filter.value }}</span
-            ><span aria-hidden="true">×</span><span class="sr-only">{{ i18n.t("ui.remove") }}</span>
-          </button>
-          <button type="button" class="search-clear-filters" @click="clearAll">
-            {{ i18n.t("search.clear_all") }}
-          </button>
-        </div>
-        <details
-          class="search-options"
-          :open="advancedOpen"
-          @toggle="toggleAdvanced(($event.currentTarget as HTMLDetailsElement).open)"
-        >
-          <summary>
-            <AppIcon name="gear" />{{ i18n.t("search.search_options")
-            }}<span v-if="snapshot.filters.length" class="badge">{{
-              snapshot.filters.length
-            }}</span>
-          </summary>
-          <div class="search-options-body">
-            <div v-if="databaseMode" class="search-method-grid">
-              <fieldset class="search-method-picker">
-                <legend>{{ i18n.t("search.ranking_method") }}</legend>
-                <label
-                  v-for="item in [
-                    ['similarity', 'search.method_similarity', 'Similarity'],
-                    ['mmr', 'search.method_mmr', 'MMR'],
-                    ['filter', 'search.method_filter', 'Filters only'],
-                  ] as const"
-                  :key="item[0]"
-                  :class="{ selected: snapshot.method === item[0] }"
-                  ><input
-                    type="radio"
-                    name="searchMethod"
-                    :value="item[0]"
-                    :checked="snapshot.method === item[0]"
-                    @change="changeMethod(item[0])"
-                  /><span
-                    ><b
-                      >{{ i18n.t(item[1], item[2]) }}
-                      <UiTooltip :text="searchMethodHelp(item[0])" /></b
-                    ><small>{{
-                      item[0] === "similarity"
-                        ? i18n.t("search.method_similarity_short")
-                        : item[0] === "mmr"
-                          ? i18n.t("search.method_mmr_short")
-                          : i18n.t("search.method_filter_short")
-                    }}</small></span
-                  ></label
-                >
-              </fieldset>
-              <div v-if="snapshot.method === 'mmr'" class="search-mmr-controls">
-                <label
-                  ><span
-                    >{{ i18n.t("research.fetch_k_label") }}
-                    <UiTooltip :text="i18n.t('help.glossary.fetch_k.definition')" /></span
-                  ><input
-                    class="control"
-                    type="number"
-                    min="1"
-                    max="1000"
-                    :value="snapshot.fetch_k"
-                    @change="
-                      updateMmrOption('fetch_k', Number(($event.target as HTMLInputElement).value))
-                    " /></label
-                ><label
-                  ><span
-                    >{{ i18n.t("search.mmr_lambda") }}
-                    <UiTooltip :text="i18n.t('help.glossary.mmr_lambda.definition')" /></span
-                  ><input
-                    class="control"
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    :value="snapshot.lambda_mult"
-                    @change="
-                      updateMmrOption(
-                        'lambda_mult',
-                        Number(($event.target as HTMLInputElement).value),
-                      )
-                    "
-                /></label>
-              </div>
-            </div>
-            <SearchAdvancedFilters
-              :filters="snapshot.filters"
-              :fields="schemaFilterFields"
-              :schemas="schemaSummaries"
-              :schema-id="filterSchemaId"
-              :associated-schema-id="associatedSchemaId"
-              :field="newFilterField"
-              :op="newFilterOp"
-              :value="newFilterValue"
-              :ops="filterOps(newFilterField)"
-              :suggestions="suggestionsFor(newFilterField)"
-              @update:field="newFilterField = $event"
-              @update:op="newFilterOp = $event"
-              @update:value="newFilterValue = $event"
-              @schema="changeFilterSchema"
-              @field-change="onFilterFieldChange"
-              @add="addAdvancedFilter"
-              @remove="removeAdvancedFilter"
-            />
-          </div>
-        </details>
-      </section>
-
-      <SearchSelectionBar
-        v-if="snapshot.selection_count"
-        :count="snapshot.selection_count"
-        :can-review="snapshot.capabilities.can_review"
-        :can-bulk-edit="snapshot.capabilities.can_bulk_edit"
-        @review="selectionAction('review')"
-        @improve="selectionAction('improve')"
-        @bulk="selectionAction('bulk')"
-        @clear="clearSelection"
+      <div v-if="phase === 'stale'" class="info error search-workspace-status" role="alert">
+        <p>{{ i18n.t("loading.stale") }} {{ error }}</p>
+        <button type="button" class="btn" @click="load()">{{ i18n.t("ui.retry") }}</button>
+      </div>
+      <UiLoadingState
+        v-else-if="phase === 'refreshing'"
+        variant="inline"
+        :label="i18n.t('loading.updating')"
       />
 
-      <section class="search-explorer-grid">
-        <button
-          type="button"
-          class="btn search-mobile-filter-button"
-          @click="facetDrawerOpen = true"
-        >
-          <AppIcon name="filter" />{{ i18n.t("search.filters")
-          }}<span v-if="activeFacetChips.length" class="badge">{{ activeFacetChips.length }}</span>
-        </button>
-        <div
-          v-if="facetDrawerOpen"
-          class="search-facet-scrim"
-          @click="facetDrawerOpen = false"
-        ></div>
-        <div class="search-facet-shell" :class="{ open: facetDrawerOpen }">
+      <AccessibleEmptyState
+        v-if="noDatabase"
+        icon="database"
+        :title="i18n.t('search.nothing_to_search_title')"
+        :description="
+          snapshot.capabilities.can_manage_database
+            ? i18n.t('search.nothing_to_search_help')
+            : i18n.t('search.empty_state_denied')
+        "
+        :action-label="
+          snapshot.capabilities.can_manage_database ? i18n.t('search.empty_state_action') : ''
+        "
+        @action="runtime.openDatabaseCreationFromResearch()"
+      />
+
+      <template v-else>
+        <section class="search-command-surface" :aria-label="i18n.t('search.search_controls')">
+          <div v-if="databaseMode" class="search-database-context">
+            <label
+              ><span>{{ i18n.t("search.corpus_database") }}</span
+              ><select
+                class="control"
+                :value="snapshot.active_store"
+                @change="changeStore(($event.target as HTMLSelectElement).value)"
+              >
+                <option v-for="store in snapshot.stores" :key="store.name" :value="store.name">
+                  {{ store.name }} · {{ store.count.toLocaleString(i18n.locale) }}
+                  {{ i18n.t("dynamic.records") }}
+                </option>
+              </select></label
+            >
+            <span class="search-database-note">{{ i18n.t("search.database_context_help") }}</span>
+          </div>
+          <form
+            class="search-command-row"
+            @submit.prevent="databaseMode ? runSearch() : recordRecentSearch()"
+          >
+            <label class="search-command-input">
+              <span class="sr-only">{{ i18n.t("search.query") }}</span>
+              <AppIcon name="search" />
+              <input
+                :value="query"
+                type="search"
+                :disabled="databaseMode && snapshot.method === 'filter'"
+                :placeholder="searchPlaceholder"
+                autocomplete="off"
+                @input="applyQuery(($event.target as HTMLInputElement).value)"
+              />
+              <button
+                v-if="query"
+                type="button"
+                class="search-query-clear"
+                :aria-label="i18n.t('search.clear_query')"
+                v-text="'×'"
+                @click="clearQuery"
+              ></button>
+            </label>
+            <button
+              v-if="databaseMode"
+              type="submit"
+              class="btn primary search-run-button"
+              :disabled="
+                searchPhase !== 'idle' ||
+                !snapshot.has_database ||
+                (snapshot.method !== 'filter' && !query.trim())
+              "
+            >
+              <AppIcon name="search" />{{
+                searchPhase === "idle" ? i18n.t("ui.search") : i18n.t("search.searching")
+              }}
+            </button>
+          </form>
+          <div
+            v-if="activeFacetChips.length || snapshot.filters.length"
+            class="search-active-filters"
+            :aria-label="i18n.t('search.active_filters')"
+          >
+            <button
+              v-for="chip in activeFacetChips"
+              :key="`facet:${chip.field}:${chip.value}`"
+              type="button"
+              class="search-filter-chip"
+              @click="removeFacet(chip.field, chip.value)"
+            >
+              <span>{{ chip.fieldLabel }}: {{ chip.label }}</span
+              ><span aria-hidden="true">×</span
+              ><span class="sr-only">{{ i18n.t("ui.remove") }}</span>
+            </button>
+            <button
+              v-for="filter in snapshot.filters"
+              :key="filter.id"
+              type="button"
+              class="search-filter-chip advanced"
+              @click="removeAdvancedFilter(filter)"
+            >
+              <span>{{ filter.field_label }} {{ filter.op_label }} {{ filter.value }}</span
+              ><span aria-hidden="true">×</span
+              ><span class="sr-only">{{ i18n.t("ui.remove") }}</span>
+            </button>
+            <button type="button" class="search-clear-filters" @click="clearAll">
+              {{ i18n.t("search.clear_all") }}
+            </button>
+          </div>
+          <details
+            class="search-options"
+            :open="advancedOpen"
+            @toggle="toggleAdvanced(($event.currentTarget as HTMLDetailsElement).open)"
+          >
+            <summary>
+              <AppIcon name="gear" />{{ i18n.t("search.search_options")
+              }}<span v-if="snapshot.filters.length" class="badge">{{
+                snapshot.filters.length
+              }}</span>
+            </summary>
+            <div class="search-options-body">
+              <div v-if="databaseMode" class="search-method-grid">
+                <fieldset class="search-method-picker">
+                  <legend>{{ i18n.t("search.ranking_method") }}</legend>
+                  <label
+                    v-for="item in [
+                      ['similarity', 'search.method_similarity', 'Similarity'],
+                      ['mmr', 'search.method_mmr', 'MMR'],
+                      ['filter', 'search.method_filter', 'Filters only'],
+                    ] as const"
+                    :key="item[0]"
+                    :class="{ selected: snapshot.method === item[0] }"
+                    ><input
+                      type="radio"
+                      name="searchMethod"
+                      :value="item[0]"
+                      :checked="snapshot.method === item[0]"
+                      @change="changeMethod(item[0])"
+                    /><span
+                      ><b
+                        >{{ i18n.t(item[1], item[2]) }}
+                        <UiTooltip :text="searchMethodHelp(item[0])" /></b
+                      ><small>{{
+                        item[0] === "similarity"
+                          ? i18n.t("search.method_similarity_short")
+                          : item[0] === "mmr"
+                            ? i18n.t("search.method_mmr_short")
+                            : i18n.t("search.method_filter_short")
+                      }}</small></span
+                    ></label
+                  >
+                </fieldset>
+                <div v-if="snapshot.method === 'mmr'" class="search-mmr-controls">
+                  <label
+                    ><span
+                      >{{ i18n.t("research.fetch_k_label") }}
+                      <UiTooltip :text="i18n.t('help.glossary.fetch_k.definition')" /></span
+                    ><input
+                      class="control"
+                      type="number"
+                      min="1"
+                      max="1000"
+                      :value="snapshot.fetch_k"
+                      @change="
+                        updateMmrOption(
+                          'fetch_k',
+                          Number(($event.target as HTMLInputElement).value),
+                        )
+                      " /></label
+                  ><label
+                    ><span
+                      >{{ i18n.t("search.mmr_lambda") }}
+                      <UiTooltip :text="i18n.t('help.glossary.mmr_lambda.definition')" /></span
+                    ><input
+                      class="control"
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      :value="snapshot.lambda_mult"
+                      @change="
+                        updateMmrOption(
+                          'lambda_mult',
+                          Number(($event.target as HTMLInputElement).value),
+                        )
+                      "
+                  /></label>
+                </div>
+              </div>
+              <SearchAdvancedFilters
+                :filters="snapshot.filters"
+                :fields="schemaFilterFields"
+                :schemas="schemaSummaries"
+                :schema-id="filterSchemaId"
+                :associated-schema-id="associatedSchemaId"
+                :field="newFilterField"
+                :op="newFilterOp"
+                :value="newFilterValue"
+                :ops="filterOps(newFilterField)"
+                :suggestions="suggestionsFor(newFilterField)"
+                @update:field="newFilterField = $event"
+                @update:op="newFilterOp = $event"
+                @update:value="newFilterValue = $event"
+                @schema="changeFilterSchema"
+                @field-change="onFilterFieldChange"
+                @add="addAdvancedFilter"
+                @remove="removeAdvancedFilter"
+              />
+            </div>
+          </details>
+        </section>
+
+        <SearchSelectionBar
+          v-if="snapshot.selection_count"
+          :count="snapshot.selection_count"
+          :can-review="snapshot.capabilities.can_review"
+          :can-bulk-edit="snapshot.capabilities.can_bulk_edit"
+          @review="selectionAction('review')"
+          @improve="selectionAction('improve')"
+          @bulk="selectionAction('bulk')"
+          @clear="clearSelection"
+        />
+
+        <section class="search-explorer-grid">
           <button
             type="button"
-            class="search-facet-close"
-            :aria-label="i18n.t('ui.close')"
-            v-text="'×'"
-            @click="facetDrawerOpen = false"
-          ></button
-          ><SearchFacetPanel :facets="snapshot.facets" @toggle="toggleFacet" @clear="clearFacets" />
-        </div>
-
-        <section class="search-results-panel" aria-labelledby="search-results-title">
-          <div class="search-results-toolbar">
-            <div class="search-results-count">
-              <span class="section-label">{{ i18n.t("search.results") }}</span>
-              <h2 id="search-results-title">{{ resultSummary }}</h2>
-              <p v-if="databaseMode && snapshot.search_has_run">
-                {{ i18n.t("search.database_result_note") }}
-              </p>
-            </div>
-            <div class="search-results-controls">
-              <UiMenu
-                class="search-sort-menu"
-                :label="`${i18n.t('search.sort')}: ${activeSortLabel}`"
-                :items="sortMenuItems"
-                align="end"
-                :menu-label="i18n.t('search.sort')"
-                @select="sortBy"
-              />
-              <SearchResultLayoutSwitcher
-                :model-value="snapshot.layout"
-                @update:model-value="changeLayout"
-              />
-              <button type="button" class="btn" @click="openColumns">
-                <AppIcon name="list" />{{ i18n.t("records.columns") }}
-              </button>
-              <label class="search-page-size"
-                ><span class="sr-only">{{ i18n.t("search.results_per_page") }}</span
-                ><select
-                  class="control"
-                  :value="snapshot.page_size"
-                  @change="changePageSize(Number(($event.target as HTMLSelectElement).value))"
-                >
-                  <option v-for="size in [25, 50, 100, 250]" :key="size" :value="size">
-                    {{ size }} / {{ i18n.t("search.page") }}
-                  </option>
-                </select></label
-              >
-            </div>
-          </div>
-
-          <div v-if="snapshot.loading" class="search-results-loading">
-            <UiLoadingState :label="i18n.t('search.searching')" />
-          </div>
-          <AccessibleEmptyState
-            v-else-if="databaseMode && !snapshot.has_database"
-            icon="database"
-            icon-tone="neutral"
-            :title="i18n.t('search.no_database_title')"
-            :description="i18n.t('search.no_database_help')"
-          /><AccessibleEmptyState
-            v-else-if="!snapshot.results.length && databaseMode && !snapshot.search_has_run"
-            icon="search"
-            icon-tone="neutral"
-            :title="i18n.t('search.ready_title')"
-            :description="i18n.t('search.ready_help')"
-          />
-          <AccessibleEmptyState
-            v-else-if="!snapshot.results.length"
-            icon="search"
-            icon-tone="neutral"
-            :title="i18n.t('search.no_results')"
-            :description="i18n.t('search.no_results_help')"
-          />
-
-          <div v-else-if="snapshot.layout === 'cards'" class="search-result-cards">
-            <article
-              v-for="result in snapshot.results"
-              :key="result.key"
-              class="search-result-card"
-              :class="{ selected: result.selected }"
-            >
-              <header>
-                <div>
-                  <span class="section-label">{{ result.record_id }}</span>
-                  <h3>{{ result.work || i18n.t("works.untitled") }}</h3>
-                </div>
-                <UiTooltip
-                  v-if="databaseMode && similarityPercent(result) != null"
-                  :text="i18n.t('search.similarity_explanation')"
-                  trigger-mode="content"
-                  placement="bottom"
-                >
-                  <span class="search-relevance-badge"
-                    >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
-                  >
-                </UiTooltip>
-              </header>
-              <div class="search-result-meta">
-                <span v-if="result.page_span"
-                  >{{ i18n.t("record.page") }} {{ result.page_span }}</span
-                ><span v-if="result.record.document_author">{{
-                  displayValue(result.record.document_author)
-                }}</span
-                ><span v-if="result.db_status" :class="['db-status', result.db_status.kind]"
-                  ><i></i>{{ result.db_status.label }}</span
-                >
-              </div>
-              <p class="search-card-text" :class="{ expanded: expandedText.has(result.key) }">
-                <HighlightedText :text="result.text" :query="query" />
-              </p>
-              <button
-                v-if="result.text.length > 520"
-                type="button"
-                class="search-expand-text"
-                @click="toggleText(result.key)"
-              >
-                {{
-                  expandedText.has(result.key)
-                    ? i18n.t("search.show_less")
-                    : i18n.t("search.show_more")
-                }}
-              </button>
-              <div v-if="result.match_reasons.length" class="search-why-result">
-                <span>{{ i18n.t("search.why_result") }}</span
-                ><span
-                  v-for="reason in result.match_reasons"
-                  :key="reason"
-                  class="metadata-result-pill"
-                  >{{ reason }}</span
-                >
-              </div>
-              <footer>
-                <label
-                  v-if="result.kind === 'workspace' && snapshot.capabilities.can_select"
-                  class="search-card-select"
-                  ><input
-                    type="checkbox"
-                    :checked="result.selected"
-                    @change="
-                      toggleResultSelected(result, ($event.target as HTMLInputElement).checked)
-                    "
-                  /><span>{{ i18n.t("search.select_record") }}</span></label
-                >
-                <div class="search-record-actions">
-                  <button type="button" class="btn" @click="resultAction(result, 'open')">
-                    {{
-                      result.kind === "database" && !snapshot.is_researcher
-                        ? i18n.t("ui.edit")
-                        : i18n.t("record.open")
-                    }}</button
-                  ><button
-                    v-if="result.evidence_available"
-                    type="button"
-                    class="btn"
-                    :class="{ soft: result.evidence_selected }"
-                    @click="resultAction(result, 'evidence')"
-                  >
-                    <AppIcon :name="result.evidence_selected ? 'check' : 'plus'" />{{
-                      result.evidence_selected ? i18n.t("ui.selected") : i18n.t("ui.add_evidence")
-                    }}</button
-                  ><CitationMenu
-                    @inline="resultAction(result, 'citation-inline')"
-                    @full="resultAction(result, 'citation-full')"
-                  />
-                </div>
-              </footer>
-            </article>
-          </div>
-
-          <div
-            v-else
-            class="search-table-scroll ui-table-scroll"
-            tabindex="0"
-            role="region"
-            :aria-label="i18n.t('search.results_table_scroll')"
+            class="btn search-mobile-filter-button"
+            @click="facetDrawerOpen = true"
           >
-            <table
-              class="search-results-table ui-table"
-              :class="[
-                snapshot.layout === 'roomy' ? 'roomy' : 'compact',
-                {
-                  'can-select': snapshot.capabilities.can_select,
-                  'database-search-table': databaseMode,
-                },
-              ]"
-            >
-              <caption class="sr-only">
-                {{
-                  resultSummary
-                }}
-              </caption>
-              <thead>
-                <tr>
-                  <th
-                    v-if="snapshot.capabilities.can_select"
-                    class="search-select-column ui-table-sticky-start"
-                    scope="col"
+            <AppIcon name="filter" />{{ i18n.t("search.filters")
+            }}<span v-if="activeFacetChips.length" class="badge">{{
+              activeFacetChips.length
+            }}</span>
+          </button>
+          <div
+            v-if="facetDrawerOpen"
+            class="search-facet-scrim"
+            @click="facetDrawerOpen = false"
+          ></div>
+          <div class="search-facet-shell" :class="{ open: facetDrawerOpen }">
+            <button
+              type="button"
+              class="search-facet-close"
+              :aria-label="i18n.t('ui.close')"
+              v-text="'×'"
+              @click="facetDrawerOpen = false"
+            ></button
+            ><SearchFacetPanel
+              :facets="snapshot.facets"
+              @toggle="toggleFacet"
+              @clear="clearFacets"
+            />
+          </div>
+
+          <section
+            class="search-results-panel"
+            aria-labelledby="search-results-title"
+            :aria-busy="searchPhase !== 'idle'"
+          >
+            <div class="search-results-toolbar">
+              <div class="search-results-count">
+                <span class="section-label">{{ i18n.t("search.results") }}</span>
+                <h2 id="search-results-title">{{ resultSummary }}</h2>
+                <p v-if="databaseMode && snapshot.search_has_run">
+                  {{ i18n.t("search.database_result_note") }}
+                </p>
+              </div>
+              <div class="search-results-controls">
+                <UiMenu
+                  class="search-sort-menu"
+                  :label="`${i18n.t('search.sort')}: ${activeSortLabel}`"
+                  :items="sortMenuItems"
+                  align="end"
+                  :menu-label="i18n.t('search.sort')"
+                  @select="sortBy"
+                />
+                <SearchResultLayoutSwitcher
+                  :model-value="snapshot.layout"
+                  @update:model-value="changeLayout"
+                />
+                <button type="button" class="btn" @click="openColumns">
+                  <AppIcon name="list" />{{ i18n.t("records.columns") }}
+                </button>
+                <label class="search-page-size"
+                  ><span class="sr-only">{{ i18n.t("search.results_per_page") }}</span
+                  ><select
+                    class="control"
+                    :value="snapshot.page_size"
+                    @change="changePageSize(Number(($event.target as HTMLSelectElement).value))"
                   >
-                    <input
-                      type="checkbox"
-                      :checked="pageAllSelected"
-                      :aria-label="i18n.t('search.select_page')"
-                      @change="togglePageSelected(($event.target as HTMLInputElement).checked)"
-                    />
-                  </th>
-                  <th
-                    v-for="column in snapshot.columns"
-                    :key="column.key"
-                    scope="col"
-                    :aria-sort="column.key !== '__db_status' ? sortState(column.key) : undefined"
-                    :class="[
-                      `search-col-${column.key.replaceAll('_', '-')}`,
-                      { 'sticky-status ui-table-sticky-start': column.key === '__db_status' },
-                    ]"
-                    :style="columnStyle(column.key)"
-                  >
-                    <button
-                      v-if="column.key !== '__db_status'"
-                      type="button"
-                      class="search-sort-header"
-                      @click="sortBy(column.key)"
-                    >
-                      {{ column.label
-                      }}<span v-if="snapshot.sort.key === column.key" aria-hidden="true">{{
-                        snapshot.sort.dir > 0 ? "↑" : "↓"
-                      }}</span></button
-                    ><span v-else>{{ column.label }}</span
-                    ><button
-                      v-if="databaseMode"
-                      type="button"
-                      class="search-column-resizer"
-                      :aria-label="i18n.tf('search.resize_column', { column: column.label })"
-                      @pointerdown="startResize($event, column.key)"
-                    ></button>
-                  </th>
-                  <th class="search-actions-column ui-table-sticky-end" scope="col">
-                    {{ i18n.t("ui.actions") }}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="result in snapshot.results"
-                  :key="result.key"
-                  :class="{ selected: result.selected }"
+                    <option v-for="size in [25, 50, 100, 250]" :key="size" :value="size">
+                      {{ size }} / {{ i18n.t("search.page") }}
+                    </option>
+                  </select></label
                 >
-                  <td
-                    v-if="snapshot.capabilities.can_select"
-                    class="search-select-column ui-table-sticky-start"
+              </div>
+            </div>
+
+            <div v-if="searchPhase === 'pending'" class="search-results-loading">
+              <UiLoadingState :label="i18n.t('search.searching')" />
+            </div>
+            <template v-else>
+              <UiLoadingState
+                v-if="searchPhase === 'refreshing'"
+                variant="inline"
+                :label="i18n.t('search.searching')"
+              />
+              <div v-if="searchErrorMessage" class="info error search-results-status" role="alert">
+                <p>{{ i18n.tf("search.search_failed", { message: searchErrorMessage }) }}</p>
+                <button type="button" class="btn" @click="runSearch()">
+                  {{ i18n.t("ui.retry") }}
+                </button>
+              </div>
+              <p v-else-if="resultsArePrevious" class="note search-results-identity">
+                {{ i18n.tf("search.results_previous_query", { query: shownQuery || "" }) }}
+              </p>
+              <template v-if="!searchErrorMessage">
+                <AccessibleEmptyState
+                  v-if="databaseMode && !snapshot.has_database"
+                  icon="database"
+                  icon-tone="neutral"
+                  :title="i18n.t('search.no_database_title')"
+                  :description="i18n.t('search.no_database_help')"
+                /><AccessibleEmptyState
+                  v-else-if="!snapshot.results.length && databaseMode && !snapshot.search_has_run"
+                  icon="search"
+                  icon-tone="neutral"
+                  :title="i18n.t('search.ready_title')"
+                  :description="i18n.t('search.ready_help')"
+                />
+                <AccessibleEmptyState
+                  v-else-if="!snapshot.results.length"
+                  icon="search"
+                  icon-tone="neutral"
+                  :title="i18n.t('search.no_results')"
+                  :description="i18n.t('search.no_results_help')"
+                />
+
+                <div v-else-if="snapshot.layout === 'cards'" class="search-result-cards">
+                  <article
+                    v-for="result in snapshot.results"
+                    :key="result.key"
+                    class="search-result-card"
+                    :class="{ selected: result.selected }"
                   >
-                    <input
-                      type="checkbox"
-                      :checked="result.selected"
-                      :aria-label="
-                        i18n.tf('search.select_record_named', { record: result.record_id })
-                      "
-                      @change="
-                        toggleResultSelected(result, ($event.target as HTMLInputElement).checked)
-                      "
-                    />
-                  </td>
-                  <td
-                    v-for="column in snapshot.columns"
-                    :key="column.key"
+                    <header>
+                      <div>
+                        <span class="section-label">{{ result.record_id }}</span>
+                        <h3>{{ result.work || i18n.t("works.untitled") }}</h3>
+                      </div>
+                      <UiTooltip
+                        v-if="databaseMode && similarityPercent(result) != null"
+                        :text="i18n.t('search.similarity_explanation')"
+                        trigger-mode="content"
+                        placement="bottom"
+                      >
+                        <span class="search-relevance-badge"
+                          >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
+                        >
+                      </UiTooltip>
+                    </header>
+                    <div class="search-result-meta">
+                      <span v-if="result.page_span"
+                        >{{ i18n.t("record.page") }} {{ result.page_span }}</span
+                      ><span v-if="result.record.document_author">{{
+                        displayValue(result.record.document_author)
+                      }}</span
+                      ><span v-if="result.db_status" :class="['db-status', result.db_status.kind]"
+                        ><i></i>{{ result.db_status.label }}</span
+                      >
+                    </div>
+                    <p class="search-card-text" :class="{ expanded: expandedText.has(result.key) }">
+                      <HighlightedText :text="result.text" :query="query" />
+                    </p>
+                    <button
+                      v-if="result.text.length > 520"
+                      type="button"
+                      class="search-expand-text"
+                      @click="toggleText(result.key)"
+                    >
+                      {{
+                        expandedText.has(result.key)
+                          ? i18n.t("search.show_less")
+                          : i18n.t("search.show_more")
+                      }}
+                    </button>
+                    <div v-if="result.match_reasons.length" class="search-why-result">
+                      <span>{{ i18n.t("search.why_result") }}</span
+                      ><span
+                        v-for="reason in result.match_reasons"
+                        :key="reason"
+                        class="metadata-result-pill"
+                        >{{ reason }}</span
+                      >
+                    </div>
+                    <footer>
+                      <label
+                        v-if="result.kind === 'workspace' && snapshot.capabilities.can_select"
+                        class="search-card-select"
+                        ><input
+                          type="checkbox"
+                          :checked="result.selected"
+                          @change="
+                            toggleResultSelected(
+                              result,
+                              ($event.target as HTMLInputElement).checked,
+                            )
+                          "
+                        /><span>{{ i18n.t("search.select_record") }}</span></label
+                      >
+                      <div class="search-record-actions">
+                        <button type="button" class="btn" @click="resultAction(result, 'open')">
+                          {{
+                            result.kind === "database" && !snapshot.is_researcher
+                              ? i18n.t("ui.edit")
+                              : i18n.t("record.open")
+                          }}</button
+                        ><button
+                          v-if="result.evidence_available"
+                          type="button"
+                          class="btn"
+                          :class="{ soft: result.evidence_selected }"
+                          @click="resultAction(result, 'evidence')"
+                        >
+                          <AppIcon :name="result.evidence_selected ? 'check' : 'plus'" />{{
+                            result.evidence_selected
+                              ? i18n.t("ui.selected")
+                              : i18n.t("ui.add_evidence")
+                          }}</button
+                        ><CitationMenu
+                          @inline="resultAction(result, 'citation-inline')"
+                          @full="resultAction(result, 'citation-full')"
+                        />
+                      </div>
+                    </footer>
+                  </article>
+                </div>
+
+                <div
+                  v-else
+                  class="search-table-scroll ui-table-scroll"
+                  tabindex="0"
+                  role="region"
+                  :aria-label="i18n.t('search.results_table_scroll')"
+                >
+                  <table
+                    class="search-results-table ui-table"
                     :class="[
-                      `search-col-${column.key.replaceAll('_', '-')}`,
+                      snapshot.layout === 'roomy' ? 'roomy' : 'compact',
                       {
-                        'sticky-status ui-table-sticky-start': column.key === '__db_status',
-                        'search-text-cell': column.key === 'text',
+                        'can-select': snapshot.capabilities.can_select,
+                        'database-search-table': databaseMode,
                       },
                     ]"
-                    :style="columnStyle(column.key)"
                   >
-                    <template v-if="column.key === '__db_status'"
-                      ><span
-                        :class="['db-status', result.db_status?.kind || 'exists']"
-                        :title="result.db_status?.title"
-                        ><i></i
-                        >{{ result.db_status?.label || i18n.t("search.db_in_database") }}</span
-                      ></template
-                    ><template v-else-if="column.key === 'needs_review'"
-                      ><span v-if="result.record.needs_review" class="review">{{
-                        i18n.t("record.needs_review")
-                      }}</span
-                      ><span v-else>—</span></template
-                    ><template v-else-if="column.key === 'text'"
-                      ><div
-                        class="search-table-text"
-                        :class="{ expanded: expandedText.has(result.key) }"
-                      >
-                        <HighlightedText :text="result.text" :query="query" />
-                      </div>
-                      <button
-                        v-if="result.text.length > 320"
-                        type="button"
-                        class="search-expand-text"
-                        @click="toggleText(result.key)"
-                      >
-                        {{
-                          expandedText.has(result.key)
-                            ? i18n.t("search.show_less")
-                            : i18n.t("search.show_more")
-                        }}
-                      </button>
-                      <div
-                        v-if="
-                          databaseMode &&
-                          (similarityPercent(result) != null || result.match_reasons.length)
-                        "
-                        class="search-inline-explanation"
-                      >
-                        <UiTooltip
-                          v-if="similarityPercent(result) != null"
-                          :text="i18n.t('search.similarity_explanation')"
-                          trigger-mode="content"
-                          placement="bottom"
+                    <caption class="sr-only">
+                      {{
+                        resultSummary
+                      }}
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th
+                          v-if="snapshot.capabilities.can_select"
+                          class="search-select-column ui-table-sticky-start"
+                          scope="col"
                         >
-                          <span class="search-relevance-mini"
-                            >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
-                          > </UiTooltip
-                        ><span v-for="reason in result.match_reasons" :key="reason">{{
-                          reason
-                        }}</span>
-                      </div></template
-                    ><template v-else>{{ displayValue(columnValue(result, column.key)) }}</template>
-                  </td>
-                  <td class="search-actions-column ui-table-sticky-end">
-                    <div class="search-record-actions">
-                      <button type="button" class="btn tiny" @click="resultAction(result, 'open')">
-                        {{
-                          result.kind === "database" && !snapshot.is_researcher
-                            ? i18n.t("ui.edit")
-                            : i18n.t("research.open")
-                        }}</button
-                      ><button
-                        v-if="result.evidence_available"
-                        type="button"
-                        class="btn tiny"
-                        :class="{ soft: result.evidence_selected }"
-                        @click="resultAction(result, 'evidence')"
+                          <input
+                            type="checkbox"
+                            :checked="pageAllSelected"
+                            :aria-label="i18n.t('search.select_page')"
+                            @change="
+                              togglePageSelected(($event.target as HTMLInputElement).checked)
+                            "
+                          />
+                        </th>
+                        <th
+                          v-for="column in snapshot.columns"
+                          :key="column.key"
+                          scope="col"
+                          :aria-sort="
+                            column.key !== '__db_status' ? sortState(column.key) : undefined
+                          "
+                          :class="[
+                            `search-col-${column.key.replaceAll('_', '-')}`,
+                            { 'sticky-status ui-table-sticky-start': column.key === '__db_status' },
+                          ]"
+                          :style="columnStyle(column.key)"
+                        >
+                          <button
+                            v-if="column.key !== '__db_status'"
+                            type="button"
+                            class="search-sort-header"
+                            @click="sortBy(column.key)"
+                          >
+                            {{ column.label
+                            }}<span v-if="snapshot.sort.key === column.key" aria-hidden="true">{{
+                              snapshot.sort.dir > 0 ? "↑" : "↓"
+                            }}</span></button
+                          ><span v-else>{{ column.label }}</span
+                          ><button
+                            v-if="databaseMode"
+                            type="button"
+                            class="search-column-resizer"
+                            :aria-label="i18n.tf('search.resize_column', { column: column.label })"
+                            @pointerdown="startResize($event, column.key)"
+                          ></button>
+                        </th>
+                        <th class="search-actions-column ui-table-sticky-end" scope="col">
+                          {{ i18n.t("ui.actions") }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="result in snapshot.results"
+                        :key="result.key"
+                        :class="{ selected: result.selected }"
                       >
-                        {{ result.evidence_selected ? "✓ " : ""
-                        }}{{ i18n.t("ui.add_evidence") }}</button
-                      ><CitationMenu
-                        compact
-                        @inline="resultAction(result, 'citation-inline')"
-                        @full="resultAction(result, 'citation-full')"
-                      />
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+                        <td
+                          v-if="snapshot.capabilities.can_select"
+                          class="search-select-column ui-table-sticky-start"
+                        >
+                          <input
+                            type="checkbox"
+                            :checked="result.selected"
+                            :aria-label="
+                              i18n.tf('search.select_record_named', { record: result.record_id })
+                            "
+                            @change="
+                              toggleResultSelected(
+                                result,
+                                ($event.target as HTMLInputElement).checked,
+                              )
+                            "
+                          />
+                        </td>
+                        <td
+                          v-for="column in snapshot.columns"
+                          :key="column.key"
+                          :class="[
+                            `search-col-${column.key.replaceAll('_', '-')}`,
+                            {
+                              'sticky-status ui-table-sticky-start': column.key === '__db_status',
+                              'search-text-cell': column.key === 'text',
+                            },
+                          ]"
+                          :style="columnStyle(column.key)"
+                        >
+                          <template v-if="column.key === '__db_status'"
+                            ><span
+                              :class="['db-status', result.db_status?.kind || 'exists']"
+                              :title="result.db_status?.title"
+                              ><i></i
+                              >{{
+                                result.db_status?.label || i18n.t("search.db_in_database")
+                              }}</span
+                            ></template
+                          ><template v-else-if="column.key === 'needs_review'"
+                            ><span v-if="result.record.needs_review" class="review">{{
+                              i18n.t("record.needs_review")
+                            }}</span
+                            ><span v-else>—</span></template
+                          ><template v-else-if="column.key === 'text'"
+                            ><div
+                              class="search-table-text"
+                              :class="{ expanded: expandedText.has(result.key) }"
+                            >
+                              <HighlightedText :text="result.text" :query="query" />
+                            </div>
+                            <button
+                              v-if="result.text.length > 320"
+                              type="button"
+                              class="search-expand-text"
+                              @click="toggleText(result.key)"
+                            >
+                              {{
+                                expandedText.has(result.key)
+                                  ? i18n.t("search.show_less")
+                                  : i18n.t("search.show_more")
+                              }}
+                            </button>
+                            <div
+                              v-if="
+                                databaseMode &&
+                                (similarityPercent(result) != null || result.match_reasons.length)
+                              "
+                              class="search-inline-explanation"
+                            >
+                              <UiTooltip
+                                v-if="similarityPercent(result) != null"
+                                :text="i18n.t('search.similarity_explanation')"
+                                trigger-mode="content"
+                                placement="bottom"
+                              >
+                                <span class="search-relevance-mini"
+                                  >{{ i18n.t("search.relevance") }}
+                                  {{ similarityPercent(result) }}</span
+                                > </UiTooltip
+                              ><span v-for="reason in result.match_reasons" :key="reason">{{
+                                reason
+                              }}</span>
+                            </div></template
+                          ><template v-else>{{
+                            displayValue(columnValue(result, column.key))
+                          }}</template>
+                        </td>
+                        <td class="search-actions-column ui-table-sticky-end">
+                          <div class="search-record-actions">
+                            <button
+                              type="button"
+                              class="btn tiny"
+                              @click="resultAction(result, 'open')"
+                            >
+                              {{
+                                result.kind === "database" && !snapshot.is_researcher
+                                  ? i18n.t("ui.edit")
+                                  : i18n.t("research.open")
+                              }}</button
+                            ><button
+                              v-if="result.evidence_available"
+                              type="button"
+                              class="btn tiny"
+                              :class="{ soft: result.evidence_selected }"
+                              @click="resultAction(result, 'evidence')"
+                            >
+                              {{ result.evidence_selected ? "✓ " : ""
+                              }}{{ i18n.t("ui.add_evidence") }}</button
+                            ><CitationMenu
+                              compact
+                              @inline="resultAction(result, 'citation-inline')"
+                              @full="resultAction(result, 'citation-full')"
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </template>
+            </template>
 
-          <nav
-            v-if="snapshot.pages > 1"
-            class="search-pagination"
-            :aria-label="i18n.t('search.pagination')"
-          >
-            <button
-              type="button"
-              class="btn"
-              :disabled="snapshot.page <= 1"
-              @click="changePage(snapshot.page - 1)"
+            <nav
+              v-if="snapshot.pages > 1"
+              class="search-pagination"
+              :aria-label="i18n.t('search.pagination')"
             >
-              ← {{ i18n.t("ui.previous") }}</button
-            ><span>{{
-              i18n.tf("search.page_of", { page: snapshot.page, pages: snapshot.pages })
-            }}</span
-            ><button
-              type="button"
-              class="btn"
-              :disabled="snapshot.page >= snapshot.pages"
-              @click="changePage(snapshot.page + 1)"
-            >
-              {{ i18n.t("ui.next") }} →
-            </button>
-          </nav>
+              <button
+                type="button"
+                class="btn"
+                :disabled="snapshot.page <= 1"
+                @click="changePage(snapshot.page - 1)"
+              >
+                ← {{ i18n.t("ui.previous") }}</button
+              ><span>{{
+                i18n.tf("search.page_of", { page: snapshot.page, pages: snapshot.pages })
+              }}</span
+              ><button
+                type="button"
+                class="btn"
+                :disabled="snapshot.page >= snapshot.pages"
+                @click="changePage(snapshot.page + 1)"
+              >
+                {{ i18n.t("ui.next") }} →
+              </button>
+            </nav>
+          </section>
         </section>
-      </section>
 
-      <UiTableColumnsDialog
-        ref="columnsDialog"
-        v-model="draftColumns"
-        :available="snapshot.available_columns"
-        :title="i18n.t('search.configure_columns')"
-        :description="i18n.t('search.column_help')"
-        @apply="saveColumns"
-        @reset="resetColumns"
-      />
+        <UiTableColumnsDialog
+          ref="columnsDialog"
+          v-model="draftColumns"
+          :available="snapshot.available_columns"
+          :title="i18n.t('search.configure_columns')"
+          :description="i18n.t('search.column_help')"
+          @apply="saveColumns"
+          @reset="resetColumns"
+        />
 
-      <dialog
-        ref="saveDialog"
-        class="search-config-dialog search-save-dialog"
-        aria-labelledby="search-save-dialog-title"
-        @cancel="onDialogCancel($event, saveDialog)"
-      >
-        <form @submit.prevent="saveCurrentView">
+        <dialog
+          ref="saveDialog"
+          class="search-config-dialog search-save-dialog"
+          aria-labelledby="search-save-dialog-title"
+          @cancel="onDialogCancel($event, saveDialog)"
+        >
+          <form @submit.prevent="saveCurrentView">
+            <div class="dh">
+              <div>
+                <span class="section-label">{{ i18n.t("search.saved_views") }}</span>
+                <h2 id="search-save-dialog-title">{{ i18n.t("search.save_view") }}</h2>
+              </div>
+              <button
+                type="button"
+                class="btn icon-only"
+                :aria-label="i18n.t('ui.close')"
+                v-text="'×'"
+                @click="closeSaveView"
+              ></button>
+            </div>
+            <div class="db">
+              <label class="field"
+                ><span>{{ i18n.t("search.view_name") }}</span
+                ><input
+                  v-model="saveViewName"
+                  class="control"
+                  required
+                  maxlength="80"
+                  :placeholder="i18n.t('search.view_name_placeholder')"
+              /></label>
+              <p class="note">{{ i18n.t("search.save_view_help") }}</p>
+            </div>
+            <div class="da">
+              <button type="button" class="btn" @click="closeSaveView">
+                {{ i18n.t("ui.cancel") }}</button
+              ><button type="submit" class="btn primary" :disabled="!saveViewName.trim()">
+                {{ i18n.t("search.save_view") }}
+              </button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog
+          ref="viewsDialog"
+          class="search-config-dialog search-views-dialog"
+          aria-labelledby="search-views-dialog-title"
+          @cancel="onDialogCancel($event, viewsDialog)"
+        >
           <div class="dh">
             <div>
-              <span class="section-label">{{ i18n.t("search.saved_views") }}</span>
-              <h2 id="search-save-dialog-title">{{ i18n.t("search.save_view") }}</h2>
+              <span class="section-label">{{ i18n.t("search.exploration_history") }}</span>
+              <h2 id="search-views-dialog-title">{{ i18n.t("search.saved_and_recent") }}</h2>
             </div>
             <button
               type="button"
               class="btn icon-only"
               :aria-label="i18n.t('ui.close')"
               v-text="'×'"
-              @click="closeSaveView"
+              @click="closeSavedViews"
             ></button>
           </div>
-          <div class="db">
-            <label class="field"
-              ><span>{{ i18n.t("search.view_name") }}</span
-              ><input
-                v-model="saveViewName"
-                class="control"
-                required
-                maxlength="80"
-                :placeholder="i18n.t('search.view_name_placeholder')"
-            /></label>
-            <p class="note">{{ i18n.t("search.save_view_help") }}</p>
+          <div class="db search-views-body">
+            <section>
+              <div class="search-options-heading">
+                <div>
+                  <h3>{{ i18n.t("search.saved_views") }}</h3>
+                  <p>{{ i18n.t("search.saved_views_help") }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="btn"
+                  @click="
+                    closeSavedViews();
+                    openSaveView();
+                  "
+                >
+                  {{ i18n.t("search.save_current") }}
+                </button>
+              </div>
+              <div v-if="savedViews.length" class="search-view-list">
+                <article v-for="view in savedViews" :key="view.id">
+                  <button type="button" class="search-view-open" @click="openSavedView(view)">
+                    <b>{{ view.name }}</b
+                    ><small>{{
+                      new Date(view.updated_at).toLocaleString(i18n.locale)
+                    }}</small></button
+                  ><button
+                    type="button"
+                    class="btn tiny danger"
+                    :aria-label="i18n.tf('search.delete_saved_view', { name: view.name })"
+                    @click="removeSavedView(view.id)"
+                  >
+                    ×
+                  </button>
+                </article>
+              </div>
+              <p v-else class="note">{{ i18n.t("search.no_saved_views") }}</p>
+            </section>
+            <section>
+              <div class="search-options-heading">
+                <div>
+                  <h3>{{ i18n.t("search.recent_searches") }}</h3>
+                  <p>{{ i18n.t("search.recent_searches_help") }}</p>
+                </div>
+              </div>
+              <div v-if="recentSearches.length" class="search-view-list recent">
+                <article v-for="item in recentSearches" :key="item.id">
+                  <button type="button" class="search-view-open" @click="openSavedView(item)">
+                    <b>{{ item.query }}</b
+                    ><small
+                      >{{
+                        item.scope === "database"
+                          ? i18n.t("search.corpus_database")
+                          : i18n.t("search.loaded_records")
+                      }}
+                      · {{ new Date(item.created_at).toLocaleString(i18n.locale) }}</small
+                    >
+                  </button>
+                </article>
+              </div>
+              <p v-else class="note">{{ i18n.t("search.no_recent_searches") }}</p>
+            </section>
           </div>
           <div class="da">
-            <button type="button" class="btn" @click="closeSaveView">
-              {{ i18n.t("ui.cancel") }}</button
-            ><button type="submit" class="btn primary" :disabled="!saveViewName.trim()">
-              {{ i18n.t("search.save_view") }}
+            <button type="button" class="btn" @click="closeSavedViews">
+              {{ i18n.t("ui.close") }}
             </button>
           </div>
-        </form>
-      </dialog>
-
-      <dialog
-        ref="viewsDialog"
-        class="search-config-dialog search-views-dialog"
-        aria-labelledby="search-views-dialog-title"
-        @cancel="onDialogCancel($event, viewsDialog)"
-      >
-        <div class="dh">
-          <div>
-            <span class="section-label">{{ i18n.t("search.exploration_history") }}</span>
-            <h2 id="search-views-dialog-title">{{ i18n.t("search.saved_and_recent") }}</h2>
-          </div>
-          <button
-            type="button"
-            class="btn icon-only"
-            :aria-label="i18n.t('ui.close')"
-            v-text="'×'"
-            @click="closeSavedViews"
-          ></button>
-        </div>
-        <div class="db search-views-body">
-          <section>
-            <div class="search-options-heading">
-              <div>
-                <h3>{{ i18n.t("search.saved_views") }}</h3>
-                <p>{{ i18n.t("search.saved_views_help") }}</p>
-              </div>
-              <button
-                type="button"
-                class="btn"
-                @click="
-                  closeSavedViews();
-                  openSaveView();
-                "
-              >
-                {{ i18n.t("search.save_current") }}
-              </button>
-            </div>
-            <div v-if="savedViews.length" class="search-view-list">
-              <article v-for="view in savedViews" :key="view.id">
-                <button type="button" class="search-view-open" @click="openSavedView(view)">
-                  <b>{{ view.name }}</b
-                  ><small>{{
-                    new Date(view.updated_at).toLocaleString(i18n.locale)
-                  }}</small></button
-                ><button
-                  type="button"
-                  class="btn tiny danger"
-                  :aria-label="i18n.tf('search.delete_saved_view', { name: view.name })"
-                  @click="removeSavedView(view.id)"
-                >
-                  ×
-                </button>
-              </article>
-            </div>
-            <p v-else class="note">{{ i18n.t("search.no_saved_views") }}</p>
-          </section>
-          <section>
-            <div class="search-options-heading">
-              <div>
-                <h3>{{ i18n.t("search.recent_searches") }}</h3>
-                <p>{{ i18n.t("search.recent_searches_help") }}</p>
-              </div>
-            </div>
-            <div v-if="recentSearches.length" class="search-view-list recent">
-              <article v-for="item in recentSearches" :key="item.id">
-                <button type="button" class="search-view-open" @click="openSavedView(item)">
-                  <b>{{ item.query }}</b
-                  ><small
-                    >{{
-                      item.scope === "database"
-                        ? i18n.t("search.corpus_database")
-                        : i18n.t("search.loaded_records")
-                    }}
-                    · {{ new Date(item.created_at).toLocaleString(i18n.locale) }}</small
-                  >
-                </button>
-              </article>
-            </div>
-            <p v-else class="note">{{ i18n.t("search.no_recent_searches") }}</p>
-          </section>
-        </div>
-        <div class="da">
-          <button type="button" class="btn" @click="closeSavedViews">
-            {{ i18n.t("ui.close") }}
-          </button>
-        </div>
-      </dialog>
+        </dialog>
+      </template>
     </template>
   </main>
 </template>
 
 <style scoped>
-.search-page-loading,
 .search-page-error {
   min-height: 320px;
   display: grid;
@@ -1421,9 +1576,32 @@ onBeforeUnmount(() => {
   gap: 12px;
   text-align: center;
 }
-.search-page-error h1 {
+.search-page-loading {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  padding-block: var(--space-4);
+}
+.search-page-error h1,
+.search-page-loading h1 {
   margin: 0;
   font-family: Georgia, serif;
+}
+.search-workspace-status,
+.search-results-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.search-workspace-status p,
+.search-results-status p {
+  margin: 0;
+}
+.search-results-identity {
+  margin: 0;
+  padding-inline: var(--space-4);
 }
 .search-database-note {
   padding-bottom: 8px;

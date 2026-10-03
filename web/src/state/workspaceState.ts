@@ -35,6 +35,8 @@ export function createVectorState() {
     activeStore: "",
     storeSearchResults: [] as Loose[],
     storeSearchLoading: false,
+    /** Why the last corpus-database search failed; cleared whenever a new search is attempted. */
+    storeSearchError: "",
     storeSearchMessage: "",
     storeSearchSort: { key: "similarity", dir: -1 },
     storeRecords: [] as Loose[],
