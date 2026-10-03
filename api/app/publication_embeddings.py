@@ -55,6 +55,10 @@ VARIANT = (
 DOWNLOAD_BYTES = MODEL_FILE_BYTES + TOKENIZER_FILE_BYTES
 
 
+class PublicationEmbeddingUnavailableError(RuntimeError):
+    """The pinned publication embedding model could not be prepared or executed."""
+
+
 def cache_dir() -> Path:
     """Model cache used only for derived publication/browser embedding infrastructure."""
     return Path(settings.chroma_data_root) / "publication_embedder"
@@ -111,16 +115,23 @@ def _verified_download(filename: str, *, size: int, sha256: str) -> Path:
     """Download one pinned Hub artifact and verify the immutable large-file contract."""
     from huggingface_hub import hf_hub_download
 
-    path = Path(
-        hf_hub_download(
-            repo_id=MODEL_ID,
-            filename=filename,
-            revision=MODEL_REVISION,
-            cache_dir=str(cache_dir()),
+    try:
+        path = Path(
+            hf_hub_download(
+                repo_id=MODEL_ID,
+                filename=filename,
+                revision=MODEL_REVISION,
+                cache_dir=str(cache_dir()),
+            )
         )
-    )
+    except Exception as exc:
+        raise PublicationEmbeddingUnavailableError(
+            f"Could not download the publication embedding artifact {filename}: {exc}"
+        ) from exc
     if path.stat().st_size != size or _sha256(path) != sha256:
-        raise RuntimeError(f"Publication embedding artifact failed verification: {filename}.")
+        raise PublicationEmbeddingUnavailableError(
+            f"Publication embedding artifact failed verification: {filename}."
+        )
     return path
 
 
@@ -154,13 +165,18 @@ def embed_records(
     from transformers import AutoTokenizer
 
     model_path, _tokenizer_path = _model_files()
-    tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_ID,
-        revision=MODEL_REVISION,
-        cache_dir=str(cache_dir()),
-        local_files_only=True,
-    )
-    session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            MODEL_ID,
+            revision=MODEL_REVISION,
+            cache_dir=str(cache_dir()),
+            local_files_only=True,
+        )
+        session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+    except Exception as exc:
+        raise PublicationEmbeddingUnavailableError(
+            f"Could not load the pinned publication embedding model: {exc}"
+        ) from exc
     input_names = {item.name for item in session.get_inputs()}
     result: list[list[float] | None] = [None] * len(records)
     indexed = [
