@@ -57,19 +57,28 @@
   if (!availableLocales.includes(locale)) locale = availableLocales[0] || "en-US";
   let theme = readLocal(themeKey) === "dark" ? "dark" : "light";
   let highContrast = readLocal(contrastKey) === "high";
-  // Keep the automatic browser profile compatibility-first. A publication may have been embedded by a much
-  // larger model (for example BGE-M3), but rebuilding every Record with that model on a single browser main
-  // thread can exhaust memory or make the page unresponsive. Readers can still select those models explicitly.
+  // Keep the automatic browser profile compatibility-first. New publications carry this
+  // contract explicitly so precomputed browser-ready vectors and query embeddings stay aligned.
+  const publishedBrowserProfile = {
+    model: "Xenova/multilingual-e5-small",
+    revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+    dtype: "q8",
+    pooling: "mean",
+    normalize: true,
+    query_prefix: "query: ",
+    document_prefix: "passage: ",
+    ...(publication.browser_embedding_profile || {}),
+  };
   const TRANSFORMERS_SUGGESTIONS = [
     {
-      id: "Xenova/multilingual-e5-small",
-      revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
-      dtype: "q8",
-      pooling: "mean",
-      normalize: true,
+      id: publishedBrowserProfile.model,
+      revision: publishedBrowserProfile.revision,
+      dtype: publishedBrowserProfile.dtype,
+      pooling: publishedBrowserProfile.pooling,
+      normalize: publishedBrowserProfile.normalize !== false,
       note: "site.runtime.transformers_model_multilingual_small",
-      query_prefix: "query: ",
-      document_prefix: "passage: ",
+      query_prefix: publishedBrowserProfile.query_prefix,
+      document_prefix: publishedBrowserProfile.document_prefix,
     },
     {
       id: "Xenova/all-MiniLM-L6-v2",
@@ -86,7 +95,7 @@
       note: "site.runtime.transformers_model_bge_m3",
     },
   ];
-  const DEFAULT_TRANSFORMERS_MODEL = "Xenova/multilingual-e5-small";
+  const DEFAULT_TRANSFORMERS_MODEL = String(publishedBrowserProfile.model);
   const DEFAULT_TRANSFORMERS_DEVICE = "wasm";
   const MODEL_CACHE_NAME = "transformers-cache";
 
