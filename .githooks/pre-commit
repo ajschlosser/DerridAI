@@ -1,11 +1,28 @@
 #!/usr/bin/env bash
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 # Fast staged-file quality gate. The broader, change-aware regression plan runs pre-push and in CI.
 set -euo pipefail
 
 [ "${DERRIDAI_SKIP_PREFLIGHT:-}" = "1" ] && exit 0
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
+"${PYTHON:-python3}" .githooks/copyright_headers.py
+[ "${DERRIDAI_SKIP_PREFLIGHT:-}" = "1" ] && exit 0
 mapfile -t FILES < <(git diff --cached --name-only --diff-filter=ACMR)
 [ "${#FILES[@]}" -eq 0 ] && exit 0
 
