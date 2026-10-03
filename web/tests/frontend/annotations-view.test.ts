@@ -17,8 +17,9 @@
  */
 
 import { flushPromises, mount } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import AnnotationsView from "../../src/views/AnnotationsView.vue";
+import { annotationsService } from "../../src/services/annotations";
 import AnnotationFeedItem from "../../src/components/annotations/AnnotationFeedItem.vue";
 
 const snapshot = {
@@ -84,5 +85,88 @@ describe("AnnotationFeedItem", () => {
     await wrapper.get(".btn.danger").trigger("click");
     expect(wrapper.emitted("open")).toHaveLength(1);
     expect(wrapper.emitted("remove")).toHaveLength(1);
+  });
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+function refresh(wrapper: ReturnType<typeof mount>) {
+  return (
+    wrapper.vm as unknown as { annotations: { load(force: boolean): Promise<void> } }
+  ).annotations.load(true);
+}
+afterEach(() => vi.restoreAllMocks());
+describe("Annotations progressive reads", () => {
+  it("mounts filters before a delayed read without claiming an empty corpus", async () => {
+    const pending = deferred<typeof snapshot>();
+    vi.spyOn(annotationsService, "loadWorkspace").mockReturnValueOnce(pending.promise);
+    const wrapper = mount(AnnotationsView);
+    await flushPromises();
+    expect(wrapper.find('input[type="search"]').exists()).toBe(true);
+    expect(wrapper.find(".ui-loading-state.is-skeleton").exists()).toBe(true);
+    expect(wrapper.find(".llm-empty").exists()).toBe(false);
+    pending.resolve(snapshot);
+    await flushPromises();
+    wrapper.unmount();
+  });
+  it("retains feed DOM and filter controls through refresh failure and retry", async () => {
+    const read = vi.spyOn(annotationsService, "loadWorkspace").mockResolvedValue(snapshot);
+    const wrapper = mount(AnnotationsView);
+    await flushPromises();
+    const feed = wrapper.get(".annotation-work-group").element;
+    const pending = deferred<typeof snapshot>();
+    read.mockReturnValueOnce(pending.promise);
+    const operation = refresh(wrapper);
+    await flushPromises();
+    expect(wrapper.get(".annotation-work-group").element).toBe(feed);
+    expect(wrapper.find(".ui-loading-state.is-inline").exists()).toBe(true);
+    pending.reject(new Error("Unavailable"));
+    await operation;
+    await flushPromises();
+    expect(wrapper.get(".annotation-work-group").element).toBe(feed);
+    expect(wrapper.get('[role="alert"]').text()).toContain("Unavailable");
+    await wrapper.get('[role="alert"] button').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+  it("clears retained annotations when access is denied", async () => {
+    const read = vi.spyOn(annotationsService, "loadWorkspace").mockResolvedValue(snapshot);
+    const wrapper = mount(AnnotationsView);
+    await flushPromises();
+    read.mockRejectedValueOnce(Object.assign(new Error("Forbidden"), { status: 403 }));
+    await refresh(wrapper);
+    await flushPromises();
+    expect(wrapper.find(".annotation-work-group").exists()).toBe(false);
+    wrapper.unmount();
+  });
+  it("discards a superseded response", async () => {
+    const older = deferred<typeof snapshot>();
+    const read = vi.spyOn(annotationsService, "loadWorkspace").mockReturnValueOnce(older.promise);
+    const wrapper = mount(AnnotationsView);
+    read.mockResolvedValueOnce({ ...snapshot, groups: [] });
+    await refresh(wrapper);
+    older.resolve(snapshot);
+    await flushPromises();
+    expect(wrapper.find(".annotation-work-group").exists()).toBe(false);
+    wrapper.unmount();
+  });
+  it("cancels a queued search on unmount", async () => {
+    vi.useFakeTimers();
+    const read = vi.spyOn(annotationsService, "loadWorkspace").mockResolvedValue(snapshot);
+    const wrapper = mount(AnnotationsView);
+    await flushPromises();
+    await wrapper.get('input[type="search"]').setValue("trace");
+    wrapper.unmount();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(read).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 });

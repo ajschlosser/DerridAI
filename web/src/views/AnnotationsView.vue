@@ -65,62 +65,71 @@ onMounted(() => void annotations.load());
       :description="i18n.t('annotations.page_help')"
     />
 
-    <section v-if="loading" class="card annotations-state">
-      <UiLoadingState :label="i18n.t('ui.loading')" />
+    <section class="card annotations-index-card">
+      <div class="annotations-toolbar">
+        <label class="search">
+          <span class="sr-only">{{ i18n.t("annotations.search_placeholder") }}</span>
+          <input
+            type="search"
+            :disabled="!snapshot"
+            :value="snapshot?.query || ''"
+            :placeholder="i18n.t('annotations.search_placeholder')"
+            @input="annotations.setQuery(($event.target as HTMLInputElement).value)"
+          />
+        </label>
+        <div class="view-tabs" role="tablist">
+          <button
+            type="button"
+            class="view-tab"
+            :disabled="!snapshot"
+            :class="{ active: snapshot?.view === 'works' }"
+            role="tab"
+            :aria-selected="snapshot?.view === 'works'"
+            @click="annotations.setView('works')"
+          >
+            {{ i18n.t("annotations.by_work") }}
+          </button>
+          <button
+            type="button"
+            class="view-tab"
+            :disabled="!snapshot"
+            :class="{ active: snapshot?.view === 'recent' }"
+            role="tab"
+            :aria-selected="snapshot?.view === 'recent'"
+            @click="annotations.setView('recent')"
+          >
+            {{ i18n.t("annotations.recent") }}
+          </button>
+        </div>
+        <span v-if="snapshot" class="note"
+          >{{
+            i18n.tf("annotations.annotation_count", {
+              count: snapshot.total.toLocaleString(i18n.locale),
+            })
+          }}
+          · {{ snapshot.groups.length.toLocaleString(i18n.locale) }}
+          {{ i18n.t("dynamic.works") }}</span
+        >
+      </div>
     </section>
-    <section v-else-if="error" class="card annotations-state" role="alert">
+
+    <section v-if="loading && !snapshot" class="card annotations-state">
+      <UiLoadingState variant="skeleton" :label="i18n.t('ui.loading')" />
+    </section>
+    <section v-if="error" class="card annotations-state" role="alert">
       <strong>{{ i18n.t("annotations.open_failed") }}</strong>
       <p>{{ error }}</p>
+      <p v-if="snapshot">{{ i18n.t("loading.stale") }}</p>
       <button type="button" class="btn" @click="annotations.load(true)">
         {{ i18n.t("ui.retry") }}
       </button>
     </section>
-    <template v-else-if="snapshot">
-      <section class="card annotations-index-card">
-        <div class="annotations-toolbar">
-          <label class="search">
-            <span class="sr-only">{{ i18n.t("annotations.search_placeholder") }}</span>
-            <input
-              type="search"
-              :value="snapshot.query"
-              :placeholder="i18n.t('annotations.search_placeholder')"
-              @input="annotations.setQuery(($event.target as HTMLInputElement).value)"
-            />
-          </label>
-          <div class="view-tabs" role="tablist">
-            <button
-              type="button"
-              class="view-tab"
-              :class="{ active: snapshot.view === 'works' }"
-              role="tab"
-              :aria-selected="snapshot.view === 'works'"
-              @click="annotations.setView('works')"
-            >
-              {{ i18n.t("annotations.by_work") }}
-            </button>
-            <button
-              type="button"
-              class="view-tab"
-              :class="{ active: snapshot.view === 'recent' }"
-              role="tab"
-              :aria-selected="snapshot.view === 'recent'"
-              @click="annotations.setView('recent')"
-            >
-              {{ i18n.t("annotations.recent") }}
-            </button>
-          </div>
-          <span class="note"
-            >{{
-              i18n.tf("annotations.annotation_count", {
-                count: snapshot.total.toLocaleString(i18n.locale),
-              })
-            }}
-            · {{ snapshot.groups.length.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.works") }}</span
-          >
-        </div>
-      </section>
-
+    <UiLoadingState
+      v-if="loading && snapshot"
+      variant="inline"
+      :label="i18n.t('loading.updating')"
+    />
+    <template v-if="snapshot">
       <section v-if="snapshot.view === 'recent'" class="card annotations-recent-card">
         <div class="cardhead">
           <div>
@@ -261,12 +270,10 @@ onMounted(() => void annotations.load());
   cursor: pointer;
 }
 .view-tab.active {
-  border-color: var(--ui-accent, #3c8d62);
+  border-color: var(--ui-accent);
   background: var(--soft);
 }
-.note,
-.annotation-feed-meta,
-.annotation-feed-item small {
+.note {
   color: var(--muted);
   font-size: 0.8125rem;
 }
@@ -341,7 +348,7 @@ onMounted(() => void annotations.load());
 .annotation-feed-item blockquote {
   margin: 0;
   padding: 8px 10px;
-  border-left: 3px solid var(--ui-accent, #3c8d62);
+  border-left: 3px solid var(--ui-accent);
   background: var(--soft);
   color: var(--text-2);
   font:
@@ -391,7 +398,7 @@ onMounted(() => void annotations.load());
 }
 button:focus-visible,
 input:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--ui-accent, #3c8d62) 42%, var(--card));
+  outline: 3px solid color-mix(in srgb, var(--ui-accent) 42%, var(--card));
   outline-offset: 2px;
 }
 @media (max-width: 640px) {
