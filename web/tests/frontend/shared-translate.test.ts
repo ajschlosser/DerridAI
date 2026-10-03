@@ -36,7 +36,7 @@ describe("shared translations", () => {
   });
 
   it("copyCitation reports the exact citation that reached the clipboard", async () => {
-    const writeText = vi.fn(async () => undefined);
+    const writeText = vi.fn(async (_text: string) => undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
     await copyCitation({ document_author: "Derrida, Jacques", work: "Glas", year: "1974" });
     const text = writeText.mock.calls[0][0] as string;
