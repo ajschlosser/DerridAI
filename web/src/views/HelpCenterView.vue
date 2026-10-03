@@ -20,9 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
-import HelpContentsNav, {
-  type HelpContentsLink,
-} from "../components/help/HelpContentsNav.vue";
+import HelpContentsNav from "../components/help/HelpContentsNav.vue";
 import HelpQuickStart from "../components/help/HelpQuickStart.vue";
 import HelpSearchHero from "../components/help/HelpSearchHero.vue";
 import HelpHighlight from "../components/HelpHighlight.vue";
@@ -38,6 +36,13 @@ import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 
 type SectionId = "help-pages" | "help-glossary" | "help-questions";
+
+interface HelpContentsLink {
+  id: string;
+  icon: string;
+  label: string;
+  count: number;
+}
 
 const i18n = useI18nStore();
 const auth = useAuthStore();
