@@ -1390,7 +1390,6 @@ docker compose up -d --build
 - vector/reranker calls that do not expose a cancellable stream stop at the next pipeline checkpoint;
 - clearing `updates` permanently removes that local audit history.
 
-
 ### Research loading and retries
 
 Research displays its workspace frame and question composer while saved data loads. Users with Research permission can draft a question before configuration is ready; starting a run waits for the required configuration. Saved run history, pipeline choices, and a selected answer load separately. A slow secondary read does not prevent drafting. Each failed read offers Retry in its region; existing workspace content and drafts remain visible during refresh. Selecting another saved answer clears the previous answer and evidence until the selected answer is available.
