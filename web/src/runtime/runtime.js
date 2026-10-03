@@ -153,7 +153,18 @@ import { createWorkDialogs } from "../domain/workDialogs";
 import { createRecordDialogs } from "../domain/recordDialogs";
 import { createOperationDock } from "../domain/operationDock";
 import { createModalDialogs } from "../domain/modalDialogs";
-import { createNavigation } from "../domain/navigation";
+import {
+  getUrlSyncHook,
+  navSnapshot,
+  setUrlSyncHook,
+  currentTableUrlState,
+  applyCompressedTableUrlState,
+  urlFromState,
+  syncUrl,
+  applyUrlState,
+  navigateTo,
+  setRenderViewHook,
+} from "../domain/sharedNavigation";
 import { sharedUrlStateCodec } from "../domain/sharedUrlState";
 import { pathViewMap, viewFromPath, viewPathMap } from "../domain/navigation";
 import { createWorkspacePersistence } from "../domain/workspacePersistence";
@@ -852,28 +863,6 @@ const {
   storeReceipt: (...args) => storeReceipt(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
-});
-const {
-  getUrlSyncHook,
-  navSnapshot,
-  setUrlSyncHook,
-  currentTableUrlState,
-  applyCompressedTableUrlState,
-  urlFromState,
-  syncUrl,
-  applyUrlState,
-  navigateTo,
-} = createNavigation({
-  codec: sharedUrlStateCodec,
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  activeFile: (...args) => activeFile(...args),
-  canAccessPage: (...args) => canAccessPage(...args),
-  dbSearchWhere: (...args) => dbSearchWhere(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  renderView: (...args) => renderView(...args),
-  selectedIndex: (...args) => selectedIndex(...args),
-  shell: (...args) => shell(...args),
 });
 const { copyJsonToClipboard } = createModalDialogs({
   state,
@@ -1886,6 +1875,8 @@ function renderView() {
   syncUrl({ replace: true });
   return null;
 }
+
+setRenderViewHook(() => renderView());
 
 function searchByMetadata(field, value, { contains = false } = {}) {
   const raw = String(value ?? "").trim();
