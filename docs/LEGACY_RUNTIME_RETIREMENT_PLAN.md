@@ -205,7 +205,10 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] `jobDialogs`: job details (`JobDetailsDialog.vue` + `composables/jobDetailsDialog.ts`; the forwarder composes plain-data facts, events and JSON summaries, and supplies `onCancel` / `openResult` callbacks that run after the dialog closes; baselines `dialog-job-details-0..2` retired)
   - [x] `jobDialogs`: job results review (`JobReviewDialog.vue` + `composables/jobReviewDialog.ts`; the forwarder builds a plain-data `JobReviewView` and republishes it through the returned handle on every refresh, realtime event or resolution. The component owns the selection (indices into the rows, kept across republishes, default is every field but `text`); `apply` / `rejectSelected` / `discard` stay in the forwarder and resolve true when they changed something. Diffs still arrive as escaped HTML from `reviewDiffSides`. `jobReviewMarkup.ts` and baseline `dialog-job-results-review` retired; the footer buttons lost their icons)
   - [ ] remaining `jobDialogs` (task launcher, touch-up), each with its markup helper in `domain/*Markup.ts`
-- [ ] Step 4 state slices and deletion
+- [ ] Step 4 state slices and deletion (branch `task/state-slice-preferences`, worktree `../DerridAI-state-slices`, based on master)
+  - Pattern: a shallow-reactive group in `state/workspaceState.ts`, bound onto the runtime `state` with `bindSharedState` (so the runtime and the persistence keys are unchanged) and exposed to Vue through a store in `stores/workspace.ts`. Vector, compare, search, works and corpus slices were already moved this way.
+  - [x] shell layout preferences (`layoutState` / `useLayoutStore`: `sidebarCollapsed`, `collectionsCollapsed`, `operationToastsMinimized`, `operationStackPosition`, `collapsedPanels`). `App.vue` reads the sidebar flag from the store, so `sidebarCollapsed` left the shell snapshot. Persisted prefs keys are unchanged
+  - [ ] remaining slices still plain fields on `createRuntimeState` (selection/list paging, annotations, PDF, FAQ, rag/app/llm config), then replace `urlFromState`/`applyUrlState`, then delete the runtime
 
 Notes for the next session:
 

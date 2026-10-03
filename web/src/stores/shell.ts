@@ -20,7 +20,6 @@ export interface ShellNavItem {
 }
 export interface ShellSnapshot {
   view: string;
-  sidebarCollapsed: boolean;
   files: ShellFile[];
   context: { kicker: string; title: string; meta: string };
   totalLoaded: number;
@@ -41,7 +40,6 @@ export interface ShellSnapshot {
 
 const emptySnapshot: ShellSnapshot = {
   view: "home",
-  sidebarCollapsed: false,
   files: [],
   context: { kicker: "Overview", title: "Dashboard", meta: "" },
   totalLoaded: 0,

@@ -4,6 +4,7 @@ import {
   bindSharedState,
   compareState,
   corpusState,
+  layoutState,
   searchState,
   vectorState,
   worksState,
@@ -56,11 +57,6 @@ export function createRuntimeState() {
     selectedEvidence: {},
     researcherProviderProfiles: [],
     translations: { locale: "en-US", dictionary: {}, base: {} },
-    sidebarCollapsed: false,
-    collectionsCollapsed: false,
-    operationToastsMinimized: false,
-    operationStackPosition: null,
-    collapsedPanels: {},
     providerStatuses: {},
     providerWarmups: {},
     tableColumns: {},
@@ -182,7 +178,8 @@ export function createRuntimeState() {
   const withCompare = bindSharedState(withVector, compareState);
   const withSearch = bindSharedState(withCompare, searchState);
   const withWorks = bindSharedState(withSearch, worksState);
-  return bindSharedState(withWorks, corpusState);
+  const withCorpus = bindSharedState(withWorks, corpusState);
+  return bindSharedState(withCorpus, layoutState);
 }
 
 export type RuntimeState = ReturnType<typeof createRuntimeState>;
