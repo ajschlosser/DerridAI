@@ -212,6 +212,7 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] annotations (`annotationsState` / `useAnnotationsStore`) and FAQ (`faqState` / `useFaqStore`) slices; persistence keys unchanged
   - [x] table lists (`listState` / `useListsStore`: `selected`, `searches`, `listFilters`, `pages`, `pageSize`, `sorts`, `tableColumns`)
   - [x] configuration (`configState` / `useConfigStore`: `ragConfig`, `appConfig`, `llmConfig`), PDF Explorer (`pdfState` / `usePdfStore`) and review selection (`reviewState` / `useReviewStore`: `reviewSelection`, `selectedEvidence`)
+  - [x] URL contract pinned by `tests/frontend/url-state-contract.test.ts` (path/`?view=`, file/record, store params, raw/compressed `ts=`, round trip, router-owned sub-paths). Finding: a known path wins over `?view=`, which only applies on a path with no view of its own
   - [ ] remaining plain fields on `createRuntimeState` are small (`view`, `userContext`, health/provider status, upsert and operation progress, translations); then replace `urlFromState`/`applyUrlState`, then delete the runtime
 
 Notes for the next session:
