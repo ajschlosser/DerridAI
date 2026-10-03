@@ -1148,7 +1148,7 @@ const scenarios: Scenario[] = [
     name: "backup-confirm",
     nav: "Settings",
     load: true,
-    target: "app",
+    target: "dialog",
     contains: ["Create full backup?"],
     steps: async (page) => {
       await inBackupSection(page);
@@ -1175,9 +1175,15 @@ const scenarios: Scenario[] = [
     load: true,
     target: "app",
     contains: ["Backup failed: disk full"],
-    fixtures: { "POST /api/admin/backup": () => ({ detail: "disk full" }) },
     steps: async (page) => {
       await inBackupSection(page);
+      await page.route("**/api/admin/backup", async (route) => {
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "disk full" }),
+        });
+      });
       await page.locator("button", { hasText: "Download full backup" }).first().click();
       await page.getByRole("button", { name: "Yes", exact: true }).click();
       await expect(page.getByText("Backup failed: disk full")).toBeVisible();
@@ -1186,7 +1192,7 @@ const scenarios: Scenario[] = [
   {
     name: "restore-confirm",
     nav: "Settings",
-    target: "app",
+    target: "dialog",
     contains: ["Restore full DerridAI backup?"],
     steps: async (page) => {
       await inBackupSection(page);

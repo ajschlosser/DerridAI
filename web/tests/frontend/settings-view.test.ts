@@ -226,27 +226,24 @@ describe("SettingsView", () => {
     expect(runtime.flushWorkspacePrefs).not.toHaveBeenCalled();
   });
 
-  it(
-    "marks appearance unsaved then reports a persistence failure without dropping the draft",
-    async () => {
-      runtime.flushWorkspacePrefs.mockRejectedValueOnce(
-        new Error("IndexedDB preference persistence failed"),
-      );
-      const { wrapper } = await mountView("admin", { section: "preferences" });
-      const dark = wrapper.get("#settings-field-scheme");
-      await dark.setValue("dark");
-      await flushPromises();
-      expect(wrapper.text()).toContain("Unsaved changes");
-      await wrapper
-        .findAll("button")
-        .find((button) => button.text().includes("Save appearance"))
-        ?.trigger("click");
-      await flushPromises();
-      expect(wrapper.text()).toContain("Save failed");
-      expect(wrapper.text()).toContain("IndexedDB preference persistence failed");
-      expect((dark.element as HTMLSelectElement).value).toBe("dark");
-    },
-  );
+  it("marks appearance unsaved then reports a persistence failure without dropping the draft", async () => {
+    runtime.flushWorkspacePrefs.mockRejectedValueOnce(
+      new Error("IndexedDB preference persistence failed"),
+    );
+    const { wrapper } = await mountView("admin", { section: "preferences" });
+    const dark = wrapper.get("#settings-field-scheme");
+    await dark.setValue("dark");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Unsaved changes");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Save appearance"))
+      ?.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Save failed");
+    expect(wrapper.text()).toContain("IndexedDB preference persistence failed");
+    expect((dark.element as HTMLSelectElement).value).toBe("dark");
+  });
 
   it("persists provider-profile embedding defaults to the backend", async () => {
     const { wrapper } = await mountView("admin", { section: "retrieval" });
