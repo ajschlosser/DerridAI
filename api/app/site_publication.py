@@ -488,16 +488,16 @@ def build_site_bundle(
 
     publication_source = f"globalThis.{PACKAGE_GLOBAL}={_js_json(package)};\n"
     sdk_source = SDK_ASSET.read_text(encoding="utf-8")
-    runtime_source = SITE_ASSET.read_text(encoding="utf-8")
+    site_interface_source = SITE_ASSET.read_text(encoding="utf-8")
     parts = [publication_source]
     if transformers_delivery == "inline":
         parts.append(_transformers_inline_source())
-    combined_runtime = "\n".join((*parts, sdk_source, runtime_source))
+    published_site_bundle = "\n".join((*parts, sdk_source, site_interface_source))
 
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
         bundle.writestr("index.html", index_html.encode("utf-8"))
-        bundle.writestr(SITE_ASSET_NAME, combined_runtime.encode("utf-8"))
+        bundle.writestr(SITE_ASSET_NAME, published_site_bundle.encode("utf-8"))
 
     return SiteBundle(
         payload=archive.getvalue(),
@@ -552,7 +552,7 @@ def build_local_site_file(
     )
     files = _core_site_files(core)
     index_html = files["index.html"].decode("utf-8")
-    runtime_source = _inline_script_source(files[SITE_ASSET_NAME].decode("utf-8"))
+    site_interface_source = _inline_script_source(files[SITE_ASSET_NAME].decode("utf-8"))
 
     external_csp = _site_csp()
     local_csp = _site_csp(standalone=True)
@@ -562,7 +562,7 @@ def build_local_site_file(
 
     replacements = {
         f'<script src="./{SITE_ASSET_NAME}" defer></script>': (
-            f"<script>{runtime_source}</script>"
+            f"<script>{site_interface_source}</script>"
         ),
     }
     for external, inline in replacements.items():
