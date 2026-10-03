@@ -383,7 +383,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="record-workspace-page">
+  <main class="record-workspace-page" :aria-busy="loading && !snapshot.available">
     <NewerDataBanner :visible="newer.hasNewer.value" @load="loadNewer" />
     <div v-if="loading && !snapshot.available" class="record-workspace-loading" aria-busy="true">
       <h1>{{ i18n.t("loading.record_frame") }}</h1>
