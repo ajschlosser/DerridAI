@@ -57,11 +57,7 @@ function activate(event: MouseEvent, id: SettingsSectionId) {
     <nav :aria-label="navLabel">
       <ul class="settings-overview-grid">
         <li v-for="item in items" :key="item.id">
-          <a
-            class="settings-overview-link"
-            :href="item.path"
-            @click="activate($event, item.id)"
-          >
+          <a class="settings-overview-link" :href="item.path" @click="activate($event, item.id)">
             <span class="settings-overview-copy">
               <strong>{{ item.label }}</strong>
               <small>{{ item.description }}</small>
