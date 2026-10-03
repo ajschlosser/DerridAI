@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import sys
 import types
 from pathlib import Path
 
 import fitz
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
@@ -16,6 +18,7 @@ except ImportError:
 
 from app import corpus_builder as cb
 from app import corpus_segmentation as segmentation
+from app import source_audio
 from app import source_media as sm
 
 
@@ -56,6 +59,60 @@ def test_whisper_spans_use_whisperx_speakers_after_full_transcript():
     meta = sm.infer_initial_metadata(transcript["text"], blocks=blocks)
     assert meta["speakers"] == ["SPEAKER_00", "SPEAKER_01"]
     assert "speaker" not in meta
+
+
+def test_audio_voice_labels_start_at_one_and_reviewed_names_project_to_records():
+    turns = source_audio.normalize_speaker_labels(
+        [
+            {"start": 0.0, "end": 1.0, "speaker": "SPEAKER_00"},
+            {"start": 1.0, "end": 2.0, "speaker": "voice-b"},
+            {"start": 2.0, "end": 3.0, "speaker": "SPEAKER_00"},
+        ]
+    )
+    assert [turn["speaker"] for turn in turns] == ["SPEAKER_1", "SPEAKER_2", "SPEAKER_1"]
+    assert turns[0]["provider_speaker"] == "SPEAKER_00"
+
+    blocks, _pages = sm.prose_to_blocks("One.\n\nTwo.", extraction_method="whisper")
+    for block in blocks:
+        block["speaker"] = "SPEAKER_1"
+        block["start"] = 0.0
+        block["end"] = 1.0
+    records = segmentation._construct_records(
+        {
+            "filename": "seminar.mp3",
+            "asset_id": "asset",
+            "media_kind": "audio",
+            "voice_assignments": {
+                "SPEAKER_1": {"voice_id": "SPEAKER_1", "display_name": "Jacques Derrida"}
+            },
+        },
+        blocks,
+        [],
+    )
+    assert records[0]["speaker"] == "Jacques Derrida"
+    assert records[0]["source_spans"][0]["speaker"] == "SPEAKER_1"
+    assert records[0]["source_spans"][0]["resolved_speaker"] == "Jacques Derrida"
+    assert records[0]["metadata_field_status"]["speaker"]["method"] == "human_voice_assignment"
+
+
+def test_voice_assignments_are_reviewed_asset_state_not_block_rewrites(tmp_path: Path):
+    repo = cb.PdfCorpusRepository(tmp_path)
+    asset_id = "pdf-audio"
+    repo.asset_meta_path(asset_id).write_text(
+        json.dumps({"asset_id": asset_id, "filename": "seminar.mp3", "media_kind": "audio"}),
+        encoding="utf-8",
+    )
+    original = {"block_id": "p00001-b0001", "text": "Hello", "speaker": "SPEAKER_1"}
+    repo.asset_blocks_path(asset_id).write_text(json.dumps(original) + "\n", encoding="utf-8")
+
+    updated = repo.update_voice_assignments(
+        asset_id, {"SPEAKER_1": "Jacques Derrida"}, reviewer="reviewer"
+    )
+
+    assert updated["voice_assignments"]["SPEAKER_1"]["display_name"] == "Jacques Derrida"
+    assert repo.load_blocks(asset_id) == [original]
+    with pytest.raises(ValueError, match="Unknown diarized voice"):
+        repo.update_voice_assignments(asset_id, {"SPEAKER_2": "Other"})
 
 
 def test_initial_metadata_uses_deterministic_language_detection_when_missing():

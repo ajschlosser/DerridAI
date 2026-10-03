@@ -201,6 +201,23 @@ export function useCorpusSourceConfiguration(
     }
   }
 
+  async function saveVoiceAssignments(assignments: Record<string, string>) {
+    if (!selectedAssetId.value) return;
+    busy.value = "voice-assignments";
+    try {
+      const result = await corpusBuilderApi.updateVoiceAssignments(
+        selectedAssetId.value,
+        assignments,
+      );
+      rememberAsset(result.asset);
+      setMessage(i18n.tf("pdf_corpus.voice_assignments_saved", { count: result.records_updated }));
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
   async function upload(file?: File | null) {
     if (!file) return;
     busy.value = "upload";
@@ -462,6 +479,7 @@ export function useCorpusSourceConfiguration(
     saveSourceLanguage,
     applyPageEstimate,
     saveSourceMetadata,
+    saveVoiceAssignments,
     refreshAssets,
     upload,
     applyUnitPolicy,

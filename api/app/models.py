@@ -859,6 +859,25 @@ class PdfCorpusSemanticAliasImport(BaseModel):
     alias_set_ids: list[str] | None = Field(default=None, max_length=2000)
 
 
+class PdfAudioVoiceAssignments(BaseModel):
+    """Human names assigned to immutable diarized voice identifiers."""
+
+    assignments: dict[str, str] = Field(default_factory=dict, max_length=100)
+
+    @field_validator("assignments")
+    @classmethod
+    def valid_assignments(cls, value: dict[str, str]) -> dict[str, str]:
+        normalized: dict[str, str] = {}
+        for voice_id, display_name in value.items():
+            if not re.fullmatch(r"SPEAKER_[1-9]\d*", voice_id):
+                raise ValueError("Voice identifiers must use SPEAKER_1, SPEAKER_2, and so on.")
+            name = str(display_name).strip()
+            if len(name) > 200:
+                raise ValueError("Speaker names must contain 200 characters or fewer.")
+            normalized[voice_id] = name
+        return normalized
+
+
 class PdfCorpusEvidencePatch(BaseModel):
     field: str = Field(min_length=1, max_length=120)
     block_ids: list[str] = Field(default_factory=list, max_length=500)

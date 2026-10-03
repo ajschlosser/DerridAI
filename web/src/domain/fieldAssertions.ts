@@ -11,6 +11,10 @@ export interface FieldAssertionView {
   record_revision?: number;
   field_id: string;
   field_name: string;
+  container_field_id?: string;
+  instance_id?: string;
+  member_field_id?: string;
+  member_name?: string;
   value: unknown;
   derivation_method?: string;
   evaluation_status?: string;
@@ -94,6 +98,10 @@ function normalizedAssertion(raw: Loose, fallbackFieldId: string): FieldAssertio
         : undefined,
     field_id: String(raw.field_id || fallbackFieldId),
     field_name: fieldName,
+    container_field_id: raw.container_field_id ? String(raw.container_field_id) : undefined,
+    instance_id: raw.instance_id ? String(raw.instance_id) : undefined,
+    member_field_id: raw.member_field_id ? String(raw.member_field_id) : undefined,
+    member_name: raw.member_name ? String(raw.member_name) : undefined,
     value: raw.value,
     derivation_method: raw.derivation_method ? String(raw.derivation_method) : undefined,
     evaluation_status: raw.evaluation_status ? String(raw.evaluation_status) : undefined,
@@ -196,12 +204,19 @@ export function assertionConflict(
 }
 
 export function assertionFieldNames(record: Loose | null | undefined): string[] {
-  return [...new Set(currentFieldAssertions(record).map((item) => item.field_name))];
+  return [
+    ...new Set(
+      currentFieldAssertions(record)
+        .filter((item) => !item.container_field_id)
+        .map((item) => item.field_name),
+    ),
+  ];
 }
 
 export function assertionValues(record: Loose | null | undefined): Record<string, unknown> {
   const values: Record<string, unknown> = {};
   for (const assertion of currentFieldAssertions(record)) {
+    if (assertion.container_field_id) continue;
     if (assertion.value_status === "confirmed_absent") {
       values[assertion.field_name] = null;
       continue;
@@ -239,6 +254,7 @@ export function assertionFieldsByTab(
     indexing: [],
   };
   for (const assertion of currentFieldAssertions(record)) {
+    if (assertion.container_field_id) continue;
     const tab = assertionPresentationTab(assertion);
     if (!result[tab].includes(assertion.field_name)) result[tab].push(assertion.field_name);
   }
