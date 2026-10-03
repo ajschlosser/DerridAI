@@ -1,7 +1,11 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 # Canonical built-in locale. Keep keys synchronized with the paired locale module.
 
-EN_US: dict[str, str] = {'loading.navigation': "Opening {destination}…",
+EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
+ 'loading.health_failed': "Storage connection information is unavailable.",
+ 'loading.providers': "Loading provider choices…",
+ 'loading.providers_failed': "Provider choices are unavailable. Retry before creating a collection or changing its provider.",
+ 'loading.navigation': "Opening {destination}…",
  'loading.navigation_failed': "Could not open {destination}. Your current page is still available.",
  'loading.reload_page': "Reload page",
  'loading.updating': "Updating…",

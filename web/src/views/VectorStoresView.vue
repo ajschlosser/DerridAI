@@ -73,7 +73,8 @@ const router = useRouter();
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const shell = useShellStore();
-const loading = ref(true);
+const loading = computed(() => storesQuery.isPending.value);
+const hasCollections = ref(false);
 const error = ref("");
 const health = ref<ChromaHealth | null>(null);
 const collections = ref<VectorCollection[]>([]);
@@ -177,58 +178,123 @@ function syncHealthIntoRuntime(next: ChromaHealth) {
   runtimeState.health = { ...(runtimeState.health || {}), chroma: next, chroma_path: next.path };
 }
 
-// Collections, health and provider profiles are one server-state read. Realtime invalidation of
-// `vector_collections` (and every local mutation, through load()) refetches it; applyStores then
-// reconciles view state from the result.
-const storesQuery = useDataQuery(
-  "vector_collections",
-  async () => {
-    const [health, stores, providers] = await Promise.all([
-      chromaApi.health(),
-      chromaApi.collections(),
-      systemApi.researcherProviders().catch(() => ({ profiles: [] })),
-    ]);
-    return { health, stores, providers };
-  },
-  { enabled: () => !auth.isResearcher },
+let skipDetails = false;
+let settingsCollection = "";
+// These reads share the existing resource invalidation, but settle independently.
+// Detail keys prevent unrelated response shapes from sharing a cache entry.
+const readScope = computed(() =>
+  JSON.stringify([auth.user?.id, auth.user?.role, auth.user?.capabilities]),
+);
+const storesQuery = useDataQuery("vector_collections", () => chromaApi.collections(), {
+  detail: () => ["workspace", readScope.value, "collections"],
+  enabled: () => auth.isAdmin,
+});
+const healthQuery = useDataQuery("vector_collections", () => chromaApi.health(), {
+  detail: () => ["workspace", readScope.value, "health"],
+  enabled: () => auth.isAdmin,
+});
+const providersQuery = useDataQuery("vector_collections", () => systemApi.researcherProviders(), {
+  detail: () => ["workspace", readScope.value, "providers"],
+  enabled: () => auth.isAdmin,
+});
+const providersReady = computed(() => providersQuery.isSuccess.value);
+const createDisabledReason = computed(() =>
+  i18n.t(providersQuery.error.value ? "loading.providers_failed" : "loading.providers"),
 );
 watch(
-  () => storesQuery.data.value,
-  (data) => {
+  () => storesQuery.dataUpdatedAt.value,
+  () => {
+    const data = storesQuery.data.value;
     if (data) void applyStores(data);
+  },
+  { immediate: true },
+);
+watch(
+  () => healthQuery.data.value,
+  (data) => {
+    if (data) syncHealthIntoRuntime(data);
+  },
+  { immediate: true },
+);
+watch(
+  () => providersQuery.data.value,
+  (data) => {
+    if (data) providerProfiles.value = data.profiles || [];
   },
   { immediate: true },
 );
 watch(
   () => storesQuery.error.value,
   (failure) => {
-    if (!failure) return;
+    if (!failure) {
+      error.value = "";
+      return;
+    }
     error.value = errorText(failure);
-    loading.value = false;
+    if (
+      failure &&
+      typeof failure === "object" &&
+      "status" in failure &&
+      [401, 403].includes(Number(failure.status))
+    ) {
+      hasCollections.value = false;
+      collections.value = [];
+      activeName.value = "";
+      records.value = [];
+      works.value = [];
+      searchResults.value = [];
+    }
   },
+  { immediate: true },
 );
-
+watch(
+  readScope,
+  () => {
+    hasCollections.value = false;
+    collections.value = [];
+    activeName.value = "";
+    health.value = null;
+    providerProfiles.value = [];
+    error.value = "";
+    records.value = [];
+    works.value = [];
+    searchResults.value = [];
+  },
+  { flush: "sync" },
+);
+watch([hasCollections, providersReady], () => {
+  if (
+    hasCollections.value &&
+    providersReady.value &&
+    workspace.vectorAutoCreateRequested &&
+    !collections.value.length
+  ) {
+    workspace.vectorAutoCreateRequested = false;
+    openCreate();
+  }
+});
 async function load(options: { details?: boolean } = {}) {
   skipDetails = options.details === false;
-  await storesQuery.refetch();
+  await Promise.all([storesQuery.refetch(), healthQuery.refetch(), providersQuery.refetch()]);
 }
-let skipDetails = false;
 function errorText(exc: unknown) {
   return exc instanceof Error ? exc.message : String(exc);
 }
 
-async function applyStores(data: {
-  health: ChromaHealth;
-  stores: VectorCollection[];
-  providers: { profiles?: ProviderProfile[] };
-}) {
+async function applyStores(stores: VectorCollection[]) {
   const details = !skipDetails;
   skipDetails = false;
   error.value = "";
   try {
-    const { health: nextHealth, stores, providers } = data;
-    providerProfiles.value = providers.profiles || [];
-    syncHealthIntoRuntime(nextHealth);
+    const previous = current.value;
+    const preserveSettings =
+      previous &&
+      settingsCollection === previous.name &&
+      (role.value !== (previous.collection_role || "general") ||
+        JSON.stringify(languageCodes.value) !== JSON.stringify(previous.language_codes || []) ||
+        embeddingProvider.value !== (previous.embedding_provider || "ollama") ||
+        embeddingModel.value !== (previous.embedding_model || ""));
+    hasCollections.value = true;
     const corpusStores = stores.filter((store) => !store.metadata?.derridai_system_collection);
     collections.value = corpusStores;
     if (activeName.value && !corpusStores.some((store) => store.name === activeName.value))
@@ -240,7 +306,8 @@ async function applyStores(data: {
     workspace.stores = corpusStores;
     persistWorkspace();
     pendingCount.value = runtime.pendingUpsertRows?.().length || 0;
-    if (current.value) {
+    if (current.value && (settingsCollection !== current.value.name || !preserveSettings)) {
+      settingsCollection = current.value.name;
       role.value = current.value.collection_role || "general";
       languageCodes.value = [...(current.value.language_codes || [])];
       embeddingProvider.value = current.value.embedding_provider || "ollama";
@@ -257,16 +324,11 @@ async function applyStores(data: {
           )[current.value.retrieval_mode || ""] || "hybrid";
     }
     if (details && current.value && tab.value === "data") await loadData();
-    if (workspace.vectorAutoCreateRequested && !corpusStores.length) {
-      workspace.vectorAutoCreateRequested = false;
-      openCreate();
-    } else if (corpusStores.length) {
+    if (corpusStores.length) {
       workspace.vectorAutoCreateRequested = false;
     }
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
-  } finally {
-    loading.value = false;
   }
 }
 
@@ -297,6 +359,7 @@ async function loadData() {
 }
 
 function openCreate() {
+  if (!providersReady.value) return;
   const models = runtimeState.llmStatus?.models || [];
   runtime.openCollectionCreationWizard({
     defaultProvider: runtimeState.appConfig?.embedding_provider || "ollama",
@@ -535,45 +598,66 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main
-    class="vue-native-page vector-native-page"
-    :aria-busy="loading"
-    aria-labelledby="vector-page-title"
-  >
+  <main class="vue-native-page vector-native-page" aria-labelledby="vector-page-title">
+    <VectorWorkspaceHeader
+      v-if="!auth.isResearcher"
+      :health-loading="healthQuery.isPending.value"
+      :can-create="providersReady"
+      :create-disabled-reason="createDisabledReason"
+      :health="health"
+      :collection-count="collections.length"
+      @create="openCreate"
+      @connection="
+        connectionOpen = true;
+        probeResult = null;
+        connectionError = '';
+      "
+    />
+    <template v-if="!auth.isResearcher">
+      <div v-if="healthQuery.error.value" class="info error" role="alert">
+        {{ i18n.t("loading.health_failed") }} {{ errorText(healthQuery.error.value) }}
+        <UiButton :label="i18n.t('ui.retry')" @click="healthQuery.refetch()" />
+      </div>
+      <UiLoadingState
+        v-if="providersQuery.isPending.value"
+        variant="inline"
+        :label="i18n.t('loading.providers')"
+      />
+      <div v-if="providersQuery.error.value" class="info error" role="alert">
+        {{ i18n.t("loading.providers_failed") }} {{ errorText(providersQuery.error.value) }}
+        <UiButton :label="i18n.t('ui.retry')" @click="providersQuery.refetch()" />
+      </div>
+    </template>
     <div v-if="auth.isResearcher" class="vector-page-loading">
       <UiLoadingState :label="i18n.t('search.redirect_database')" />
     </div>
-    <div v-else-if="loading && !collections.length && !error" class="vector-page-loading">
-      <UiLoadingState :label="i18n.t('vector.loading_stores')" />
+    <div v-if="!auth.isResearcher && loading && !hasCollections" class="vector-page-loading">
+      <UiLoadingState :label="i18n.t('vector.loading_stores')" variant="skeleton" />
     </div>
-    <section v-else-if="error" class="vector-page-error">
-      <h1 id="vector-page-title">{{ i18n.t("nav.vector", "Corpus Data") }}</h1>
+    <section v-if="error && !auth.isResearcher" class="vector-page-error" role="alert">
+      <p v-if="hasCollections">{{ i18n.t("loading.stale") }}</p>
       <p>{{ error }}</p>
       <UiButton :label="i18n.t('ui.retry')" @click="load()" />
     </section>
-    <template v-else>
-      <VectorWorkspaceHeader
-        :health="health"
-        :collection-count="collections.length"
-        @create="openCreate"
-        @connection="
-          connectionOpen = true;
-          probeResult = null;
-          connectionError = '';
-        "
+    <template v-if="hasCollections && !auth.isResearcher">
+      <UiLoadingState
+        v-if="storesQuery.isFetching.value"
+        variant="inline"
+        :label="i18n.t('loading.updating')"
       />
-
       <AccessibleEmptyState
         v-if="!collections.length"
         icon="database"
         :title="i18n.t('vector.empty_title')"
         :description="i18n.t('vector.empty_help')"
-        :action-label="i18n.t('vector.create_first_collection')"
+        :action-label="providersReady ? i18n.t('vector.create_first_collection') : ''"
         @action="openCreate"
       />
 
       <section v-else class="storegrid vector-store-layout vector-workspace-v0371">
         <VectorCollectionRail
+          :can-create="providersReady"
+          :create-disabled-reason="createDisabledReason"
           :collections="visibleCollections"
           :active-name="activeName"
           :filter="filter"
@@ -1031,7 +1115,7 @@ onBeforeUnmount(() => {
                       <select
                         class="control"
                         v-model="embeddingProvider"
-                        :disabled="contractLocked"
+                        :disabled="contractLocked || !providersReady"
                       >
                         <option value="chroma">{{ i18n.t("vector.provider_chroma") }}</option>
                         <option value="precomputed">

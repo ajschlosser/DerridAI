@@ -1,4 +1,8 @@
 {
+  "loading.health": "Checking storage connection…",
+  "loading.health_failed": "Storage connection information is unavailable.",
+  "loading.providers": "Loading provider choices…",
+  "loading.providers_failed": "Provider choices are unavailable. Retry before creating a collection or changing its provider.",
   "loading.navigation": "Opening {destination}…",
   "loading.navigation_failed": "Could not open {destination}. Your current page is still available.",
   "loading.reload_page": "Reload page",
@@ -2597,8 +2601,6 @@
   "schemas.type_boolean": "Yes / no",
   "schemas.type_choice": "One of a list",
   "schemas.type_list": "List of texts",
-  "schemas.type_repeatable": "Repeatable structured field",
-  "schemas.add_repeatable_member": "Add member field",
   "schemas.field_group": "Group",
   "schemas.instruction": "What the model should look for",
   "schemas.instruction_help": "Plain-language guidance for the model, shown right after the field’s name. Say what to look for and what to ignore. Write {values} where the allowed values should be listed.",

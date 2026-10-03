@@ -1,3 +1,4 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { VueQueryPlugin } from "@tanstack/vue-query";
@@ -186,6 +187,122 @@ describe("VectorStoresView", () => {
     await flushPromises();
     expect(document.body.textContent || "").toContain("Storage backend");
     expect(document.body.textContent || "").toContain("Local filesystem");
+    wrapper.unmount();
+  });
+});
+function pending<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+describe("Vector Stores loading boundaries", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    queryClient.clear();
+    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 30_000 } });
+    Object.assign(vectorState, createVectorState());
+    chromaApi.health.mockResolvedValue(readyHealth);
+    chromaApi.collections.mockResolvedValue([{ name: "collection-a", count: 2, status: "ready" }]);
+    systemApi.researcherProviders.mockResolvedValue({ profiles: [] });
+    vectorBrowseReads.browse.mockResolvedValue({ works: [], page: null });
+    runtime.pendingUpsertRows.mockReturnValue([]);
+  });
+  it("shows the title before collections resolve without a false empty state", async () => {
+    const read = pending<unknown[]>();
+    chromaApi.collections.mockReturnValueOnce(read.promise);
+    const { wrapper } = await mountView("admin");
+    expect(wrapper.find("#vector-page-title").exists()).toBe(true);
+    expect(wrapper.find(".accessible-empty-state").exists()).toBe(false);
+    read.resolve([]);
+    await flushPromises();
+    expect(wrapper.find(".accessible-empty-state").exists()).toBe(true);
+    wrapper.unmount();
+  });
+  it.each(["health", "providers"])("shows collections while %s is pending", async (region) => {
+    const read = pending<unknown>();
+    if (region === "health") chromaApi.health.mockReturnValueOnce(read.promise);
+    else systemApi.researcherProviders.mockReturnValueOnce(read.promise);
+    const { wrapper } = await mountView("admin");
+    expect(wrapper.find(".vector-collection-list").exists()).toBe(true);
+    expect(wrapper.text()).toContain("collection-a");
+    read.resolve(region === "health" ? readyHealth : { profiles: [] });
+    await flushPromises();
+    wrapper.unmount();
+  });
+  it("reports provider failure without clearing collections", async () => {
+    systemApi.researcherProviders.mockRejectedValue(new Error("provider discovery offline"));
+    const { wrapper } = await mountView("admin");
+    expect(wrapper.text()).toContain("provider discovery offline");
+    expect(wrapper.find(".vector-collection-list").exists()).toBe(true);
+    wrapper.unmount();
+  });
+  it("retains collection DOM and filter on a failed refresh", async () => {
+    const { wrapper } = await mountView("admin");
+    const rail = wrapper.get(".vector-collection-list").element;
+    await wrapper.get("#vector-collection-filter").setValue("collection");
+    chromaApi.collections.mockRejectedValueOnce(new Error("collections offline"));
+    await queryClient.invalidateQueries({ queryKey: ["data", "vector_collections"] });
+    await flushPromises();
+    expect(wrapper.get(".vector-collection-list").element).toBe(rail);
+    expect(wrapper.get<HTMLInputElement>("#vector-collection-filter").element.value).toBe(
+      "collection",
+    );
+    expect(wrapper.text()).toContain("collections offline");
+    wrapper.unmount();
+  });
+  it("clears a refresh error when identical cached collections are successfully revalidated", async () => {
+    const { wrapper } = await mountView("admin");
+    chromaApi.collections.mockRejectedValueOnce(new Error("temporary offline"));
+    await queryClient.invalidateQueries({ queryKey: ["data", "vector_collections"] });
+    await flushPromises();
+    expect(wrapper.text()).toContain("temporary offline");
+    await queryClient.invalidateQueries({ queryKey: ["data", "vector_collections"] });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("temporary offline");
+    expect(wrapper.find(".vector-collection-list").exists()).toBe(true);
+    wrapper.unmount();
+  });
+  it("hydrates a warm revisit and reuses each region's fresh cached read", async () => {
+    const first = await mountView("admin");
+    first.wrapper.unmount();
+    const second = await mountView("admin");
+    expect(second.wrapper.find(".vector-collection-list").exists()).toBe(true);
+    expect(chromaApi.collections).toHaveBeenCalledTimes(1);
+    expect(chromaApi.health).toHaveBeenCalledTimes(1);
+    expect(systemApi.researcherProviders).toHaveBeenCalledTimes(1);
+    second.wrapper.unmount();
+  });
+  it("clears retained collections when refresh loses authorization", async () => {
+    const { wrapper } = await mountView("admin");
+    chromaApi.collections.mockRejectedValueOnce(
+      Object.assign(new Error("Forbidden"), { status: 403 }),
+    );
+    await queryClient.invalidateQueries({ queryKey: ["data", "vector_collections"] });
+    await flushPromises();
+    expect(wrapper.find(".vector-collection-list").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Forbidden");
+    wrapper.unmount();
+  });
+  it("keeps an unsaved provider/model draft during collection invalidation", async () => {
+    const collection = {
+      name: "collection-a",
+      count: 0,
+      embedding_provider: "profile:p",
+      embedding_model: "original",
+      status: "empty",
+    };
+    chromaApi.collections.mockResolvedValue([collection]);
+    systemApi.researcherProviders.mockResolvedValue({ profiles: [{ id: "p", name: "Provider" }] });
+    const { wrapper } = await mountView("admin");
+    await wrapper.get("#vector-section-tab-settings").trigger("click");
+    const model = wrapper.get<HTMLInputElement>('input[placeholder="bge-m3:latest"]');
+    await model.setValue("unsaved-model");
+    chromaApi.collections.mockResolvedValue([{ ...collection, description: "updated" }]);
+    await queryClient.invalidateQueries({ queryKey: ["data", "vector_collections"] });
+    await flushPromises();
+    expect(model.element.value).toBe("unsaved-model");
     wrapper.unmount();
   });
 });

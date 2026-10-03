@@ -45,6 +45,8 @@ Works shows its title while the workspace loads. Once local records are hydrated
 
 Record detail keeps the reading pane and open edit draft mounted during a same-record refresh. Traceability loads independently of the record text. A failed refresh shows an error and Retry alongside the previously loaded record; a different selection clears the old record immediately. Search within the current record does not reload the workspace.
 
+Vector Stores loads collections, storage health, and provider choices independently. A slow or unavailable provider service does not block collection browsing. Provider-dependent creation and embedding controls wait for successful discovery, with a local Retry action on failure. Failed collection refreshes retain the current list and filter with an out-of-date notice; a successful retry clears it. Unsaved provider/model settings remain intact during same-collection updates.
+
 ## Dashboard
 
 Dashboard shows:
