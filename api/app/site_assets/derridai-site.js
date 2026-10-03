@@ -1341,9 +1341,7 @@
       "div",
       { class: "results-heading", hidden: true },
       node("h2", { text: t("site.runtime.search_results") }),
-      node("span", { class: "meta" }),
     );
-    const resultCount = resultsHeading.querySelector(".meta");
     const form = node(
       "form",
       {
@@ -1422,9 +1420,6 @@
             })
           : t("site.runtime.results_count", { count: response.results.length });
         resultsHeading.hidden = false;
-        resultCount.textContent = t("site.runtime.results_count", {
-          count: response.results.length,
-        });
         if (!response.results.length) {
           results.append(node("div", { class: "empty", text: t("site.runtime.no_results") }));
         } else {
