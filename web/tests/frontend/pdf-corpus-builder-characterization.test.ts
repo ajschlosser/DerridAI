@@ -90,6 +90,7 @@ const runtime = vi.hoisted(() => ({
 
 vi.mock("../../src/domain/sharedProviderProfiles", () => ({
   getProviderProfilesForUi: runtime.getProviderProfilesForUi,
+  getProviderRequestConfigForUi: runtime.getProviderRequestConfigForUi,
   getDefaultProviderProfileId: runtime.getDefaultProviderProfileId,
 }));
 
