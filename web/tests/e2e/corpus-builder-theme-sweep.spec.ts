@@ -1,13 +1,23 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-// Every Corpus Builder story, in light and dark, against WCAG 2.0 through 2.2 A/AA.
-// The inventory is split into stable batches so CI can scan it concurrently and retry/fail
-// a small slice rather than serializing the entire Storybook catalogue behind one test.
+// Full scans remain the merge-to-master/release gate. Ordinary PRs use a deterministic,
+// breadth-preserving sample because the composed workflow suite already scans interactive states.
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
-const BATCHES = 4;
+const SCOPE = process.env.DERRIDAI_A11Y_SCOPE === "representative" ? "representative" : "full";
+const BATCHES = SCOPE === "full" ? 4 : 2;
+const REPRESENTATIVE_STORIES = 16;
 const isCorpusStory = (id: string) =>
   id.startsWith("corpus") || id.startsWith("metadata-enrichment");
+
+function evenlySample(ids: string[], target: number): string[] {
+  if (ids.length <= target) return ids;
+  const chosen = new Set<number>();
+  for (let index = 0; index < target; index += 1) {
+    chosen.add(Math.round((index * (ids.length - 1)) / (target - 1)));
+  }
+  return [...chosen].sort((a, b) => a - b).map((index) => ids[index]);
+}
 
 async function scan(page: Page) {
   // Local Storybook development still runs the a11y addon automatically. Static CI builds
@@ -24,7 +34,7 @@ async function scan(page: Page) {
 
 for (const scheme of ["light", "dark"] as const) {
   for (let batch = 0; batch < BATCHES; batch += 1) {
-    test(`Corpus Builder stories batch ${batch + 1}/${BATCHES} is WCAG 2.2 AA clean in ${scheme} mode`, async ({
+    test(`Corpus Builder stories batch ${batch + 1}/${BATCHES} is WCAG 2.2 AA clean in ${scheme} mode (${SCOPE})`, async ({
       browser,
       baseURL,
     }) => {
@@ -36,7 +46,14 @@ for (const scheme of ["light", "dark"] as const) {
         .sort();
       expect(allIds.length, "the sweep found too few Corpus Builder stories").toBeGreaterThan(100);
 
-      const ids = allIds.filter((_, storyIndex) => storyIndex % BATCHES === batch);
+      let ownedIds = allIds;
+      if (SCOPE === "representative") {
+        ownedIds = evenlySample(allIds, REPRESENTATIVE_STORIES);
+        // Structural accessibility is theme-independent. Dark mode keeps a second contrast-focused
+        // sample while avoiding a complete duplicate Axe traversal of the same DOM structures.
+        if (scheme === "dark") ownedIds = ownedIds.filter((_, index) => index % 2 === 0);
+      }
+      const ids = ownedIds.filter((_, storyIndex) => storyIndex % BATCHES === batch);
       expect(ids.length, `batch ${batch + 1} has no stories`).toBeGreaterThan(0);
 
       const context = await browser.newContext({ colorScheme: scheme, reducedMotion: "reduce" });
