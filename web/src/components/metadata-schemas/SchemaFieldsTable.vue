@@ -159,8 +159,8 @@ function isEdge(field: SchemaField, by: -1 | 1) {
         />
       </label>
       <p class="panel-count" role="status">
+        {{ t("col_fields", "Fields") }}:
         {{ needle ? `${totalShown} / ${draft.fields.length}` : draft.fields.length }}
-        {{ t("fields", "Fields").toLowerCase() }}
       </p>
       <p class="locked-core" role="note">
         <AppIcon name="lock" aria-hidden="true" />
@@ -221,8 +221,10 @@ function isEdge(field: SchemaField, by: -1 | 1) {
                   <code v-if="field.name">{{ field.name }}</code>
                 </span>
                 <span class="field-meta">
-                  <span class="chip">{{ field.type }}</span>
-                  <span v-if="field.role && field.role !== 'scholarly'" class="chip">{{ field.role }}</span>
+                  <span class="chip">{{ t(`type_${field.type}`, field.type) }}</span>
+                  <span v-if="field.role && field.role !== 'scholarly'" class="chip">
+                    {{ t(`role_${field.role}`, field.role) }}
+                  </span>
                   <span v-for="label in policy(field)" :key="label" class="chip is-policy">{{ label }}</span>
                 </span>
               </button>
