@@ -227,7 +227,11 @@ Task branch for Step 1: `task/router-single-source-of-truth`
 - [ ] Step 4 state slices and deletion (branch `task/state-slice-preferences`, worktree `../DerridAI-state-slices`, based on master)
   - Pattern: a shallow-reactive group in `state/workspaceState.ts`, bound onto the runtime `state` with `bindSharedState` (so the runtime and the persistence keys are unchanged) and exposed to Vue through a store in `stores/workspace.ts`. Vector, compare, search, works and corpus slices were already moved this way.
   - [x] shell layout preferences (`layoutState` / `useLayoutStore`: `sidebarCollapsed`, `collectionsCollapsed`, `operationToastsMinimized`, `operationStackPosition`, `collapsedPanels`). `App.vue` reads the sidebar flag from the store, so `sidebarCollapsed` left the shell snapshot. Persisted prefs keys are unchanged
-  - [ ] remaining slices still plain fields on `createRuntimeState` (selection/list paging, annotations, PDF, FAQ, rag/app/llm config), then replace `urlFromState`/`applyUrlState`, then delete the runtime
+  - [x] annotations (`annotationsState` / `useAnnotationsStore`) and FAQ (`faqState` / `useFaqStore`) slices; persistence keys unchanged
+  - [x] table lists (`listState` / `useListsStore`: `selected`, `searches`, `listFilters`, `pages`, `pageSize`, `sorts`, `tableColumns`)
+  - [x] configuration (`configState` / `useConfigStore`: `ragConfig`, `appConfig`, `llmConfig`), PDF Explorer (`pdfState` / `usePdfStore`) and review selection (`reviewState` / `useReviewStore`: `reviewSelection`, `selectedEvidence`)
+  - [x] URL contract pinned by `tests/frontend/url-state-contract.test.ts` (path/`?view=`, file/record, store params, raw/compressed `ts=`, round trip, router-owned sub-paths). Finding: a known path wins over `?view=`, which only applies on a path with no view of its own
+  - [ ] remaining plain fields on `createRuntimeState` are small (`view`, `userContext`, health/provider status, upsert and operation progress, translations); then replace `urlFromState`/`applyUrlState`, then delete the runtime
 
 Notes for the next session:
 

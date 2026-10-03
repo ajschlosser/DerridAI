@@ -32,7 +32,11 @@ import {
 import {
   useCompareStore,
   useCorpusStore,
+  useAnnotationsStore,
+  useFaqStore,
+  useConfigStore,
   useLayoutStore,
+  useListsStore,
   useSearchStore,
   useVectorStore,
   useWorksStore,
@@ -206,5 +210,77 @@ describe("shell layout state", () => {
     panels.notes = true;
     expect(layout.collapsedPanels).toBe(panels);
     layoutState.sidebarCollapsed = false;
+  });
+});
+
+describe("annotations and FAQ state", () => {
+  it("keeps the runtime's defaults and shares them with their stores", async () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.annotationView).toBe("works");
+    expect(state.serverAnnotations).toEqual([]);
+    expect(state.annotationsFetchedAt).toBe(0);
+    expect(state.faqPage).toBe(1);
+    expect(state.faqExpanded).toEqual({});
+
+    const faq = useFaqStore();
+    const seen: number[] = [];
+    watch(
+      () => faq.faqPage,
+      (value) => seen.push(value),
+    );
+    state.faqPage = 3;
+    await nextTick();
+    expect(seen).toEqual([3]);
+
+    const annotations = useAnnotationsStore();
+    state.serverAnnotations = [{ id: "a" }];
+    expect(annotations.serverAnnotations).toEqual([{ id: "a" }]);
+    state.faqPage = 1;
+    state.serverAnnotations = [];
+  });
+});
+
+describe("table list state", () => {
+  it("keeps the runtime's defaults and shares them with the lists store", async () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.pageSize).toBe(100);
+    expect(state.selected).toEqual({});
+    expect(state.tableColumns).toEqual({});
+
+    const lists = useListsStore();
+    const seen: number[] = [];
+    watch(
+      () => lists.pageSize,
+      (value) => seen.push(value),
+    );
+    state.pageSize = 50;
+    await nextTick();
+    expect(seen).toEqual([50]);
+    const pages = state.pages as Record<string, number>;
+    pages.works = 2;
+    expect(lists.pages).toBe(pages);
+    state.pageSize = 100;
+    state.pages = {};
+  });
+});
+
+describe("configuration, PDF and review state", () => {
+  it("keeps the runtime's defaults and shares them with their stores", () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.ragConfig.k).toBe(64);
+    expect(state.appConfig.chat_provider).toBe("ollama");
+    expect(state.llmConfig.num_ctx).toBe(16384);
+    expect(state.pdf.page).toBe(1);
+    expect(state.reviewSelection.size).toBe(0);
+    expect(state.selectedEvidence).toEqual({});
+
+    const config = useConfigStore();
+    expect(config.ragConfig).toBe(state.ragConfig);
+    state.ragConfig = { ...state.ragConfig, k: 8 };
+    expect(config.ragConfig.k).toBe(8);
+    config.ragConfig = { ...config.ragConfig, k: 64 };
   });
 });

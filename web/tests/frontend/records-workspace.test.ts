@@ -20,10 +20,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRecordsWorkspace } from "../../src/domain/recordsWorkspace";
 import { TABLE_DEFAULTS } from "../../src/domain/runtimeConstants";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createListState, listState } from "../../src/state/workspaceState";
 
 // The Records workspace commands set per-file fields on the runtime state, save preferences and sync the URL. The
 // modern Records Playwright workflow covers rendered interactions; these tests pin the commands themselves.
 function setup(activeFile: unknown = { id: "f1", name: "a.jsonl", records: [] }) {
+  // The list fields are shared module state, so start each test from the defaults.
+  Object.assign(listState, createListState());
   const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
   const overrides: Record<string, unknown> = {

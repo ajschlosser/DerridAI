@@ -19,9 +19,15 @@
 import { toRefs } from "vue";
 import { defineStore } from "pinia";
 import {
+  annotationsState,
   compareState,
+  configState,
   corpusState,
+  faqState,
   layoutState,
+  listState,
+  pdfState,
+  reviewState,
   searchState,
   vectorState,
   worksState,
@@ -48,3 +54,23 @@ export const useCorpusStore = defineStore("corpus", () => ({ ...toRefs(corpusSta
 
 /** Shell layout preferences (collapsed sidebar, operation dock position, collapsed panels); persisted by the runtime. */
 export const useLayoutStore = defineStore("layout", () => ({ ...toRefs(layoutState) }));
+
+/** Annotations workspace: view, filter and the annotations fetched from the server. */
+export const useAnnotationsStore = defineStore("annotations", () => ({
+  ...toRefs(annotationsState),
+}));
+
+/** FAQ view: search text, page and expanded entries; persisted by the runtime. */
+export const useFaqStore = defineStore("faq", () => ({ ...toRefs(faqState) }));
+
+/** Table lists: selection, search, filters, paging, sort and columns per list; persisted by the runtime. */
+export const useListsStore = defineStore("lists", () => ({ ...toRefs(listState) }));
+
+/** Research, application and LLM configuration as loaded from the server. */
+export const useConfigStore = defineStore("config", () => ({ ...toRefs(configState) }));
+
+/** PDF Explorer document and viewing state. */
+export const usePdfStore = defineStore("pdf", () => ({ ...toRefs(pdfState) }));
+
+/** Review selection and chosen evidence. */
+export const useReviewStore = defineStore("review", () => ({ ...toRefs(reviewState) }));
