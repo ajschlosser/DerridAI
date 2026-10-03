@@ -10442,7 +10442,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'site.create_languages': 'Langues du site',
  'site.create_languages_help': 'Choisissez toutes les langues installées dans DerridAI ou seulement certaines pour le site exporté. Les chaînes manquantes utilisent l\'anglais canonique comme solution de repli.',
  'site.create_languages_selected': '{count} langues sélectionnées',
- 'site.runtime.loading_site': 'Chargement du site de recherche DerridAI…'
+ 'site.runtime.loading_site': 'Chargement du site de recherche DerridAI…',
  "schemas.copy_name": "{name} (copie)",
  "schemas.editing_schema": "Schéma en cours de modification",
  "schemas.field_configuration": "Configuration du champ",
