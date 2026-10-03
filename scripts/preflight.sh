@@ -138,9 +138,9 @@ fi
 # 8. Browser gates are mandatory from the pre-push hook. Set the same variable when
 #    invoking this script manually for a complete merge-readiness run.
 if [ "$FRONTEND" = true ] && [ "${DERRIDAI_PREFLIGHT_BROWSER:-0}" = 1 ]; then
-  web_gate "legacy browser tests" npm run test:e2e:legacy
-  web_gate "composed UI browser tests" npm run test:e2e
-  web_gate "accessibility browser tests" npm run test:e2e:a11y
+  web_gate "legacy browser tests" npm run test:e2e:legacy -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
+  web_gate "composed UI browser tests" npm run test:e2e -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
+  web_gate "accessibility browser tests" npm run test:e2e:a11y -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
 elif [ "$FRONTEND" = true ]; then
   say "browser gates not run; use DERRIDAI_PREFLIGHT_BROWSER=1 for complete readiness"
 fi

@@ -88,6 +88,7 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 - The final browser-enabled pre-push preflight is the remaining PR-readiness gate. It uses CI static Storybook, bounded workers, the workflow's typechecker environment, and a Windows-safe temporary root. No Docker, live-provider, human-review timing, or whole-plan completion claim is made.
 - The full backend rerun passes **1,933 tests**, with **18 optional cases skipped**, when the Windows temporary root is quoted for pytest's argument parser. Full frontend units pass **1,482 tests**. The hook also exposed a relative `GIT_DIR` inherited by frontend build subprocesses; preflight now clears that hook-local addressing after entering the repository so nested Git freshness checks rediscover the correct worktree.
 - Publication acceptance's three browser cases and the packaged nginx Docker build/start/health/redirect/stop checks pass. The Docker check uses session-unique image/container names and cleans them afterward; it is not a full application Docker-build or release-readiness claim.
+- SDK package validation no longer depends on POSIX `/dev/null` redirection; native Windows `build:ci` passes. Preflight browser concurrency defaults to two workers and can be narrowed with `DERRIDAI_PREFLIGHT_BROWSER_WORKERS` on a contended host without skipping cases or relaxing assertions. The affected static Storybook selection passes **89 tests**.
 
 ## Persistence checkpoint (2026-10-02)
 
