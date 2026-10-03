@@ -379,12 +379,16 @@ defineExpose({ select, draft });
           :draft="draft"
           :readonly="readonly"
         />
-        <fieldset v-else-if="tab === 'document'" :disabled="readonly" class="schema-fieldset">
-          <SchemaDocumentFieldsPanel :draft="draft" :readonly="readonly" />
-        </fieldset>
-        <fieldset v-else-if="tab === 'groups'" :disabled="readonly" class="schema-fieldset">
-          <SchemaGroupsPanel :draft="draft" :readonly="readonly" />
-        </fieldset>
+        <SchemaDocumentFieldsPanel
+          v-else-if="tab === 'document'"
+          :draft="draft"
+          :readonly="readonly"
+        />
+        <SchemaGroupsPanel
+          v-else-if="tab === 'groups'"
+          :draft="draft"
+          :readonly="readonly"
+        />
         <SchemaPreviewPanel
           v-else
           :draft="draft"
@@ -479,8 +483,7 @@ defineExpose({ select, draft });
   flex-wrap: wrap;
   gap: 8px;
 }
-.schema-identity,
-.schema-fieldset {
+.schema-identity {
   margin: 0;
   padding: 0;
   border: 0;
