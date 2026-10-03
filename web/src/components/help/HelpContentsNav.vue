@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 
-export interface HelpContentsLink {
+interface HelpContentsLink {
   id: string;
   icon: string;
   label: string;
