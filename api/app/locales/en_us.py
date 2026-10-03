@@ -6468,6 +6468,7 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
  'pdf_corpus.text_save_hint': 'Saving confirms that you reviewed this record text.',
  'pdf_corpus.save_and_mark_reviewed': 'Save & mark reviewed',
  'pdf_corpus.metadata_enrichment_pending': 'LLM enrichment pending',
+ 'pdf_corpus.text_review_available_preparation': 'Text review is available. Metadata decisions and structural changes remain locked while preparation finishes.',
  'pdf_corpus.metadata_enrichment_pending_help': 'This record is editable now, but its background LLM metadata has not settled yet. Confidence and suggestions will appear as each metadata family completes.',
  'pdf_corpus.metadata_pipeline_trace_title': 'How metadata precedents were retrieved',
  'pdf_corpus.metadata_pipeline_trace_help': ('This audit trace shows the exact saved retrieval pipeline used for this record, including semantic search, reranking, '

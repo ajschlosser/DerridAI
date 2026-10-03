@@ -552,7 +552,7 @@ function calibrated(field: string) {
     ? { reviewed: Number(row.reviewed || 0), acceptanceRate: Number(row.acceptance_rate || 0) }
     : null;
 }
-// After a decision, focus moves to the next field still to decide (its Confirm button, so Enter confirms it).
+// Focus the next field's decision: Confirm for a value, No value for an empty proposal.
 // Record Review applies decision state optimistically, so the last decision can report completion immediately;
 // an explicit blocking caller can still hold `savingField` / `batchSaving` until it is ready to advance.
 const root = ref<HTMLElement | null>(null);

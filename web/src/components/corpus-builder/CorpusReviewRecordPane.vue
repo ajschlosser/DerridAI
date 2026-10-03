@@ -28,19 +28,24 @@ import MovableRecordModal from "./MovableRecordModal.vue";
 import RecordContextReader from "./RecordContextReader.vue";
 
 /** The central Record reader for Review: Record text, text editing and the per-Record notices. */
-const props = defineProps<{
-  record: CorpusRecord | null;
-  loading?: boolean;
-  loadError?: string;
-  buildId: string;
-  visible: boolean;
-  queueCollapsed: boolean;
-  editing: boolean;
-  busy: boolean;
-  locked: boolean;
-  activitySummary: string;
-  popout: { recordId: string; text: string } | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    record: CorpusRecord | null;
+    loading?: boolean;
+    loadError?: string;
+    buildId: string;
+    visible: boolean;
+    queueCollapsed: boolean;
+    editing: boolean;
+    busy: boolean;
+    locked: boolean;
+    assistanceLocked?: boolean;
+    textPreparationReady?: boolean;
+    activitySummary: string;
+    popout: { recordId: string; text: string } | null;
+  }>(),
+  { assistanceLocked: undefined },
+);
 const emit = defineEmits<{
   showQueue: [];
   beginEdit: [touchup: boolean];
@@ -100,6 +105,9 @@ onBeforeUnmount(() => emit("rootChange", null));
     :aria-labelledby="record ? 'review-record-title' : undefined"
   >
     <template v-if="record">
+      <p v-if="textPreparationReady" class="help" role="status">
+        {{ i18n.t("pdf_corpus.text_review_available_preparation") }}
+      </p>
       <header class="record-review-head">
         <div>
           <button
@@ -136,7 +144,12 @@ onBeforeUnmount(() => emit("rootChange", null));
           <UiButton size="small" v-if="!editing" @click="emit('openPopout')">
             {{ i18n.t("pdf_corpus.popout_record") }}
           </UiButton>
-          <UiButton size="small" v-if="editing" @click="emit('cleanup')" :disabled="busy || locked">
+          <UiButton
+            size="small"
+            v-if="editing"
+            @click="emit('cleanup')"
+            :disabled="busy || (assistanceLocked ?? locked)"
+          >
             {{ i18n.t("pdf_corpus.clean_text") }}</UiButton
           ><UiTooltip
             v-if="editing"
@@ -158,7 +171,7 @@ onBeforeUnmount(() => emit("rootChange", null));
             size="small"
             v-if="editing"
             @click="emit('llmTouchup')"
-            :disabled="busy || locked"
+            :disabled="busy || (assistanceLocked ?? locked)"
           >
             {{ i18n.t("pdf_corpus.llm_touchup") }}</UiButton
           ><UiButton

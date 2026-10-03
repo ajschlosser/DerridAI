@@ -125,11 +125,31 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   let selectionVersion = 0;
   const recordGenerations = new Map<string, number>();
   const cachedStateVersions = new Map<string, number | null>();
+  const pendingPrefetches = new Map<string, Promise<CorpusRecord | undefined>>();
+  let foregroundRead:
+    | { key: string; controller: AbortController; promise: Promise<CorpusRecord | undefined> }
+    | undefined;
+  function prefetchKey(id: string, revision: number | null, state: number | null) {
+    return JSON.stringify([
+      generation,
+      options.selectedBuildId.value,
+      options.reviewerKey?.value,
+      id,
+      recordGenerations.get(id),
+      revision,
+      state,
+    ]);
+  }
   let facetsLoadedForBuild = false;
   let facetsLoadingForBuild = false;
   let context = "";
   let reconcilePending = false;
   let reconcilePromise: Promise<void> | undefined;
+
+  function cancelForegroundRead() {
+    foregroundRead?.controller.abort();
+    foregroundRead = undefined;
+  }
 
   function invalidateBuild(buildId = options.selectedBuildId.value) {
     if (buildId) invalidateGraphQLReads({ buildId });
@@ -196,6 +216,12 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     const neighbours = [queueRows.value[index - 1], queueRows.value[index + 1]].filter(
       (row): row is CorpusQueueRow => {
         if (!row) return false;
+        if (
+          pendingPrefetches.has(
+            prefetchKey(row.record_id, row.record_revision ?? null, row.state_version ?? null),
+          )
+        )
+          return false;
         const cached = cache.get(row.record_id);
         return (
           !cached ||
@@ -205,7 +231,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
         );
       },
     );
-    if (!neighbours.length) return;
+    if (!neighbours.length || pendingPrefetches.size + neighbours.length > CACHE_CAPACITY) return;
     const buildId = options.selectedBuildId.value;
     invalidateGraphQLReads({
       buildId,
@@ -215,15 +241,35 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     const versions = new Map(
       neighbours.map((row) => [row.record_id, recordGenerations.get(row.record_id)]),
     );
-    void corpusReviewReads
-      .records(
-        buildId,
-        neighbours.map((row) => row.record_id),
-      )
+    const cachedAtStart = new Map(
+      neighbours.map((row) => [row.record_id, cache.get(row.record_id)]),
+    );
+    const request = corpusReviewReads.records(
+      buildId,
+      neighbours.map((row) => row.record_id),
+    );
+    for (const row of neighbours) {
+      const key = prefetchKey(
+        row.record_id,
+        row.record_revision ?? null,
+        row.state_version ?? null,
+      );
+      const pending = request.then((records) =>
+        records.find((record) => record.record_id === row.record_id),
+      );
+      pendingPrefetches.set(key, pending);
+      void pending
+        .finally(() => {
+          if (pendingPrefetches.get(key) === pending) pendingPrefetches.delete(key);
+        })
+        .catch(() => undefined);
+    }
+    void request
       .then((records) => {
         if (epoch !== generation || buildId !== options.selectedBuildId.value) return;
         for (const record of records) {
           if (versions.get(record.record_id) !== recordGenerations.get(record.record_id)) continue;
+          if (cache.get(record.record_id) !== cachedAtStart.get(record.record_id)) continue;
           cache.set(record.record_id, record);
           cachedStateVersions.set(
             record.record_id,
@@ -241,6 +287,8 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     stateHint: number | null = null,
   ): Promise<void> {
     if (!options.selectedBuildId.value || !id) return;
+    const key = prefetchKey(id, revisionHint, stateHint);
+    if (foregroundRead?.key !== key) cancelForegroundRead();
     const ticket = latestSelection.start();
     selectionVersion += 1;
     const buildId = options.selectedBuildId.value;
@@ -258,6 +306,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       (revisionHint == null || cached.record_revision === revisionHint) &&
       (stateHint == null || cachedStateVersions.get(id) === stateHint)
     ) {
+      cancelForegroundRead();
       if (toRaw(options.selectedRecord.value) !== toRaw(cached)) options.activateRecord(cached);
       prefetchNeighbours(id);
       return;
@@ -269,9 +318,25 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     if (!refreshingSelection) options.selectedRecord.value = null;
     loadingRecordId.value = id;
     try {
-      const [record] = await corpusReviewReads.records(buildId, [id], {
-        signal: ticket.signal,
-      });
+      let pending = pendingPrefetches.get(key) ?? foregroundRead?.promise;
+      if (!pending) {
+        const controller = new AbortController();
+        const read = {
+          key,
+          controller,
+          promise: corpusReviewReads
+            .records(buildId, [id], { signal: controller.signal })
+            .then((records) => records[0]),
+        };
+        foregroundRead = read;
+        pending = read.promise;
+        void read.promise
+          .finally(() => {
+            if (foregroundRead === read) foregroundRead = undefined;
+          })
+          .catch(() => undefined);
+      }
+      const record = await pending;
       if (!ticket.current() || epoch !== generation || buildId !== options.selectedBuildId.value)
         return;
       if (recordVersion !== recordGenerations.get(id)) {
@@ -302,6 +367,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     if (isFullRecord(target)) {
       // The caller already has the full Record (for example a review decision's `next_record`):
       // open it without another read, but still supersede any selection already in flight.
+      cancelForegroundRead();
       const ticket = latestSelection.start();
       selectionVersion += 1;
       loadingRecordId.value = "";
@@ -376,6 +442,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       // including enrichment proposals that may change without advancing RecordRevision.
       // A reset is therefore an explicit invalidation boundary for both cache layers.
       invalidateBuild();
+      cancelForegroundRead();
       generation += 1;
       cache.clear();
       cachedStateVersions.clear();
@@ -414,6 +481,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
         topologyGeneration.value !== page.topologyGeneration
       ) {
         generation += 1;
+        cancelForegroundRead();
         cache.clear();
         cachedStateVersions.clear();
         invalidateBuild();
@@ -470,6 +538,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
         page.rows[0]?.record_id ||
         "";
       if (!targetId) {
+        cancelForegroundRead();
         latestSelection.cancel();
         loadingRecordId.value = "";
         requestedRecordId.value = "";
@@ -499,6 +568,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
         exc.hasCode("STALE_QUEUE_CURSOR")
       ) {
         resetCursor();
+        cancelForegroundRead();
         generation += 1;
         cache.clear();
         cachedStateVersions.clear();
@@ -564,6 +634,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   }
 
   function clear(buildId = options.selectedBuildId.value) {
+    cancelForegroundRead();
     generation += 1;
     latestPage.cancel();
     latestSelection.cancel();

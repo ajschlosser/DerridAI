@@ -60,6 +60,17 @@ export function useCorpusBuildLifecycle(
       buildRunning.value && !reviewCompatibleStages.has(String(currentBuild.value?.stage || "")),
     ),
   );
+  const textReviewLocked = computed(
+    () =>
+      reviewLocked.value &&
+      !(
+        currentBuild.value?.text_review_available_at &&
+        currentBuild.value.topology_validation?.valid === true &&
+        ["constructing_records", "document_intelligence"].includes(
+          String(currentBuild.value.stage || ""),
+        )
+      ),
+  );
   const structuralReviewLocked = computed(
     () =>
       buildRunning.value &&
@@ -147,6 +158,7 @@ export function useCorpusBuildLifecycle(
     topologyIssueCount,
     buildRunning,
     reviewLocked,
+    textReviewLocked,
     structuralReviewLocked,
     canResume,
     segmentationNeedsReview,

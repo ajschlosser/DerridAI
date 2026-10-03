@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 // Copyright 2026 Aaron John Schlosser, PhD.
 import type { ProviderProfile } from "../../api/system";
+import { onBeforeUnmount } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import LlmExecutionControl from "../LlmExecutionControl.vue";
 import UiButton from "../ui/UiButton.vue";
@@ -43,14 +44,19 @@ const emit = defineEmits<{
   rerun: [];
   requeue: [];
   enrichAgain: [];
+  disclosure: [open: boolean];
 }>();
 const draft = defineModel<string>("draft", { required: true });
 const family = defineModel<string>("family", { required: true });
 const i18n = useI18nStore();
+function disclosureChanged(event: Event) {
+  if (event.target instanceof HTMLDetailsElement) emit("disclosure", event.target.open);
+}
+onBeforeUnmount(() => emit("disclosure", false));
 </script>
 
 <template>
-  <details class="record-data">
+  <details class="record-data" @toggle="disclosureChanged">
     <summary>{{ i18n.t("pdf_corpus.advanced_metadata") }}</summary>
     <p class="help">{{ i18n.t("pdf_corpus.metadata_help") }}</p>
     <UiButton

@@ -146,6 +146,175 @@ function setup(overrides: Record<string, unknown> = {}) {
 }
 
 describe("useCorpusReviewRecords", () => {
+  it("shares repeated foreground opens without aborting their current transport", async () => {
+    const state = setup();
+    let finish!: (records: unknown[]) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    const first = state.reviewRecords.selectRecord(row("r1", 1, { state_version: 4 }));
+    const signal = corpusReviewReads.records.mock.calls[0][2].signal as AbortSignal;
+    const second = state.reviewRecords.selectRecord(row("r1", 1, { state_version: 4 }));
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(1);
+    expect(signal.aborted).toBe(false);
+    finish([record("r1")]);
+    await Promise.all([first, second]);
+    expect(state.activateRecord).toHaveBeenCalledTimes(1);
+    expect(state.selectedRecord.value.record_id).toBe("r1");
+    expect(state.reviewRecords.loadingRecordId.value).toBe("");
+  });
+
+  it("cancels a foreground read when its operational version changes", async () => {
+    const state = setup();
+    let finish!: (records: unknown[]) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    const first = state.reviewRecords.selectRecord(row("r1", 1, { state_version: 4 }));
+    const signal = corpusReviewReads.records.mock.calls[0][2].signal as AbortSignal;
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1", 1, { text: "Current" })]);
+    await state.reviewRecords.selectRecord(row("r1", 1, { state_version: 5 }));
+    expect(signal.aborted).toBe(true);
+    finish([record("r1", 1, { text: "Obsolete" })]);
+    await first;
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+    expect(state.selectedRecord.value.text).toBe("Current");
+    expect(state.activateRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a shared foreground failure once and retries with a fresh read", async () => {
+    const state = setup();
+    let fail!: (error: Error) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (fail = reject)),
+    );
+    const first = state.reviewRecords.selectRecord(row("r1"));
+    const second = state.reviewRecords.selectRecord(row("r1"));
+    fail(new Error("Foreground offline"));
+    await Promise.all([first, second]);
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(1);
+    expect(state.onError).toHaveBeenCalledExactlyOnceWith("Foreground offline");
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    await state.reviewRecords.retryRecord();
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+    expect(state.selectedRecord.value.record_id).toBe("r1");
+    expect(state.reviewRecords.recordError.value).toBe("");
+  });
+
+  it("aborts a shared foreground transport on clear and ignores an uncancellable response", async () => {
+    const state = setup();
+    let finish!: (records: unknown[]) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    const first = state.reviewRecords.selectRecord(row("r1"));
+    const second = state.reviewRecords.selectRecord(row("r1"));
+    const signal = corpusReviewReads.records.mock.calls[0][2].signal as AbortSignal;
+    state.reviewRecords.clear();
+    expect(signal.aborted).toBe(true);
+    finish([record("r1")]);
+    await Promise.all([first, second]);
+    expect(state.activateRecord).not.toHaveBeenCalled();
+    expect(state.selectedRecord.value).toBeNull();
+  });
+
+  it("cancels a foreground transport when a complete authoritative Record is selected", async () => {
+    const state = setup();
+    let finish!: (records: unknown[]) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    const pending = state.reviewRecords.selectRecord(row("r1"));
+    const signal = corpusReviewReads.records.mock.calls[0][2].signal as AbortSignal;
+    await state.reviewRecords.selectRecord(record("r2"));
+    expect(signal.aborted).toBe(true);
+    finish([record("r1")]);
+    await pending;
+    expect(state.selectedRecord.value.record_id).toBe("r2");
+    expect(state.activateRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it("joins an exact in-flight neighbour prefetch when that Record is opened", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1"), row("r2"), row("r3")]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    let finish!: (records: unknown[]) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    await state.reviewRecords.refreshRecords();
+    const selection = state.reviewRecords.selectRecord(row("r2"));
+    await flushPromises();
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+    expect(state.reviewRecords.loadingRecordId.value).toBe("r2");
+    // The prefetch for r3 after activation is separate from the shared r2 read.
+    corpusReviewReads.records.mockResolvedValueOnce([record("r3")]);
+    finish([record("r2")]);
+    await selection;
+    expect(state.selectedRecord.value.record_id).toBe("r2");
+    expect(
+      corpusReviewReads.records.mock.calls.filter(([, ids]) => ids.includes("r2")),
+    ).toHaveLength(1);
+  });
+
+  it("does not share a prefetch across different operational state versions", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(
+      page([row("r1"), row("r2", 1, { state_version: 4 })]),
+    );
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    let finish!: (records: unknown[]) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    await state.reviewRecords.refreshRecords();
+    corpusReviewReads.records.mockResolvedValueOnce([record("r2", 1, { text: "Current" })]);
+    await state.reviewRecords.selectRecord(row("r2", 1, { state_version: 5 }));
+    expect(state.selectedRecord.value.text).toBe("Current");
+    finish([record("r2", 1, { text: "Old prefetch" })]);
+    await flushPromises();
+    expect(state.selectedRecord.value.text).toBe("Current");
+    const reads = corpusReviewReads.records.mock.calls.length;
+    await state.reviewRecords.selectRecord(row("r2", 1, { state_version: 5 }));
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(reads);
+    expect(state.selectedRecord.value.text).toBe("Current");
+  });
+
+  it("does not activate a shared prefetch after foreground selection changes", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1"), row("r2")]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    let finish!: (records: unknown[]) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    await state.reviewRecords.refreshRecords();
+    const selection = state.reviewRecords.selectRecord(row("r2"));
+    await state.reviewRecords.selectRecord(row("r1"));
+    finish([record("r2")]);
+    await selection;
+    expect(state.selectedRecord.value.record_id).toBe("r1");
+    expect(state.reviewRecords.loadingRecordId.value).toBe("");
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+  });
+
+  it("surfaces a shared prefetch failure to its foreground consumer", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1"), row("r2")]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    let fail!: (error: Error) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (fail = reject)),
+    );
+    await state.reviewRecords.refreshRecords();
+    const selection = state.reviewRecords.selectRecord(row("r2"));
+    fail(new Error("Prefetch offline"));
+    await selection;
+    expect(state.reviewRecords.recordError.value).toBe("Prefetch offline");
+    expect(state.onError).toHaveBeenCalledWith("Prefetch offline");
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps the open Record mounted throughout a background refresh", async () => {
     const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));
