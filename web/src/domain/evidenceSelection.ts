@@ -18,6 +18,10 @@
 
 import { assertionSummaries, assertionValues } from "./fieldAssertions";
 import { toast } from "../composables/notifications";
+import {
+  reviewItemFromKey as sharedReviewItemFromKey,
+  selectedReviewItems as sharedSelectedReviewItems,
+} from "./reviewItems";
 
 // Evidence and review selection: which workspace/database records are picked as Research evidence or marked for review.
 // Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -60,18 +64,8 @@ export function createEvidenceSelection(deps: Deps) {
     storeReceipt,
     tr,
   } = deps;
-  function reviewItemFromKey(key: Any) {
-    const split = String(key).lastIndexOf("::");
-    if (split < 0) return null;
-    const fileId = key.slice(0, split),
-      index = Number(key.slice(split + 2));
-    const file = state.files.find((f: Any) => f.id === fileId);
-    if (!file || !Number.isInteger(index) || !file.records[index]) return null;
-    return { file, index, record: file.records[index], key };
-  }
-  function selectedReviewItems() {
-    return [...state.reviewSelection].map(reviewItemFromKey).filter(Boolean);
-  }
+  const reviewItemFromKey = (key: Any) => sharedReviewItemFromKey(state, key);
+  const selectedReviewItems = () => sharedSelectedReviewItems(state);
   function workspaceEvidenceKey(file: Any, index: Any) {
     return `workspace:${file.id}:${index}`;
   }
