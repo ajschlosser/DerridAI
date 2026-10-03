@@ -292,8 +292,9 @@
     .record-text{white-space:pre-wrap;font-family:Georgia,serif;font-size:1.04rem;line-height:1.75;border-block:1px solid var(--border);padding:1rem 0}
     .metadata{display:grid;grid-template-columns:minmax(9rem,auto) 1fr;gap:.35rem 1rem;font-size:.9rem}.metadata dt{font-weight:800}.metadata dd{margin:0;overflow-wrap:anywhere}
     textarea{min-height:7rem;resize:vertical}.annotation{border-left:4px solid var(--accent);padding:.8rem 1rem;background:var(--surface)}.annotation blockquote{margin:.35rem 0;font-family:Georgia,serif}
-    .research-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(18rem,24rem);gap:1rem}.answer{white-space:pre-wrap;font-family:Georgia,serif;font-size:1.04rem}
-    .evidence{display:grid;gap:.6rem}.evidence button{text-align:left;height:auto}.work-button{width:100%;text-align:left;height:100%;padding:1rem}.work-title{display:block;font-size:1.1rem;font-weight:800}.count{font-size:1.6rem;font-weight:800}
+    .research-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(18rem,24rem);gap:1rem}.answer{white-space:pre-wrap;font-family:Georgia,serif;font-size:1.04rem}.inline-citation{font-family:inherit}
+    .research-evidence-pane{align-self:start;position:sticky;top:5.5rem;max-height:calc(100vh - 6.5rem);overflow:auto;overscroll-behavior:contain}.research-evidence-panel{align-content:start}
+    .evidence{display:grid;gap:.6rem}.evidence button{text-align:left;height:auto}.evidence-item{scroll-margin-top:6rem}.evidence-item:target{outline:3px solid var(--accent);outline-offset:3px}.work-button{width:100%;text-align:left;height:100%;padding:1rem}.work-title{display:block;font-size:1.1rem;font-weight:800}.count{font-size:1.6rem;font-weight:800}
     .provider-panel{display:grid;gap:.7rem}.provider-form{display:grid;gap:.7rem;padding-top:.8rem;border-top:1px solid var(--border)}.provider-summary{padding:.65rem;border:1px solid var(--border);border-radius:.5rem;background:var(--bg);overflow-wrap:anywhere}
     .provider-command{display:block;margin-top:.5rem;overflow:auto;padding:.5rem;border:1px solid var(--border);border-radius:.4rem;background:var(--raised);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;white-space:pre}
     .tutorial-progress{font-weight:800;color:var(--muted)}.tutorial-copy{font-size:1.02rem;max-width:68ch}.tutorial-copy p{margin:.35rem 0 .9rem}
@@ -315,7 +316,7 @@
     .footer{margin-top:3rem;border-top:1px solid var(--border);padding:1.2rem 0 2.5rem;color:var(--muted);font-size:.875rem}
     [hidden]{display:none!important}progress{width:100%;height:1rem;accent-color:var(--accent)}
     .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
-    @media(max-width:760px){.research-layout{grid-template-columns:1fr}.search-row{grid-template-columns:1fr}.search-toolbar{align-items:flex-start;flex-direction:column}.top{position:static}.top-inner,.main{width:min(100% - 1rem,1080px)}.main{scroll-margin-top:1rem}.header-controls{width:100%}}
+    @media(max-width:760px){.research-layout{grid-template-columns:1fr}.research-evidence-pane{position:static;max-height:none;overflow:visible}.search-row{grid-template-columns:1fr}.search-toolbar{align-items:flex-start;flex-direction:column}.top{position:static}.top-inner,.main{width:min(100% - 1rem,1080px)}.main{scroll-margin-top:1rem}.header-controls{width:100%}}
     @media(forced-colors:active){.tour-spot{outline:4px solid Highlight}mark{background:Mark;color:MarkText;forced-color-adjust:none}button,.control,.panel,.card,.method-badge,.toggle{forced-color-adjust:auto}.method-badge[data-active="true"]{outline:2px solid CanvasText}}
   `;
   document.head.appendChild(style);
@@ -471,6 +472,54 @@
 
   function warningText(warnings) {
     return (warnings || []).map(localizedWarning).filter(Boolean).join(" ");
+  }
+
+  function researchEvidenceTargetId(evidenceId) {
+    return `research-evidence-${String(evidenceId || "").replace(/[^A-Za-z0-9_-]+/g, "-")}`;
+  }
+
+  function researchInlineCitation(item, record) {
+    const inline = String(record?.inline_citation || "").trim();
+    if (inline) {
+      return inline.startsWith("(") && inline.endsWith(")") ? inline : `(${inline})`;
+    }
+    const fallback = String(item?.citation || item?.work || item?.recordId || "").trim();
+    if (!fallback) return `[${item?.evidenceId || ""}]`;
+    return fallback.startsWith("(") && fallback.endsWith(")") ? fallback : `(${fallback})`;
+  }
+
+  function renderBoundResearchAnswer(target, text, evidenceItems, recordsById) {
+    const raw = String(text || "");
+    const evidenceById = new Map(
+      (evidenceItems || []).map((item) => [String(item.evidenceId || "").toUpperCase(), item]),
+    );
+    const marker = /\[(E\d+)\]/gi;
+    let cursor = 0;
+    target.replaceChildren();
+
+    for (let match = marker.exec(raw); match; match = marker.exec(raw)) {
+      if (match.index > cursor) {
+        target.append(document.createTextNode(raw.slice(cursor, match.index)));
+      }
+      const item = evidenceById.get(match[1].toUpperCase());
+      if (!item) {
+        target.append(document.createTextNode(match[0]));
+      } else {
+        target.append(
+          node("a", {
+            class: "inline-citation",
+            href: `#${researchEvidenceTargetId(item.evidenceId)}`,
+            "data-evidence-id": item.evidenceId,
+            text: researchInlineCitation(item, recordsById.get(String(item.recordId))),
+          }),
+        );
+      }
+      cursor = marker.lastIndex;
+    }
+
+    if (cursor < raw.length) {
+      target.append(document.createTextNode(raw.slice(cursor)));
+    }
   }
 
   function providerError(message, code, status = 0) {
@@ -2199,21 +2248,34 @@
             mmrLambda: 0.72,
           },
         });
+        const recordsById = new Map(
+          (response.retrieval.results || []).map((result) => [
+            String(result.record?.record_id || ""),
+            result.record,
+          ]),
+        );
         for (const item of response.evidencePacket.evidence) {
+          const record = recordsById.get(String(item.recordId));
           evidence.append(
             node(
               "button",
               {
+                id: researchEvidenceTargetId(item.evidenceId),
+                class: "evidence-item",
                 type: "button",
+                "data-evidence-id": item.evidenceId,
                 on: {
                   click: async () => {
-                    const record = await client.records.get(item.recordId);
-                    if (record) openRecord(record);
+                    const selectedRecord = record || (await client.records.get(item.recordId));
+                    if (selectedRecord) openRecord(selectedRecord);
                   },
                 },
               },
               node("strong", { text: `[${item.evidenceId}] ${item.work || item.recordId}` }),
-              node("small", { class: "muted", text: item.citation }),
+              node("small", {
+                class: "muted",
+                text: item.citation || record?.full_citation || record?.citation || "",
+              }),
             ),
           );
         }
@@ -2227,7 +2289,12 @@
           (warning) => warning.code === "generation_unavailable",
         );
         if (response.answer) {
-          answer.textContent = response.answer;
+          renderBoundResearchAnswer(
+            answer,
+            response.answer,
+            response.evidencePacket.evidence,
+            recordsById,
+          );
           status.className = retrievalWarning ? "status warning" : "status success";
           status.textContent = retrievalWarning
             ? t("site.runtime.complete_with_warning", { warning: retrievalWarning })
@@ -2270,10 +2337,14 @@
       ),
       node(
         "aside",
-        { class: "stack", "aria-label": t("site.runtime.research_tools") },
+        { class: "stack research-evidence-pane", "aria-label": t("site.runtime.research_tools") },
         node(
           "section",
-          { class: "panel stack", "data-tour": "evidence", "aria-labelledby": "evidence-heading" },
+          {
+            class: "panel stack research-evidence-panel",
+            "data-tour": "evidence",
+            "aria-labelledby": "evidence-heading",
+          },
           node("h3", { id: "evidence-heading", text: t("site.runtime.evidence") }),
           evidence,
         ),
