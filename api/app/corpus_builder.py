@@ -77,6 +77,7 @@ from .corpus_enrichment_helpers import (
 from .corpus_enrichment_helpers import (
     _merge_preparation_snapshot,
     _metadata_family_states,
+    _record_source_matches,
 )
 from .corpus_enrichment_helpers import (
     _semantic_atoms as _semantic_atoms,
@@ -4439,55 +4440,61 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             "queued": "metadata_tasks_queued",
         }
         with self._lock:
-            try:
-                live_record = self.repo.get_record(build_id, record_id)
-            except KeyError:
-                return
-
-            row_status = (
-                live_record.get("metadata_stage_status")
-                if isinstance(live_record.get("metadata_stage_status"), dict)
-                else {}
-            )
-            prior_state = str(
-                row_status.get(task_name)
-                or ("complete" if live_record.get("metadata_complete") else "queued")
-            )
-
+            allowed_fields = self._allowed_fields(build_id)
+            prior_state = ""
+            applied = False
             copy = json.loads(json.dumps(snapshot))
             copy["metadata_enrichment_state"] = (
                 "running"
                 if state == "running"
                 else str(copy.get("metadata_enrichment_state") or "running")
             )
-            # Metadata families may finish concurrently. A worker snapshot began from
-            # the Record state that existed before its sibling family advanced, so
-            # replacing the whole status/ledger maps would regress or erase sibling
-            # checkpoints. Merge only this callback's family entry into the live maps
-            # before applying the ordinary authority-preserving Record merge.
-            for map_key in ("metadata_stage_status", "metadata_execution_ledger"):
-                live_map = (
-                    dict(live_record.get(map_key) or {})
-                    if isinstance(live_record.get(map_key), dict)
+
+            def merge_stage(rows: list[dict[str, Any]]) -> None:
+                nonlocal prior_state, applied
+                if not rows or not _record_source_matches(rows[0], copy):
+                    return
+                live_record = rows[0]
+                row_status = (
+                    live_record.get("metadata_stage_status")
+                    if isinstance(live_record.get("metadata_stage_status"), dict)
                     else {}
                 )
-                worker_map = (
-                    dict(copy.get(map_key) or {})
-                    if isinstance(copy.get(map_key), dict)
-                    else {}
+                prior_state = str(
+                    row_status.get(task_name)
+                    or ("complete" if live_record.get("metadata_complete") else "queued")
                 )
-                if task_name in worker_map:
-                    live_map[task_name] = worker_map[task_name]
-                copy[map_key] = live_map
-            merged = _merge_enrichment_snapshot(
-                live_record, copy, self._allowed_fields(build_id)
-            )
-            self.repo.update_record(build_id, merged)
+                # A sibling may have advanced since this worker's snapshot.
+                # Merge only the callback's own status and ledger entry.
+                for map_key in ("metadata_stage_status", "metadata_execution_ledger"):
+                    live_map = (
+                        dict(live_record.get(map_key) or {})
+                        if isinstance(live_record.get(map_key), dict)
+                        else {}
+                    )
+                    worker_map = (
+                        dict(copy.get(map_key) or {})
+                        if isinstance(copy.get(map_key), dict)
+                        else {}
+                    )
+                    if task_name in worker_map:
+                        live_map[task_name] = worker_map[task_name]
+                    copy[map_key] = live_map
+                rows[0] = _merge_enrichment_snapshot(live_record, copy, allowed_fields)
+                applied = True
+
+            current = self.repo.reconcile_records(build_id, merge_stage, record_ids=[record_id])
+            if not applied:
+                if current:
+                    logger.warning("Discarded stale initial metadata checkpoint for build %s record %s", build_id, record_id)
+                return
+            merged = current[0]
 
             build = self.repo.get_build(build_id)
             updates: dict[str, Any] = {"metadata_tasks_total": metadata_task_total}
             prior_counter = counter_for_state.get(prior_state)
-            next_counter = counter_for_state.get(state)
+            settled_state = str((merged.get("metadata_stage_status") or {}).get(task_name) or state)
+            next_counter = counter_for_state.get(settled_state)
             if prior_counter != next_counter:
                 if prior_counter:
                     updates[prior_counter] = max(0, int(build.get(prior_counter) or 0) - 1)
@@ -4502,7 +4509,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     and str(item.get("task") or "") == task_name
                 )
             ]
-            if state == "running":
+            if settled_state == "running":
                 ledger = (
                     merged.get("metadata_execution_ledger")
                     if isinstance(merged.get("metadata_execution_ledger"), dict)
@@ -4515,64 +4522,77 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     "started_at": entry.get("started_at"),
                 })
             updates["metadata_active_tasks"] = active[:32]
-            if state in {"complete", "failed", "needs_review", "skipped"}:
+            if settled_state in {"complete", "failed", "needs_review", "skipped"}:
                 updates["metadata_last_progress_at"] = iso_now()
             self._update(build_id, **updates)
 
+
+    def _initialize_build_enrichment(
+        self, build_id: str, request: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Reset current operational queue state outside review locks, then commit one batch."""
+        updates: dict[str, Any] = {}
+
+        def check_cancelled() -> bool:
+            if self._cancelled(build_id):
+                raise InterruptedError("Corpus build cancelled")
+            return True
+
+        def initialize_current(rows: list[dict[str, Any]]) -> None:
+            nonlocal updates
+            check_cancelled()
+            for record in rows:
+                if record.get("metadata_complete"):
+                    record["metadata_enrichment_state"] = "complete"
+                else:
+                    # Restarted workers do not survive; their family checkpoints do.
+                    record["metadata_enrichment_state"] = "queued"
+                    record.setdefault("metadata_stage_status", {})
+            states = _metadata_family_states(rows)
+            updates = {
+                "metadata_enriched_count": sum(1 for row in rows if row.get("metadata_complete")),
+                "metadata_enrichment_total": len(rows),
+                "metadata_concurrency": max(1, min(64, int(request.get("max_concurrent_requests") or 1))),
+                "metadata_tasks_total": len(rows) * 3,
+                "metadata_tasks_completed": sum(1 for value in states if value == "complete"),
+                "metadata_tasks_failed": sum(1 for value in states if value in {"failed", "needs_review"}),
+                "metadata_tasks_skipped": sum(1 for value in states if value == "skipped"),
+                "metadata_tasks_running": 0,
+                "metadata_tasks_queued": sum(1 for value in states if value == "queued"),
+                "metadata_active_tasks": [],
+            }
+
+        def committed() -> None:
+            current = self.repo.get_build(build_id)
+            self._update(
+                build_id, **updates,
+                metadata_started_at=current.get("metadata_started_at") or iso_now(),
+                metadata_last_progress_at=iso_now(),
+                metadata_settle_requested=bool(current.get("metadata_settle_requested")),
+            )
+
+        try:
+            return self.repo.reconcile_records(
+                build_id, initialize_current, optimistic=True, coordination_lock=self._lock,
+                is_current=check_cancelled, on_commit=committed,
+            )
+        except RecordStateConflict as exc:
+            raise RecordStateConflict(
+                "Records changed during enrichment queue setup; retry against the current corpus."
+            ) from exc
 
     def _schedule_build_enrichment(
         self, build_id: str, request: dict[str, Any], manifest: dict[str, Any], records: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """Schedule incomplete records and merge worker checkpoints with live human edits."""
-        preparation_base = json.loads(json.dumps(records))
+        records = self._initialize_build_enrichment(build_id, request)
         total = max(1, len(records))
         pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
         priority_ids = {str(value) for value in request.get("_priority_record_ids", [])}
         pending.sort(key=lambda index: (0 if str(records[index].get("record_id") or "") in priority_ids else 1, index))
         already_complete = len(records) - len(pending)
-        metadata_started_at = self.repo.get_build(build_id).get("metadata_started_at") or iso_now()
-        # Metadata enrichment is book-length work and may take minutes on a
-        # local model. Track readiness per record so completed records can be
-        # reviewed immediately instead of locking the entire book until the
-        # final LLM call finishes.
-        pending_indices = set(pending)
-        for index, record in enumerate(records):
-            if index in pending_indices:
-                # A process restart may leave a record marked running. No worker
-                # survives the restart, so it safely returns to the queue while
-                # per-family checkpoints determine where enrichment resumes.
-                record["metadata_enrichment_state"] = "queued"
-                record.setdefault("metadata_stage_status", {})
-            else:
-                record["metadata_enrichment_state"] = "complete"
-        records = self._persist_preparation_records(build_id, preparation_base, records)
-        total = max(1, len(records))
-        pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
-        pending.sort(key=lambda index: (0 if str(records[index].get("record_id") or "") in priority_ids else 1, index))
-        already_complete = len(records) - len(pending)
-        self._update(
-            build_id, metadata_enriched_count=already_complete,
-            metadata_enrichment_total=len(records),
-            metadata_concurrency=max(1, min(64, int(request.get("max_concurrent_requests") or 1))),
-            metadata_started_at=metadata_started_at, metadata_last_progress_at=iso_now(),
-            metadata_settle_requested=False,
-        )
         max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
-        metadata_families = ("discourse", "quotation", "indexing")
-        # Fast mode still exposes all three family states, but deliberately
-        # skipped families settle immediately and do not consume provider time.
-        metadata_task_total = len(records) * len(metadata_families)
-
-        initial_states = _metadata_family_states(records)
-        self._update(
-            build_id, metadata_tasks_total=metadata_task_total,
-            metadata_tasks_completed=sum(1 for value in initial_states if value == "complete"),
-            metadata_tasks_failed=sum(1 for value in initial_states if value in {"failed", "needs_review"}),
-            metadata_tasks_skipped=sum(1 for value in initial_states if value == "skipped"),
-            metadata_tasks_running=0,
-            metadata_tasks_queued=sum(1 for value in initial_states if value == "queued"),
-            metadata_active_tasks=[],
-        )
+        metadata_task_total = len(records) * 3
 
         def persist_metadata_stage(snapshot: dict[str, Any], task_name: str, state: str, error_text: str | None) -> None:
             self._persist_build_metadata_stage(build_id, metadata_task_total, snapshot, task_name, state, error_text)
@@ -4613,6 +4633,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 ):
                     if self._cancelled(build_id):
                         raise InterruptedError("Corpus build cancelled")
+                    baseline = records[index]
                     try:
                         completed_record = future.result()
                         completed_record["metadata_enrichment_state"] = "complete"
@@ -4666,17 +4687,30 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     # The final handoff reloads all rows once, including other edits.
                     completed_id = str(records[index].get("record_id") or "")
                     with self._lock:
-                        try:
-                            live_record = self.repo.get_record(build_id, completed_id)
-                        except KeyError:
-                            # A split/merge retired this identity while its worker ran.
-                            # Never restore the worker's obsolete topology snapshot.
-                            continue
-                        merged = _merge_enrichment_snapshot(
-                            live_record, records[index], self._allowed_fields(build_id),
+                        allowed_fields = self._allowed_fields(build_id)
+                        applied = False
+
+                        def merge_completion(
+                            rows: list[dict[str, Any]], baseline: dict[str, Any] = baseline,
+                            worker: dict[str, Any] = records[index], allowed: set[str] = allowed_fields,
+                        ) -> None:
+                            nonlocal applied
+                            if rows and _record_source_matches(rows[0], baseline):
+                                rows[0] = _merge_enrichment_snapshot(
+                                    rows[0], worker, allowed,
+                                )
+                                applied = True
+
+                        current = self.repo.reconcile_records(
+                            build_id, merge_completion, record_ids=[completed_id],
                         )
-                        self.repo.update_record(build_id, merged)
-                        records[index] = merged
+                        if not applied:
+                            # Retired identities and changed documentary snapshots
+                            # cannot install stale assertions or completion state.
+                            if current:
+                                logger.warning("Discarded stale initial metadata completion for build %s record %s", build_id, completed_id)
+                            continue
+                        records[index] = current[0]
                         build = self.repo.get_build(build_id)
                         if not build.get("metadata_first_settled_at"):
                             self._update(build_id, metadata_first_settled_at=iso_now())
