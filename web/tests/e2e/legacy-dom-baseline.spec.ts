@@ -1049,12 +1049,26 @@ const scenarios: Scenario[] = [
   },
   // System Data is Vue-native and covered by component/E2E tests rather than the legacy runtime DOM baseline.
   // The Response Library is Vue too; it reads cached research answers through the runtime.
-  { name: "faq-records", path: "/faq", fixtures: { "/api/response-cache/records": FAQ_PAGE } },
+  {
+    name: "faq-records",
+    path: "/faq",
+    fixtures: { "/api/response-cache/records": FAQ_PAGE },
+    contains: [
+      "Response Library",
+      "How does Derrida distinguish responsibility from programmable rule-following?",
+      "The responsible decision is not a calculable one.",
+    ],
+  },
   {
     name: "faq-archive-dialog",
     path: "/faq",
     target: "dialog",
     fixtures: { "/api/response-cache/records": FAQ_PAGE },
+    contains: [
+      "Saved questions",
+      "Select a question to open its saved answer.",
+      "How does Derrida distinguish responsibility from programmable rule-following?",
+    ],
     steps: async (page) => {
       await page
         .getByRole("button", { name: /Find a question/ })
