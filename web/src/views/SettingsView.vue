@@ -35,12 +35,11 @@ import LanguageFlag from "../components/LanguageFlag.vue";
 import UiButton from "../components/ui/UiButton.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
 import UiField from "../components/ui/UiField.vue";
-import UiHealthChip from "../components/ui/UiHealthChip.vue";
-import DocumentNlpLanguagePacks from "../components/settings/DocumentNlpLanguagePacks.vue";
 import SettingsAccessPanel from "../components/settings/SettingsAccessPanel.vue";
 import SettingsDataPanel from "../components/settings/SettingsDataPanel.vue";
 import SettingsNav from "../components/settings/SettingsNav.vue";
 import SettingsOverview from "../components/settings/SettingsOverview.vue";
+import SettingsServicesPanel from "../components/settings/SettingsServicesPanel.vue";
 import SettingsTroubleshootingPanel from "../components/settings/SettingsTroubleshootingPanel.vue";
 import SettingsSearch, { type SettingsSearchHit } from "../components/settings/SettingsSearch.vue";
 import SettingsSection from "../components/settings/SettingsSection.vue";
@@ -1120,138 +1119,22 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           </SettingsSection>
         </div>
 
-        <div
-          v-if="isAdmin"
-          v-show="section === 'services'"
-          id="settings-section-providers"
-        >
-          <SettingsSection
-            section-id="providers"
-            :title="i18n.t('settings.providers_title')"
-            :description="i18n.t('settings.providers_help')"
-            :persistence="persistKind('link')"
-            status="readonly"
-            :status-label="statusLabel('readonly')"
-          >
-            <ul v-if="profiles.length" class="providers-summary">
-              <li v-for="profile in profiles" :key="profile.id">
-                <UiHealthChip
-                  :available="providerReady(profile)"
-                  :label="String(profile.name || profile.id)"
-                  :detail="
-                    providerReady(profile)
-                      ? i18n.t('settings.provider_ready')
-                      : i18n.t('settings.provider_not_ready')
-                  "
-                />
-                <span
-                  >{{
-                    profile.type === "ollama"
-                      ? i18n.t("settings.provider_ollama")
-                      : i18n.t("settings.openai_compatible")
-                  }}
-                  ·
-                  {{
-                    i18n.tf("settings.max_concurrent", {
-                      count: Number(profile.max_concurrent_requests ?? 1),
-                    })
-                  }}
-                  · {{ profile.model || i18n.t("language.model_not_set") }}</span
-                >
-                <small>{{
-                  i18n.tf("settings.last_checked", { time: providerChecked(profile) })
-                }}</small>
-                <b v-if="profile.id === defaultProfileId">{{ i18n.t("ui.default") }}</b>
-              </li>
-            </ul>
-            <p v-else class="note">{{ i18n.t("settings.no_providers") }}</p>
-            <template #actions>
-              <UiButton
-                variant="primary"
-                icon="spark"
-                :label="i18n.t('settings.open_providers')"
-                @click="go('/providers', 'providers')"
-              />
-            </template>
-          </SettingsSection>
-          <SettingsSection
-            v-if="isAdmin"
-            section-id="audio"
-            :title="i18n.t('settings.audio_title')"
-            :description="i18n.t('settings.audio_help')"
-            :persistence="persistKind('backend')"
-          >
-            <div class="config-grid">
-              <UiField :label="i18n.t('settings.audio_base_url')">
-                <input
-                  id="settings-field-audio-base-url"
-                  class="control"
-                  type="url"
-                  v-model="audioDraft.base_url"
-                />
-              </UiField>
-              <UiField :label="i18n.t('settings.audio_model')">
-                <input id="settings-field-audio-model" class="control" v-model="audioDraft.model" />
-              </UiField>
-              <UiField
-                wide
-                :label="i18n.t('settings.audio_key')"
-                :hint="
-                  audio?.has_key
-                    ? i18n.t(
-                        audio.key_source === 'settings'
-                          ? 'settings.audio_key_stored'
-                          : 'settings.audio_key_from_environment',
-                      )
-                    : i18n.t('settings.audio_key_missing')
-                "
-              >
-                <input
-                  id="settings-field-audio-key"
-                  class="control"
-                  type="password"
-                  autocomplete="off"
-                  v-model="audioDraft.api_key"
-                  :placeholder="i18n.t('settings.audio_key_placeholder')"
-                />
-              </UiField>
-            </div>
-            <p
-              v-if="audioStatus"
-              class="embedding-probe"
-              :data-state="audioStatus.reachable ? 'ok' : 'failed'"
-              role="status"
-            >
-              <strong>{{
-                i18n.t(
-                  audioStatus.reachable ? "settings.audio_reachable" : "settings.audio_unreachable",
-                )
-              }}</strong>
-              <span v-if="audioStatus.error">{{ audioStatus.error }}</span>
-              <span v-if="audioStatus.hint">{{ audioStatus.hint }}</span>
-            </p>
-            <p v-if="audioMessage" class="note" role="status">{{ audioMessage }}</p>
-            <template #actions>
-              <UiButton
-                :disabled="audioBusy !== ''"
-                :label="i18n.t('settings.audio_test')"
-                @click="testAudio"
-              />
-              <UiButton
-                v-if="audio?.key_source === 'settings'"
-                :disabled="audioBusy !== ''"
-                :label="i18n.t('settings.audio_clear_key')"
-                @click="saveAudio(true)"
-              />
-              <UiButton
-                variant="primary"
-                :disabled="audioBusy !== ''"
-                :label="i18n.t('settings.audio_save')"
-                @click="saveAudio(false)"
-              />
-            </template>
-          </SettingsSection>
-        </div>
+        <SettingsServicesPanel
+          v-if="isAdmin && section === 'services'"
+          :profiles="profiles"
+          :default-profile-id="defaultProfileId"
+          :provider-statuses="workspace.providerStatuses || {}"
+          :audio="audio"
+          :audio-draft="audioDraft"
+          :audio-status="audioStatus"
+          :audio-busy="audioBusy"
+          :audio-message="audioMessage"
+          @update-audio-draft="audioDraft = $event"
+          @test-audio="testAudio"
+          @save-audio="saveAudio(false)"
+          @clear-audio-key="saveAudio(true)"
+          @navigate="go"
+        />
 
         <div
           v-if="isAdmin"
@@ -1634,20 +1517,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           v-if="isAdmin && section === 'access'"
           @navigate="go"
         />
-
-        <div
-          v-if="isAdmin && section === 'services'"
-          id="settings-services-resources"
-        >
-          <SettingsSection
-            section-id="language-packs"
-            :title="i18n.t('settings.nlp_packs_title')"
-            :description="i18n.t('settings.nlp_packs_help')"
-            :persistence="persistKind('backend')"
-          >
-            <DocumentNlpLanguagePacks />
-          </SettingsSection>
-        </div>
 
         <SettingsDataPanel
           v-if="isAdmin && section === 'data'"
