@@ -38,6 +38,13 @@ const nonSnapshotScenarios = new Set([
   "dialog-merge",
   "dialog-ocr-cleanup",
   "record-edit-sheet",
+  // Settings backup/restore is Vue-native; these scenarios assert behavior instead of legacy DOM.
+  "backup-section",
+  "backup-confirm",
+  "backup-created",
+  "backup-failed",
+  "restore-confirm",
+  "restore-done",
   "dialog-job-details-0",
   "dialog-job-details-1",
   "dialog-job-details-2",

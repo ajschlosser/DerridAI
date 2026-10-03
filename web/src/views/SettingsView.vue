@@ -252,7 +252,11 @@ watch(
   (raw) => {
     const resolved = resolveSettingsSectionId(raw);
     if (resolved && resolved !== raw) {
-      void router.replace({ name: "settings-section", params: { section: resolved }, query: route.query });
+      void router.replace({
+        name: "settings-section",
+        params: { section: resolved },
+        query: route.query,
+      });
     }
   },
   { immediate: true },
@@ -760,10 +764,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           </template>
         </SettingsOverview>
 
-        <div
-          v-show="section === 'preferences'"
-          id="settings-section-workspace"
-        >
+        <div v-show="section === 'preferences'" id="settings-section-workspace">
           <SettingsSection
             section-id="workspace"
             :title="i18n.t('settings.appearance')"
@@ -836,10 +837,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           </SettingsSection>
         </div>
 
-        <div
-          v-show="section === 'preferences'"
-          id="settings-section-language"
-        >
+        <div v-show="section === 'preferences'" id="settings-section-language">
           <SettingsSection
             section-id="language"
             :title="i18n.t('settings.language_title')"
@@ -877,10 +875,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 </select>
               </div>
             </UiField>
-            <UiField
-              :label="i18n.t('settings.contrast')"
-              :hint="i18n.t('settings.contrast_help')"
-            >
+            <UiField :label="i18n.t('settings.contrast')" :hint="i18n.t('settings.contrast_help')">
               <select
                 id="settings-field-contrast"
                 class="control"
@@ -941,10 +936,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           </SettingsSection>
         </div>
 
-        <div
-          v-show="section === 'research'"
-          id="settings-section-research"
-        >
+        <div v-show="section === 'research'" id="settings-section-research">
           <SettingsSection
             v-if="isAdmin"
             section-id="research"
@@ -1025,11 +1017,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           </SettingsSection>
         </div>
 
-        <div
-          v-if="isAdmin"
-          v-show="section === 'research'"
-          id="settings-section-review"
-        >
+        <div v-if="isAdmin" v-show="section === 'research'" id="settings-section-review">
           <SettingsSection
             section-id="review"
             :title="i18n.t('settings.review_title')"
@@ -1133,11 +1121,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           @navigate="go"
         />
 
-        <div
-          v-if="isAdmin"
-          v-show="section === 'retrieval'"
-          id="settings-section-retrieval"
-        >
+        <div v-if="isAdmin" v-show="section === 'retrieval'" id="settings-section-retrieval">
           <SettingsSection
             section-id="retrieval"
             :title="i18n.t('settings.vector_title')"
@@ -1510,10 +1494,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           </SettingsSection>
         </div>
 
-        <SettingsAccessPanel
-          v-if="isAdmin && section === 'access'"
-          @navigate="go"
-        />
+        <SettingsAccessPanel v-if="isAdmin && section === 'access'" @navigate="go" />
 
         <SettingsDataPanel
           v-if="isAdmin && section === 'data'"

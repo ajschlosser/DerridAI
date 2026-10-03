@@ -354,7 +354,11 @@ describe("sidebar at sign-in", () => {
     expect(crumbs.text()).toContain("System");
     expect(crumbs.text()).toContain("Settings");
     expect(crumbs.text()).toContain("Preferences");
-    expect(crumbs.findAll("a").map((link) => link.text())).toEqual(["DerridAI", "System", "Settings"]);
+    expect(crumbs.findAll("a").map((link) => link.text())).toEqual([
+      "DerridAI",
+      "System",
+      "Settings",
+    ]);
   });
 
   it("filters navigation without hiding its information architecture", async () => {

@@ -92,32 +92,32 @@ Overview should use compact category navigation surfaces with limited live conte
 
 ## Migration map
 
-| Existing surface | Target |
-| --- | --- |
-| Workspace → Appearance | Preferences → Appearance |
-| Workspace → About DerridAI | Overview footer/product information |
-| Language & accessibility → Interface language | Preferences → Language & accessibility |
-| Contrast | Preferences → Accessibility |
-| Manage Languages | Contextual link to Languages workspace |
-| Research defaults → Response language | Research & review → Research output defaults |
-| Review & AI behavior → provider/preset/run mode | Research & review → Review execution |
-| Auto-grade cached answers | Research & review → Evaluation defaults |
-| Providers & models summary | AI & language services → Provider status |
-| Audio transcription | AI & language services → Audio transcription |
-| Embedding provider/model/path/test | Retrieval & indexing → Embeddings |
-| RAG k/automatic sizing/top-N/reranker | Retrieval & indexing → Retrieval strategy |
-| Evidence character budgets | Retrieval & indexing → Evidence budget |
-| Document languages/retrieval routes | Retrieval & indexing → Retrieval scope |
-| fetch_k/MMR/RRF/cross-encoder/decomposition | Retrieval & indexing → Advanced retrieval |
-| Security/users/permissions | Access & permissions |
-| NLP language packs | AI & language services → Document NLP resources |
-| Data retention | Data & storage → Retention |
-| Backup & restore | Data & storage → Backup & restore |
-| Desktop notifications | Preferences → Notifications |
-| Reset columns/panels/sidebar | Troubleshooting & recovery → Interface reset |
-| Restore upsert suppressions | Troubleshooting & recovery |
-| Clear update history | Troubleshooting & recovery |
-| Start from scratch / NUKE | Troubleshooting & recovery → Danger zone |
+| Existing surface                                | Target                                          |
+| ----------------------------------------------- | ----------------------------------------------- |
+| Workspace → Appearance                          | Preferences → Appearance                        |
+| Workspace → About DerridAI                      | Overview footer/product information             |
+| Language & accessibility → Interface language   | Preferences → Language & accessibility          |
+| Contrast                                        | Preferences → Accessibility                     |
+| Manage Languages                                | Contextual link to Languages workspace          |
+| Research defaults → Response language           | Research & review → Research output defaults    |
+| Review & AI behavior → provider/preset/run mode | Research & review → Review execution            |
+| Auto-grade cached answers                       | Research & review → Evaluation defaults         |
+| Providers & models summary                      | AI & language services → Provider status        |
+| Audio transcription                             | AI & language services → Audio transcription    |
+| Embedding provider/model/path/test              | Retrieval & indexing → Embeddings               |
+| RAG k/automatic sizing/top-N/reranker           | Retrieval & indexing → Retrieval strategy       |
+| Evidence character budgets                      | Retrieval & indexing → Evidence budget          |
+| Document languages/retrieval routes             | Retrieval & indexing → Retrieval scope          |
+| fetch_k/MMR/RRF/cross-encoder/decomposition     | Retrieval & indexing → Advanced retrieval       |
+| Security/users/permissions                      | Access & permissions                            |
+| NLP language packs                              | AI & language services → Document NLP resources |
+| Data retention                                  | Data & storage → Retention                      |
+| Backup & restore                                | Data & storage → Backup & restore               |
+| Desktop notifications                           | Preferences → Notifications                     |
+| Reset columns/panels/sidebar                    | Troubleshooting & recovery → Interface reset    |
+| Restore upsert suppressions                     | Troubleshooting & recovery                      |
+| Clear update history                            | Troubleshooting & recovery                      |
+| Start from scratch / NUKE                       | Troubleshooting & recovery → Danger zone        |
 
 ## Interaction and layout direction
 

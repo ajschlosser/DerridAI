@@ -430,7 +430,7 @@ const liveJobs = (options: { finishAfterListings?: number } = {}): Fixtures => {
 /** Settings > Data & storage, where the backup and restore controls are. */
 const inBackupSection = async (page: Page) => {
   await page.locator('a[href="/settings/data"]').first().click();
-  await page.waitForTimeout(700);
+  await expect(page.getByRole("heading", { name: "Backup and restore" })).toBeVisible();
 };
 const RESTORE_RESPONSE = {
   workspace: { files: [], prefs: {} },
@@ -1137,16 +1137,23 @@ const scenarios: Scenario[] = [
     steps: exerciseDockedOperations,
   },
   // Backup and restore are started from Settings; the runtime does the work and reports it in a toast.
-  { name: "backup-section", nav: "Settings", load: true, steps: inBackupSection },
+  {
+    name: "backup-section",
+    contains: ["Backup and restore"],
+    nav: "Settings",
+    load: true,
+    steps: inBackupSection,
+  },
   {
     name: "backup-confirm",
     nav: "Settings",
     load: true,
     target: "app",
+    contains: ["Create full backup?"],
     steps: async (page) => {
       await inBackupSection(page);
       await page.locator("button", { hasText: "Download full backup" }).first().click();
-      await page.waitForTimeout(600);
+      await expect(page.getByRole("dialog")).toBeVisible();
     },
   },
   {
@@ -1154,6 +1161,7 @@ const scenarios: Scenario[] = [
     nav: "Settings",
     load: true,
     target: "app",
+    contains: ["Full backup created"],
     steps: async (page) => {
       await inBackupSection(page);
       await page.locator("button", { hasText: "Download full backup" }).first().click();
@@ -1166,18 +1174,20 @@ const scenarios: Scenario[] = [
     nav: "Settings",
     load: true,
     target: "app",
+    contains: ["Backup failed: disk full"],
     fixtures: { "POST /api/admin/backup": () => ({ detail: "disk full" }) },
     steps: async (page) => {
       await inBackupSection(page);
       await page.locator("button", { hasText: "Download full backup" }).first().click();
       await page.getByRole("button", { name: "Yes", exact: true }).click();
-      await page.waitForTimeout(1200);
+      await expect(page.getByText("Backup failed: disk full")).toBeVisible();
     },
   },
   {
     name: "restore-confirm",
     nav: "Settings",
     target: "app",
+    contains: ["Restore full DerridAI backup?"],
     steps: async (page) => {
       await inBackupSection(page);
       await page.locator("input[type=file][accept*=zip]").setInputFiles({
@@ -1185,13 +1195,14 @@ const scenarios: Scenario[] = [
         mimeType: "application/zip",
         buffer: Buffer.from("PK"),
       });
-      await page.waitForTimeout(600);
+      await expect(page.getByRole("dialog")).toBeVisible();
     },
   },
   {
     name: "restore-done",
     nav: "Settings",
     target: "app",
+    contains: ["Settings"],
     fixtures: { "POST /api/admin/restore": () => RESTORE_RESPONSE },
     steps: async (page) => {
       await inBackupSection(page);
