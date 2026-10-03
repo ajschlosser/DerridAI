@@ -73,8 +73,54 @@ test("Users exposes accounts before roles, retries locally and retains rows", as
 });
 
 test("Roles retains the permission editor through atomic failure and retry", async ({ page }) => {
-  await page.clock.install();
   await mockBackend(page, { role: "admin" });
+  let usersSubscribed = false;
+  let eventId = 0;
+  let emitUsersChanged: (() => void) | null = null;
+  await page.routeWebSocket(
+    (url) => url.pathname === "/api/ws/events",
+    (socket) => {
+      const topics = new Set<string>();
+      const send = (type: string, payload: Record<string, unknown>) =>
+        socket.send(
+          JSON.stringify({
+            type,
+            timestamp: "2026-10-03T23:00:00Z",
+            payload,
+          }),
+        );
+      send("connection.ready", {
+        protocol_version: 1,
+        connection_id: "roles-revalidation",
+        last_event_id: 0,
+        heartbeat_seconds: 20,
+        idle_timeout_seconds: 60,
+      });
+      socket.onMessage((raw) => {
+        const message = JSON.parse(String(raw)) as { type: string; topics?: string[] };
+        if (message.type === "subscribe") (message.topics ?? []).forEach((topic) => topics.add(topic));
+        if (message.type === "unsubscribe")
+          (message.topics ?? []).forEach((topic) => topics.delete(topic));
+        if (message.type === "subscribe" || message.type === "unsubscribe") {
+          usersSubscribed = topics.has("data:users");
+          send("subscription.updated", { topics: [...topics].sort(), rejected: [] });
+        }
+        if (message.type === "ping") send("pong", { last_event_id: eventId });
+      });
+      emitUsersChanged = () =>
+        socket.send(
+          JSON.stringify({
+            type: "resource.changed",
+            event_id: ++eventId,
+            resource_type: "data",
+            resource_id: "users",
+            revision: eventId,
+            timestamp: "2026-10-03T23:00:01Z",
+            payload: { resource: "users" },
+          }),
+        );
+    },
+  );
   await page.goto(APP);
   await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
   await page.waitForLoadState("networkidle");
@@ -82,6 +128,7 @@ test("Roles retains the permission editor through atomic failure and retry", asy
   await page.getByRole("button", { name: "Users & roles", exact: true }).click();
   await page.getByRole("button", { name: "Manage permissions", exact: true }).click();
   await expect(page.locator(".role-editor")).toBeVisible();
+  await expect.poll(() => usersSubscribed).toBe(true);
   const editor = await page.locator(".role-editor").elementHandle();
   let fail = true;
   let reads = 0;
@@ -96,9 +143,10 @@ test("Roles retains the permission editor through atomic failure and retry", asy
       });
     else await route.fallback();
   });
-  // There is no manual refresh: cached data is revalidated when the window regains focus after it went stale.
-  await page.clock.fastForward(31_000);
-  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+
+  // Exercise the production refresh path: the server says only that the users resource changed,
+  // and the shared data bridge invalidates the mounted query without replacing the editor.
+  emitUsersChanged!();
   await expect(
     page.locator(".roles-page").getByRole("button", { name: "Create role", exact: true }),
   ).toBeDisabled();
