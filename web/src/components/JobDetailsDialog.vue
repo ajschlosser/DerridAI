@@ -12,14 +12,16 @@ const dialogRef = ref<HTMLDialogElement | null>(null);
 watch(
   current,
   async (request) => {
+    // Close synchronously while the native dialog is still mounted so the browser
+    // restores focus to the opener before Vue removes the inactive host from the DOM.
+    if (!request) {
+      const dialog = dialogRef.value;
+      if (dialog?.open) dialog.close();
+      return;
+    }
     await nextTick();
     const dialog = dialogRef.value;
-    if (!dialog) return;
-    if (!request) {
-      if (dialog.open) dialog.close();
-    } else if (!dialog.open) {
-      dialog.showModal();
-    }
+    if (dialog && !dialog.open) dialog.showModal();
   },
   { immediate: true },
 );
@@ -39,6 +41,7 @@ async function openResult() {
 
 <template>
   <dialog
+    v-if="current"
     ref="dialogRef"
     class="job-details-dialog"
     aria-labelledby="jobDetailsTitle"
