@@ -45,6 +45,7 @@ const props = withDefaults(
     busy?: boolean;
     canRun?: boolean;
     canConfigure?: boolean;
+    canDraft?: boolean;
     canManageRuns?: boolean;
     disabledReason?: string;
   }>(),
@@ -134,7 +135,7 @@ function pickHistory(item: Record<string, unknown>) {
         id="researchQuestion"
         class="research-question-input"
         :value="prompt"
-        :disabled="!canConfigure"
+        :disabled="!(canDraft ?? canConfigure)"
         :placeholder="i18n.t('research.question_placeholder')"
         @input="emit('update:prompt', ($event.target as HTMLTextAreaElement).value)"
       ></textarea>
@@ -201,7 +202,7 @@ function pickHistory(item: Record<string, unknown>) {
       <textarea
         id="researchInstructions"
         :value="instructions"
-        :disabled="!canConfigure"
+        :disabled="!(canDraft ?? canConfigure)"
         :placeholder="i18n.t('research.instructions_placeholder')"
         @input="emit('update:instructions', ($event.target as HTMLTextAreaElement).value)"
       ></textarea>

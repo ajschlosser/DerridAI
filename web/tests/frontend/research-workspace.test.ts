@@ -125,3 +125,40 @@ describe("research workspace commands", () => {
     );
   });
 });
+
+describe("Research independent reads", () => {
+  it("can hydrate composer data without waiting for run history or pipeline visibility", async () => {
+    const refreshJobs = vi.fn(() => new Promise(() => {})),
+      api = vi.fn(() => new Promise(() => {}));
+    const { workspace } = setup({
+      refreshStores: vi.fn(async () => {}),
+      refreshJobs,
+      api,
+      recordStores: () => [],
+      providerProfiles: () => [],
+      selectedEvidenceEntries: () => [],
+      hasCorpusDb: () => false,
+      hasCapability: () => true,
+      isResearcher: () => false,
+    });
+    const result = await workspace.getResearchWorkspaceSnapshot({
+      refresh: true,
+      includeJobs: false,
+      includePipelines: false,
+      strictCollections: true,
+    });
+    expect(result.stores).toEqual([]);
+    expect(refreshJobs).not.toHaveBeenCalled();
+    expect(api).not.toHaveBeenCalled();
+  });
+  it("reports a failed authoritative collection read instead of confirming an empty workspace", async () => {
+    const { workspace } = setup({
+      refreshStores: vi.fn(async () => {
+        throw new Error("Collections unavailable");
+      }),
+    });
+    await expect(
+      workspace.getResearchWorkspaceSnapshot({ refresh: true, strictCollections: true }),
+    ).rejects.toThrow("Collections unavailable");
+  });
+});

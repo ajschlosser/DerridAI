@@ -107,14 +107,21 @@ export function createResearchWorkspace(deps: Deps) {
   function researchConfigForUi() {
     return cloneAuditValue(state.ragConfig || {});
   }
-  async function getResearchWorkspaceSnapshot({ refresh = false } = {}) {
+  async function getResearchWorkspaceSnapshot({
+    refresh = false,
+    includeJobs = true,
+    includePipelines = true,
+    strictCollections = false,
+  } = {}) {
     if (refresh) {
       try {
         await refreshStores();
       } catch (error) {
+        if (strictCollections) throw error;
         console.warn("Could not refresh Research collections", error);
       }
-      if (hasCapability("rag.jobs.own") || !isResearcher()) await refreshJobs({ rerender: false });
+      if (includeJobs && (hasCapability("rag.jobs.own") || !isResearcher()))
+        await refreshJobs({ rerender: false });
     }
     const corpus = recordStores();
     const usable = corpus.filter((store: Any) => Number(store.count || 0) > 0);
@@ -167,10 +174,12 @@ export function createResearchWorkspace(deps: Deps) {
       strategies: [],
     };
     try {
-      pipelineVisibility = await api("/api/system/pipelines/research-options");
+      if (includePipelines)
+        pipelineVisibility = await api("/api/system/pipelines/research-options");
       const configuredId = String(state.ragConfig.pipeline_id || "").trim();
       const configuredVersion = Number(state.ragConfig.pipeline_version || 0);
       if (
+        includePipelines &&
         configuredId &&
         !((pipelineVisibility.pipelines || []) as Loose[]).some(
           (pipeline: Loose) =>
