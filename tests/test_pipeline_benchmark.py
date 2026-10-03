@@ -28,6 +28,18 @@ from app.pipelines.benchmark import (
 from app.pipelines.store import PipelineStore
 
 
+def test_benchmark_defaults_preserve_order_and_are_instance_local() -> None:
+    payload = {"case_id": "defaults", "prompt": "Trace", "source_collection": "corpus"}
+    first = ResearchPipelineBenchmarkCaseCreate(**payload)
+    second = ResearchPipelineBenchmarkCaseCreate(**payload)
+    assert first.locales == ["en", "fr"]
+    assert first.search_types == ["similarity", "lexical", "mmr"]
+    first.locales.clear()
+    first.search_types.clear()
+    assert second.locales == ["en", "fr"]
+    assert second.search_types == ["similarity", "lexical", "mmr"]
+
+
 class _BenchmarkStore:
     def __init__(self) -> None:
         self.build_id = "build-123"

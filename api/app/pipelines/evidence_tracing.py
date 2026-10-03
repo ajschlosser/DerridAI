@@ -65,17 +65,17 @@ def build_evidence_trace(
             )
         )
 
-    return PipelineRunTrace(
-        run_id=run_id,
-        feature="evidence_suggestion.reviewer",
-        pipeline_id=pipeline.pipeline_id,
-        pipeline_version=pipeline.version,
-        resolved_pipeline=pipeline.model_dump(mode="json"),
-        resolved_hash=resolved_hash,
-        owner=owner,
-        status=status,
-        started_at=started_at,
-        finished_at=finished_at,
-        total_elapsed_ms=max(0, int((finished_at - started_at).total_seconds() * 1000)),
-        stages=stages,
-    )
+    return PipelineRunTrace.model_validate({
+        "run_id": run_id,
+        "feature": "evidence_suggestion.reviewer",
+        "pipeline_id": pipeline.pipeline_id,
+        "pipeline_version": pipeline.version,
+        "resolved_pipeline": pipeline.model_dump(mode="json"),
+        "resolved_hash": resolved_hash,
+        "owner": owner,
+        "status": status,
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "total_elapsed_ms": max(0, int((finished_at - started_at).total_seconds() * 1000)),
+        "stages": stages,
+    })
