@@ -467,19 +467,23 @@ function goSection(id: SettingsSectionId) {
     document.getElementById(`settings-section-${id}`)?.scrollIntoView({ block: "start" }),
   );
 }
-function chooseSearch(hit: SettingsSearchHit) {
+async function chooseSearch(hit: SettingsSearchHit) {
   if (hit.advanced) advancedOpen.value = true;
-  goSection(hit.section);
   query.value = "";
-  void nextTick(() => {
-    const target =
-      document.getElementById(hit.targetId || `settings-field-${hit.id}`) ||
-      document.getElementById(`settings-section-${hit.section}`);
-    target?.scrollIntoView({ block: "center" });
-    if (target instanceof HTMLElement && target.matches("input, select, textarea, button, a[href]")) {
-      target.focus();
-    }
+  contentsOpen.value = false;
+  await router.push({
+    name: "settings-section",
+    params: { section: hit.section },
+    query: route.query,
   });
+  await nextTick();
+  const target =
+    document.getElementById(hit.targetId || `settings-field-${hit.id}`) ||
+    document.getElementById(`settings-section-${hit.section}`);
+  target?.scrollIntoView({ block: "center" });
+  if (target instanceof HTMLElement && target.matches("input, select, textarea, button, a[href]")) {
+    target.focus();
+  }
 }
 function go(path: string, view?: string) {
   if (view) runtime.navigateView(view);
