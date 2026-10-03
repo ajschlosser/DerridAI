@@ -163,7 +163,7 @@ import {
   syncUrl,
   applyUrlState,
   navigateTo,
-  setRenderViewHook,
+  renderView,
 } from "../domain/sharedNavigation";
 import { sharedUrlStateCodec } from "../domain/sharedUrlState";
 import { pathViewMap, viewFromPath, viewPathMap } from "../domain/navigation";
@@ -1860,23 +1860,6 @@ function enhanceCollapsibles(root = document.querySelector("#main")) {
   });
 }
 let collapsibleObserver = null;
-function renderView() {
-  const main = document.querySelector("#main");
-  // Native Vue routes (for example Users & roles) intentionally do not mount
-  // the legacy surface. Do not let compatibility rendering or URL syncing
-  // overwrite those routes while they are active.
-  if (!main) {
-    unmountOperationsPanel();
-    refreshShell();
-    return null;
-  }
-  if (state.view !== "home") unmountOperationsPanel();
-  if (!canAccessPage(state.view)) state.view = "home";
-  syncUrl({ replace: true });
-  return null;
-}
-
-setRenderViewHook(() => renderView());
 
 function searchByMetadata(field, value, { contains = false } = {}) {
   const raw = String(value ?? "").trim();
