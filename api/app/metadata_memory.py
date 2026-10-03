@@ -133,21 +133,38 @@ class MetadataMemoryService:
 
     @staticmethod
     def _scan(collection: Any) -> list[tuple[str, Any, Mapping[str, Any]]]:
-        total = int(collection.count())
+        """Read the live projection page-by-page without trusting a separate count snapshot.
+
+        Chroma count() and get() are separate reads.  When the exemplar projection is being
+        refreshed, a count taken just before the first page can already be stale and can make
+        newly committed rows invisible to this audit surface.  Paging until get() is exhausted
+        keeps one request self-consistent enough for inspection and removes that race.
+        """
+
         output: list[tuple[str, Any, Mapping[str, Any]]] = []
-        for offset in range(0, total, PAGE_SCAN_SIZE):
+        offset = 0
+        while True:
             payload = collection.get(
                 limit=PAGE_SCAN_SIZE,
                 offset=offset,
                 include=["documents", "metadatas"],
             )
             ids = list(payload.get("ids") or [])
+            if not ids:
+                break
             docs = list(payload.get("documents") or [])
             metas = list(payload.get("metadatas") or [])
             for index, value in enumerate(ids):
-                metadata = metas[index] if index < len(metas) and isinstance(metas[index], dict) else {}
+                metadata = (
+                    metas[index]
+                    if index < len(metas) and isinstance(metas[index], dict)
+                    else {}
+                )
                 document = docs[index] if index < len(docs) else ""
                 output.append((str(value), document, metadata))
+            offset += len(ids)
+            if len(ids) < PAGE_SCAN_SIZE:
+                break
         return output
 
     def _resolve_evidence(self, item: dict[str, Any], caches: dict[str, Any]) -> None:
@@ -235,9 +252,7 @@ class MetadataMemoryService:
 
         merged: dict[tuple[str, str, str, str], dict[str, Any]] = {}
         backend_count = 0
-        try:
-            collections = self._collections()
-        except Exception as exc:
+        def unavailable(exc: Exception) -> dict[str, Any]:
             return {
                 "items": [],
                 "total": 0,
@@ -248,7 +263,7 @@ class MetadataMemoryService:
                     "evidence_bound": 0,
                     "corrections": 0,
                     "fields": 0,
-                    "backends": 0,
+                    "backends": backend_count,
                 },
                 "facets": {"fields": [], "kinds": [], "languages": [], "builds": []},
                 "derived": True,
@@ -257,14 +272,21 @@ class MetadataMemoryService:
                 "error": str(exc),
             }
 
-        for collection, memory_kind in collections:
-            backend_count += 1
-            for item_id, document, metadata in self._scan(collection):
-                item = _normalized_item(memory_kind, item_id, document, metadata)
-                if item is None:
-                    continue
-                key = _dedupe_key(item)
-                merged[key] = item
+        try:
+            collections = self._collections()
+            for collection, memory_kind in collections:
+                backend_count += 1
+                for item_id, document, metadata in self._scan(collection):
+                    item = _normalized_item(memory_kind, item_id, document, metadata)
+                    if item is None:
+                        continue
+                    key = _dedupe_key(item)
+                    merged[key] = item
+        except Exception as exc:
+            # An interrupted projection read is not the same thing as an empty memory.  Return
+            # a structured unavailable result so the frontend can retain its last successful
+            # page instead of replacing it with a false zero-row state.
+            return unavailable(exc)
 
         items = list(merged.values())
         if field:
