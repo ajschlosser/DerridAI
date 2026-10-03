@@ -50,11 +50,7 @@ const i18n = useI18nStore();
           :label="i18n.t('settings.clear_updates')"
           @click="emit('clear-updates')"
         />
-        <UiButton
-          icon="dashboard"
-          :label="i18n.t('nav.home')"
-          @click="emit('navigate', '/')"
-        />
+        <UiButton icon="dashboard" :label="i18n.t('nav.home')" @click="emit('navigate', '/')" />
       </template>
     </SettingsSection>
 
