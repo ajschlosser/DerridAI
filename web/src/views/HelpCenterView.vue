@@ -202,6 +202,10 @@ function clearSearch() {
   void nextTick(() => searchHero.value?.focusSearch());
 }
 
+function activateSection(id: string) {
+  activeSection.value = id as SectionId;
+}
+
 function syncRouteState() {
   if (applyingRouteState) return;
   const trimmed = query.value.trim();
@@ -347,7 +351,7 @@ onBeforeUnmount(() => {
         v-if="hasResults"
         :links="railLinks"
         :active-section="activeSection"
-        @activate="activeSection = $event as SectionId"
+        @activate="activateSection"
       />
 
       <div ref="contentRoot" class="help-content">
@@ -684,6 +688,16 @@ onBeforeUnmount(() => {
 
 .help-toggle-all:hover {
   background: var(--surface-hover);
+}
+
+.help-text-button:focus-visible,
+.help-toggle-all:focus-visible,
+.help-filter:focus-visible,
+.help-open-page:focus-visible,
+.help-guide-card summary:focus-visible,
+.help-entry summary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .help-page-group,
@@ -1103,7 +1117,6 @@ onBeforeUnmount(() => {
   .help-layout {
     grid-template-columns: 1fr;
   }
-
 }
 
 @media (max-width: 680px) {
