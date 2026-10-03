@@ -71,6 +71,56 @@ See [SPECIFICATION.md](SPECIFICATION.md) for the normative cELF 1.0 specificatio
 
 ## Architecture
 
+DerridAI's top-level dependency and authority boundaries are:
+
+```mermaid
+flowchart LR
+    Browser["web · Vue 3 browser app"]
+
+    subgraph API["api · FastAPI"]
+        REST["REST commands + mutations"]
+        GQL["GraphQL read façade"]
+        WS["WebSocket notifications"]
+        Domains["Corpus · Research · Pipelines · Jobs"]
+    end
+
+    Canonical["Canonical scholarly state
+sources · records · revisions · assertions · evidence"]
+    System["Server-owned durable state
+SQLite"]
+    Chroma["Derived/rebuildable projections
+Chroma + embeddings + caches"]
+    Providers["LLM / embedding providers"]
+    NLP["Optional document-nlp worker"]
+
+    Browser --> REST
+    Browser --> GQL
+    Browser <-->|bounded events| WS
+    REST --> Domains
+    GQL --> Domains
+    Domains --> Canonical
+    Domains --> System
+    Domains -. index / retrieve .-> Chroma
+    Domains --> Providers
+    Domains -. bounded reviewed text .-> NLP
+    NLP -. derived annotations .-> Domains
+```
+
+For developers working inside a subsystem, the local maps are more specific than this overview:
+
+- [Backend application map](api/app/README.md)
+- [Computational pipelines](api/app/pipelines/README.md)
+- [Frontend workspace](web/README.md)
+- [Frontend application map](web/src/README.md)
+- [Frontend domain layer](web/src/domain/README.md)
+- [Frontend components](web/src/components/README.md)
+- [Frontend API clients](web/src/api/README.md)
+- [Corpus Builder frontend feature](web/src/features/corpus-builder/README.md)
+- [Corpus Builder components](web/src/components/corpus-builder/README.md)
+- [Pipeline Studio components](web/src/components/pipelines/README.md)
+- [Frontend test architecture](web/tests/README.md)
+
+
 ### Runtime services
 
 - `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, and nginx. It is the browser application, proxies `/api/`, and consumes REST, GraphQL, and realtime notifications. Storybook is an opt-in development profile.
