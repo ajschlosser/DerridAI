@@ -34,7 +34,6 @@ const steps: Array<{
 const dialog = ref<HTMLDialogElement | null>(null);
 const spot = ref<HTMLElement | null>(null);
 const card = ref<HTMLElement | null>(null);
-const nextButton = ref<HTMLElement | null>(null);
 const index = ref(0);
 const centered = ref(true);
 const dockClass = ref("");
@@ -164,7 +163,7 @@ async function show(nextIndex: number) {
     reveal();
     place();
     await nextTick();
-    nextButton.value?.focus();
+    card.value?.querySelector<HTMLButtonElement>("button.ui-button.variant-primary")?.focus();
   } finally {
     busy.value = false;
   }
@@ -279,9 +278,7 @@ onBeforeUnmount(() => {
             :disabled="index === 0"
             @click="move(-1)"
           />
-          <span ref="nextButton">
-            <UiButton variant="primary" :label="nextLabel" @click="move(1)" />
-          </span>
+          <UiButton variant="primary" :label="nextLabel" @click="move(1)" />
         </div>
       </div>
     </dialog>
