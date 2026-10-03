@@ -93,6 +93,12 @@ def _write(path: Path | None, items: list[dict[str, Any]]) -> None:
     tmp.replace(path)
 
 
+def _invalidate_exemplars(repo: Any, build_id: str) -> None:
+    invalidator = getattr(repo, "invalidate_metadata_exemplars", None)
+    if callable(invalidator):
+        invalidator(build_id)
+
+
 def list_alias_sets(repo: Any, build_id: str, *, include_retired: bool = False) -> list[dict[str, Any]]:
     items = _read(_path(repo, build_id))
     return [item for item in items if include_retired or not item.get("retired_at")]
@@ -184,6 +190,7 @@ def create_alias_set(
         items.append(entry)
         _write(path, items)
     system_store.mark_semantic_map_dirty(build_id, reason="semantic_alias_changed")
+    _invalidate_exemplars(repo, build_id)
     return entry
 
 
@@ -197,6 +204,7 @@ def retire_alias_set(repo: Any, build_id: str, alias_set_id: str, *, reviewer: s
                 item["retired_by"] = reviewer
                 _write(path, items)
                 system_store.mark_semantic_map_dirty(build_id, reason="semantic_alias_changed")
+                _invalidate_exemplars(repo, build_id)
                 return item
     raise KeyError(alias_set_id)
 

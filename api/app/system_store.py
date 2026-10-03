@@ -189,9 +189,9 @@ class SystemStore:
         with self._lock:
             return self.repository.clear_adjudication_cache(record_id=record_id, field=field)
 
-    def put_memory_binding(self, payload: dict[str, Any]) -> None:
+    def put_memory_binding(self, payload: dict[str, Any], *, enqueue_projection: bool = False) -> None:
         with self._lock:
-            self.repository.put_memory_binding(payload)
+            self.repository.put_memory_binding(payload, enqueue_projection=enqueue_projection)
 
     def list_memory_bindings(self, **filters: Any) -> list[dict[str, Any]]:
         with self._lock:
@@ -206,14 +206,26 @@ class SystemStore:
         projection: str | None = None,
         *,
         scope_id: str | None = None,
+        unscoped: bool = False,
+        after: tuple[str, str] | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         with self._lock:
             return self.repository.list_semantic_memory_dirty(
                 projection,
                 scope_id=scope_id,
+                unscoped=unscoped,
+                after=after,
                 limit=limit,
             )
+
+    def semantic_memory_dirty_summary(self, projection: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.semantic_memory_dirty_summary(projection)
+
+    def resolve_semantic_memory_scope(self, item_ids: list[str], scope_id: str) -> None:
+        with self._lock:
+            self.repository.resolve_semantic_memory_scope(item_ids, scope_id)
 
     def complete_semantic_memory_dirty(self, item_ids: list[str]) -> int:
         with self._lock:

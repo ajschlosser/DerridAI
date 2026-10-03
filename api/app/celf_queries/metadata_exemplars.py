@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ..corpus_builder import pdf_corpus_repository
 from ..metadata_exemplar_projection import projection_backlog
 from ..services import store
 from ..system_metadata_exemplars import MetadataExemplarInspector
@@ -46,4 +47,4 @@ def exemplar_page(
         record_id=filters.record_id,
     )
     # Why the list may be empty: reviewed metadata waiting on a failing projection.
-    return {**payload, "projection_backlog": projection_backlog()}
+    return {**payload, "projection_backlog": projection_backlog(pdf_corpus_repository)}

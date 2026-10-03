@@ -1,3 +1,4 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
 """Semantic retrieval of progressive metadata exemplars."""
 
 from __future__ import annotations
@@ -58,7 +59,10 @@ class FakeEmbeddings:
 def _matches_where(row, where):
     if "$and" in where:
         return all(_matches_where(row, item) for item in where["$and"])
-    return all(row.get(key) == value for key, value in where.items())
+    return all(
+        row.get(key) in value["$in"] if isinstance(value, dict) else row.get(key) == value
+        for key, value in where.items()
+    )
 
 
 class FakeCollection:
