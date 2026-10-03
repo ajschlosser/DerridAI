@@ -195,6 +195,46 @@ describe("local vector index", () => {
     expect(spy).toHaveBeenCalledTimes(2);
   });
 
+  it("yields between local embedding batches so browser work can stay responsive", async () => {
+    const pkg = publication("pub-responsive");
+    const records = [
+      record("g1", "Glas", "hospitality gift"),
+      record("g2", "Glas", "mourning remains"),
+      record("r1", "Rogues", "democracy sovereignty"),
+    ];
+    pkg.manifest.works = [{ work: "All", record_count: 3 }];
+    pkg.chunks = [
+      {
+        id: "all",
+        work: "All",
+        record_count: 3,
+        records_b64: json64(records),
+        vector_ids: [],
+        vectors_b64: floats64([]),
+      },
+    ];
+
+    const previousScheduler = Object.getOwnPropertyDescriptor(globalThis, "scheduler");
+    const yieldNow = vi.fn(async () => undefined);
+    Object.defineProperty(globalThis, "scheduler", {
+      configurable: true,
+      value: { yield: yieldNow },
+    });
+    try {
+      const client = await createClient({
+        dataSource: dataSources.inline(pkg),
+        storage: new MemoryStorage(),
+        vectorIndex: vectorIndex.memory(),
+        embeddings: keywordProvider("tiny-local"),
+      });
+      await client.index.build({ batchSize: 1 });
+      expect(yieldNow).toHaveBeenCalledTimes(2);
+    } finally {
+      if (previousScheduler) Object.defineProperty(globalThis, "scheduler", previousScheduler);
+      else delete (globalThis as typeof globalThis & { scheduler?: unknown }).scheduler;
+    }
+  });
+
   it("rejects malformed provider output instead of storing it", async () => {
     const client = await createClient({
       dataSource: dataSources.inline(publication()),
