@@ -156,8 +156,8 @@ describe("Metadata schemas page", () => {
     await flushPromises();
     await wrapper.get("button.new-schema").trigger("click");
     await flushPromises();
-    expect(wrapper.find(".schema-row.is-new").exists()).toBe(true);
-    expect(wrapper.get(".schema-row.is-new").text()).toContain("New schema");
+    expect(wrapper.find(".schema-item.is-new").exists()).toBe(true);
+    expect(wrapper.get(".schema-item.is-new").text()).toContain("New schema");
     wrapper.unmount();
   });
 });
