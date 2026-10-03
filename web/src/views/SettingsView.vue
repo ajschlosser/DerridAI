@@ -147,12 +147,53 @@ const section = computed<SettingsSectionId>({
     void router.push({ name: "settings-section", params: { section: id }, query: route.query });
   },
 });
-const overviewItems = computed(() =>
-  visibleSections.value.filter((item) => item.id !== "overview").map((item) => ({
-    ...item,
-    path: `/settings/${item.id}`,
-  })),
-);
+const overviewItems = computed(() => {
+  const reviewProfile = profiles.value.find(
+    (profile) => profile.id === reviewDraft.value.default_provider_profile,
+  );
+  const reviewPreset =
+    reviewDraft.value.default_review_preset === "attribution"
+      ? i18n.t("settings.preset_attribution")
+      : reviewDraft.value.default_review_preset === "semantic"
+        ? i18n.t("settings.preset_semantic")
+        : i18n.t("settings.preset_text");
+  const readyProviders = profiles.value.filter((profile) => providerReady(profile)).length;
+
+  return visibleSections.value
+    .filter((item) => item.id !== "overview")
+    .map((item) => {
+      if (item.id === "research") {
+        return {
+          ...item,
+          path: `/settings/${item.id}`,
+          detail: `${reviewProfile?.name || i18n.t("settings.not_configured")} · ${reviewPreset}`,
+        };
+      }
+      if (item.id === "retrieval") {
+        return {
+          ...item,
+          path: `/settings/${item.id}`,
+          detail: [
+            String(embeddingDraft.value.embedding_provider || ""),
+            String(embeddingDraft.value.embedding_model || ""),
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        };
+      }
+      if (item.id === "services") {
+        return {
+          ...item,
+          path: `/settings/${item.id}`,
+          detail: profiles.value.length
+            ? `${readyProviders}/${profiles.value.length} ${i18n.t("settings.provider_ready")}`
+            : i18n.t("settings.no_providers"),
+          attention: profiles.value.length === 0 || readyProviders < profiles.value.length,
+        };
+      }
+      return { ...item, path: `/settings/${item.id}` };
+    });
+});
 const appearanceDirty = computed(() => !sameSettings(appearanceDraft.value, appearanceSaved.value));
 const reviewDirty = computed(() => !sameSettings(reviewDraft.value, reviewSaved.value));
 // Audio transcription has its own endpoint and key so it is never confused with a chat profile.
