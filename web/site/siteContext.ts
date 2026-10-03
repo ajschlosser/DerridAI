@@ -246,9 +246,9 @@ function base64Bytes(value: string): Uint8Array {
   return bytes;
 }
 
-async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
+async function gunzip(bytes: Uint8Array, unsupportedMessage: string): Promise<Uint8Array> {
   if (typeof DecompressionStream !== "function") {
-    throw providerError("DecompressionStream is unavailable.", "unsupported");
+    throw providerError(unsupportedMessage, "unsupported");
   }
   const stream = new Blob([bytes as BlobPart])
     .stream()
@@ -799,7 +799,13 @@ export function createPublishedSiteContext() {
         engineUrl = blobUrl(base64Bytes(bundle.engine_b64), "text/javascript");
         wasmPaths = {
           mjs: blobUrl(base64Bytes(bundle.wasm_factory_b64), "text/javascript"),
-          wasm: blobUrl(await gunzip(base64Bytes(bundle.wasm_gzip_b64)), "application/wasm"),
+          wasm: blobUrl(
+            await gunzip(
+              base64Bytes(bundle.wasm_gzip_b64),
+              t("site.runtime.transformers_unsupported_browser"),
+            ),
+            "application/wasm",
+          ),
         };
       }
       const runtime = (await import(/* @vite-ignore */ engineUrl)) as TransformersRuntime;
