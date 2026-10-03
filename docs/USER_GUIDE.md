@@ -298,6 +298,8 @@ After workspace restoration and API health checks, the configured default model 
 
 ## JSONL workspace
 
+Records shows its title and import controls while its initial corpus tab loads. Until that read succeeds, it shows placeholders and withholds empty-workspace claims and counts. A failed initial corpus read offers Retry. Existing file rows remain visible while workspace activation is pending or fails; importing a file while collection discovery is pending takes precedence over automatic collection selection.
+
 Multiple JSONL files remain open as a local working set and persist through browser IndexedDB, including:
 
 - unsaved edits
@@ -1121,6 +1123,8 @@ Research memory is stored separately from that deterministic response cache. Two
 - **Use cached provenance to steer claims** finds reviewer-validated claims similar to the question, with the citations their support bindings recorded, and checks each cited record against the run's evidence: present, revised since validation, or absent. The model is told that support absent from the current evidence cannot be cited. A claim cannot be validated, indexed in validated-claim memory, or rebuilt into that memory unless it has at least one usable support binding to a Record; legacy or malformed validated rows without usable support are ignored by the projection.
 
 Neither setting adds remembered text to the evidence packet or lets it supply a citation. Both match by meaning through derived, rebuildable projections; if the embedding service is unavailable they fall back to shared-word matching and the run's warnings say so. The run records which prior responses and claims steered it.
+
+The **Response Library** opens its page frame and archive controls while saved responses load. Initial reads show placeholders rather than a zero-question count. Refresh keeps the selected answer and evidence visible; a failed refresh shows an out-of-date warning and Retry. Searching or paging the archive updates its rows independently of the answer being read. A new response selection replaces the answer and its evidence together. Fresh revisits use the shared server-data cache, and access loss clears retained responses.
 
 The **Response Library** page provides:
 

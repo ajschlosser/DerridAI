@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { toast } from "../composables/notifications";
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -28,12 +28,15 @@ import ResponseFaqArchiveDialog from "../components/research/ResponseFaqArchiveD
 import ResponseFaqSelectionBar from "../components/research/ResponseFaqSelectionBar.vue";
 import ResearchResultPresentation from "../components/research/ResearchResultPresentation.vue";
 import EvaluationReport from "../components/research/EvaluationReport.vue";
-import { useDataQuery } from "../realtime/dataQuery";
+import { useAuthStore } from "../stores/auth";
+import { queryClient, useDataQuery } from "../realtime/dataQuery";
+import { dataKey } from "../realtime/resourceKeys";
 import { useI18nStore } from "../stores/i18n";
 import type { ResearchResult, ResponseFaqPage, ResponseFaqRecord } from "../types/research";
 import * as runtime from "../runtime/runtimeBridge";
 
 const i18n = useI18nStore();
+const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 const routeText = (value: unknown) =>
@@ -48,6 +51,7 @@ const activeEvidenceIndex = ref(0);
 const archiveOpen = ref(false);
 let searchTimer: number | undefined;
 let applyingRoute = false;
+let routeSelectionPending = true;
 let writingRoute = false;
 
 const records = computed(() => payload.value?.records || []);
@@ -241,71 +245,106 @@ function metadataEntries(value: unknown, kind: "retrieval" | "query"): MetaEntry
 function faqParams() {
   return { limit: pageSize, offset: (page.value - 1) * pageSize, query: search.value };
 }
-// The requested page is the query key; realtime invalidation of `response_library` refetches it and
-// applyPage keeps the reader's selection (it only picks a first record when none is selected).
+// Archive rows and the reader selection have independent identities. Filtering the archive
+// does not replace the answer being read. The existing cache owns deduplication and freshness.
 const applied = ref(faqParams());
+const readScope = computed(() =>
+  JSON.stringify([auth.user?.id, auth.user?.role, auth.user?.capabilities]),
+);
 const faqQuery = useDataQuery(
   "response_library",
-  () => runtime.getResponseFaqPage(applied.value) as Promise<ResponseFaqPage>,
-  { detail: () => [applied.value] },
+  () => runtime.getResponseFaqPage({ ...applied.value }) as Promise<ResponseFaqPage>,
+  {
+    detail: () => ["workspace", readScope.value, applied.value],
+    enabled: () => Boolean(auth.user),
+  },
 );
 const loading = computed(() => faqQuery.isFetching.value);
-let lastApplied: ResponseFaqPage | undefined;
-async function applyPage(next: ResponseFaqPage, chooseFirst = false) {
-  if (next === lastApplied) return;
-  lastApplied = next;
+const readError = computed(() =>
+  faqQuery.error.value ? String(faqQuery.error.value.message || faqQuery.error.value) : "",
+);
+const ready = computed(() => Boolean(payload.value));
+const waiting = computed(() => !ready.value && !readError.value);
+let denied = false;
+function clearPage(clearSelection = false) {
+  payload.value = null;
+  if (clearSelection) {
+    selected.value = null;
+    activeEvidenceIndex.value = 0;
+  }
+}
+function applyPage(next: ResponseFaqPage) {
   payload.value = next;
   const maxPage = Math.max(1, Math.ceil(Number(next.count || 0) / pageSize));
   if (page.value > maxPage) {
     page.value = maxPage;
-    await load({ chooseFirst });
+    void load();
     return;
   }
   const requestedId = routeText(route.query.id);
-  const requested = requestedId
-    ? next.records.find((record) => recordKey(record) === requestedId)
-    : null;
-  if (requested) selected.value = requested;
-  else if (
-    chooseFirst ||
-    !selected.value ||
-    !next.records.some((record) => recordKey(record) === selectedId.value)
-  )
+  if (routeSelectionPending) {
+    selected.value =
+      (requestedId
+        ? next.records.find((record) => recordKey(record) === requestedId)
+        : next.records[0]) || null;
+    activeEvidenceIndex.value = 0;
+    routeSelectionPending = false;
+  } else if (!selected.value) {
     selected.value = next.records[0] || null;
-  else
-    selected.value = next.records.find((r) => recordKey(r) === selectedId.value) || selected.value;
-  if (chooseFirst) activeEvidenceIndex.value = 0;
-  await syncFaqUrl();
+  } else {
+    // Refresh an available selected revision atomically; an archive filter can exclude it.
+    selected.value =
+      next.records.find((record) => recordKey(record) === selectedId.value) || selected.value;
+  }
+  void syncFaqUrl();
 }
-async function load({ chooseFirst = false }: { chooseFirst?: boolean } = {}) {
+async function load() {
   const next = faqParams();
-  try {
-    if (JSON.stringify(next) === JSON.stringify(applied.value)) await faqQuery.refetch();
-    else applied.value = next;
-    const data = await waitForPage();
-    if (data) await applyPage(data, chooseFirst);
-  } catch (error) {
-    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+  if (JSON.stringify(next) === JSON.stringify(applied.value)) await faqQuery.refetch();
+  else {
+    clearPage();
+    applied.value = next;
   }
 }
-// After a key change the observer fetches on its own; wait for that fetch's data.
-async function waitForPage(): Promise<ResponseFaqPage | undefined> {
-  await nextTick();
-  const result = await faqQuery.suspense();
-  return result.data;
-}
-// Realtime refetches arrive here without a caller.
 watch(
-  () => faqQuery.data.value,
-  (data) => {
-    if (data) void applyPage(data);
+  () => [faqQuery.data.value, faqQuery.error.value, faqQuery.isFetching.value] as const,
+  ([data, error, fetching]) => {
+    const status = Number((error as { status?: number } | null)?.status);
+    if (status === 401 || status === 403) {
+      if (!denied)
+        queryClient.removeQueries({
+          queryKey: dataKey("response_library", "workspace", readScope.value),
+        });
+      denied = true;
+      clearPage(true);
+      return;
+    }
+    if (error || (denied && fetching)) return;
+    if (data) {
+      denied = false;
+      applyPage(data);
+    }
   },
+  { immediate: true },
+);
+watch(
+  readScope,
+  (_, oldScope) => {
+    clearPage(true);
+    archiveOpen.value = false;
+    routeSelectionPending = true;
+    // Cancel and discard data belonging to the former authorization scope.
+    const queryKey = dataKey("response_library", "workspace", oldScope);
+    void queryClient.cancelQueries({ queryKey });
+    queryClient.removeQueries({ queryKey });
+  },
+  { flush: "sync" },
 );
 function scheduleSearch() {
   if (applyingRoute) return;
   window.clearTimeout(searchTimer);
   page.value = 1;
-  searchTimer = window.setTimeout(() => void load({ chooseFirst: true }), 250);
+  searchTimer = window.setTimeout(() => void load(), 250);
   void syncFaqUrl();
 }
 async function copyAnswer() {
@@ -339,7 +378,7 @@ function newResearch() {
 async function goPage(delta: number) {
   page.value = Math.min(pages.value, Math.max(1, page.value + delta));
   await syncFaqUrl();
-  await load({ chooseFirst: true });
+  await load();
 }
 
 watch(search, scheduleSearch);
@@ -357,18 +396,21 @@ watch(
     try {
       search.value = nextSearch;
       page.value = nextPage;
-      selected.value = null;
-      await load({ chooseFirst: true });
-      if (nextId) {
-        const match = records.value.find((record) => recordKey(record) === nextId);
-        if (match) selected.value = match;
-      }
+      routeSelectionPending = true;
+      clearPage(true);
+      if (
+        JSON.stringify(faqParams()) === JSON.stringify(applied.value) &&
+        faqQuery.data.value &&
+        !readError.value
+      ) {
+        applyPage(faqQuery.data.value);
+      } else await load();
     } finally {
       applyingRoute = false;
     }
   },
 );
-onMounted(() => void load({ chooseFirst: true }));
+onBeforeUnmount(() => window.clearTimeout(searchTimer));
 </script>
 
 <template>
@@ -382,15 +424,10 @@ onMounted(() => void load({ chooseFirst: true }));
     >
       <template #actions>
         <div class="response-faq-page-actions">
-          <button
-            v-if="payload && cacheTotal"
-            class="btn"
-            type="button"
-            @click="archiveOpen = true"
-          >
+          <button v-if="!ready || cacheTotal" class="btn" type="button" @click="archiveOpen = true">
             <AppIcon name="search" />
             {{ i18n.t("faq.find_question") }}
-            <span>{{ cacheTotal.toLocaleString(i18n.locale) }}</span>
+            <span v-if="ready">{{ cacheTotal.toLocaleString(i18n.locale) }}</span>
           </button>
           <button class="btn primary" type="button" @click="newResearch">
             <AppIcon name="spark" />{{ i18n.t("faq.new_research") }}
@@ -399,19 +436,34 @@ onMounted(() => void load({ chooseFirst: true }));
       </template>
     </UiPageHeader>
 
-    <div v-if="loading && !payload" class="research-loading response-faq-loading">
-      <UiLoadingState :label="i18n.t('faq.loading')" />
+    <div v-if="readError && !archiveOpen" class="response-faq-read-error" role="alert">
+      <p>{{ i18n.tf(ready ? "faq.refresh_failed" : "faq.read_failed", { message: readError }) }}</p>
+      <button class="btn" type="button" :disabled="loading" @click="load()">
+        {{ i18n.t("ui.retry") }}
+      </button>
+    </div>
+    <UiLoadingState
+      v-if="loading && ready && !archiveOpen"
+      variant="inline"
+      :label="i18n.t('loading.updating')"
+    />
+    <div
+      v-if="waiting && !selected"
+      class="research-loading response-faq-loading"
+      :aria-busy="loading"
+    >
+      <UiLoadingState variant="skeleton" :label="i18n.t('faq.loading')" />
     </div>
 
     <AccessibleEmptyState
-      v-else-if="payload && !cacheTotal"
+      v-else-if="ready && !cacheTotal && !readError"
       icon="spark"
       icon-tone="neutral"
       :title="i18n.t('faq.empty_title')"
       :description="i18n.t('faq.empty_help')"
     />
 
-    <section v-else-if="selected && result" class="response-faq-workspace" aria-live="polite">
+    <section v-else-if="selected && result" class="response-faq-workspace">
       <ResponseFaqSelectionBar
         :record="selected"
         :evidence-count="evidenceCount"
@@ -547,7 +599,9 @@ onMounted(() => void load({ chooseFirst: true }));
       :records="records"
       :selected-id="selectedId"
       :search="search"
-      :loading="loading"
+      :loading="loading || waiting"
+      :ready="ready"
+      :error="readError"
       :count="total"
       :total="cacheTotal"
       :page="page"
@@ -556,6 +610,7 @@ onMounted(() => void load({ chooseFirst: true }));
       @select="choose"
       @search="setArchiveSearch"
       @page="goPage"
+      @retry="load()"
     />
   </main>
 </template>
@@ -590,6 +645,15 @@ onMounted(() => void load({ chooseFirst: true }));
   border-radius: 999px;
   background: var(--soft);
   font-size: 0.8125rem;
+}
+.response-faq-read-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.response-faq-read-error p {
+  margin: 0;
 }
 .response-faq-loading {
   min-height: 260px;

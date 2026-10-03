@@ -198,6 +198,7 @@ import {
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 import { refreshStores } from "../domain/sharedStores";
+import { createCorpusWorkspaceHydration } from "../domain/corpusWorkspaceHydration";
 import { canAccessPage, hasCapability, isResearcher } from "../domain/sharedSession";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { applyAppearance } from "../domain/sharedAppearance";
@@ -1463,15 +1464,6 @@ function corpusStoreExists(name) {
   return Boolean(name && recordStores().some((store) => store.name === name));
 }
 
-let progressiveRenderToken = 0;
-function loadingCardsHtml(label = "Loading", count = 4) {
-  return `<div class="progressive-loading" role="status" aria-live="polite"><div class="progressive-loading-head"><span class="spinner small-spinner"></span><b>${esc(label)}</b></div><div class="progressive-skeleton-grid">${Array.from({ length: count }, () => '<div class="progressive-skeleton-card"><i></i><i></i><i></i></div>').join("")}</div></div>`;
-}
-function showViewLoading(main, title = "Loading view", detail = "Preparing data…") {
-  if (!main) return;
-  main.innerHTML = `<section class="card view-loading-card"><div class="view-loading-copy"><span class="spinner"></span><div><b>${esc(title)}</b><p>${esc(detail)}</p></div></div>${loadingCardsHtml("Loading cards", 3)}</section>`;
-}
-
 function pages(r) {
   if (r.page_start == null && r.page_end == null) return "—";
   return r.page_end != null && r.page_end !== r.page_start
@@ -2040,24 +2032,20 @@ async function exportStoreJsonl({
     return null;
   }
 }
-let corpusWorkspaceAutoLoadAttempted = false;
-async function ensureCorpusWorkspaceLoaded() {
-  if (isResearcher() || state.files.length || corpusWorkspaceAutoLoadAttempted) return;
-  corpusWorkspaceAutoLoadAttempted = true;
-  try {
-    if (!state.stores.length) await refreshStores();
-  } catch {
-    return;
-  }
-  const stores = recordStores().filter((item) => Number(item.count || 0) > 0);
-  if (!stores.length) return;
-  const target =
-    stores.find((item) => item.name === state.activeStore) ||
-    [...stores].sort((a, b) => Number(b.count || 0) - Number(a.count || 0))[0];
-  if (!target) return;
-  state.activeStore = target.name;
-  await exportStoreJsonl({ store: target.name, loadTab: true, navigate: false, silent: true });
-}
+const ensureCorpusWorkspaceLoaded = createCorpusWorkspaceHydration({
+  isResearcher,
+  hasFiles: () => Boolean(state.files.length),
+  hasStores: () => Boolean(state.stores.length),
+  refreshStores,
+  recordStores,
+  activeStore: () => state.activeStore,
+  setActiveStore: (name) => {
+    state.activeStore = name;
+  },
+  exportStore: (name) =>
+    exportStoreJsonl({ store: name, loadTab: true, navigate: false, silent: true }),
+  exportFailure: () => tr("records.hydration_export_failed"),
+});
 const vectorCollectionBridge = createVectorCollectionBridge({
   state,
   workIndex,

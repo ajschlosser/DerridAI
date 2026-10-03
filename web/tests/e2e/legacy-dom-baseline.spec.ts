@@ -814,11 +814,28 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: "dialog-ocr-cleanup",
-    contains: ["Clean OCR Artifacts"],
+    name: "record-ocr-cleanup",
+    contains: ["fi ligature remains in extracted text."],
+    nav: "Record View",
     load: true,
-    target: "dialog",
-    steps: openDialogFromRecords("Clean OCR Artifacts"),
+    records: [
+      {
+        ...RECORDS[0],
+        text: "A ﬁ ligature remains in extracted text.",
+      },
+    ],
+    steps: async (page) => {
+      // OCR cleanup is an in-place Record View command, not a dialog workflow.
+      const more = page.locator("summary[aria-label='More record actions']");
+      await expect(more).toBeVisible({ timeout: 10_000 });
+      await more.click();
+      const clean = page.getByRole("button", { name: /Clean OCR artifacts/i });
+      await expect(clean).toBeVisible();
+      await clean.click();
+      await expect(page.locator(".record-reading-text")).toContainText(
+        "A fi ligature remains in extracted text.",
+      );
+    },
   },
   { name: "search-loaded", nav: "Search", load: true },
   {
@@ -1049,12 +1066,26 @@ const scenarios: Scenario[] = [
   },
   // System Data is Vue-native and covered by component/E2E tests rather than the legacy runtime DOM baseline.
   // The Response Library is Vue too; it reads cached research answers through the runtime.
-  { name: "faq-records", path: "/faq", fixtures: { "/api/response-cache/records": FAQ_PAGE } },
+  {
+    name: "faq-records",
+    path: "/faq",
+    fixtures: { "/api/response-cache/records": FAQ_PAGE },
+    contains: [
+      "Response Library",
+      "How does Derrida distinguish responsibility from programmable rule-following?",
+      "The responsible decision is not a calculable one.",
+    ],
+  },
   {
     name: "faq-archive-dialog",
     path: "/faq",
     target: "dialog",
     fixtures: { "/api/response-cache/records": FAQ_PAGE },
+    contains: [
+      "Saved questions",
+      "Select a question to open its saved answer.",
+      "How does Derrida distinguish responsibility from programmable rule-following?",
+    ],
     steps: async (page) => {
       await page
         .getByRole("button", { name: /Find a question/ })

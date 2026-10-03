@@ -69,3 +69,9 @@ export const Searching: Story = {
   args: { search: "hospitality", count: 1, records: [records[1]], selectedId: "cache-2" },
 };
 export const NoMatches: Story = { args: { search: "khôra and telepathy", count: 0, records: [] } };
+export const InitialRead: Story = { args: { loading: true, ready: false, records: [] } };
+export const Refreshing: Story = { args: { loading: true } };
+export const FailedRead: Story = {
+  args: { ready: false, records: [], error: "Service unavailable" },
+};
+export const FailedRefresh: Story = { args: { error: "Service unavailable" } };
