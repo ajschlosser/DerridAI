@@ -1728,8 +1728,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 
         <SettingsTroubleshootingPanel
           v-if="isAdmin && section === 'troubleshooting'"
-          :nuke-phrase="nukePhrase"
-          @update:nuke-phrase="nukePhrase = $event"
+          v-model="nukePhrase"
           @reset-columns="resetColumns"
           @expand-panels="expandPanels"
           @expand-sidebar="expandSidebar"
