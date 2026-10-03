@@ -35,12 +35,9 @@ flowchart LR
     Backend["api/app"]
     Frontend["web/src"]
 
-    Pytest["tests/
-pytest regression + contract + integration"]
-    Vitest["web/tests/frontend
-Vitest + Vue Test Utils"]
-    Browser["web/tests/e2e
-Playwright + axe"]
+    Pytest["tests/<br/>pytest regression + contract + integration"]
+    Vitest["web/tests/frontend<br/>Vitest + Vue Test Utils"]
+    Browser["web/tests/e2e<br/>Playwright + axe"]
     CI["Ownership-aware CI gates"]
 
     Backend --> Pytest
