@@ -16,7 +16,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { computed, ref, type Ref } from "vue";
+import { computed, inject, provide, ref } from "vue";
 import type {
   LocalIndexStatus,
   PublicationManifest,
@@ -1208,21 +1208,12 @@ export type PublishedSiteContext = ReturnType<typeof createPublishedSiteContext>
 
 const contextKey = Symbol("published-site-context");
 
-export function providePublishedSiteContext(
-  provide: (key: symbol, value: PublishedSiteContext) => void,
-  context: PublishedSiteContext,
-): void {
+export function providePublishedSiteContext(context: PublishedSiteContext): void {
   provide(contextKey, context);
 }
 
-export function injectPublishedSiteContext(
-  inject: <T>(key: symbol) => T | undefined,
-): PublishedSiteContext {
+export function usePublishedSite(): PublishedSiteContext {
   const context = inject<PublishedSiteContext>(contextKey);
   if (!context) throw new Error("Published site context is unavailable.");
   return context;
-}
-
-export function asWritableRef<T>(value: Ref<T>): Ref<T> {
-  return value;
 }
