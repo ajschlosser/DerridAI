@@ -202,6 +202,58 @@ def test_site_bundle_can_omit_vectors_and_preserve_source_embedding_contract(
     assert chunk["vectors_b64"] == ""
 
 
+def test_site_bundle_can_publish_vectors_for_the_default_browser_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        site_publication.store,
+        "export_site_projection",
+        lambda store_name, works: {
+            "store": {
+                "name": store_name,
+                "embedding_provider": "ollama",
+                "embedding_model": "bge-m3:latest",
+                "embedding_dimension": 3,
+                "distance_metric": "cosine",
+                "text_field": "text",
+            },
+            "records": [
+                {"record": _record("r1", "Glas"), "embedding": [0.1, 0.2, 0.3]},
+                {"record": _record("r2", "Glas"), "embedding": [0.4, 0.5, 0.6]},
+            ],
+        },
+    )
+    embedded = [[0.01] * 384, [0.02] * 384]
+    monkeypatch.setattr(site_publication, "embed_browser_documents", lambda texts: embedded)
+
+    bundle = site_publication.build_site_bundle(
+        store_name="derrida-primary",
+        works=["Glas"],
+        title="Ready-to-search Derrida",
+        vector_strategy="browser-default",
+    )
+
+    with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
+        package = _package_from_published_site_script(
+            archive.read("derridai-site.js").decode("utf-8")
+        )
+
+    manifest = package["manifest"]
+    chunk = package["chunks"][0]
+    assert bundle.include_vectors is True
+    assert bundle.vector_strategy == "browser-default"
+    assert manifest["features"]["semantic_search"] is True
+    assert manifest["features"]["publication_vector_strategy"] == "browser-default"
+    assert manifest["vector_index"]["provider"] == "transformers"
+    assert manifest["vector_index"]["model"] == "Xenova/multilingual-e5-small"
+    assert manifest["vector_index"]["dimension"] == 384
+    assert manifest["vector_index"]["revision"] == "761b726dd34fb83930e26aab4e9ac3899aa1fa78"
+    assert "query-prefix=query: " in manifest["vector_index"]["variant"]
+    assert manifest["source_collection"]["embedding_model"] == "bge-m3:latest"
+    assert chunk["vector_ids"] == ["r1", "r2"]
+    assert _chunk_vectors(chunk, 384)[0] == pytest.approx(embedded[0])
+
+
 def test_site_bundle_exports_only_selected_installed_languages_and_no_provider_profiles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -777,6 +829,18 @@ def test_site_export_request_accepts_nginx_provider_proxy_configuration() -> Non
         provider_proxy_upstream="http://localhost:11434/v1",
     )
     assert request.provider_proxy_upstream == "http://localhost:11434/v1"
+
+
+def test_site_export_request_accepts_browser_ready_vector_strategy() -> None:
+    from app.routers.sites import SiteExportRequest
+
+    request = SiteExportRequest(
+        store="derrida-primary",
+        works=["Glas"],
+        vector_strategy="browser-default",
+    )
+    assert request.vector_strategy == "browser-default"
+    assert request.include_vectors is None
 
 
 def test_export_requests_ignore_legacy_provider_profile_ids() -> None:
