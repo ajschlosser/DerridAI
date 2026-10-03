@@ -202,6 +202,65 @@ def test_site_bundle_can_omit_vectors_and_preserve_source_embedding_contract(
     assert chunk["vectors_b64"] == ""
 
 
+def test_site_bundle_can_publish_vectors_for_the_default_browser_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        site_publication.store,
+        "export_site_projection",
+        lambda store_name, works: {
+            "store": {
+                "name": store_name,
+                "embedding_provider": "ollama",
+                "embedding_model": "bge-m3:latest",
+                "embedding_dimension": 1024,
+                "distance_metric": "cosine",
+                "text_field": "text",
+            },
+            "records": [
+                {"record": _record("r1", "Glas"), "embedding": [0.1] * 1024},
+            ],
+        },
+    )
+    vector = [0.0] * 384
+    vector[0] = 1.0
+    monkeypatch.setattr(site_publication, "embed_publication_records", lambda records: [vector])
+
+    bundle = site_publication.build_site_bundle(
+        store_name="derrida-primary",
+        works=["Glas"],
+        title="Browser-ready Derrida",
+        vector_strategy="browser-default",
+    )
+
+    with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
+        package = _package_from_published_site_script(
+            archive.read("derridai-site.js").decode("utf-8")
+        )
+
+    manifest = package["manifest"]
+    chunk = package["chunks"][0]
+    assert bundle.vector_strategy == "browser-default"
+    assert bundle.include_vectors is True
+    assert manifest["features"]["publication_vector_strategy"] == "browser-default"
+    assert manifest["features"]["semantic_search"] is True
+    assert manifest["vector_index"] == {
+        "dimension": 384,
+        "provider": "transformers",
+        "model": "Xenova/multilingual-e5-small",
+        "revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+        "variant": (
+            "query-prefix=query: ;document-prefix=passage: ;"
+            "dtype=q8;pooling=mean;normalize=true"
+        ),
+        "distance_metric": "cosine",
+        "text_field": "text",
+    }
+    assert manifest["source_collection"]["embedding_model"] == "bge-m3:latest"
+    assert chunk["vector_ids"] == ["r1"]
+    assert _chunk_vectors(chunk, 384)[0][0] == pytest.approx(1.0)
+
+
 def test_site_bundle_exports_only_selected_installed_languages_and_no_provider_profiles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
