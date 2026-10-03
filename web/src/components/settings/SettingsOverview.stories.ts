@@ -60,7 +60,8 @@ export const French: Story = {
   parameters: { locale: "fr-CA" },
   args: {
     title: "Vue d’ensemble des paramètres",
-    description: "Trouvez les paramètres par tâche et ouvrez l’espace de travail qui gère l’opération.",
+    description:
+      "Trouvez les paramètres par tâche et ouvrez l’espace de travail qui gère l’opération.",
     navLabel: "Catégories de paramètres",
     items: [
       {
