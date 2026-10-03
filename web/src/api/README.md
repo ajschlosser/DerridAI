@@ -28,8 +28,7 @@ Realtime notifications are separate in `../realtime/`; they are not a second API
 flowchart LR
     UI["views / features / composables"]
     HTTP["http.ts"]
-    REST["Domain REST clients
-auth · corpus · jobs · pipelines · system · …"]
+    REST["Domain REST clients<br/>auth · corpus · jobs · pipelines · system · …"]
     GQL["graphql/ · read operations"]
     WS["../realtime/ · notifications"]
     API["FastAPI"]
