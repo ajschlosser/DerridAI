@@ -5732,14 +5732,11 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
                                        'bureau.',
  'settings.open_providers': 'Ouvrir les fournisseurs LLM',
  'settings.openai_compatible': 'Compatible OpenAI',
- 'settings.page_help': 'Contrôlez l’apparence de l’espace de travail, les valeurs de recherche par'
-                                       ' défaut et les outils d’exploitation. Chaque groupe s’enre'
-                                       'gistre séparément; quitter avec des modifications non enre'
-                                       'gistrées demandera confirmation.',
- 'settings.page_help_short': 'Espace de travail, recherche et opérations',
+ 'settings.page_help': 'Configurez les préférences, les valeurs par défaut de recherche et de révision, le repérage, les services, les politiques de données, l’accès et la récupération. La recherche permet d’accéder directement à un paramètre.',
+ 'settings.page_help_short': 'Préférences, recherche, données et politiques système',
  'settings.panels_expanded': 'Tous les panneaux de l’interface sont développés',
- 'settings.persist.backend': 'Opération serveur',
- 'settings.persist.browser': 'Enregistré dans ce navigateur',
+ 'settings.persist.backend': 'À l’échelle du système',
+ 'settings.persist.browser': 'Ce navigateur',
  'settings.persist.link': 'Géré ailleurs',
  'settings.persist.readonly': 'Lecture seule',
  'settings.preset_attribution': 'Attribution',
