@@ -73,7 +73,7 @@ def test_language_guess():
 def test_nlp_places_the_place_of_publication_beside_the_publisher():
     spacy = pytest.importorskip("spacy")
     try:
-        spacy.load("en_core_web_lg", exclude=["parser", "lemmatizer"])
+        spacy.load("en_core_web_sm", exclude=["parser", "lemmatizer"])
     except Exception:
         pytest.skip("English model not installed")
     found = by_field(dp.nlp_candidates(TITLE_PAGE, "English"))
