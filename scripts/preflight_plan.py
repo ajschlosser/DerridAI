@@ -14,6 +14,7 @@ class PreflightPlan:
     backend: bool = False
     frontend: bool = False
     frontend_unit: bool = False
+    unit_full: bool = False
     frontend_build: bool = False
     storybook: bool = False
     e2e: bool = False
@@ -82,6 +83,7 @@ A11Y_FULL_PATHS = {
 def _mark_full_frontend(plan: PreflightPlan) -> None:
     plan.frontend = True
     plan.frontend_unit = True
+    plan.unit_full = True
     plan.frontend_build = True
     plan.storybook = True
     plan.e2e = True
@@ -142,6 +144,8 @@ def build_plan(paths: list[str]) -> PreflightPlan:
             plan.frontend = plan.frontend_unit = plan.frontend_build = plan.contract = True
         elif path.startswith("web/tests/frontend/"):
             plan.frontend = plan.frontend_unit = True
+            if path == "web/tests/frontend/setup.ts":
+                plan.unit_full = True
         elif path.startswith("web/tests/e2e/legacy-dom"):
             plan.frontend = plan.frontend_build = plan.legacy = True
         elif path == "web/tests/e2e/corpus-builder-theme-sweep.spec.ts":
@@ -164,8 +168,15 @@ def build_plan(paths: list[str]) -> PreflightPlan:
             plan.frontend = plan.publication = True
         elif path.startswith("web/.storybook/") or path.startswith("web/.storybook"):
             plan.frontend = plan.storybook = plan.e2e = plan.a11y = plan.a11y_full = True
-        elif path in {"web/vite.config.ts", "web/tsconfig.json", "web/tsconfig.tests.json"}:
+        elif path in {
+            "web/vite.config.ts",
+            "web/vitest.config.ts",
+            "web/tsconfig.json",
+            "web/tsconfig.tests.json",
+        }:
             plan.frontend = plan.frontend_unit = plan.frontend_build = True
+            if path in {"web/vitest.config.ts", "web/tsconfig.tests.json"}:
+                plan.unit_full = True
         elif path in {"web/package.json", "web/package-lock.json"}:
             _mark_full_frontend(plan)
             plan.publication = True
