@@ -289,89 +289,94 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 
 ### Phase 1 — Registry, routing, and shell
 
-- [~] Design/implement declarative Settings category registry.
-- [ ] Add Overview category and canonical `/settings/overview`.
-- [ ] Redirect bare `/settings` to Overview while preserving old section deep links.
-- [ ] Convert category rail from tab semantics to navigation-link semantics.
-- [ ] Make role/capability filtering registry-driven.
-- [ ] Make search derive from the same registry.
-- [ ] Add exact route/anchor handling for search results.
-- [ ] Update routing/settings-domain tests.
+- [x] Design/implement declarative task-oriented Settings category registry.
+- [x] Add Overview category and canonical `/settings/overview`.
+- [x] Redirect bare `/settings` to Overview while preserving/canonicalizing old section deep links.
+- [x] Convert category rail from tab semantics to ordinary navigation-link semantics.
+- [x] Make role visibility registry-driven.
+- [~] Unify category/search metadata completely; field-level search still has its own registry alongside category metadata.
+- [x] Add exact route/anchor handling for search results, including automatic opening of advanced retrieval.
+- [x] Update routing/settings-domain test definitions for the new routes and aliases.
 
 ### Phase 2 — Overview
 
-- [ ] Implement Settings Overview.
-- [ ] Add compact category navigation surfaces.
-- [ ] Add useful status/context without decorative normal-state badges.
-- [ ] Move About/build information to Overview.
-- [ ] Add responsive/role variants and Storybook coverage where appropriate.
+- [x] Implement Settings Overview.
+- [x] Add compact category navigation surfaces.
+- [x] Add useful live context for research/review, retrieval, and provider/service readiness without decorative normal-state badges.
+- [x] Move About/build information to Overview.
+- [x] Add responsive behavior, researcher/admin variants, and Storybook/WCAG story coverage.
 
 ### Phase 3 — Preferences
 
-- [ ] Move appearance.
-- [ ] Move language/accessibility.
-- [ ] Move notifications/viewer preferences.
-- [ ] Rework scope labels and save behavior.
-- [ ] Preserve researcher access and existing browser persistence.
+- [x] Move appearance into Preferences.
+- [x] Move interface language and contrast/accessibility into Preferences.
+- [x] Move desktop notifications into Preferences; keep reset/recovery controls out of preferences.
+- [~] Rework scope labels and save behavior; normal saved/read-only badges are suppressed and scopes are human-facing, but dirty-state action affordances can still be improved.
+- [x] Preserve researcher access and existing browser persistence semantics.
 
 ### Phase 4 — Research & review
 
-- [ ] Consolidate response language and review execution defaults.
-- [ ] Separate evaluation defaults.
-- [ ] Clarify downstream effects and persistence scope.
+- [x] Consolidate response language and review execution defaults under Research & review.
+- [x] Separate evaluation defaults from review execution.
+- [~] Clarify downstream effects and persistence scope; hierarchy is improved, but additional consequence copy remains useful.
 
 ### Phase 5 — Retrieval & indexing
 
-- [ ] Separate Embeddings, Retrieval strategy, Evidence budget, Retrieval scope, Advanced tuning.
-- [ ] Preserve embedding backend persistence and health test behavior.
-- [ ] Improve advanced-control deep linking/search.
-- [ ] Preserve validation and draft behavior.
+- [x] Separate Embeddings, Retrieval strategy, Evidence budget, Retrieval scope, and Advanced tuning conceptually.
+- [x] Preserve the existing embedding persistence/health-test implementation while moving it into the new category.
+- [x] Improve advanced-control deep linking/search with exact control anchors.
+- [x] Preserve existing validation/draft behavior in the implementation and regression tests.
 
 ### Phase 6 — AI & language services
 
-- [ ] Move provider summary/gateway.
-- [ ] Move audio transcription.
-- [ ] Move NLP language packs.
-- [ ] Keep Providers/Languages entity management in their dedicated workspaces.
+- [x] Move provider summary/gateway.
+- [x] Move audio transcription.
+- [x] Move NLP language packs.
+- [x] Keep Provider and Language entity management in their dedicated workspaces.
 
 ### Phase 7 — Data & storage
 
-- [ ] Move retention.
-- [ ] Reframe canonical vs operational state.
-- [ ] Improve policy summary/override/effect hierarchy.
-- [ ] Move backup/restore.
-- [ ] Clarify links to System Data / corpus data workspaces.
+- [x] Move retention into Data & storage.
+- [x] Make the canonical-vs-operational retention boundary permanently visible.
+- [~] Improve policy summary/override/effect hierarchy; the canonical boundary is improved, while the dense override table still needs a final UX pass.
+- [x] Move backup/restore.
+- [x] Add explicit links to System Data and Corpus Data rather than duplicating those workspaces.
 
 ### Phase 8 — Access, troubleshooting, danger zone
 
-- [ ] Replace Security section with Access & permissions gateway.
-- [ ] Move UI recovery/reset tools into Troubleshooting & recovery.
-- [ ] Isolate destructive workspace reset in a danger zone.
-- [ ] Add explicit consequence/reversibility copy.
+- [x] Replace Security with an Access & permissions gateway.
+- [x] Move UI recovery/reset tools into Troubleshooting & recovery.
+- [x] Isolate destructive workspace reset in a dedicated danger zone.
+- [~] Add explicit consequence/reversibility copy; the danger zone now points users to backup and retains irreversible-action warnings, with a final copy audit still pending.
 
 ### Phase 9 — Decomposition and cleanup
 
-- [ ] Decompose `SettingsView.vue` into category views/components.
-- [ ] Remove obsolete duplicated field/search declarations.
-- [ ] Keep domain/persistence logic separate from presentation.
-- [ ] Update Help coverage/page guide if required.
-- [ ] Update docs/User Guide where navigation has changed.
+- [~] Decompose `SettingsView.vue`; Overview, navigation, search, section framing, retention, and NLP resources are components, but category-level extraction remains.
+- [ ] Remove remaining duplicated field/search metadata by converging on one registry contract.
+- [~] Keep domain/persistence logic separate from presentation; registry/domain work is separated, but category state/actions still live in `SettingsView.vue`.
+- [x] Point Help coverage/canonical Settings route at Overview.
+- [x] Update the User Guide for the new hierarchy and workspace ownership model.
 
 ### Phase 10 — Verification
 
-- [ ] Frontend unit tests.
-- [ ] Settings E2E.
-- [ ] Keyboard/focus checks.
-- [ ] axe/WCAG scans.
-- [ ] Light/dark/high-contrast/forced-colors.
-- [ ] Reduced motion.
-- [ ] Mobile/narrow-screen/reflow.
-- [ ] fr-CA and long-string coverage.
-- [ ] Full relevant CI.
-- [ ] Final design/implementation audit against this document.
+- [ ] Run frontend unit tests.
+- [ ] Run Settings E2E.
+- [ ] Run keyboard/focus checks.
+- [ ] Run axe/WCAG scans.
+- [ ] Verify light/dark/high-contrast/forced-colors.
+- [ ] Verify reduced motion.
+- [ ] Verify mobile/narrow-screen/reflow.
+- [ ] Verify fr-CA and long-string coverage.
+- [ ] Run full relevant CI.
+- [~] Final design/implementation audit against this document is in progress.
 
 ## Implementation notes
 
 Record material deviations from this plan here rather than silently changing direction.
 
 - 2026-10-02: Work started from latest `master` at `c4b30fdb310a5606ae0d40b897b74326211aa4ac`.
+- 2026-10-02: Existing legacy URLs such as `/settings/workspace`, `/settings/review`, and `/settings/system` are accepted and canonicalized onto the new task-oriented categories instead of being broken.
+- 2026-10-02: Settings category and Overview destinations use native link semantics with in-app interception for ordinary clicks. This preserves copy-link/open-in-new-tab behavior and keeps the standalone Storybook stories independent of a router plugin.
+- 2026-10-02: Desktop notifications remain administrator-visible, matching the pre-refactor behavior; only their information-architecture location changed.
+- 2026-10-02: The permanent/canonical retention boundary is now visible without opening a disclosure so destructive operational-retention controls cannot visually flatten canonical research state into disposable system history.
+- 2026-10-02: No local test suite has been executed from the GitHub connector environment. Phase 10 remains explicitly unverified until CI or a runnable checkout is available.
