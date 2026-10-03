@@ -57,7 +57,7 @@ export const viewPathMap: Record<string, string> = {
   responsecache: "/system-data/overview",
   providers: "/providers",
   schemas: "/schemas",
-  config: "/settings/workspace",
+  config: "/settings/overview",
 };
 export const pathViewMap: Record<string, string> = {
   ...Object.fromEntries(Object.entries(viewPathMap).map(([view, path]) => [path, view])),
