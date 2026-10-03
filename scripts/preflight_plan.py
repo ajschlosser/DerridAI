@@ -99,7 +99,7 @@ def build_plan(paths: list[str]) -> PreflightPlan:
             continue
 
         if path == ".github/workflows/frontend.yml":
-            plan.backend = plan.contract = plan.format = True
+            plan.backend = plan.contract = plan.format = plan.publication = True
             _mark_full_frontend(plan)
         elif path.startswith("scripts/"):
             # Repository automation should test the automation it can affect, not every application surface.
