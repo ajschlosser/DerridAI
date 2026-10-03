@@ -66,6 +66,8 @@ PUBLICATION_PATHS = {
     "api/app/site_assets/derridai-sdk.js",
     "web/vite.sdk.config.ts",
     "web/vite.sdk.package.config.ts",
+    "web/vite.site.config.ts",
+    "web/tsconfig.site.json",
     "web/playwright.publication.config.ts",
     "scripts/build_publication_acceptance_fixtures.py",
     "scripts/check_publication_artifacts.sh",
@@ -165,6 +167,14 @@ def build_plan(paths: list[str]) -> PreflightPlan:
             plan.frontend = plan.frontend_unit = plan.sdk = True
             plan.publication = True
 
+        if (
+            path.startswith("web/site/")
+            or path == "web/vite.site.config.ts"
+            or path == "web/tsconfig.site.json"
+        ):
+            plan.frontend = plan.frontend_build = plan.a11y = True
+            plan.publication = True
+
         if path.startswith("web/src/api/"):
             plan.frontend = plan.frontend_unit = plan.frontend_build = plan.contract = True
         elif path.startswith("web/tests/frontend/"):
@@ -249,6 +259,7 @@ def build_plan(paths: list[str]) -> PreflightPlan:
 
         if (
             path in PUBLICATION_PATHS
+            or path.startswith("web/site/")
             or path.startswith("web/sdk/")
             or path.startswith("web/tests/e2e/static-site-")
             or path.startswith("web/tests/fixtures/sdk-consumer/")

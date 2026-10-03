@@ -309,6 +309,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Typecheck application
         run: npm run typecheck:app
+      - name: Typecheck published-site Vue sources
+        run: npm run typecheck:site
       - name: Typecheck tests and test configuration
         run: npm run typecheck:tests
       - name: Guard legacy snapshot ownership
@@ -570,6 +572,15 @@ jobs:
           npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
           npm run build:sdk
+          npm run build:site
+      - name: Upload generated published-site bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-site-runtime-${{ github.run_id }}
+          path: api/app/site_assets/derridai-site.js
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
       - name: Generate real publication artifacts
         run: python scripts/build_publication_acceptance_fixtures.py .tmp/publication-acceptance
       - name: Exercise single-file publication from file protocol
