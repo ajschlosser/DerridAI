@@ -379,6 +379,16 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     labelFallback: "Desktop notifications",
   },
   {
+    id: "data-workspaces",
+    section: "data",
+    labelKey: "settings.data_workspaces_title",
+    labelFallback: "Data workspaces",
+    helpKey: "settings.data_workspaces_help",
+    helpFallback: "Inspect operational System Data or open Corpus Data without duplicating those workspaces inside Settings.",
+    keywords: ["system data", "corpus data", "databases", "stores", "vector stores"],
+    targetId: "settings-heading-data-workspaces",
+  },
+  {
     id: "data-retention",
     section: "data",
     labelKey: "settings.retention_title",
