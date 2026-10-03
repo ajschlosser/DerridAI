@@ -138,6 +138,7 @@ function setup(overrides: Record<string, unknown> = {}) {
     activateRecord,
     onSelectionCleared,
     onError,
+    onFacets,
     setActiveDraft: (value: boolean) => {
       activeDraft = value;
     },
@@ -277,6 +278,69 @@ describe("useCorpusReviewRecords", () => {
       corpusReviewReads.metadataFacets.mock.invocationCallOrder[0],
     );
     expect(state.selectedRecord.value?.record_id).toBe("r1");
+  });
+
+  it("defers facets until demand and reloads invalidated generations only when visible", async () => {
+    const facetsActive = ref(false);
+    const state = setup({ facetsActive });
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")], { dataGeneration: 1 }));
+    corpusReviewReads.records.mockResolvedValue([record("r1")]);
+    await state.reviewRecords.refreshRecords(true);
+    expect(corpusReviewReads.metadataFacets).not.toHaveBeenCalled();
+    facetsActive.value = true;
+    await flushPromises();
+    expect(corpusReviewReads.metadataFacets).toHaveBeenCalledTimes(1);
+    facetsActive.value = false;
+    await flushPromises();
+    facetsActive.value = true;
+    await flushPromises();
+    expect(corpusReviewReads.metadataFacets).toHaveBeenCalledTimes(1);
+    facetsActive.value = false;
+    await flushPromises();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")], { dataGeneration: 2 }));
+    await state.reviewRecords.refreshRecords();
+    expect(corpusReviewReads.metadataFacets).toHaveBeenCalledTimes(1);
+    facetsActive.value = true;
+    await flushPromises();
+    expect(corpusReviewReads.metadataFacets).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels hidden facet responses and clears reviewer-bound values", async () => {
+    const facetsActive = ref(true);
+    const reviewerKey = ref("reviewer-1");
+    const state = setup({ facetsActive, reviewerKey });
+    let release!: (values: Record<string, string[]>) => void;
+    corpusReviewReads.metadataFacets.mockReturnValueOnce(
+      new Promise((resolve) => (release = resolve)),
+    );
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));
+    corpusReviewReads.records.mockResolvedValue([record("r1")]);
+    await state.reviewRecords.refreshRecords();
+    const signal = corpusReviewReads.metadataFacets.mock.calls[0][2].signal as AbortSignal;
+    facetsActive.value = false;
+    await flushPromises();
+    expect(signal.aborted).toBe(true);
+    release({ speaker: ["Sealed old value"] });
+    await flushPromises();
+    expect(state.onFacets).not.toHaveBeenCalled();
+    facetsActive.value = true;
+    await flushPromises();
+    expect(state.onFacets).toHaveBeenLastCalledWith({});
+    reviewerKey.value = "reviewer-2";
+    expect(state.onFacets).toHaveBeenLastCalledWith({});
+  });
+
+  it("shows a demanded facet failure instead of accepting an empty success", async () => {
+    const facetsActive = ref(false);
+    const state = setup({ facetsActive });
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));
+    corpusReviewReads.records.mockResolvedValue([record("r1")]);
+    await state.reviewRecords.refreshRecords();
+    corpusReviewReads.metadataFacets.mockRejectedValueOnce(new Error("Facets unavailable"));
+    facetsActive.value = true;
+    await flushPromises();
+    expect(state.onError).toHaveBeenCalledWith("Facets unavailable");
+    expect(state.onFacets).not.toHaveBeenCalled();
   });
 
   it("drops a stale cache entry and refetches when the row's revision has moved on", async () => {

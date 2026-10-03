@@ -32,6 +32,7 @@ export const corpusRecordsApi = {
     }>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records?offset=${offset}&limit=${limit}${reviewQueue && reviewQueue !== "all" ? `&review_queue=${encodeURIComponent(reviewQueue)}` : ""}${query ? `&query=${encodeURIComponent(query)}` : ""}`,
     ),
+  /** @deprecated Returns historical activity without recording a view. */
   markViewed: (buildId: string, recordId: string) =>
     apiRequest<{ record_id: string; activity: CorpusRecord["activity"] }>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/viewed`,

@@ -79,6 +79,8 @@ function messageOf(exc: unknown): string {
 interface CorpusReviewRecordsOptions {
   selectedBuildId: Ref<string>;
   reviewerKey?: Ref<string>;
+  /** Autocomplete consumers are visible; omitted preserves eager compatibility behavior. */
+  facetsActive?: Ref<boolean>;
   currentBuild: Ref<CorpusBuild | null>;
   recordOffset: Ref<number>;
   pageSize: number;
@@ -334,7 +336,13 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   }
 
   async function loadFacets() {
-    if (!options.selectedBuildId.value || facetsLoadingForBuild) return;
+    if (
+      !options.selectedBuildId.value ||
+      facetsLoadingForBuild ||
+      facetsLoadedForBuild ||
+      options.facetsActive?.value === false
+    )
+      return;
     const buildId = options.selectedBuildId.value;
     const ticket = latestFacets.start();
     facetsLoadingForBuild = true;
@@ -578,10 +586,20 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     recordError.value = "";
     requestedRecordId.value = "";
     recordGenerations.clear();
+    options.onFacets({});
     clearSelection();
   }
 
   watch(options.selectedBuildId, (_build, oldBuild) => clear(oldBuild), { flush: "sync" });
+  if (options.facetsActive)
+    watch(options.facetsActive, (active) => {
+      if (!active) {
+        latestFacets.cancel();
+        facetsLoadingForBuild = false;
+      } else if (reviewHydrated.value) {
+        void loadFacets();
+      }
+    });
   if (options.reviewerKey)
     watch(
       options.reviewerKey,

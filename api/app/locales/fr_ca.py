@@ -3339,7 +3339,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'pdf_corpus.metadata_enrichment_in_progress': 'Enrichissement des métadonnées en cours',
  'pdf_corpus.enrichment_pass_number': 'Passe {pass}',
  'pdf_corpus.default_model': 'modèle par défaut',
- 'pdf_corpus.record_activity_summary': 'Consultations {views} · révisions humaines {human} · révisions LLM {llm} · passes d’enrichissement {passes}',
+ 'pdf_corpus.record_activity_summary': 'Révisions humaines {human} · révisions LLM {llm} · passes d’enrichissement {passes}',
  'pdf_corpus.change_dispute_values': '« {existing} » conservé ; la passe proposait « {proposed} ».',
  'pdf_corpus.add_metadata_section': 'Ajouter d’autres détails',
  'pdf_corpus.add_metadata_help': 'Ces champs sont vides pour cet enregistrement. Remplissez ceux qui s’appliquent, par exemple un locuteur cité.',

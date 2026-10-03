@@ -206,9 +206,11 @@ function setRecordListElement(element: HTMLElement | null) {
   recordListEl.value = element;
 }
 // The queue list holds lightweight rows; full Records are read one at a time when opened.
+const metadataFacetsActive = ref(false);
 const reviewRecords = useCorpusReviewRecords({
   selectedBuildId,
   reviewerKey: computed(() => String(useAuthStore().user?.id ?? "")),
+  facetsActive: metadataFacetsActive,
   currentBuild,
   recordOffset,
   pageSize,
@@ -721,6 +723,22 @@ const {
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, fallbackOrValues, values) => i18n.tf(key, fallbackOrValues, values),
 });
+
+const metadataInspectorActive = computed(
+  () =>
+    workspaceMode.value === "review" &&
+    !focusView.value &&
+    (reviewWorkspaceMode.value === "metadata" ||
+      (reviewWorkspaceMode.value === "record" && reviewInspectorTab.value === "metadata")),
+);
+watch(
+  () =>
+    metadataInspectorActive.value ||
+    (workspaceMode.value === "review" && bulkMetadataOpen.value) ||
+    (focusView.value && reviewInspectorTab.value === "metadata"),
+  (active) => (metadataFacetsActive.value = active),
+  { immediate: true },
+);
 
 function normalizedEvidenceWords(value: string) {
   return new Set(
@@ -1564,12 +1582,11 @@ const selectedMetadataBlockingLabel = computed(() =>
 const selectedRecordActivitySummary = computed(() => {
   const record = selectedRecord.value;
   if (!record) return "";
-  const views = Number(record.activity?.human_view_count || record.human_view_count || 0);
   const human = Number(record.activity?.human_review_count || 0);
   const llm = Number(record.activity?.llm_review_count || 0);
   const passes = Number(record.activity?.enrichment_pass_count || 0);
-  return views + human + llm + passes > 0
-    ? ` · ${i18n.tf("pdf_corpus.record_activity_summary", { views, human, llm, passes })}`
+  return human + llm + passes > 0
+    ? ` · ${i18n.tf("pdf_corpus.record_activity_summary", { human, llm, passes })}`
     : "";
 });
 const selectedStructureSummary = computed(() => {
@@ -2006,22 +2023,6 @@ function activateRecord(record: CorpusRecord) {
     void refreshBlocks().catch((exc: unknown) =>
       setMessage(exc instanceof Error ? exc.message : String(exc), "error"),
     );
-  const buildId = selectedBuildId.value;
-  if (buildId && !sameRecord)
-    void corpusBuilderApi
-      .markViewed(buildId, record.record_id)
-      .then((result) => {
-        if (
-          selectedBuildId.value === buildId &&
-          selectedRecord.value?.record_id === record.record_id
-        )
-          selectedRecord.value.activity = result.activity;
-      })
-      .catch(
-        (exc: unknown) =>
-          selectedBuildId.value === buildId &&
-          setMessage(exc instanceof Error ? exc.message : String(exc), "error"),
-      );
   void restoreReviewViewport(viewport, { record: !sameRecord });
 }
 function toggleReviewSelection(recordId: string, checked: boolean) {
@@ -3040,6 +3041,7 @@ defineExpose({
             tabindex="0"
           >
             <CorpusMetadataResolutionPanel
+              :active="metadataInspectorActive"
               :schema="currentBuild?.schema"
               :build-id="currentBuild?.build_id"
               :record="selectedRecord"

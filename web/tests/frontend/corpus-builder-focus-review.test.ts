@@ -98,11 +98,17 @@ describe("Corpus Builder focus review interactions", () => {
       global: { stubs },
     });
     expect(wrapper.get("#focus-tab-metadata").attributes("aria-selected")).toBe("true");
+    const metadataPanel = wrapper.findComponent({ name: "CorpusMetadataResolutionPanel" });
+    expect(metadataPanel.props("active")).toBe(true);
     await wrapper.get(".focus-tabs").trigger("keydown", { key: "ArrowRight" });
     // The tab is parent-owned (blocked accepts switch it too): the view asks, the parent applies.
     expect(lastEmission(wrapper, "update:inspectorTab")).toEqual(["evidence"]);
     await wrapper.setProps({ inspectorTab: "evidence" });
     expect(wrapper.get("#focus-tab-evidence").attributes("aria-selected")).toBe("true");
+    expect(metadataPanel.props("active")).toBe(false);
+    expect(wrapper.findComponent({ name: "CorpusMetadataResolutionPanel" }).vm).toBe(
+      metadataPanel.vm,
+    );
     expect(document.activeElement).toBe(wrapper.get("#focus-tab-evidence").element);
     await wrapper.get(".focus-tabs").trigger("keydown", { key: "End" });
     expect(lastEmission(wrapper, "update:inspectorTab")).toEqual(["semantic"]);
