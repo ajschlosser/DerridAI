@@ -391,15 +391,15 @@ describe("Metadata memory page", () => {
   it("repairs an out-of-range bookmarked page instead of showing a successful empty slice", async () => {
     const list = vi.mocked(metadataMemoryApi.list);
     list.mockImplementation(async (filters) =>
-      filters.offset === 50
+      filters?.offset === 50
         ? currentPayload({ items: [], total: 1, offset: 50 })
         : currentPayload({ offset: 0 }),
     );
     const { wrapper, router } = await mountView({ offset: "50" });
     await flushPromises();
 
-    expect(list.mock.calls.some(([filters]) => filters.offset === 50)).toBe(true);
-    expect(list.mock.calls.some(([filters]) => filters.offset === 0)).toBe(true);
+    expect(list.mock.calls.some(([filters]) => filters?.offset === 50)).toBe(true);
+    expect(list.mock.calls.some(([filters]) => filters?.offset === 0)).toBe(true);
     expect(router.currentRoute.value.query.offset).toBeUndefined();
     expect(wrapper.text()).toContain("Levinas");
     expect(wrapper.text()).not.toContain("No precedents yet");
