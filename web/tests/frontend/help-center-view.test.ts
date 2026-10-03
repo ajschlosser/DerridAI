@@ -24,6 +24,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../src/domain/helpTopics", () => ({
   visiblePageGuides: () => [],
   visibleGlossary: () => [],
+  visibleStarters: () => [],
   visibleHelp: (_isAdmin: boolean, query: string) => {
     if (query && !"breadcrumbs".includes(query.toLowerCase())) return [];
     return [
@@ -94,6 +95,35 @@ describe("HelpCenterView URL state", () => {
 
     expect(router.currentRoute.value.query.q).toBe("missing");
     expect(wrapper.text()).toContain("No results");
+  });
+
+  it("restores glossary category state in the URL", async () => {
+    const { wrapper, router } = await mountView();
+    await flushPromises();
+
+    const buttons = wrapper.findAll(".help-filter");
+    const storage = buttons.find((button) => button.text().toLowerCase().includes("storage"));
+    expect(storage).toBeTruthy();
+    await storage!.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.topic).toBe("storage");
+
+    await wrapper.get("input[type=search]").setValue("breadcrumbs");
+    await flushPromises();
+    expect(router.currentRoute.value.query.topic).toBeUndefined();
+  });
+
+  it("opens shareable question anchors and keeps them keyboard-operable", async () => {
+    const { wrapper, router } = await mountView();
+    await flushPromises();
+
+    await router.push({ name: "help", hash: "#help-question-breadcrumbs" });
+    await flushPromises();
+
+    const question = wrapper.get("#help-question-breadcrumbs");
+    expect((question.element as HTMLDetailsElement).open).toBe(true);
+    expect(question.get("summary").attributes("tabindex")).toBeUndefined();
   });
 
   it("highlights matches, expands all, and clears the search from the field", async () => {
