@@ -814,23 +814,27 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: "dialog-ocr-cleanup",
-    contains: ["Clean OCR Artifacts"],
+    name: "record-ocr-cleanup",
+    contains: ["fi ligature remains in extracted text."],
     nav: "Record View",
     load: true,
-    target: "dialog",
+    records: [
+      {
+        ...RECORDS[0],
+        text: "A ﬁ ligature remains in extracted text.",
+      },
+    ],
     steps: async (page) => {
-      // OCR cleanup is a Record View command. Reach it through the owning surface instead of
-      // relying on Records-list hydration timing or on an unrelated "More" menu being present.
+      // OCR cleanup is an in-place Record View command, not a dialog workflow.
       const more = page.locator("summary[aria-label='More record actions']");
       await expect(more).toBeVisible({ timeout: 10_000 });
       await more.click();
       const clean = page.getByRole("button", { name: /Clean OCR artifacts/i });
       await expect(clean).toBeVisible();
       await clean.click();
-      await expect(
-        page.locator("dialog[open], [role=dialog][aria-modal=true]").last(),
-      ).toBeVisible();
+      await expect(page.locator(".record-reading-text")).toContainText(
+        "A fi ligature remains in extracted text.",
+      );
     },
   },
   { name: "search-loaded", nav: "Search", load: true },
