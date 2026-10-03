@@ -406,22 +406,28 @@ defineExpose({ select, draft });
 <style scoped>
 .schema-editor {
   display: grid;
-  gap: 16px;
+  grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
+  gap: var(--space-5);
   align-content: start;
+  align-items: start;
 }
 .schema-library {
+  position: sticky;
+  inset-block-start: var(--space-3);
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
+  min-inline-size: 0;
 }
 .library-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 .library-bar h2 {
+  flex-basis: 100%;
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--fs-md);
 }
 .spacer {
   flex: 1;
@@ -432,7 +438,7 @@ defineExpose({ select, draft });
 }
 .schema-form {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   min-inline-size: 0;
 }
 .schema-bar {
@@ -514,6 +520,14 @@ defineExpose({ select, draft });
   background: var(--tone-info-bg);
   color: var(--tone-info-fg);
   font-size: 0.875rem;
+}
+@media (max-width: 1100px) {
+  .schema-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .schema-library {
+    position: static;
+  }
 }
 @media (max-width: 820px) {
   .schema-identity {
