@@ -159,7 +159,6 @@ import {
 } from "../domain/sharedNavigation";
 import { selectedIndex, sharedUrlStateCodec } from "../domain/sharedUrlState";
 import { pathViewMap, viewFromPath, viewPathMap } from "../domain/navigation";
-import { createWorkspacePersistence } from "../domain/workspacePersistence";
 import { cancelPendingPrefs } from "../domain/prefsPersistence";
 import {
   workspaceDb,
@@ -175,6 +174,14 @@ import { createRecordEditing } from "../domain/recordEditing";
 import { createDbPresenceUpsert } from "../domain/dbPresenceUpsert";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
 import { createPdfLinking } from "../domain/pdfLinking";
+import { clearFileDerivedState as clearFileDerivedStateOf } from "../domain/fileDerivedState";
+import { closeFile, importFiles } from "../domain/sharedFileLifecycle";
+import {
+  fileTimers,
+  persistFile,
+  persistFileNow,
+  restoreWorkspace,
+} from "../domain/sharedWorkspacePersistence";
 import { createAppLifecycle } from "../domain/appLifecycle";
 import { compareSearchIndex, lookupRecord } from "../domain/sharedCompareLibrary";
 import { recordOptionLabel } from "../domain/recordOptionLabel";
@@ -696,20 +703,13 @@ const {
   workIndex: (...args) => workIndex(...args),
   workInsightMetrics: (...args) => workInsightMetrics(...args),
 });
-const { warmupConfiguredLlm, importFiles, closeFile, checkHealth } = createAppLifecycle({
+const { warmupConfiguredLlm, checkHealth } = createAppLifecycle({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   api: (...args) => api(...args),
-  applyCompressedTableUrlState: (...args) => applyCompressedTableUrlState(...args),
-  clearFileDerivedState: (...args) => clearFileDerivedState(...args),
-  decompressUrlState: (...args) => decompressUrlState(...args),
   defaultProviderProfile: (...args) => defaultProviderProfile(...args),
   ensureProviderProfiles: (...args) => ensureProviderProfiles(...args),
-  idbDelete: (...args) => idbDelete(...args),
-  invalidateCorpusCache: (...args) => invalidateCorpusCache(...args),
   isResearcher: (...args) => isResearcher(...args),
-  parseJsonl: (...args) => parseJsonl(...args),
-  persistFileNow: (...args) => persistFileNow(...args),
   persistPrefs: (...args) => persistPrefs(...args),
   warmupProviderProfile,
   refreshProviderStatuses: (...args) => refreshProviderStatuses(...args),
@@ -717,17 +717,12 @@ const { warmupConfiguredLlm, importFiles, closeFile, checkHealth } = createAppLi
   refreshStores: (...args) => refreshStores(...args),
   renderView: (...args) => renderView(...args),
   shell: (...args) => shell(...args),
-  stableJsonlFileIdentity: (...args) => stableJsonlFileIdentity(...args),
-  syncUrl: (...args) => syncUrl(...args),
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
   updateSystemCard: (...args) => updateSystemCard(...args),
 });
 const {
   pdfDisplayTitle,
   loadedPdfPagesForRecord,
   allLinkedRowsForLoadedPdf,
-  loadPdfMetadata,
   openPdfExplorerWorkspace,
   openLoadedPdfPage,
   linkedPdfRows,
@@ -1132,18 +1127,7 @@ function currentContext() {
 }
 
 const uid = () => crypto.randomUUID();
-async function stableJsonlFileIdentity(text) {
-  // Shareable URLs can only point back to a browser-local JSONL workspace if
-  // the same corpus file resolves to the same identifier on every client. Use
-  // a content digest rather than a random tab id. The JSONL payload is already
-  // resident as text during import, so hashing does not add another file read.
-  const bytes = new TextEncoder().encode(String(text || ""));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  const hex = [...new Uint8Array(digest)]
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
-  return { id: `jsonl-${hex.slice(0, 24)}`, content_hash: hex };
-}
+const clearFileDerivedState = (fileId) => clearFileDerivedStateOf(state, fileId);
 const activeFile = () => state.files.find((f) => f.id === state.activeFileId) || null;
 const selectedRecord = () => {
   const f = activeFile();
@@ -1410,21 +1394,6 @@ function showAppModal(dialog) {
   dialog.showModal();
 }
 
-const fileTimers = new Map();
-const { persistFileNow, persistFile, restoreWorkspace } = createWorkspacePersistence({
-  state,
-  trf: (...args) => trf(...args),
-  fileTimers,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  applyUiTheme: (...args) => applyUiTheme(...args),
-  ensureProviderProfiles: (...args) => ensureProviderProfiles(...args),
-  idbGet: (...args) => idbGet(...args),
-  idbGetAll: (...args) => idbGetAll(...args),
-  idbPut: (...args) => idbPut(...args),
-  invalidateCorpusCache: (...args) => invalidateCorpusCache(...args),
-  restoreCurrentPdfAsset: (...args) => restoreCurrentPdfAsset(...args),
-  serializableFile: (...args) => serializableFile(...args),
-});
 // Subset files for the Vue Records view: the sources, fields and file creation, over the loaded files.
 const { subsetSources, subsetSourceRecords, subsetFields, defaultSubsetName, createSubsetFile } =
   createRecordSubsets({
@@ -1504,42 +1473,6 @@ async function deleteWorkspaceDatabase() {
 }
 const deleteAllDerridaiBrowserState = () =>
   deleteAllDerridaiBrowserStateCompat(deleteWorkspaceDatabase);
-async function restoreCurrentPdfAsset() {
-  try {
-    const asset = await idbGet("assets", "current_pdf");
-    if (!asset?.blob) return;
-    const file = new File([asset.blob], asset.name || "restored.pdf", {
-      type: asset.blob.type || "application/pdf",
-    });
-    const buffer = await file.arrayBuffer();
-    if (state.pdf.url) URL.revokeObjectURL(state.pdf.url);
-    state.pdf.file = file;
-    state.pdf.url = URL.createObjectURL(new Blob([buffer], { type: "application/pdf" }));
-    state.pdf.name = file.name;
-    state.pdf.title = asset.title || file.name.replace(/\.pdf$/i, "");
-    state.pdf.author = asset.author || "";
-    state.pdf.page = Math.max(1, Number(asset.page) || 1);
-    state.pdf.rotation = Number(asset.rotation || 0) % 360;
-    state.pdf.text = String(asset.text || "");
-    state.pdf.search = String(asset.search || "");
-    state.pdf.relatedSearch = String(asset.relatedSearch || "");
-    state.pdf.extractionSource = String(asset.extractionSource || "");
-    state.pdf.extractError = String(asset.extractError || "");
-    try {
-      state.pdf.doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer.slice(0)) }).promise;
-      const metadata = await loadPdfMetadata(state.pdf.doc, file.name);
-      state.pdf.title = asset.title || metadata.title || state.pdf.title;
-      state.pdf.author = asset.author || metadata.author || state.pdf.author;
-      state.pdf.page = Math.min(state.pdf.page, state.pdf.doc.numPages || state.pdf.page);
-    } catch (error) {
-      state.pdf.doc = null;
-      state.pdf.extractError = `Restored PDF.js initialization failed (${error.message}).`;
-    }
-  } catch (error) {
-    console.warn("Could not restore current PDF asset", error);
-  }
-}
-
 function serializableFile(file) {
   return serializableRecordsFile(file);
 }
@@ -1709,25 +1642,6 @@ function bulkEditRowsForScope(scope) {
     return work ? allRows().filter((row) => row.record.work === work) : [];
   }
   return allRows();
-}
-
-function clearFileDerivedState(fileId) {
-  state.reviewSelection = new Set(
-    [...state.reviewSelection].filter((key) => !String(key).startsWith(fileId + "::")),
-  );
-  delete state.selected[fileId];
-  for (const bucket of [
-    state.upsertState,
-    state.upsertIgnored,
-    state.storePresence,
-    state.storePresenceIds,
-    state.storePresenceCheckedAt,
-  ]) {
-    for (const store of Object.keys(bucket || {})) {
-      for (const key of Object.keys(bucket[store] || {}))
-        if (key.startsWith(fileId + "::")) delete bucket[store][key];
-    }
-  }
 }
 
 function dbSearchWhere() {
@@ -2538,11 +2452,6 @@ function activateFile(fileId) {
     renderView();
   } else navigateTo("list", { fileId });
 }
-function triggerImport(fileList) {
-  return canUse("manageCorpus")
-    ? importFiles(fileList)
-    : toast(tr("runtime.toast.cannot_load_files"), { tone: "warning" });
-}
 function triggerMerge() {
   return canUse("manageCorpus")
     ? openMergeDialog()
@@ -3029,7 +2938,6 @@ export {
   toggleSidebar,
   activateFile,
   closeWorkspaceFile,
-  triggerImport,
   triggerMerge,
   subsetSources,
   subsetSourceRecords,
@@ -3085,7 +2993,6 @@ export {
   linkPdfPage,
   linkPdfPageWithLlm,
   linkedPdfRows,
-  loadPdfMetadata,
   loadedPdfPagesForRecord,
   pages,
   pdfDisplayTitle,

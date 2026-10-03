@@ -76,6 +76,7 @@ import { SETTINGS_SECTIONS, resolveSettingsSectionId } from "./domain/settings";
 import { viewConfig } from "./domain/runtimeConstants";
 import * as runtime from "./runtime/runtime.js";
 import { navigateTo } from "./domain/sharedNavigation";
+import { triggerImport } from "./domain/sharedFileLifecycle";
 import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
 
 const router = useRouter();
@@ -401,7 +402,7 @@ const breadcrumbForwardLabel = computed(() =>
 );
 
 function onImport(files: FileList) {
-  if (auth.isAdmin) runtime.triggerImport(files);
+  if (auth.isAdmin) triggerImport(files);
 }
 
 function onFiles(event: Event) {

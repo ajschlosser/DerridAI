@@ -47,8 +47,6 @@ export const repaintAfterLocationChange = (
 ) => runtime.repaintAfterLocationChange(...args);
 export const viewForPath = (...args: Parameters<typeof runtime.viewForPath>) =>
   runtime.viewForPath(...args);
-export const triggerImport = (...args: Parameters<typeof runtime.triggerImport>) =>
-  runtime.triggerImport(...args);
 export const responseCacheStore = (...args: Parameters<typeof runtime.responseCacheStore>) =>
   runtime.responseCacheStore(...args);
 export const getResponseFaqPage = (...args: Parameters<typeof runtime.getResponseFaqPage>) =>
