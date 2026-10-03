@@ -26,6 +26,10 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..http_auth import require_admin
+from ..publication_embeddings import (
+    PublicationEmbeddingUnavailableError,
+    runtime_info as publication_embedding_info,
+)
 from ..site_publication import (
     build_local_site_file,
     build_nginx_site_bundle,
@@ -54,9 +58,9 @@ class SiteExportRequest(BaseModel):
     record_profile: Literal["complete", "reader"] = "complete"
     # Accepted for older clients. Every export includes Transformers.js; model weights are never packaged.
     include_transformers: bool = True
-    # Copy the active collection's derived vectors into the publication. When false, Records and the source
-    # embedding contract are still published so each browser can build its own local semantic index.
+    # Legacy boolean retained for older clients. New clients use vector_strategy.
     include_vectors: bool = True
+    vector_strategy: Literal["source", "browser-default", "browser-build"] | None = None
     # nginx/Docker only: expose a same-origin /provider/ bridge to this OpenAI-compatible base URL.
     provider_proxy_upstream: str | None = Field(default=None, max_length=2048)
 
@@ -68,6 +72,7 @@ def site_export_options(request: Request) -> dict[str, object]:
     return {
         "languages": system_store.list_languages(),
         "transformers_runtime": runtime_info(),
+        "publication_embedder": publication_embedding_info(),
     }
 
 
@@ -124,6 +129,7 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
                 languages=body.languages or [body.locale],
                 include_transformers=body.include_transformers,
                 include_vectors=body.include_vectors,
+                vector_strategy=body.vector_strategy,
                 record_profile=body.record_profile,
             )
         elif body.export_format == "local-single-file":
@@ -136,6 +142,7 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
                 languages=body.languages or [body.locale],
                 include_transformers=body.include_transformers,
                 include_vectors=body.include_vectors,
+                vector_strategy=body.vector_strategy,
                 record_profile=body.record_profile,
             )
         else:
@@ -148,6 +155,7 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
                 languages=body.languages or [body.locale],
                 include_transformers=body.include_transformers,
                 include_vectors=body.include_vectors,
+                vector_strategy=body.vector_strategy,
                 record_profile=body.record_profile,
                 provider_proxy_upstream=provider_proxy_upstream,
             )
@@ -159,6 +167,11 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
         raise HTTPException(
             status_code=502,
             detail=f"The Transformers.js runtime could not be downloaded. Retry the download, then create the site. {exc}",
+        ) from exc
+    except PublicationEmbeddingUnavailableError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"The browser-default publication embeddings could not be prepared. {exc}",
         ) from exc
     return Response(
         content=bundle.payload,
@@ -174,6 +187,7 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
             "X-DerridAI-Work-Count": str(bundle.work_count),
             "X-DerridAI-Record-Profile": bundle.record_profile,
             "X-DerridAI-Transformers-Runtime": "included",
-            "X-DerridAI-Publication-Vectors": "included" if body.include_vectors else "omitted",
+            "X-DerridAI-Publication-Vectors": "included" if bundle.include_vectors else "omitted",
+            "X-DerridAI-Vector-Strategy": bundle.vector_strategy,
         },
     )
