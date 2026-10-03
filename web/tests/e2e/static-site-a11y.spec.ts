@@ -663,8 +663,12 @@ test("a provider the reader configures powers vector + LLM Research with method 
   await expect(evidenceItem).toContainText("[E1] Glas");
   const evidencePane = page.locator(".research-evidence-pane");
   const evidencePanel = page.locator(".research-evidence-panel");
-  expect(await evidencePane.evaluate((element) => getComputedStyle(element).alignSelf)).toBe("start");
-  expect(await evidencePane.evaluate((element) => getComputedStyle(element).position)).toBe("sticky");
+  expect(
+    await evidencePane.evaluate((element) => getComputedStyle(element).alignSelf),
+  ).toBe("start");
+  expect(
+    await evidencePane.evaluate((element) => getComputedStyle(element).position),
+  ).toBe("sticky");
   expect(await evidencePanel.evaluate((element) => getComputedStyle(element).alignContent)).toBe(
     "start",
   );
