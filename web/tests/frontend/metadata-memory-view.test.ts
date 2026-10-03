@@ -302,10 +302,11 @@ describe("Metadata memory page", () => {
     const toggle = wrapper.get(".details-toggle");
     const detailsId = toggle.attributes("aria-controls");
     expect(detailsId).toBe("metadata-memory-details-mex-1");
-    expect(wrapper.find(`#${detailsId}`).exists()).toBe(false);
+    expect(wrapper.get(`#${detailsId}`).attributes("hidden")).toBeDefined();
     await toggle.trigger("click");
     expect(wrapper.text()).toContain("Context around the evidence.");
     expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(wrapper.get(`#${detailsId}`).attributes("hidden")).toBeUndefined();
     expect(wrapper.get(`#${detailsId}`).text()).toContain("Context around the evidence.");
     expect(wrapper.get("table caption").text()).toBe("Metadata precedents table");
   });
