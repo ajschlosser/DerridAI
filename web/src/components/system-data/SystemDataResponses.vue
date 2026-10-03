@@ -23,7 +23,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../AppIcon.vue";
 import { systemApi, type SystemResponseCachePage } from "../../api/system";
-import * as runtime from "../../runtime/runtimeBridge";
+import { formatTimestamp } from "../../domain/recordTableHelpers";
 import { useDataQuery } from "../../realtime/dataQuery";
 import { useI18nStore } from "../../stores/i18n";
 
@@ -55,7 +55,7 @@ function formatValue(value: unknown) {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 function formatDate(value: unknown) {
-  return value ? runtime.formatTimestamp(String(value)) : "—";
+  return value ? formatTimestamp(String(value)) : "—";
 }
 function provider(record: DataRow) {
   return String(

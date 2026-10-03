@@ -23,6 +23,10 @@ import * as runtime from "../runtime/runtime.js";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { navigateTo, syncUrl } from "../domain/sharedNavigation";
 import { dbSearchWhere } from "../domain/sharedUrlState";
+import { userHasCapability } from "../domain/pageAccess";
+import { formatTimestamp } from "../domain/recordTableHelpers";
+import { sessionState } from "../state/workspaceState";
+
 import { mlaPageSpan } from "../domain/citations";
 import { icon } from "../domain/html";
 import { commonWorkValue, workCoverUrl } from "../domain/workMetadata";
@@ -31,6 +35,9 @@ import UiTooltip from "../components/ui/UiTooltip.vue";
 import { useI18nStore } from "../stores/i18n";
 import { corpusState } from "../state/workspaceState";
 import { useJobsStore } from "../stores/jobs";
+
+const hasCapability = (capability: string) =>
+  userHasCapability(sessionState.userContext, capability);
 
 const i18n = useI18nStore();
 
@@ -189,16 +196,16 @@ async function refresh() {
   activeMetricIndex.value = state.dashboardMetricIndex as number;
 
   recent.value = isResearcher.value
-    ? runtime.hasCapability("activity.read")
+    ? hasCapability("activity.read")
       ? [
-          ...(runtime.hasCapability("annotations.read")
+          ...(hasCapability("annotations.read")
             ? ((state.serverAnnotations || []) as Any[]).map((annotation: Any) => ({
                 kind: "annotation",
                 timestamp: annotation.created_at || "",
                 annotation,
               }))
             : []),
-          ...(runtime.hasCapability("rag.jobs.own")
+          ...(hasCapability("rag.jobs.own")
             ? ((state.jobs || []) as Any[])
                 .filter((job: Any) => job.type === "rag")
                 .map((job: Any) => ({
@@ -229,7 +236,7 @@ async function refresh() {
   currentLanguage.value = state.translations?.info?.name || state.translations?.locale || "";
   currentLanguageFlag.value = state.translations?.info?.flag || "🌐";
   latestAnnotation.value =
-    !isResearcher.value || runtime.hasCapability("annotations.read")
+    !isResearcher.value || hasCapability("annotations.read")
       ? runtime.recentAnnotations(1)[0] || null
       : null;
   uiColorTheme.value = state.appConfig?.ui_color_theme || "green";
@@ -870,7 +877,7 @@ onBeforeUnmount(() => {
       </section>
       <section class="dashboard-page-lower">
         <article
-          v-if="isResearcher && runtime.hasCapability('appearance.manage')"
+          v-if="isResearcher && hasCapability('appearance.manage')"
           class="card dashboard-quick-card dashboard-appearance-card"
         >
           <div class="dashboard-card-title">
@@ -1059,9 +1066,7 @@ onBeforeUnmount(() => {
                 (latestAnnotation as Any).annotation.author ||
                 i18n.t("annotations.unknown_author")
               }}</span>
-              <time>{{
-                runtime.formatTimestamp((latestAnnotation as Any).annotation.created_at)
-              }}</time>
+              <time>{{ formatTimestamp((latestAnnotation as Any).annotation.created_at) }}</time>
               <small>{{
                 (latestAnnotation as Any).record.record_id || i18n.t("nav.record")
               }}</small>
