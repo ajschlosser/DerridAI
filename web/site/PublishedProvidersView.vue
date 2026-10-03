@@ -77,7 +77,9 @@ async function testModel() {
       if (info?.status !== "progress") return;
       localProgress.value = Math.round(Number(info.progress) || 0);
       localStatus.value = site.t("site.runtime.model_download", {
-        file: String(info.file || site.localModel.value.model).split("/").pop(),
+        file: String(info.file || site.localModel.value.model)
+          .split("/")
+          .pop(),
         percent: localProgress.value,
       });
     });
@@ -282,12 +284,7 @@ const activeDeviceText = computed(() =>
           @click="deleteCachedModel"
         />
       </div>
-      <div
-        class="status"
-        :class="localStatusTone"
-        role="status"
-        aria-live="polite"
-      >
+      <div class="status" :class="localStatusTone" role="status" aria-live="polite">
         {{ localStatus }}
       </div>
       <PublishedIndexStatus
@@ -339,12 +336,7 @@ const activeDeviceText = computed(() =>
           @click="deleteSelectedEndpoint"
         />
       </div>
-      <div
-        class="status"
-        :class="providerStatusTone"
-        role="status"
-        aria-live="polite"
-      >
+      <div class="status" :class="providerStatusTone" role="status" aria-live="polite">
         {{ providerStatus }}
       </div>
       <PublishedIndexStatus v-if="site.selectedEmbeddingId.value" />
@@ -420,18 +412,9 @@ const activeDeviceText = computed(() =>
         <span>{{ site.t("site.runtime.use_for_answers") }}</span>
       </label>
       <div class="chips">
-        <UiButton
-          variant="primary"
-          type="submit"
-          :label="site.t('site.runtime.save_provider')"
-        />
+        <UiButton variant="primary" type="submit" :label="site.t('site.runtime.save_provider')" />
       </div>
-      <div
-        class="status"
-        :class="endpointStatusTone"
-        role="status"
-        aria-live="polite"
-      >
+      <div class="status" :class="endpointStatusTone" role="status" aria-live="polite">
         {{ endpointStatus }}
       </div>
     </form>

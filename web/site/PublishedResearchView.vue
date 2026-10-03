@@ -122,17 +122,9 @@ async function runResearch() {
 
 <template>
   <div class="research-layout">
-    <section
-      class="panel stack"
-      data-tour="research"
-      aria-labelledby="research-heading"
-    >
+    <section class="panel stack" data-tour="research" aria-labelledby="research-heading">
       <h2 id="research-heading">{{ site.t("site.runtime.research") }}</h2>
-      <PublishedMethodStrip
-        :text="methods.text"
-        :vector="methods.vector"
-        :llm="methods.llm"
-      />
+      <PublishedMethodStrip :text="methods.text" :vector="methods.vector" :llm="methods.llm" />
       <UiTextarea
         v-model="question"
         class="control"
@@ -145,12 +137,7 @@ async function runResearch() {
         :disabled="running"
         @click="runResearch"
       />
-      <div
-        class="status"
-        :class="statusTone"
-        role="status"
-        aria-live="polite"
-      >
+      <div class="status" :class="statusTone" role="status" aria-live="polite">
         {{ status }}
       </div>
       <PublishedIndexStatus
@@ -159,7 +146,9 @@ async function runResearch() {
       />
       <div class="answer" aria-live="polite">
         <PublishedResearchResult
-          v-if="response && evidenceTarget && (answerText || response.evidencePacket.evidence.length)"
+          v-if="
+            response && evidenceTarget && (answerText || response.evidencePacket.evidence.length)
+          "
           :answer="answerText"
           :evidence="response.evidencePacket.evidence"
           :records-by-id="recordsById"
@@ -171,10 +160,7 @@ async function runResearch() {
       </div>
     </section>
 
-    <aside
-      class="stack research-evidence-pane"
-      :aria-label="site.t('site.runtime.research_tools')"
-    >
+    <aside class="stack research-evidence-pane" :aria-label="site.t('site.runtime.research_tools')">
       <section
         ref="evidenceTarget"
         class="research-evidence-panel"

@@ -48,20 +48,11 @@ onMounted(refresh);
 </script>
 
 <template>
-  <div
-    v-if="!items.length"
-    class="panel empty"
-    data-tour="notes"
-  >
+  <div v-if="!items.length" class="panel empty" data-tour="notes">
     {{ site.t("site.runtime.no_annotations") }}
   </div>
 
-  <section
-    v-else
-    class="stack"
-    data-tour="notes"
-    :aria-label="site.t('site.runtime.annotations')"
-  >
+  <section v-else class="stack" data-tour="notes" :aria-label="site.t('site.runtime.annotations')">
     <article v-for="item in items" :key="item.id" class="annotation">
       <strong>{{ item.work || item.record_id }}</strong>
       <div class="meta">{{ site.formatDate(item.created_at) }}</div>
@@ -81,9 +72,7 @@ onMounted(refresh);
           @click="remove(item.id)"
         />
       </div>
-      <span class="status" role="status" aria-live="polite">{{
-        statusById[item.id] || ""
-      }}</span>
+      <span class="status" role="status" aria-live="polite">{{ statusById[item.id] || "" }}</span>
     </article>
   </section>
 </template>

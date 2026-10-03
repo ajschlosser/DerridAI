@@ -150,11 +150,7 @@ async function clear() {
         :disabled="building"
         @click="build"
       />
-      <UiButton
-        v-if="building"
-        :label="site.t('site.runtime.index_cancel')"
-        @click="cancel"
-      />
+      <UiButton v-if="building" :label="site.t('site.runtime.index_cancel')" @click="cancel" />
       <UiButton
         variant="danger"
         :label="site.t('site.runtime.index_clear')"

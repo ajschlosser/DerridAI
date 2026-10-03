@@ -32,10 +32,9 @@ function inlinePublishedSiteCss(): Plugin {
 
       if (!entryChunk || !cssParts.length) return;
       const css = cssParts.join("\n");
-      const installer =
-        `(()=>{const style=document.createElement("style");style.dataset.derridaiPublishedSiteVue="";style.textContent=${JSON.stringify(
-          css,
-        )};document.head.appendChild(style)})();\n`;
+      const installer = `(()=>{const style=document.createElement("style");style.dataset.derridaiPublishedSiteVue="";style.textContent=${JSON.stringify(
+        css,
+      )};document.head.appendChild(style)})();\n`;
       entryChunk.code = installer + entryChunk.code;
     },
   };

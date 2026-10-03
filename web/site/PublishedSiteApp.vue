@@ -174,11 +174,7 @@ onMounted(initialize);
             <span>{{ site.t("site.runtime.high_contrast") }}</span>
           </label>
 
-          <button
-            type="button"
-            data-tour="tutorial"
-            @click="tutorialOpen = true"
-          >
+          <button type="button" data-tour="tutorial" @click="tutorialOpen = true">
             {{ site.t("site.runtime.tutorial") }}
           </button>
         </div>

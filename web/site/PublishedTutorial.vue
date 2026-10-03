@@ -55,9 +55,7 @@ const progress = computed(() =>
 );
 const fillWidth = computed(() => `${((index.value + 1) / steps.length) * 100}%`);
 const nextLabel = computed(() =>
-  index.value === steps.length - 1
-    ? site.t("site.runtime.finish")
-    : site.t("site.runtime.next"),
+  index.value === steps.length - 1 ? site.t("site.runtime.finish") : site.t("site.runtime.next"),
 );
 
 function resetCardPosition() {
@@ -124,8 +122,7 @@ function reveal() {
   const target = currentTarget.value;
   if (!target || target.closest("header.top") || !card.value) return;
   const rect = target.getBoundingClientRect();
-  const usable =
-    window.innerHeight - (window.innerWidth <= 760 ? card.value.offsetHeight + 24 : 0);
+  const usable = window.innerHeight - (window.innerWidth <= 760 ? card.value.offsetHeight + 24 : 0);
   if (rect.top < 72 || rect.bottom > usable) {
     if (window.innerWidth <= 760) window.scrollBy(0, rect.top - 16);
     else {

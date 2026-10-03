@@ -23,11 +23,7 @@ const record = computed(() => state.value?.record || null);
 const searchedQuery = computed(() => state.value?.searchedQuery || "");
 
 const textSegments = computed(() =>
-  highlightSegments(
-    String(record.value?.text || ""),
-    searchedQuery.value,
-    site.locale.value,
-  ),
+  highlightSegments(String(record.value?.text || ""), searchedQuery.value, site.locale.value),
 );
 
 const metadata = computed(() => {
@@ -52,23 +48,20 @@ const metadata = computed(() => {
     }));
 });
 
-watch(
-  state,
-  async (next) => {
-    quote.value = "";
-    note.value = "";
-    tags.value = "";
-    saved.value = "";
-    await nextTick();
-    if (next && dialog.value && !dialog.value.open) {
-      dialog.value.showModal();
-      dialog.value.querySelector<HTMLButtonElement>(".record-close")?.focus();
-      dialog.value.querySelector("mark")?.scrollIntoView({ block: "center" });
-    } else if (!next && dialog.value?.open) {
-      dialog.value.close();
-    }
-  },
-);
+watch(state, async (next) => {
+  quote.value = "";
+  note.value = "";
+  tags.value = "";
+  saved.value = "";
+  await nextTick();
+  if (next && dialog.value && !dialog.value.open) {
+    dialog.value.showModal();
+    dialog.value.querySelector<HTMLButtonElement>(".record-close")?.focus();
+    dialog.value.querySelector("mark")?.scrollIntoView({ block: "center" });
+  } else if (!next && dialog.value?.open) {
+    dialog.value.close();
+  }
+});
 
 function close() {
   dialog.value?.close();

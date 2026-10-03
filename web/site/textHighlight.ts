@@ -31,10 +31,16 @@ export function matchRanges(text: string, query: string, locale: string): Array<
     }
   }
 
-  const phrase = String(query || "").trim().toLocaleLowerCase(locale);
+  const phrase = String(query || "")
+    .trim()
+    .toLocaleLowerCase(locale);
   const folded = text.toLocaleLowerCase(locale);
   if (terms.size > 1 && folded.length === text.length) {
-    for (let at = folded.indexOf(phrase); phrase && at !== -1; at = folded.indexOf(phrase, at + 1)) {
+    for (
+      let at = folded.indexOf(phrase);
+      phrase && at !== -1;
+      at = folded.indexOf(phrase, at + 1)
+    ) {
       ranges.push([at, at + phrase.length]);
     }
   }
@@ -49,11 +55,7 @@ export function matchRanges(text: string, query: string, locale: string): Array<
   return merged;
 }
 
-export function highlightSegments(
-  text: string,
-  query: string,
-  locale: string,
-): HighlightSegment[] {
+export function highlightSegments(text: string, query: string, locale: string): HighlightSegment[] {
   const segments: HighlightSegment[] = [];
   let from = 0;
   for (const [start, end] of matchRanges(text, query, locale)) {

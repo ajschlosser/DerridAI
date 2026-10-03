@@ -250,7 +250,9 @@ async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
   if (typeof DecompressionStream !== "function") {
     throw providerError("DecompressionStream is unavailable.", "unsupported");
   }
-  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const stream = new Blob([bytes as BlobPart])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
@@ -299,7 +301,8 @@ export function createPublishedSiteContext() {
 
   const availableLocales = Object.keys(publication.strings || {});
   const languageMetadata = Array.isArray(publication.languages) ? publication.languages : [];
-  const initialLocale = readLocal(localeKey) || publication.locale || availableLocales[0] || "en-US";
+  const initialLocale =
+    readLocal(localeKey) || publication.locale || availableLocales[0] || "en-US";
 
   const locale = ref(
     availableLocales.includes(initialLocale) ? initialLocale : availableLocales[0] || "en-US",
@@ -381,7 +384,9 @@ export function createPublishedSiteContext() {
   }
 
   function suggestedProfileForModel(model: string) {
-    const normalized = String(model || "").trim().toLocaleLowerCase();
+    const normalized = String(model || "")
+      .trim()
+      .toLocaleLowerCase();
     return transformerSuggestions.find(
       (item) =>
         item.id.toLocaleLowerCase() === normalized ||
@@ -408,9 +413,7 @@ export function createPublishedSiteContext() {
       const model = String(raw.model || defaultTransformersModel);
       const defaults = settingsForModel(model);
       const device: LocalModelSettings["device"] =
-        raw.device === "webgpu" || raw.device === "wasm"
-          ? raw.device
-          : defaultTransformersDevice;
+        raw.device === "webgpu" || raw.device === "wasm" ? raw.device : defaultTransformersDevice;
       return {
         model,
         device,
@@ -418,8 +421,7 @@ export function createPublishedSiteContext() {
         dtype: raw.dtype == null ? defaults.dtype : String(raw.dtype),
         pooling: raw.pooling == null ? defaults.pooling : String(raw.pooling),
         normalize: raw.normalize == null ? defaults.normalize : Boolean(raw.normalize),
-        query_prefix:
-          raw.query_prefix == null ? defaults.query_prefix : String(raw.query_prefix),
+        query_prefix: raw.query_prefix == null ? defaults.query_prefix : String(raw.query_prefix),
         document_prefix:
           raw.document_prefix == null ? defaults.document_prefix : String(raw.document_prefix),
       };
@@ -479,8 +481,7 @@ export function createPublishedSiteContext() {
   const selectedEmbeddingId = ref(
     endpoints.value.some((endpoint) => endpoint.id === initialEmbedding) ? initialEmbedding : "",
   );
-  const initialGeneration =
-    readLocal(generationSelectionKey) || readLocal(legacyProviderKey) || "";
+  const initialGeneration = readLocal(generationSelectionKey) || readLocal(legacyProviderKey) || "";
   const selectedGenerationId = ref(
     endpoints.value.some((endpoint) => endpoint.id === initialGeneration) ? initialGeneration : "",
   );
@@ -603,7 +604,9 @@ export function createPublishedSiteContext() {
   }
 
   function providerBase(profile: EndpointProfile): string {
-    const raw = String(profile?.base_url || "").trim().replace(/\/$/, "");
+    const raw = String(profile?.base_url || "")
+      .trim()
+      .replace(/\/$/, "");
     if (!raw) {
       throw providerError(t("site.runtime.provider_endpoint_missing"), "invalid_endpoint");
     }
@@ -697,10 +700,7 @@ export function createPublishedSiteContext() {
     }
   }
 
-  function embeddingVariant(profile: {
-    query_prefix?: string;
-    document_prefix?: string;
-  }): string {
+  function embeddingVariant(profile: { query_prefix?: string; document_prefix?: string }): string {
     return [
       profile.query_prefix ? `query-prefix=${profile.query_prefix}` : "",
       profile.document_prefix ? `document-prefix=${profile.document_prefix}` : "",
@@ -720,8 +720,9 @@ export function createPublishedSiteContext() {
 
   async function yieldAfterEmbeddingBatch(signal?: AbortSignal): Promise<void> {
     if (signal?.aborted) throw new DOMException("Operation aborted.", "AbortError");
-    const scheduler = (globalThis as typeof globalThis & { scheduler?: { yield?: () => Promise<void> } })
-      .scheduler;
+    const scheduler = (
+      globalThis as typeof globalThis & { scheduler?: { yield?: () => Promise<void> } }
+    ).scheduler;
     if (scheduler?.yield) {
       await scheduler.yield();
     } else {
@@ -817,7 +818,9 @@ export function createPublishedSiteContext() {
     return transformersRuntime;
   }
 
-  async function resolveDevice(preference: LocalModelSettings["device"]): Promise<"wasm" | "webgpu"> {
+  async function resolveDevice(
+    preference: LocalModelSettings["device"],
+  ): Promise<"wasm" | "webgpu"> {
     if (preference !== "webgpu") return "wasm";
     const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
     if (!gpu) return "wasm";
@@ -1115,8 +1118,7 @@ export function createPublishedSiteContext() {
     } catch (error) {
       const providerFailure = error as ProviderError;
       if (providerFailure.code === "network" && (await noCorsReachabilityProbe(endpoint))) {
-        const origin =
-          location.origin === "null" ? t("site.runtime.file_origin") : location.origin;
+        const origin = location.origin === "null" ? t("site.runtime.file_origin") : location.origin;
         return {
           ok: false,
           message: t("site.runtime.provider_cors_blocked", { origin }),
@@ -1166,7 +1168,9 @@ export function createPublishedSiteContext() {
     const profile = normalizeEndpoint(raw);
     if (!profile || !profile.model) {
       throw new Error(
-        profile ? t("site.runtime.provider_model_required") : t("site.runtime.provider_endpoint_invalid"),
+        profile
+          ? t("site.runtime.provider_model_required")
+          : t("site.runtime.provider_endpoint_invalid"),
       );
     }
     providerBase(profile);
@@ -1190,12 +1194,14 @@ export function createPublishedSiteContext() {
     await rebuildClient();
   }
 
-  async function buildIndex(options: {
-    prepareLocalModel?: boolean;
-    signal?: AbortSignal;
-    onIndexProgress?: (indexed: number, total: number) => void;
-    onModelProgress?: (info: ModelProgress) => void;
-  } = {}): Promise<LocalIndexStatus> {
+  async function buildIndex(
+    options: {
+      prepareLocalModel?: boolean;
+      signal?: AbortSignal;
+      onIndexProgress?: (indexed: number, total: number) => void;
+      onModelProgress?: (info: ModelProgress) => void;
+    } = {},
+  ): Promise<LocalIndexStatus> {
     if (options.prepareLocalModel) {
       saveLocalModel();
       await rebuildClient();

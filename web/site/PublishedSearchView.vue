@@ -128,11 +128,7 @@ async function runSearch() {
 }
 
 function snippet(record: PublicationRecord): string {
-  return snippetText(
-    String(record.text || ""),
-    searchedQuery.value,
-    site.locale.value,
-  );
+  return snippetText(String(record.text || ""), searchedQuery.value, site.locale.value);
 }
 
 function segments(record: PublicationRecord) {
@@ -188,11 +184,7 @@ function segments(record: PublicationRecord) {
               </option>
             </UiSelect>
           </label>
-          <PublishedMethodStrip
-            :text="methods.text"
-            :vector="methods.vector"
-            :llm="methods.llm"
-          />
+          <PublishedMethodStrip :text="methods.text" :vector="methods.vector" :llm="methods.llm" />
         </div>
 
         <details class="search-refine" data-tour="filters">
@@ -245,12 +237,7 @@ function segments(record: PublicationRecord) {
         </details>
       </form>
 
-      <div
-        class="status"
-        :class="statusTone"
-        role="status"
-        aria-live="polite"
-      >
+      <div class="status" :class="statusTone" role="status" aria-live="polite">
         {{ status }}
       </div>
 
