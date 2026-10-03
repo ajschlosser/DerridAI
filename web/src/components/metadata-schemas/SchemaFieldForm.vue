@@ -49,7 +49,6 @@ const { t } = useSchemaCopy();
 const baseId = useId();
 const matchTitleId = `${baseId}-match-fields`;
 const matchingNoteId = `${baseId}-matching-note`;
-const kindHelpId = `${baseId}-kind-help`;
 const id = (suffix: string) => `${baseId}-${suffix}`;
 
 const MATCHING_MODES: EquivalenceMode[] = [
@@ -207,16 +206,20 @@ function setMemberValues(member: SchemaMember, text: string) {
           :tooltip="t('field_role_help')"
           :control-id="id('role')"
         >
-          <UiSelect
-            :id="id('role')"
-            :model-value="field.role || 'scholarly'"
-            @update:model-value="setFieldRole"
-          >
-            <option value="scholarly">{{ t("role_scholarly", "Scholarly metadata") }}</option>
-            <option value="structural">{{ t("role_structural", "Structural metadata") }}</option>
-            <option value="document">{{ t("role_document", "Document metadata") }}</option>
-            <option value="operational">{{ t("role_operational", "Operational / utility") }}</option>
-          </UiSelect>
+          <template #default="{ describedby, invalid }">
+            <UiSelect
+              :id="id('role')"
+              :model-value="field.role || 'scholarly'"
+              :aria-describedby="describedby"
+              :invalid="invalid"
+              @update:model-value="setFieldRole"
+            >
+              <option value="scholarly">{{ t("role_scholarly", "Scholarly metadata") }}</option>
+              <option value="structural">{{ t("role_structural", "Structural metadata") }}</option>
+              <option value="document">{{ t("role_document", "Document metadata") }}</option>
+              <option value="operational">{{ t("role_operational", "Operational / utility") }}</option>
+            </UiSelect>
+          </template>
         </UiField>
         <UiField
           :label="t('field_scope', 'Where the value lives')"
@@ -224,14 +227,18 @@ function setMemberValues(member: SchemaMember, text: string) {
           :tooltip="t('field_scope_help')"
           :control-id="id('scope')"
         >
-          <UiSelect
-            :id="id('scope')"
-            :model-value="field.scope || 'record'"
-            @update:model-value="setFieldScope"
-          >
-            <option value="record">{{ t("scope_record", "On each record") }}</option>
-            <option value="corpus">{{ t("scope_corpus", "Once for the corpus") }}</option>
-          </UiSelect>
+          <template #default="{ describedby, invalid }">
+            <UiSelect
+              :id="id('scope')"
+              :model-value="field.scope || 'record'"
+              :aria-describedby="describedby"
+              :invalid="invalid"
+              @update:model-value="setFieldScope"
+            >
+              <option value="record">{{ t("scope_record", "On each record") }}</option>
+              <option value="corpus">{{ t("scope_corpus", "Once for the corpus") }}</option>
+            </UiSelect>
+          </template>
         </UiField>
         <UiField
           :label="t('review_visibility', 'Record review visibility')"
@@ -239,15 +246,19 @@ function setMemberValues(member: SchemaMember, text: string) {
           :tooltip="t('review_visibility_help')"
           :control-id="id('visibility')"
         >
-          <UiSelect
-            :id="id('visibility')"
-            :model-value="field.review_visibility || 'primary'"
-            @update:model-value="setReviewVisibility"
-          >
-            <option value="primary">{{ t("visibility_primary", "Show in review") }}</option>
-            <option value="details">{{ t("visibility_details", "Show in details") }}</option>
-            <option value="hidden">{{ t("visibility_hidden", "Hidden") }}</option>
-          </UiSelect>
+          <template #default="{ describedby, invalid }">
+            <UiSelect
+              :id="id('visibility')"
+              :model-value="field.review_visibility || 'primary'"
+              :aria-describedby="describedby"
+              :invalid="invalid"
+              @update:model-value="setReviewVisibility"
+            >
+              <option value="primary">{{ t("visibility_primary", "Show in review") }}</option>
+              <option value="details">{{ t("visibility_details", "Show in details") }}</option>
+              <option value="hidden">{{ t("visibility_hidden", "Hidden") }}</option>
+            </UiSelect>
+          </template>
         </UiField>
       </div>
     </section>
@@ -477,17 +488,20 @@ function setMemberValues(member: SchemaMember, text: string) {
           :hint="t('value_matching_kind_help')"
           :control-id="id('identity-kind')"
         >
-          <UiInput
-            :id="id('identity-kind')"
-            type="text"
-            maxlength="120"
-            pattern="[a-z][a-z0-9_.\-]*"
-            spellcheck="false"
-            autocomplete="off"
-            :model-value="field.equivalence_profile.identity_kind ?? ''"
-            :aria-describedby="kindHelpId"
-            @update:model-value="setIdentityKind(String($event ?? ''))"
-          />
+          <template #default="{ describedby, invalid }">
+            <UiInput
+              :id="id('identity-kind')"
+              type="text"
+              maxlength="120"
+              pattern="[a-z][a-z0-9_.\-]*"
+              spellcheck="false"
+              autocomplete="off"
+              :model-value="field.equivalence_profile.identity_kind ?? ''"
+              :aria-describedby="describedby"
+              :invalid="invalid"
+              @update:model-value="setIdentityKind(String($event ?? ''))"
+            />
+          </template>
         </UiField>
       </div>
     </details>
