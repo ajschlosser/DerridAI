@@ -69,4 +69,19 @@ describe("ResearchComposer prompt metadata setup", () => {
 
     wrapper.unmount();
   });
+  it("accepts a draft before configuration arrives while run controls remain disabled", async () => {
+    const wrapper = mount(ResearchComposer, {
+      props: {
+        ...baseProps,
+        canConfigure: false,
+        canDraft: true,
+        canRun: false,
+        canManageRuns: false,
+      },
+    });
+    await wrapper.get("#researchQuestion").setValue("Early research draft");
+    expect(wrapper.emitted("update:prompt")).toEqual([["Early research draft"]]);
+    expect(wrapper.get(".research-run-button").attributes("disabled")).toBeDefined();
+    wrapper.unmount();
+  });
 });
