@@ -34,7 +34,7 @@ def _record(record_id: str = "r1", work: str = "Glas") -> dict:
     }
 
 
-def _package_from_runtime(asset: str) -> dict:
+def _package_from_published_site_script(asset: str) -> dict:
     prefix = f"globalThis.{site_publication.PACKAGE_GLOBAL}="
     assert asset.startswith(prefix)
     payload = asset[len(prefix) :].split(";\n", 1)[0]
@@ -96,7 +96,7 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     assert 'src="./derridai-site.js"' in index_html
     assert "connect-src 'self' http: https:" in index_html
 
-    package = _package_from_runtime(published_site_script)
+    package = _package_from_published_site_script(published_site_script)
     publication = package["manifest"]
     chunks = package["chunks"]
 
@@ -170,7 +170,7 @@ def test_site_bundle_can_omit_vectors_and_preserve_source_embedding_contract(
     )
 
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
-        package = _package_from_runtime(archive.read("derridai-site.js").decode("utf-8"))
+        package = _package_from_published_site_script(archive.read("derridai-site.js").decode("utf-8"))
 
     manifest = package["manifest"]
     chunk = package["chunks"][0]
@@ -240,7 +240,7 @@ def test_site_bundle_exports_only_selected_installed_languages_and_no_provider_p
 
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
         published_site_script = archive.read("derridai-site.js").decode("utf-8")
-    package = _package_from_runtime(published_site_script)
+    package = _package_from_published_site_script(published_site_script)
     manifest = package["manifest"]
 
     assert manifest["locale"] == "de-DE"
@@ -513,7 +513,7 @@ def test_nginx_export_contains_one_container_deployment_and_executable_scripts(
     assert stop_mode & 0o111
 
 
-def test_every_translation_key_used_by_the_site_runtime_exists_in_both_locales() -> None:
+def test_every_translation_key_used_by_the_reference_site_interface_exists_in_both_locales() -> None:
     import re
     from pathlib import Path
 
@@ -584,19 +584,19 @@ def test_two_file_site_embeds_the_transformers_runtime_only_when_requested(
     bundle = site_publication.build_site_bundle(
         store_name="derrida-primary",
         works=["Glas"],
-        title="With runtime",
+        title="With Transformers.js",
         include_transformers=True,
     )
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
         assert archive.namelist() == ["index.html", "derridai-site.js"]
         index_html = archive.read("index.html").decode("utf-8")
-        runtime = archive.read("derridai-site.js").decode("utf-8")
+        published_site_script = archive.read("derridai-site.js").decode("utf-8")
 
-    manifest = _package_from_runtime(runtime)["manifest"]
+    manifest = _package_from_published_site_script(published_site_script)["manifest"]
     assert manifest["features"]["transformers_runtime"] == "inline"
     assert manifest["features"]["transformers_local_models"] is None
     payload = json.loads(
-        runtime.split(f"globalThis.{TRANSFORMERS_GLOBAL}=", 1)[1].split(";\n", 1)[0]
+        published_site_script.split(f"globalThis.{TRANSFORMERS_GLOBAL}=", 1)[1].split(";\n", 1)[0]
     )
     assert base64.b64decode(payload["engine_b64"]) == _FAKE_RUNTIME["engine"]
     assert base64.b64decode(payload["wasm_factory_b64"]) == _FAKE_RUNTIME["wasm_factory"]
@@ -607,14 +607,14 @@ def test_two_file_site_embeds_the_transformers_runtime_only_when_requested(
     assert "blob:" in index_html
 
 
-def test_single_file_site_embeds_the_runtime_with_a_matching_standalone_csp(
+def test_single_file_site_embeds_the_transformers_runtime_with_a_matching_standalone_csp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _stub_projection(monkeypatch)
     bundle = site_publication.build_local_site_file(
         store_name="derrida-primary",
         works=["Glas"],
-        title="With runtime",
+        title="With Transformers.js",
         include_transformers=True,
     )
     html = bundle.payload.decode("utf-8")
@@ -624,7 +624,7 @@ def test_single_file_site_embeds_the_runtime_with_a_matching_standalone_csp(
     assert "default-src 'none'" in html
 
 
-def test_nginx_export_serves_the_runtime_as_files(
+def test_nginx_export_serves_the_transformers_runtime_as_files(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _stub_projection(monkeypatch)
@@ -636,7 +636,7 @@ def test_nginx_export_serves_the_runtime_as_files(
     )
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
         names = set(archive.namelist())
-        runtime_script = archive.read("derridai-site.js").decode("utf-8")
+        published_site_script = archive.read("derridai-site.js").decode("utf-8")
         dockerfile = archive.read("Dockerfile").decode("utf-8")
         nginx = archive.read("nginx.conf").decode("utf-8")
         start = archive.read("start.sh").decode("utf-8")
@@ -652,9 +652,9 @@ def test_nginx_export_serves_the_runtime_as_files(
     assert not any(name.startswith("models/") for name in names)
     assert engine == _FAKE_RUNTIME["engine"]
     assert wasm == _FAKE_RUNTIME["wasm"]
-    # The deployment serves the runtime, so it is not duplicated inside the site script.
-    assert f"globalThis.{TRANSFORMERS_GLOBAL}=" not in runtime_script
-    manifest = _package_from_runtime(runtime_script)["manifest"]
+    # The deployment serves the Transformers.js runtime, so it is not duplicated inside the site script.
+    assert f"globalThis.{TRANSFORMERS_GLOBAL}=" not in published_site_script
+    manifest = _package_from_published_site_script(published_site_script)["manifest"]
     assert manifest["features"]["transformers_runtime"] == "files"
     assert manifest["features"]["transformers_local_models"] is None
     assert "COPY vendor /usr/share/nginx/html/vendor" in dockerfile
