@@ -84,12 +84,9 @@ flowchart LR
         Domains["Corpus · Research · Pipelines · Jobs"]
     end
 
-    Canonical["Canonical scholarly state
-sources · records · revisions · assertions · evidence"]
-    System["Server-owned durable state
-SQLite"]
-    Chroma["Derived/rebuildable projections
-Chroma + embeddings + caches"]
+    Canonical["Canonical scholarly state<br/>sources · records · revisions · assertions · evidence"]
+    System["Server-owned durable state<br/>SQLite"]
+    Chroma["Derived/rebuildable projections<br/>Chroma + embeddings + caches"]
     Providers["LLM / embedding providers"]
     NLP["Optional document-nlp worker"]
 
