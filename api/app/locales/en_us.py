@@ -5368,6 +5368,8 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
  'settings.default_provider': 'Default provider profile',
  'settings.default_provider_help': 'Used when a workflow does not pick a profile itself. Credentia'
                                        'ls stay on the Providers page.',
+ 'settings.data_workspaces_title': 'Data workspaces',
+ 'settings.data_workspaces_help': 'Inspect operational System Data or open Corpus Data without duplicating those workspaces inside Settings.',
  'settings.desktop_notifications': 'Desktop notifications',
  'settings.download_backup': 'Download full backup',
  'settings.embedding_model': 'Default embedding model',
