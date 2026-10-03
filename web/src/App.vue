@@ -13,6 +13,7 @@ import RouteNavigationFeedback from "./components/shell/RouteNavigationFeedback.
 import { createRouteLoading } from "./router/routeLoading";
 import { createNavigationHistory, type HistoryEntryTitle } from "./router/navigationHistory";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
+import { useLayoutStore } from "./stores/workspace";
 import { useAuthStore } from "./stores/auth";
 import { useI18nStore } from "./stores/i18n";
 import AuthScreen from "./components/AuthScreen.vue";
@@ -24,6 +25,7 @@ import SeparateWorksDialog from "./components/SeparateWorksDialog.vue";
 import BulkFieldEditorDialog from "./components/BulkFieldEditorDialog.vue";
 import JobDetailsDialog from "./components/JobDetailsDialog.vue";
 import JobReviewDialog from "./components/JobReviewDialog.vue";
+import LlmTaskLauncherDialog from "./components/LlmTaskLauncherDialog.vue";
 import LlmToolResultDialog from "./components/LlmToolResultDialog.vue";
 import PdfDraftRecordDialog from "./components/PdfDraftRecordDialog.vue";
 import RecordPreviewDialog from "./components/RecordPreviewDialog.vue";
@@ -67,6 +69,7 @@ const route = useRoute();
 const navigationHistory = createNavigationHistory(router);
 const routeLoading = createRouteLoading(router);
 const shell = useShellStore();
+const layout = useLayoutStore();
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const semanticMap = useSemanticMapStore();
@@ -85,7 +88,7 @@ const commandShortcut =
     ? "⌘K"
     : "Ctrl K";
 const s = computed(() => shell.snapshot);
-const effectiveSidebarCollapsed = computed(() => s.value.sidebarCollapsed || narrowSidebar.value);
+const effectiveSidebarCollapsed = computed(() => layout.sidebarCollapsed || narrowSidebar.value);
 
 const pageCapability: Record<string, string> = {
   home: "page.dashboard",
@@ -800,6 +803,7 @@ watch(
   <JobDetailsDialog />
   <JobReviewDialog />
   <LlmToolResultDialog />
+  <LlmTaskLauncherDialog />
   <PdfDraftRecordDialog />
   <WorkMetadataEditorDialog />
   <WorkMetadataLlmDialog />
