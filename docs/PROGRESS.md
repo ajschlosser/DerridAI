@@ -18,9 +18,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Progressive loading UX progress
 
-Checkpoint: 2026-10-03. Branch: `codex/annotations-progressive-loading`, based on freshly fetched master `f6554817` after #470 merged.
+Checkpoint: 2026-10-03. Branch: `codex/annotations-progressive-loading`, started after #470 and merged current master `eb5b7b38` after #473.
 
 ## Current checkpoint
+
+Latest: Languages dictionary/policy and Relationships trace/model loading boundaries are implemented and validated on current master. The final evidence is recorded below; next work is Users/Roles readiness (preserving role-delete safety), Metadata Memory and the broader P2/readiness matrix.
 
 Annotations now retains its toolbar during initial reads and its loaded feed during refresh/failure, with region skeletons, Updating, out-of-date failure and Retry. Vue rejects superseded completions and clears queued searches on disposal. Workspace reads expose shared-annotation/store-discovery errors instead of silently reporting success. Authorization-denied errors clear retained feed content. The 15-second shared-read cache and other refresh callers retain their existing contracts. This is a scoped P2 increment, not completion of the readiness or scope/cache matrix.
 
@@ -35,7 +37,7 @@ Response Library validation: ten focused cases pass (six initially failed agains
 1. Records initial hydration is implemented. Its broader scope/cache/selection/readiness matrix remains open. The typed coordinator is `web/src/domain/corpusWorkspaceHydration.ts`; the existing export adapter still reduces failures to null, so the view reports generic unavailability. Avoid extending runtime renderers or overlapping Corpus Builder queues, reconciliation, persistence or enrichment.
 2. Complete baseline/readiness measurements and explicit cache/refresh policies across the implemented surfaces: cold/warm/back navigation, request counts, rapid selections, partial failure, offline/cancellation and authorization changes.
 3. Keep Corpus Builder/source-preview changes deferred while its performance work is active; document any necessary boundary before implementing.
-4. Continue P2 boundaries with Relationships, then Users/Roles and the remaining route inventory and cross-route accessibility/localization/layout audit (light/dark, zoom, dense long labels and narrow widths). Do not declare completion until the plan's acceptance checks are evidenced.
+4. Continue P2 readiness with Users/Roles (preserve the atomic role-delete safety snapshot), Metadata Memory, and the remaining route inventory and cross-route accessibility/localization/layout audit (light/dark, zoom, dense long labels and narrow widths). Do not declare completion until the plan's acceptance checks are evidenced.
 
 This checkout has local pinned frontend dependencies. Browser checks use ports 5298/6298. Bundled Python ran locale tests; change-aware preflight passed frontend lint/types/selected tests/build and Python syntax, but backend lint/types/regressions could not run because Ruff, mypy and pytest-xdist are absent. The documented preflight override is used for that tooling limitation.
 
@@ -48,3 +50,7 @@ Final Annotations validation: all three production-browser cases passed, includi
 Languages checkpoint: independent dictionary/policy readiness, truthful policy failures/retry, retained same-dictionary drafts and latest-locale guards are implemented. Initial counts and empty claims await successful initialization. Thirteen focused Languages tests and the production delay/failure/retry/390-pixel axe case pass; app/SDK/test types, touched-file lint and production/Storybook builds pass. Providers initial state was verified as synchronous local state, so no network-loading rewrite was made. See the detailed plan for limits and preflight evidence.
 
 Languages final change-aware preflight passed: repository frontend lint, app/test typechecks, directly changed tests, dependency-selected tests, formatting and production build. Backend gates were not selected; no override was needed. Browser and Storybook checks ran separately above.
+
+Relationships checkpoint: independent trace/model reads, local model retry, retained same-record graph/focus and different-record/store guards are implemented. Five view and seven explorer cases pass; initial preflight passed 980 selected tests but detected newer master. Master was merged cleanly and final merged-base validation is recorded below. Existing selected-tab missing-panel ARIA debt is pinned in browser checks; matching markup awaits the requested choice. Languages final preflight passed 973 selected tests. Remaining work includes the broader initial/readiness/cache/scope/cancellation/geometry matrix; these checkpoints do not complete the full plan.
+
+Final merged-base validation: repository change-aware preflight passed on master `eb5b7b38`: frontend lint, application/test typechecks, formatting, 37 directly changed tests and 149 dependency-selected suites (980 tests), plus the production app build. Storybook passed separately. The combined production-browser run passed all five Annotations/Languages/Relationships cases, including scope-local retry/request counts, retained DOM/draft behavior and narrow-screen axe checks with the documented exact existing exceptions. No preflight override. Backend gates were not selected for these frontend changes. Counts overlap earlier runs. Both requested unrelated accessibility fixes remain pending. The working branch is ready for review as a scoped continuation; the complete plan/readiness audit remains unfinished.
