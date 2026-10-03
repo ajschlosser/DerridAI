@@ -605,11 +605,20 @@ RECOVERY_ONLY_CONFIG: dict[str, frozenset[str]] = {
 }
 
 
-def reject_unhonoured_config(pipeline: Any, adapter: str) -> None:
+def reject_unhonoured_config(
+    pipeline: Any,
+    adapter: str,
+    *,
+    honour: dict[str, frozenset[str]] | None = None,
+) -> None:
     """Raise when an enabled stage sets a recovery-only key this adapter ignores."""
 
+    allowed = honour or {}
     for stage in pipeline.stages:
-        ignored = sorted(set(stage.config) & RECOVERY_ONLY_CONFIG.get(stage.strategy, frozenset()))
+        ignored = sorted(
+            (set(stage.config) & RECOVERY_ONLY_CONFIG.get(stage.strategy, frozenset()))
+            - allowed.get(stage.strategy, frozenset())
+        )
         if stage.enabled and ignored:
             raise ValueError(
                 f"The {adapter} adapter does not apply {', '.join(ignored)} on stage {stage.id!r}."

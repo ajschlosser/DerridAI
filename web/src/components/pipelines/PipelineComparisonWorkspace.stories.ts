@@ -98,6 +98,38 @@ const pipelines: PipelineDefinition[] = [
     built_in: true,
     runtime_support: { supported: true, adapter: "research" },
   },
+  {
+    pipeline_id: "evidence.reviewer.current",
+    version: 2,
+    name: "Reviewer evidence — current",
+    purpose: "evidence_suggestion",
+    status: "active",
+    entry_stage_ids: ["lexical"],
+    stages: [],
+    built_in: true,
+    runtime_support: { supported: true, adapter: "evidence_suggestion" },
+  },
+  {
+    pipeline_id: "evidence.lexical-only",
+    version: 1,
+    name: "Reviewer evidence — lexical",
+    purpose: "evidence_suggestion",
+    status: "draft",
+    entry_stage_ids: ["lexical"],
+    stages: [],
+    runtime_support: { supported: true, adapter: "evidence_suggestion" },
+  },
+  {
+    pipeline_id: "evidence.recovery.celf",
+    version: 1,
+    name: "Evidence recovery — cELF",
+    purpose: "evidence_recovery",
+    status: "active",
+    entry_stage_ids: ["lexical"],
+    stages: [],
+    built_in: true,
+    runtime_support: { supported: true, adapter: "evidence_recovery" },
+  },
 ];
 
 const meta = {

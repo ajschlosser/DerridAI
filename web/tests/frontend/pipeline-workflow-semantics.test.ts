@@ -156,7 +156,7 @@ describe("pipeline workflow domain helpers", () => {
     const ids = (key: keyof typeof groups) => groups[key].map((item) => item.strategy_id);
     expect(ids("supported")).toContain("validate.evidence_support");
     expect(ids("output_contract")).toContain("llm.generate_answer");
-    expect(ids("inspect_only")).toContain("select.mmr");
+    expect(ids("supported")).toContain("select.mmr");
   });
 
   it("reads phases from the actual graph, repeating validation after generation", () => {
@@ -441,8 +441,8 @@ describe("purpose-aware editing", () => {
   });
 
   it("marks an inspect-only strategy on the current stage", () => {
-    const wrapper = mountStageEditor("select.mmr");
-    expect(wrapper.find('option[value="select.mmr"]').exists()).toBe(true);
+    const wrapper = mountStageEditor("select.source_diversity");
+    expect(wrapper.find('option[value="select.source_diversity"]').exists()).toBe(true);
     expect(text(wrapper.get(".stage-fit-note"))).toContain(
       "is not run by the Reviewer evidence suggestion adapter",
     );

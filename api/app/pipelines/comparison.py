@@ -221,3 +221,137 @@ def compare_research_dry_runs(
             ),
         },
     }
+
+
+def comparison_source_projection() -> Any:
+    """Rebuildable source-unit embeddings for comparison, never scholarly evidence."""
+
+    from ..services import store
+    from ..source_embeddings import SourceEmbeddingProjection
+
+    return SourceEmbeddingProjection(store)
+
+
+class EvidencePipelineComparisonRequest(BaseModel):
+    value: Any
+    blocks: list[dict[str, Any]] = Field(min_length=1)
+    field: str = Field(default="field", min_length=1, max_length=120)
+    field_metadata: dict[str, Any] = Field(default_factory=dict)
+    source_document_id: str = ""
+    left: PipelineVersionRef
+    right: PipelineVersionRef
+    limit: int = Field(default=5, ge=1, le=64)
+
+
+def _block_row(item: dict[str, Any], rank: int) -> dict[str, Any]:
+    return {
+        "block_id": str(item.get("block_id") or ""),
+        "rank": rank,
+        "score": item.get("score"),
+        "lexical_score": item.get("lexical_score"),
+        "semantic_score": item.get("semantic_score"),
+        "cross_encoder_score": item.get("cross_encoder_score"),
+        "mmr_score": item.get("mmr_score"),
+        "support_score": item.get("support_score"),
+        "method": item.get("method"),
+    }
+
+
+def _stage_rows(trace: Any) -> list[dict[str, Any]]:
+    rows = []
+    for stage in getattr(trace, "stages", []) or []:
+        rows.append(
+            {
+                "stage_id": stage.stage_id,
+                "strategy": getattr(stage, "strategy_id", None) or getattr(stage, "strategy", None),
+                "status": stage.status,
+                "elapsed_ms": stage.elapsed_ms,
+                "input_count": stage.input_count,
+                "output_count": stage.output_count,
+                "fallback_reason": stage.fallback_reason,
+            }
+        )
+    return rows
+
+
+def summarize_evidence_suggestion_run(execution: Any) -> dict[str, Any]:
+    """Bounded view of one reviewer-evidence run: ids, ranks, and stage timing only."""
+
+    items = list(execution.items or [])
+    pipeline = {
+        "pipeline_id": execution.status.get("pipeline_id"),
+        "pipeline_version": execution.status.get("pipeline_version"),
+        "pipeline_hash": execution.status.get("pipeline_hash"),
+        "purpose": "evidence_suggestion",
+    }
+    return {
+        "pipeline": pipeline,
+        "elapsed_seconds": (execution.trace.total_elapsed_ms or 0) / 1000,
+        "stages": _stage_rows(execution.trace),
+        "candidates": [_block_row(item, rank) for rank, item in enumerate(items, start=1)],
+    }
+
+
+def summarize_evidence_recovery_run(
+    *,
+    pipeline: Any,
+    resolved_hash: str,
+    items: list[dict[str, Any]],
+    winner: str | None,
+    trace: Any,
+    celf_compliant: bool,
+    compliance_reason: str,
+) -> dict[str, Any]:
+    return {
+        "pipeline": {
+            "pipeline_id": pipeline.pipeline_id,
+            "pipeline_version": pipeline.version,
+            "pipeline_hash": resolved_hash,
+            "purpose": pipeline.purpose,
+            "celf_compliant": celf_compliant,
+            "compliance_reason": compliance_reason,
+        },
+        "elapsed_seconds": (trace.total_elapsed_ms or 0) / 1000,
+        "winning_strategy": winner,
+        "stages": _stage_rows(trace),
+        "candidates": [_block_row(item, rank) for rank, item in enumerate(items, start=1)],
+    }
+
+
+def compare_evidence_runs(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    """Compare selected block membership/rank without implying a quality winner."""
+
+    left_ids = [str(item["block_id"]) for item in left.get("candidates") or [] if item.get("block_id")]
+    right_ids = [str(item["block_id"]) for item in right.get("candidates") or [] if item.get("block_id")]
+    overlap = _overlap(left_ids, right_ids)
+    left_rank = {block_id: index for index, block_id in enumerate(left_ids, start=1)}
+    right_rank = {block_id: index for index, block_id in enumerate(right_ids, start=1)}
+    rank_changes = [
+        {
+            "block_id": block_id,
+            "left_rank": left_rank[block_id],
+            "right_rank": right_rank[block_id],
+            "rank_delta": right_rank[block_id] - left_rank[block_id],
+        }
+        for block_id in overlap["shared_record_ids"]
+    ]
+    return {
+        "non_persistent": True,
+        "left": left,
+        "right": right,
+        "comparison": {
+            "shared_block_ids": overlap["shared_record_ids"],
+            "left_only_block_ids": overlap["left_only_record_ids"],
+            "right_only_block_ids": overlap["right_only_record_ids"],
+            "shared_count": overlap["shared_count"],
+            "union_count": overlap["union_count"],
+            "jaccard_overlap": overlap["jaccard_overlap"],
+            "rank_changes": rank_changes,
+            "elapsed_seconds_delta": (
+                float(right["elapsed_seconds"]) - float(left["elapsed_seconds"])
+                if isinstance(left.get("elapsed_seconds"), (int, float))
+                and isinstance(right.get("elapsed_seconds"), (int, float))
+                else None
+            ),
+        },
+    }

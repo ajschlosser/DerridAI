@@ -61,8 +61,14 @@ export const InspectOnlyStage: Story = {
     modelValue: {
       ...draft,
       stages: [
-        { ...draft.stages[0], next: ["mmr"] },
-        { id: "mmr", strategy: "select.mmr", enabled: true, config: {}, next: [] },
+        { ...draft.stages[0], next: ["source-diversity"] },
+        {
+          id: "source-diversity",
+          strategy: "select.source_diversity",
+          enabled: true,
+          config: {},
+          next: [],
+        },
       ],
     },
   },
