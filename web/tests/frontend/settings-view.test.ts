@@ -183,10 +183,13 @@ describe("SettingsView", () => {
     expect(systemApi.setEmbeddingDefaults).not.toHaveBeenCalled();
   });
 
-  it("keeps researcher accounts off administrative sections", async () => {
+  it("keeps researcher accounts off administrative settings categories", async () => {
     const { wrapper } = await mountView("researcher");
     expect(wrapper.get("h1").text()).toContain("Settings");
-    expect(wrapper.text()).toContain("Research workspace");
+    expect(wrapper.text()).toContain("Preferences");
+    expect(wrapper.text()).toContain("Research & review");
+    expect(wrapper.text()).not.toContain("Retrieval & indexing");
+    expect(wrapper.text()).not.toContain("Data & storage");
     expect(wrapper.text()).not.toContain("NUKE DerridAI workspace");
     expect(wrapper.text()).not.toContain("Save RAG defaults");
   });
