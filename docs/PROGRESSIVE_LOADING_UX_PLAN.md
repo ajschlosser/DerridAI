@@ -138,3 +138,7 @@ Five new loading cases failed on the unchanged Vector Stores implementation; the
 Remaining: full baseline timing/geometry matrix; finer Vector data-table/search request identities and local error/empty states; Search, Research, Response Library and Records loading boundaries; remaining administration/workspace inventory; completion audit. Vector collection reads are isolated, but this is not completion of every Vector subpanel or increments 1–3. Preserve the deferred Corpus Builder boundary.
 
 Stopping rule for this resumed run: the user clarified **20% remaining (80% used)** in the five-hour window. Update this document with exact validation, commit, push, and stop at that threshold.
+
+### Latest handoff
+
+See [PROGRESS.md](PROGRESS.md) for the current checkpoint, final master merge, full frontend validation, backend environment limitations, and ordered resume steps. Earlier stopping sections above are historical; the Vector collection increment has now been implemented.
