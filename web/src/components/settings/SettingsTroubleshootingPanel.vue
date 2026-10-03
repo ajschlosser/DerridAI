@@ -15,10 +15,10 @@ import UiField from "../ui/UiField.vue";
 import SettingsSection from "./SettingsSection.vue";
 
 defineProps<{
-  nukePhrase: string;
+  modelValue: string;
 }>();
 const emit = defineEmits<{
-  "update:nukePhrase": [value: string];
+  "update:modelValue": [value: string];
   "reset-columns": [];
   "expand-panels": [];
   "expand-sidebar": [];
@@ -75,16 +75,16 @@ const i18n = useI18nStore();
         <input
           id="settings-field-nuke"
           class="control"
-          :value="nukePhrase"
+          :value="modelValue"
           autocomplete="off"
-          @input="emit('update:nukePhrase', ($event.target as HTMLInputElement).value)"
+          @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
         />
       </UiField>
       <template #actions>
         <UiButton
           variant="danger"
           :label="i18n.t('config.nuke.button')"
-          :disabled="nukePhrase !== 'NUKE'"
+          :disabled="modelValue !== 'NUKE'"
           :disabled-reason="i18n.t('config.nuke.type_to_enable_help')"
           @click="emit('open-nuke')"
         />
