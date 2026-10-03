@@ -20,6 +20,7 @@ import { ApiError, apiRequest } from "./http";
 import type { LanguageInfo } from "./system";
 
 export type SiteExportFormat = "two-file" | "local-single-file" | "nginx-docker";
+export type SiteVectorStrategy = "browser-default" | "source" | "browser";
 
 /** How much Record metadata a site carries: `reader` omits FieldAssertions to reduce file size. */
 export type SiteRecordProfile = "complete" | "reader";
@@ -35,8 +36,10 @@ export interface SiteExportRequest {
   record_profile: SiteRecordProfile;
   /** Every export includes Transformers.js. Kept so older clients still send a value. */
   include_transformers: boolean;
-  /** Copy the current collection vectors into the publication; otherwise browsers build their own index. */
-  include_vectors: boolean;
+  /** How the publication prepares derived vectors for semantic search. */
+  vector_strategy: SiteVectorStrategy;
+  /** Backward compatibility for older servers/clients. Prefer vector_strategy. */
+  include_vectors?: boolean;
   /** nginx/Docker only: same-origin /provider/ bridge target. Empty/null disables the proxy. */
   provider_proxy_upstream?: string | null;
 }
@@ -61,9 +64,22 @@ export interface SiteTransformersRuntime {
   inline_bytes: number;
 }
 
+export interface SiteBrowserEmbeddingProfile {
+  model: string;
+  revision: string;
+  dimension: number;
+  dtype: string;
+  pooling: string;
+  normalize: boolean;
+  query_prefix: string;
+  document_prefix: string;
+  download_bytes: number;
+}
+
 export interface SiteExportOptions {
   languages: LanguageInfo[];
   transformers_runtime: SiteTransformersRuntime;
+  browser_embedding_profile: SiteBrowserEmbeddingProfile;
 }
 
 export interface SiteExportDownload {

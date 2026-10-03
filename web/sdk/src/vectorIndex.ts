@@ -38,16 +38,20 @@ function modelName(value: unknown): string {
 /** Vectors are comparable only when the model is exactly the one that embedded the publication. */
 export function matchesPublicationModel(
   descriptor: ProviderDescriptor,
-  contract: { model?: string; revision?: string } | undefined,
+  contract: { model?: string; revision?: string; variant?: string } | undefined,
 ): boolean {
   const expected = modelName(contract?.model);
   const actual = modelName(descriptor.model);
   if (!expected || !actual || expected !== actual) return false;
-  // Prefixes and similar changes alter the vectors, so they no longer match what was published.
-  if (descriptor.variant) return false;
   const expectedRevision = String(contract?.revision ?? "");
   const actualRevision = String(descriptor.revision ?? "");
-  return !expectedRevision || !actualRevision || expectedRevision === actualRevision;
+  if (expectedRevision && actualRevision && expectedRevision !== actualRevision) return false;
+  const expectedVariant = String(contract?.variant ?? "");
+  const actualVariant = String(descriptor.variant ?? "");
+  // Older publications did not record preprocessing details, so retain the conservative rule:
+  // a provider that declares a vector-changing variant cannot silently claim compatibility.
+  if (!expectedVariant) return !actualVariant;
+  return expectedVariant === actualVariant;
 }
 
 function indexKey(publicationId: string, fingerprint: string): string {

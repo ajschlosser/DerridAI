@@ -20,15 +20,22 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, onMounted, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { LanguageInfo } from "../../api/system";
-import type { SiteExportFormat, SiteRecordProfile, SiteTransformersRuntime } from "../../api/sites";
+import type {
+  SiteBrowserEmbeddingProfile,
+  SiteExportFormat,
+  SiteRecordProfile,
+  SiteTransformersRuntime,
+  SiteVectorStrategy,
+} from "../../api/sites";
+import type { WorksScopeItem } from "../../types/works";
+import AppIcon from "../AppIcon.vue";
+import SiteRadioOption from "./SiteRadioOption.vue";
 
 export interface TransformersDownloadProgress {
   file: string;
   received: number;
   total: number;
 }
-import type { WorksScopeItem } from "../../types/works";
-import AppIcon from "../AppIcon.vue";
 
 const props = defineProps<{
   works: WorksScopeItem[];
@@ -36,6 +43,7 @@ const props = defineProps<{
   initialWork?: string;
   languages: LanguageInfo[];
   transformersRuntime?: SiteTransformersRuntime;
+  browserEmbeddingProfile?: SiteBrowserEmbeddingProfile;
   downloadProgress?: TransformersDownloadProgress | null;
   busy?: boolean;
   error?: string;
@@ -52,7 +60,7 @@ const emit = defineEmits<{
       works: string[];
       languages: string[];
       include_transformers: boolean;
-      include_vectors: boolean;
+      vector_strategy: SiteVectorStrategy;
       export_format: SiteExportFormat;
       record_profile: SiteRecordProfile;
       provider_proxy_upstream: string | null;
@@ -67,7 +75,7 @@ const title = ref(props.initialWork || "");
 const description = ref("");
 const exportFormat = ref<SiteExportFormat>("two-file");
 const recordProfile = ref<SiteRecordProfile>("complete");
-const includeVectors = ref(true);
+const vectorStrategy = ref<SiteVectorStrategy>("browser-default");
 const providerProxyEnabled = ref(false);
 const providerProxyUpstream = ref("http://localhost:11434/v1");
 const selectedLanguages = ref<string[]>(props.languages.map((item) => item.code));
@@ -140,7 +148,7 @@ function submit() {
     works: [...selected.value],
     languages: [...selectedLanguages.value],
     include_transformers: true,
-    include_vectors: includeVectors.value,
+    vector_strategy: vectorStrategy.value,
     export_format: exportFormat.value,
     record_profile: recordProfile.value,
     provider_proxy_upstream:
@@ -182,7 +190,7 @@ onMounted(async () => {
       </header>
 
       <div class="create-site-body">
-        <section class="create-site-fields" :aria-label="i18n.t('site.create_dialog_title')">
+        <section class="publication-section create-site-fields">
           <label class="field">
             <span>{{ i18n.t("site.create_title") }}</span>
             <input
@@ -209,264 +217,306 @@ onMounted(async () => {
           </div>
         </section>
 
-        <fieldset class="site-export-format">
-          <legend>{{ i18n.t("site.create_export_format") }}</legend>
-          <label class="site-export-option">
-            <input v-model="exportFormat" type="radio" value="two-file" />
-            <span>
-              <strong>{{ i18n.t("site.create_format_two_file") }}</strong>
-              <small>{{ i18n.t("site.create_format_two_file_help") }}</small>
-            </span>
-          </label>
-          <label class="site-export-option">
-            <input v-model="exportFormat" type="radio" value="local-single-file" />
-            <span>
-              <strong>{{ i18n.t("site.create_format_local") }}</strong>
-              <small>{{ i18n.t("site.create_format_local_help") }}</small>
-            </span>
-          </label>
-          <label class="site-export-option">
-            <input v-model="exportFormat" type="radio" value="nginx-docker" />
-            <span>
-              <strong>{{ i18n.t("site.create_format_nginx") }}</strong>
-              <small>{{ i18n.t("site.create_format_nginx_help") }}</small>
-            </span>
-          </label>
-        </fieldset>
+        <section class="publication-section" aria-labelledby="site-content-heading">
+          <div class="publication-section-head">
+            <div>
+              <h3 id="site-content-heading">{{ i18n.t("site.create_content") }}</h3>
+              <p>{{ i18n.t("site.create_content_help") }}</p>
+            </div>
+          </div>
+          <div class="publication-content-grid">
+            <fieldset class="site-work-picker">
+              <legend>{{ i18n.t("site.create_select_works") }}</legend>
+              <div class="site-work-picker-toolbar">
+                <span>{{ i18n.tf("site.create_selected_count", { count: selectedCount }) }}</span>
+                <div>
+                  <button type="button" class="btn small" @click="selectAll">
+                    {{ i18n.t("site.create_select_all") }}
+                  </button>
+                  <button type="button" class="btn small" @click="clearSelection">
+                    {{ i18n.t("site.create_clear") }}
+                  </button>
+                </div>
+              </div>
+              <div class="site-work-list">
+                <label v-for="work in props.works" :key="work.work" class="site-work-option">
+                  <input
+                    type="checkbox"
+                    :checked="selected.includes(work.work)"
+                    :data-site-work="work.work"
+                    @change="toggle(work.work, ($event.target as HTMLInputElement).checked)"
+                  />
+                  <span>
+                    <strong>{{ work.work }}</strong>
+                    <small>
+                      {{ work.authors.join(", ") }}
+                      <template v-if="work.year_label"> · {{ work.year_label }}</template>
+                      · {{ work.count.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }}
+                    </small>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
 
-        <fieldset
-          v-if="exportFormat === 'nginx-docker'"
-          class="site-export-format site-provider-proxy"
-          data-site-provider-proxy
-        >
-          <legend>{{ i18n.t("site.create_provider_proxy") }}</legend>
-          <p class="site-choice-help">{{ i18n.t("site.create_provider_proxy_help") }}</p>
-          <label class="site-export-option">
-            <input
-              v-model="providerProxyEnabled"
-              type="checkbox"
-              data-site-provider-proxy-enabled
-            />
-            <span>
-              <strong>{{ i18n.t("site.create_provider_proxy_enable") }}</strong>
-              <small>{{ i18n.t("site.create_provider_proxy_enable_help") }}</small>
-            </span>
-          </label>
-          <label v-if="providerProxyEnabled" class="field">
-            <span>{{ i18n.t("site.create_provider_proxy_upstream") }}</span>
-            <input
-              v-model="providerProxyUpstream"
-              class="control"
-              type="url"
-              autocomplete="url"
-              maxlength="2048"
-              data-site-provider-proxy-upstream
-              :aria-invalid="providerProxyValid ? undefined : 'true'"
-              :placeholder="i18n.t('site.create_provider_proxy_upstream_placeholder')"
-            />
-            <small>{{ i18n.t("site.create_provider_proxy_upstream_help") }}</small>
-          </label>
-          <p
-            v-if="providerProxyEnabled && !providerProxyValid"
-            class="site-create-error"
-            role="alert"
-          >
-            {{ i18n.t("site.create_provider_proxy_invalid") }}
-          </p>
-          <p v-if="providerProxyEnabled" class="site-choice-help">
-            {{ i18n.t("site.create_provider_proxy_security") }}
-          </p>
-        </fieldset>
+            <fieldset class="site-choice-picker">
+              <legend>{{ i18n.t("site.create_languages") }}</legend>
+              <p class="site-choice-help">{{ i18n.t("site.create_languages_help") }}</p>
+              <div class="site-work-picker-toolbar">
+                <span>
+                  {{ i18n.tf("site.create_languages_selected", { count: selectedLanguages.length }) }}
+                </span>
+                <div>
+                  <button type="button" class="btn small" @click="selectAllLanguages">
+                    {{ i18n.t("site.create_select_all") }}
+                  </button>
+                  <button type="button" class="btn small" @click="clearLanguages">
+                    {{ i18n.t("site.create_clear") }}
+                  </button>
+                </div>
+              </div>
+              <div class="site-choice-list">
+                <label
+                  v-for="language in props.languages"
+                  :key="language.code"
+                  class="site-work-option"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="selectedLanguages.includes(language.code)"
+                    :data-site-language="language.code"
+                    @change="toggleLanguage(language.code, ($event.target as HTMLInputElement).checked)"
+                  />
+                  <span>
+                    <strong>{{ language.flag }} {{ language.name }}</strong>
+                    <small>{{ language.code }}</small>
+                  </span>
+                </label>
+              </div>
+              <p v-if="!selectedLanguages.length" class="site-create-error" role="alert">
+                {{ i18n.t("site.create_language_required") }}
+              </p>
+            </fieldset>
+          </div>
+        </section>
 
-        <fieldset class="site-export-format site-record-profile">
-          <legend>{{ i18n.t("site.create_record_profile") }}</legend>
-          <p class="site-choice-help">{{ i18n.t("site.create_record_profile_help") }}</p>
-          <label class="site-export-option">
-            <input
-              v-model="recordProfile"
-              type="radio"
-              name="site-record-profile"
-              value="complete"
-            />
-            <span>
-              <strong>{{ i18n.t("site.create_profile_complete") }}</strong>
-              <small>{{ i18n.t("site.create_profile_complete_help") }}</small>
+        <section class="publication-section" aria-labelledby="site-search-data-heading">
+          <div class="publication-section-head">
+            <div>
+              <h3 id="site-search-data-heading">{{ i18n.t("site.create_search_data") }}</h3>
+              <p>{{ i18n.t("site.create_search_data_help") }}</p>
+            </div>
+          </div>
+          <div class="publication-settings-grid">
+            <fieldset class="site-option-group site-vector-profile">
+              <legend>{{ i18n.t("site.create_vectors") }}</legend>
+              <p class="site-choice-help">{{ i18n.t("site.create_vectors_help") }}</p>
+              <SiteRadioOption
+                v-model="vectorStrategy"
+                name="site-vector-profile"
+                value="browser-default"
+                :title="i18n.t('site.create_vectors_recommended')"
+                :description="i18n.t('site.create_vectors_recommended_help')"
+                :badge="i18n.t('site.create_recommended')"
+              />
+              <p v-if="props.browserEmbeddingProfile" class="site-model-note">
+                {{
+                  i18n.tf("site.create_vectors_model_summary", {
+                    model: props.browserEmbeddingProfile.model,
+                    dimension: props.browserEmbeddingProfile.dimension,
+                    size: formatMegabytes(props.browserEmbeddingProfile.download_bytes),
+                  })
+                }}
+              </p>
+              <SiteRadioOption
+                v-model="vectorStrategy"
+                name="site-vector-profile"
+                value="source"
+                :title="i18n.t('site.create_vectors_include')"
+                :description="i18n.t('site.create_vectors_include_help')"
+              />
+              <SiteRadioOption
+                v-model="vectorStrategy"
+                name="site-vector-profile"
+                value="browser"
+                :title="i18n.t('site.create_vectors_browser')"
+                :description="i18n.t('site.create_vectors_browser_help')"
+              />
+            </fieldset>
+
+            <fieldset class="site-option-group site-record-profile">
+              <legend>{{ i18n.t("site.create_record_profile") }}</legend>
+              <p class="site-choice-help">{{ i18n.t("site.create_record_profile_help") }}</p>
+              <SiteRadioOption
+                v-model="recordProfile"
+                name="site-record-profile"
+                value="complete"
+                :title="i18n.t('site.create_profile_complete')"
+                :description="i18n.t('site.create_profile_complete_help')"
+              />
               <small class="site-celf-status" data-celf="complete">
                 {{ i18n.t("site.create_profile_complete_celf") }}
               </small>
-            </span>
-          </label>
-          <label class="site-export-option">
-            <input v-model="recordProfile" type="radio" name="site-record-profile" value="reader" />
-            <span>
-              <strong>{{ i18n.t("site.create_profile_reader") }}</strong>
-              <small>{{ i18n.t("site.create_profile_reader_help") }}</small>
+              <SiteRadioOption
+                v-model="recordProfile"
+                name="site-record-profile"
+                value="reader"
+                :title="i18n.t('site.create_profile_reader')"
+                :description="i18n.t('site.create_profile_reader_help')"
+              />
               <small class="site-celf-status" data-celf="reader">
                 {{ i18n.t("site.create_profile_reader_celf") }}
               </small>
-            </span>
-          </label>
-        </fieldset>
+            </fieldset>
+          </div>
+        </section>
 
-        <fieldset class="site-export-format site-vector-profile">
-          <legend>{{ i18n.t("site.create_vectors") }}</legend>
-          <p class="site-choice-help">{{ i18n.t("site.create_vectors_help") }}</p>
-          <label class="site-export-option">
-            <input v-model="includeVectors" type="radio" name="site-vector-profile" :value="true" />
-            <span>
-              <strong>{{ i18n.t("site.create_vectors_include") }}</strong>
-              <small>{{ i18n.t("site.create_vectors_include_help") }}</small>
-            </span>
-          </label>
-          <label class="site-export-option">
-            <input
-              v-model="includeVectors"
-              type="radio"
-              name="site-vector-profile"
-              :value="false"
-            />
-            <span>
-              <strong>{{ i18n.t("site.create_vectors_browser") }}</strong>
-              <small>{{ i18n.t("site.create_vectors_browser_help") }}</small>
-            </span>
-          </label>
-        </fieldset>
-
-        <fieldset class="site-choice-picker">
-          <legend>{{ i18n.t("site.create_languages") }}</legend>
-          <p class="site-choice-help">{{ i18n.t("site.create_languages_help") }}</p>
-          <div class="site-work-picker-toolbar">
-            <span>
-              {{ i18n.tf("site.create_languages_selected", { count: selectedLanguages.length }) }}
-            </span>
+        <section class="publication-section" aria-labelledby="site-delivery-heading">
+          <div class="publication-section-head">
             <div>
-              <button type="button" class="btn small" @click="selectAllLanguages">
-                {{ i18n.t("site.create_select_all") }}
-              </button>
-              <button type="button" class="btn small" @click="clearLanguages">
-                {{ i18n.t("site.create_clear") }}
-              </button>
+              <h3 id="site-delivery-heading">{{ i18n.t("site.create_delivery") }}</h3>
+              <p>{{ i18n.t("site.create_delivery_help") }}</p>
             </div>
           </div>
-          <div class="site-choice-list">
-            <label
-              v-for="language in props.languages"
-              :key="language.code"
-              class="site-work-option"
+          <fieldset class="site-option-group site-export-format">
+            <legend class="sr-only">{{ i18n.t("site.create_export_format") }}</legend>
+            <div class="site-format-grid">
+              <SiteRadioOption
+                v-model="exportFormat"
+                name="site-export-format"
+                value="two-file"
+                :title="i18n.t('site.create_format_two_file')"
+                :description="i18n.t('site.create_format_two_file_help')"
+              />
+              <SiteRadioOption
+                v-model="exportFormat"
+                name="site-export-format"
+                value="local-single-file"
+                :title="i18n.t('site.create_format_local')"
+                :description="i18n.t('site.create_format_local_help')"
+              />
+              <SiteRadioOption
+                v-model="exportFormat"
+                name="site-export-format"
+                value="nginx-docker"
+                :title="i18n.t('site.create_format_nginx')"
+                :description="i18n.t('site.create_format_nginx_help')"
+              />
+            </div>
+          </fieldset>
+        </section>
+
+        <details class="publication-advanced">
+          <summary>{{ i18n.t("site.create_advanced") }}</summary>
+          <div class="publication-advanced-body">
+            <fieldset
+              v-if="exportFormat === 'nginx-docker'"
+              class="site-option-group site-provider-proxy"
+              data-site-provider-proxy
             >
-              <input
-                type="checkbox"
-                :checked="selectedLanguages.includes(language.code)"
-                :data-site-language="language.code"
-                @change="toggleLanguage(language.code, ($event.target as HTMLInputElement).checked)"
-              />
-              <span>
-                <strong>{{ language.flag }} {{ language.name }}</strong>
-                <small>{{ language.code }}</small>
-              </span>
-            </label>
-          </div>
-          <p v-if="!selectedLanguages.length" class="site-create-error" role="alert">
-            {{ i18n.t("site.create_language_required") }}
-          </p>
-        </fieldset>
+              <legend>{{ i18n.t("site.create_provider_proxy") }}</legend>
+              <p class="site-choice-help">{{ i18n.t("site.create_provider_proxy_help") }}</p>
+              <label class="site-check-option">
+                <input
+                  v-model="providerProxyEnabled"
+                  type="checkbox"
+                  data-site-provider-proxy-enabled
+                />
+                <span>
+                  <strong>{{ i18n.t("site.create_provider_proxy_enable") }}</strong>
+                  <small>{{ i18n.t("site.create_provider_proxy_enable_help") }}</small>
+                </span>
+              </label>
+              <label v-if="providerProxyEnabled" class="field">
+                <span>{{ i18n.t("site.create_provider_proxy_upstream") }}</span>
+                <input
+                  v-model="providerProxyUpstream"
+                  class="control"
+                  type="url"
+                  autocomplete="url"
+                  maxlength="2048"
+                  data-site-provider-proxy-upstream
+                  :aria-invalid="providerProxyValid ? undefined : 'true'"
+                  :placeholder="i18n.t('site.create_provider_proxy_upstream_placeholder')"
+                />
+                <small>{{ i18n.t("site.create_provider_proxy_upstream_help") }}</small>
+              </label>
+              <p
+                v-if="providerProxyEnabled && !providerProxyValid"
+                class="site-create-error"
+                role="alert"
+              >
+                {{ i18n.t("site.create_provider_proxy_invalid") }}
+              </p>
+              <p v-if="providerProxyEnabled" class="site-choice-help">
+                {{ i18n.t("site.create_provider_proxy_security") }}
+              </p>
+            </fieldset>
 
-        <fieldset class="site-choice-picker" data-site-transformers>
-          <legend>{{ i18n.t("site.create_transformers") }}</legend>
-          <p class="site-choice-help">{{ i18n.t("site.create_transformers_help") }}</p>
-          <template v-if="props.transformersRuntime">
-            <p v-if="exportFormat === 'nginx-docker'" class="site-choice-help">
-              {{ i18n.t("site.create_transformers_help_files") }}
-            </p>
-            <p v-else class="site-choice-help">
-              {{
-                i18n.tf("site.create_transformers_help_inline", {
-                  size: formatMegabytes(props.transformersRuntime.inline_bytes),
-                })
-              }}
-            </p>
-            <p data-transformers-source>
-              {{
-                props.transformersRuntime.cached
-                  ? i18n.t("site.create_transformers_cached")
-                  : i18n.tf("site.create_transformers_download", {
-                      size: formatMegabytes(props.transformersRuntime.download_bytes),
+            <section class="runtime-section" data-site-transformers>
+              <h4>{{ i18n.t("site.create_transformers") }}</h4>
+              <p class="site-choice-help">{{ i18n.t("site.create_transformers_help") }}</p>
+              <template v-if="props.transformersRuntime">
+                <p v-if="exportFormat === 'nginx-docker'" class="site-choice-help">
+                  {{ i18n.t("site.create_transformers_help_files") }}
+                </p>
+                <p v-else class="site-choice-help">
+                  {{
+                    i18n.tf("site.create_transformers_help_inline", {
+                      size: formatMegabytes(props.transformersRuntime.inline_bytes),
                     })
-              }}
-            </p>
-            <progress
-              v-if="props.downloadProgress"
-              :value="props.downloadProgress.received"
-              :max="Math.max(props.downloadProgress.total, 1)"
-              :aria-label="i18n.t('site.create_transformers_downloading')"
-            />
-            <p v-if="props.downloadProgress" role="status">
-              {{
-                i18n.tf("site.create_transformers_progress", {
-                  file: props.downloadProgress.file || "Transformers.js",
-                  received: formatMegabytes(props.downloadProgress.received),
-                  total: formatMegabytes(props.downloadProgress.total),
-                })
-              }}
-            </p>
-            <div class="site-work-picker-toolbar">
-              <button
-                v-if="props.transformersRuntime.cached"
-                type="button"
-                class="btn small"
-                data-transformers-delete
-                :disabled="props.busy"
-                @click="emit('delete-runtime')"
-              >
-                {{ i18n.t("site.create_transformers_delete") }}
-              </button>
-              <button
-                v-else
-                type="button"
-                class="btn small"
-                data-transformers-download
-                :disabled="props.busy"
-                @click="emit('download-runtime')"
-              >
-                {{ i18n.t("site.create_transformers_redownload") }}
-              </button>
-            </div>
-          </template>
-          <p v-else>{{ i18n.t("site.create_transformers_unavailable") }}</p>
-        </fieldset>
-
-        <fieldset class="site-work-picker">
-          <legend>{{ i18n.t("site.create_select_works") }}</legend>
-          <div class="site-work-picker-toolbar">
-            <span>{{ i18n.tf("site.create_selected_count", { count: selectedCount }) }}</span>
-            <div>
-              <button type="button" class="btn small" @click="selectAll">
-                {{ i18n.t("site.create_select_all") }}
-              </button>
-              <button type="button" class="btn small" @click="clearSelection">
-                {{ i18n.t("site.create_clear") }}
-              </button>
-            </div>
+                  }}
+                </p>
+                <p data-transformers-source>
+                  {{
+                    props.transformersRuntime.cached
+                      ? i18n.t("site.create_transformers_cached")
+                      : i18n.tf("site.create_transformers_download", {
+                          size: formatMegabytes(props.transformersRuntime.download_bytes),
+                        })
+                  }}
+                </p>
+                <progress
+                  v-if="props.downloadProgress"
+                  :value="props.downloadProgress.received"
+                  :max="Math.max(props.downloadProgress.total, 1)"
+                  :aria-label="i18n.t('site.create_transformers_downloading')"
+                />
+                <p v-if="props.downloadProgress" role="status">
+                  {{
+                    i18n.tf("site.create_transformers_progress", {
+                      file: props.downloadProgress.file || "Transformers.js",
+                      received: formatMegabytes(props.downloadProgress.received),
+                      total: formatMegabytes(props.downloadProgress.total),
+                    })
+                  }}
+                </p>
+                <div class="runtime-actions">
+                  <button
+                    v-if="props.transformersRuntime.cached"
+                    type="button"
+                    class="btn small"
+                    data-transformers-delete
+                    :disabled="props.busy"
+                    @click="emit('delete-runtime')"
+                  >
+                    {{ i18n.t("site.create_transformers_delete") }}
+                  </button>
+                  <button
+                    v-else
+                    type="button"
+                    class="btn small"
+                    data-transformers-download
+                    :disabled="props.busy"
+                    @click="emit('download-runtime')"
+                  >
+                    {{ i18n.t("site.create_transformers_redownload") }}
+                  </button>
+                </div>
+              </template>
+              <p v-else>{{ i18n.t("site.create_transformers_unavailable") }}</p>
+            </section>
           </div>
-          <div class="site-work-list">
-            <label v-for="work in props.works" :key="work.work" class="site-work-option">
-              <input
-                type="checkbox"
-                :checked="selected.includes(work.work)"
-                :data-site-work="work.work"
-                @change="toggle(work.work, ($event.target as HTMLInputElement).checked)"
-              />
-              <span>
-                <strong>{{ work.work }}</strong>
-                <small>
-                  {{ work.authors.join(", ") }}
-                  <template v-if="work.year_label"> · {{ work.year_label }}</template>
-                  · {{ work.count.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }}
-                </small>
-              </span>
-            </label>
-          </div>
-        </fieldset>
+        </details>
 
         <aside class="site-feature-summary">
           <AppIcon name="spark" aria-hidden="true" />
@@ -502,8 +552,8 @@ onMounted(async () => {
 
 <style scoped>
 .create-site-dialog {
-  width: min(58rem, calc(100vw - 2rem));
-  max-height: min(90vh, 52rem);
+  width: min(64rem, calc(100vw - 2rem));
+  max-height: min(92vh, 58rem);
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -529,7 +579,7 @@ onMounted(async () => {
   gap: 1rem;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 1rem 1.15rem;
+  padding: 1rem 1.2rem;
   background: var(--surface-raised);
 }
 
@@ -543,29 +593,56 @@ onMounted(async () => {
 }
 
 .create-site-header p {
-  max-width: 44rem;
-  margin: 0.45rem 0 0;
+  max-width: 46rem;
+  margin: 0.4rem 0 0;
   color: var(--muted);
   line-height: 1.5;
 }
 
 .create-site-body {
   display: grid;
-  gap: 1rem;
-  padding: 1rem 1.15rem;
+  gap: 1.15rem;
+  padding: 1.15rem 1.2rem 1.4rem;
   overflow: auto;
+}
+
+.publication-section {
+  min-width: 0;
+}
+
+.publication-section + .publication-section {
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.publication-section-head {
+  display: flex;
+  gap: 1rem;
+  align-items: start;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.publication-section-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.publication-section-head p {
+  max-width: 62ch;
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .create-site-fields {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.75fr);
+  grid-template-columns: minmax(0, 1fr) minmax(17rem, 0.7fr);
   gap: 0.8rem;
 }
 
-.create-site-fields .field:first-child {
-  grid-column: 1;
-}
-
+.create-site-fields .field:first-child,
 .create-site-fields .field:nth-child(2) {
   grid-column: 1;
 }
@@ -579,16 +656,15 @@ onMounted(async () => {
   grid-row: 1 / span 2;
   display: grid;
   align-content: start;
-  gap: 0.35rem;
+  gap: 0.3rem;
   padding: 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border-left: 3px solid var(--ui-accent);
   background: var(--surface-raised);
 }
 
 .site-store-summary > span,
 .site-feature-summary strong {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 800;
 }
 
@@ -599,76 +675,56 @@ onMounted(async () => {
   line-height: 1.45;
 }
 
-.site-export-format {
+.publication-content-grid,
+.publication-settings-grid {
   display: grid;
-  min-width: 0;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
-
-.site-export-format legend {
-  padding: 0 0.35rem;
-  font-weight: 800;
-}
-
-.site-export-option {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.7rem;
+  grid-template-columns: minmax(0, 1.2fr) minmax(17rem, 0.8fr);
+  gap: 1rem;
   align-items: start;
-  padding: 0.75rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--surface-raised);
-  cursor: pointer;
-}
-
-.site-export-option:has(input:checked) {
-  border-color: var(--ui-accent);
-  box-shadow: 0 0 0 1px var(--ui-accent);
-}
-
-.site-export-option input {
-  margin-top: 0.2rem;
-}
-
-.site-export-option span {
-  display: grid;
-  gap: 0.2rem;
-}
-
-.site-export-option small {
-  color: var(--muted);
-  line-height: 1.45;
-}
-
-.site-export-option .site-celf-status {
-  color: var(--text);
-  font-weight: 600;
 }
 
 .site-work-picker,
-.site-choice-picker {
+.site-choice-picker,
+.site-option-group {
   min-width: 0;
   margin: 0;
-  padding: 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  padding: 0;
+  border: 0;
 }
 
 .site-work-picker legend,
-.site-choice-picker legend {
-  padding: 0 0.35rem;
+.site-choice-picker legend,
+.site-option-group legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
   font-weight: 800;
 }
 
 .site-choice-help {
   margin: 0 0 0.65rem;
   color: var(--muted);
+  font-size: 0.88rem;
   line-height: 1.45;
+}
+
+.site-option-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.site-model-note,
+.site-celf-status {
+  display: block;
+  margin: 0 0 0.2rem 1.75rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.site-format-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
 }
 
 .site-work-picker-toolbar {
@@ -676,35 +732,43 @@ onMounted(async () => {
   gap: 0.75rem;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.55rem;
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: 0.82rem;
 }
 
-.site-work-picker-toolbar > div {
+.site-work-picker-toolbar > div,
+.runtime-actions {
   display: flex;
   gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
 .site-work-list,
 .site-choice-list {
   display: grid;
-  max-height: 18rem;
-  gap: 0.35rem;
+  max-height: 16rem;
+  gap: 0.25rem;
   overflow: auto;
+  padding-right: 0.2rem;
 }
 
 .site-work-option {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.65rem;
+  gap: 0.6rem;
   align-items: start;
-  padding: 0.65rem;
-  border-radius: 8px;
+  padding: 0.55rem;
+  border-radius: 7px;
 }
 
 .site-work-option:hover {
   background: var(--surface-raised);
+}
+
+.site-work-option:focus-within {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
 }
 
 .site-work-option input {
@@ -716,7 +780,54 @@ onMounted(async () => {
 .site-work-option span {
   display: grid;
   min-width: 0;
+  gap: 0.12rem;
+}
+
+.site-check-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+}
+
+.site-check-option span {
+  display: grid;
   gap: 0.15rem;
+}
+
+.site-check-option small {
+  color: var(--muted);
+}
+
+.publication-advanced {
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.publication-advanced > summary {
+  padding: 0.8rem 0;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.publication-advanced-body {
+  display: grid;
+  gap: 1rem;
+  padding: 0 0 1rem;
+}
+
+.runtime-section {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.runtime-section h4 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.runtime-section p {
+  margin-top: 0;
 }
 
 .site-feature-summary {
@@ -725,18 +836,18 @@ onMounted(async () => {
   gap: 0.7rem;
   align-items: start;
   padding: 0.85rem;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--ui-accent) 7%, var(--surface-raised));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ui-accent) 6%, var(--surface-raised));
 }
 
 .site-feature-summary > svg {
-  width: 1.15rem;
-  margin-top: 0.15rem;
+  width: 1.1rem;
+  margin-top: 0.12rem;
 }
 
 .site-feature-summary span {
   display: grid;
-  gap: 0.2rem;
+  gap: 0.15rem;
 }
 
 .site-create-error {
@@ -750,8 +861,23 @@ onMounted(async () => {
   border-top: 1px solid var(--border);
 }
 
-@media (max-width: 720px) {
-  .create-site-fields {
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 800px) {
+  .create-site-fields,
+  .publication-content-grid,
+  .publication-settings-grid,
+  .site-format-grid {
     grid-template-columns: 1fr;
   }
 

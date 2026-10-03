@@ -126,6 +126,24 @@ describe("local vector index", () => {
     expect(
       matchesPublicationModel({ model: "m", revision: "2" }, { model: "m", revision: "1" }),
     ).toBe(false);
+    expect(
+      matchesPublicationModel(
+        { model: "m", revision: "1", variant: "passage-prefix=passage: " },
+        { model: "m", revision: "1", variant: "passage-prefix=passage: " },
+      ),
+    ).toBe(true);
+    expect(
+      matchesPublicationModel(
+        { model: "m", revision: "1", variant: "passage-prefix=passage: " },
+        { model: "m", revision: "1", variant: "passage-prefix=document: " },
+      ),
+    ).toBe(false);
+    expect(
+      matchesPublicationModel(
+        { model: "m", revision: "1", variant: "passage-prefix=passage: " },
+        { model: "m", revision: "1" },
+      ),
+    ).toBe(false);
     expect(embeddingFingerprint({ type: "ollama", model: "m" })).not.toBe(
       embeddingFingerprint({ type: "transformers", model: "m" }),
     );
