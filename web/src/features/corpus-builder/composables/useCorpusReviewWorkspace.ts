@@ -101,7 +101,7 @@ export function useCorpusReviewWorkspace() {
         ? document.querySelector<HTMLElement>(".focus-inspector-body")
         : reviewInspectorEl.value;
       const field = root?.querySelector<HTMLElement>('[data-unresolved-field="true"]');
-      // The field's Confirm button first, so Enter confirms the proposed value; otherwise its value control.
+      // The field owns its default decision: Confirm or No value for an empty proposal.
       const control =
         field?.querySelector<HTMLElement>("[data-primary-action]:not([disabled])") ||
         field?.querySelector<HTMLElement>(

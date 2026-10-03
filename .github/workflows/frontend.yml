@@ -197,22 +197,12 @@ jobs:
             exit 0
           fi
 
-          # TEMPORARY formatting capture for PR authoring; reverted before merge.
+          # Deleted files cannot be formatted; exclude them before passing paths to Prettier.
           git diff --name-only --diff-filter=ACMRTUXB -z "$BASE_SHA" "$HEAD_SHA" -- \
             '*.md' '*.json' '*.yml' '*.yaml' '*.js' '*.mjs' '*.cjs' \
             '*.ts' '*.tsx' '*.vue' '*.css' '*.scss' '*.html' \
             | xargs -0 --no-run-if-empty ./web/node_modules/.bin/prettier \
-              --write --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
-          for file in \
-            web/src/components/works/CreateSiteDialog.vue \
-            web/src/views/WorksView.vue \
-            web/tests/frontend/works-view.test.ts; do
-            echo "::FORMAT:$file::"
-            base64 -w0 "$file"
-            echo
-            echo "::END_FORMAT::"
-          done
-          exit 1
+              --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
 
   backend-lint:
     needs: changes

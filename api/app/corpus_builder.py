@@ -885,6 +885,7 @@ class PdfCorpusRepository:
         # of an unchanged payload was most of the cost of loading or saving a corpus.
         self._migration_fixed_points: set[tuple[bytes, bytes]] = set()
         self._metadata_projection_callback: Callable[[str], None] | None = None
+        self._initialized_record_databases: dict[str, tuple[int, int, int]] = {}
 
     def asset_meta_path(self, asset_id: str) -> Path:
         return self.root / "assets" / f"{asset_id}.json"
@@ -1742,30 +1743,76 @@ class PdfCorpusRepository:
     @contextmanager
     def _records_db(self, build_id: str) -> Iterator[sqlite3.Connection]:
         path = self.build_records_db_path(build_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(path, timeout=30)
         try:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS corpus_records (
-                    record_id TEXT PRIMARY KEY,
-                    ordinal INTEGER NOT NULL,
-                    payload TEXT NOT NULL
-                )
-                """
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS idx_corpus_records_ordinal "
-                "ON corpus_records (ordinal)"
-            )
-            corpus_queue_projection.initialize(connection)
-            corpus_document_context.initialize(connection)
-            metadata_exemplar_journal.initialize(connection)
-            connection.commit()
+            stat = path.stat()
+            identity = (stat.st_dev, stat.st_ino, int(connection.execute("PRAGMA schema_version").fetchone()[0]))
+            if self._initialized_record_databases.get(build_id) != identity:
+                with self._lock:
+                    if self._initialized_record_databases.get(build_id) != identity:
+                        self._initialize_records_db(connection)
+                    identity = (stat.st_dev, stat.st_ino, int(connection.execute("PRAGMA schema_version").fetchone()[0]))
+                    self._initialized_record_databases[build_id] = identity
+                    if len(self._initialized_record_databases) > 64:
+                        del self._initialized_record_databases[next(iter(self._initialized_record_databases))]
             with connection:
                 yield connection
         finally:
             connection.close()
+
+    def _initialize_records_db(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS corpus_records (
+                record_id TEXT PRIMARY KEY,
+                ordinal INTEGER NOT NULL,
+                payload TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_corpus_records_ordinal "
+            "ON corpus_records (ordinal)"
+        )
+        corpus_queue_projection.initialize(connection)
+        corpus_document_context.initialize(connection)
+        metadata_exemplar_journal.initialize(connection)
+        connection.commit()
+
+    @contextmanager
+    def _review_read_db(self, build_id: str) -> Iterator[tuple[sqlite3.Connection, MetadataSchema | None, bytes]]:
+        self._read_build_snapshot(build_id)
+        if not self.build_records_db_path(build_id).exists():
+            with self._lock:
+                self._bootstrap_records_db(build_id)
+        for _attempt in range(3):
+            with self._records_db(build_id) as connection:
+                schema = self._record_schema(build_id, build_snapshot=self._read_build_snapshot(build_id))
+                signature = self._schema_signature(schema)
+                identity = self._review_projection_schema_identity(schema)
+                connection.execute("BEGIN")
+                meta = connection.execute(
+                    "SELECT contract,schema_identity FROM review_projection_meta WHERE id=1"
+                ).fetchone()
+                document = connection.execute(
+                    "SELECT contract FROM document_context_state WHERE id=1"
+                ).fetchone()
+                dirty = connection.execute("SELECT 1 FROM review_projection_dirty LIMIT 1").fetchone()
+                if (
+                    meta == (corpus_queue_projection.CONTRACT, identity)
+                    and document == (corpus_document_context.CONTRACT,)
+                    and dirty is None
+                ):
+                    yield connection, schema, signature
+                    return
+                connection.rollback()
+                with self._lock:
+                    connection.execute("BEGIN IMMEDIATE")
+                    self._ensure_review_projection(connection, build_id)
+                    connection.commit()
+        raise RuntimeError("Review projection changed repeatedly during read preparation.")
 
     def _bootstrap_records_db(self, build_id: str) -> None:
         if self.build_records_db_path(build_id).exists():
@@ -1868,8 +1915,10 @@ class PdfCorpusRepository:
         # the build itself through REST.
         note_corpus_build(_operation_from_build(build))
 
-    def _record_schema(self, build_id: str) -> MetadataSchema | None:
-        build = self.get_build(build_id)
+    def _record_schema(
+        self, build_id: str, *, build_snapshot: dict[str, Any] | None = None,
+    ) -> MetadataSchema | None:
+        build = build_snapshot if build_snapshot is not None else self.get_build(build_id)
         raw_schema = build.get("schema") if isinstance(build, dict) else None
         if not isinstance(raw_schema, dict):
             return None
@@ -1880,7 +1929,11 @@ class PdfCorpusRepository:
 
     def get_build(self, build_id: str) -> dict[str, Any]:
         with self._lock:
-            build = _json_read(self.build_path(build_id))
+            return self._read_build_snapshot(build_id)
+
+    def _read_build_snapshot(self, build_id: str) -> dict[str, Any]:
+        # Build summaries are atomically replaced; one read retains one complete snapshot.
+        build = _json_read(self.build_path(build_id))
         if not isinstance(build, dict):
             raise KeyError(build_id)
         return _migrate_status_vocabulary(build)
@@ -2297,37 +2350,29 @@ class PdfCorpusRepository:
         avoids the historical O(corpus-size) deserialize/migration cost on every click.
         Missing ids remain None and input order (including duplicates) is preserved.
         """
-        self.get_build(build_id)
         requested = [str(record_id) for record_id in record_ids]
         if not requested:
+            self._read_build_snapshot(build_id)
             return []
         unique_ids = list(dict.fromkeys(requested))
         found: dict[str, str] = {}
         versions: dict[str, int] = {}
-        with self._lock:
-            self._bootstrap_records_db(build_id)
-            with self._records_db(build_id) as connection:
-                if include_queue_version:
-                    connection.execute("BEGIN IMMEDIATE")
-                    self._ensure_review_projection(connection, build_id)
-                # Review opens/prefetches only a few rows at a time. Fixed-shape indexed
-                # queries avoid dynamic SQL while preserving order/duplicate semantics below.
-                for record_id in unique_ids:
-                    row = connection.execute(
-                        """SELECT c.payload,q.state_version FROM corpus_records c
+        with self._review_read_db(build_id) as (connection, schema, signature):
+            # Fixed-shape indexed queries preserve order and duplicate semantics.
+            for record_id in unique_ids:
+                row = connection.execute(
+                    """SELECT c.payload,q.state_version FROM corpus_records c
                            LEFT JOIN review_queue_rows q ON q.record_id=c.record_id
                            WHERE c.record_id=?"""
-                        if include_queue_version else "SELECT payload FROM corpus_records WHERE record_id = ?",
-                        (record_id,),
-                    ).fetchone()
-                    if row is not None:
-                        found[record_id] = str(row[0])
-                        if include_queue_version:
-                            if row[1] is None:
-                                raise RuntimeError("Canonical record has no review projection version.")
-                            versions[record_id] = int(row[1])
-        schema = self._record_schema(build_id)
-        signature = self._schema_signature(schema)
+                    if include_queue_version else "SELECT payload FROM corpus_records WHERE record_id = ?",
+                    (record_id,),
+                ).fetchone()
+                if row is not None:
+                    found[record_id] = str(row[0])
+                    if include_queue_version:
+                        if row[1] is None:
+                            raise RuntimeError("Canonical record has no review projection version.")
+                        versions[record_id] = int(row[1])
         decoded: dict[str, dict[str, Any]] = {
             record_id: self._decode_migrated(payload, schema, signature)
             for record_id, payload in found.items()
@@ -2455,62 +2500,53 @@ class PdfCorpusRepository:
         corpus_document_context.ensure(connection)
         schema = self._record_schema(build_id)
         signature = self._schema_signature(schema)
-        identity = hashlib.sha256(
-            json.dumps(schema.model_dump(mode="json") if schema else None, sort_keys=True).encode()
-        ).hexdigest()
+        identity = self._review_projection_schema_identity(schema)
         corpus_queue_projection.ensure(
             connection, identity, lambda payload: self._decode_migrated(payload, schema, signature),
             rebuild=rebuild,
         )
 
+    @staticmethod
+    def _review_projection_schema_identity(schema: MetadataSchema | None) -> str:
+        return hashlib.sha256(
+            json.dumps(schema.model_dump(mode="json") if schema else None, sort_keys=True).encode()
+        ).hexdigest()
+
     def projected_review_page(
         self, build_id: str, filters: QueueFilter, *, offset: int = 0, limit: int = 50,
         cursor: str | None = None, direction: str = "forward", include_facets: bool = False,
     ) -> dict[str, Any]:
-        self.get_build(build_id)
-        with self._lock:
-            self._bootstrap_records_db(build_id)
-            with self._records_db(build_id) as connection:
-                connection.execute("BEGIN IMMEDIATE")
-                self._ensure_review_projection(connection, build_id)
-                selected, page = corpus_queue_projection.select(
-                    connection, build_id, filters, offset=offset, limit=limit, cursor=cursor, direction=direction,
-                )
-                schema = self._record_schema(build_id)
-                signature = self._schema_signature(schema)
-                items = []
-                for record_id, ordinal, version in selected:
-                    payload = connection.execute("SELECT payload FROM corpus_records WHERE record_id=?", (record_id,)).fetchone()
-                    if payload is None:
-                        raise RuntimeError("Review projection references a missing canonical record.")
-                    record = corpus_queue_projection._transport_record(self._decode_migrated(payload[0], schema, signature))
-                    record["topology_index"] = int(ordinal)
-                    record["topology_count"] = page["topology_count"]
-                    record["queue_state_version"] = int(version)
-                    _decorate_review_state(record)
-                    _present_for_reviewer(record)
-                    items.append(record)
-                page["items"] = items
-                if include_facets:
-                    page["metadata_values"] = corpus_queue_projection.facets(connection)
-                return page
+        with self._review_read_db(build_id) as (connection, schema, signature):
+            selected, page = corpus_queue_projection.select(
+                connection, build_id, filters, offset=offset, limit=limit, cursor=cursor, direction=direction,
+            )
+            payloads = []
+            for record_id, ordinal, version in selected:
+                payload = connection.execute("SELECT payload FROM corpus_records WHERE record_id=?", (record_id,)).fetchone()
+                if payload is None:
+                    raise RuntimeError("Review projection references a missing canonical record.")
+                payloads.append((payload[0], ordinal, version))
+            if include_facets:
+                page["metadata_values"] = corpus_queue_projection.facets(connection)
+        items = []
+        for payload, ordinal, version in payloads:
+            record = corpus_queue_projection._transport_record(self._decode_migrated(payload, schema, signature))
+            record["topology_index"] = int(ordinal)
+            record["topology_count"] = page["topology_count"]
+            record["queue_state_version"] = int(version)
+            _decorate_review_state(record)
+            _present_for_reviewer(record)
+            items.append(record)
+        page["items"] = items
+        return page
 
     def review_metadata_facets(self, build_id: str, fields: list[str] | None = None) -> dict[str, list[str]]:
-        self.get_build(build_id)
-        with self._lock:
-            self._bootstrap_records_db(build_id)
-            with self._records_db(build_id) as connection:
-                connection.execute("BEGIN IMMEDIATE")
-                self._ensure_review_projection(connection, build_id)
-                return corpus_queue_projection.facets(connection, fields)
+        with self._review_read_db(build_id) as (connection, _schema, _signature):
+            return corpus_queue_projection.facets(connection, fields)
 
     def review_build_aggregates(self, build_id: str, *, automation_running: bool) -> dict[str, Any]:
-        with self._lock:
-            self._bootstrap_records_db(build_id)
-            with self._records_db(build_id) as connection:
-                connection.execute("BEGIN IMMEDIATE")
-                self._ensure_review_projection(connection, build_id)
-                return corpus_queue_projection.build_aggregates(connection, automation_running)
+        with self._review_read_db(build_id) as (connection, _schema, _signature):
+            return corpus_queue_projection.build_aggregates(connection, automation_running)
 
     def rebuild_review_queue(self, build_id: str) -> dict[str, Any]:
         self.get_build(build_id)
@@ -4043,7 +4079,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
     def _run(self, build_id: str, request: dict[str, Any], resume: bool = False) -> None:
         """Coordinate checkpointed stages; retain failure/cancellation recovery at one boundary."""
         try:
-            self._update(build_id, stage="preparing")
+            self._update(build_id, stage="preparing", text_review_available_at=None)
             scope = self._prepare_build_scope(build_id, request, resume)
             if scope is None:
                 return
@@ -4340,11 +4376,11 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             self._update(
                 build_id, record_count=len(records), boundary_count=len(boundaries),
                 topology_persisted_at=self.repo.get_build(build_id).get("topology_persisted_at") or iso_now(),
+                text_review_available_at=iso_now(),
             )
             records = self.repo.load_records(build_id)
             preparation_base = json.loads(json.dumps(records))
-            # Canonical topology is readable before optional derived work; review
-            # remains locked until preparation and enrichment scheduling complete.
+            # Text review is available; metadata and structural decisions still wait.
             source_projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
             try:
                 provider, model = source_projection.store.default_embedding_spec()
@@ -4968,6 +5004,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
     def _apply_review_workflow(
         self, build: dict[str, Any], validation: dict[str, Any], *, automation_running: bool, pass_running: bool,
     ) -> None:
+        if (
+            str(build.get("status") or "") in {"queued", "running"}
+            and str(build.get("stage") or "") in {"constructing_records", "document_intelligence"}
+            and build.get("text_review_available_at")
+            and (build.get("topology_validation") or {}).get("valid") is True
+        ):
+            return
         reviewed_count = min(build["record_count"], build["accepted_count"] + build["rejected_count"])
         review_fraction = reviewed_count / max(1, build["record_count"])
         blockers = bool(build["needs_review_count"] or build["boundary_review_count"] or not validation.get("valid"))

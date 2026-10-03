@@ -22,47 +22,145 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 ## Baseline and branch
 
-- Current continuation branch: `ajschlosser-corpus-builder-performance-fce`; merged #453 used `ajschlosser-corpus-builder-performance-a2f`.
-- Continuation baseline: merged #453 at `9b477ff5`, including transactional initial handoffs and batched enrichment queue setup. Earlier checkpoint descriptions below retain their historical validation scope.
+- Current continuation branch: `ajschlosser-corpus-builder-performance-0ef`; merged #455 used `ajschlosser-corpus-builder-performance-fce`.
+- Continuation baseline: merged #455 at `6312cedc`, with merged #454 at workspace HEAD `c9377472`. Earlier checkpoint descriptions below retain their historical validation scope.
 - Integrated merged #427 at `c8e671cd` before the scheduling continuation; local performance and refresh changes reapplied without conflicts.
-- Working scope: retire automatic Record-open bookkeeping without losing historical activity or meaningful review events. Hidden optional work, earlier preparation readiness, broader caching, end-to-end contention measurements, and evaluated review assistance remain planned.
+- PR preparation integrated current `origin/master` through `78ea96ae`. Reviewer changes are committed at `d5c9543e`; the locale-export regression fix is committed separately at `905ddce1`.
+- Working scope: demand-gated reviewer work, bounded precedent resolution, shared reads, clean repository read transactions, explicit keyboard absence decisions, and validated text-only preparation readiness. Earlier metadata/structural and resumed-topology readiness, broader computational caching, live end-to-end contention measurements, and evaluated review assistance remain open.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
 ## Checkpoints
 
-| Checkpoint                             | State                       | Evidence                                                                                                 |
-| -------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Plan and tracker                       | Committed/pushed `dc0b35f0` | Scope, invariants, acceptance gates, rollout sequence                                                    |
-| Baseline instrumentation               | Partial                     | Synthetic persistence/write counts captured; stable wall-clock and end-to-end baselines pending          |
-| Incremental enrichment completion      | Committed/pushed `d9c30235` | Ownership, restart, failure, and retired-record regressions                                              |
-| Audio manifest preparation             | Committed/pushed `6fff2e0e` | Transcript time locators and provider fallback                                                           |
-| Remove review navigation modal         | Committed/pushed `bb066a35` | 18 production-browser cases pass; local draft recovery retained                                          |
-| Restore document metadata editor       | Committed/pushed `0be91ae9` | Component-resolution regression and typechecks                                                           |
-| Queue projection                       | Merged #425                 | Transactional SQLite projection, live cursors, scoped reconciliation, repository scaling measurements    |
-| Incremental metadata exemplars         | Merged #428                 | Record-local reconciliation, recoverable invalidation, unchanged-vector reuse; measurements below        |
-| Bounded source-embedding cache reads   | Merged #430                 | Selected-ID batches, warm reuse, document isolation; deterministic work counts below                     |
-| Dependency-aware enrichment caching    | Partial                     | Exact raw/materialized family fingerprints plus bounded in-flight sharing; other stages remain planned   |
-| Readiness / scheduling                 | Partial                     | Bounded admission and provider priorities delivered; earlier safe review-readiness work remains          |
-| Review refresh continuity              | Merged #430                 | Same-Record refresh preserves mounted panes, evidence/page selection, and in-flight drafts               |
-| Record-local source-block lookup       | Merged #439                 | File-version-bound offset index; selected rows/bytes and output equivalence measured below               |
-| Conditional preparation persistence    | Merged #439                 | Changed-Record deltas, transactional queue-version checks, stale/retired/authority regressions           |
-| Automatic enrichment handoffs          | Merged #444                 | Transactional current-row retry/rerun/requeue writes and changed-row final validation                    |
-| Document annotation context            | Merged #444                 | Exact transactional documentary epochs, stale-snapshot rejection, bounded metadata-hint checks           |
-| Optimistic automatic validation        | Merged #448                 | Computation outside repository/writer locks; conflict retries preserve current Records and topology      |
-| Review-safe validation handoff         | Merged #448                 | Manager review overlaps validation; guarded summary handoff and consistent final-phase readiness         |
-| Transactional initial handoffs         | Merged #453                 | Initial checkpoints/completions merge current selected rows; stale context and no-op writes are rejected |
-| Batched initial enrichment queue setup | Merged #453                 | One changed-row batch, review-safe optimistic retries, cancellation/settle preservation; timings below   |
-| Evaluated learning / review assistance | Pending                     | Requires held-out evaluation                                                                             |
+| Checkpoint                                   | State                       | Evidence                                                                                                    |
+| -------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Plan and tracker                             | Committed/pushed `dc0b35f0` | Scope, invariants, acceptance gates, rollout sequence                                                       |
+| Baseline instrumentation                     | Partial                     | Synthetic persistence/write counts captured; stable wall-clock and end-to-end baselines pending             |
+| Incremental enrichment completion            | Committed/pushed `d9c30235` | Ownership, restart, failure, and retired-record regressions                                                 |
+| Audio manifest preparation                   | Committed/pushed `6fff2e0e` | Transcript time locators and provider fallback                                                              |
+| Remove review navigation modal               | Committed/pushed `bb066a35` | 18 production-browser cases pass; local draft recovery retained                                             |
+| Restore document metadata editor             | Committed/pushed `0be91ae9` | Component-resolution regression and typechecks                                                              |
+| Queue projection                             | Merged #425                 | Transactional SQLite projection, live cursors, scoped reconciliation, repository scaling measurements       |
+| Incremental metadata exemplars               | Merged #428                 | Record-local reconciliation, recoverable invalidation, unchanged-vector reuse; measurements below           |
+| Bounded source-embedding cache reads         | Merged #430                 | Selected-ID batches, warm reuse, document isolation; deterministic work counts below                        |
+| Dependency-aware enrichment caching          | Partial                     | Exact raw/materialized family fingerprints plus bounded in-flight sharing; other stages remain planned      |
+| Readiness / scheduling                       | Partial                     | Bounded admission and provider priorities delivered; earlier safe review-readiness work remains             |
+| Review refresh continuity                    | Merged #430                 | Same-Record refresh preserves mounted panes, evidence/page selection, and in-flight drafts                  |
+| Record-local source-block lookup             | Merged #439                 | File-version-bound offset index; selected rows/bytes and output equivalence measured below                  |
+| Conditional preparation persistence          | Merged #439                 | Changed-Record deltas, transactional queue-version checks, stale/retired/authority regressions              |
+| Automatic enrichment handoffs                | Merged #444                 | Transactional current-row retry/rerun/requeue writes and changed-row final validation                       |
+| Document annotation context                  | Merged #444                 | Exact transactional documentary epochs, stale-snapshot rejection, bounded metadata-hint checks              |
+| Optimistic automatic validation              | Merged #448                 | Computation outside repository/writer locks; conflict retries preserve current Records and topology         |
+| Review-safe validation handoff               | Merged #448                 | Manager review overlaps validation; guarded summary handoff and consistent final-phase readiness            |
+| Transactional initial handoffs               | Merged #453                 | Initial checkpoints/completions merge current selected rows; stale context and no-op writes are rejected    |
+| Batched initial enrichment queue setup       | Merged #453                 | One changed-row batch, review-safe optimistic retries, cancellation/settle preservation; timings below      |
+| Mutation-free navigation / hidden assistance | Merged #455                 | Historical activity retained; metadata precedent and autocomplete demand gates                              |
+| Source-block demand / clean advanced drafts  | Implemented locally         | Visible-consumer reads, revision/context invalidation, recovery and pending-save edit regressions           |
+| Foreground neighbour-prefetch sharing        | Implemented locally         | Exact context joins, bounded pending admission, stale-cache and visible-failure regressions                 |
+| Repeated foreground read sharing             | Implemented locally         | One exact-context transport, latest-consumer activation/errors, cancellation and retry regressions          |
+| Advanced JSON disclosure demand              | Implemented locally         | Clean hidden activation/refresh skips formatting; production disclosure and recovery coverage               |
+| Clean repository read transactions           | Implemented locally         | Deferred snapshots, explicit dirty repair, lifecycle schema checks; validation below                        |
+| Bounded kept-precedent resolution            | Implemented locally         | Version 3 Record-backed references; selected canonical Records/source units; legacy version 2 compatibility |
+| Text-only preparation readiness              | Implemented locally         | Fresh validated topology; text saves preserve running preparation; metadata/structural gates remain intact  |
+| Explicit No-value keyboard focus             | Implemented locally         | Empty fields focus No value; Enter records explicit absence; zero/false and busy/saving guards preserved    |
+| Disclosure-local precedent candidates        | Implemented locally         | Kept batches avoid ranking/embedding; single-field disclosure demand and obsolete client transport aborts   |
+| Browser cached-navigation budget             | Partial                     | 40 synthetic warmed observations; no full preparation, live-provider, real-source or contention comparison  |
+| Evaluated learning / review assistance       | Pending                     | Requires held-out evaluation                                                                                |
 
 ## Validation and measurements
 
 Focused validation is recorded below by checkpoint; overlapping test counts are not additive. The synthetic persistence benchmark verifies fewer full-store writes, not an end-to-end speedup. Shared-machine disk variability prevents a reliable elapsed-time conclusion. Live-model preparation and human-review measurements remain outstanding.
+
+## PR preparation follow-up
+
+- Fixed the English fallback exporter to preserve both single- and double-quoted Python dictionary keys, then regenerated the fallback through the existing exporter. Behavioral coverage exercises both quote forms, escaped key quotes, adjacent value literals, and escaped newlines. All six locale regressions and 17 schema-editor tests pass; canonical/export dictionary equality is restored.
+- Initial merged preflight passed backend lint, mypy (262 source files), Python syntax, all 15 REST/GraphQL contracts, frontend lint, application/test typechecks, 132 directly selected and 406 related frontend test executions, and the production application build. Frontend counts overlap and are not additive.
+- The full backend run passed 2,186 tests with 20 skips and two failures: optional installed-English-model expectations for publication-place ranking and recognition of Hobbes. Both failures reproduce on a clean `master` snapshot at `3a2e41dc`; the later master update changes only frontend/docs. Windows temporary-path failures were resolved with a short private pytest root, without modifying publication behavior; the hook, reconciliation, and publication suites also passed all 92 cases in an isolated rerun.
+- User-directed NLP follow-up separates annotation-contract checks from statistical model accuracy. The bundled small model tags Hobbes as a location and includes Baltimore inside a publisher entity; the application must not silently rewrite these provider observations as correct person/place tags. Exact Baltimore/London ranking and Hobbes inclusion/exclusion are now covered with controlled provider output. Installed-model integration checks exact native spans, category filtering, and advisory derivation rather than assuming those two names are recognized correctly. All 23 focused NLP cases pass.
+- Final preflight is **green**: 2,191 backend regressions passed with 20 skips, all 15 REST/GraphQL contracts passed, and every lint, typecheck, related frontend-test, formatting, freshness, and production-application-build gate passed. Four-worker Windows runs encountered intermittent file-sharing `PermissionError`s in concurrent persistence fixtures; the complete single-worker rerun passed without new exclusions or softened concurrency assertions. The short private temporary root avoids shared-directory permissions and Windows path-length failures. No hook bypass was used.
+- No Docker-build, release-readiness, live-provider, real-source, or human-review success is implied by these results. Earlier production-browser and Storybook results retain their checkpoint scope.
+
+## Source-block demand continuation (2026-10-03)
+
+- Ordinary Record activation and topology hydration no longer fetch source blocks. Visible Source/Evidence inspectors (including focus review) load the selected Record's blocks on demand; metadata selection-evidence commands also load them explicitly before matching.
+- Loaded blocks are reused only for the same reviewer/build/asset/Record/revision/source-binding context. Context changes clear them, and responses invalidated by hiding or navigation cannot install data. Current-request failures remain visible; this client gate does not cancel dispatched server work.
+- Added navigation-demand and late-response regressions, and updated refresh coverage to require reloading source blocks when the Record revision advances. No browser latency or percentage improvement is claimed.
+- Validation: 47 targeted frontend tests passed across builder characterization, focus review, and metadata review. Application/SDK and test typechecks, touched-source ESLint, touched-file Prettier, and diff whitespace checks passed. Browser/live-source contention measurements have not run.
+
+## Clean advanced-metadata draft continuation (2026-10-03)
+
+- Advanced metadata persists only dirty, non-canonical draft text. Clean activation, authoritative refresh, and optimistic canonical updates no longer write browser recovery drafts; successful saves no longer recreate the draft removed by the save path.
+- Existing unsaved drafts still restore on activation and survive same-Record refreshes. Failed advanced saves restore the submitted recovery text and keep the active editor dirty; errors remain visible. Serialized server mutations and viewport handling are unchanged.
+- Added clean-activation/refresh, edit persistence, successful-save cleanup, and failed-save recovery regressions. This removes unnecessary browser storage work but does not establish a measured navigation speedup or defer JSON serialization until disclosure.
+- Newer edits made while an earlier save is pending remain dirty and recoverable when that save finishes. Validation: 52 targeted frontend tests, application/SDK and test typechecks, and touched-source ESLint passed; touched files were formatted with Prettier. Browser/live contention measurements remain unrun.
+
+## Foreground neighbour-prefetch sharing continuation (2026-10-03)
+
+- Opening a Record now joins its in-flight neighbour prefetch only when build/reviewer epoch, per-Record invalidation generation, revision hint, and operational state-version hint match exactly. The existing batched neighbour request remains intact; foreground failures stay visible rather than inheriting best-effort prefetch error suppression.
+- Repeated prefetch admission skips matching pending identities and caps tracked pending Records at the 48-Record cache capacity. Different contexts use independent reads. A late prefetch cannot replace a cache entry installed by a newer foreground read, and superseded selection tickets cannot activate shared results.
+- This checkpoint introduced bounded sharing with neighbour prefetch; the later foreground continuation below also shares repeated exact-context foreground opens. Neither cancels already-dispatched server-side prefetch work. Added shared-read, state-version/cache-race, superseded-selection, and visible-failure regressions; no browser latency improvement is claimed.
+- Validation: 89 targeted frontend tests passed across review-record reads, builder characterization, focus review, and metadata review. Application/SDK and test typechecks, touched-source ESLint, Prettier formatting, and diff whitespace checks passed. Browser/live contention measurements remain unrun.
+
+## Clean repository read transaction continuation (2026-10-03)
+
+- Selected Records, queue pages, facets, and build aggregates now check projection/schema identity, documentary-context contract, and dirty state inside a deferred SQLite read snapshot. Clean reads reserve no writer and require no repository coordination. Dirty or incompatible projections roll back, repair under the existing writer/coordination boundary, and retry; three repeated repair races fail visibly.
+- Database initialization is cached by file identity and SQLite schema version, bounded to 64 builds. Warm reads perform no DDL. Missing storage, restart, and changed database schemas retain initialization/repair paths; unknown builds do not create storage. Atomically replaced build summaries provide one pinned schema snapshot for the read.
+- Queue payloads, versions, counts, and requested facets are copied from the same transaction. Decoding, migration, and reviewer presentation then run after that transaction closes, so a slow decoder does not hold up a writer commit. A regression commits an external update during decoding and verifies that the returned page remains the preceding coherent snapshot.
+- Writer reservations, schema initialization, and repository coordination remain for cold initialization/repair and canonical mutations. Manager-level commands and build-summary durability are unchanged. This is not complete per-build writer-lock decomposition or a claim that every API request is lock-free.
+
+## Bounded kept-precedent resolution continuation (2026-10-03)
+
+- New kept-precedent cache contract version 3 retains originating Record identity with each exemplar reference. Reverification calls the existing editorial-memory canonical derivation over only referenced Records and selected source units; remapping loads only the current Record's own source units.
+- Exact exemplar identity, revision/evidence bindings, current human authority, blind opinions, field retrieval policy, and reset policy remain authoritative. Record/exemplar identity mismatch is stale rather than rebound. Version 2 references remain supported through their legacy full-corpus resolution path because they lack Record identity.
+- Existing assigned candidate-remapping pipeline behavior is unchanged. General live precedent searches still use their existing broader retrieval path; explicit candidate cancellation and provider-free batch disclosure remain open.
+
+## Reviewer measurement continuation (2026-10-03)
+
+- The production application and Storybook builds passed. Production Chromium demand-gate coverage verifies zero source-block reads and metadata draft writes on clean activation, and one reusable source read after opening Evidence/Source. Browser fixtures remain mocked rather than live API/model benchmarks.
+- A 40-observation warmed, two-Record navigation run measured **p50 49.900 ms / p95 50.600 ms**, including two animation frames after activation, with zero full-Record network requests. It satisfies the cached-navigation budget in that synthetic configuration; it is not a before/after improvement, population estimate, large-corpus browser result, or enrichment-contention measurement.
+- Added opt-in `CORPUS_READ_BENCHMARK` coverage for prepared 1,000/10,000-Record repositories and one/two concurrent builds. Each sample reads one Record per build; 40 samples per case decoded exactly 40/80 payloads, with initialization and repair forbidden on the measured path.
+
+| Records per build | Concurrent read-only builds | Samples | Batch p50 (ms) | Batch p95 (ms) | Decoded payloads |
+| ----------------- | --------------------------- | ------- | -------------- | -------------- | ---------------- |
+| 1,000             | 1                           | 40      | 0.460          | 0.582          | 40               |
+| 10,000            | 1                           | 40      | 0.584          | 1.108          | 40               |
+| 1,000             | 2                           | 40      | 0.978          | 1.251          | 80               |
+| 10,000            | 2                           | 40      | 1.062          | 1.342          | 80               |
+
+- Repository timings used Python 3.12.15 in the local Docker Linux/WSL2 environment, with fixtures on container-local storage. They exclude cold initialization, HTTP/browser, enrichment writes, real sources, and providers. Concurrent regression work and shared-host load limit comparisons; no historical baseline or end-to-end speedup is established. Raw text-free timing artifacts remain in this session's files, outside the repository.
+- Reproduce the repository measurements with a fresh output path: `CORPUS_READ_BENCHMARK=<path> python -m pytest -q tests/test_review_queue_projection.py -k clean_selected_read_benchmark`. Browser timing is attached by `web/tests/e2e/corpus-review-refresh.spec.ts`.
+
+## Foreground sharing and advanced disclosure continuation (2026-10-03)
+
+- Repeated foreground opens with exactly matching build/reviewer epoch, Record invalidation generation, revision and operational version now retain one request. Selection tickets remain independent: only the latest consumer activates or reports failure. Different contexts/targets, a full authoritative selection, resets and disposal abort the foreground transport; ignored aborts cannot install obsolete results. Failed shared reads retire before Retry starts a fresh request. The foreground transport count is bounded to one, independently of the bounded neighbour prefetch map.
+- Clean advanced JSON formatting waits for the visible disclosure, including authoritative and ordinary-field updates. Opening it uses current editable metadata; a hidden open disclosure does not force formatting during navigation. Stored recovery drafts restore regardless of disclosure, and closing/hiding preserves dirty text. Explicit saves still materialize and validate the submitted JSON, preserve newer edits, and report failures.
+- Final frontend validation: 95 tests passed across reviewer reads, builder characterization, focus review and metadata review. Application/SDK and test typechecks, touched-source ESLint and Prettier passed. Fresh production application and Storybook builds passed; five production Chromium cases passed, including disclosure/recovery, background refresh, cached activation, and light/dark final-validation editing. The preceding 42-case browser batch also passed; overlapping counts are not additive.
+- Backend validation: the expanded batch passed 123 tests with 15 skips. Its new snapshot-decoding test initially inspected a reviewer-hidden field; the corrected regression passed separately and now compares visible text, revision, operational version and snapshot facets while a writer commits during decoding. Touched Python Ruff and application compile checks passed. Host Python remains unavailable; checks used an isolated disposable Docker container. Docker application builds and live source/provider/human evaluation did not run.
+
+## Remaining implementation and acceptance gates
+
+- **Engineering still open:** earlier metadata/structural and existing-topology resume readiness; wider non-family dependency caching; cancellation of dispatched precedent server/provider work; per-build writer coordination; measured capacity reservation; and previewable/version-checked review assistance and auditable reversals. Text-only readiness, disclosure-local candidate demand, and obsolete client transport cancellation are narrower delivered increments, not completion of these broader gates.
+- **Measurement/evaluation inputs still needed:** representative authorized source material, reproducible local/hosted model configurations, held-out document-level reviewed judgments, independent high-severity quality assessment, and a human-review timing protocol. This checkout contains no real source-media fixtures for those studies. Synthetic timings and agent-operated browser checks cannot replace them.
+- **Unverified targets:** 50% first-reviewable reduction, 30–50% full-preparation reduction, 50% active human-review reduction, live one/two-build cold-open/save-tail bounds, and no increase in high-severity errors on held-out material. No learning/routing policy has been promoted or required analysis suppressed to claim those targets.
 
 ## Next actions
 
 1. Establish isolated real-source and end-to-end timing baselines, including browser/save tail latency, before claiming progress toward 50%.
 2. Extend exact reuse to other computational stages and refine consumed-dependency scopes. Record-local source lookup, bounded in-flight sharing, and materialized family checking are implemented below; real-source/cold-load/contention validation remains outstanding.
 3. Evaluate earlier readiness, scheduling, and review assistance separately from repository queue improvements.
+
+## Text readiness and explicit absence continuation (2026-10-03)
+
+- Fresh topology records `text_review_available_at` after conservation validation and deterministic cleanup are durably saved, before optional source indexing, prefill, and Document Intelligence finish. The current preparation's milestone and valid topology allow text-only decisions during `constructing_records` and `document_intelligence`. Ordinary/focus readers and the decision dock share this lock distinction; cleanup/model assistance, metadata, disposition, and structural edits remain locked.
+- Text saves retain the running preparation stage instead of prematurely moving the build into ordinary Review. Existing revision/authority protections preserve the human correction and original extraction through late work. Preparation/resume clears the milestone before any scope work; existing-topology resume does not yet receive the earlier unlock.
+- Empty metadata fields now focus No value on initial blocker navigation and next-field progression. Native Enter explicitly records absence; modified Enter inside an empty editor takes the same decision path. Nonempty drafts focus Confirm/Save, zero and false remain values, and focus alone has no authority effect. Busy/saving guards prevent duplicate decisions.
+- Validation: 139 affected frontend tests and application/SDK/test typechecks passed with a single worker after a shared-host parallel worker-fetch timeout. Five backend early-readiness/invalid-boundary cases passed. The first Ruff invocation attempted a read-only cache; rerunning touched Python lint with `--no-cache` passed. A fresh production app build and all ten production Chromium review-refresh/keyboard/readiness cases passed; the final browser rerun allowed 120 seconds for shared-host teardown after two context-close timeouts. The initial readiness-notice layout failure was fixed by keeping the notice inside the existing reader grid item. These fixtures use mocked API state, not live providers or human-review measurements.
+- Baseline limitations: a clean-HEAD backend run passed 14 cases and reproduced two existing evidence-edit exemplar-scheduling count failures. The earlier changed-tree run also observed an extra callback in the disposition test; that third symptom was not reproduced by the baseline run and is not certified as unrelated. No baseline expectation was weakened.
+
+## Disclosure-local precedent candidate continuation (2026-10-03)
+
+- Kept batch reads revalidate reviewed precedent identities and evidence without target candidate ranking, source-unit remapping, or embedding lookup. Nonempty fields declare `candidates_pending`; only opening a field disclosure requests its assigned-pipeline candidate ranking. Empty kept fields do not trigger it. The existing explicit Like reviewed precedents Evidence command still requests the single-field path.
+- Completed candidates remain reusable for the same Record context. Closing/hiding, Record-context changes, and disposal abort the client transport, retire its request generation, and reject late success or failure even when a transport ignores abort. Current failures remain visible and retryable. Already-dispatched server/provider work is not cancelled by this change.
+- Added provider-free batch, bounded selected-source read, disclosure-only request/reuse, obsolete transport, visible failure/retry, and Focus-view text-only readiness regressions. Final validation: 163 tests passed across nine affected frontend suites; application/SDK and test typechecks passed. Fifteen targeted backend cache/readiness-reset cases and touched Python Ruff passed in a disposable container. Touched frontend ESLint and Prettier passed. Fresh production application and Storybook builds passed, followed by ten production Chromium review cases. A transient default-worker fetch timeout and a failed experimental thread-pool process were followed by the successful final default-pool run; no assertion was relaxed to hide either infrastructure failure.
 
 ## Mutation-free Record navigation continuation (2026-10-03)
 

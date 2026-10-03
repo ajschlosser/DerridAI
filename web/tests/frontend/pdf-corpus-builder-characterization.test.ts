@@ -98,6 +98,7 @@ import PdfCorpusBuilder from "../../src/components/PdfCorpusBuilder.vue";
 import DocumentManifestEditor from "../../src/components/DocumentManifestEditor.vue";
 import { queueRowFromRecord } from "../../src/features/corpus-builder/domain/queueRows";
 import { useI18nStore } from "../../src/stores/i18n";
+import * as recordMetadataDomain from "../../src/features/corpus-builder/domain/recordMetadata";
 
 const defaultSchema = {
   format_version: 1,
@@ -320,6 +321,220 @@ describe("PdfCorpusBuilder characterization", () => {
       wrapper.unmount();
     });
 
+    it("does not persist clean advanced metadata on activation or authoritative refresh", async () => {
+      const writes = vi.spyOn(Storage.prototype, "setItem");
+      const wrapper = await mountBuilder("?workspace=review&build=build-1");
+      const exposed = wrapper.vm as unknown as {
+        applyAuthoritativeRecord: (record: typeof reviewRecord) => void;
+      };
+      exposed.applyAuthoritativeRecord({ ...reviewRecord, record_revision: 2 });
+      await flushPromises();
+      expect(
+        writes.mock.calls.filter(([key]) => key.startsWith("derridai.pdf-corpus.metadata-draft.")),
+      ).toEqual([]);
+      wrapper.unmount();
+      writes.mockRestore();
+    });
+
+    it("formats clean advanced metadata only while its disclosure is visible", async () => {
+      const formatting = vi.spyOn(recordMetadataDomain, "editableRecordMetadata");
+      const wrapper = await mountBuilder("?workspace=review&build=build-1", false, true);
+      const exposed = wrapper.vm as unknown as {
+        metadataDraft: string;
+        activateRecord: (record: typeof reviewRecord) => void;
+        applyAuthoritativeRecord: (record: typeof reviewRecord) => void;
+        reviewInspectorTab: string;
+        reviewWorkspaceMode: string;
+      };
+      exposed.reviewWorkspaceMode = "record";
+      expect(exposed.metadataDraft).toBe("");
+      expect(formatting).not.toHaveBeenCalled();
+      exposed.applyAuthoritativeRecord({ ...reviewRecord, record_revision: 2 });
+      await flushPromises();
+      expect(formatting).not.toHaveBeenCalled();
+      const advanced = wrapper.findComponent({ name: "CorpusReviewAdvancedMetadata" });
+      advanced.vm.$emit("disclosure", true);
+      await flushPromises();
+      expect(formatting).toHaveBeenCalledTimes(1);
+      expect(exposed.metadataDraft).toBe(JSON.stringify(formatting.mock.results[0].value, null, 2));
+      exposed.reviewInspectorTab = "evidence";
+      await flushPromises();
+      formatting.mockClear();
+      exposed.activateRecord({ ...reviewRecord, record_revision: 3 });
+      await flushPromises();
+      expect(formatting).not.toHaveBeenCalled();
+      exposed.reviewInspectorTab = "metadata";
+      await flushPromises();
+      expect(formatting).toHaveBeenCalledTimes(1);
+      expect(formatting.mock.calls[0][0].record_revision).toBe(3);
+      advanced.vm.$emit("disclosure", false);
+      await flushPromises();
+      formatting.mockClear();
+      exposed.activateRecord({ ...reviewRecord, record_revision: 4 });
+      expect(formatting).not.toHaveBeenCalled();
+      wrapper.unmount();
+      formatting.mockRestore();
+    });
+
+    it("recovers unsaved advanced metadata and preserves it after a failed save", async () => {
+      const key = "derridai.pdf-corpus.metadata-draft.build-1.record-1";
+      const draft = '{ "speaker": "Unsaved author" }';
+      localStorage.setItem(key, draft);
+      pdfCorpusApi.patchMetadata.mockRejectedValue(new Error("offline"));
+      const wrapper = await mountBuilder("?workspace=review&build=build-1");
+      const exposed = wrapper.vm as unknown as {
+        metadataDraft: string;
+        advancedMetadataDirty: boolean;
+        saveAdvancedMetadata: () => Promise<void>;
+        error: string;
+      };
+      expect(exposed.metadataDraft).toBe(draft);
+      expect(exposed.advancedMetadataDirty).toBe(true);
+      await exposed.saveAdvancedMetadata();
+      await flushPromises();
+      expect(exposed.error).toContain("offline");
+      expect(exposed.metadataDraft).toBe(draft);
+      expect(exposed.advancedMetadataDirty).toBe(true);
+      expect(localStorage.getItem(key)).toBe(draft);
+      wrapper.unmount();
+      localStorage.removeItem(key);
+    });
+
+    it("removes a saved advanced draft without recreating it from optimistic metadata", async () => {
+      const wrapper = await mountBuilder("?workspace=review&build=build-1");
+      const exposed = wrapper.vm as unknown as {
+        metadataDraft: string;
+        advancedMetadataDirty: boolean;
+        saveAdvancedMetadata: () => Promise<void>;
+      };
+      pdfCorpusApi.patchMetadata.mockResolvedValue({ ...reviewRecord, record_revision: 2 });
+      exposed.metadataDraft = '{ "speaker": "Saved author" }';
+      exposed.advancedMetadataDirty = true;
+      await flushPromises();
+      await exposed.saveAdvancedMetadata();
+      await flushPromises();
+      expect(exposed.advancedMetadataDirty).toBe(false);
+      expect(
+        localStorage.getItem("derridai.pdf-corpus.metadata-draft.build-1.record-1"),
+      ).toBeNull();
+      wrapper.unmount();
+    });
+
+    it("keeps newer edits dirty when an earlier advanced save completes", async () => {
+      const wrapper = await mountBuilder("?workspace=review&build=build-1");
+      const exposed = wrapper.vm as unknown as {
+        metadataDraft: string;
+        advancedMetadataDirty: boolean;
+        saveAdvancedMetadata: () => Promise<void>;
+      };
+      let finish!: (value: unknown) => void;
+      pdfCorpusApi.patchMetadata.mockImplementationOnce(
+        () => new Promise((resolve) => (finish = resolve)),
+      );
+      exposed.metadataDraft = '{ "speaker": "First edit" }';
+      exposed.advancedMetadataDirty = true;
+      const saving = exposed.saveAdvancedMetadata();
+      await flushPromises();
+      const newer = '{ "speaker": "Later edit" }';
+      exposed.metadataDraft = newer;
+      exposed.advancedMetadataDirty = true;
+      await flushPromises();
+      finish({ ...reviewRecord, record_revision: 2 });
+      await saving;
+      expect(exposed.metadataDraft).toBe(newer);
+      expect(exposed.advancedMetadataDirty).toBe(true);
+      expect(localStorage.getItem("derridai.pdf-corpus.metadata-draft.build-1.record-1")).toBe(
+        newer,
+      );
+      wrapper.unmount();
+      localStorage.removeItem("derridai.pdf-corpus.metadata-draft.build-1.record-1");
+    });
+
+    it("persists edited advanced metadata without replacing it on a same-Record refresh", async () => {
+      const wrapper = await mountBuilder("?workspace=review&build=build-1");
+      const exposed = wrapper.vm as unknown as {
+        metadataDraft: string;
+        advancedMetadataDirty: boolean;
+        activateRecord: (record: typeof reviewRecord) => void;
+      };
+      const draft = '{ "speaker": "Edited author" }';
+      exposed.metadataDraft = draft;
+      exposed.advancedMetadataDirty = true;
+      await flushPromises();
+      const key = "derridai.pdf-corpus.metadata-draft.build-1.record-1";
+      expect(localStorage.getItem(key)).toBe(draft);
+      exposed.activateRecord({ ...reviewRecord, record_revision: 2 });
+      await flushPromises();
+      expect(exposed.metadataDraft).toBe(draft);
+      wrapper.unmount();
+      localStorage.removeItem(key);
+    });
+
+    it("loads source blocks only for visible consumers and reuses the current context", async () => {
+      const wrapper = await mountBuilder("?workspace=review&build=build-1");
+      const exposed = wrapper.vm as unknown as {
+        reviewInspectorTab: string;
+        reviewWorkspaceMode: string;
+      };
+      expect(pdfCorpusApi.blocks).not.toHaveBeenCalled();
+      exposed.reviewWorkspaceMode = "record";
+      exposed.reviewInspectorTab = "evidence";
+      await flushPromises();
+      expect(pdfCorpusApi.blocks).toHaveBeenCalledTimes(1);
+      exposed.reviewInspectorTab = "metadata";
+      await flushPromises();
+      exposed.reviewInspectorTab = "source";
+      await flushPromises();
+      expect(pdfCorpusApi.blocks).toHaveBeenCalledTimes(1);
+      wrapper.unmount();
+    });
+
+    it("loads selected-text evidence on explicit demand and reports a failed load without saving", async () => {
+      const wrapper = await mountBuilder("?workspace=review&build=build-1");
+      const exposed = wrapper.vm as unknown as {
+        resolveMetadataWithSelectionEvidence: (
+          field: string,
+          value: unknown,
+          text: string,
+        ) => Promise<void>;
+        error: string;
+        selectedRecord: typeof reviewRecord;
+      };
+      expect(pdfCorpusApi.blocks).not.toHaveBeenCalled();
+      pdfCorpusApi.blocks.mockRejectedValueOnce(new Error("Source load failed"));
+      const record = exposed.selectedRecord;
+      await exposed.resolveMetadataWithSelectionEvidence("speaker", "Author", "Selected text");
+      expect(pdfCorpusApi.blocks).toHaveBeenCalledTimes(1);
+      expect(exposed.error).toBe("Source load failed");
+      expect(exposed.selectedRecord).toBe(record);
+      wrapper.unmount();
+    });
+
+    it("discards source blocks returned after their consumer is hidden", async () => {
+      let finish!: (result: { items: Array<{ block_id: string }> }) => void;
+      pdfCorpusApi.blocks.mockImplementationOnce(
+        () => new Promise((resolve) => (finish = resolve)),
+      );
+      const wrapper = await mountBuilder("?workspace=review&build=build-1");
+      const exposed = wrapper.vm as unknown as {
+        reviewInspectorTab: string;
+        reviewWorkspaceMode: string;
+        sourceBlocks: Array<{ block_id: string }>;
+      };
+      exposed.reviewWorkspaceMode = "record";
+      exposed.reviewInspectorTab = "evidence";
+      await flushPromises();
+      exposed.reviewInspectorTab = "metadata";
+      await flushPromises();
+      finish({ items: [{ block_id: "block-1" }] });
+      await flushPromises();
+      expect(exposed.sourceBlocks).toEqual([]);
+      exposed.reviewInspectorTab = "source";
+      await flushPromises();
+      expect(pdfCorpusApi.blocks).toHaveBeenCalledTimes(2);
+      wrapper.unmount();
+    });
+
     it("keeps autocomplete available for the bulk editor when the metadata inspector is hidden", async () => {
       const wrapper = await mountBuilder("?workspace=review&build=build-1");
       const exposed = wrapper.vm as unknown as {
@@ -407,7 +622,7 @@ describe("PdfCorpusBuilder characterization", () => {
       expect(exposed.reviewInspectorTab).toBe("evidence");
       expect(exposed.selectedEvidenceField).toBe("speaker");
       expect(exposed.selectedPdfPage).toBe(4);
-      expect(pdfCorpusApi.blocks).toHaveBeenCalledTimes(sourceReads);
+      expect(pdfCorpusApi.blocks).toHaveBeenCalledTimes(sourceReads + 1);
       expect(pdfCorpusApi.markViewed).toHaveBeenCalledTimes(viewed);
       wrapper.unmount();
     });

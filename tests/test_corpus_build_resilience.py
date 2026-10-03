@@ -600,15 +600,26 @@ def test_topology_is_durable_before_optional_embedding_work(monkeypatch, tmp_pat
     build = _build(repo, blocks=3)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     observed = []
+    edited = []
     def inspect_projection(*args, **kwargs):
         stored = repo.load_records(build["build_id"])
         observed.append(len(stored))
         snapshot = repo.get_build(build["build_id"])
         assert snapshot["record_count"] == len(stored)
         assert snapshot["topology_persisted_at"]
+        assert snapshot["text_review_available_at"]
         assert not snapshot.get("review_available_at")
         with pytest.raises(ValueError, match="not editable"):
             manager._assert_human_review_available(build["build_id"])
+        with pytest.raises(ValueError, match="not editable"):
+            manager._assert_human_review_available(build["build_id"], structural=True, text_only=True)
+        target = stored[0]
+        edited.append(manager.patch_record_text(
+            build["build_id"], target["record_id"], "Human correction before optional work.",
+            expected_revision=target["record_revision"],
+        ))
+        with pytest.raises(ValueError, match="not editable"):
+            manager.patch_metadata(build["build_id"], target["record_id"], {"primary_text": True})
         return {"status": "ready"}
     monkeypatch.setattr(cb.SourceEmbeddingProjection, "sync", inspect_projection)
     monkeypatch.setattr(cb, "chat_complete", lambda **kwargs: "{}")
@@ -619,8 +630,58 @@ def test_topology_is_durable_before_optional_embedding_work(monkeypatch, tmp_pat
     })
     assert observed == [3]
     final = repo.get_build(build["build_id"])
+    current = repo.get_record(build["build_id"], edited[0]["record_id"])
+    assert current["text"] == edited[0]["text"]
+    assert current["source_extracted_text"] != current["text"]
+    assert current["text_review_source"] == "human"
+    assert current["record_revision"] >= edited[0]["record_revision"]
+    assert final["text_review_available_at"] <= final["review_available_at"]
     assert final["topology_persisted_at"] <= final["review_available_at"] <= final["metadata_first_settled_at"]
     manager._executor.shutdown(wait=True)
+
+@pytest.mark.parametrize("stage, milestone, valid", [
+    ("constructing_records", None, True),
+    ("constructing_records", "2026-10-03T00:00:00Z", False),
+    ("segmenting", "2026-10-03T00:00:00Z", True),
+    ("constructing_topology", "2026-10-03T00:00:00Z", True),
+])
+def test_preparation_text_review_rejects_missing_or_incompatible_readiness(tmp_path, stage, milestone, valid):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build.update(status="running", stage=stage, text_review_available_at=milestone, topology_validation={"valid": valid})
+    repo.save_build(build)
+    try:
+        with pytest.raises(ValueError, match="not editable"):
+            manager._assert_human_review_available(build["build_id"], text_only=True)
+    finally:
+        manager._executor.shutdown(wait=True)
+
+
+def test_preparation_resets_text_review_milestone_before_resume(tmp_path, monkeypatch):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build.update(status="running", stage="constructing_records",
+                 text_review_available_at="2026-10-03T00:00:00Z", topology_validation={"valid": True})
+    repo.save_build(build)
+    observed = []
+
+    def prepare(build_id, request, resume):
+        snapshot = repo.get_build(build_id)
+        observed.append(snapshot["text_review_available_at"])
+        assert snapshot["stage"] == "preparing"
+        assert resume is True
+        with pytest.raises(ValueError, match="not editable"):
+            manager._assert_human_review_available(build_id, text_only=True)
+        return None
+
+    monkeypatch.setattr(manager, "_prepare_build_scope", prepare)
+    try:
+        manager._run(build["build_id"], {}, resume=True)
+        assert observed == [None]
+    finally:
+        manager._executor.shutdown(wait=True)
 
 
 def test_record_context_enforces_budget_and_retains_exact_locator(tmp_path):

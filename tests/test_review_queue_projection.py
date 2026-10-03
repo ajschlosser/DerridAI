@@ -92,6 +92,134 @@ def test_cold_and_post_edit_pages_and_facets_do_not_load_corpus(corpus, monkeypa
     assert second["data_generation"] > first["data_generation"]
     assert second["topology_generation"] == first["topology_generation"]
 
+def test_clean_review_reads_do_not_initialize_or_reserve_a_writer(corpus, monkeypatch):
+    repo, build = corpus
+    bid = build["build_id"]
+    original = repo.get_records(bid, ["r1"], include_queue_version=True)[0]
+    repo.page_records(bid, limit=1)
+
+    def fail(*args, **kwargs):
+        pytest.fail("clean review read attempted initialization or projection repair")
+
+    monkeypatch.setattr(repo, "_initialize_records_db", fail)
+    monkeypatch.setattr(repo, "_ensure_review_projection", fail)
+    with sqlite3.connect(repo.build_records_db_path(bid)) as writer:
+        writer.execute("BEGIN IMMEDIATE")
+        writer.execute("UPDATE corpus_records SET payload=payload WHERE record_id='r1'")
+        actual = repo.get_records(bid, ["r1"], include_queue_version=True)[0]
+        assert actual == original
+        assert repo.page_records(bid, limit=1)["items"]
+        assert repo.review_metadata_facets(bid)
+        assert repo.review_build_aggregates(bid, automation_running=False)
+        writer.rollback()
+
+
+def test_clean_selected_reads_do_not_wait_for_repository_coordination(corpus):
+    repo, build = corpus
+    bid = build["build_id"]
+    repo.get_records(bid, ["r1"], include_queue_version=True)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with repo._lock:
+            future = pool.submit(repo.get_records, bid, ["r1"], include_queue_version=True)
+            assert future.result(timeout=3)[0]["record_id"] == "r1"
+
+
+def test_external_dirty_write_repairs_before_payload_and_version_read(corpus):
+    repo, build = corpus
+    bid = build["build_id"]
+    previous = repo.get_records(bid, ["r1"], include_queue_version=True)[0]
+    changed = {**previous, "speaker": "Externally changed"}
+    with sqlite3.connect(repo.build_records_db_path(bid)) as writer:
+        writer.execute(
+            "UPDATE corpus_records SET payload=? WHERE record_id='r1'",
+            (json.dumps(changed),),
+        )
+    current = repo.get_records(bid, ["r1"], include_queue_version=True)[0]
+    assert current["speaker"] == "Externally changed"
+    assert current["queue_state_version"] > previous["queue_state_version"]
+    assert "Externally changed" in repo.review_metadata_facets(bid)["speaker"]
+
+
+def test_record_database_schema_change_reinitializes_once(corpus, monkeypatch):
+    repo, build = corpus
+    bid = build["build_id"]
+    repo.get_records(bid, ["r1"], include_queue_version=True)
+    original = repo._initialize_records_db
+    calls = []
+
+    def initialize(connection):
+        calls.append(True)
+        original(connection)
+
+    monkeypatch.setattr(repo, "_initialize_records_db", initialize)
+    with sqlite3.connect(repo.build_records_db_path(bid)) as writer:
+        writer.execute("DROP TABLE review_facets")
+    assert repo.get_records(bid, ["r1"], include_queue_version=True)[0]
+    assert repo.review_metadata_facets(bid)
+    assert len(calls) == 1
+
+
+def test_review_read_repair_churn_fails_visibly_after_bounded_retries(corpus, monkeypatch):
+    repo, build = corpus
+    bid = build["build_id"]
+    original = repo._ensure_review_projection
+    calls = []
+
+    def repair(connection, build_id):
+        calls.append(True)
+        original(connection, build_id)
+        connection.execute("INSERT OR IGNORE INTO review_projection_dirty VALUES('r1')")
+
+    with sqlite3.connect(repo.build_records_db_path(bid)) as writer:
+        writer.execute("INSERT OR IGNORE INTO review_projection_dirty VALUES('r1')")
+    monkeypatch.setattr(repo, "_ensure_review_projection", repair)
+    with pytest.raises(RuntimeError, match="changed repeatedly"):
+        repo.get_records(bid, ["r1"], include_queue_version=True)
+    assert len(calls) == 3
+
+
+def test_unknown_build_read_does_not_create_storage(corpus):
+    repo, _build = corpus
+    with pytest.raises(KeyError):
+        repo.get_records("missing-build", ["r1"], include_queue_version=True)
+    assert not repo.build_records_db_path("missing-build").parent.exists()
+    with pytest.raises(KeyError):
+        repo.get_records("missing-build", [])
+
+
+def test_page_decode_releases_read_transaction_and_keeps_snapshot_coherent(corpus, monkeypatch):
+    repo, build = corpus
+    bid = build["build_id"]
+    before = repo.get_records(bid, ["r1"], include_queue_version=True)[0]
+    original = repo._decode_migrated
+    changed = False
+
+    def decode(payload, *args):
+        nonlocal changed
+        if not changed:
+            changed = True
+            with sqlite3.connect(repo.build_records_db_path(bid), timeout=0.1) as writer:
+                current = json.loads(writer.execute(
+                    "SELECT payload FROM corpus_records WHERE record_id='r1'",
+                ).fetchone()[0])
+                current["speaker"] = "Changed during decode"
+                current["text"] = "Changed during decode"
+                current["record_revision"] = int(current.get("record_revision") or 1) + 1
+                writer.execute(
+                    "UPDATE corpus_records SET payload=? WHERE record_id='r1'",
+                    (json.dumps(current),),
+                )
+        return original(payload, *args)
+
+    monkeypatch.setattr(repo, "_decode_migrated", decode)
+    result = repo.page_records(bid, limit=2)
+    row = next(item for item in result["items"] if item["record_id"] == "r1")
+    assert row["text"] == before["text"]
+    assert row["record_revision"] == before["record_revision"]
+    assert row["queue_state_version"] == before["queue_state_version"]
+    assert "Changed during decode" not in result["metadata_values"].get("speaker", [])
+    assert repo.get_record(bid, "r1")["speaker"] == "Changed during decode"
+
 
 def test_blind_search_counts_and_facets_use_presented_values(corpus):
     repo, build = corpus
@@ -461,3 +589,50 @@ def test_repository_projection_benchmark(tmp_path, monkeypatch, count, build_cou
             }
             with Path(os.environ["CORPUS_PROJECTION_BENCHMARK"]).open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(result) + "\n")
+
+
+@pytest.mark.skipif(not os.environ.get("CORPUS_READ_BENCHMARK"), reason="opt-in clean-read benchmark")
+@pytest.mark.parametrize("count", [1000, 10000])
+@pytest.mark.parametrize("build_count", [1, 2])
+def test_clean_selected_read_benchmark(tmp_path, monkeypatch, count, build_count):
+    builds = []
+    for index in range(build_count):
+        repo, build = install_repo(
+            tmp_path / str(index), [ready_record(f"r{i}", f"b{i}") for i in range(count)],
+        )
+        builds.append((repo, build["build_id"]))
+    decoded = 0
+    for repo, bid in builds:
+        repo.get_records(bid, ["r0"], include_queue_version=True)
+        original = repo._decode_migrated
+
+        def decode(payload, schema, signature, original=original):
+            nonlocal decoded
+            decoded += 1
+            return original(payload, schema, signature)
+
+        monkeypatch.setattr(repo, "_decode_migrated", decode)
+        monkeypatch.setattr(repo, "_initialize_records_db", lambda *_args: pytest.fail("hot read initialized storage"))
+        monkeypatch.setattr(repo, "_ensure_review_projection", lambda *_args: pytest.fail("clean read repaired projection"))
+    samples = []
+    with ThreadPoolExecutor(max_workers=build_count) as pool:
+        for index in range(40):
+            started = time.perf_counter()
+            futures = [
+                pool.submit(repo.get_records, bid, [f"r{index}"], include_queue_version=True)
+                for repo, bid in builds
+            ]
+            assert all(future.result()[0]["record_id"] == f"r{index}" for future in futures)
+            samples.append((time.perf_counter() - started) * 1000)
+    assert decoded == 40 * build_count
+    ranked = sorted(samples)
+    result = {
+        "contract": "corpus-clean-selected-read-v1", "records_per_build": count,
+        "builds": build_count, "samples": 40, "p50_ms": ranked[19], "p95_ms": ranked[37],
+        "batch_times_ms": samples, "payloads_decoded": decoded,
+        "python": platform.python_version(), "platform": platform.platform(),
+        "basis": "prepared synthetic repositories; warm storage schema; concurrent read-only builds",
+        "excludes": "HTTP, browser, cold initialization, enrichment writes, real sources and providers",
+    }
+    with Path(os.environ["CORPUS_READ_BENCHMARK"]).open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(result) + "\n")

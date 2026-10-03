@@ -41,7 +41,7 @@ from .pipelines.precedent_remap import RemapSession
 
 CACHE_KEY = "metadata_precedents_cache"
 # Bump when the stored shape or its meaning changes; other versions are ignored and recomputed live.
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 
 
 def precedent_mode(field: str, items: list[dict[str, Any]], telemetry: dict[str, Any]) -> str:
@@ -100,6 +100,7 @@ def build_precedents_cache(
         for item in items:
             ref: dict[str, Any] = {
                 "exemplar_id": str(item["exemplar_id"]),
+                "record_id": str(item.get("record_id") or ""),
                 "similarity": item.get("similarity"),
             }
             if isinstance(item.get("match"), dict):
@@ -117,7 +118,7 @@ def build_precedents_cache(
 def cached_field(record: dict[str, Any], field: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
     """The stored entry for ``field`` and its cache, or None when it must be computed live."""
     cache = record.get(CACHE_KEY)
-    if not isinstance(cache, dict) or cache.get("version") != CACHE_VERSION:
+    if not isinstance(cache, dict) or cache.get("version") not in (2, CACHE_VERSION):
         return None
     entry = (cache.get("fields") or {}).get(field)
     if not isinstance(entry, dict) or not isinstance(entry.get("refs"), list):
@@ -147,7 +148,9 @@ def resolve_cached_precedents(
         if not isinstance(ref, dict):
             continue
         exemplar = canonical_by_id.get(str(ref.get("exemplar_id") or ""))
-        if exemplar is None:
+        if exemplar is None or (
+            ref.get("record_id") and str(ref["record_id"]) != str(exemplar.get("record_id") or "")
+        ):
             stale += 1
             continue
         similarity = ref.get("similarity")

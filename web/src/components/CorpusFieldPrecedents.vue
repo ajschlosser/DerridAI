@@ -53,6 +53,7 @@ const props = withDefaults(
       recordId: string,
       field: string,
       refresh?: boolean,
+      signal?: AbortSignal,
     ) => Promise<MetadataPrecedents>;
   }>(),
   { preloaded: null, sourceBlockIds: () => [], canUse: true, load: undefined, active: true },
@@ -67,7 +68,18 @@ const error = ref("");
 const fetched = ref<MetadataPrecedents | null>(null);
 const usedKey = ref("");
 let requestVersion = 0;
+let controller: AbortController | null = null;
 const result = computed(() => fetched.value ?? props.preloaded ?? null);
+const needsFetch = computed(
+  () => !fetched.value && (!props.preloaded || props.preloaded.candidates_pending === true),
+);
+
+function cancelRequest() {
+  requestVersion += 1;
+  controller?.abort();
+  controller = null;
+  loading.value = false;
+}
 // A closed disclosure whose known result (kept or fetched) has no precedents offers nothing; an open one keeps
 // showing the reviewer's empty result instead of vanishing under them.
 const isEmpty = computed(
@@ -79,21 +91,19 @@ watch(
   // A primitive key so a poll re-rendering the same record does not discard loaded precedents.
   () => JSON.stringify([props.buildId, props.recordId, props.recordRevision, props.field]),
   () => {
-    requestVersion += 1;
-    loading.value = false;
+    cancelRequest();
     fetched.value = null;
     error.value = "";
     usedKey.value = "";
-    if (props.active !== false && open.value && !props.preloaded) void fetchPrecedents(false);
+    if (props.active !== false && open.value && needsFetch.value) void fetchPrecedents(false);
   },
 );
 watch(
   () => props.active !== false,
   (active) => {
     if (!active) {
-      requestVersion += 1;
-      loading.value = false;
-    } else if (open.value && !result.value && !loading.value) {
+      cancelRequest();
+    } else if (open.value && needsFetch.value && !loading.value) {
       void fetchPrecedents(false);
     }
   },
@@ -101,24 +111,37 @@ watch(
 
 async function fetchPrecedents(refresh: boolean) {
   if (props.active === false) return;
+  cancelRequest();
   const version = ++requestVersion;
+  const requestController = new AbortController();
+  controller = requestController;
   loading.value = true;
   error.value = "";
   try {
     const load = props.load ?? corpusBuilderApi.precedents;
-    const result = await load(props.buildId, props.recordId, props.field, refresh);
+    const result = await load(
+      props.buildId,
+      props.recordId,
+      props.field,
+      refresh,
+      requestController.signal,
+    );
     if (version === requestVersion) fetched.value = result;
   } catch (exc) {
     if (version === requestVersion) error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
-    if (version === requestVersion) loading.value = false;
+    if (version === requestVersion) {
+      loading.value = false;
+      controller = null;
+    }
   }
 }
-onBeforeUnmount(() => (requestVersion += 1));
+onBeforeUnmount(cancelRequest);
 
 function toggle() {
   open.value = !open.value;
-  if (open.value && !result.value && !loading.value) void fetchPrecedents(false);
+  if (!open.value) cancelRequest();
+  else if (needsFetch.value && !loading.value) void fetchPrecedents(false);
 }
 
 // One compact status line: where the list came from, matching mode, and anything now stale.

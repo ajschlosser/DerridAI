@@ -109,6 +109,8 @@ export interface MetadataPrecedents {
   fallback_reason: string;
   /** Kept precedents that changed or are hidden from this reviewer since enrichment; not shown. */
   stale_count?: number;
+  /** Kept batch results defer advisory source-unit ranking until the field disclosure opens. */
+  candidates_pending?: boolean;
   items: MetadataPrecedent[];
   /** Live searches only: the remap pipeline that ranked each item's candidate source units. */
   candidate_pipeline?: {
@@ -153,9 +155,16 @@ export const corpusMetadataApi = {
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence-suggestions/llm`,
       { method: "POST", body: JSON.stringify({ ...request, field }) },
     ),
-  precedents: (buildId: string, recordId: string, field: string, refresh = false) =>
+  precedents: (
+    buildId: string,
+    recordId: string,
+    field: string,
+    refresh = false,
+    signal?: AbortSignal,
+  ) =>
     apiRequest<MetadataPrecedents>(
       `${recordUrl(buildId, recordId)}/precedents?field=${encodeURIComponent(field)}${refresh ? "&refresh=true" : ""}`,
+      { signal },
     ),
   /** Every field's precedents kept from the last enrichment; fields not kept are absent. */
   fieldPrecedents: (buildId: string, recordId: string) =>

@@ -86,6 +86,7 @@ interface CorpusMetadataReviewOptions {
   refreshBuild: () => Promise<void>;
   refreshRecords: (reset?: boolean, preferredId?: string) => Promise<void>;
   recordMetadata: (record: CorpusRecord) => Record<string, unknown>;
+  formatMetadataDraft?: (record: CorpusRecord) => string;
   metadataDraftKey: (buildId: string, recordId: string) => string;
   setMessage: (message: string, tone?: MessageTone) => void;
   t: (key: string, fallback?: string) => string;
@@ -109,6 +110,11 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
   const metadataRerunFamily = ref("all");
   const metadataHumanValues = ref<Record<string, Set<string>>>({});
   const metadataObservedValues = ref<Record<string, string[]>>({});
+  function formattedDraft(record: CorpusRecord) {
+    return options.formatMetadataDraft
+      ? options.formatMetadataDraft(record)
+      : JSON.stringify(options.recordMetadata(record), null, 2);
+  }
 
   watch(options.selectedRecordId, () => {
     metadataSavingField.value = "";
@@ -156,7 +162,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     } as CorpusRecord;
 
     options.selectedRecord.value = row;
-    metadataDraft.value = JSON.stringify(options.recordMetadata(row), null, 2);
+    metadataDraft.value = formattedDraft(row);
     options.applyRecordToQueue(row, false);
     metadataEditorDirty.value = false;
     try {
@@ -289,7 +295,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     } as CorpusRecord;
 
     options.selectedRecord.value = row;
-    metadataDraft.value = JSON.stringify(options.recordMetadata(row), null, 2);
+    metadataDraft.value = formattedDraft(row);
     options.applyRecordToQueue(row, false);
     await options.restoreReviewViewport(viewport);
     options.queueRecordRequest(recordId, [field], (rebase) =>
@@ -683,7 +689,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
         payload,
       );
       options.selectedRecord.value = row;
-      metadataDraft.value = JSON.stringify(options.recordMetadata(row), null, 2);
+      metadataDraft.value = formattedDraft(row);
       await options.refreshBuild();
       await options.refreshRecords(false, row.record_id);
       await options.restoreReviewViewport(viewport);
