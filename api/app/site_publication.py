@@ -38,6 +38,11 @@ from urllib.parse import urlsplit, urlunsplit
 from .corpus_publication import serialize_public_record, validate_publication_record
 from .locales.en_us import EN_US
 from .services import store
+from .site_embeddings import (
+    browser_embedding_contract,
+    browser_embedding_profile,
+    embed_browser_documents,
+)
 from .site_record_profile import (
     DEFAULT_SITE_RECORD_PROFILE,
     apply_record_profile,
@@ -72,6 +77,7 @@ class SiteBundle:
     work_count: int
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE
     include_vectors: bool = True
+    vector_strategy: str = "source"
 
 
 def _slug(value: str) -> str:
@@ -278,7 +284,8 @@ def build_site_bundle(
     languages: Sequence[str] | None = None,
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
     include_transformers: bool = True,
-    include_vectors: bool = True,
+    include_vectors: bool | None = None,
+    vector_strategy: str | None = None,
     transformers_delivery: str = "inline",
 ) -> SiteBundle:
     """Create an SDK-backed static research site from one immutable publication snapshot.
@@ -290,6 +297,10 @@ def build_site_bundle(
     files (nginx/Docker). ``include_transformers`` is accepted for older callers and is always treated as true.
     """
     del include_transformers
+    if vector_strategy is None:
+        vector_strategy = "source" if include_vectors is not False else "browser"
+    if vector_strategy not in {"browser-default", "source", "browser"}:
+        raise ValueError("Unknown static-site semantic-vector strategy.")
     if transformers_delivery not in {"inline", "files"}:
         raise ValueError("Unknown Transformers.js delivery mode.")
     record_profile = normalize_site_record_profile(record_profile)
@@ -346,7 +357,10 @@ def build_site_bundle(
         ids.add(record_id)
         full_records.append(public_record)
 
-        vector = item.get("embedding") if include_vectors else None
+        if vector_strategy != "source":
+            vectors.append(None)
+            continue
+        vector = item.get("embedding")
         if vector is None:
             vectors.append(None)
             continue
@@ -380,6 +394,11 @@ def build_site_bundle(
         raise ValueError(
             "The record metadata profile removed required fields: " + "; ".join(profile_errors[:8])
         )
+
+    if vector_strategy == "browser-default":
+        embedded = embed_browser_documents([str(record.get("text") or "") for record in public_records])
+        vectors = [list(vector) for vector in embedded]
+        dimension = int(browser_embedding_contract()["dimension"])
     semantic_count = sum(1 for vector in vectors if vector)
     created_at = datetime.now(UTC).isoformat()
     publication_id = f"sitepub-{uuid.uuid4().hex}"
@@ -414,6 +433,18 @@ def build_site_bundle(
         vectors=vectors,
         dimension=dimension,
     )
+    published_vector_contract = (
+        browser_embedding_contract()
+        if vector_strategy == "browser-default"
+        else {
+            "dimension": dimension,
+            "provider": vector_contract.get("embedding_provider"),
+            "model": vector_contract.get("embedding_model"),
+            "revision": vector_contract.get("embedding_revision"),
+            "distance_metric": vector_contract.get("distance_metric") or "cosine",
+            "text_field": vector_contract.get("text_field") or "text",
+        }
+    )
     manifest = {
         "format": SITE_FORMAT,
         "publication_id": publication_id,
@@ -427,14 +458,8 @@ def build_site_bundle(
         "locale": normalized_locale,
         "languages": selected_languages,
         "works": [_work_summary(public_records, work) for work in selected_works],
-        "vector_index": {
-            "dimension": dimension,
-            "provider": vector_contract.get("embedding_provider"),
-            "model": vector_contract.get("embedding_model"),
-            "revision": vector_contract.get("embedding_revision"),
-            "distance_metric": vector_contract.get("distance_metric") or "cosine",
-            "text_field": vector_contract.get("text_field") or "text",
-        },
+        "vector_index": published_vector_contract,
+        "browser_embedding_profile": browser_embedding_profile(),
         "source_collection": {
             key: vector_contract.get(key)
             for key in (
@@ -458,6 +483,7 @@ def build_site_bundle(
             "semantic_search": semantic_count > 0,
             "semantic_record_count": semantic_count,
             "publication_vectors_included": semantic_count > 0,
+            "publication_vector_strategy": vector_strategy,
             "local_annotations": True,
             "research": True,
             "shared_state": False,
@@ -521,7 +547,8 @@ def build_site_bundle(
         record_count=len(public_records),
         work_count=len(selected_works),
         record_profile=record_profile,
-        include_vectors=include_vectors,
+        include_vectors=semantic_count > 0,
+        vector_strategy=vector_strategy,
     )
 
 
@@ -546,7 +573,8 @@ def build_local_site_file(
     languages: Sequence[str] | None = None,
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
     include_transformers: bool = True,
-    include_vectors: bool = True,
+    include_vectors: bool | None = None,
+    vector_strategy: str | None = None,
 ) -> SiteBundle:
     """Create one self-contained HTML file for direct local use.
 
@@ -564,6 +592,7 @@ def build_local_site_file(
         languages=languages,
         record_profile=record_profile,
         include_vectors=include_vectors,
+        vector_strategy=vector_strategy,
     )
     files = _core_site_files(core)
     index_html = files["index.html"].decode("utf-8")
@@ -594,6 +623,7 @@ def build_local_site_file(
         work_count=core.work_count,
         record_profile=core.record_profile,
         include_vectors=core.include_vectors,
+        vector_strategy=core.vector_strategy,
     )
 
 
@@ -849,7 +879,8 @@ def build_nginx_site_bundle(
     languages: Sequence[str] | None = None,
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
     include_transformers: bool = True,
-    include_vectors: bool = True,
+    include_vectors: bool | None = None,
+    vector_strategy: str | None = None,
     provider_proxy_upstream: str | None = None,
 ) -> SiteBundle:
     """Create a deployable multi-file site served by exactly one nginx container.
@@ -868,6 +899,7 @@ def build_nginx_site_bundle(
         languages=languages,
         record_profile=record_profile,
         include_vectors=include_vectors,
+        vector_strategy=vector_strategy,
         transformers_delivery="files",
     )
     files = _core_site_files(core)
@@ -900,4 +932,5 @@ def build_nginx_site_bundle(
         work_count=core.work_count,
         record_profile=core.record_profile,
         include_vectors=core.include_vectors,
+        vector_strategy=core.vector_strategy,
     )

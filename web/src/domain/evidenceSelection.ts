@@ -29,17 +29,14 @@ type Fn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-
 
 /** The helpers that still live in the legacy runtime. */
 type Helper =
-  | "fullCitation"
   | "hasCapability"
-  | "inlineCitation"
   | "localRecordKey"
   | "persistPrefs"
   | "ragEvidenceRecordPayload"
   | "recordDbStatus"
   | "shellRefreshHook"
   | "storeReceipt"
-  | "tr"
-  | "trf";
+  | "tr";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
 /** Key of one workspace record in the review selection (`reviewSelection`). */
@@ -54,9 +51,7 @@ export function isEvidenceSelected(state: Loose, key: Any) {
 export function createEvidenceSelection(deps: Deps) {
   const {
     state,
-    fullCitation,
     hasCapability,
-    inlineCitation,
     localRecordKey,
     persistPrefs,
     ragEvidenceRecordPayload,
@@ -64,7 +59,6 @@ export function createEvidenceSelection(deps: Deps) {
     shellRefreshHook,
     storeReceipt,
     tr,
-    trf,
   } = deps;
   function reviewItemFromKey(key: Any) {
     const split = String(key).lastIndexOf("::");
@@ -77,32 +71,6 @@ export function createEvidenceSelection(deps: Deps) {
   }
   function selectedReviewItems() {
     return [...state.reviewSelection].map(reviewItemFromKey).filter(Boolean);
-  }
-  async function copyCitation(record: Any, kind = "inline") {
-    const text = kind === "full" ? fullCitation(record) : inlineCitation(record);
-    try {
-      await navigator.clipboard.writeText(text);
-      // Say exactly what reached the clipboard, so the reader can check it before pasting.
-      toast(
-        trf(
-          kind === "full"
-            ? "record.full_citation_copied_value"
-            : "record.inline_citation_copied_value",
-          kind === "full"
-            ? "Copied full citation to the clipboard: {citation}"
-            : "Copied inline citation to the clipboard: {citation}",
-          { citation: text },
-        ),
-        { tone: "success", duration: 7000 },
-      );
-    } catch (error: Any) {
-      toast(
-        trf("record.copy_failed_reason", {
-          error: error?.message || String(error),
-        }),
-        { tone: "danger" },
-      );
-    }
   }
   function workspaceEvidenceKey(file: Any, index: Any) {
     return `workspace:${file.id}:${index}`;
@@ -264,7 +232,6 @@ export function createEvidenceSelection(deps: Deps) {
     reviewKey,
     reviewItemFromKey,
     selectedReviewItems,
-    copyCitation,
     workspaceEvidenceKey,
     dbEvidenceKey,
     selectedEvidenceEntries,

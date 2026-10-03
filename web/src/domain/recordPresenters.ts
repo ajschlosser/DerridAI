@@ -498,9 +498,6 @@ export function createRecordPresenters(deps: Deps) {
     }
     return matches;
   }
-  function recordOptionLabel(file: Loose, record: Loose, index: number) {
-    return `${file.name} · ${record.record_id || index + 1} · ${record.work || ""}`;
-  }
   function ragGradeEvidencePayload(evidence = []) {
     return (Array.isArray(evidence) ? evidence : [])
       .slice(0, 40)
@@ -534,7 +531,6 @@ export function createRecordPresenters(deps: Deps) {
     recordsListCell,
     metadataSearchable,
     searchRecordOptions,
-    recordOptionLabel,
     ragGradeEvidencePayload,
   };
 }

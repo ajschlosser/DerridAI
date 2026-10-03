@@ -151,10 +151,13 @@ var DerridAI = (function(exports) {
     const expected = modelName(contract?.model);
     const actual = modelName(descriptor.model);
     if (!expected || !actual || expected !== actual) return false;
-    if (descriptor.variant) return false;
     const expectedRevision = String(contract?.revision ?? "");
     const actualRevision = String(descriptor.revision ?? "");
-    return !expectedRevision || !actualRevision || expectedRevision === actualRevision;
+    if (expectedRevision && actualRevision && expectedRevision !== actualRevision) return false;
+    const expectedVariant = String(contract?.variant ?? "");
+    const actualVariant = String(descriptor.variant ?? "");
+    if (!expectedVariant) return !actualVariant;
+    return expectedVariant === actualVariant;
   }
   function indexKey(publicationId, fingerprint) {
     return `${publicationId}${SEPARATOR}${fingerprint}`;
@@ -870,7 +873,7 @@ ${evidence}`;
   function embeddingDescriptorMismatches(contract, descriptor) {
     if (!contract) return [];
     const mismatches = [];
-    const pairs = ["model", "revision"];
+    const pairs = ["model", "revision", "variant"];
     for (const field of pairs) {
       const expected = String(contract[field] ?? "").trim();
       const actual = String(descriptor[field] ?? "").trim();

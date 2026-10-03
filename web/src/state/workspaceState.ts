@@ -402,6 +402,14 @@ export function createSessionState() {
 }
 export const sessionState = shallowReactive(createSessionState());
 
+/** The active UI language's dictionary, read by `tr`/`trf` in the runtime and in shared modules. */
+export function createTranslationState() {
+  return {
+    translations: { locale: "en-US", dictionary: {}, base: {} } as Loose,
+  };
+}
+export const translationState = shallowReactive(createTranslationState());
+
 /** Every shared group except background jobs, in the order they are bound onto a state object. */
 const sharedGroups = [
   vectorState,
@@ -421,6 +429,7 @@ const sharedGroups = [
   upsertProgressState,
   navigationState,
   sessionState,
+  translationState,
 ];
 
 /** Binds every shared group onto `target`, so code that reads a workspace state object works without the runtime. */
@@ -441,7 +450,8 @@ export type WorkspaceGroups = Omit<
     ReturnType<typeof createRecordViewState> &
     ReturnType<typeof createUpsertProgressState> &
     ReturnType<typeof createNavigationState> &
-    ReturnType<typeof createSessionState>,
+    ReturnType<typeof createSessionState> &
+    ReturnType<typeof createTranslationState>,
   "version"
 >;
 

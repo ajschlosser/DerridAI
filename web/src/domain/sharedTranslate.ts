@@ -16,20 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { bindJobsState } from "../state/jobsState";
-import { bindWorkspaceGroups } from "../state/workspaceState";
+import { tr as trCompat, trf as trfCompat } from "../runtime/legacyCompat.js";
+import { state } from "./sharedUrlState";
 
-// Initial value of the legacy runtime's single mutable workspace state. Moved verbatim from
-// runtime.js so the shape has one home; the runtime still owns the instance it creates.
-
-export function createRuntimeState() {
-  const state = {
-    jobsPollTimer: null,
-  };
-  // Background-job and per-view workspace fields live in stores shared with Vue code; see state/jobsState.ts and
-  // state/workspaceState.ts.
-  const withJobs = bindJobsState(state);
-  return bindWorkspaceGroups(withJobs);
-}
-
-export type RuntimeState = ReturnType<typeof createRuntimeState>;
+// Translation lookups over the shared `translations` slice, usable without the legacy runtime. The runtime's own
+// `tr`/`trf` read the same slice.
+export const tr = (key: string, fallback = ""): string => trCompat(state, key, fallback);
+export const trf = (
+  key: string,
+  fallback?: string | Record<string, unknown>,
+  values: Record<string, unknown> = {},
+): string => trfCompat(state, key, fallback, values);

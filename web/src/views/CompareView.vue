@@ -18,10 +18,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import * as runtime from "../runtime/runtime.js";
+import { copyCitation, copyJsonToClipboard } from "../domain/clipboardCopy";
+import {
+  ensureCompareLibrary,
+  getCompareLibrary,
+  getCompareRecord,
+} from "../domain/sharedCompareLibrary";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { useAuthStore } from "../stores/auth";
-import { useCompareStore } from "../stores/workspace";
+import { useCompareStore, useRecordViewStore } from "../stores/workspace";
+import { state as sharedState } from "../domain/sharedUrlState";
 import { corpusState } from "../state/workspaceState";
 import { useI18nStore } from "../stores/i18n";
 import { useNewerData } from "../composables/useNewerData";
@@ -45,13 +51,9 @@ import {
 
 const auth = useAuthStore();
 const i18n = useI18nStore();
-// The shared Compare fields live in the compare store; the researcher's picks are still on the runtime's own state.
+// The Compare fields live in the compare store; the researcher's picks are in the record-view store.
 const compare = useCompareStore();
-const runtimeState = runtime.state as unknown as {
-  researcherCompareA: string;
-  researcherCompareB: string;
-  storeRecords: unknown[];
-};
+const recordView = useRecordViewStore();
 const workspace = compare as unknown as {
   compareA: string;
   compareB: string;
@@ -74,10 +76,10 @@ const sourceB = ref<CompareSource>(
     : "library",
 );
 const keyA = ref(
-  auth.isResearcher ? runtimeState.researcherCompareA || "" : workspace.compareA || "",
+  auth.isResearcher ? recordView.researcherCompareA || "" : workspace.compareA || "",
 );
 const keyB = ref(
-  auth.isResearcher ? runtimeState.researcherCompareB || "" : workspace.compareB || "",
+  auth.isResearcher ? recordView.researcherCompareB || "" : workspace.compareB || "",
 );
 const pasteA = ref(workspace.comparePasteA || "");
 const pasteB = ref(workspace.comparePasteB || "");
@@ -88,7 +90,7 @@ const parsedA = computed(() =>
   sourceA.value === "scratch"
     ? parseCompareRecord(pasteA.value)
     : {
-        record: runtime.getCompareRecord?.(keyA.value)?.record || null,
+        record: getCompareRecord(keyA.value)?.record || null,
         errorKey: "",
         errorFallback: "",
       },
@@ -97,7 +99,7 @@ const parsedB = computed(() =>
   sourceB.value === "scratch"
     ? parseCompareRecord(pasteB.value)
     : {
-        record: runtime.getCompareRecord?.(keyB.value)?.record || null,
+        record: getCompareRecord(keyB.value)?.record || null,
         errorKey: "",
         errorFallback: "",
       },
@@ -121,8 +123,8 @@ function t(key: string, fallback: string) {
 }
 function persist() {
   if (auth.isResearcher) {
-    runtimeState.researcherCompareA = keyA.value;
-    runtimeState.researcherCompareB = keyB.value;
+    recordView.researcherCompareA = keyA.value;
+    recordView.researcherCompareB = keyB.value;
   } else {
     workspace.compareA = keyA.value;
     workspace.compareB = keyB.value;
@@ -137,11 +139,11 @@ function persist() {
   persistPrefs();
 }
 function refreshLibrary() {
-  library.value = runtime.getCompareLibrary?.() || [];
+  library.value = getCompareLibrary();
 }
 function loadIntoEditor(side: "A" | "B") {
   const key = side === "A" ? keyA.value : keyB.value;
-  const found = runtime.getCompareRecord?.(key);
+  const found = getCompareRecord(key);
   if (!found?.record) return;
   const text = prettyRecord(found.record);
   if (side === "A") {
@@ -192,12 +194,11 @@ function copyAtoB() {
 }
 function copyJson(side: "A" | "B") {
   const record = side === "A" ? recordA.value : recordB.value;
-  if (record)
-    void runtime.copyJsonToClipboard?.(record, record.record_id || (side === "A" ? "A" : "B"));
+  if (record) void copyJsonToClipboard(record, record.record_id || (side === "A" ? "A" : "B"));
 }
 function cite(side: "A" | "B", kind: "inline" | "full") {
   const record = side === "A" ? recordA.value : recordB.value;
-  if (record) void runtime.copyCitation?.(record, kind);
+  if (record) void copyCitation(record, kind);
 }
 function statusFor(side: "A" | "B") {
   const parsed = side === "A" ? parsedA.value : parsedB.value;
@@ -221,12 +222,12 @@ const newer = useNewerData();
 // ensureCompareLibrary only loads when the store page is empty, so clear it to read the new data.
 async function loadNewer() {
   newer.acknowledge();
-  runtimeState.storeRecords = [];
-  await runtime.ensureCompareLibrary?.();
+  sharedState.storeRecords = [];
+  await ensureCompareLibrary();
   refreshLibrary();
 }
 onMounted(async () => {
-  if (typeof runtime.ensureCompareLibrary === "function") await runtime.ensureCompareLibrary();
+  await ensureCompareLibrary();
   refreshLibrary();
 });
 </script>

@@ -16,20 +16,29 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { bindJobsState } from "../state/jobsState";
-import { bindWorkspaceGroups } from "../state/workspaceState";
+import { createCompareLibrary } from "./compareLibrary";
+import { allRows, memoCorpus } from "./corpusCache";
+import { recordOptionLabel } from "./recordOptionLabel";
+import { isResearcher } from "./sharedSession";
+import { loadStorePage, researcherDbRecords } from "./sharedStoreRecords";
+import { refreshStores } from "./sharedStores";
+import { state } from "./sharedUrlState";
 
-// Initial value of the legacy runtime's single mutable workspace state. Moved verbatim from
-// runtime.js so the shape has one home; the runtime still owns the instance it creates.
-
-export function createRuntimeState() {
-  const state = {
-    jobsPollTimer: null,
-  };
-  // Background-job and per-view workspace fields live in stores shared with Vue code; see state/jobsState.ts and
-  // state/workspaceState.ts.
-  const withJobs = bindJobsState(state);
-  return bindWorkspaceGroups(withJobs);
-}
-
-export type RuntimeState = ReturnType<typeof createRuntimeState>;
+// The Compare library over the shared state, usable by Vue callers without the legacy runtime. The runtime uses this
+// same instance.
+export const {
+  compareSearchIndex,
+  lookupRecord,
+  getCompareLibrary,
+  getCompareRecord,
+  ensureCompareLibrary,
+} = createCompareLibrary({
+  state,
+  allRows,
+  isResearcher,
+  loadStorePage,
+  memoCorpus,
+  recordOptionLabel,
+  refreshStores,
+  researcherDbRecords,
+});

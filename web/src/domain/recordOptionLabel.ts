@@ -16,20 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { bindJobsState } from "../state/jobsState";
-import { bindWorkspaceGroups } from "../state/workspaceState";
-
-// Initial value of the legacy runtime's single mutable workspace state. Moved verbatim from
-// runtime.js so the shape has one home; the runtime still owns the instance it creates.
-
-export function createRuntimeState() {
-  const state = {
-    jobsPollTimer: null,
-  };
-  // Background-job and per-view workspace fields live in stores shared with Vue code; see state/jobsState.ts and
-  // state/workspaceState.ts.
-  const withJobs = bindJobsState(state);
-  return bindWorkspaceGroups(withJobs);
+/** The picker label for a workspace record; pure, so Compare, the PDF explorer and the presenters share one. */
+export function recordOptionLabel(
+  file: { name?: string },
+  record: { record_id?: unknown; work?: unknown },
+  index: number,
+): string {
+  return `${file.name} · ${record.record_id || index + 1} · ${record.work || ""}`;
 }
-
-export type RuntimeState = ReturnType<typeof createRuntimeState>;

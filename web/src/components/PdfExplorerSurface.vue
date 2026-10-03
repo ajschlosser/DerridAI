@@ -21,6 +21,7 @@ import { toast } from "../composables/notifications";
 import { openMessageDialog } from "../composables/messageDialog";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import { recordOptionLabel } from "../domain/recordOptionLabel";
 import { selectedIndex } from "../domain/sharedUrlState";
 import { isEvidenceSelected, reviewKey } from "../domain/evidenceSelection";
 import { enhanceCollapsibles } from "../domain/collapsiblePanels";
@@ -163,7 +164,7 @@ async function refresh() {
     selectedFile.value && selected.value
       ? {
           value: currentRecordKey,
-          label: runtime.recordOptionLabel(
+          label: recordOptionLabel(
             selectedFile.value,
             selected.value,
             selectedIndex(selectedFile.value),

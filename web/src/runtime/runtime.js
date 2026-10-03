@@ -144,7 +144,7 @@ import { createJobDialogs } from "../domain/jobDialogs";
 import { createWorkDialogs } from "../domain/workDialogs";
 import { createRecordDialogs } from "../domain/recordDialogs";
 import { createOperationDock } from "../domain/operationDock";
-import { createModalDialogs } from "../domain/modalDialogs";
+import { copyCitation, copyJsonToClipboard } from "../domain/clipboardCopy";
 import {
   getUrlSyncHook,
   navSnapshot,
@@ -176,7 +176,9 @@ import { createDbPresenceUpsert } from "../domain/dbPresenceUpsert";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
 import { createPdfLinking } from "../domain/pdfLinking";
 import { createAppLifecycle } from "../domain/appLifecycle";
-import { createCompareLibrary } from "../domain/compareLibrary";
+import { compareSearchIndex, lookupRecord } from "../domain/sharedCompareLibrary";
+import { recordOptionLabel } from "../domain/recordOptionLabel";
+import { loadStorePage, researcherDbRecords } from "../domain/sharedStoreRecords";
 import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
@@ -288,7 +290,6 @@ const {
   recordsListCell,
   metadataSearchable,
   searchRecordOptions,
-  recordOptionLabel,
   ragGradeEvidencePayload,
 } = createRecordPresenters({
   tr,
@@ -355,7 +356,6 @@ const {
   getSearchShareHref,
   restoreSearchViewFromHref,
   safeDbSearchWhere,
-  researcherDbRecords,
 } = createSearchWorkspace({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -696,23 +696,6 @@ const {
   workIndex: (...args) => workIndex(...args),
   workInsightMetrics: (...args) => workInsightMetrics(...args),
 });
-const {
-  compareSearchIndex,
-  lookupRecord,
-  getCompareLibrary,
-  getCompareRecord,
-  ensureCompareLibrary,
-} = createCompareLibrary({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  allRows: (...args) => allRows(...args),
-  isResearcher: (...args) => isResearcher(...args),
-  loadStorePage: (...args) => loadStorePage(...args),
-  memoCorpus: (...args) => memoCorpus(...args),
-  recordOptionLabel: (...args) => recordOptionLabel(...args),
-  refreshStores: (...args) => refreshStores(...args),
-  researcherDbRecords: (...args) => researcherDbRecords(...args),
-});
 const { warmupConfiguredLlm, importFiles, closeFile, checkHealth } = createAppLifecycle({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -824,7 +807,6 @@ const {
   reviewKey,
   reviewItemFromKey,
   selectedReviewItems,
-  copyCitation,
   workspaceEvidenceKey,
   dbEvidenceKey,
   selectedEvidenceEntries,
@@ -841,9 +823,7 @@ const {
 } = createEvidenceSelection({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  fullCitation: (...args) => fullCitation(...args),
   hasCapability: (...args) => hasCapability(...args),
-  inlineCitation: (...args) => inlineCitation(...args),
   localRecordKey: (...args) => localRecordKey(...args),
   persistPrefs: (...args) => persistPrefs(...args),
   ragEvidenceRecordPayload: (...args) => ragEvidenceRecordPayload(...args),
@@ -851,12 +831,6 @@ const {
   shellRefreshHook: refreshShell,
   storeReceipt: (...args) => storeReceipt(...args),
   tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-});
-const { copyJsonToClipboard } = createModalDialogs({
-  state,
-  trf: (...args) => trf(...args),
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
 });
 const {
   applyOperationStackPosition,
@@ -2090,35 +2064,6 @@ async function refreshStoreWorks(force = false) {
   state.storeWorksStore = state.activeStore;
   if (state.storeWork && !state.storeWorks.includes(state.storeWork)) state.storeWork = "";
 }
-async function loadStorePage() {
-  if (!state.activeStore) {
-    state.storeRecords = [];
-    state.storeCount = 0;
-    return;
-  }
-  const offset = Math.max(0, (state.storePage - 1) * state.storePageSize);
-  const params = new URLSearchParams({
-    limit: String(state.storePageSize),
-    offset: String(offset),
-  });
-  if (state.storeWork) params.set("work", state.storeWork);
-  if (state.storeSort?.key) {
-    params.set("sort_field", state.storeSort.key);
-    params.set("sort_dir", state.storeSort.dir === -1 ? "desc" : "asc");
-  }
-  const activeFilters = Object.fromEntries(
-    Object.entries(state.storeFilters || {}).filter(([, value]) => String(value || "").trim()),
-  );
-  if (Object.keys(activeFilters).length) params.set("filters", JSON.stringify(activeFilters));
-  const data = await api(`/api/stores/${encodeURIComponent(state.activeStore)}/records?${params}`);
-  state.storeRecords = data.records || [];
-  state.storeCount = data.count || 0;
-  const maxPage = Math.max(1, Math.ceil(state.storeCount / state.storePageSize));
-  if (state.storePage > maxPage) {
-    state.storePage = maxPage;
-    return loadStorePage();
-  }
-}
 async function exportStoreJsonl({
   store = state.activeStore,
   work = null,
@@ -3127,9 +3072,6 @@ export {
   ensureCorpusWorkspaceLoaded,
   persistPrefs,
   lookupRecord,
-  getCompareLibrary,
-  getCompareRecord,
-  ensureCompareLibrary,
   copyJsonToClipboard,
   copyCitation,
   formatTimestamp,
@@ -3148,7 +3090,6 @@ export {
   pages,
   pdfDisplayTitle,
   recordOptionForKey,
-  recordOptionLabel,
   reviewKey,
   searchRecordOptions,
   selectedIndex,
@@ -3175,7 +3116,6 @@ export {
   relativeTime,
   renderCorpusBuildsHomeCard,
   renderOperationsPanel,
-  researcherDbRecords,
   listSemanticMapSources,
   openSemanticRecord,
   searchByMetadata,
