@@ -9215,5 +9215,7 @@
   "site.create_languages": "Site languages",
   "site.create_languages_help": "Choose all or any installed DerridAI languages to include in the exported site. Missing strings fall back to canonical English.",
   "site.create_languages_selected": "{count} languages selected",
-  "site.runtime.loading_site": "Loading DerridAI research site…"
+  "site.runtime.loading_site": "Loading DerridAI research site…",
+  "settings.data_workspaces_title": "Data workspaces",
+  "settings.data_workspaces_help": "Inspect operational System Data or open Corpus Data without duplicating those workspaces inside Settings."
 }
