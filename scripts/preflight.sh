@@ -8,6 +8,9 @@ set -u
 
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT" || exit 1
+# Hooks can supply a relative GIT_DIR; let Git rediscover this worktree after
+# frontend gates change directory, rather than resolving it against web/.
+unset GIT_DIR GIT_WORK_TREE
 BASE_REF=${DERRIDAI_BASE_REF:-origin/master}
 fail=0
 say() { printf 'preflight: %s\n' "$*" >&2; }
