@@ -19,6 +19,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import {
+  ensureCompareLibrary,
+  getCompareLibrary,
+  getCompareRecord,
+} from "../domain/sharedCompareLibrary";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { useAuthStore } from "../stores/auth";
 import { useCompareStore } from "../stores/workspace";
@@ -88,7 +93,7 @@ const parsedA = computed(() =>
   sourceA.value === "scratch"
     ? parseCompareRecord(pasteA.value)
     : {
-        record: runtime.getCompareRecord?.(keyA.value)?.record || null,
+        record: getCompareRecord(keyA.value)?.record || null,
         errorKey: "",
         errorFallback: "",
       },
@@ -97,7 +102,7 @@ const parsedB = computed(() =>
   sourceB.value === "scratch"
     ? parseCompareRecord(pasteB.value)
     : {
-        record: runtime.getCompareRecord?.(keyB.value)?.record || null,
+        record: getCompareRecord(keyB.value)?.record || null,
         errorKey: "",
         errorFallback: "",
       },
@@ -137,11 +142,11 @@ function persist() {
   persistPrefs();
 }
 function refreshLibrary() {
-  library.value = runtime.getCompareLibrary?.() || [];
+  library.value = getCompareLibrary();
 }
 function loadIntoEditor(side: "A" | "B") {
   const key = side === "A" ? keyA.value : keyB.value;
-  const found = runtime.getCompareRecord?.(key);
+  const found = getCompareRecord(key);
   if (!found?.record) return;
   const text = prettyRecord(found.record);
   if (side === "A") {
@@ -222,11 +227,11 @@ const newer = useNewerData();
 async function loadNewer() {
   newer.acknowledge();
   runtimeState.storeRecords = [];
-  await runtime.ensureCompareLibrary?.();
+  await ensureCompareLibrary();
   refreshLibrary();
 }
 onMounted(async () => {
-  if (typeof runtime.ensureCompareLibrary === "function") await runtime.ensureCompareLibrary();
+  await ensureCompareLibrary();
   refreshLibrary();
 });
 </script>
