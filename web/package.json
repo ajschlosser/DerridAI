@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "npm run build:sdk && npm run build:site && npm run build:sdk:package && vue-tsc --noEmit && vite build",
     "build:browser-embedder": "node scripts/build-browser-embedder.mjs",
-    "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.site.json && tsc --noEmit -p sdk/tsconfig.json",
+    "typecheck": "vue-tsc --noEmit && npm run typecheck:site && tsc --noEmit -p sdk/tsconfig.json",
     "typecheck:app": "vue-tsc --noEmit",
     "preview": "vite preview --host 0.0.0.0",
     "storybook": "storybook dev -p 6006 --host 0.0.0.0",
@@ -40,9 +40,10 @@
     "check:legacy-snapshots": "node scripts/check-legacy-snapshots.mjs",
     "build:app:ci": "vite build",
     "build:sdk:ci": "npm run build:sdk:check && npm run check:sdk:package",
-    "build:site": "vue-tsc --noEmit -p tsconfig.site.json && vite build --config vite.site.config.ts && node scripts/apply-copyright-header.mjs ../api/app/site_assets/derridai-site.js",
+    "build:site": "npm run typecheck:site && vite build --config vite.site.config.ts && node scripts/apply-copyright-header.mjs ../api/app/site_assets/derridai-site.js",
     "build:site:check": "npm run build:site && git diff --exit-code -- ../api/app/site_assets/derridai-site.js",
-    "build:site:ci": "npm run build:site:check"
+    "build:site:ci": "npm run build:site:check",
+    "typecheck:site": "vue-tsc --noEmit -p tsconfig.site.json"
   },
   "dependencies": {
     "@tanstack/vue-query": "^5.104.0",
