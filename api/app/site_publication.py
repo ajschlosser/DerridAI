@@ -37,6 +37,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 from .corpus_publication import serialize_public_record, validate_publication_record
 from .locales.en_us import EN_US
+from .publication_embeddings import contract as publication_embedding_contract
+from .publication_embeddings import embed_records as embed_publication_records
 from .services import store
 from .site_record_profile import (
     DEFAULT_SITE_RECORD_PROFILE,
@@ -72,6 +74,20 @@ class SiteBundle:
     work_count: int
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE
     include_vectors: bool = True
+    vector_strategy: str = "source"
+
+
+_VECTOR_STRATEGIES = {"source", "browser-default", "browser-build"}
+
+
+def _normalize_vector_strategy(value: str | None, include_vectors: bool) -> str:
+    """Resolve the new explicit strategy while retaining the legacy boolean contract."""
+    if value is None:
+        return "source" if include_vectors else "browser-build"
+    strategy = str(value).strip().lower()
+    if strategy not in _VECTOR_STRATEGIES:
+        raise ValueError(f"Unknown site vector strategy: {value!r}.")
+    return strategy
 
 
 def _slug(value: str) -> str:
@@ -279,6 +295,7 @@ def build_site_bundle(
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
     include_transformers: bool = True,
     include_vectors: bool = True,
+    vector_strategy: str | None = None,
     transformers_delivery: str = "inline",
 ) -> SiteBundle:
     """Create an SDK-backed static research site from one immutable publication snapshot.
@@ -290,6 +307,7 @@ def build_site_bundle(
     files (nginx/Docker). ``include_transformers`` is accepted for older callers and is always treated as true.
     """
     del include_transformers
+    strategy = _normalize_vector_strategy(vector_strategy, include_vectors)
     if transformers_delivery not in {"inline", "files"}:
         raise ValueError("Unknown Transformers.js delivery mode.")
     record_profile = normalize_site_record_profile(record_profile)
@@ -323,7 +341,8 @@ def build_site_bundle(
             f"database. Missing: {preview}{suffix}"
         )
 
-    vector_contract = dict(projection.get("store") or {})
+    source_vector_contract = dict(projection.get("store") or {})
+    publication_vector_contract = dict(source_vector_contract)
     full_records: list[dict[str, Any]] = []
     public_records: list[dict[str, Any]] = []
     vectors: list[list[float] | None] = []
@@ -346,7 +365,7 @@ def build_site_bundle(
         ids.add(record_id)
         full_records.append(public_record)
 
-        vector = item.get("embedding") if include_vectors else None
+        vector = item.get("embedding") if strategy == "source" else None
         if vector is None:
             vectors.append(None)
             continue
@@ -372,6 +391,13 @@ def build_site_bundle(
         raise ValueError("No publication-valid records remain after validating the selected works.")
 
     public_records = apply_record_profile(full_records, record_profile)
+    if strategy == "browser-default":
+        vectors = embed_publication_records(public_records)
+        publication_vector_contract = publication_embedding_contract()
+        dimension = int(publication_vector_contract["dimension"])
+    elif strategy == "browser-build":
+        vectors = [None] * len(public_records)
+        dimension = None
     # The profile must never remove what cELF Core requires; fail rather than publish a broken Record.
     profile_errors = [
         error for record in public_records for error in validate_publication_record(record)
@@ -429,14 +455,18 @@ def build_site_bundle(
         "works": [_work_summary(public_records, work) for work in selected_works],
         "vector_index": {
             "dimension": dimension,
-            "provider": vector_contract.get("embedding_provider"),
-            "model": vector_contract.get("embedding_model"),
-            "revision": vector_contract.get("embedding_revision"),
-            "distance_metric": vector_contract.get("distance_metric") or "cosine",
-            "text_field": vector_contract.get("text_field") or "text",
+            "provider": publication_vector_contract.get("provider")
+            or publication_vector_contract.get("embedding_provider"),
+            "model": publication_vector_contract.get("model")
+            or publication_vector_contract.get("embedding_model"),
+            "revision": publication_vector_contract.get("revision")
+            or publication_vector_contract.get("embedding_revision"),
+            "variant": publication_vector_contract.get("variant"),
+            "distance_metric": publication_vector_contract.get("distance_metric") or "cosine",
+            "text_field": publication_vector_contract.get("text_field") or "text",
         },
         "source_collection": {
-            key: vector_contract.get(key)
+            key: source_vector_contract.get(key)
             for key in (
                 "name",
                 "embedding_provider",
@@ -450,7 +480,7 @@ def build_site_bundle(
                 "language_codes",
                 "schema_id",
             )
-            if vector_contract.get(key) not in (None, "")
+            if source_vector_contract.get(key) not in (None, "")
         },
         "features": {
             "browse": True,
@@ -458,6 +488,7 @@ def build_site_bundle(
             "semantic_search": semantic_count > 0,
             "semantic_record_count": semantic_count,
             "publication_vectors_included": semantic_count > 0,
+            "publication_vector_strategy": strategy,
             "local_annotations": True,
             "research": True,
             "shared_state": False,
@@ -521,7 +552,8 @@ def build_site_bundle(
         record_count=len(public_records),
         work_count=len(selected_works),
         record_profile=record_profile,
-        include_vectors=include_vectors,
+        include_vectors=semantic_count > 0,
+        vector_strategy=strategy,
     )
 
 
