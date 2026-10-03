@@ -6,7 +6,7 @@ import io
 from pathlib import Path
 
 import pytest
-from app import site_runtime_cache as cache
+from app import transformers_runtime_cache as cache
 
 
 def _artifact(role: str, filename: str, payload: bytes) -> dict:
@@ -62,7 +62,8 @@ def _tiny_runtime(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
             _artifact("wasm", "ort-wasm-simd-threaded.wasm", _PAYLOADS["wasm"]),
         ),
     )
-    monkeypatch.setattr(cache, "runtime_dir", lambda: tmp_path / "site_runtime" / "transformers")
+    monkeypatch.setattr(cache, "runtime_dir", lambda: tmp_path / "transformers_runtime" / "transformers")
+    monkeypatch.setattr(cache, "legacy_runtime_dir", lambda: tmp_path / "site_runtime" / "transformers")
 
 
 def test_first_use_downloads_and_verifies_then_later_exports_use_the_cache() -> None:
@@ -76,6 +77,20 @@ def test_first_use_downloads_and_verifies_then_later_exports_use_the_cache() -> 
     second = _Opener()
     assert cache.ensure_runtime(second) == _PAYLOADS
     assert second.requested == []
+
+
+def test_legacy_cache_is_adopted_without_redownloading() -> None:
+    legacy = cache.legacy_runtime_dir()
+    legacy.mkdir(parents=True)
+    for item in cache.ARTIFACTS:
+        legacy.joinpath(item["filename"]).write_bytes(_PAYLOADS[item["role"]])
+
+    assert cache.is_cached() is True
+    assert not legacy.exists()
+    assert cache.runtime_dir().exists()
+    opener = _Opener()
+    assert cache.ensure_runtime(opener) == _PAYLOADS
+    assert opener.requested == []
 
 
 def test_a_corrupted_cached_file_is_downloaded_again() -> None:
