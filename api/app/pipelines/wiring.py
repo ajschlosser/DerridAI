@@ -34,7 +34,7 @@ pipeline either hands every stage the input it declares or says why it cannot.
 from __future__ import annotations
 
 from collections import defaultdict, deque
-from typing import Any
+from typing import Any, Literal
 
 from .contracts import input_ports, output_ports
 from .models import (
@@ -55,7 +55,7 @@ def types_compatible(source: str, target: str) -> bool:
 
 
 def _issue(
-    level: str, code: str, message: str, stage_id: str | None = None
+    level: Literal["error", "warning"], code: str, message: str, stage_id: str | None = None
 ) -> PipelineValidationIssue:
     return PipelineValidationIssue(level=level, code=code, message=message, stage_id=stage_id)
 

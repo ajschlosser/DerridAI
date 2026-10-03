@@ -86,23 +86,23 @@ def trace_stage(
     status: str = "completed",
 ) -> PipelineStageTrace:
     spec = strategy_registry.require(strategy_id)
-    return PipelineStageTrace(
-        stage_id=stage_id,
-        strategy_id=strategy_id,
-        strategy_version=spec.version,
-        status=status,
-        elapsed_ms=(
+    return PipelineStageTrace.model_validate({
+        "stage_id": stage_id,
+        "strategy_id": strategy_id,
+        "strategy_version": spec.version,
+        "status": status,
+        "elapsed_ms": (
             max(0, int(float(elapsed_seconds) * 1000))
             if elapsed_seconds is not None
             else None
         ),
-        input_count=input_count,
-        output_count=output_count,
-        parameters=sanitize_trace_value(parameters or {}),
-        provider=provider,
-        model=model,
-        collection=collection,
-        fallback_reason=fallback_reason,
-        warnings=[str(item)[:MAX_TRACE_STRING] for item in (warnings or [])],
-        score_summary=sanitize_trace_value(score_summary or {}),
-    )
+        "input_count": input_count,
+        "output_count": output_count,
+        "parameters": sanitize_trace_value(parameters or {}),
+        "provider": provider,
+        "model": model,
+        "collection": collection,
+        "fallback_reason": fallback_reason,
+        "warnings": [str(item)[:MAX_TRACE_STRING] for item in (warnings or [])],
+        "score_summary": sanitize_trace_value(score_summary or {}),
+    })

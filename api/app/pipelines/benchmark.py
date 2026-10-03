@@ -73,6 +73,14 @@ class BenchmarkCorpusSnapshot(BaseModel):
     limitations: list[str] = Field(default_factory=list)
 
 
+def _default_locales() -> list[LanguageCode]:
+    return ["en", "fr"]
+
+
+def _default_search_types() -> list[SearchType]:
+    return ["similarity", "lexical", "mmr"]
+
+
 class ResearchPipelineBenchmarkCaseCreate(BaseModel):
     """Immutable retrieval-only benchmark case supplied by an administrator."""
 
@@ -81,10 +89,8 @@ class ResearchPipelineBenchmarkCaseCreate(BaseModel):
     prompt: str = Field(min_length=1, max_length=20000)
     instructions: str | None = Field(default=None, max_length=20000)
     source_collection: str = Field(min_length=1, max_length=128)
-    locales: list[LanguageCode] = Field(default_factory=lambda: ["en", "fr"])
-    search_types: list[SearchType] = Field(
-        default_factory=lambda: ["similarity", "lexical", "mmr"]
-    )
+    locales: list[LanguageCode] = Field(default_factory=_default_locales)
+    search_types: list[SearchType] = Field(default_factory=_default_search_types)
     k: int = Field(default=64, ge=1, le=500)
     fetch_k: int = Field(default=500, ge=1, le=5000)
     automatic_sizing: bool = False

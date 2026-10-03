@@ -16,9 +16,34 @@
 
 from __future__ import annotations
 
+import pytest
+from app.pipelines.contracts import input_ports, output_ports
 from app.pipelines.defaults import BUILT_IN_PIPELINES
 from app.pipelines.models import PipelineDefinition
+from app.pipelines.registry import strategy_registry
 from app.pipelines.service import PipelineService, pipeline_hash
+from pydantic import ValidationError
+
+
+def test_legacy_strategy_ports_keep_their_declared_types() -> None:
+    spec = strategy_registry.require("retrieve.lexical_bm25").model_copy(
+        update={"inputs": [], "outputs": []}
+    )
+    assert input_ports(spec)[0].model_dump()["data_type"] == spec.input_type
+    assert output_ports(spec)[0].model_dump()["data_type"] == spec.output_type
+    assert input_ports(spec)[0].required is True
+    any_input = spec.model_copy(update={"input_type": "any"})
+    assert input_ports(any_input)[0].required is False
+
+
+@pytest.mark.parametrize("direction", ["input", "output"])
+def test_legacy_strategy_ports_reject_unknown_types(direction: str) -> None:
+    spec = strategy_registry.require("retrieve.lexical_bm25").model_copy(
+        update={"inputs": [], "outputs": [], f"{direction}_type": "not-a-port-type"}
+    )
+    with pytest.raises(ValidationError) as exc:
+        (input_ports if direction == "input" else output_ports)(spec)
+    assert exc.value.errors()[0]["loc"] == ("data_type",)
 
 
 def test_built_in_pipeline_catalog_is_graph_valid() -> None:

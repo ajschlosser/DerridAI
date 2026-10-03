@@ -64,6 +64,15 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 
 ## Review-safe manager validation handoff continuation (2026-10-02)
 
+### PR preparation follow-up
+
+- Merged current `origin/master` at `401ca637` and retained its copyright/licence updates. Windows checkout line endings were normalized for local checks without changing published source content.
+- Pre-commit checks now batch staged files in groups of at most 32 and honour intentional ESLint ignores while still blocking real warnings/errors. Seven hook regressions pass, and the complete staged merge passed its formatting, Ruff, and ESLint gates. The incoming CSS-token migration script's import ordering was corrected.
+- Initial full preflight passed 2,116 backend tests (18 skipped), 12 directly selected and 27 related frontend test executions (six overlap), application/test typechecks, frontend lint, and the production app build. Its only failure was ten upstream pipeline type errors. User-approved fixes retain closed Pydantic validation for dynamically supplied port/trace states, narrow static severity types, and type the unchanged benchmark defaults; complete mypy now passes all 262 checked source files. Eighty-two focused pipeline/schema regressions pass, including default isolation, invalid port/status rejection, and unchanged generated contracts.
+- The merged production app and rebuilt Storybook passed three review-refresh browser cases, including final-validation saves and WCAG checks in light and dark. Final combined preflight remains a required pre-push gate. Docker, live-provider, real-source/save-tail, and human-review measurements remain outstanding.
+
+### Implementation checkpoint
+
 - Extended the preceding optimistic validation checkpoint to release the manager coordination lock during decoding, validation, and change encoding as well. Capture and commit acquire manager before repository locks; the commit guard remains held through the separate build-summary save. A full captured build comparison catches changes that do not write Records, including operational/reviewer counters, rather than overwriting them with the validation candidate.
 - Actual text edits, metadata decisions, and disposition commands commit while validation is paused, on initial finalization, retries, and rerun closure. Validation recomputes the changed scope afterward. Independent-build review remains available without invalidating an unchanged build. Summary handoff still serializes review; a summary-storage failure stays visible while already committed Records remain durable and notified.
 - Removed the rerun coordinator's outer whole-validation lock. Initial finalization no longer recomputes validation from its obsolete worker BuildScope; final, retry, and rerun closure reread current build state under the short handoff guard. Retry closure reads selected identities only and skips retired rows. Closing coordinators check cancellation received during validation rather than reporting ordinary completion.

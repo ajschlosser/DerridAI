@@ -21,7 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import defaultdict, deque
-from typing import Any
+from typing import Any, Literal
 
 from .defaults import (
     BUILT_IN_ASSIGNMENTS,
@@ -200,7 +200,7 @@ class PipelineService:
             enabled_strategies = {
                 stage.strategy for stage in pipeline.stages if stage.enabled
             }
-            gate_level = "error" if pipeline.status == "active" else "warning"
+            gate_level: Literal["error", "warning"] = "error" if pipeline.status == "active" else "warning"
             if "validate.evidence_support" not in enabled_strategies:
                 issues.append(
                     PipelineValidationIssue(
