@@ -94,6 +94,12 @@ A11Y_FULL_PATHS = {
     "web/playwright.a11y.config.ts",
 }
 
+# Vue-owned surfaces that are still intentionally characterized by the legacy DOM suite.
+# Keep this list narrow so unrelated view work does not pay for the legacy browser catalogue.
+LEGACY_CHARACTERIZATION_PATHS = {
+    "web/src/views/SearchView.vue",
+}
+
 
 def _mark_full_frontend(plan: PreflightPlan) -> None:
     plan.frontend = True
@@ -214,7 +220,11 @@ def build_plan(paths: list[str]) -> PreflightPlan:
                     or path in A11Y_FULL_PATHS
                 ):
                     plan.a11y = True
-                if path.startswith("web/src/runtime/") or path == "web/src/App.vue":
+                if (
+                    path.startswith("web/src/runtime/")
+                    or path == "web/src/App.vue"
+                    or path in LEGACY_CHARACTERIZATION_PATHS
+                ):
                     plan.legacy = True
 
         if (
