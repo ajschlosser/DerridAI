@@ -175,7 +175,7 @@ import {
   recordFields,
   dbSearchWhere,
 } from "../domain/sharedRecordHelpers";
-import { createRecordPresenters } from "../domain/recordPresenters";
+import { recordPresenters as sharedRecordPresenters } from "../domain/sharedRecordPresenters";
 import { providerProfilesService, warmupProviderProfile } from "../domain/sharedProviderProfiles";
 import { createSearchWorkspace } from "../domain/searchWorkspace";
 import { createRecordsWorkspace } from "../domain/recordsWorkspace";
@@ -226,7 +226,7 @@ import {
   refreshShell,
   shell,
 } from "../domain/sharedWorkspaceStorage";
-import { createRecordEditing } from "../domain/recordEditing";
+import * as sharedRecordEditing from "../domain/sharedRecordEditing";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
 import { createPdfLinking } from "../domain/pdfLinking";
 import { clearFileDerivedState as clearFileDerivedStateOf } from "../domain/fileDerivedState";
@@ -242,7 +242,7 @@ import { compareSearchIndex, lookupRecord } from "../domain/sharedCompareLibrary
 import { recordOptionLabel } from "../domain/recordOptionLabel";
 import { loadStorePage, researcherDbRecords } from "../domain/sharedStoreRecords";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
-import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
+import { annotationsWorkspace } from "../domain/sharedAnnotations";
 import { slimSemanticSource } from "../domain/semanticMap";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import {
@@ -256,7 +256,7 @@ import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 import { refreshStores } from "../domain/sharedStores";
 import { createCorpusWorkspaceHydration } from "../domain/corpusWorkspaceHydration";
-import { canAccessPage, hasCapability, isResearcher } from "../domain/sharedSession";
+import { canAccessPage, canUse, hasCapability, isResearcher } from "../domain/sharedSession";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { applyAppearance } from "../domain/sharedAppearance";
 import { relativeTimeLabel } from "../domain/relativeTimeLabel";
@@ -329,16 +329,7 @@ const {
   metadataSearchable,
   searchRecordOptions,
   ragGradeEvidencePayload,
-} = createRecordPresenters({
-  tr,
-  trf,
-  pages,
-  label,
-  display,
-  recordDbStatus: (...args) => recordDbStatus(...args),
-  allAnnotations: () => allAnnotations(),
-  compareSearchIndex: () => compareSearchIndex(),
-});
+} = sharedRecordPresenters;
 const {
   ensureProviderProfiles,
   providerProfiles,
@@ -789,21 +780,7 @@ const {
   clearAllUpdates,
   historyVersionChanges,
   restoreRecordHistoryVersion,
-} = createRecordEditing({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  allRows: (...args) => allRows(...args),
-  cloneAuditValue: (...args) => cloneAuditValue(...args),
-  invalidateCorpusCache: (...args) => invalidateCorpusCache(...args),
-  label: (...args) => label(...args),
-  persistFile: (...args) => persistFile(...args),
-  renderView: (...args) => renderView(...args),
-  sameValue: (...args) => sameValue(...args),
-  shell: (...args) => shell(...args),
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-  uid: (...args) => uid(...args),
-});
+} = sharedRecordEditing;
 const {
   reviewKey,
   reviewItemFromKey,
@@ -985,28 +962,7 @@ const {
   openAnnotationsWorkspaceRecord,
   openAnnotationsWorkspaceWork,
   removeAnnotationsWorkspaceItem,
-} = createAnnotationsWorkspace({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  allRows: (...args) => allRows(...args),
-  api: (...args) => api(...args),
-  applyRecordChanges: (...args) => applyRecordChanges(...args),
-  canUse: (...args) => canUse(...args),
-  dateKeys: (...args) => dateKeys(...args),
-  hasCapability: (...args) => hasCapability(...args),
-  isResearcher: (...args) => isResearcher(...args),
-  label: (...args) => label(...args),
-  memoCorpus: (...args) => memoCorpus(...args),
-  navigateTo: (...args) => navigateTo(...args),
-  persistFileNow: (...args) => persistFileNow(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  recordStores: (...args) => recordStores(...args),
-  refreshStores: (...args) => refreshStores(...args),
-  reviewItemFromKey: (...args) => reviewItemFromKey(...args),
-  reviewKey: (...args) => reviewKey(...args),
-  syncUrl: (...args) => syncUrl(...args),
-  tr: (...args) => tr(...args),
-});
+} = annotationsWorkspace;
 const {
   jobLabel,
   jobProviderSummary,
@@ -1175,21 +1131,6 @@ const {
   workIndex: (...args) => workIndex(...args),
   workMetadataControlSpec: (...args) => workMetadataControlSpec(...args),
 });
-function userCapabilities() {
-  return {
-    viewSharedPages: hasCapability("page.dashboard"),
-    annotate: hasCapability("annotations.write"),
-    compare: hasCapability("page.compare"),
-    research: hasCapability("rag.run"),
-    editLocalRecords: hasCapability("records.edit"),
-    manageCorpus: hasCapability("corpus.manage"),
-    manageUsers: hasCapability("users.manage"),
-    configureProviders: hasCapability("providers.manage"),
-  };
-}
-function canUse(feature) {
-  return Boolean(userCapabilities()[feature]);
-}
 function setUserContext(user) {
   const priorId = state.userContext?.id;
   state.userContext = user || null;

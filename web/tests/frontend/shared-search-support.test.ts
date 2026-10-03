@@ -17,8 +17,14 @@
  */
 
 import { describe, expect, it } from "vitest";
+// The app enters through the runtime; sharedNavigation reaches it through the operations panel, so import it first.
+import "../../src/runtime/runtimeBridge";
 import { evidenceSelection, searchFacets } from "../../src/domain/sharedSearchSupport";
 import { dbSearchWhere, display, pages, recordFields } from "../../src/domain/sharedRecordHelpers";
+import { annotationsWorkspace } from "../../src/domain/sharedAnnotations";
+import { recordPresenters } from "../../src/domain/sharedRecordPresenters";
+import { applyRecordChanges } from "../../src/domain/sharedRecordEditing";
+import { canUse } from "../../src/domain/sharedSession";
 import { state } from "../../src/domain/sharedUrlState";
 
 describe("shared record helpers", () => {
@@ -42,5 +48,18 @@ describe("shared search support", () => {
     expect(typeof searchFacets.buildSearchFacets).toBe("function");
     expect(typeof evidenceSelection.toggleDbEvidence).toBe("function");
     expect(typeof evidenceSelection.clearSelectedEvidence).toBe("function");
+  });
+});
+
+describe("shared annotations, record editing and presenters", () => {
+  it("build over the shared state without the runtime", () => {
+    expect(typeof annotationsWorkspace.allAnnotations).toBe("function");
+    expect(annotationsWorkspace.allAnnotations()).toEqual([]);
+    expect(typeof recordPresenters.pager).toBe("function");
+    expect(applyRecordChanges({ records: [] }, 0, { a: 1 })).toBe(0);
+  });
+  it("reports capabilities as false without a signed-in user", () => {
+    expect(canUse("manageCorpus")).toBe(false);
+    expect(canUse("unknown")).toBe(false);
   });
 });
