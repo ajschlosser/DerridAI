@@ -31,11 +31,11 @@ const systemApi = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/api/system", () => ({ systemApi }));
+vi.mock("../../src/domain/sharedAppearance", () => ({ applyAppearance: vi.fn() }));
 
 const runtime = vi.hoisted(() => ({
   persistPrefs: vi.fn(),
   flushWorkspacePrefs: vi.fn(async () => undefined),
-  applyAppearance: vi.fn(),
   getProviderProfilesForUi: vi.fn(() => [
     { id: "p1", name: "Local", type: "ollama", model: "gemma", max_concurrent_requests: 1 },
   ]),
