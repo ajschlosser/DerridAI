@@ -26,24 +26,19 @@ The folder is organized around the current researcher workflow rather than aroun
 
 ```mermaid
 flowchart TD
-    Owner["PdfCorpusBuilder.vue
-(top-level owner)"]
+    Owner["PdfCorpusBuilder.vue<br/>(top-level owner)"]
 
     Setup["CorpusSetupWorkspace"]
     Build["CorpusBuildWorkspace"]
     Review["CorpusReviewWorkspace"]
     Publish["CorpusPublishWorkspace"]
 
-    SetupParts["source / document metadata
-structure / topology / configuration"]
-    BuildParts["primary status / activity
-diagnostics / enrichment config"]
-    ReviewParts["queue / record pane / source panel
-evidence / inspector / toolbar / semantic views"]
+    SetupParts["source / document metadata<br/>structure / topology / configuration"]
+    BuildParts["primary status / activity<br/>diagnostics / enrichment config"]
+    ReviewParts["queue / record pane / source panel<br/>evidence / inspector / toolbar / semantic views"]
     PublishParts["readiness / publish controls"]
 
-    Feature["features/corpus-builder
-composables + domain"]
+    Feature["features/corpus-builder<br/>composables + domain"]
     API["REST + GraphQL"]
 
     Owner --> Setup
