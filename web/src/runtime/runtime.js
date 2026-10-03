@@ -50,11 +50,7 @@ import {
   parseJsonl,
   valueMatches,
 } from "../domain/recordQuery";
-import {
-  DB_NAME,
-  createWorkspaceDb,
-  deleteAllDerridaiBrowserState as deleteAllDerridaiBrowserStateCompat,
-} from "../services/workspaceDb";
+import { deleteAllDerridaiBrowserState as deleteAllDerridaiBrowserStateCompat } from "../services/workspaceDb";
 import {
   finiteResearchNumber,
   normalizedResearchConfig,
@@ -161,6 +157,16 @@ import { createNavigation } from "../domain/navigation";
 import { sharedUrlStateCodec } from "../domain/sharedUrlState";
 import { pathViewMap, viewFromPath, viewPathMap } from "../domain/navigation";
 import { createWorkspacePersistence } from "../domain/workspacePersistence";
+import { cancelPendingPrefs } from "../domain/prefsPersistence";
+import {
+  workspaceDb,
+  workspacePrefs,
+  persistPrefs,
+  flushWorkspacePrefs,
+  setShellRefreshHook,
+  refreshShell,
+  shell,
+} from "../domain/sharedWorkspaceStorage";
 import { createEvidenceSelection } from "../domain/evidenceSelection";
 import { createRecordEditing } from "../domain/recordEditing";
 import { createDbPresenceUpsert } from "../domain/dbPresenceUpsert";
@@ -842,7 +848,7 @@ const {
   persistPrefs: (...args) => persistPrefs(...args),
   ragEvidenceRecordPayload: (...args) => ragEvidenceRecordPayload(...args),
   recordDbStatus: (...args) => recordDbStatus(...args),
-  shellRefreshHook: (...args) => shellRefreshHook(...args),
+  shellRefreshHook: refreshShell,
   storeReceipt: (...args) => storeReceipt(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
@@ -950,7 +956,7 @@ const {
   reviewKey: (...args) => reviewKey(...args),
   sanitizeResearchGeneration: (...args) => sanitizeResearchGeneration(...args),
   shell: (...args) => shell(...args),
-  shellRefreshHook: (...args) => shellRefreshHook(...args),
+  shellRefreshHook: refreshShell,
   showAppModal: (...args) => showAppModal(...args),
   startJobPolling: (...args) => startJobPolling(...args),
   syncJobProgressToasts: (...args) => syncJobProgressToasts(...args),
@@ -1017,7 +1023,7 @@ const {
   selectedEvidenceEntries: (...args) => selectedEvidenceEntries(...args),
   selectedEvidencePayload: (...args) => selectedEvidencePayload(...args),
   setEvidence: (...args) => setEvidence(...args),
-  shellRefreshHook: (...args) => shellRefreshHook(...args),
+  shellRefreshHook: refreshShell,
   startJobPolling: (...args) => startJobPolling(...args),
   syncJobProgressToasts: (...args) => syncJobProgressToasts(...args),
   tr: (...args) => tr(...args),
@@ -1492,21 +1498,8 @@ function showAppModal(dialog) {
   dialog.showModal();
 }
 
-function workspaceDbName() {
-  return isResearcher() && state.userContext?.id
-    ? `${DB_NAME}-researcher-${state.userContext.id}`
-    : DB_NAME;
-}
-let prefsTimer = null;
 const fileTimers = new Map();
-const {
-  persistFileNow,
-  persistFile,
-  workspacePrefs,
-  persistPrefs,
-  flushWorkspacePrefs,
-  restoreWorkspace,
-} = createWorkspacePersistence({
+const { persistFileNow, persistFile, restoreWorkspace } = createWorkspacePersistence({
   state,
   trf: (...args) => trf(...args),
   fileTimers,
@@ -1587,13 +1580,12 @@ const {
   upsertRows: (...args) => upsertRows(...args),
 });
 
-const workspaceDb = createWorkspaceDb(workspaceDbName);
 const idbGetAll = workspaceDb.getAll;
 const idbGet = workspaceDb.get;
 const idbPut = workspaceDb.put;
 const idbDelete = workspaceDb.remove;
 async function deleteWorkspaceDatabase() {
-  clearTimeout(prefsTimer);
+  cancelPendingPrefs();
   for (const timer of fileTimers.values()) clearTimeout(timer);
   fileTimers.clear();
   await workspaceDb.drop();
@@ -1804,14 +1796,6 @@ function relativeTime(value) {
   return relativeTimeLabel(value, Date.now(), { tr, trf, locale: state.translations?.locale });
 }
 
-let shellRefreshHook = () => {};
-function setShellRefreshHook(hook) {
-  shellRefreshHook = typeof hook === "function" ? hook : () => {};
-}
-function shell() {
-  persistPrefs();
-  shellRefreshHook();
-}
 function collapseKeyFor(element, index) {
   const heading =
     element
@@ -1894,7 +1878,7 @@ function renderView() {
   // overwrite those routes while they are active.
   if (!main) {
     unmountOperationsPanel();
-    shellRefreshHook?.();
+    refreshShell();
     return null;
   }
   if (state.view !== "home") unmountOperationsPanel();

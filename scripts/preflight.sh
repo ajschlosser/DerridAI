@@ -17,7 +17,7 @@
 
 #
 # Change-aware merge-readiness gate. Run it by hand (`scripts/preflight.sh`) or let
-# `.githooks/pre-push` run it. Browser checks are opt-in locally and mandatory in CI.
+# `.githooks/pre-push` run it. Browser checks are not run locally; CI runs them.
 # Set DERRIDAI_SKIP_PREFLIGHT=1 to bypass (CI will still enforce everything).
 set -u
 
@@ -159,37 +159,9 @@ if [ "$FRONTEND" = true ]; then
   fi
 fi
 
-# 8. Browser suites are opt-in locally and retain the same surface ownership as CI.
-if [ "${DERRIDAI_PREFLIGHT_BROWSER:-0}" = 1 ]; then
-  if [ "$STORYBOOK" = true ]; then
-    web_gate "Storybook build" npm run build-storybook
-  fi
-  if [ "$LEGACY" = true ]; then
-    web_gate "legacy browser tests" npm run test:e2e:legacy -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
-  fi
-  if [ "$E2E" = true ]; then
-    web_gate "composed UI browser tests" npm run test:e2e -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
-  fi
-  if [ "$A11Y" = true ]; then
-    if [ "$A11Y_FULL" = true ]; then
-      DERRIDAI_A11Y_SCOPE=full web_gate "accessibility browser tests" npm run test:e2e:a11y -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
-    else
-      DERRIDAI_A11Y_SCOPE=representative web_gate "representative accessibility browser tests" npm run test:e2e:a11y -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
-    fi
-  fi
-elif [ "$STORYBOOK" = true ] || [ "$LEGACY" = true ] || [ "$E2E" = true ] || [ "$A11Y" = true ]; then
-  say "local browser gates omitted; CI runs the affected surfaces (opt in with DERRIDAI_PREFLIGHT_BROWSER=1)"
-fi
-
-# 9. Publication paths require the dedicated generated-artifact acceptance check.
-if [ "$PUBLICATION" = true ] && [ "${DERRIDAI_PREFLIGHT_BROWSER:-0}" = 1 ]; then
-  say "running publication artifact acceptance"
-  "$PY" scripts/build_publication_acceptance_fixtures.py .tmp/publication-acceptance &&
-    (cd web && DERRIDAI_PUBLICATION_FIXTURE_DIR=../.tmp/publication-acceptance \
-      npx playwright test -c playwright.publication.config.ts) &&
-    sh scripts/check_publication_artifacts.sh .tmp/publication-acceptance || fail=1
-elif [ "$PUBLICATION" = true ]; then
-  say "local publication browser/Docker acceptance omitted; CI runs it (opt in with DERRIDAI_PREFLIGHT_BROWSER=1)"
+# 8. Playwright (browser, accessibility and publication acceptance) suites never run locally; CI runs them.
+if [ "$STORYBOOK" = true ] || [ "$LEGACY" = true ] || [ "$E2E" = true ] || [ "$A11Y" = true ] || [ "$PUBLICATION" = true ]; then
+  say "browser gates are not run locally; CI runs the affected surfaces"
 fi
 
 [ "$fail" -eq 0 ] && say "ok"

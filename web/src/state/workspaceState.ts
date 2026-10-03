@@ -392,6 +392,16 @@ export function createNavigationState() {
 }
 export const navigationState = shallowReactive(createNavigationState());
 
+/** The signed-in user and whether browser-local workspace storage has been opened and restored. */
+export function createSessionState() {
+  return {
+    userContext: null as Loose | null,
+    storageReady: false,
+    version: 0,
+  };
+}
+export const sessionState = shallowReactive(createSessionState());
+
 /** Every shared group except background jobs, in the order they are bound onto a state object. */
 const sharedGroups = [
   vectorState,
@@ -410,6 +420,7 @@ const sharedGroups = [
   recordViewState,
   upsertProgressState,
   navigationState,
+  sessionState,
 ];
 
 /** Binds every shared group onto `target`, so code that reads a workspace state object works without the runtime. */
@@ -429,7 +440,8 @@ export type WorkspaceGroups = Omit<
     ReturnType<typeof createStatusState> &
     ReturnType<typeof createRecordViewState> &
     ReturnType<typeof createUpsertProgressState> &
-    ReturnType<typeof createNavigationState>,
+    ReturnType<typeof createNavigationState> &
+    ReturnType<typeof createSessionState>,
   "version"
 >;
 
