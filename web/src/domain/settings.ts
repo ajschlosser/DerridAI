@@ -198,6 +198,7 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     labelFallback: "Color theme",
     helpKey: "settings.appearance_help",
     helpFallback: "Choose the interface color theme for your workspace.",
+    targetId: "settings-heading-workspace",
   },
   {
     id: "scheme",
@@ -223,6 +224,7 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     helpKey: "about.help",
     helpFallback:
       "Release version of this instance. The git commit is shown for administrators and on the sign-in screen.",
+    targetId: "settings-overview-title",
   },
   {
     id: "locale",
@@ -397,12 +399,14 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     helpFallback:
       "Choose how long DerridAI keeps operational history: pipeline traces, benchmark results, finished jobs, and saved Research responses.",
     keywords: ["retention", "expire", "traces", "job history", "disk space", "gigabytes"],
+    targetId: "settings-heading-data-retention",
   },
   {
     id: "backup",
     section: "data",
     labelKey: "settings.backup",
     labelFallback: "Backup and restore",
+    targetId: "settings-heading-backup",
   },
   {
     id: "nuke",
@@ -428,7 +432,7 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     helpKey: "settings.audio_help",
     helpFallback: "Configure and test the audio transcription service used for media ingestion.",
     keywords: ["audio", "transcription", "speech", "api key", "model"],
-    targetId: "settings-section-audio",
+    targetId: "settings-heading-audio",
   },
   {
     id: "nlp-packs",
@@ -438,7 +442,7 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     helpKey: "settings.nlp_packs_help",
     helpFallback: "Install and manage language resources used for document NLP.",
     keywords: ["nlp", "language pack", "pos", "ner", "spacy"],
-    targetId: "settings-section-language-packs",
+    targetId: "settings-heading-language-packs",
   },
   {
     id: "access",
@@ -458,7 +462,7 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     helpKey: "settings.viewer_help",
     helpFallback: "Reset local table, panel, sidebar, and update-history state.",
     keywords: ["reset", "columns", "panels", "sidebar", "updates", "upsert"],
-    targetId: "settings-section-viewer",
+    targetId: "settings-heading-viewer",
   },
 ];
 
