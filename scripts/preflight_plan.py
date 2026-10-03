@@ -113,6 +113,8 @@ def build_plan(paths: list[str]) -> PreflightPlan:
                 "scripts/check_frontend_graphql_contract.py",
             }:
                 plan.contract = True
+            if path == "scripts/run_frontend_related_tests.sh":
+                plan.frontend = plan.frontend_unit = plan.unit_full = True
             if path in PUBLICATION_PATHS:
                 plan.publication = True
         elif path.startswith("api/"):
