@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it } from "vitest";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 import { createPinia, setActivePinia } from "pinia";
@@ -15,7 +32,11 @@ import {
 import {
   useCompareStore,
   useCorpusStore,
+  useAnnotationsStore,
+  useFaqStore,
+  useConfigStore,
   useLayoutStore,
+  useListsStore,
   useSearchStore,
   useVectorStore,
   useWorksStore,
@@ -189,5 +210,77 @@ describe("shell layout state", () => {
     panels.notes = true;
     expect(layout.collapsedPanels).toBe(panels);
     layoutState.sidebarCollapsed = false;
+  });
+});
+
+describe("annotations and FAQ state", () => {
+  it("keeps the runtime's defaults and shares them with their stores", async () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.annotationView).toBe("works");
+    expect(state.serverAnnotations).toEqual([]);
+    expect(state.annotationsFetchedAt).toBe(0);
+    expect(state.faqPage).toBe(1);
+    expect(state.faqExpanded).toEqual({});
+
+    const faq = useFaqStore();
+    const seen: number[] = [];
+    watch(
+      () => faq.faqPage,
+      (value) => seen.push(value),
+    );
+    state.faqPage = 3;
+    await nextTick();
+    expect(seen).toEqual([3]);
+
+    const annotations = useAnnotationsStore();
+    state.serverAnnotations = [{ id: "a" }];
+    expect(annotations.serverAnnotations).toEqual([{ id: "a" }]);
+    state.faqPage = 1;
+    state.serverAnnotations = [];
+  });
+});
+
+describe("table list state", () => {
+  it("keeps the runtime's defaults and shares them with the lists store", async () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.pageSize).toBe(100);
+    expect(state.selected).toEqual({});
+    expect(state.tableColumns).toEqual({});
+
+    const lists = useListsStore();
+    const seen: number[] = [];
+    watch(
+      () => lists.pageSize,
+      (value) => seen.push(value),
+    );
+    state.pageSize = 50;
+    await nextTick();
+    expect(seen).toEqual([50]);
+    const pages = state.pages as Record<string, number>;
+    pages.works = 2;
+    expect(lists.pages).toBe(pages);
+    state.pageSize = 100;
+    state.pages = {};
+  });
+});
+
+describe("configuration, PDF and review state", () => {
+  it("keeps the runtime's defaults and shares them with their stores", () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.ragConfig.k).toBe(64);
+    expect(state.appConfig.chat_provider).toBe("ollama");
+    expect(state.llmConfig.num_ctx).toBe(16384);
+    expect(state.pdf.page).toBe(1);
+    expect(state.reviewSelection.size).toBe(0);
+    expect(state.selectedEvidence).toEqual({});
+
+    const config = useConfigStore();
+    expect(config.ragConfig).toBe(state.ragConfig);
+    state.ragConfig = { ...state.ragConfig, k: 8 };
+    expect(config.ragConfig.k).toBe(8);
+    config.ragConfig = { ...config.ragConfig, k: 64 };
   });
 });

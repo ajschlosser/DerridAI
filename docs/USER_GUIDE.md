@@ -1,3 +1,21 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 # DerridAI User Guide
 
 Feature reference for the current release. See the [README](../README.md) for installation and [release notes](notes/) for per-version changes. The sign-in screen, the account menu, Settings → Workspace → About DerridAI, and the browser tab title show the release version. The git commit that built this instance is shown on sign-in and to administrators.
@@ -36,6 +54,16 @@ Researcher-authored text (queries, notes, tags, and filters) is checked against 
 The **Languages** dictionary editor groups keys by their dotted namespace, so administrators can work category by category instead of scanning the complete dictionary. The editor can export the full dictionary or the selected category as JSON, and can import a validated JSON dictionary for review before saving. Researcher text-policy terms are intentionally hidden until the administrator explicitly expands the sensitive-terms section.
 
 A policy is generated **in the language it is for**. The request names the installed language (for example "Français (fr)") and asks for terms in six categories: vulgarities, sexual insults, racial and ethnic slurs, religious slurs, homophobic and transphobic slurs, and ableist slurs, at least three each. A second, narrower question then audits every candidate ("is this a word of this language?"). Terms that also appear in another installed language's policy must be affirmatively confirmed, since that overlap is the usual sign of English leaking into another language. Rejected terms are removed, and only the categories still short are requested again (up to three rounds), with the rejected terms listed so the model does not repeat them. Wrong-language terms are never saved. If the model still cannot fill a category, the policy is saved with a "Coverage is incomplete for: …" note so you can add terms yourself; if fewer than eight acceptable terms exist, generation fails with an explanation. The card shows how many attempts were needed and how many terms the language check removed. The check uses the same model, so it reduces the problem rather than eliminating it; review a generated list before relying on it.
+
+## Loading Works and Record detail
+
+Slow page navigation shows the destination while keeping the current page available. If a page module fails to load, the notice offers Retry or Reload page. Reload performs a full page navigation; save any work on the current page first.
+
+Works shows its title while the workspace loads. Once local records are hydrated, work cards are available while database and annotation preparation continues. A collection change clears the previous collection while the new one loads.
+
+Record detail keeps the reading pane and open edit draft mounted during a same-record refresh. Traceability loads independently of the record text. A failed refresh shows an error and Retry alongside the previously loaded record; a different selection clears the old record immediately. Search within the current record does not reload the workspace.
+
+Vector Stores loads collections, storage health, and provider choices independently. A slow or unavailable provider service does not block collection browsing. Provider-dependent creation and embedding controls wait for successful discovery, with a local Retry action on failure. Failed collection refreshes retain the current list and filter with an out-of-date notice; a successful retry clears it. Unsaved provider/model settings remain intact during same-collection updates.
 
 ## Dashboard
 

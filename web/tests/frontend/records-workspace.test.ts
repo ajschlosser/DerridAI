@@ -1,12 +1,32 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRecordsWorkspace } from "../../src/domain/recordsWorkspace";
 import { TABLE_DEFAULTS } from "../../src/domain/runtimeConstants";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createListState, listState } from "../../src/state/workspaceState";
 
 // The Records workspace commands set per-file fields on the runtime state, save preferences and sync the URL. The
 // modern Records Playwright workflow covers rendered interactions; these tests pin the commands themselves.
 function setup(activeFile: unknown = { id: "f1", name: "a.jsonl", records: [] }) {
+  // The list fields are shared module state, so start each test from the defaults.
+  Object.assign(listState, createListState());
   const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
   const overrides: Record<string, unknown> = {

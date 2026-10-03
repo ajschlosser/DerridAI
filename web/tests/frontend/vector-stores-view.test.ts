@@ -1,3 +1,21 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { VueQueryPlugin } from "@tanstack/vue-query";
@@ -186,6 +204,320 @@ describe("VectorStoresView", () => {
     await flushPromises();
     expect(document.body.textContent || "").toContain("Storage backend");
     expect(document.body.textContent || "").toContain("Local filesystem");
+    wrapper.unmount();
+  });
+});
+function pending<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+describe("Vector Stores loading boundaries", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    queryClient.clear();
+    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 30_000 } });
+    Object.assign(vectorState, createVectorState());
+    chromaApi.health.mockResolvedValue(readyHealth);
+    chromaApi.collections.mockResolvedValue([{ name: "collection-a", count: 2, status: "ready" }]);
+    systemApi.researcherProviders.mockResolvedValue({ profiles: [] });
+    vectorBrowseReads.browse.mockResolvedValue({ works: [], page: null });
+    runtime.pendingUpsertRows.mockReturnValue([]);
+  });
+  it("shows the title before collections resolve without a false empty state", async () => {
+    const read = pending<unknown[]>();
+    chromaApi.collections.mockReturnValueOnce(read.promise);
+    const { wrapper } = await mountView("admin");
+    expect(wrapper.find("#vector-page-title").exists()).toBe(true);
+    expect(wrapper.find(".accessible-empty-state").exists()).toBe(false);
+    read.resolve([]);
+    await flushPromises();
+    expect(wrapper.find(".accessible-empty-state").exists()).toBe(true);
+    wrapper.unmount();
+  });
+  it.each(["health", "providers"])("shows collections while %s is pending", async (region) => {
+    const read = pending<unknown>();
+    if (region === "health") chromaApi.health.mockReturnValueOnce(read.promise);
+    else systemApi.researcherProviders.mockReturnValueOnce(read.promise);
+    const { wrapper } = await mountView("admin");
+    expect(wrapper.find(".vector-collection-list").exists()).toBe(true);
+    expect(wrapper.text()).toContain("collection-a");
+    read.resolve(region === "health" ? readyHealth : { profiles: [] });
+    await flushPromises();
+    wrapper.unmount();
+  });
+  it("reports provider failure without clearing collections", async () => {
+    systemApi.researcherProviders.mockRejectedValue(new Error("provider discovery offline"));
+    const { wrapper } = await mountView("admin");
+    expect(wrapper.text()).toContain("provider discovery offline");
+    expect(wrapper.find(".vector-collection-list").exists()).toBe(true);
+    wrapper.unmount();
+  });
+  it("retains collection DOM and filter on a failed refresh", async () => {
+    const { wrapper } = await mountView("admin");
+    const rail = wrapper.get(".vector-collection-list").element;
+    await wrapper.get("#vector-collection-filter").setValue("collection");
+    chromaApi.collections.mockRejectedValueOnce(new Error("collections offline"));
+    await queryClient.invalidateQueries({ queryKey: ["data", "vector_collections"] });
+    await flushPromises();
+    expect(wrapper.get(".vector-collection-list").element).toBe(rail);
+    expect(wrapper.get<HTMLInputElement>("#vector-collection-filter").element.value).toBe(
+      "collection",
+    );
+    expect(wrapper.text()).toContain("collections offline");
+    wrapper.unmount();
+  });
+  it("clears a refresh error when identical cached collections are successfully revalidated", async () => {
+    const { wrapper } = await mountView("admin");
+    chromaApi.collections.mockRejectedValueOnce(new Error("temporary offline"));
+    await queryClient.invalidateQueries({ queryKey: ["data", "vector_collections"] });
+    await flushPromises();
+    expect(wrapper.text()).toContain("temporary offline");
+    await queryClient.invalidateQueries({ queryKey: ["data", "vector_collections"] });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("temporary offline");
+    expect(wrapper.find(".vector-collection-list").exists()).toBe(true);
+    wrapper.unmount();
+  });
+  it("hydrates a warm revisit and reuses each region's fresh cached read", async () => {
+    const first = await mountView("admin");
+    first.wrapper.unmount();
+    const second = await mountView("admin");
+    expect(second.wrapper.find(".vector-collection-list").exists()).toBe(true);
+    expect(chromaApi.collections).toHaveBeenCalledTimes(1);
+    expect(chromaApi.health).toHaveBeenCalledTimes(1);
+    expect(systemApi.researcherProviders).toHaveBeenCalledTimes(1);
+    second.wrapper.unmount();
+  });
+  it("clears retained collections when refresh loses authorization", async () => {
+    const { wrapper } = await mountView("admin");
+    chromaApi.collections.mockRejectedValueOnce(
+      Object.assign(new Error("Forbidden"), { status: 403 }),
+    );
+    await queryClient.invalidateQueries({ queryKey: ["data", "vector_collections"] });
+    await flushPromises();
+    expect(wrapper.find(".vector-collection-list").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Forbidden");
+    wrapper.unmount();
+  });
+  it("keeps an unsaved provider/model draft during collection invalidation", async () => {
+    const collection = {
+      name: "collection-a",
+      count: 0,
+      embedding_provider: "profile:p",
+      embedding_model: "original",
+      status: "empty",
+    };
+    chromaApi.collections.mockResolvedValue([collection]);
+    systemApi.researcherProviders.mockResolvedValue({ profiles: [{ id: "p", name: "Provider" }] });
+    const { wrapper } = await mountView("admin");
+    await wrapper.get("#vector-section-tab-settings").trigger("click");
+    const model = wrapper.get<HTMLInputElement>('input[placeholder="bge-m3:latest"]');
+    await model.setValue("unsaved-model");
+    chromaApi.collections.mockResolvedValue([{ ...collection, description: "updated" }]);
+    await queryClient.invalidateQueries({ queryKey: ["data", "vector_collections"] });
+    await flushPromises();
+    expect(model.element.value).toBe("unsaved-model");
+    wrapper.unmount();
+  });
+
+  it("keeps the works panel pending instead of showing an empty collection", async () => {
+    const read = pending<{ works: { work: string; count: number }[] }>();
+    vectorBrowseReads.browse.mockReturnValue(read.promise);
+    const { wrapper } = await mountView("admin");
+    await wrapper.get("#vector-section-tab-data").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Loading works");
+    expect(wrapper.text()).not.toContain("No work metadata was found");
+    read.resolve({ works: [{ work: "Of Grammatology", count: 2 }] });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Of Grammatology");
+    wrapper.unmount();
+  });
+
+  it("shows a local browse error and retries without treating failure as an empty collection", async () => {
+    vectorBrowseReads.browse.mockRejectedValueOnce(new Error("browse offline"));
+    const { wrapper } = await mountView("admin");
+    await wrapper.get("#vector-section-tab-data").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("browse offline");
+    expect(wrapper.text()).not.toContain("No work metadata was found");
+    vectorBrowseReads.browse.mockResolvedValueOnce({
+      works: [{ work: "Of Grammatology", count: 1 }],
+    });
+    const retry = wrapper
+      .findAll("button")
+      .find(
+        (button) =>
+          button.text() === "Retry" && button.element.closest("#vector-browse-panel-works"),
+      );
+    expect(retry).toBeTruthy();
+    await retry!.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("Of Grammatology");
+    expect(wrapper.text()).not.toContain("browse offline");
+    wrapper.unmount();
+  });
+
+  it("retains works when a same-collection refresh fails", async () => {
+    vectorBrowseReads.browse.mockResolvedValue({
+      works: [{ work: "Of Grammatology", count: 2 }],
+    });
+    const { wrapper } = await mountView("admin");
+    await wrapper.get("#vector-section-tab-data").trigger("click");
+    await flushPromises();
+    vectorBrowseReads.browse.mockRejectedValueOnce(new Error("browse offline"));
+    await queryClient.invalidateQueries({ queryKey: ["data", "vector_collections"] });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Of Grammatology");
+    expect(wrapper.text()).toContain("browse offline");
+    expect(wrapper.text()).toContain("Previously loaded content is shown");
+    wrapper.unmount();
+  });
+
+  it("ignores a slow browse after the selected collection changes", async () => {
+    chromaApi.collections.mockResolvedValue([
+      { name: "collection-a", count: 2, status: "ready" },
+      { name: "collection-b", count: 2, status: "ready" },
+    ]);
+    const first = pending<{ works: { work: string; count: number }[] }>();
+    const second = pending<{ works: { work: string; count: number }[] }>();
+    vectorBrowseReads.browse.mockImplementation((name: string) =>
+      name === "collection-a" ? first.promise : second.promise,
+    );
+    const { wrapper } = await mountView("admin");
+    await wrapper.get("#vector-section-tab-data").trigger("click");
+    await flushPromises();
+    await wrapper
+      .findAll(".storeitem")
+      .find((button) => button.text().includes("collection-b"))!
+      .trigger("click");
+    await wrapper.get("#vector-section-tab-data").trigger("click");
+    await flushPromises();
+    first.resolve({ works: [{ work: "Of Grammatology", count: 1 }] });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("Of Grammatology");
+    expect(wrapper.text()).toContain("Loading works");
+    second.resolve({ works: [{ work: "Writing and Difference", count: 1 }] });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Writing and Difference");
+    expect(wrapper.text()).not.toContain("Of Grammatology");
+    wrapper.unmount();
+  });
+
+  it("hides the previous record page until the requested page resolves", async () => {
+    vectorBrowseReads.browse.mockResolvedValue({
+      works: [{ work: "Of Grammatology", count: 60 }],
+      page: {
+        rows: [
+          {
+            chroma_id: "row-1",
+            record_id: "record-1",
+            work: "Of Grammatology",
+            page_start: "1",
+            page_end: "1",
+            text_preview: "page-one text",
+          },
+        ],
+        total: 60,
+      },
+    });
+    const { wrapper } = await mountView("admin");
+    await wrapper.get("#vector-section-tab-data").trigger("click");
+    await flushPromises();
+    await wrapper.get("#vector-browse-tab-records").trigger("click");
+    await flushPromises();
+    expect(wrapper.get(".store-table").text()).toContain("page-one text");
+    const nextPage = pending<{
+      works: { work: string; count: number }[];
+      page: { rows: unknown[]; total: number };
+    }>();
+    vectorBrowseReads.browse.mockReturnValueOnce(nextPage.promise);
+    const next = wrapper
+      .findAll("#vector-browse-panel-records button")
+      .find((button) => button.text() === "Next");
+    await next!.trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".store-table").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("page-one text");
+    expect(wrapper.text()).toContain("Loading records");
+    nextPage.resolve({
+      works: [{ work: "Of Grammatology", count: 60 }],
+      page: {
+        rows: [
+          {
+            chroma_id: "row-2",
+            record_id: "record-2",
+            work: "Of Grammatology",
+            page_start: "2",
+            page_end: "2",
+            text_preview: "page-two text",
+          },
+        ],
+        total: 60,
+      },
+    });
+    await flushPromises();
+    expect(wrapper.get(".store-table").text()).toContain("page-two text");
+    expect(wrapper.get(".store-table").text()).not.toContain("page-one text");
+    wrapper.unmount();
+  });
+
+  it("labels the previous query until the newer search resolves and ignores the stale response", async () => {
+    const { wrapper } = await mountView("admin");
+    await wrapper.get("#vector-section-tab-retrieval").trigger("click");
+    chromaApi.search.mockResolvedValueOnce({
+      results: [{ id: "1", record: { work: "ALPHA", text: "alpha passage" } }],
+    });
+    await wrapper.get("#vector-store-query").setValue("first query");
+    await wrapper.get("form.vector-search-config").trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain("ALPHA");
+    const newer = pending<{ results: { id: string; record: { work: string; text: string } }[] }>();
+    const stale = pending<{ results: { id: string; record: { work: string; text: string } }[] }>();
+    chromaApi.search.mockImplementation((_store: string, body: { query: string }) =>
+      body.query === "second query" ? newer.promise : stale.promise,
+    );
+    await wrapper.get("#vector-store-query").setValue("second query");
+    await wrapper.get("form.vector-search-config").trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain("These results are for the previous query: first query");
+    expect(wrapper.text()).toContain("ALPHA");
+    stale.resolve({ results: [{ id: "stale", record: { work: "STALE", text: "old passage" } }] });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("STALE");
+    newer.resolve({ results: [{ id: "2", record: { work: "BETA", text: "beta passage" } }] });
+    await flushPromises();
+    expect(wrapper.text()).toContain("BETA");
+    expect(wrapper.text()).not.toContain("previous query");
+    expect(wrapper.text()).not.toContain("ALPHA");
+    wrapper.unmount();
+  });
+
+  it("distinguishes an empty search from the idle prompt and keeps a failed refresh", async () => {
+    const { wrapper } = await mountView("admin");
+    await wrapper.get("#vector-section-tab-retrieval").trigger("click");
+    expect(wrapper.text()).toContain("Search results will appear here.");
+    chromaApi.search.mockResolvedValueOnce({ results: [] });
+    await wrapper.get("#vector-store-query").setValue("nothing");
+    await wrapper.get("form.vector-search-config").trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain("No records matched this query.");
+    expect(wrapper.text()).not.toContain("Search results will appear here.");
+    chromaApi.search.mockResolvedValueOnce({
+      results: [{ id: "1", record: { work: "ALPHA", text: "alpha passage" } }],
+    });
+    await wrapper.get("#vector-store-query").setValue("again");
+    await wrapper.get("form.vector-search-config").trigger("submit");
+    await flushPromises();
+    chromaApi.search.mockRejectedValueOnce(new Error("search offline"));
+    await wrapper.get("form.vector-search-config").trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain("ALPHA");
+    expect(wrapper.text()).toContain("search offline");
+    expect(wrapper.text()).toContain("Previously loaded content is shown");
     wrapper.unmount();
   });
 });

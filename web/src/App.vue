@@ -1,3 +1,21 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
@@ -8,6 +26,8 @@ import {
   useRoute,
   useRouter,
 } from "vue-router";
+import RouteNavigationFeedback from "./components/shell/RouteNavigationFeedback.vue";
+import { createRouteLoading } from "./router/routeLoading";
 import { createNavigationHistory, type HistoryEntryTitle } from "./router/navigationHistory";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
 import { useLayoutStore } from "./stores/workspace";
@@ -64,6 +84,7 @@ import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
 const router = useRouter();
 const route = useRoute();
 const navigationHistory = createNavigationHistory(router);
+const routeLoading = createRouteLoading(router);
 const shell = useShellStore();
 const layout = useLayoutStore();
 const auth = useAuthStore();
@@ -405,7 +426,9 @@ function navigateNative(path: string, runtimeView?: string) {
     runtime.navigateView(runtimeView, target);
     return;
   }
-  void router.push(target);
+  void router.push(target).catch(() => {
+    // The route feedback panel exposes the failure and recovery actions.
+  });
 }
 
 function navigate(view: string) {
@@ -541,6 +564,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopRouteSync();
   navigationHistory.dispose();
+  routeLoading.dispose();
   window.removeEventListener(CHOOSE_CORPUS_FILES_EVENT, openCorpusFilePicker);
 });
 
@@ -726,7 +750,29 @@ watch(
             route.name !== 'semanticmap',
         }"
       >
-        <div id="appContent" class="app-content-region" tabindex="-1"><RouterView /></div>
+        <div id="appContent" class="app-content-region" tabindex="-1">
+          <RouterView />
+          <Teleport to="body">
+            <RouteNavigationFeedback
+              v-if="routeLoading.visible.value || routeLoading.failed.value"
+              :destination="
+                i18n.t(
+                  String(
+                    (routeLoading.failed.value || routeLoading.destination.value)?.meta.titleKey ||
+                      'ui.loading',
+                  ),
+                  String(
+                    (routeLoading.failed.value || routeLoading.destination.value)?.meta
+                      .titleFallback || '',
+                  ),
+                )
+              "
+              :failed="Boolean(routeLoading.failed.value)"
+              @retry="routeLoading.retry"
+              @reload="routeLoading.reload"
+            />
+          </Teleport>
+        </div>
         <SemanticMapHost />
       </div>
     </section>

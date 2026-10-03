@@ -1,3 +1,21 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`dashboard charts > draws bar charts, pie charts and ranked lists 1`] = `"<section class="dash-chart dash-bar-chart"><div class="dash-chart-head"><div class="dash-chart-title">Length</div><div class="chart-legend"><i></i><span>Words</span></div></div><div class="dash-bars"><div class="dash-bar-row" data-chart-tip="&lt;W0&gt; · 1,234.5 words · 2 records"><div class="dash-bar-label" title="&lt;W0&gt;"><b>&lt;W0&gt;</b><span>2 records</span></div><div class="dash-bar-track"><i style="width:33%"></i></div><strong>1,234.5</strong></div><div class="dash-bar-row" data-chart-tip="&lt;W1&gt; · 2,469 words · 3 records"><div class="dash-bar-label" title="&lt;W1&gt;"><b>&lt;W1&gt;</b><span>3 records</span></div><div class="dash-bar-track"><i style="width:67%"></i></div><strong>2,469</strong></div><div class="dash-bar-row" data-chart-tip="&lt;W2&gt; · 3,703.5 words · 4 records"><div class="dash-bar-label" title="&lt;W2&gt;"><b>&lt;W2&gt;</b><span>4 records</span></div><div class="dash-bar-track"><i style="width:100%"></i></div><strong>3,703.5</strong></div></div></section>"`;

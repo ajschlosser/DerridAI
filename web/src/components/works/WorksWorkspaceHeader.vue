@@ -1,4 +1,21 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
@@ -39,7 +56,12 @@ const i18n = useI18nStore();
 // Synchronization is deliberately absent: it changes derived database state, so it lives with the
 // corpus-database context rather than among the commands that act on the loaded library.
 const items = computed<UiMenuItem[]>(() => [
-  { id: "separate", label: i18n.t("works.separate_jsonl"), icon: "filter" },
+  {
+    id: "separate",
+    label: i18n.t("works.separate_jsonl"),
+    icon: "filter",
+    reason: props.canManageCorpus ? undefined : props.corpusManageDeniedReason,
+  },
   {
     id: "populate-all",
     label: i18n.t("works.populate_all_metadata"),

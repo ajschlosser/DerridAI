@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Every place the app declares its version must agree, and the release must have notes."""
 from __future__ import annotations
 
@@ -27,8 +42,9 @@ def test_all_declared_versions_agree():
     The FastAPI constructor, backup manifest, AppBuildInfo (sign-in, account menu,
     and Settings), and AuthScreen read APP_VERSION / the Vite-injected build stamp
     rather than duplicating the string.
-    docs/notes/<version>.md must exist and start with "# <version> —". When cutting a
-    release, bump the declared copies and create annotated git tag v<version> on that
+    docs/notes/<version>.md must contain its release heading after the standardized
+    repository copyright header. When cutting a release, bump the declared copies and
+    create annotated git tag v<version> on that
     commit (see AGENTS.md). This test checks the working tree, not git tags. Do not
     hard-code the version in other tests.
     """
@@ -68,4 +84,8 @@ def test_all_declared_versions_agree():
     assert "APP_CODENAME" in build_info
     notes = ROOT / "docs" / "notes" / f"{version}.md"
     assert notes.is_file(), f"missing {notes.relative_to(ROOT)}"
-    assert notes.read_text(encoding="utf-8").lstrip().startswith(f"# {version} — {codename}")
+    note_text = notes.read_text(encoding="utf-8")
+    expected_heading = f"# {version} — {codename}"
+    assert expected_heading in note_text.splitlines(), (
+        f"{notes.relative_to(ROOT)} does not contain the expected release heading"
+    )

@@ -1,10 +1,27 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 withDefaults(
   defineProps<{
     label: string;
     detail?: string;
-    variant?: "status" | "skeleton";
+    variant?: "status" | "skeleton" | "inline";
     skeletonCount?: number;
   }>(),
   { detail: "", variant: "status", skeletonCount: 3 },
@@ -40,6 +57,11 @@ withDefaults(
   display: grid;
   gap: var(--space-4, 16px);
   color: var(--text-primary);
+}
+
+.ui-loading-state.is-inline {
+  display: flex;
+  padding-block: var(--space-2, 8px);
 }
 
 .ui-loading-state.is-status {
@@ -78,7 +100,9 @@ withDefaults(
   border: 2px solid var(--border-interactive);
   border-block-start-color: transparent;
   border-radius: 50%;
-  animation: ui-loading-spin 800ms linear infinite;
+  animation:
+    ui-loading-reveal 0s 180ms both,
+    ui-loading-spin 800ms 180ms linear infinite;
 }
 
 .ui-loading-skeletons {
@@ -111,6 +135,15 @@ withDefaults(
 
 .ui-loading-skeleton span:last-child {
   inline-size: 54%;
+}
+
+@keyframes ui-loading-reveal {
+  from {
+    visibility: hidden;
+  }
+  to {
+    visibility: visible;
+  }
 }
 
 @keyframes ui-loading-spin {

@@ -1,4 +1,21 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useAuthStore } from "../stores/auth";
@@ -202,14 +219,13 @@ function inspectorHandlers(work: string) {
   };
 }
 const loadingTitle = computed(() => i18n.t("works.loading"));
-const loadingDetail = computed(() =>
-  auth.isResearcher ? i18n.t("works.checking_database") : i18n.t("works.checking_database"),
-);
+const loadingDetail = computed(() => i18n.t("works.checking_database"));
 
 async function boot() {
-  loading.value = !snapshot.value;
+  loading.value = true;
+  const previousQuery = query.value;
   await works.activate();
-  query.value = snapshot.value?.query || "";
+  if (query.value === previousQuery) query.value = snapshot.value?.query || "";
   loading.value = false;
 }
 
@@ -330,6 +346,8 @@ function closeWorkSemanticMap() {
 }
 
 async function changeStore(name: string) {
+  if (loading.value) return;
+  works.reset();
   loading.value = true;
   await works.setStore(name);
   query.value = snapshot.value?.query || "";
@@ -340,6 +358,14 @@ async function changeStore(name: string) {
 watch(
   () => [snapshot.value?.works.length, snapshot.value?.viewMode],
   () => setLibraryPage(libraryPage.value),
+);
+watch(
+  () => auth.user,
+  () => {
+    works.reset();
+    if (auth.user) void boot();
+  },
+  { deep: true },
 );
 watch(fileSignature, () => {
   if (loading.value || !snapshot.value) return;
@@ -373,8 +399,26 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main ref="page" class="works-page" :aria-busy="loading">
-    <section v-if="loading" class="card view-loading-card">
+  <main ref="page" class="works-page">
+    <WorksWorkspaceHeader
+      :mode="snapshot?.mode || (auth.isResearcher ? 'researcher' : 'admin')"
+      :can-manage-corpus="snapshot?.capabilities.canManageCorpus ?? false"
+      :can-populate="snapshot?.capabilities.canPopulate ?? false"
+      :can-create-site="Boolean(snapshot?.activeStore && snapshot?.totalWorks)"
+      :corpus-manage-denied-reason="snapshot?.corpusManageDeniedReason || loadingTitle"
+      :populate-disabled-reason="snapshot?.populateDisabledReason || loadingTitle"
+      :create-site-disabled-reason="
+        !snapshot?.activeStore
+          ? i18n.t('site.create_requires_store')
+          : i18n.t('site.create_requires_works')
+      "
+      @choose-jsonl="works.chooseJsonl()"
+      @separate="works.separateWorks()"
+      @populate-all="works.populateAll()"
+      @create-site="openCreateSite"
+    />
+
+    <section v-if="loading && !snapshot" class="card view-loading-card" aria-busy="true">
       <UiLoadingState
         :label="loadingTitle"
         :detail="loadingDetail"
@@ -383,9 +427,16 @@ onBeforeUnmount(() => {
       />
     </section>
 
-    <div v-else-if="error" class="info error" role="alert">{{ error }}</div>
+    <div v-if="error" class="info error" role="alert">
+      <p v-if="snapshot">{{ i18n.t("loading.stale") }}</p>
+      {{ error }}
+      <button type="button" :disabled="loading" @click="boot">{{ i18n.t("ui.retry") }}</button>
+    </div>
 
-    <section v-else-if="snapshot?.mode === 'admin' && !snapshot.available" class="empty">
+    <section
+      v-if="!loading && !error && snapshot?.mode === 'admin' && !snapshot.available"
+      class="empty"
+    >
       <div class="drop">
         <div class="drop-icon"><AppIcon name="upload" aria-hidden="true" /></div>
         <h1>
@@ -415,25 +466,8 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <template v-else-if="snapshot?.available">
-      <WorksWorkspaceHeader
-        :mode="snapshot.mode"
-        :can-manage-corpus="snapshot.capabilities.canManageCorpus"
-        :can-populate="snapshot.capabilities.canPopulate"
-        :can-create-site="Boolean(snapshot.activeStore && snapshot.totalWorks)"
-        :corpus-manage-denied-reason="snapshot.corpusManageDeniedReason"
-        :populate-disabled-reason="snapshot.populateDisabledReason"
-        :create-site-disabled-reason="
-          !snapshot.activeStore
-            ? i18n.t('site.create_requires_store')
-            : i18n.t('site.create_requires_works')
-        "
-        @choose-jsonl="works.chooseJsonl()"
-        @separate="works.separateWorks()"
-        @populate-all="works.populateAll()"
-        @create-site="openCreateSite"
-      />
-
+    <template v-if="snapshot?.available">
+      <UiLoadingState v-if="loading" variant="inline" :label="i18n.t('loading.updating')" />
       <WorksCorpusContext
         :mode="snapshot.mode"
         :stores="snapshot.stores"

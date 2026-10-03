@@ -1,7 +1,32 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 # Canonical built-in locale. Keep keys synchronized with the paired locale module.
 
-EN_US: dict[str, str] = {'common.apply': 'Apply',
+EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
+ 'loading.health_failed': "Storage connection information is unavailable.",
+ 'loading.providers': "Loading provider choices…",
+ 'loading.providers_failed': "Provider choices are unavailable. Retry before creating a collection or changing its provider.",
+ 'loading.navigation': "Opening {destination}…",
+ 'loading.navigation_failed': "Could not open {destination}. Your current page is still available.",
+ 'loading.reload_page': "Reload page",
+ 'loading.updating': "Updating…",
+ 'loading.stale': "The refresh failed. Previously loaded content is shown.",
+ 'loading.record_frame': "Record",
+ 'common.apply': 'Apply',
  'common.cancel': 'Cancel',
  'common.clear': 'Clear',
  'common.close': 'Close',
@@ -5785,6 +5810,8 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'vector.background_build': 'Background build',
  'vector.background_build_help': 'After the collection is created, {count} selected records will be queued as one '
                                  'server-side background build. You can continue using DerridAI while it runs.',
+ 'vector.browse_failed': 'Works could not be loaded. {message}',
+ 'vector.browse_loading': 'Loading works…',
  'vector.browse_works': 'Browse works',
  'vector.browse_works_help': 'Open a work to browse only its records in this collection.',
  'vector.build': 'Build',
@@ -6016,6 +6043,8 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
                                      'unavailable.',
  'vector.query_embedding': 'Query embedding',
  'vector.record_inspector': 'Record inspector',
+ 'vector.records_failed': 'Records could not be loaded. {message}',
+ 'vector.records_loading': 'Loading records…',
  'vector.retrieval_contract': 'Define the retrieval contract',
  'vector.retrieval_contract_help': 'Embedding identity, vector dimension, distance metric, and retrieval mode are '
                                    'treated as a durable collection contract and validated before creation.',
@@ -6030,7 +6059,10 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'vector.role_language_title': 'Role & language',
  'vector.role_primary': 'Primary',
  'vector.running_preflight': 'Running preflight…',
+ 'vector.search_failed': 'Search could not be completed. {message}',
  'vector.search_method': 'Search method',
+ 'vector.search_no_results': 'No records matched this query.',
+ 'vector.search_previous': 'These results are for the previous query: {query}',
  'vector.search_results_empty': 'Search results will appear here.',
  'vector.select_collection': 'Select a collection',
  'vector.select_collection_help': 'Choose a collection from the list to manage settings, sync records, search, or '

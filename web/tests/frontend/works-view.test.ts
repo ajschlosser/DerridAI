@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -750,6 +767,28 @@ describe("WorksView", () => {
     expect(wrapper.find(".works-semantic-map-dialog").attributes("open")).toBeDefined();
     expect(wrapper.find(".semantic-map-frame").exists()).toBe(true);
     expect(wrapper.text()).not.toContain("A semantic map is not available");
+    wrapper.unmount();
+  });
+});
+
+describe("Works progressive loading", () => {
+  it("renders the title before preparation completes without an empty-state flash", async () => {
+    setActivePinia(createPinia());
+    let finish!: () => void;
+    runtime.prepareWorksWorkspace.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ error: "" });
+        }),
+    );
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(adminSnapshot());
+    const wrapper = mount(WorksView);
+    await flushPromises();
+    expect(wrapper.find("#works-page-title").exists()).toBe(true);
+    expect(wrapper.find(".empty").exists()).toBe(false);
+    finish();
+    await flushPromises();
+    expect(wrapper.find("#worksGrid").exists()).toBe(true);
     wrapper.unmount();
   });
 });

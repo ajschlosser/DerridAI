@@ -1,4 +1,20 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
 
 # AGENTS.md
 
@@ -122,7 +138,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 
 ## Before you push (avoids most CI failures)
 
-Run `sh scripts/install-git-hooks.sh` once per clone. The pre-commit hook checks only staged Prettier/Ruff/ESLint-owned files. Before opening or updating a PR, merge current `origin/master`, finish a coherent local batch, and run `scripts/preflight.sh`; pre-push invokes that same surface-aware plan automatically. Frontend unit tests are dependency-selected on a branch, SDK/package checks are separate from the production app build, and Storybook/browser catalogues run only for the surfaces that own them. Browser suites and publication browser/Docker acceptance remain opt-in locally (`DERRIDAI_PREFLIGHT_BROWSER=1`) and mandatory in CI when their owning paths change; merge-to-master runs restore exhaustive browser/a11y coverage. The plan is machine-readable with `python scripts/preflight_plan.py --format json <paths...>`. Do not use GitHub Actions as an interactive test runner by pushing after every small edit.
+Run `sh scripts/install-git-hooks.sh` once per clone. The pre-commit hook checks only staged Prettier/Ruff/ESLint-owned files, in batches of at most 32 to stay below native Windows command-line limits. Every selected file is checked, and a failed batch blocks the commit. ESLint honours configured file ignores without treating ignored-file notices as lint failures; real warnings still block. Before opening or updating a PR, merge current `origin/master`, finish a coherent local batch, and run `scripts/preflight.sh`; pre-push invokes that same surface-aware plan automatically. Frontend unit tests are dependency-selected on a branch, SDK/package checks are separate from the production app build, and Storybook/browser catalogues run only for the surfaces that own them. Browser suites and publication browser/Docker acceptance remain opt-in locally (`DERRIDAI_PREFLIGHT_BROWSER=1`) and mandatory in CI when their owning paths change; merge-to-master runs restore exhaustive browser/a11y coverage. The plan is machine-readable with `python scripts/preflight_plan.py --format json <paths...>`. Do not use GitHub Actions as an interactive test runner by pushing after every small edit.
 
 - **Fresh branch.** CI tests your branch merged with `origin/master`. If master moved, merge it and re-run the tests before pushing; a green local run on a stale base proves little.
 - **Prettier on every file you touched**, including Markdown docs and `SPECIFICATION.md`. CI formats only changed files, so one unformatted doc fails `format-check`.

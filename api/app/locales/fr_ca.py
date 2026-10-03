@@ -1,7 +1,32 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 # Canonical built-in locale. Keep keys synchronized with the paired locale module.
 
-FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
+FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au stockage…",
+ 'loading.health_failed': "Les informations sur la connexion au stockage ne sont pas disponibles.",
+ 'loading.providers': "Chargement des fournisseurs…",
+ 'loading.providers_failed': "Les fournisseurs ne sont pas disponibles. Réessayez avant de créer une collection ou de modifier son fournisseur.",
+ 'loading.navigation': "Ouverture de {destination}…",
+ 'loading.navigation_failed': "Impossible d’ouvrir {destination}. La page actuelle reste disponible.",
+ 'loading.reload_page': "Recharger la page",
+ 'loading.updating': "Mise à jour…",
+ 'loading.stale': "La mise à jour a échoué. Le contenu précédemment chargé est affiché.",
+ 'loading.record_frame': "Notice",
+ 'common.apply': 'Appliquer',
  'common.cancel': 'Annuler',
  'common.clear': 'Effacer',
  'common.close': 'Fermer',
@@ -6065,6 +6090,8 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'vector.background_build': 'Construction en arrière-plan',
  'vector.background_build_help': 'Après la création, {count} fiches sélectionnées seront placées dans une seule '
                                  'construction serveur en arrière-plan. Vous pouvez continuer à utiliser DerridAI.',
+ 'vector.browse_failed': 'Les œuvres n’ont pas pu être chargées. {message}',
+ 'vector.browse_loading': 'Chargement des œuvres…',
  'vector.browse_works': 'Parcourir les œuvres',
  'vector.browse_works_help': 'Ouvrez une œuvre pour ne parcourir que ses fiches dans cette collection.',
  'vector.build': 'Construction',
@@ -6303,6 +6330,8 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
                                      'requête n’est pas disponible.',
  'vector.query_embedding': 'Intégration de la requête',
  'vector.record_inspector': 'Inspecteur de fiche',
+ 'vector.records_failed': 'Les fiches n’ont pas pu être chargées. {message}',
+ 'vector.records_loading': 'Chargement des fiches…',
  'vector.retrieval_contract': 'Définir le contrat de recherche',
  'vector.retrieval_contract_help': 'L’identité du modèle d’intégration, la dimension, la métrique de distance et le '
                                    'mode de recherche forment un contrat durable validé avant la création.',
@@ -6317,7 +6346,10 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'vector.role_language_title': 'Rôle et langue',
  'vector.role_primary': 'Principale',
  'vector.running_preflight': 'Prévalidation en cours…',
+ 'vector.search_failed': 'La recherche n’a pas pu être effectuée. {message}',
  'vector.search_method': 'Méthode de recherche',
+ 'vector.search_no_results': 'Aucune fiche ne correspond à cette requête.',
+ 'vector.search_previous': 'Ces résultats correspondent à la requête précédente : {query}',
  'vector.search_results_empty': 'Les résultats de recherche apparaîtront ici.',
  'vector.select_collection': 'Sélectionnez une collection',
  'vector.select_collection_help': 'Choisissez une collection dans la liste pour gérer ses paramètres, synchroniser des '
