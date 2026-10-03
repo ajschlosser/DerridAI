@@ -34,18 +34,14 @@ const profile = () => ({
 
 vi.mock("../../src/domain/sharedProviderProfiles", () => ({
   getProviderProfilesForUi: () => [profile()],
-  getDefaultProviderProfileId: () => "p1",
-}));
-vi.mock("../../src/runtime/runtime.js", () => ({
-  getProviderProfilesForUi: () => [profile()],
   getProviderStatusesForUi: () => ({ p1: { available: true, models: [] } }),
   getProviderWarmupsForUi: () => ({}),
   getDefaultProviderProfileId: () => "p1",
   getWarmOnStartForUi: () => false,
   saveProviderProfilesForUi: (...args: unknown[]) => saved(...args),
   syncResearcherProviderProfiles: async () => undefined,
-  notifyToast: vi.fn(),
 }));
+vi.mock("../../src/runtime/runtime.js", () => ({ notifyToast: vi.fn() }));
 
 async function mountView(query: Record<string, string> = {}) {
   const pinia = createPinia();

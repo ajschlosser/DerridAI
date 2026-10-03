@@ -20,6 +20,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
+import {
+  backupContainsCredentials,
+  deleteAllDerridaiBrowserState,
+  downloadFullBackup,
+  restoreFullBackup,
+} from "../domain/sharedBackup";
 import { applyAppearance } from "../domain/sharedAppearance";
 import {
   getProviderProfilesForUi,
@@ -550,7 +556,7 @@ function openBackup() {
   confirm.value = {
     kind: "backup",
     title: i18n.t("settings.backup_confirm_title"),
-    message: runtime.backupContainsCredentials?.()
+    message: backupContainsCredentials()
       ? i18n.t("settings.backup_keys_warning")
       : i18n.t("settings.backup_confirm_message"),
   };
@@ -583,13 +589,13 @@ async function applyConfirm() {
   busy.value = kind;
   pageError.value = "";
   try {
-    if (kind === "backup") await runtime.downloadFullBackup({ confirmed: true });
+    if (kind === "backup") await downloadFullBackup({ confirmed: true });
     else if (kind === "restore" && restoreFile.value)
-      await runtime.restoreFullBackup(restoreFile.value, { confirmed: true });
+      await restoreFullBackup(restoreFile.value, { confirmed: true });
     else if (kind === "updates") await runtime.clearAllUpdates({ confirmed: true });
     else if (kind === "nuke") {
       await apiRequest("/api/admin/nuke", { method: "POST", body: "{}" });
-      await runtime.deleteAllDerridaiBrowserState();
+      await deleteAllDerridaiBrowserState();
       location.reload();
       return;
     } else if (kind === "leave") {

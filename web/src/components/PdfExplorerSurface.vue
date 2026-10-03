@@ -23,6 +23,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import * as runtime from "../runtime/runtime.js";
 import { recordOptionLabel } from "../domain/recordOptionLabel";
 import { selectedIndex } from "../domain/sharedUrlState";
+import { defaultProviderProfile, providerDisplayName } from "../domain/sharedProviderProfiles";
 import { isEvidenceSelected, reviewKey } from "../domain/evidenceSelection";
 import { enhanceCollapsibles } from "../domain/collapsiblePanels";
 import { persistCurrentPdfAsset } from "../domain/pdfAssetPersistence";
@@ -176,7 +177,7 @@ async function refresh() {
   relatedWorks.value = [
     ...new Set(allRelated.value.map((item: Any) => String(item.record.work || "")).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b));
-  pdfProvider.value = runtime.defaultProviderProfile();
+  pdfProvider.value = defaultProviderProfile();
   pageInputValue.value = state.pdf.page;
   recordSearchInput.value = currentOption.value?.label || "";
   recordSearchKey.value = currentOption.value?.value || "";
@@ -557,7 +558,7 @@ onBeforeUnmount(() => {
             <summary class="btn small soft"><AppIcon name="spark" />{{ copy.llmTools }}</summary>
             <div class="pdf-toolbar-menu-popover">
               <div class="pdf-menu-context">
-                <b>{{ runtime.providerDisplayName(pdfProvider) }}</b>
+                <b>{{ providerDisplayName(pdfProvider) }}</b>
                 <span>{{ copy.llmToolsHelp }}</span>
               </div>
               <button
