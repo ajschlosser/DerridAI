@@ -718,6 +718,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           "
           :nav-label="i18n.t('settings.contents')"
           :items="overviewItems"
+          @select="goSection"
         >
           <template #footer>
             <AppBuildInfo :show-commit="isAdmin" />
