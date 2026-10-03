@@ -31,7 +31,7 @@ const i18n = useI18nStore();
   <section class="help-start" aria-labelledby="help-start-heading">
     <header>
       <div>
-        <p class="help-start-eyebrow">{{ i18n.t("help.start_here") }}</p>
+        <p class="help-start-eyebrow">{{ i18n.t("help.quick_tasks") }}</p>
         <h2 id="help-start-heading">{{ i18n.t("help.start_here") }}</h2>
         <p>{{ i18n.t("help.start_here_help") }}</p>
       </div>
