@@ -76,11 +76,13 @@ export type HelpPageGroup =
 
 export type HelpGlossaryCategory =
   | "all"
+  | "core"
   | "ai"
   | "retrieval"
   | "parameters"
   | "provenance"
-  | "storage";
+  | "storage"
+  | "operations";
 
 export interface HelpGlossaryDefinition {
   id: string;
@@ -94,6 +96,40 @@ export interface HelpGlossaryEntry extends HelpGlossaryDefinition {
   definition: string;
   practical: string;
 }
+
+export interface HelpStarterDefinition {
+  id: string;
+  path: string;
+  icon: string;
+  adminOnly?: boolean;
+  capability?: string;
+}
+
+export interface HelpStarter extends HelpStarterDefinition {
+  title: string;
+  description: string;
+}
+
+export const HELP_STARTERS: HelpStarterDefinition[] = [
+  { id: "find_passage", path: "/search", icon: "search", capability: "page.search" },
+  { id: "ask_research", path: "/rag", icon: "spark", capability: "page.research" },
+  { id: "browse_works", path: "/works", icon: "books", capability: "page.works" },
+  { id: "learn_terms", path: "/help#help-glossary", icon: "help" },
+  {
+    id: "build_corpus",
+    path: "/corpus-builder",
+    icon: "upload",
+    capability: "page.pdf",
+    adminOnly: true,
+  },
+  {
+    id: "review_records",
+    path: "/records",
+    icon: "record",
+    capability: "page.records",
+    adminOnly: true,
+  },
+];
 
 export const HELP_SECTIONS: HelpSection[] = [
   {
@@ -113,8 +149,10 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: "research",
     questions: [
       { id: "retrieval_modes" },
+      { id: "memory_vs_evidence" },
       { id: "no_citations" },
       { id: "rerun_answer" },
+      { id: "why_results_change" },
       { id: "choose_model" },
       { id: "cached_responses", showImpact: true },
       { id: "cached_provenance", showImpact: true },
@@ -123,8 +161,26 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
+    id: "access",
+    questions: [
+      { id: "missing_page" },
+      { id: "browser_vs_server" },
+      { id: "automatic_updates" },
+    ],
+  },
+  {
     id: "troubleshooting",
-    questions: [{ id: "slow_run" }, { id: "model_unavailable" }],
+    questions: [{ id: "slow_run" }, { id: "model_unavailable" }, { id: "queued_run" }],
+  },
+  {
+    id: "sources_ingestion",
+    adminOnly: true,
+    questions: [
+      { id: "supported_sources" },
+      { id: "media_specific_controls" },
+      { id: "extraction_provenance" },
+      { id: "safe_ingestion" },
+    ],
   },
   {
     id: "corpus_builder",
@@ -135,6 +191,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       { id: "retry_vs_rerun", showImpact: true },
       { id: "requeue_record", showImpact: true },
       { id: "publish_visibility" },
+      { id: "publish_suggestions", showImpact: true },
       { id: "failed_enrichment" },
     ],
   },
@@ -159,6 +216,27 @@ export const HELP_SECTIONS: HelpSection[] = [
       { id: "retrieval_policy", showImpact: true },
       { id: "agree_on", showImpact: true },
       { id: "autofill" },
+      { id: "memory_vs_examples" },
+    ],
+  },
+  {
+    id: "pipelines_operations",
+    adminOnly: true,
+    questions: [
+      { id: "pipeline_assignment", showImpact: true },
+      { id: "pipeline_trace" },
+      { id: "cancel_operation", showImpact: true },
+      { id: "interrupted_operation" },
+    ],
+  },
+  {
+    id: "data_publishing",
+    adminOnly: true,
+    questions: [
+      { id: "system_data" },
+      { id: "data_retention", showImpact: true },
+      { id: "backup_restore", showImpact: true },
+      { id: "static_site", showImpact: true },
     ],
   },
 ];
@@ -404,6 +482,17 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
 ];
 
 export const HELP_GLOSSARY: HelpGlossaryDefinition[] = [
+  { id: "corpus", category: "core" },
+  { id: "work", category: "core" },
+  { id: "record", category: "core" },
+  { id: "review_state", category: "core", aliases: ["needs review", "accepted", "rejected"] },
+  { id: "speaker", category: "core" },
+  { id: "position_holder", category: "core", aliases: ["position holder"] },
+  { id: "stance", category: "core" },
+  { id: "proposition", category: "core" },
+  { id: "claim", category: "core", aliases: ["generated claim"] },
+  { id: "support_binding", category: "core", aliases: ["supportbinding"] },
+  { id: "evidence_packet", category: "core", aliases: ["evidencepacket"] },
   { id: "llm", category: "ai", aliases: ["large language model", "language model"] },
   { id: "model", category: "ai" },
   { id: "provider", category: "ai", aliases: ["llm provider"] },
@@ -413,8 +502,13 @@ export const HELP_GLOSSARY: HelpGlossaryDefinition[] = [
   { id: "temperature", category: "parameters", code: true },
   { id: "top_p", category: "parameters", code: true, aliases: ["nucleus sampling"] },
   { id: "seed", category: "parameters", code: true },
+  { id: "sampling_top_k", category: "parameters", code: true, aliases: ["sampling top_k"] },
+  { id: "num_ctx", category: "parameters", code: true, aliases: ["context tokens"] },
+  { id: "max_output_tokens", category: "parameters", code: true, aliases: ["output tokens"] },
+  { id: "keep_alive", category: "parameters", code: true },
   { id: "embedding", category: "ai", aliases: ["vector embedding"] },
   { id: "embedding_model", category: "ai" },
+  { id: "structured_output", category: "ai", aliases: ["structured json", "json output"] },
   { id: "rag", category: "retrieval", aliases: ["retrieval augmented generation"] },
   { id: "retrieval", category: "retrieval" },
   { id: "semantic_search", category: "retrieval", aliases: ["vector search"] },
@@ -442,6 +536,10 @@ export const HELP_GLOSSARY: HelpGlossaryDefinition[] = [
   { id: "evidence_budget", category: "parameters" },
   { id: "max_chars_evidence", category: "parameters", code: true },
   { id: "evidence", category: "provenance" },
+  { id: "canonical_state", category: "provenance", aliases: ["authoritative state"] },
+  { id: "derived_state", category: "provenance", aliases: ["derived data", "projection"] },
+  { id: "source_asset", category: "provenance", aliases: ["source file"] },
+  { id: "extraction_provenance", category: "provenance", aliases: ["extractor provenance"] },
   { id: "evidence_binding", category: "provenance" },
   { id: "citation_binding", category: "provenance" },
   { id: "provenance", category: "provenance" },
@@ -455,14 +553,29 @@ export const HELP_GLOSSARY: HelpGlossaryDefinition[] = [
   { id: "authority", category: "provenance" },
   { id: "metadata_precedent", category: "provenance", aliases: ["precedent"] },
   { id: "confirmed_absence", category: "provenance", aliases: ["no value"] },
+  { id: "blind_second_opinion", category: "provenance", aliases: ["blind review"] },
+  { id: "calibrated_autofill", category: "provenance", aliases: ["autofill"] },
   { id: "celf", category: "provenance", aliases: ["capta-enriched lexical format"] },
   { id: "chroma", category: "storage" },
   { id: "vector_collection", category: "storage", aliases: ["collection"] },
   { id: "vector_database", category: "storage", aliases: ["vector store"] },
   { id: "derived_index", category: "storage", aliases: ["derived projection"] },
   { id: "response_cache", category: "storage" },
+  { id: "response_library", category: "storage" },
+  { id: "metadata_example", category: "storage", aliases: ["metadata examples"] },
   { id: "metadata_memory", category: "storage" },
+  { id: "response_memory", category: "storage", aliases: ["cached responses"] },
+  { id: "claim_memory", category: "storage", aliases: ["cached provenance"] },
   { id: "cached_provenance", category: "storage" },
+  { id: "browser_workspace", category: "storage", aliases: ["indexeddb", "browser local"] },
+  { id: "system_data", category: "storage" },
+  { id: "operation", category: "operations", aliases: ["background operation"] },
+  { id: "job", category: "operations", aliases: ["background job"] },
+  { id: "pipeline_trace", category: "operations", aliases: ["execution trace"] },
+  { id: "benchmark", category: "operations" },
+  { id: "document_intelligence", category: "operations", aliases: ["nlp annotations"] },
+  { id: "semantic_content_graph", category: "operations", aliases: ["semantic graph"] },
+  { id: "research_object_graph", category: "operations", aliases: ["celf research object graph"] },
 ];
 
 function matchesNeedle(values: Array<string | undefined>, needle: string): boolean {
@@ -544,4 +657,22 @@ export function visibleGlossary(
       ),
     )
     .sort((a, b) => a.term.localeCompare(b.term));
+}
+
+
+/** Task-first Help Center entry points visible to the current role. */
+export function visibleStarters(
+  isAdmin: boolean,
+  can: (capability: string) => boolean,
+  t: HelpTranslate,
+): HelpStarter[] {
+  return HELP_STARTERS.filter(
+    (starter) =>
+      (!starter.adminOnly || isAdmin) &&
+      (!starter.capability || isAdmin || can(starter.capability)),
+  ).map((starter) => ({
+    ...starter,
+    title: t(`help.starter.${starter.id}.title`),
+    description: t(`help.starter.${starter.id}.description`),
+  }));
 }
