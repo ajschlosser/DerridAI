@@ -71,6 +71,18 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 Focused validation is recorded below by checkpoint; overlapping test counts are not additive. The synthetic persistence benchmark verifies fewer full-store writes, not an end-to-end speedup. Shared-machine disk variability prevents a reliable elapsed-time conclusion. Live-model preparation and human-review measurements remain outstanding.
 
+## Writer and manager coordination continuation (2026-10-03)
+
+- Summary progress, metrics, effectiveness and human-feedback mutations now hold manager then repository coordination across the complete read/modify/write, as warning mutations already did. Repository deletion and snapshot-cache invalidation also synchronize with canonical writers. These remain process-local locks, not cross-process JSON manifest compare-and-swap.
+- A separate short-lived cache/registry lock protects pinned schemas, semantic-projection lock admission/cache installation, loaded-model cache publication and fallback-warning admission. Cache admission does not acquire manager/repository locks; schema parsing and provider I/O occur outside it. Provider responses cannot overwrite a newer cache observation, and callers receive detached model-name sets.
+- Provider-switch epoch observation and runtime-request capture are coordinated together. Fallback warning failures release their admission marker for a later retry. Canonical Record transactions, optimistic queue versions, publication authority, durable journals and the Chroma projection writer are unchanged.
+- Added competing repository-writer, independent cache admission, detached cache and late-provider-response regressions. Initial disposable API-container validation: **213 passed, 17 skipped** across handoff, document-freshness, incremental exemplar and queue-projection suites; touched Python Ruff passed. Final merged/preflight results are recorded separately below when available.
+- This completes these identified coordination races, not per-build canonical writer decomposition or the whole performance plan. No live-model, browser-contention, real-source, human-review, save-tail or end-to-end improvement is established.
+- PR preparation committed the accumulated focused continuation at `5feaf00f` and merged refreshed `origin/master` at `e770d695` without conflicts. The merge moved provider configuration to the shared domain module; the characterization mock was updated to exercise that actual export instead of the retired runtime bridge.
+- Merged API-container preflight passed repository-wide Ruff, mypy (**263 source files**), syntax, generated-artifact checks and **2,255 backend regressions**, with **26 skips** and four Starlette deprecation warnings. Its single-process overall result is **not green**: the API image lacks frontend dependencies. Equivalent Node 22 container gates separately passed touched-file Prettier, repository frontend ESLint, application/SDK and test typechecks, **28 directly selected tests** and **37 related tests** (overlapping), and the production application build (existing chunk-size warning).
+- Host Python and frontend dependencies are unavailable, so commit/push hooks are bypassed only after those disclosed disposable-container checks. Browser/a11y and Storybook gates remain for CI; no Docker-image build, live-model, human-review or release-readiness claim is made. The earlier eight opt-in contention cases retain their recorded checkpoint scope; they were not repeated for these registry and summary changes.
+- Master advanced again during validation; merged `b204fd8c` without conflicts and repeated the checks. The final backend run passed **2,256 tests**, with **26 skips** and the same four warnings. Final Node gates passed formatting, lint, application/site/SDK and test typechecks, the overlapping **28 selected / 37 related** tests and the production app build. Backend preflight still reports missing frontend dependencies; the final shell log-summary wrapper also had a quoting error after pytest completed. Neither is represented as a green all-in-one preflight.
+
 ## PR preparation follow-up
 
 - Fixed the English fallback exporter to preserve both single- and double-quoted Python dictionary keys, then regenerated the fallback through the existing exporter. Behavioral coverage exercises both quote forms, escaped key quotes, adjacent value literals, and escaped newlines. All six locale regressions and 17 schema-editor tests pass; canonical/export dictionary equality is restored.
@@ -148,6 +160,130 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 1. Establish isolated real-source and end-to-end timing baselines, including browser/save tail latency, before claiming progress toward 50%.
 2. Extend exact reuse to other computational stages and refine consumed-dependency scopes. Record-local source lookup, bounded in-flight sharing, and materialized family checking are implemented below; real-source/cold-load/contention validation remains outstanding.
 3. Evaluate earlier readiness, scheduling, and review assistance separately from repository queue improvements.
+
+## Shared-repository contention harness continuation (2026-10-03)
+
+- Extended the opt-in selected-read benchmark to place both builds behind one repository instance and its shared coordination, rather than separate repository instances. Each of 40 rounds synchronizes reader admission with optional canonical Record writes; writes exercise the normal Record/queue persistence path and complete before the next round.
+- The text-free report distinguishes read-only and concurrent-write cases, records committed write counts, and retains raw read-batch samples. The measured interval ends when the read batch returns; it is not whole-round or save-tail latency.
+- Added always-on small-corpus regressions for one and two builds. Both passed in an isolated Docker Linux environment using the local API image with the missing pytest runner installed. Authoritative text and revision remain unchanged, reads observe an allowed before/after operational state, and the final write remains durable.
+- Reproduce larger synthetic cases using the existing `CORPUS_READ_BENCHMARK=<fresh path>` command. These cases still exclude actual enrichment jobs, HTTP/browser rendering, real sources and providers. This harness does not establish a latency improvement or justify changing writer coordination by itself.
+
+### Shared canonical read/write measurements
+
+The `corpus-selected-read-v3` continuation captures canonical lookup/update durations as well as read-batch durations. Every returned operational state is checked against its original queue version: pre-write payloads retain that version, and post-write payloads must advance it. Counts exclude final verification reads and enforce exactly one decoded payload per foreground read and writer lookup. Writes use the normal repository coordination and durable Record/queue persistence path.
+
+| Records per build | Builds | Canonical writes | Read-batch p50 (ms) | Read-batch p95 (ms) | Lookup/update p50 (ms) | Lookup/update p95 (ms) |
+| ----------------- | ------ | ---------------- | ------------------- | ------------------- | ---------------------- | ---------------------- |
+| 1,000             | 1      | 0                | 0.536               | 0.841               | Not sampled            | Not sampled            |
+| 10,000            | 1      | 0                | 0.584               | 1.049               | Not sampled            | Not sampled            |
+| 1,000             | 2      | 0                | 1.140               | 1.774               | Not sampled            | Not sampled            |
+| 10,000            | 2      | 0                | 2.553               | 4.190               | Not sampled            | Not sampled            |
+| 1,000             | 1      | 40               | 2.742               | 7.042               | 65.132                 | 701.969                |
+| 10,000            | 1      | 40               | 2.032               | 2.736               | 52.628                 | 96.995                 |
+| 1,000             | 2      | 80               | 4.577               | 6.160               | 98.060                 | 200.383                |
+| 10,000            | 2      | 80               | 3.511               | 5.037               | 41.035                 | 436.463                |
+
+- Each case has 40 read-batch observations; write percentiles use 40/80 individual lookup/update observations, including repository coordination. Both builds use one repository instance. Fixtures and SQLite files reside on container-local storage. Python 3.12.15 ran under Linux/WSL2 on this shared Windows host; there is no historical before/after baseline.
+- Read latency remains small in these synthetic cases, but canonical write tails are variable. This does not identify lock wait, fsync, queue projection, or source validation as the cause. Before changing writer coordination, partition lookup/update timing and repeat under controlled storage/load. These are not browser save-tail measurements or real enrichment contention.
+- The queue suite, including all eight benchmark cases, passed with 43 tests and 5 unrelated opt-in skips; touched Python Ruff passed. Raw text-free v3 samples remain in this session's `files/shared-repository-contention-v3.jsonl`, outside the repository.
+
+## Restart resume queue preservation (2026-10-03)
+
+- Fixed queue initialization and scheduling conflating scholarly `metadata_complete` with completion of an automated Record pass. A successfully processed Record can still require human review; resume previously reset its operational completion to queued and scheduled it again.
+- Queue setup now preserves operationally completed passes, including review-pending results, and counts them as already processed. Interrupted, queued, failed, and invalidated passes still enter processing. Scholarly completeness and publication gates are unchanged.
+- Regression coverage recreates the repository and manager to simulate restart, prohibits repeat enrichment of completed review-pending Records, and checks unfinished/invalidated queue recovery. Combined enrichment handoff, persistence, and review-queue coverage passed: 155 tests, 19 skips; touched Python Ruff passed in isolated Docker validation.
+
+## Write-path decomposition and atomic schema snapshots (2026-10-03)
+
+- Added benchmark-only writer-thread timing for Record lookup, schema lookup, bootstrap, JSONL dirty-marker persistence, SQLite connection/transaction scope, projection assurance, queue updates, semantic invalidation, notifications, and repository-lock acquisition. The v4 report retains bounded named samples without source text, SQL, paths, or credentials. Timings are inclusive: SQLite scopes contain queue/projection work, and schema scopes can contain lock wait. They must not be summed as exclusive costs.
+- The pre-change two-build cases exposed schema-lookup p95 of 51.276 / 47.384 ms at 1,000 / 10,000 Records. Schema lookup used the repository-wide writer lock to read a single atomically replaced build JSON file. It now uses the existing coherent snapshot reader instead. Explicit caller-supplied snapshots remain authoritative for that lookup; canonical writes, projection repair, public build reads, and manager coordination retain their existing locks.
+- A regression holds the repository writer lock while another thread reads and validates the schema snapshot. It proves that schema reads no longer wait for that lock, rather than relying on a fragile elapsed-time improvement assertion.
+
+| Records per build | Builds | Schema p95 before / after (ms) | Write p95 before / after (ms) | Lock-wait p95 after (ms) | SQLite-scope p95 after (ms) |
+| ----------------- | ------ | ------------------------------ | ----------------------------- | ------------------------ | --------------------------- |
+| 1,000             | 1      | 0.447 / 0.621                  | 48.455 / 88.736               | 0.002                    | 63.754                      |
+| 10,000            | 1      | 0.472 / 0.500                  | 67.390 / 51.790               | 0.002                    | 48.019                      |
+| 1,000             | 2      | 51.276 / 0.883                 | 92.705 / 157.822              | 58.468                   | 62.071                      |
+| 10,000            | 2      | 47.384 / 1.096                 | 85.834 / 349.517              | 151.914                  | 203.347                     |
+
+- Both runs use the same eight-case synthetic harness on shared Linux/WSL2 container-local storage, with 40 read batches and 40/80 writes per case. They are sequential observations under variable host load, not a controlled speedup study. Overall write tails did not improve consistently; the change removes a specific read-side dependency, not writer contention or persistence costs. SQLite scope includes SQL, commit and connection lifecycle; it does not isolate fsync or SQLite lock wait.
+- Post-change read-batch p95 under concurrent writes ranged from 3.358 to 8.278 ms. Full browser save-tail, provider enrichment, real sources, and human-review timing remain unmeasured. Per-build writer coordination still requires broader lock-order/cache/registry work and race coverage.
+- Validation passed: 164 tests, 11 skips across queue projection, enrichment handoff and persistence, including all eight benchmark cases; touched Python Ruff passed. Raw samples remain in this session's `files/shared-repository-contention-v4.jsonl` and `files/shared-repository-contention-v4-schema-snapshot.jsonl`, outside the repository.
+
+## Live model-switch override preservation (2026-10-03)
+
+- Fixed a user-reported live-switch regression: browser-managed provider defaults were copied into the switch request after its explicit model override, replacing the selected model. The API consequently received the saved default while the UI confirmation named the requested model.
+- The explicit trimmed model now wins after provider defaults are assembled. Confirmation uses the returned build model instead of assuming the requested model became active. Server-owned profile resolution, endpoint/key transport, escalation configuration, and in-flight task policy are unchanged.
+- Added component-to-API regression coverage for browser-managed and server-managed profiles, including whitespace normalization and the returned active-model label. Thirty targeted frontend tests, application/SDK and test typechecks, and touched-source ESLint passed in an isolated Docker environment after restoring missing frontend dependencies.
+
+## SQLite durability-scope and journal comparison (2026-10-03)
+
+- Extended writer-only timing using a real SQLite Connection subclass in the test harness. Transaction admission (`BEGIN`), SQL statement execution, and explicit commit now have separate bounded timings. Production connections, synchronization, journal mode, locks, and backup behavior are unchanged.
+- The v6 harness accepts only `delete` or `wal` through `CORPUS_READ_BENCHMARK_JOURNAL`, checks the effective journal mode on each prepared build, and asserts `synchronous=FULL`. It never benchmarks disabled synchronization or unsafe journals. Always-on small-corpus tests exercise both modes; invalid modes fail before repository creation.
+- Ran all eight large-corpus cases in each mode with the same synthetic workload and shared-repository topology. Each case retains 40 read-batch observations and 40/80 writer observations. The following comparison is limited to concurrent-write cases; timings include durable lookup/update, and phase percentiles are inclusive rather than additive.
+
+| Records per build | Builds | DELETE write p95 (ms) | WAL write p95 (ms) | DELETE commit p95 (ms) | WAL commit p95 (ms) |
+| ----------------- | ------ | --------------------- | ------------------ | ---------------------- | ------------------- |
+| 1,000             | 1      | 80.737                | 65.958             | 47.337                 | 46.901              |
+| 10,000            | 1      | 49.325                | 60.964             | 31.922                 | 39.982              |
+| 1,000             | 2      | 122.660               | 88.372             | 47.561                 | 39.702              |
+| 10,000            | 2      | 58.164                | 66.916             | 29.887                 | 20.815              |
+
+- In the verified DELETE run, transaction-admission p95 was 0.017–0.093 ms and statement-execution p95 was 1.896–3.193 ms. Commit, JSON dirty-marker persistence (p95 18.798–38.845 ms), and repository writer coordination contribute more than SQL execution in these samples. This does not isolate physical fsync costs or establish their causal contribution to browser save latency.
+- WAL did not consistently improve full lookup/update tails. These sequential runs share variable Linux/WSL2 host load, use synthetic Records and no long-lived production connection pool, and are not an alternating repeated-trial comparison. There is no basis here to promote WAL or weaken synchronization. A storage change would additionally require backup/checkpoint/sidecar, external-writer, crash/restart, and supported-filesystem acceptance.
+- The queue suite with the WAL benchmark passed 46 tests with 5 unrelated opt-in skips; the verified DELETE large-corpus benchmark passed all eight cases. The final ordinary queue run, including the added invalid-journal guards, passed 41 tests with 13 opt-in skips; touched Python Ruff passed. Raw text-free samples remain in this session's `files/shared-repository-contention-v6-wal.jsonl` and `files/shared-repository-contention-v6-delete.jsonl`. Reproduce with a fresh output path and either journal setting; production behavior is not changed by these test-only environment variables.
+
+## Rejected targeted-save persistence avoidance (2026-10-03)
+
+- Targeted Record writes now check identity and expected operational queue version inside the SQLite writer transaction before persisting the JSONL dirty marker. Missing/retired IDs and stale-version conflicts no longer rewrite build JSON or mark a clean publication projection dirty. This eliminates one durable marker write on rejected requests, not on successful saves.
+- The marker still persists before canonical SQL mutation. Marker persistence failures prevent the Record write; later queue-update failures roll back Record and queue state while retaining a conservative dirty marker. Errors remain visible, and failed saves do not notify exemplar projection workers.
+- Added restart-based regressions for missing identity, stale version, marker failure, and post-marker queue failure. The combined queue/enrichment handoff/persistence batch passed 164 tests with 19 skips before the final rollback regression; the final queue suite passed 45 tests with 13 opt-in skips. Touched Python Ruff passed. No elapsed-time improvement is claimed.
+
+## Deferred next-Record handoff reads (2026-10-03)
+
+- Converted `review_queue_summary`, the next-Record/counts handoff, from a repository-wide lock plus `BEGIN IMMEDIATE` to the shared deferred review snapshot. Clean handoffs no longer reserve a SQLite writer or wait on the repository lock; incompatible/dirty projections retain the existing explicit repair/retry path.
+- Counts, next pending identity, and its canonical payload are captured together. Decoding and reviewer presentation happen after the snapshot closes. An impossible missing canonical payload now fails explicitly rather than presenting a partial result.
+- Regression coverage holds both repository and SQLite writer reservations during clean reads, checks queue selection across seven filters and three reviewer contexts, and commits an external write during decoding. Existing review-decision and queue behavior passed alongside the new cases. This is bounded read-side contention removal, not complete per-build writer coordination or a measured save-tail reduction.
+- Final validation passed 94 tests with 13 opt-in skips across queue projection, review decisions and review queues; touched Python Ruff passed. Blind-review assertions distinguish the second reviewer from the intentionally trusted empty worker context.
+
+## Deferred annotation-context checks (2026-10-03)
+
+- Document Intelligence annotation-epoch reads now use the shared deferred snapshot instead of repository-wide coordination plus a SQLite writer reservation. Clean metadata workers and semantic readers can verify context while another writer holds those reservations.
+- The epoch and optional captured-scope comparison share one snapshot. Dirty/incompatible context still repairs through the existing coordinated path; a missing initialized epoch fails explicitly. Exact documentary fingerprints, topology, stale-result exclusion, and human-authority rules are unchanged.
+- Added a blocked-writer regression prohibiting repair/initialization on clean reads and verifying that changed captured text remains incompatible. Existing freshness coverage checks external canonical writes, source/text/topology changes, metadata-only stability, and stale analysis. Combined freshness, queue and enrichment-handoff validation passed 169 tests with 13 opt-in skips; touched Python Ruff passed. No whole-build or browser latency improvement is claimed.
+
+## Deferred exemplar-journal status reads (2026-10-03)
+
+- Exemplar dirty-item, dirty-count, and epoch/context reads now use deferred SQLite snapshots without the repository-wide lock on initialized stores. These read only journal state, not corpus payloads or review projections. Cold JSONL bootstrap and database/schema initialization remain coordinated; invalidation, token-checked acknowledgment, and state writes retain existing writer locks.
+- Each status method returns its own coherent snapshot; the three calls are not claimed to form one cross-call transaction. An uncommitted writer state is never exposed. Missing initialized state fails visibly rather than returning a fabricated clean epoch.
+- Added blocked repository/SQLite writer coverage, restarted-reader visibility, legacy JSONL bootstrap, and missing-state failure cases. Incremental exemplar, projection and queue regressions passed 111 tests with 17 opt-in skips; touched Python Ruff passed. This removes journal-read contention only and does not establish end-to-end improvement or change the single Chroma writer rule.
+
+## Three raw-store snapshot slices (2026-10-03)
+
+- **Shared raw-store boundary:** generalized the exemplar reader into `_record_store_read_db`. It verifies build existence, coordinates missing-store JSONL bootstrap, uses the existing schema initialization boundary, and opens a deferred snapshot without repairing unrelated derived projections. Exemplar status reads use the same boundary; journal mutations remain locked.
+- **Bounded neighbour context:** `record_context` captures the selected ordinal and both neighbour sets in one deferred snapshot, without repository-wide coordination on initialized stores. Existing before/after limits, nearest-text budgets, document order, locator offsets, and declared truncation remain unchanged. Text shaping still occurs after snapshot release.
+- **Full canonical scope capture:** `load_records` captures ordered serialized rows and the schema used to decode them, then closes the snapshot before migration/decoding and transport scrubbing. Full-scope consumers still read the whole corpus; this slice reduces lock/transaction lifetime rather than pretending that full reads became selected-row reads. Writers can commit during decoding, while the returned list retains the captured payloads.
+- New regressions hold repository and SQLite writer reservations during raw reads, verify neighbour count/text budgets, and commit a real canonical update during full-scope decoding. Restarted reads observe the new state while the preceding captured list stays coherent. Existing legacy bootstrap, exact annotation freshness, optimistic handoffs, and incremental exemplars remain covered.
+- Combined queue, incremental exemplar, enrichment handoff/persistence, and annotation freshness validation passed 246 tests with 23 opt-in skips; touched Python Ruff passed. No browser, provider, full-build latency, or whole-plan completion claim is made.
+
+## Six snapshot-coordination slices (2026-10-03)
+
+- **Refresh race guard:** explicit JSONL refresh marks the projection dirty before replacement, captures ordered canonical payloads in a deferred snapshot, and compares them again under a final SQLite writer reservation before clearing the marker. A concurrent canonical change raises `RecordStateConflict`, leaves the projection visibly dirty, and requires retry. This explicit full refresh now performs two corpus-sized reads; it is a correctness guard, not a hot-path optimization.
+- **Refresh failure recovery:** replacement failure preserves the previous JSONL file and dirty state. Regression coverage verifies retry restores a clean projection after both replacement failure and an external canonical write.
+- **Concurrent cold bootstrap:** concurrent raw readers exposed duplicate schema initialization from a stale pre-lock schema identity. Initialization now rereads file/schema identity inside the initialization lock. The regression verifies a single initialization and coherent results.
+- **Neighbour topology snapshots:** an external ordinal reorder between neighbour queries cannot mix old and new topology in one result. A WAL-backed temporary test establishes the snapshot and verifies both sides retain the original order; production journaling is unchanged.
+- **Exemplar acknowledgment:** an external invalidation replaces the dirty token, and acknowledgment using the old captured token cannot consume the newer work.
+- **Large-corpus rerun:** all eight shared-repository selected-read cases completed with verified DELETE journaling and FULL synchronization. Each case includes 40 synchronized read rounds; write-enabled cases include 40/80 canonical lookup/update observations. Exact decode counts and payload/version coherence remain asserted.
+
+| Records/build | Builds | Read p95, no writes (ms) | Read p95, writes (ms) | Lookup/update p95 (ms) |
+| ------------- | ------ | ------------------------ | --------------------- | ---------------------- |
+| 1,000         | 1      | 0.783                    | 2.668                 | 69.632                 |
+| 10,000        | 1      | 0.828                    | 2.439                 | 78.723                 |
+| 1,000         | 2      | 1.329                    | 4.433                 | 35.353                 |
+| 10,000        | 2      | 1.897                    | 4.764                 | 90.687                 |
+
+- Raw observations are retained in the session artifact `shared-repository-contention-six-slices.jsonl` (`corpus-selected-read-v6`). These synthetic Linux/WSL2 container-local measurements exclude cold initialization, real enrichment, HTTP/browser, sources, and providers. They are not a controlled before/after comparison or evidence of an end-to-end speedup.
+- Combined queue, incremental exemplar, enrichment handoff, and persistence validation, including the eight opt-in contention cases, passed **235 tests**, with **15 other opt-in cases skipped**; touched Python Ruff passed. Canonical writer/manager coordination and live-source/model/browser/human acceptance remain outstanding. Changes remain uncommitted and unpushed.
 
 ## Resume readiness and save reuse PR preparation
 

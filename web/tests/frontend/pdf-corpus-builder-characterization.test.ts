@@ -20,6 +20,7 @@ import { flushPromises, shallowMount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
+import type { ProviderProfile } from "../../src/api/system";
 
 const pdfCorpusApi = vi.hoisted(() => ({
   listAssets: vi.fn(),
@@ -30,6 +31,7 @@ const pdfCorpusApi = vi.hoisted(() => ({
   markViewed: vi.fn(),
   patchText: vi.fn(),
   patchMetadata: vi.fn(),
+  switchProviderProfile: vi.fn(),
   reviewDecision: vi.fn(),
   assetContentUrl: vi.fn((assetId: string) => `/api/pdf/assets/${assetId}/content`),
 }));
@@ -58,6 +60,7 @@ vi.mock("../../src/features/corpus-builder/api/reviewReads", async () => {
 const systemApi = vi.hoisted(() => ({
   researcherProviders: vi.fn(),
   researcherProviderAvailability: vi.fn(),
+  llmStatus: vi.fn(),
 }));
 
 vi.mock("../../src/api/system", async () => {
@@ -79,10 +82,16 @@ vi.mock("../../src/api/metadataSchemas", async () => {
 });
 
 const runtime = vi.hoisted(() => ({
-  getProviderProfilesForUi: vi.fn(() => []),
-  getProviderRequestConfigForUi: vi.fn(() => null),
+  getProviderProfilesForUi: vi.fn<() => ProviderProfile[]>(() => []),
+  getProviderRequestConfigForUi: vi.fn<() => Record<string, unknown> | null>(() => null),
   getDefaultProviderProfileId: vi.fn(() => ""),
   state: { pdf: { file: null } },
+}));
+
+vi.mock("../../src/domain/sharedProviderProfiles", () => ({
+  getProviderProfilesForUi: runtime.getProviderProfilesForUi,
+  getProviderRequestConfigForUi: runtime.getProviderRequestConfigForUi,
+  getDefaultProviderProfileId: runtime.getDefaultProviderProfileId,
 }));
 
 vi.mock("../../src/runtime/runtime.js", () => ({
@@ -131,7 +140,10 @@ async function mountBuilder(query = "", renderManifest = false, renderReview = f
         ? { CorpusBuildWorkspace: { template: '<div><slot name="manifest" /></div>' } }
         : renderReview
           ? {
-              CorpusReviewWorkspace: { template: '<div><slot name="inspector" /></div>' },
+              CorpusReviewWorkspace: {
+                template: '<div><slot name="header" /><slot name="inspector" /></div>',
+              },
+              CorpusReviewHeader: { template: '<div><slot name="run-status" /></div>' },
               CorpusReviewInspector: { template: "<div><slot /></div>" },
             }
           : {},
@@ -172,6 +184,8 @@ const reviewQueueRow = queueRowFromRecord(reviewRecord as never);
 describe("PdfCorpusBuilder characterization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    runtime.getProviderProfilesForUi.mockReturnValue([]);
+    runtime.getProviderRequestConfigForUi.mockReturnValue(null);
     pdfCorpusApi.listAssets.mockResolvedValue({ items: [] });
     pdfCorpusApi.profiles.mockResolvedValue({ items: [] });
     pdfCorpusApi.listBuilds.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 100 });
@@ -196,6 +210,7 @@ describe("PdfCorpusBuilder characterization", () => {
       available: false,
       model_available: false,
     });
+    systemApi.llmStatus.mockResolvedValue({ available: true, models: [{ name: "old-model" }] });
     metadataSchemasApi.list.mockResolvedValue({
       items: [
         {
@@ -272,6 +287,48 @@ describe("PdfCorpusBuilder characterization", () => {
       expect(editor.props("manifest")).toEqual({ title: "Lecture" });
       wrapper.unmount();
     });
+
+    it.each([false, true])(
+      "sends the selected model instead of the profile default (server managed: %s)",
+      async (serverManaged) => {
+        const profile = { id: "local", name: "Local", type: "ollama" as const, model: "old-model" };
+        runtime.getProviderProfilesForUi.mockReturnValue([profile]);
+        runtime.getProviderRequestConfigForUi.mockReturnValue({
+          provider: "ollama",
+          model: "old-model",
+          base_url: "http://localhost:11434",
+          api_key: "test-key",
+          ollama: { num_ctx: 8192 },
+        });
+        systemApi.researcherProviders.mockResolvedValue({
+          profiles: serverManaged ? [profile] : [],
+        });
+        pdfCorpusApi.switchProviderProfile.mockResolvedValue({
+          ...reviewBuild,
+          model: "new-model",
+          request: { provider_profile_id: "local", model: "new-model" },
+        });
+        const wrapper = await mountBuilder("?workspace=review&build=build-1", false, true);
+        try {
+          const status = wrapper.findComponent({ name: "CorpusReviewRunStatus" });
+          expect(status.exists()).toBe(true);
+          status.vm.$emit("switch-profile", "local", "  new-model  ");
+          await flushPromises();
+          expect(pdfCorpusApi.switchProviderProfile).toHaveBeenCalledWith(
+            "build-1",
+            expect.objectContaining({
+              provider_profile_id: "local",
+              model: "new-model",
+              base_url: "http://localhost:11434",
+              api_key: "test-key",
+            }),
+          );
+          expect(status.props("activeModel")).toBe("new-model");
+        } finally {
+          wrapper.unmount();
+        }
+      },
+    );
 
     it.each([
       ["build", "CorpusBuildWorkspace"],

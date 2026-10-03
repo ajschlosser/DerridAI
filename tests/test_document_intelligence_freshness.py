@@ -21,6 +21,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from app import corpus_builder as cb
@@ -98,6 +100,30 @@ def test_metadata_only_revision_and_equivalent_replacement_preserve_context(prep
     repo.save_records(bid, repo.load_records(bid))
     assert repo.document_context(bid) == before
     assert repo.document_context(bid, repo.load_records(bid)) == before
+
+
+def test_clean_context_checks_do_not_wait_for_writers_or_repair(prepared, monkeypatch):
+    repo, bid, _manager = prepared
+    records = repo.load_records(bid)
+    expected = repo.document_context(bid, records)
+    assert expected
+
+    def fail(*args, **kwargs):
+        pytest.fail("clean annotation context attempted repair or initialization")
+
+    monkeypatch.setattr(context, "ensure", fail)
+    monkeypatch.setattr(repo, "_ensure_review_projection", fail)
+    monkeypatch.setattr(repo, "_initialize_records_db", fail)
+    with sqlite3.connect(repo.build_records_db_path(bid)) as writer:
+        writer.execute("BEGIN IMMEDIATE")
+        writer.execute("UPDATE corpus_records SET payload=payload WHERE record_id='r1'")
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with repo._lock:
+                assert pool.submit(repo.document_context, bid, records).result(timeout=5) == expected
+        writer.rollback()
+    changed = copy.deepcopy(records)
+    changed[0]["text"] += " Not current."
+    assert repo.document_context(bid, changed) is None
 
 
 def test_context_lookup_and_metadata_writes_do_not_decode_unchanged_records(prepared, monkeypatch):

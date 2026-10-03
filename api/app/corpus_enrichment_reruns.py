@@ -630,7 +630,8 @@ class EnrichmentRerunsMixin:
         max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
         totals: Counter[str] = Counter()
         pass_schema = self._schema_for(build_id)
-        epoch_at_start = self._provider_epoch.get(build_id, 0)
+        with self._lock:
+            epoch_at_start = self._provider_epoch.get(build_id, 0)
         provider_keys = ("provider", "model", "base_url", "api_key", "generation", "provider_profile_id", "review_provider_profile_id", "_review_provider")
 
         def effective_request() -> dict[str, Any]:
@@ -639,9 +640,10 @@ class EnrichmentRerunsMixin:
             A switch applies to records not yet started; requests already in flight finish on the old model.
             Each event in the ledger names the model that actually answered, so the metrics show both.
             """
-            if self._provider_epoch.get(build_id, 0) == epoch_at_start:
-                return request
-            live = self._latest_runtime_request(build_id, request)
+            with self._lock:
+                if self._provider_epoch.get(build_id, 0) == epoch_at_start:
+                    return request
+                live = self._latest_runtime_request(build_id, request)
             return {**request, **{key: live[key] for key in provider_keys if key in live}}
 
         def operation_stage_callback(record: dict[str, Any], task_name: str, state: str, _error: str | None) -> None:

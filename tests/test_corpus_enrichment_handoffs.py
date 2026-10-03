@@ -52,6 +52,98 @@ def forbid_replacement(monkeypatch, repo):
     monkeypatch.setattr(repo, "save_records", lambda *args: pytest.fail("handoff replaced the corpus"))
 
 
+@pytest.mark.parametrize("mutation", ["progress", "metric"])
+def test_summary_mutation_excludes_repository_writer(prepared, monkeypatch, mutation):
+    repo, bid, manager = prepared
+    attempted = threading.Event()
+    admitted = threading.Event()
+    release = threading.Event()
+    get_build = repo.get_build
+
+    def writer():
+        attempted.set()
+        with repo._lock:
+            admitted.set()
+            build = get_build(bid)
+            build["independent_writer"] = True
+            repo.save_build(build)
+
+    def paused_read(build_id):
+        build = get_build(build_id)
+        release.set()
+        assert attempted.wait(2)
+        assert not admitted.wait(0.1), "writer entered a summary read/modify/write"
+        return build
+
+    def competing_writer():
+        assert release.wait(2)
+        writer()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(competing_writer)
+        monkeypatch.setattr(repo, "get_build", paused_read)
+        try:
+            if mutation == "progress":
+                manager._update(bid, progress=0.25)
+            else:
+                manager._increment_metric(bid, "calls")
+        finally:
+            release.set()
+        future.result(timeout=3)
+    final = get_build(bid)
+    assert final["independent_writer"] is True
+    if mutation == "progress":
+        assert final["progress"] == 0.25
+    else:
+        assert final["llm_metrics"]["calls"] == 1
+
+
+def test_cache_registry_does_not_wait_for_manager_writer(prepared):
+    _repo, bid, manager = prepared
+    build = manager.repo.get_build(bid)
+    with ThreadPoolExecutor(max_workers=2) as executor, manager._lock:
+        schema = executor.submit(manager._schema_of_build, build).result(timeout=2)
+        projection_lock = executor.submit(manager._semantic_projection_lock, bid).result(timeout=2)
+    assert schema is manager._schema_of_build(build)
+    assert projection_lock is manager._semantic_projection_lock(bid)
+
+
+def test_loaded_model_cache_is_detached_and_rejects_late_response(prepared, monkeypatch):
+    from app import corpus_build_lifecycle as lifecycle
+
+    _repo, _bid, manager = prepared
+    started = threading.Event()
+    release = threading.Event()
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"models": [{"name": "old"}]}'
+
+    def fetch(*args, **kwargs):
+        started.set()
+        assert release.wait(3)
+        return Response()
+
+    monkeypatch.setattr(lifecycle.urllib.request, "urlopen", fetch)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        old = executor.submit(manager._ollama_loaded_models, "http://old")
+        assert started.wait(2)
+        with manager._cache_lock:
+            manager._loaded_models_cache = (lifecycle.time.monotonic(), "http://new", {"new"})
+        release.set()
+        assert old.result(timeout=2) == {"old"}
+    cached = manager._ollama_loaded_models("http://new")
+    assert cached == {"new"}
+    cached.clear()
+    assert manager._ollama_loaded_models("http://new") == {"new"}
+
+
 def test_reconciliation_writes_only_changed_rows_and_keeps_cursor_context(prepared, monkeypatch):
     repo, bid, _manager = prepared
     before = repo.get_records(bid, ["r1", "r2"], include_queue_version=True)
@@ -719,6 +811,44 @@ def test_requeue_clears_only_current_marker_without_full_replacement(prepared, m
     assert not result[0].get("metadata_requeue_requested")
     assert [row["record_id"] for row in result] == ["r1", "r2"]
     assert cb.PdfCorpusRepository(repo.root).load_records(bid) == result
+
+
+def test_restart_resume_does_not_repeat_completed_review_pending_pass(prepared, monkeypatch):
+    repo, bid, _manager = prepared
+    record = repo.get_record(bid, "r1")
+    record.update(
+        metadata_complete=False,
+        metadata_enrichment_state="complete",
+        metadata_review_fields=["discourse_role"],
+        metadata_stage_status={"discourse": "complete", "quotation": "skipped", "indexing": "complete"},
+    )
+    repo.update_record(bid, record)
+    restarted_repo = cb.PdfCorpusRepository(repo.root)
+    restarted = cb.PdfCorpusBuildManager(restarted_repo, max_workers=1)
+    monkeypatch.setattr(
+        restarted, "_enrich_record",
+        lambda *args, **kwargs: pytest.fail("resume repeated a completed metadata pass"),
+    )
+    try:
+        result = restarted._schedule_build_enrichment(bid, {}, {}, restarted_repo.load_records(bid))
+        assert result[0]["metadata_enrichment_state"] == "complete"
+        assert not result[0]["metadata_complete"]
+        assert result[0]["metadata_review_fields"] == ["discourse_role"]
+        assert restarted_repo.get_build(bid)["metadata_enriched_count"] == 2
+    finally:
+        restarted._executor.shutdown(wait=True)
+
+
+@pytest.mark.parametrize("state", ["running", "queued", "stale", "failed"])
+def test_resume_requeues_only_unfinished_or_invalidated_passes(prepared, state):
+    repo, bid, manager = prepared
+    record = repo.get_record(bid, "r1")
+    record.update(metadata_complete=False, metadata_enrichment_state=state)
+    repo.update_record(bid, record)
+    rows = manager._initialize_build_enrichment(bid, {})
+    assert rows[0]["metadata_enrichment_state"] == "queued"
+    assert rows[1]["metadata_enrichment_state"] == "complete"
+    assert repo.get_build(bid)["metadata_enriched_count"] == 1
 
 
 def test_queued_retry_targets_identity_not_obsolete_ordinal(prepared, monkeypatch):

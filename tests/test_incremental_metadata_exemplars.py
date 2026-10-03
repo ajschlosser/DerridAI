@@ -22,8 +22,10 @@ import copy
 import json
 import os
 import platform
+import sqlite3
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -39,6 +41,72 @@ from app.reviewer_context import current_reviewer
 from test_metadata_exemplar_projection import FakeRepo, _patch_quiet
 from test_progressive_metadata_retrieval import exemplar
 from test_review_queues import install_repo, ready_record
+
+
+def test_clean_exemplar_journal_reads_do_not_wait_for_writers(tmp_path, monkeypatch):
+    repo, build = install_repo(tmp_path, [ready_record("r1", "b1")])
+    bid = build["build_id"]
+    expected = (
+        repo.metadata_exemplar_dirty(bid),
+        repo.metadata_exemplar_dirty_count(bid),
+        repo.metadata_exemplar_state(bid),
+    )
+
+    def fail(*args, **kwargs):
+        pytest.fail("clean journal read initialized or bootstrapped storage")
+
+    monkeypatch.setattr(repo, "_initialize_records_db", fail)
+    monkeypatch.setattr(repo, "_bootstrap_records_db", fail)
+
+    def read():
+        return (
+            repo.metadata_exemplar_dirty(bid),
+            repo.metadata_exemplar_dirty_count(bid),
+            repo.metadata_exemplar_state(bid),
+        )
+
+    with sqlite3.connect(repo.build_records_db_path(bid)) as writer:
+        writer.execute("BEGIN IMMEDIATE")
+        writer.execute("UPDATE metadata_exemplar_state SET epoch='uncommitted' WHERE singleton=1")
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with repo._lock:
+                assert pool.submit(read).result(timeout=5) == expected
+        writer.rollback()
+    assert cb.PdfCorpusRepository(repo.root).metadata_exemplar_state(bid) == expected[2]
+
+
+def test_exemplar_journal_read_bootstraps_legacy_jsonl_once(tmp_path):
+    repo, build = install_repo(tmp_path, [ready_record("r1", "b1")])
+    bid = build["build_id"]
+    repo.build_records_db_path(bid).unlink()
+    restarted = cb.PdfCorpusRepository(repo.root)
+    assert restarted.metadata_exemplar_dirty_count(bid) >= 1
+    assert restarted.metadata_exemplar_state(bid) == ("", "")
+    assert restarted.get_record(bid, "r1")["text"] == ready_record("r1", "b1")["text"]
+
+
+def test_exemplar_journal_missing_state_fails_visibly(tmp_path):
+    repo, build = install_repo(tmp_path, [ready_record("r1", "b1")])
+    bid = build["build_id"]
+    repo.metadata_exemplar_state(bid)
+
+
+def test_external_invalidation_cannot_be_acknowledged_with_old_token(tmp_path):
+    repo, build = install_repo(tmp_path, [ready_record("r1", "b1")])
+    bid = build["build_id"]
+    stale_items = repo.metadata_exemplar_dirty(bid)
+    assert stale_items
+    external = cb.PdfCorpusRepository(repo.root)
+    external.invalidate_metadata_exemplars(bid, schedule=False)
+    assert repo.complete_metadata_exemplar_dirty(bid, stale_items) == 0
+    current_items = external.metadata_exemplar_dirty(bid)
+    assert current_items != stale_items
+    assert external.complete_metadata_exemplar_dirty(bid, current_items) >= 1
+    assert repo.metadata_exemplar_dirty_count(bid) == 0
+    with sqlite3.connect(repo.build_records_db_path(bid)) as writer:
+        writer.execute("DELETE FROM metadata_exemplar_state")
+    with pytest.raises(RuntimeError, match="initialized state row"):
+        repo.metadata_exemplar_state(bid)
 
 
 class Collection:
