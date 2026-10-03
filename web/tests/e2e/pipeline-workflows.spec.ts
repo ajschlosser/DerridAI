@@ -24,6 +24,8 @@ const stories = [
   ["pipelines-stage-navigator--default", ".stage-navigator"],
   ["pipelines-strategy-inspector--used", ".strategy-inspector"],
   ["pipelines-comparison-result--benchmark-with-drift-warning", ".comparison-result"],
+  ["pipelines-comparison-workspace--default", ".comparison-workspace"],
+  ["pipelines-evidence-comparison-result--default", ".comparison-result"],
   ["pipelines-benchmark-case-list--default", ".case-list"],
   ["pipelines-studio-help-dialog--open", "[role=dialog]"],
   ["pipelines-data-type-chip--all-types", ".type-chip"],
@@ -108,7 +110,7 @@ test("clone editor explains disabled operations for the selected stage", async (
     "/iframe.html?id=pipelines-version-editor-panel--inspect-only-stage&viewMode=story",
   );
   await expect(page.getByText("Purpose is fixed for this version.")).toBeVisible();
-  await page.locator(".stage-row", { hasText: "mmr" }).click();
+  await page.locator(".stage-row", { hasText: "source-diversity" }).click();
   await expect(page.locator(".stage-fit-note").first()).toContainText("stays inspect-only");
   await page.getByText("Advanced").click();
   await page.getByLabel(/Show operations this workflow cannot run/).check();

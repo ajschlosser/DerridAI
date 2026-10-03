@@ -21,6 +21,7 @@ import {
   usableListOptions,
   withoutTransportItems,
 } from "../domain/metadataValues";
+import type { SchemaMember } from "../api/metadataSchemas";
 
 const props = defineProps<{
   field: string;
@@ -36,6 +37,8 @@ const props = defineProps<{
   open?: boolean;
   revealed?: unknown;
   label?: string;
+  repeatableMembers?: SchemaMember[];
+  repeatableMaxItems?: number;
   recheck?: { first: unknown; second: unknown; agreed: boolean };
   constraint?: { value: unknown; reason: string } | null;
   calibratedAcceptance?: { reviewed: number; acceptanceRate: number } | null;
@@ -183,6 +186,8 @@ const scalarCardinalityConflict = computed(() => {
   return !isMultiCombobox.value && Array.isArray(value) && value.length > 1;
 });
 function editableValue() {
+  if (props.repeatableMembers?.length)
+    return Array.isArray(resolvedValue.value) ? structuredClone(resolvedValue.value) : [];
   const value = unwrapMetadataValue(resolvedValue.value);
   let text = metadataValueText(value);
   if (Array.isArray(value)) {
@@ -236,6 +241,7 @@ watch(
 /** The ★ that marks a suggested or auto-filled option is decoration; it must never reach a saved value. */
 const stripStar = (value: string) => value.replace(/^\s*★\s*/u, "").trim();
 function normalized() {
+  if (props.repeatableMembers?.length) return draft.value;
   if (props.control === "multi-combobox")
     return [
       ...new Set(
@@ -248,6 +254,38 @@ function normalized() {
   if (props.control === "number" && draft.value !== "") return Number(draft.value);
   const raw = typeof draft.value === "string" ? stripStar(draft.value) : draft.value;
   return normalizeMetadataFieldValue(props.field, raw);
+}
+function repeatableRows(): Array<Record<string, unknown>> {
+  return Array.isArray(draft.value) ? (draft.value as Array<Record<string, unknown>>) : [];
+}
+function addRepeatableRow() {
+  const row: Record<string, unknown> = { instance_id: `instance:${crypto.randomUUID()}` };
+  for (const member of props.repeatableMembers || [])
+    row[member.name] = member.type === "list" ? [] : null;
+  draft.value = [...repeatableRows(), row];
+  markDirty();
+}
+function removeRepeatableRow(index: number) {
+  draft.value = repeatableRows().filter((_row, rowIndex) => rowIndex !== index);
+  markDirty();
+}
+function setRepeatableValue(index: number, member: SchemaMember, value: string | boolean) {
+  const rows = structuredClone(repeatableRows());
+  rows[index][member.name] =
+    member.type === "boolean"
+      ? value
+      : member.type === "number"
+        ? value === ""
+          ? null
+          : Number(value)
+        : member.type === "list"
+          ? String(value)
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : value || null;
+  draft.value = rows;
+  markDirty();
 }
 const selectionMissing = ref(false);
 const scalarCardinalityResolved = computed(
@@ -586,8 +624,54 @@ const traceRows = computed(() => {
         {{ i18n.t("pdf_corpus.scalar_cardinality_conflict") }}
       </p>
       <div class="value-control">
+        <div v-if="repeatableMembers?.length" class="repeatable-editor">
+          <fieldset v-for="(row, index) in repeatableRows()" :key="String(row.instance_id)">
+            <legend>{{ fieldLabel }} {{ index + 1 }}</legend>
+            <label v-for="member in repeatableMembers" :key="member.field_id">
+              <span>{{ member.name.toUpperCase() }}_{{ index + 1 }}</span>
+              <input
+                v-if="member.type !== 'boolean'"
+                :type="member.type === 'number' ? 'number' : 'text'"
+                :value="
+                  member.type === 'list'
+                    ? (row[member.name] as unknown[] | undefined)?.join(', ') || ''
+                    : String(row[member.name] ?? '')
+                "
+                @input="
+                  setRepeatableValue(index, member, ($event.target as HTMLInputElement).value)
+                "
+              />
+              <select
+                v-else
+                :value="String(row[member.name] ?? '')"
+                @change="
+                  setRepeatableValue(
+                    index,
+                    member,
+                    ($event.target as HTMLSelectElement).value === 'true',
+                  )
+                "
+              >
+                <option value=""></option>
+                <option value="true">{{ i18n.t("ui.yes") }}</option>
+                <option value="false">{{ i18n.t("ui.no") }}</option>
+              </select>
+            </label>
+            <button type="button" class="btn small" @click="removeRepeatableRow(index)">
+              {{ i18n.t("ui.remove") }}
+            </button>
+          </fieldset>
+          <button
+            type="button"
+            class="btn small"
+            :disabled="repeatableRows().length >= (repeatableMaxItems || 24)"
+            @click="addRepeatableRow"
+          >
+            {{ i18n.t("pdf_corpus.add_metadata_instance") }}
+          </button>
+        </div>
         <select
-          v-if="control === 'enum'"
+          v-else-if="control === 'enum'"
           v-model="draft"
           class="control"
           :aria-label="fieldLabel"
@@ -1051,6 +1135,30 @@ const traceRows = computed(() => {
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+}
+.repeatable-editor,
+.repeatable-editor fieldset,
+.repeatable-editor label {
+  display: grid;
+  gap: 8px;
+}
+.repeatable-editor fieldset {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.repeatable-editor label {
+  grid-template-columns: minmax(10rem, auto) 1fr;
+  align-items: center;
+}
+.repeatable-editor :is(input, select) {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
 }
 .value-control > * {
   min-width: 0;

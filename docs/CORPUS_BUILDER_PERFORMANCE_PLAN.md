@@ -68,6 +68,10 @@ Extend existing source embeddings, precedent caches, family checkpoints, and sel
 
 Stage fingerprints include only consumed inputs: authoritative text and relevant neighbours; span/topology/page-map versions; relevant schema/instruction hashes; provider/model configuration and known revision; prompt/pipeline/validator versions; applicable document metadata, guidance, and memory snapshot.
 
+Post-#428 continuation bounds reads of the existing source-embedding cache: partial synchronization and vector lookup fetch only selected source-unit identities in bounded batches. Full-snapshot pruning remains document-wide. This removes whole-document vector reads from narrow reuse paths; it does not implement the broader semantic-stage fingerprinting or concurrent request coalescing below. Work-count evidence and remaining validation limits are in the progress tracker.
+
+The next local checkpoint adds exact dependency fingerprints and response revalidation to existing raw metadata-family checkpoints. Unchanged raw families avoid provider calls; changed family prompts/configuration/source locators or unknown legacy provenance force recomputation, with reuse/invalidation retained in the execution ledger. Already materialized completed-family resume behavior is unchanged. This is a Record-scoped crash-checkpoint improvement, not a general completed-stage cache or in-flight request coalescer.
+
 - Store validated results, provenance, and dependency fingerprints; record reuse in execution history.
 - Coalesce concurrent identical requests and invalidate only dependent stages.
 - Keep failure/malformed states distinct from reusable valid results.
@@ -78,11 +82,13 @@ Acceptance: unchanged warm stages avoid provider calls; field edits do not resta
 
 ## 5. Incremental vector memory
 
-Source-span embedding reuse and reviewed-example prefill already exist. `project_build_metadata_exemplars` currently derives a build's exemplars and calls `rebuild_scope`; make ordinary review updates incremental.
+Delivered continuation after #425: `project_build_metadata_exemplars` now derives complete exemplar sets for changed Records and reconciles only their vector rows. Unchanged evidence contexts reuse compatible vectors even when revision-bound exemplar IDs change; metadata-only changes do not request embeddings. Durable per-build dirty tokens and the reviewed-memory outbox survive failure/restart, and background tasks coalesce per build. The progress tracker records equivalence checks, work counts, and component timings.
 
-- Consume durable dirty work per record/field; upsert or retire only affected exemplars.
-- Bind stable exemplar IDs to originating assertions, record revisions, and evidence spans.
-- Coalesce repeated edits; retain full rebuild for recovery/reconciliation.
+The reconciliation unit is a complete Record, rather than only the edited field: RecordRevision and other reviewed-value snapshots can affect all of its exemplars. Full rebuilds remain for initialization, repair, broad invalidation and collection replacement. Full-asset source blocks still load once per derivation batch; source-storage indexing and broader enrichment caching remain separate work. Pending sealed second opinions and disputed, invalid, or unresolved assertions cannot enter the trusted exemplar projection.
+
+- Delivered: consume durable dirty work per Record; upsert or retire complete affected exemplar sets, including an empty set.
+- Delivered: preserve originating assertion identity, record revision, and bound evidence; reconcile revision-dependent exemplar IDs without re-embedding identical context.
+- Delivered: coalesce repeated edits; retain full rebuild for recovery/reconciliation and acknowledge only captured dirty tokens/events.
 - Include model revision/digest and preprocessing identity in embedding contracts where available.
 - Share exact compatible computations without collapsing source identity; batch bounded neighbour queries.
 - Keep reverse dependencies for retractions and changed suggestions.
@@ -123,6 +129,8 @@ With cached navigation already fast, halve review effort by reducing repeated re
 Acceptance: compare active time, corrections, reopened decisions, and independent quality assessment; 50% is most plausible for recurring metadata patterns. No automatic human-confirmed status by similarity.
 
 ## 8. Scheduling and contention
+
+The local continuation bounds pending Record tasks to the Record-worker count in initial enrichment, retries, and rerun passes. Shared provider and Ollama gates now prioritize reviewer-triggered metadata work, Research, and tools, with FIFO ordering within each class and a background turn after at most three foreground admissions while background work waits. Capacity limits and ownership/publication policy remain unchanged. Earlier readiness, dedicated capacity reservation, and contention measurements remain planned; these increments do not establish an elapsed-time improvement.
 
 Extend existing shared provider capacity and family parallelism; do not indiscriminately increase worker counts.
 

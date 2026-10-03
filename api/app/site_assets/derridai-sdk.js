@@ -367,6 +367,16 @@ var DerridAI = (function(exports) {
   function throwIfAborted$2(signal) {
     if (signal?.aborted) throw new DOMException("Operation aborted.", "AbortError");
   }
+  async function yieldBetweenIndexBatches(signal) {
+    throwIfAborted$2(signal);
+    const scheduler = globalThis.scheduler;
+    if (scheduler?.yield) {
+      await scheduler.yield();
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    throwIfAborted$2(signal);
+  }
   class LocalVectorIndex {
     constructor(manifest, repository, store, events) {
       this.manifest = manifest;
@@ -467,6 +477,9 @@ var DerridAI = (function(exports) {
           await this.store.put(this.publicationId, fingerprint, descriptor, entries);
           indexed += entries.length;
           this.events.emit({ type: "index-progress", runId: runId2, indexed, total });
+          if (start + batchSize < embeddable.length) {
+            await yieldBetweenIndexBatches(signal);
+          }
         }
         if (dimension) await writeEmpty(empty);
         else deferredEmpty.push(...empty);

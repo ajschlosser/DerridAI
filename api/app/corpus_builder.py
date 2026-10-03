@@ -13,6 +13,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -23,8 +24,8 @@ import time
 import unicodedata
 import uuid
 from collections import Counter
-from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -32,10 +33,15 @@ from typing import Any
 import fitz
 from pydantic import BaseModel, ValidationError
 
-from . import corpus_queue_projection
+from . import corpus_queue_projection, metadata_exemplar_journal
 from .autonomous import Policy as AutonomousPolicy
 from .celf_conformance import evaluate_celf_conformance
-from .concurrency import capacity_coordinator, provider_capacity_key, provider_limit
+from .concurrency import (
+    bounded_as_completed,
+    capacity_coordinator,
+    provider_capacity_key,
+    provider_limit,
+)
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
 from .corpus_build_lifecycle import BuildLifecycleMixin
@@ -336,6 +342,7 @@ from .text_noise import (
 )
 
 PUBLICATION_SCHEMA_VERSION = "derridai-corpus-jsonl-v1"
+logger = logging.getLogger(__name__)
 
 
 _PROMPT_TAG_RE = re.compile(r"</?\s*SOURCE[_ ]?TEXT\s*/?\s*>", re.I)
@@ -852,6 +859,7 @@ class PdfCorpusRepository:
         # idempotent and every writer already migrates, so re-running it on every read
         # of an unchanged payload was most of the cost of loading or saving a corpus.
         self._migration_fixed_points: set[tuple[bytes, bytes]] = set()
+        self._metadata_projection_callback: Callable[[str], None] | None = None
 
     def asset_meta_path(self, asset_id: str) -> Path:
         return self.root / "assets" / f"{asset_id}.json"
@@ -1162,8 +1170,9 @@ class PdfCorpusRepository:
         return meta
 
     def load_blocks(self, asset_id: str) -> list[dict[str, Any]]:
-        self.get_asset(asset_id)
-        return self._load_block_rows(asset_id)
+        with self._lock:
+            self.get_asset(asset_id)
+            return self._load_block_rows(asset_id)
 
     def update_page_labels(self, asset_id: str, labels: dict[int, str | None]) -> dict[str, Any]:
         """Apply explicit scholarly page-label overrides to a source asset.
@@ -1205,7 +1214,8 @@ class PdfCorpusRepository:
             asset["page_label_revision"] = int(asset.get("page_label_revision") or 0) + 1
             asset["page_labels_updated_at"] = iso_now()
             _json_write(self.asset_meta_path(asset_id), asset)
-            return asset
+        self._invalidate_asset_metadata_exemplars(asset_id)
+        return asset
 
     def apply_page_estimate(self, asset_id: str, *, words_per_page: int, one_record_per_page: bool) -> dict[str, Any]:
         """Rebuild estimated pages from a reviewer-chosen word length. Printed pages are left alone."""
@@ -1267,7 +1277,18 @@ class PdfCorpusRepository:
                     handle.write(json.dumps(block, ensure_ascii=False) + "\n")
             os.replace(tmp, self.asset_blocks_path(asset_id))
             _json_write(self.asset_meta_path(asset_id), asset)
-            return asset
+        self._invalidate_asset_metadata_exemplars(asset_id)
+        return asset
+
+    def _invalidate_asset_metadata_exemplars(self, asset_id: str) -> None:
+        offset = 0
+        while True:
+            listing = self.list_builds(offset=offset, limit=100, asset_id=asset_id)
+            for build in listing["items"]:
+                self.invalidate_metadata_exemplars(str(build["build_id"]))
+            offset += len(listing["items"])
+            if offset >= listing["total"]:
+                break
 
     def store_source_scans(self, asset_id: str, scans: list[dict[str, Any]], *, source: str, warnings: list[str] | None = None) -> dict[str, Any]:
         """Save bounded provider scan images beside a text source. The transcription stays authoritative."""
@@ -1391,6 +1412,45 @@ class PdfCorpusRepository:
             asset["initial_metadata"] = initial
             asset["metadata_revision"] = int(asset.get("metadata_revision") or 0) + 1
             asset["metadata_updated_at"] = iso_now()
+            _json_write(self.asset_meta_path(asset_id), asset)
+            return asset
+
+    def update_voice_assignments(
+        self,
+        asset_id: str,
+        assignments: dict[str, str],
+        *,
+        reviewer: str = "",
+    ) -> dict[str, Any]:
+        """Review diarized voice identities without rewriting extracted blocks."""
+        with self._lock:
+            asset = self.get_asset(asset_id)
+            if asset.get("media_kind") != "audio":
+                raise ValueError("Voice assignments are available only for audio sources.")
+            voices = list(dict.fromkeys(
+                str(block.get("speaker") or "").strip()
+                for block in self._load_block_rows(asset_id)
+                if str(block.get("speaker") or "").strip()
+            ))
+            unknown = sorted(set(assignments) - set(voices))
+            if unknown:
+                raise ValueError("Unknown diarized voice(s): " + ", ".join(unknown))
+            normalized: dict[str, dict[str, Any]] = {}
+            previous = asset.get("voice_assignments")
+            previous = previous if isinstance(previous, dict) else {}
+            for voice_id in voices:
+                name = str(assignments.get(voice_id) or "").strip()
+                prior = previous.get(voice_id) if isinstance(previous.get(voice_id), dict) else {}
+                normalized[voice_id] = {
+                    "voice_id": voice_id,
+                    "display_name": name,
+                    "authority": "human" if name else "unassigned",
+                    "reviewer": reviewer if name else "",
+                    "updated_at": iso_now() if name != str(prior.get("display_name") or "") else prior.get("updated_at"),
+                }
+            asset["voice_assignments"] = normalized
+            asset["voice_assignment_revision"] = int(asset.get("voice_assignment_revision") or 0) + 1
+            asset["voice_assignments_updated_at"] = iso_now()
             _json_write(self.asset_meta_path(asset_id), asset)
             return asset
 
@@ -1664,6 +1724,7 @@ class PdfCorpusRepository:
                 "ON corpus_records (ordinal)"
             )
             corpus_queue_projection.initialize(connection)
+            metadata_exemplar_journal.initialize(connection)
             connection.commit()
             with connection:
                 yield connection
@@ -1755,7 +1816,16 @@ class PdfCorpusRepository:
                 path.unlink()
 
     def save_build(self, build: dict[str, Any]) -> None:
-        _json_write(self.build_path(str(build["build_id"])), build)
+        build_id = str(build["build_id"])
+        with self._lock:
+            previous = _json_read(self.build_path(build_id), {})
+            dependencies = ("schema", "asset_id", "source_document_id", "editorial_memory_reset_at", "manifest")
+            changed = bool(previous) and any(previous.get(key) != build.get(key) for key in dependencies)
+            if changed:
+                self.invalidate_metadata_exemplars(build_id, schedule=False)
+            _json_write(self.build_path(build_id), build)
+        if changed:
+            self._notify_metadata_projection(build_id)
         # Realtime clients learn that the durable build changed; they still read
         # the build itself through REST.
         note_corpus_build(_operation_from_build(build))
@@ -1771,7 +1841,8 @@ class PdfCorpusRepository:
             return None
 
     def get_build(self, build_id: str) -> dict[str, Any]:
-        build = _json_read(self.build_path(build_id))
+        with self._lock:
+            build = _json_read(self.build_path(build_id))
         if not isinstance(build, dict):
             raise KeyError(build_id)
         return _migrate_status_vocabulary(build)
@@ -1779,7 +1850,8 @@ class PdfCorpusRepository:
     def list_builds(self, *, offset: int = 0, limit: int = 50, asset_id: str | None = None) -> dict[str, Any]:
         items: list[dict[str, Any]] = []
         for path in (self.root / "builds").glob("build-*/build.json"):
-            build = _json_read(path)
+            with self._lock:
+                build = _json_read(path)
             if isinstance(build, dict) and (not asset_id or build.get("asset_id") == asset_id):
                 items.append(_migrate_status_vocabulary(build))
         items.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
@@ -1880,6 +1952,7 @@ class PdfCorpusRepository:
             with self._records_db(build_id) as connection:
                 if not connection.in_transaction:
                     connection.execute("BEGIN IMMEDIATE")
+                metadata_exemplar_journal.invalidate(connection)
                 connection.execute("DELETE FROM corpus_records")
                 connection.executemany(
                     "INSERT INTO corpus_records(record_id, ordinal, payload) VALUES (?, ?, ?)",
@@ -1900,6 +1973,7 @@ class PdfCorpusRepository:
         # Semantic maps are System Data. Invalidate by generation in O(1);
         # rebuilding is deferred until a map is actually requested.
         system_store.mark_semantic_map_dirty(build_id, reason="records_saved")
+        self._notify_metadata_projection(build_id)
 
     def update_record(self, build_id: str, record: dict[str, Any]) -> None:
         """Persist one validated record without rebuilding the whole JSONL file.
@@ -1942,6 +2016,46 @@ class PdfCorpusRepository:
         # Committed single-record write (not a per-batch build write): readers may hold stale text.
         note_resource_changed("corpus_records")
         system_store.mark_semantic_map_dirty(build_id, reason=f"record_updated:{record_id}")
+        self._notify_metadata_projection(build_id)
+
+    def _notify_metadata_projection(self, build_id: str) -> None:
+        callback = self._metadata_projection_callback
+        if callback is not None:
+            callback(build_id)
+
+    def invalidate_metadata_exemplars(self, build_id: str, *, schedule: bool = True) -> None:
+        self._bootstrap_records_db(build_id)
+        with self._lock, self._records_db(build_id) as connection:
+            metadata_exemplar_journal.invalidate(connection)
+        if schedule:
+            self._notify_metadata_projection(build_id)
+
+    def metadata_exemplar_dirty(self, build_id: str, *, limit: int = 100) -> list[dict[str, str]]:
+        self._bootstrap_records_db(build_id)
+        with self._lock, self._records_db(build_id) as connection:
+            return metadata_exemplar_journal.dirty(connection, limit)
+
+    def metadata_exemplar_dirty_count(self, build_id: str) -> int:
+        self._bootstrap_records_db(build_id)
+        with self._lock, self._records_db(build_id) as connection:
+            return int(connection.execute("SELECT COUNT(*) FROM metadata_exemplar_dirty").fetchone()[0])
+
+    def complete_metadata_exemplar_dirty(self, build_id: str, items: list[dict[str, Any]]) -> int:
+        with self._lock, self._records_db(build_id) as connection:
+            return metadata_exemplar_journal.complete(connection, items)
+
+    def metadata_exemplar_state(self, build_id: str) -> tuple[str, str]:
+        self._bootstrap_records_db(build_id)
+        with self._lock, self._records_db(build_id) as connection:
+            row = connection.execute("SELECT epoch,context FROM metadata_exemplar_state WHERE singleton=1").fetchone()
+            return str(row[0]), str(row[1])
+
+    def save_metadata_exemplar_state(self, build_id: str, epoch: str, context: str) -> None:
+        with self._lock, self._records_db(build_id) as connection:
+            connection.execute(
+                "UPDATE metadata_exemplar_state SET epoch=?,context=? WHERE singleton=1",
+                (epoch, context),
+            )
 
     def refresh_records_projection(self, build_id: str) -> None:
         """Rebuild the JSONL publication projection from the transactional index."""
@@ -2304,6 +2418,11 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._progressive_metadata_index = ChromaMetadataExemplarIndex()
         self._progressive_metadata_warning_builds: set[str] = set()
         self._metadata_projection_lock = threading.RLock()
+        self._metadata_schedule_lock = threading.RLock()
+        self._metadata_scheduled: set[str] = set()
+        self._metadata_reschedule: set[str] = set()
+        self.repo._metadata_projection_callback = self._schedule_metadata_exemplar_projection
+        self._progressive_metadata_index.on_recreated = self._invalidate_all_metadata_exemplar_scopes
         self._ledger = EnrichmentLedger(self.repo.root / "enrichment_ledger.jsonl")
         self._suspended: set[tuple[str, str]] = set()
         self._schemas = SchemaStore(self.repo.root)
@@ -2645,15 +2764,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             record_projection_result(build_id)
             return result
         except Exception as exc:
-            record_projection_result(build_id, f"{type(exc).__name__}: {exc}")
-            self._append_warning(
-                build_id,
-                "Metadata exemplar projection is pending. Reviewed metadata was saved; "
-                "only the rebuildable semantic example index could not be refreshed. "
-                "This projection failure does not block review or publication. Check "
-                "vector-store and embedding-provider health; DerridAI will retry the "
-                "derived index.",
-            )
+            self._report_metadata_projection_failure(build_id, exc)
             return {
                 "scope_id": build_id,
                 "skipped": False,
@@ -2661,19 +2772,68 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 "error": str(exc),
             }
 
+    def _report_metadata_projection_failure(self, build_id: str, exc: Exception) -> None:
+        record_projection_result(build_id, f"{type(exc).__name__}: {exc}")
+        self._append_warning(
+            build_id,
+            "Metadata exemplar projection is pending. Reviewed metadata was saved; "
+            "only the rebuildable semantic example index could not be refreshed. "
+            "This projection failure does not block review or publication. Check "
+            "vector-store and embedding-provider health; DerridAI will retry the "
+            "derived index.",
+        )
+
     def _schedule_metadata_exemplar_projection(self, build_id: str) -> None:
         # Review durability never depends on Chroma. The SQLite outbox is committed
         # first; projection runs best-effort and an unacknowledged item is retried
         # after restart or the next review in this build.
-        self._executor.submit(self._project_metadata_exemplars_best_effort, build_id)
+        with self._metadata_schedule_lock:
+            if build_id in self._metadata_scheduled:
+                self._metadata_reschedule.add(build_id)
+                return
+            self._metadata_scheduled.add(build_id)
+        try:
+            self._executor.submit(self._drain_metadata_exemplar_projection, build_id)
+        except RuntimeError as exc:
+            with self._metadata_schedule_lock:
+                self._metadata_scheduled.discard(build_id)
+            self._report_metadata_projection_failure(build_id, exc)
+
+    def _drain_metadata_exemplar_projection(self, build_id: str) -> None:
+        result: dict[str, Any] = {}
+        try:
+            result = self._project_metadata_exemplars_best_effort(build_id)
+        finally:
+            with self._metadata_schedule_lock:
+                requested = build_id in self._metadata_reschedule
+                self._metadata_reschedule.discard(build_id)
+                self._metadata_scheduled.discard(build_id)
+        if not result.get("error") and (requested or result.get("pending")):
+            self._schedule_metadata_exemplar_projection(build_id)
 
     def _recover_metadata_exemplar_projections(self) -> None:
         try:
             build_ids = dirty_metadata_exemplar_build_ids(self.repo)
-        except Exception:
+        except Exception as exc:
+            record_projection_result("recovery", type(exc).__name__)
+            logger.error(
+                "Metadata exemplar recovery is pending (%s); inspect operational storage. Canonical review remains available.",
+                type(exc).__name__,
+            )
             return
+        record_projection_result("recovery")
         for build_id in build_ids:
             self._schedule_metadata_exemplar_projection(build_id)
+
+    def _invalidate_all_metadata_exemplar_scopes(self) -> None:
+        offset = 0
+        while True:
+            listing = self.repo.list_builds(offset=offset, limit=100)
+            for build in listing["items"]:
+                self.repo.invalidate_metadata_exemplars(str(build["build_id"]))
+            offset += len(listing["items"])
+            if offset >= listing["total"]:
+                break
 
 
 
@@ -2864,7 +3024,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
 
 
     def _append_warning(self, build_id: str, message: str) -> None:
-        with self._lock:
+        with self._lock, self.repo._lock:
             build = self.repo.get_build(build_id)
             warnings = list(build.get("warnings") or [])
             if message not in warnings:
@@ -3055,6 +3215,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                         capacity_limit,
                         cancelled=cancelled if build_id else None,
                         on_wait=waiting,
+                        priority="foreground" if request.get("_capacity_priority") == "foreground" else "background",
                     ) as permit:
                         if build_id and permit.waited_seconds > 0:
                             self._increment_metric(
@@ -3103,6 +3264,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                                 ollama_limit,
                                 cancelled=cancelled if build_id else None,
                                 on_wait=waiting_ollama,
+                                priority="foreground" if request.get("_capacity_priority") == "foreground" else "background",
                             ) as ollama_permit:
                                 if build_id and ollama_permit.waited_seconds > 0:
                                     self._increment_metric(
@@ -4151,14 +4313,11 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     thread_name_prefix="pdf-corpus-family",
                 ) as family_pool,
             ):
-                futures = {}
-                for index in pending:
-                    if self._cancelled(build_id):
-                        raise InterruptedError("Corpus build cancelled")
+                def submit_record(index: int):
                     record = dict(records[index])
                     previous_text = str(records[index - 1].get("text") or "") if index > 0 else ""
                     next_text = str(records[index + 1].get("text") or "") if index + 1 < len(records) else ""
-                    future = pool.submit(
+                    return pool.submit(
                         self._enrich_record,
                         record,
                         manifest,
@@ -4169,14 +4328,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         stage_callback=persist_metadata_stage,
                         family_executor=family_pool,
                     )
-                    futures[future] = index
                 completed = already_complete
-                for future in as_completed(futures):
+                for index, future in bounded_as_completed(
+                    pending, submit_record, max_pending=max_workers,
+                    cancelled=lambda: self._cancelled(build_id),
+                ):
                     if self._cancelled(build_id):
-                        for outstanding in futures:
-                            outstanding.cancel()
                         raise InterruptedError("Corpus build cancelled")
-                    index = futures[future]
                     try:
                         completed_record = future.result()
                         completed_record["metadata_enrichment_state"] = "complete"
@@ -4253,6 +4411,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         metadata_total=len(records),
                         metadata_concurrency=max_workers,
                     )
+                if self._cancelled(build_id):
+                    raise InterruptedError("Corpus build cancelled")
 
         settled_records = self.repo.load_records(build_id)
         requeued = [row for row in settled_records if row.get("metadata_requeue_requested")]

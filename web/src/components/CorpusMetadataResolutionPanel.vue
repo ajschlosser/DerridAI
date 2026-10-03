@@ -177,6 +177,8 @@ const inheritedFieldSet = new Set([
 const schemaFields = computed<Record<string, SchemaField>>(() =>
   Object.fromEntries((props.schema?.fields || []).map((field) => [field.name, field])),
 );
+const repeatableMembers = (field: string) =>
+  schemaFields.value[field]?.type === "repeatable" ? schemaFields.value[field]?.members || [] : [];
 const canonicalAssertions = computed(() =>
   currentFieldAssertions(props.record as unknown as Record<string, unknown>),
 );
@@ -187,7 +189,11 @@ const fieldOrder = computed<string[]>(() =>
 );
 const fieldLabel = (field: string) => schemaFields.value[field]?.label || "";
 const assertionByField = computed(() =>
-  Object.fromEntries(canonicalAssertions.value.map((item) => [item.field_name, item])),
+  Object.fromEntries(
+    canonicalAssertions.value
+      .filter((item) => !item.container_field_id)
+      .map((item) => [item.field_name, item]),
+  ),
 );
 function canonicalStatus(field: string): Record<string, unknown> | null {
   const assertion = assertionByField.value[field];
@@ -640,6 +646,8 @@ function displayValue(field: string) {
       >
         <CorpusMetadataFieldEditor
           :label="fieldLabel(field)"
+          :repeatable-members="repeatableMembers(field)"
+          :repeatable-max-items="schemaFields[field]?.max_items || undefined"
           :field="field"
           :value="fieldValue(field)"
           :status="status(field)"
@@ -720,6 +728,8 @@ function displayValue(field: string) {
         <div v-for="field in settledFields" :key="field" class="metadata-list-item" role="listitem">
           <CorpusMetadataFieldEditor
             :label="fieldLabel(field)"
+            :repeatable-members="repeatableMembers(field)"
+            :repeatable-max-items="schemaFields[field]?.max_items || undefined"
             :field="field"
             :value="fieldValue(field)"
             :status="status(field)"
@@ -771,6 +781,8 @@ function displayValue(field: string) {
         <div v-for="field in addableFields" :key="field" class="metadata-list-item" role="listitem">
           <CorpusMetadataFieldEditor
             :label="fieldLabel(field)"
+            :repeatable-members="repeatableMembers(field)"
+            :repeatable-max-items="schemaFields[field]?.max_items || undefined"
             :field="field"
             :value="fieldValue(field)"
             :status="status(field)"

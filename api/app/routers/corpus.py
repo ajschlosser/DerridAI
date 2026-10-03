@@ -42,6 +42,7 @@ from ..models import (
     PageEstimatePatch,
     PdfAssetLanguagePatch,
     PdfAssetMetadataPatch,
+    PdfAudioVoiceAssignments,
     PdfCorpusBoundaryAdjudication,
     PdfCorpusBuildCreate,
     PdfCorpusBuildResume,
@@ -369,6 +370,17 @@ def get_pdf_asset(asset_id: str) -> dict[str, Any]:
         return pdf_corpus_repository.get_asset(asset_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+
+
+@router.patch("/api/pdf/assets/{asset_id}/voice-assignments")
+def patch_audio_voice_assignments(asset_id: str, body: PdfAudioVoiceAssignments) -> dict[str, Any]:
+    """Name diarized voices and project the reviewed names into current records."""
+    try:
+        return pdf_corpus_builds.update_voice_assignments(asset_id, body.assignments)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Source asset not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 

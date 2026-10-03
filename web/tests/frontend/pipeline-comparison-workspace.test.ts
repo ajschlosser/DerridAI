@@ -256,4 +256,93 @@ describe("PipelineComparisonWorkspace", () => {
     expect(wrapper.text()).not.toMatch(/\b(winner|best)\b/i);
     expect(wrapper.text()).toContain("does not declare either pipeline better");
   });
+
+  it("runs a reviewer-evidence comparison on the same field value and blocks", async () => {
+    const evidencePipelines: PipelineDefinition[] = [
+      {
+        pipeline_id: "evidence.reviewer.current",
+        version: 2,
+        name: "Reviewer current",
+        purpose: "evidence_suggestion",
+        status: "active",
+        entry_stage_ids: ["lexical"],
+        stages: [],
+        runtime_support: { supported: true, adapter: "evidence_suggestion" },
+      },
+      {
+        pipeline_id: "evidence.lexical-only",
+        version: 1,
+        name: "Lexical only",
+        purpose: "evidence_suggestion",
+        status: "draft",
+        entry_stage_ids: ["lexical"],
+        stages: [],
+        runtime_support: { supported: true, adapter: "evidence_suggestion" },
+      },
+    ];
+    vi.spyOn(pipelinesApi, "compareEvidenceSuggestion").mockResolvedValue({
+      non_persistent: true,
+      left: {
+        pipeline: {
+          pipeline_id: "evidence.reviewer.current",
+          pipeline_version: 2,
+          pipeline_hash: "left",
+          purpose: "evidence_suggestion",
+        },
+        elapsed_seconds: 0.12,
+        stages: [],
+        candidates: [{ block_id: "b1", rank: 1, score: 0.9 }],
+      },
+      right: {
+        pipeline: {
+          pipeline_id: "evidence.lexical-only",
+          pipeline_version: 1,
+          pipeline_hash: "right",
+          purpose: "evidence_suggestion",
+        },
+        elapsed_seconds: 0.08,
+        stages: [],
+        candidates: [{ block_id: "b1", rank: 1, score: 0.7 }],
+      },
+      comparison: {
+        shared_block_ids: ["b1"],
+        left_only_block_ids: [],
+        right_only_block_ids: [],
+        shared_count: 1,
+        union_count: 1,
+        jaccard_overlap: 1,
+        rank_changes: [{ block_id: "b1", left_rank: 1, right_rank: 1, rank_delta: 0 }],
+        elapsed_seconds_delta: -0.04,
+      },
+    });
+
+    const wrapper = mount(PipelineComparisonWorkspace, {
+      props: { pipelines: [...pipelines, ...evidencePipelines] },
+    });
+    await flushPromises();
+    const radios = wrapper.findAll('input[type="radio"]');
+    await radios[1].setValue();
+    await wrapper.findAll("textarea")[0].setValue("hospitality");
+    await wrapper
+      .findAll("textarea")[1]
+      .setValue('[{"block_id":"b1","text":"welcome the stranger"}]');
+    await wrapper.find("input[type='text']").setValue("topic");
+    const button = wrapper
+      .findAll("button")
+      .find((item) => item.text().includes("Run dry comparison"));
+    await button!.trigger("click");
+    await flushPromises();
+    expect(pipelinesApi.compareEvidenceSuggestion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: "hospitality",
+        field: "topic",
+        left: { pipeline_id: "evidence.reviewer.current", version: 2 },
+        right: { pipeline_id: "evidence.lexical-only", version: 1 },
+      }),
+    );
+    expect(wrapper.text()).toContain("Suggested-block overlap");
+    expect(wrapper.text()).toContain("100%");
+    expect(wrapper.text()).toContain("b1");
+    expect(wrapper.text()).not.toMatch(/\b(winner|best)\b/i);
+  });
 });

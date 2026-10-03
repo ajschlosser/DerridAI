@@ -60,6 +60,10 @@ class FakeRepo:
         assert build_id == "build-1"
         return self.records
 
+    def get_records(self, build_id, record_ids):
+        assert build_id == "build-1"
+        return [next((row for row in self.records if row["record_id"] == rid), None) for rid in record_ids]
+
     def load_blocks(self, asset_id):
         assert asset_id == "asset-1"
         return self.blocks
@@ -170,7 +174,7 @@ def test_projector_rebuilds_dirty_scope_then_acknowledges(monkeypatch):
     monkeypatch.setattr(
         projection.system_store,
         "list_semantic_memory_dirty",
-        lambda name, limit=1000: list(dirty),
+        lambda name, limit=1000, **kw: [] if kw.get("unscoped") else list(dirty),
     )
     acknowledged = []
     monkeypatch.setattr(
@@ -179,7 +183,7 @@ def test_projector_rebuilds_dirty_scope_then_acknowledges(monkeypatch):
         lambda item_ids: acknowledged.extend(item_ids) or len(item_ids),
     )
 
-    result = projection.project_build_metadata_exemplars(repo, "build-1", index)
+    result = projection.project_build_metadata_exemplars(repo, "build-1", index, force=True)
 
     assert result["skipped"] is False
     assert result["desired"] == 1
@@ -201,7 +205,7 @@ def test_projector_does_not_acknowledge_if_chroma_rebuild_fails(monkeypatch):
     monkeypatch.setattr(
         projection.system_store,
         "list_semantic_memory_dirty",
-        lambda name, limit=1000: [
+        lambda name, limit=1000, **kw: [] if kw.get("unscoped") else [
             {"item_id": "dirty-1", "scope_id": "build-1", "record_id": "r1"}
         ],
     )
@@ -213,7 +217,7 @@ def test_projector_does_not_acknowledge_if_chroma_rebuild_fails(monkeypatch):
     )
 
     try:
-        projection.project_build_metadata_exemplars(repo, "build-1", BrokenIndex())
+        projection.project_build_metadata_exemplars(repo, "build-1", BrokenIndex(), force=True)
         raise AssertionError("projection failure should propagate")
     except RuntimeError as exc:
         assert "chroma unavailable" in str(exc)

@@ -113,7 +113,7 @@ npm run test:e2e
 npm run test:e2e:a11y
 ```
 
-If port 6006 or 5199 is busy, set `STORYBOOK_PORT` or `APP_PORT`; do not weaken a test gate to work around a local port collision.
+The Storybook suites run against the static build, as CI does, so run `npm run build-storybook` (and `npm run build` for the app suites) first; the configs fail fast if it is missing. They never reuse a server that is already listening: if port 6006 or 5199 is busy, set `STORYBOOK_PORT` or `APP_PORT`; do not weaken a test gate to work around a local port collision.
 
 See [tests/README.md](tests/README.md) for pytest markers, test taxonomy, and focused test guidance.
 

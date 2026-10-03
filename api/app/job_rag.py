@@ -351,6 +351,7 @@ class RAGJobManager(PersistentJobStateMixin):
                 limit,
                 cancelled=cancelled,
                 on_wait=waiting,
+                priority="foreground",
             )
         except CapacityCancelled:
             return None
@@ -435,6 +436,7 @@ class RAGJobManager(PersistentJobStateMixin):
                 limit,
                 cancelled=cancelled,
                 on_wait=waiting,
+                priority="foreground",
             )
         except CapacityCancelled:
             return None

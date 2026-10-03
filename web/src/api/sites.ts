@@ -36,11 +36,11 @@ export interface TransformersDownloadEvent {
 
 export interface SiteTransformersRuntime {
   version: string;
-  /** True once DerridAI has downloaded and verified the runtime on this server. */
+  /** True once DerridAI has downloaded and verified the Transformers.js runtime on this server. */
   cached: boolean;
   /** One-time download size when it is not cached yet. */
   download_bytes: number;
-  /** Size added to a single-file or two-file site when the runtime is embedded. */
+  /** Size added to a single-file or two-file site when the Transformers.js runtime is embedded. */
   inline_bytes: number;
 }
 

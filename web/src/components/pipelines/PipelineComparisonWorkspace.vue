@@ -1,13 +1,18 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { chromaApi } from "../../api/chroma";
 import { pipelinesApi } from "../../api/pipelines";
 import { pipelineKey } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
-import type { PipelineDefinition, ResearchPipelineComparisonResult } from "../../types/pipelines";
+import type {
+  EvidencePipelineComparisonResult,
+  PipelineDefinition,
+  ResearchPipelineComparisonResult,
+} from "../../types/pipelines";
 import type { VectorCollection } from "../../types/vector";
 import PipelineComparisonResult from "./PipelineComparisonResult.vue";
+import PipelineEvidenceComparisonResult from "./PipelineEvidenceComparisonResult.vue";
 import UiButton from "../ui/UiButton.vue";
 
 const props = defineProps<{
@@ -18,8 +23,15 @@ const emit = defineEmits<{ openPipeline: [key: string] }>();
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
 
+type CompareMode = "research" | "evidence_suggestion" | "evidence_recovery";
+
+const mode = ref<CompareMode>("research");
 const prompt = ref("");
 const collection = ref("");
+const fieldValue = ref("");
+const fieldName = ref("");
+const sourceDocumentId = ref("");
+const blocksJson = ref("[]");
 const leftKey = ref("");
 const rightKey = ref("");
 const collections = ref<VectorCollection[]>([]);
@@ -27,7 +39,8 @@ const collectionsLoaded = ref(false);
 const collectionsLoading = ref(false);
 const running = ref(false);
 const error = ref("");
-const result = ref<ResearchPipelineComparisonResult | null>(null);
+const researchResult = ref<ResearchPipelineComparisonResult | null>(null);
+const evidenceResult = ref<EvidencePipelineComparisonResult | null>(null);
 
 const researchPipelines = computed(() =>
   props.pipelines.filter(
@@ -38,32 +51,137 @@ const researchPipelines = computed(() =>
   ),
 );
 
+const evidencePipelines = computed(() => {
+  const purpose = mode.value === "evidence_recovery" ? "evidence_recovery" : "evidence_suggestion";
+  return props.pipelines.filter(
+    (pipeline) =>
+      pipeline.purpose === purpose &&
+      pipeline.status !== "disabled" &&
+      pipeline.runtime_support?.supported !== false,
+  );
+});
+
+const selectablePipelines = computed(() =>
+  mode.value === "research" ? researchPipelines.value : evidencePipelines.value,
+);
+
+const heading = computed(() => {
+  if (mode.value === "evidence_suggestion") {
+    return t("pipelines.compare_title_suggestion", "Test and compare reviewer-evidence pipelines");
+  }
+  if (mode.value === "evidence_recovery") {
+    return t("pipelines.compare_title_recovery", "Test and compare evidence-recovery pipelines");
+  }
+  return t("pipelines.compare_title", "Test and compare Research pipelines");
+});
+
+const help = computed(() => {
+  if (mode.value === "evidence_suggestion") {
+    return t(
+      "pipelines.compare_help_suggestion",
+      "This dry run executes the same reviewer-evidence retrieval, optional MMR, and support/provenance gates on one field value and the same source blocks. It does not bind evidence or write corpus state. The result describes differences; it does not declare either pipeline better.",
+    );
+  }
+  if (mode.value === "evidence_recovery") {
+    return t(
+      "pipelines.compare_help_recovery",
+      "This dry run walks each recovery cascade on one field value and the same source blocks without calling a language model or persisting a trace. The result describes differences; it does not declare either pipeline better.",
+    );
+  }
+  return t(
+    "pipelines.compare_help",
+    "This dry run executes real retrieval, reranking, diversity, provenance, and context-packing stages, then stops before answer generation. Query decomposition is disabled in this first comparison mode so both sides receive the same question. The result describes differences; it does not declare either pipeline better.",
+  );
+});
+
+const parsedBlocks = computed(() => {
+  try {
+    const parsed = JSON.parse(blocksJson.value);
+    if (!Array.isArray(parsed) || !parsed.length) return null;
+    const blocks = parsed
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+      .map((item) => ({
+        block_id: String(item.block_id || ""),
+        text: String(item.text || ""),
+        source_unit_id: item.source_unit_id != null ? String(item.source_unit_id) : undefined,
+      }))
+      .filter((item) => item.block_id);
+    return blocks.length ? blocks : null;
+  } catch {
+    return null;
+  }
+});
+
+const statusMessage = computed(() => {
+  if (running.value) return t("pipelines.compare_status_running", "Comparing pipelines.");
+  if (error.value) return t("pipelines.compare_status_error", "Comparison failed.");
+  if (researchResult.value || evidenceResult.value)
+    return t("pipelines.compare_status_complete", "Comparison complete.");
+  return t("pipelines.compare_status_idle", "Ready to compare.");
+});
+
+const parsedValue = computed(() => {
+  const raw = fieldValue.value.trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+});
+
 const disabledReason = computed(() => {
   if (running.value) return "";
-  if (!researchPipelines.value.length)
+  if (!selectablePipelines.value.length) {
+    return mode.value === "research"
+      ? t(
+          "pipelines.compare_reason_no_pipelines",
+          "No executable Research pipelines are available.",
+        )
+      : t(
+          "pipelines.compare_reason_no_evidence_pipelines",
+          "No executable evidence pipelines of this kind are available.",
+        );
+  }
+  if (mode.value === "research") {
+    if (!prompt.value.trim())
+      return t("pipelines.compare_reason_question", "Enter a research question first.");
+    if (!collection.value)
+      return t("pipelines.compare_reason_collection", "Choose a corpus collection first.");
+    return "";
+  }
+  if (parsedValue.value == null)
     return t(
-      "pipelines.compare_reason_no_pipelines",
-      "No executable Research pipelines are available.",
+      "pipelines.compare_reason_value",
+      "Enter the field value both pipelines should score.",
     );
-  if (!prompt.value.trim())
-    return t("pipelines.compare_reason_question", "Enter a research question first.");
-  if (!collection.value)
-    return t("pipelines.compare_reason_collection", "Choose a corpus collection first.");
+  if (!fieldName.value.trim())
+    return t("pipelines.compare_reason_field", "Enter the field name first.");
+  if (!parsedBlocks.value)
+    return t(
+      "pipelines.compare_reason_blocks",
+      "Provide a JSON array of source blocks with block_id values.",
+    );
   return "";
 });
 
 function definition(key: string) {
-  return researchPipelines.value.find((pipeline) => pipelineKey(pipeline) === key) || null;
+  return selectablePipelines.value.find((pipeline) => pipelineKey(pipeline) === key) || null;
 }
 
 function initializeChoices() {
-  if (!leftKey.value && researchPipelines.value.length) {
-    leftKey.value = pipelineKey(researchPipelines.value[0]);
-  }
-  if (!rightKey.value && researchPipelines.value.length) {
-    rightKey.value = pipelineKey(researchPipelines.value[1] || researchPipelines.value[0]);
-  }
+  leftKey.value = selectablePipelines.value[0] ? pipelineKey(selectablePipelines.value[0]) : "";
+  rightKey.value = selectablePipelines.value[1]
+    ? pipelineKey(selectablePipelines.value[1])
+    : leftKey.value;
 }
+
+watch(mode, () => {
+  researchResult.value = null;
+  evidenceResult.value = null;
+  error.value = "";
+  initializeChoices();
+});
 
 onMounted(() => {
   initializeChoices();
@@ -90,23 +208,38 @@ async function loadCollections() {
 async function runComparison() {
   const left = definition(leftKey.value);
   const right = definition(rightKey.value);
-  if (!left || !right || !prompt.value.trim() || !collection.value || running.value) return;
+  if (!left || !right || running.value || disabledReason.value) return;
 
   running.value = true;
   error.value = "";
-  result.value = null;
+  researchResult.value = null;
+  evidenceResult.value = null;
   try {
-    result.value = await pipelinesApi.compareResearch({
-      request: {
-        prompt: prompt.value.trim(),
-        source_collection: collection.value,
-        // Keep the first comparison mode retrieval-focused and reproducible.
-        // The backend therefore does not need a generation provider/model.
-        query_decomposition: false,
-      },
+    if (mode.value === "research") {
+      researchResult.value = await pipelinesApi.compareResearch({
+        request: {
+          prompt: prompt.value.trim(),
+          source_collection: collection.value,
+          query_decomposition: false,
+        },
+        left: { pipeline_id: left.pipeline_id, version: left.version },
+        right: { pipeline_id: right.pipeline_id, version: right.version },
+      });
+      return;
+    }
+    const request = {
+      value: parsedValue.value,
+      blocks: parsedBlocks.value || [],
+      field: fieldName.value.trim(),
+      field_metadata: { name: fieldName.value.trim(), label: fieldName.value.trim() },
+      source_document_id: sourceDocumentId.value.trim(),
       left: { pipeline_id: left.pipeline_id, version: left.version },
       right: { pipeline_id: right.pipeline_id, version: right.version },
-    });
+    };
+    evidenceResult.value =
+      mode.value === "evidence_recovery"
+        ? await pipelinesApi.compareEvidenceRecovery(request)
+        : await pipelinesApi.compareEvidenceSuggestion(request);
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -118,22 +251,30 @@ async function runComparison() {
 <template>
   <section class="comparison-workspace" aria-labelledby="pipeline-compare-title">
     <header class="workspace-heading">
-      <h3 id="pipeline-compare-title">
-        {{ t("pipelines.compare_title", "Test and compare Research pipelines") }}
-      </h3>
-      <p>
-        {{
-          t(
-            "pipelines.compare_help",
-            "This dry run executes real retrieval, reranking, diversity, provenance, and context-packing stages, then stops before answer generation. Query decomposition is disabled in this first comparison mode so both sides receive the same question. The result describes differences; it does not declare either pipeline better.",
-          )
-        }}
-      </p>
+      <h3 id="pipeline-compare-title">{{ heading }}</h3>
+      <p>{{ help }}</p>
     </header>
 
+    <fieldset class="mode-row">
+      <legend>{{ t("pipelines.compare_mode", "Comparison kind") }}</legend>
+      <label>
+        <input v-model="mode" type="radio" value="research" />
+        {{ t("pipelines.compare_mode_research", "Research") }}
+      </label>
+      <label>
+        <input v-model="mode" type="radio" value="evidence_suggestion" />
+        {{ t("pipelines.compare_mode_suggestion", "Reviewer evidence") }}
+      </label>
+      <label>
+        <input v-model="mode" type="radio" value="evidence_recovery" />
+        {{ t("pipelines.compare_mode_recovery", "Evidence recovery") }}
+      </label>
+    </fieldset>
+
+    <p class="sr-only" role="status" aria-live="polite">{{ statusMessage }}</p>
     <p v-if="error" class="comparison-error" role="alert">{{ error }}</p>
 
-    <div class="comparison-form">
+    <div v-if="mode === 'research'" class="comparison-form">
       <label class="prompt-field">
         <span>{{ t("pipelines.compare_question", "Research question") }}</span>
         <textarea
@@ -194,6 +335,72 @@ async function runComparison() {
       </div>
     </div>
 
+    <div v-else class="comparison-form">
+      <label class="prompt-field">
+        <span>{{ t("pipelines.compare_value", "Field value") }}</span>
+        <textarea
+          v-model="fieldValue"
+          class="control"
+          rows="3"
+          :placeholder="
+            t(
+              'pipelines.compare_value_placeholder',
+              'Value both pipelines should retrieve evidence for.',
+            )
+          "
+        />
+      </label>
+      <label class="prompt-field">
+        <span>{{ t("pipelines.compare_blocks", "Source blocks (JSON)") }}</span>
+        <textarea
+          v-model="blocksJson"
+          class="control"
+          rows="6"
+          :placeholder="t('pipelines.compare_blocks_placeholder', 'JSON array of source blocks')"
+        />
+      </label>
+      <div class="choice-row">
+        <label>
+          <span>{{ t("pipelines.compare_field", "Field name") }}</span>
+          <input v-model="fieldName" class="control" type="text" />
+        </label>
+        <label>
+          <span>{{ t("pipelines.compare_source_document", "Source document ID") }}</span>
+          <input
+            v-model="sourceDocumentId"
+            class="control"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </label>
+        <label>
+          <span>{{ t("pipelines.compare_left", "Pipeline A") }}</span>
+          <select v-model="leftKey" class="control">
+            <option
+              v-for="pipeline in evidencePipelines"
+              :key="pipelineKey(pipeline)"
+              :value="pipelineKey(pipeline)"
+            >
+              {{ pipeline.name }} · v{{ pipeline.version }}
+            </option>
+          </select>
+        </label>
+        <label>
+          <span>{{ t("pipelines.compare_right", "Pipeline B") }}</span>
+          <select v-model="rightKey" class="control">
+            <option
+              v-for="pipeline in evidencePipelines"
+              :key="pipelineKey(pipeline)"
+              :value="pipelineKey(pipeline)"
+            >
+              {{ pipeline.name }} · v{{ pipeline.version }}
+            </option>
+          </select>
+        </label>
+      </div>
+    </div>
+
     <div class="comparison-actions">
       <UiButton
         variant="primary"
@@ -202,30 +409,33 @@ async function runComparison() {
             ? t('pipelines.comparing', 'Comparing…')
             : t('pipelines.compare_action', 'Run dry comparison')
         "
-        :disabled="
-          running ||
-          !prompt.trim() ||
-          !collection ||
-          !leftKey ||
-          !rightKey ||
-          researchPipelines.length < 1
-        "
+        :disabled="Boolean(disabledReason) || !leftKey || !rightKey"
         :disabled-reason="disabledReason"
         @click="runComparison"
       />
       <span>
         {{
-          t(
-            "pipelines.compare_nonpersistent",
-            "No Research job, response-memory entry, or pipeline trace is saved.",
-          )
+          mode === "research"
+            ? t(
+                "pipelines.compare_nonpersistent",
+                "No Research job, response-memory entry, or pipeline trace is saved.",
+              )
+            : t(
+                "pipelines.compare_nonpersistent_evidence",
+                "No evidence is bound and no pipeline trace is saved.",
+              )
         }}
       </span>
     </div>
 
     <PipelineComparisonResult
-      v-if="result"
-      :result="result"
+      v-if="researchResult"
+      :result="researchResult"
+      @open-pipeline="emit('openPipeline', $event)"
+    />
+    <PipelineEvidenceComparisonResult
+      v-if="evidenceResult"
+      :result="evidenceResult"
       @open-pipeline="emit('openPipeline', $event)"
     />
   </section>
@@ -247,6 +457,27 @@ async function runComparison() {
   color: var(--text-secondary);
   font-size: 0.875rem;
   line-height: var(--lh-normal);
+}
+.mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.mode-row legend {
+  padding: 0;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+}
+.mode-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-primary);
+  font-size: 0.875rem;
 }
 .comparison-error {
   margin: 0;

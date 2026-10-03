@@ -15,6 +15,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from .corpus_reviewer_helpers import _pending_second_opinion
 from .field_assertions import (
     FieldAssertion,
     current_assertion_by_name,
@@ -63,7 +64,10 @@ def reviewed_values(record: dict[str, Any]) -> dict[str, str]:
     migrate_record_assertions(row)
     for assertion in current_assertions(row):
         name = str(assertion.field_name or "")
-        if name and assertion.value_status == "present" and assertion.authority_status in REVIEWED_AUTHORITY:
+        if (
+            name and not _pending_second_opinion(row, name)
+            and assertion.value_status == "present" and assertion.authority_status in REVIEWED_AUTHORITY
+        ):
             out[name] = _json_key(assertion.value)
     return out
 
@@ -170,6 +174,8 @@ def build_metadata_exemplar(
     why: list[str] | None = None,
     schema: Any = None,
     registry: Any = None,
+    assertion_override: Any = None,
+    value_override: Any = ...,
 ) -> dict[str, Any] | None:
     """Derive one trusted, evidence-bound positive metadata exemplar.
 
@@ -187,19 +193,20 @@ def build_metadata_exemplar(
     field = str(field or "").strip()
     if not field:
         return skip("no_field")
+    if _pending_second_opinion(record, field):
+        return skip("second_opinion_pending")
 
     migrate_record_assertions(record)
-    assertion = current_assertion_by_name(record, field)
+    assertion = assertion_override or current_assertion_by_name(record, field)
     if assertion is None:
         return skip("no_assertion")
     is_confirmed_absence = assertion.value_status == "confirmed_absent"
-    if (
-        assertion.authority_status not in {"human_confirmed", "human_override"}
-        and not is_confirmed_absence
-    ):
+    if assertion.authority_status not in REVIEWED_AUTHORITY:
         return skip("not_human_confirmed")
+    if assertion.value_status not in {"present", "confirmed_absent"}:
+        return skip("value_not_resolved")
 
-    value = record.get(field)
+    value = record.get(field) if value_override is ... else value_override
     if is_confirmed_absence:
         if value not in (None, "", []):
             return skip("absence_has_value")
@@ -284,6 +291,7 @@ def build_metadata_exemplar(
 
     return {
         "metadata_exemplar_id": exemplar_id,
+        "assertion_id": str(assertion.assertion_id),
         "kind": "absence" if is_confirmed_absence else "positive",
         "record_id": record_id,
         "record_revision": record_revision,

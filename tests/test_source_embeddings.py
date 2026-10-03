@@ -139,7 +139,7 @@ class FakeChromaCollection:
     def __init__(self, rows: list[dict[str, object]]) -> None:
         self._rows = rows
 
-    def get(self, *, where, include):
+    def get(self, *, where, include, ids=None):
         return {
             "ids": [row["id"] for row in self._rows],
             "metadatas": [row["metadata"] for row in self._rows],
@@ -175,14 +175,19 @@ class BatchLimitedCollection:
         self.upsert_batch_sizes: list[int] = []
         self.delete_batch_sizes: list[int] = []
         self.fail_upserts = False
+        self.get_requests: list[dict[str, object]] = []
+        self.returned_rows = 0
 
-    def get(self, *, where, include):
+    def get(self, *, where, include, ids=None):
+        self.get_requests.append({"ids": ids, "include": include})
         document_id = str(where.get("source_document_id") or "")
         matching = [
             (storage_id, row)
             for storage_id, row in self.rows.items()
             if str((row.get("metadata") or {}).get("source_document_id") or "") == document_id
+            and (ids is None or storage_id in ids)
         ]
+        self.returned_rows += len(matching)
         return {
             "ids": [storage_id for storage_id, _ in matching],
             "metadatas": [row["metadata"] for _, row in matching],
@@ -227,6 +232,87 @@ def batch_limited_projection(store: BatchLimitedStore) -> SourceEmbeddingProject
     projection = SourceEmbeddingProjection(store)
     projection._collection = lambda provider, model: store.collection
     return projection
+
+
+@pytest.mark.parametrize("size", [1000, 10000])
+def test_partial_source_cache_reads_only_requested_units(size):
+    store = BatchLimitedStore(max_batch_size=3)
+    projection = batch_limited_projection(store)
+    source = [block(f"b{index}", f"Source text {index}.") for index in range(size)]
+    projection.sync("doc-1", source, provider="ollama", model="m")
+    expected = {
+        f"b{index}": store.collection.rows[source_unit_identity("doc-1", f"b{index}")]["embedding"]
+        for index in range(5)
+    }
+    store.collection.get_requests.clear()
+    store.collection.returned_rows = 0
+    store.embeddings.calls.clear()
+
+    result = projection.sync("doc-1", source[:5], provider="ollama", model="m", prune=False)
+    vectors = projection.embeddings_for(
+        "doc-1", [*expected, "b0", "missing"], provider="ollama", model="m",
+    )
+
+    assert vectors == expected
+    assert result["reused"] == 5
+    assert result["embedded"] == result["deleted"] == 0
+    assert store.embeddings.calls == []
+    assert store.collection.returned_rows == 10
+    assert len(store.collection.get_requests) == 4
+    assert all(0 < len(request["ids"]) <= 3 for request in store.collection.get_requests)
+    assert len(store.collection.rows) == size
+
+
+def test_empty_source_vector_selection_does_not_open_collection():
+    projection = SourceEmbeddingProjection(FakeStore())
+
+    def unexpected_collection(*args):
+        pytest.fail("Empty selection must not open or rebuild the collection.")
+
+    projection._collection = unexpected_collection
+    assert projection.embeddings_for("doc-1", ["", " "]) == {}
+
+
+def test_partial_sync_changes_only_selected_document_units():
+    store = BatchLimitedStore(max_batch_size=3)
+    projection = batch_limited_projection(store)
+    for document in ("doc-1", "doc-2"):
+        projection.sync(
+            document, [block("b1", "Original."), block("b2", "Keep.")],
+            provider="ollama", model="m",
+        )
+    unchanged = {
+        key: row for key, row in store.collection.rows.items()
+        if key != source_unit_identity("doc-1", "b1")
+    }
+    store.embeddings.calls.clear()
+    result = projection.sync(
+        "doc-1", [block("b1", "Changed.")], provider="ollama", model="m", prune=False,
+    )
+    assert result["embedded"] == result["upserted"] == 1
+    assert result["deleted"] == 0
+    assert store.embeddings.calls == [["Changed."]]
+    assert all(store.collection.rows[key] == row for key, row in unchanged.items())
+    store.collection.get_requests.clear()
+    assert projection.embeddings_for("missing-document", ["b1"], provider="ollama", model="m") == {}
+    assert projection.sync("doc-1", [], provider="ollama", model="m", prune=False)["deleted"] == 0
+    assert len(store.collection.get_requests) == 1
+    assert len(store.collection.rows) == 4
+
+
+def test_fallback_source_cache_keeps_same_unit_ids_in_separate_documents():
+    projection = SourceEmbeddingProjection(FakeStore())
+    for document in ("doc-1", "doc-2"):
+        projection.sync(document, [block("b1", document)], provider="ollama", model="m")
+    for document in ("doc-1", "doc-2"):
+        result = projection.sync(
+            document, [block("b1", document)], provider="ollama", model="m", prune=False,
+        )
+        assert result["reused"] == 1
+        assert projection.embeddings_for(document, ["b1"], provider="ollama", model="m")
+    projection.sync("doc-1", [], provider="ollama", model="m")
+    assert projection.embeddings_for("doc-1", ["b1"], provider="ollama", model="m") == {}
+    assert projection.embeddings_for("doc-2", ["b1"], provider="ollama", model="m")
 
 
 def test_projection_batches_embeddings_upserts_and_deletes_to_backend_limit(monkeypatch):

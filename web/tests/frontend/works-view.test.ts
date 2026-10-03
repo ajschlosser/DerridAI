@@ -625,7 +625,7 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
-  it("says the runtime is downloaded once on first use, then cached", async () => {
+  it("says the Transformers.js runtime is downloaded once on first use, then cached", async () => {
     const wrapper = await mountWorks();
     await chooseMenuItem(wrapper, "More actions", "Create site");
     const section = wrapper.get(".create-site-dialog [data-site-transformers]");
@@ -650,7 +650,7 @@ describe("WorksView", () => {
     cached.unmount();
   });
 
-  it("describes where the runtime goes for the single-container format", async () => {
+  it("describes where the Transformers.js runtime goes for the single-container format", async () => {
     const wrapper = await mountWorks();
     await chooseMenuItem(wrapper, "More actions", "Create site");
     const dialog = wrapper.get(".create-site-dialog");

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Iterator
 from typing import Any, cast
 
 from .config import settings
@@ -246,8 +247,14 @@ class SourceEmbeddingProjection:
         desired = self._rows(blocks, document_id)
         if collection is None:
             rows = self._fallback_rows(resolved_provider, resolved_model)
+            candidates = (
+                rows.values() if prune else (
+                    rows[key] for row in desired
+                    if (key := source_unit_identity(document_id, row["source_unit_id"])) in rows
+                )
+            )
             existing = {
-                key: value for key, value in rows.items()
+                str(value["source_unit_id"]): value for value in candidates
                 if str(value.get("source_document_id") or "") == document_id
             }
             stale = (
@@ -286,13 +293,13 @@ class SourceEmbeddingProjection:
                 )
                 if prior and prior.get("embedding_identity") == identity:
                     continue
-                rows[row["source_unit_id"]] = {
+                rows[source_unit_identity(document_id, row["source_unit_id"])] = {
                     **row,
                     "embedding_identity": identity,
                     "embedding": vector_by_hash[row["text_hash"]],
                 }
             for unit_id in stale:
-                rows.pop(unit_id, None)
+                rows.pop(source_unit_identity(document_id, unit_id), None)
             return {
                 "desired": len(desired),
                 "embedded": embedded,
@@ -306,10 +313,19 @@ class SourceEmbeddingProjection:
                 "batches": embedding_batches,
             }
 
-        payload = collection.get(
-            where={"source_document_id": document_id},
-            include=["metadatas"],
-        )
+        if prune:
+            payload = collection.get(
+                where={"source_document_id": document_id},
+                include=["metadatas"],
+            )
+        else:
+            payload = {"ids": [], "metadatas": []}
+            for batch in self._selected_rows(
+                collection, document_id, [_unit_id(row) for row in desired],
+                include=["metadatas"],
+            ):
+                payload["ids"].extend(batch.get("ids") or [])
+                payload["metadatas"].extend(batch.get("metadatas") or [])
         current: dict[str, dict[str, Any]] = {}
         for metadata in payload.get("metadatas") or []:
             if isinstance(metadata, dict) and _normalise(metadata.get("source_unit_id")):
@@ -418,6 +434,23 @@ class SourceEmbeddingProjection:
         }
         return [vector_by_hash[row["text_hash"]] for row in rows], batches
 
+    def _selected_rows(
+        self,
+        collection: Any,
+        document_id: str,
+        unit_ids: list[str],
+        *,
+        include: list[str],
+    ) -> Iterator[dict[str, Any]]:
+        ids = [source_unit_identity(document_id, unit_id) for unit_id in dict.fromkeys(unit_ids)]
+        batch_size = self._batch_size()
+        for start in range(0, len(ids), batch_size):
+            yield collection.get(
+                ids=ids[start : start + batch_size],
+                where={"source_document_id": document_id},
+                include=include,
+            )
+
     def embeddings_for(
         self,
         source_document_id: str,
@@ -428,34 +461,36 @@ class SourceEmbeddingProjection:
     ) -> dict[str, list[float]]:
         """Return already synchronized vectors keyed by source-unit ID."""
 
+        wanted = list(dict.fromkeys(_normalise(value) for value in unit_ids if _normalise(value)))
+        if not wanted:
+            return {}
+        document_id = _normalise(source_document_id)
         resolved_provider, resolved_model = _provider_model(self.store, provider, model)
         collection = self._collection(resolved_provider, resolved_model)
-        wanted = {_normalise(value) for value in unit_ids if _normalise(value)}
         if collection is None:
             rows = self._fallback_rows(resolved_provider, resolved_model)
             return {
                 unit_id: list(row["embedding"])
-                for unit_id, row in rows.items()
-                if str(row.get("source_document_id") or "") == str(source_document_id)
-                and unit_id in wanted and isinstance(row.get("embedding"), list)
+                for unit_id in wanted
+                if (row := rows.get(source_unit_identity(document_id, unit_id))) is not None
+                and isinstance(row.get("embedding"), list)
             }
-        payload = collection.get(
-            where={"source_document_id": _normalise(source_document_id)},
-            include=["metadatas", "embeddings"],
-        )
-        # Chroma may return `embeddings` as a numpy array, whose truth value with more than
-        # one row is ambiguous; convert to a list before any `or` fallback.
-        raw_embeddings = payload.get("embeddings")
-        embeddings = (
-            raw_embeddings.tolist() if hasattr(raw_embeddings, "tolist") else raw_embeddings
-        ) or []
         vectors: dict[str, list[float]] = {}
-        for metadata, vector in zip(payload.get("metadatas") or [], embeddings):
-            if not isinstance(metadata, dict):
-                continue
-            unit_id = _normalise(metadata.get("source_unit_id"))
-            if unit_id in wanted and isinstance(vector, (list, tuple)):
-                vectors[unit_id] = [float(value) for value in vector]
+        wanted_set = set(wanted)
+        for payload in self._selected_rows(
+            collection, document_id, wanted, include=["metadatas", "embeddings"],
+        ):
+            # Chroma's numpy arrays must be converted before testing their truth value.
+            raw_embeddings = payload.get("embeddings")
+            embeddings = (
+                raw_embeddings.tolist() if hasattr(raw_embeddings, "tolist") else raw_embeddings
+            ) or []
+            for metadata, vector in zip(payload.get("metadatas") or [], embeddings):
+                if not isinstance(metadata, dict):
+                    continue
+                unit_id = _normalise(metadata.get("source_unit_id"))
+                if unit_id in wanted_set and isinstance(vector, (list, tuple)):
+                    vectors[unit_id] = [float(value) for value in vector]
         return vectors
 
     def embed_query(

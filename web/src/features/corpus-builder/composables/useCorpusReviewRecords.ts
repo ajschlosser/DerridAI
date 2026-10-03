@@ -4,7 +4,7 @@
 // (docs/GRAPHQL.md). The queue list holds `CorpusQueueRow`s; a full `CorpusRecord` is read one at
 // a time, only when a row is opened, and kept in an LRU cache so moving between recently seen
 // records does not re-read them.
-import { onScopeDispose, ref, watch, type Ref } from "vue";
+import { onScopeDispose, ref, toRaw, watch, type Ref } from "vue";
 import type { CorpusBuild, CorpusRecord } from "../../../api/corpus";
 import type { ReviewQueue } from "../../../types/corpus";
 import {
@@ -227,6 +227,8 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     const buildId = options.selectedBuildId.value;
     const epoch = generation;
     const recordVersion = recordGenerations.get(id);
+    const refreshingSelection =
+      options.selectedRecordId.value === id && options.selectedRecord.value?.record_id === id;
     requestedRecordId.value = id;
     options.selectedRecordId.value = id;
     recordError.value = "";
@@ -237,7 +239,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       (revisionHint == null || cached.record_revision === revisionHint) &&
       (stateHint == null || cachedStateVersions.get(id) === stateHint)
     ) {
-      options.activateRecord(cached);
+      if (toRaw(options.selectedRecord.value) !== toRaw(cached)) options.activateRecord(cached);
       prefetchNeighbours(id);
       return;
     }
@@ -245,7 +247,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     // Never leave a stale Record showing while a different one loads: a slow response for the
     // previous selection could otherwise land after the reviewer has already moved on and a
     // command (accept/reject/edit) would fire against the wrong Record.
-    options.selectedRecord.value = null;
+    if (!refreshingSelection) options.selectedRecord.value = null;
     loadingRecordId.value = id;
     try {
       const [record] = await corpusReviewReads.records(buildId, [id], {
@@ -264,6 +266,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       }
       cache.set(record.record_id, record);
       cachedStateVersions.set(record.record_id, stateHint);
+      if (refreshingSelection && options.hasActiveDraft()) return;
       options.activateRecord(record);
       prefetchNeighbours(record.record_id);
     } catch (exc) {

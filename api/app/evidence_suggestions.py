@@ -191,6 +191,134 @@ def _signal(
     }
 
 
+def score_semantic_evidence_blocks(
+    value: Any,
+    blocks: list[dict[str, Any]],
+    *,
+    field_metadata: Any,
+    source_document_id: str,
+    projection: Any,
+    provider: str | None = None,
+    model: str | None = None,
+    query: str | None = None,
+    limit: int | None = None,
+    min_similarity: float = SEMANTIC_MIN_SCORE,
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    """Score this record's source units against the field/value query.
+
+    Returns a block-id map and a status. A projection, embedder, or empty-input
+    failure is reported as fallback and never raises.
+    """
+
+    status = {"semantic": "available", "reason": ""}
+    scored: dict[str, dict[str, Any]] = {}
+    try:
+        if projection is None:
+            raise ValueError("No source embedding projection is available.")
+        if not blocks or not _flatten(value):
+            raise ValueError("No proposed value or source blocks are available.")
+        query_text = query or semantic_query(field_metadata, value)
+        projection.sync(
+            source_document_id,
+            blocks,
+            provider=provider,
+            model=model,
+            prune=False,
+        )
+        unit_ids = [str(block.get("source_unit_id") or block.get("block_id") or "") for block in blocks]
+        vectors = projection.embeddings_for(
+            source_document_id,
+            unit_ids,
+            provider=provider,
+            model=model,
+        )
+        query_vector = projection.embed_query(query_text, provider=provider, model=model)
+        ranked: list[tuple[str, dict[str, Any]]] = []
+        for block in blocks:
+            block_id = str(block.get("block_id") or "")
+            unit_id = str(block.get("source_unit_id") or block_id)
+            vector = vectors.get(unit_id)
+            score = _cosine(query_vector, vector or [])
+            if block_id and vector and score >= min_similarity:
+                ranked.append(
+                    (
+                        block_id,
+                        {
+                            "score": score,
+                            "reason": "Semantically resembles the proposed value for this field.",
+                            "method": SEMANTIC_METHOD,
+                            "vector": vector,
+                        },
+                    )
+                )
+        ranked.sort(key=lambda item: (-item[1]["score"], item[0]))
+        if limit is not None:
+            ranked = ranked[: max(1, int(limit))]
+        scored = {block_id: payload for block_id, payload in ranked}
+    except Exception as exc:  # noqa: BLE001 - semantic advice must never block lexical advice
+        status = {
+            "semantic": "fallback",
+            "reason": f"Local semantic retrieval failed; lexical suggestions remain available: {exc}",
+        }
+    return scored, status
+
+
+def merge_lexical_semantic_evidence(
+    blocks: list[dict[str, Any]],
+    lexical_by_id: dict[str, dict[str, Any]],
+    semantic_by_id: dict[str, dict[str, Any]],
+    semantic_status: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Keep both retrieval signals on one candidate row, without source text."""
+
+    candidate_ids = set(lexical_by_id) | set(semantic_by_id)
+    rows: list[dict[str, Any]] = []
+    for block in blocks:
+        block_id = str(block.get("block_id") or "")
+        if block_id not in candidate_ids:
+            continue
+        lexical_item = lexical_by_id.get(block_id)
+        semantic_item = semantic_by_id.get(block_id)
+        lexical_signal = _signal(
+            lexical_item["score"] if lexical_item else None,
+            lexical_item["method"] if lexical_item else METHOD,
+            lexical_item["reason"] if lexical_item else "No deterministic text overlap found.",
+            status="available" if lexical_item else "no_match",
+        )
+        semantic_signal = _signal(
+            semantic_item["score"] if semantic_item else None,
+            semantic_item["method"] if semantic_item else SEMANTIC_METHOD,
+            semantic_item["reason"] if semantic_item else semantic_status.get("reason") or "No local semantic match reached the suggestion threshold.",
+            status="available" if semantic_item else ("fallback" if semantic_status.get("semantic") == "fallback" else "no_match"),
+        )
+        combined_score = max(lexical_signal["score"] or 0.0, semantic_signal["score"] or 0.0)
+        primary = semantic_item if semantic_item and (not lexical_item or semantic_item["score"] > lexical_item["score"]) else lexical_item
+        row = {
+            "block_id": block_id,
+            **(
+                {"source_unit_id": str(block.get("source_unit_id"))}
+                if block.get("source_unit_id")
+                else {}
+            ),
+            "score": round(combined_score, 4),
+            "method": primary["method"] if primary else METHOD,
+            "reason": primary["reason"] if primary else "",
+            "lexical_score": lexical_signal["score"],
+            "lexical_method": lexical_signal["method"],
+            "lexical_reason": lexical_signal["reason"],
+            "semantic_score": semantic_signal["score"],
+            "semantic_method": semantic_signal["method"],
+            "semantic_reason": semantic_signal["reason"],
+            "semantic_status": semantic_signal["status"],
+            "signals": {"lexical": lexical_signal, "semantic": semantic_signal},
+        }
+        if semantic_item and semantic_item.get("vector") is not None:
+            row["vector"] = semantic_item["vector"]
+        rows.append(row)
+    rows.sort(key=lambda item: (-item["score"], item["block_id"]))
+    return rows
+
+
 def suggest_evidence_blocks_semantic(
     value: Any,
     blocks: list[dict[str, Any]],
@@ -211,88 +339,17 @@ def suggest_evidence_blocks_semantic(
     """
     lexical = suggest_evidence_blocks(value, blocks, limit=len(blocks), min_score=0.2)
     lexical_by_id = {item["block_id"]: item for item in lexical}
-    status = {"semantic": "available", "reason": ""}
-    semantic_by_id: dict[str, dict[str, Any]] = {}
-    try:
-        if not blocks or not _flatten(value):
-            raise ValueError("No proposed value or source blocks are available.")
-        query_text = query or semantic_query(field_metadata, value)
-        projection.sync(
-            source_document_id,
-            blocks,
-            provider=provider,
-            model=model,
-            prune=False,
-        )
-        unit_ids = [str(block.get("source_unit_id") or block.get("block_id") or "") for block in blocks]
-        vectors = projection.embeddings_for(
-            source_document_id,
-            unit_ids,
-            provider=provider,
-            model=model,
-        )
-        query_vector = projection.embed_query(query_text, provider=provider, model=model)
-        for block in blocks:
-            block_id = str(block.get("block_id") or "")
-            unit_id = str(block.get("source_unit_id") or block_id)
-            vector = vectors.get(unit_id)
-            score = _cosine(query_vector, vector or [])
-            if block_id and vector and score >= SEMANTIC_MIN_SCORE:
-                semantic_by_id[block_id] = {
-                    "score": score,
-                    "reason": "Semantically resembles the proposed value for this field.",
-                    "method": SEMANTIC_METHOD,
-                }
-    except Exception as exc:  # noqa: BLE001 - semantic advice must never block lexical advice
-        status = {
-            "semantic": "fallback",
-            "reason": f"Local semantic retrieval failed; lexical suggestions remain available: {exc}",
-        }
-    candidate_ids = set(lexical_by_id) | set(semantic_by_id)
-    rows: list[dict[str, Any]] = []
-    for block in blocks:
-        block_id = str(block.get("block_id") or "")
-        if block_id not in candidate_ids:
-            continue
-        lexical_item = lexical_by_id.get(block_id)
-        semantic_item = semantic_by_id.get(block_id)
-        lexical_signal = _signal(
-            lexical_item["score"] if lexical_item else None,
-            lexical_item["method"] if lexical_item else METHOD,
-            lexical_item["reason"] if lexical_item else "No deterministic text overlap found.",
-            status="available" if lexical_item else "no_match",
-        )
-        semantic_signal = _signal(
-            semantic_item["score"] if semantic_item else None,
-            semantic_item["method"] if semantic_item else SEMANTIC_METHOD,
-            semantic_item["reason"] if semantic_item else status["reason"] or "No local semantic match reached the suggestion threshold.",
-            status="available" if semantic_item else ("fallback" if status["semantic"] == "fallback" else "no_match"),
-        )
-        combined_score = max(lexical_signal["score"] or 0.0, semantic_signal["score"] or 0.0)
-        primary = semantic_item if semantic_item and (not lexical_item or semantic_item["score"] > lexical_item["score"]) else lexical_item
-        row = {
-            "block_id": block_id,
-            **(
-                {"source_unit_id": str(block.get("source_unit_id"))}
-                if block.get("source_unit_id")
-                else {}
-            ),
-            # Existing consumers use these top-level fields; keep them as the
-            # strongest signal while exposing both signals independently below.
-            "score": round(combined_score, 4),
-            "method": primary["method"] if primary else METHOD,
-            "reason": primary["reason"] if primary else "",
-            "lexical_score": lexical_signal["score"],
-            "lexical_method": lexical_signal["method"],
-            "lexical_reason": lexical_signal["reason"],
-            "semantic_score": semantic_signal["score"],
-            "semantic_method": semantic_signal["method"],
-            "semantic_reason": semantic_signal["reason"],
-            "semantic_status": semantic_signal["status"],
-            "signals": {"lexical": lexical_signal, "semantic": semantic_signal},
-        }
-        rows.append(row)
-    rows.sort(key=lambda item: (-item["score"], item["block_id"]))
+    semantic_by_id, status = score_semantic_evidence_blocks(
+        value,
+        blocks,
+        field_metadata=field_metadata,
+        source_document_id=source_document_id,
+        projection=projection,
+        provider=provider,
+        model=model,
+        query=query,
+    )
+    rows = merge_lexical_semantic_evidence(blocks, lexical_by_id, semantic_by_id, status)
     return rows[: max(1, limit)], status
 
 

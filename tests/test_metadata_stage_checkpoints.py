@@ -255,11 +255,11 @@ def test_metadata_families_checkpoint_independently_and_record_execution_ledger(
     assert 'metadata_stage_results' not in record
 
 
-def test_metadata_resume_reuses_completed_family_checkpoint(tmp_path,monkeypatch):
-    """A family with a saved checkpoint is not sent to the LLM again.
+def test_metadata_resume_recomputes_legacy_raw_family_checkpoint(tmp_path,monkeypatch):
+    """A raw checkpoint without exact dependency provenance must be recomputed.
 
-    With the discourse result already stored, only quotation and indexing are called and
-    the record ends metadata-complete. Why: resuming a long build must not repeat paid work.
+    Legacy materialized values remain intact, but a raw response cannot be
+    reconciled as current evidence solely because it was once marked complete.
     """
     repo=cb.PdfCorpusRepository(tmp_path/'repo')
     build=_install_minimal_build(repo)
@@ -271,7 +271,7 @@ def test_metadata_resume_reuses_completed_family_checkpoint(tmp_path,monkeypatch
         return _metadata_result(schema_name)
     monkeypatch.setattr(manager,'_chat_json',fake)
     manager._enrich_record(record,{}, {"provider":"ollama","model":"test-model","families":["discourse","quotation","indexing"]},build_id=build['build_id'])
-    assert called==['derridai_record_quotation','derridai_record_indexing']
+    assert called==['derridai_record_discourse','derridai_record_quotation','derridai_record_indexing']
     assert record['metadata_complete'] is True
 
 
@@ -320,5 +320,4 @@ def test_record_store_concurrent_writes_remain_valid_jsonl(tmp_path):
         thread.join()
     assert not failures
     assert repo.load_records(build_id) in (rows_a, rows_b)
-
 

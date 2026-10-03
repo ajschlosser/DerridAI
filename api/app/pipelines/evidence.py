@@ -21,10 +21,14 @@ from ..evidence_suggestions import (
     CROSS_ENCODER_METHOD,
     LLM_METHOD,
     METHOD,
+    MMR_METHOD,
+    SEMANTIC_MIN_SCORE,
     llm_prompt,
+    merge_lexical_semantic_evidence,
+    score_semantic_evidence_blocks,
+    select_evidence_mmr,
     semantic_query,
     suggest_evidence_blocks,
-    suggest_evidence_blocks_semantic,
     validate_llm_choice,
 )
 from .evidence_tracing import build_evidence_trace
@@ -38,14 +42,22 @@ class EvidencePipelinePlan:
     """Executable subset of an evidence pipeline definition."""
 
     query_stage_id: str
-    semantic_stage_id: str
-    lexical_stage_id: str
     support_stage_id: str
     provenance_stage_id: str
     select_stage_id: str
+    semantic_stage_id: str | None = None
+    lexical_stage_id: str | None = None
     rerank_stage_id: str | None = None
+    mmr_stage_id: str | None = None
     llm_stage_id: str | None = None
     selection_limit: int | None = None
+    lexical_fetch_k: int | None = None
+    lexical_min_score: float | None = None
+    semantic_fetch_k: int | None = None
+    semantic_min_similarity: float | None = None
+    mmr_lambda: float | None = None
+    mmr_limit: int | None = None
+    mmr_min_relevance: float | None = None
     cross_encoder_top_k: int | None = None
     cross_encoder_model: str | None = None
     cross_encoder_timeout_seconds: float | None = None
@@ -65,6 +77,7 @@ SUPPORTED_STRATEGIES = frozenset(
         "retrieve.source_cosine",
         "retrieve.lexical_bm25",
         "rerank.cross_encoder",
+        "select.mmr",
         "validate.evidence_support",
         "validate.provenance",
         "llm.closed_choice_evidence",
@@ -110,7 +123,14 @@ def compile_evidence_pipeline(pipeline: PipelineDefinition) -> EvidencePipelineP
 
     if pipeline.purpose != "evidence_suggestion":
         raise ValueError("Evidence adapter can only compile evidence_suggestion pipelines.")
-    reject_unhonoured_config(pipeline, "reviewer evidence")
+    reject_unhonoured_config(
+        pipeline,
+        "reviewer evidence",
+        honour={
+            "retrieve.lexical_bm25": frozenset({"min_score"}),
+            "select.mmr": frozenset({"min_relevance"}),
+        },
+    )
 
     enabled = [stage for stage in pipeline.stages if stage.enabled]
     unsupported = sorted({stage.strategy for stage in enabled} - SUPPORTED_STRATEGIES)
@@ -122,33 +142,46 @@ def compile_evidence_pipeline(pipeline: PipelineDefinition) -> EvidencePipelineP
 
     by_strategy = _enabled_by_strategy(pipeline)
     query = _one(by_strategy, "query.evidence_field", required=True)
-    semantic = _one(by_strategy, "retrieve.source_cosine", required=True)
-    lexical = _one(by_strategy, "retrieve.lexical_bm25", required=True)
+    semantic = _one(by_strategy, "retrieve.source_cosine")
+    lexical = _one(by_strategy, "retrieve.lexical_bm25")
     select = _one(by_strategy, "select.top_k", required=True)
     rerank = _one(by_strategy, "rerank.cross_encoder")
+    mmr = _one(by_strategy, "select.mmr")
     support = _one(by_strategy, "validate.evidence_support", required=True)
     provenance = _one(by_strategy, "validate.provenance", required=True)
     llm = _one(by_strategy, "llm.closed_choice_evidence")
     assert (
         query is not None
-        and semantic is not None
-        and lexical is not None
         and support is not None
         and provenance is not None
         and select is not None
     )
+    if semantic is None and lexical is None:
+        raise ValueError("Evidence pipelines need semantic and/or lexical candidate generation.")
 
     if pipeline.entry_stage_ids != [query.id]:
         raise ValueError("Evidence adapter requires the field-aware query stage as its sole entry stage.")
-    _require_target(query, semantic.id)
-    _require_target(query, lexical.id)
+    for retriever in (semantic, lexical):
+        if retriever is not None:
+            _require_target(query, retriever.id)
 
-    convergence = rerank.id if rerank is not None else support.id
-    _require_target(semantic, convergence)
-    _require_target(lexical, convergence)
+    if rerank is not None and mmr is not None:
+        convergence = rerank.id
+        _require_target(rerank, mmr.id)
+        _require_target(mmr, support.id)
+    elif rerank is not None:
+        convergence = rerank.id
+        _require_target(rerank, support.id)
+    elif mmr is not None:
+        convergence = mmr.id
+        _require_target(mmr, support.id)
+    else:
+        convergence = support.id
+    for retriever in (semantic, lexical):
+        if retriever is not None:
+            _require_target(retriever, convergence)
 
     if rerank is not None:
-        _require_target(rerank, support.id)
         for fallback_edge in ("on_unavailable", "on_timeout", "on_error"):
             fallback = getattr(rerank, fallback_edge)
             if fallback is not None and fallback != support.id:
@@ -186,14 +219,42 @@ def compile_evidence_pipeline(pipeline: PipelineDefinition) -> EvidencePipelineP
 
     return EvidencePipelinePlan(
         query_stage_id=query.id,
-        semantic_stage_id=semantic.id,
-        lexical_stage_id=lexical.id,
+        semantic_stage_id=semantic.id if semantic else None,
+        lexical_stage_id=lexical.id if lexical else None,
         select_stage_id=select.id,
         rerank_stage_id=rerank.id if rerank else None,
+        mmr_stage_id=mmr.id if mmr else None,
         support_stage_id=support.id,
         provenance_stage_id=provenance.id,
         llm_stage_id=llm.id if llm else None,
         selection_limit=(int(select.config["limit"]) if "limit" in select.config else None),
+        lexical_fetch_k=(
+            int(lexical.config["fetch_k"])
+            if lexical is not None and "fetch_k" in lexical.config
+            else None
+        ),
+        lexical_min_score=(
+            float(lexical.config["min_score"])
+            if lexical is not None and "min_score" in lexical.config
+            else None
+        ),
+        semantic_fetch_k=(
+            int(semantic.config["fetch_k"])
+            if semantic is not None and "fetch_k" in semantic.config
+            else None
+        ),
+        semantic_min_similarity=(
+            float(semantic.config["min_similarity"])
+            if semantic is not None and "min_similarity" in semantic.config
+            else None
+        ),
+        mmr_lambda=(float(mmr.config["lambda_mult"]) if mmr is not None and "lambda_mult" in mmr.config else None),
+        mmr_limit=(int(mmr.config["limit"]) if mmr is not None and "limit" in mmr.config else None),
+        mmr_min_relevance=(
+            float(mmr.config["min_relevance"])
+            if mmr is not None and "min_relevance" in mmr.config
+            else None
+        ),
         cross_encoder_top_k=(
             int(rerank.config["top_k"])
             if rerank is not None and "top_k" in rerank.config
@@ -333,6 +394,7 @@ def _candidate_decision(item: dict[str, Any], decision: str) -> dict[str, Any]:
         "lexical_score",
         "semantic_score",
         "cross_encoder_score",
+        "mmr_score",
         "support_score",
         "support_status",
         "provenance_status",
@@ -387,49 +449,64 @@ def execute_reviewer_evidence_pipeline(
         "output_count": 1,
     }
 
-    # The legacy helper still owns lexical + semantic candidate generation. It
-    # exposes each signal independently, but both branches share one timing
-    # boundary. We therefore record counts/status separately and intentionally
-    # leave per-branch timing unset instead of manufacturing precision.
-    retrieval_started = time.perf_counter()
-    items, retrieval_status = suggest_evidence_blocks_semantic(
-        value,
-        blocks,
-        field_metadata=field_metadata,
-        source_document_id=source_document_id,
-        projection=projection,
-        limit=max(1, len(blocks)),
-        provider=provider,
-        model=model,
-        query=query_text,
-    )
-    shared_retrieval_seconds = time.perf_counter() - retrieval_started
-    lexical_count = sum(item.get("lexical_score") is not None for item in items)
-    semantic_count = sum(item.get("semantic_score") is not None for item in items)
-    timing_warning = (
-        "Lexical and semantic retrieval share one legacy instrumentation boundary; "
-        "branch-specific elapsed time is not measured."
-    )
-    observations[plan.lexical_stage_id] = {
-        "input_count": len(blocks),
-        # Reviewable blocks in scope: a count, so scans can be fitted against it.
-        "parameters": {"scope_size": len(blocks)},
-        "output_count": lexical_count,
-        "warnings": [timing_warning],
-        "score_summary": _score_summary(items, "lexical_score"),
-    }
-    semantic_fallback = retrieval_status.get("semantic") == "fallback"
-    observations[plan.semantic_stage_id] = {
-        "input_count": len(blocks),
-        "parameters": {"scope_size": len(blocks)},
-        "output_count": semantic_count,
-        "warnings": [timing_warning],
-        "status": "unavailable" if semantic_fallback else "completed",
-        "fallback_reason": retrieval_status.get("reason") if semantic_fallback else None,
-        "score_summary": _score_summary(items, "semantic_score"),
-        "provider": provider,
-        "model": model,
-    }
+    lexical_by_id: dict[str, dict[str, Any]] = {}
+    semantic_by_id: dict[str, dict[str, Any]] = {}
+    retrieval_status = {"semantic": "skipped", "reason": ""}
+    retrieval_seconds = 0.0
+    if plan.lexical_stage_id is not None:
+        lexical_started = time.perf_counter()
+        lexical_min = 0.2 if plan.lexical_min_score is None else plan.lexical_min_score
+        lexical_limit = plan.lexical_fetch_k if plan.lexical_fetch_k is not None else max(1, len(blocks))
+        lexical_rows = suggest_evidence_blocks(
+            value, blocks, limit=max(1, lexical_limit), min_score=lexical_min
+        )
+        lexical_by_id = {item["block_id"]: item for item in lexical_rows}
+        retrieval_seconds += time.perf_counter() - lexical_started
+        observations[plan.lexical_stage_id] = {
+            "elapsed_seconds": time.perf_counter() - lexical_started,
+            "input_count": len(blocks),
+            "output_count": len(lexical_rows),
+            "parameters": {
+                "scope_size": len(blocks),
+                "fetch_k": lexical_limit,
+                "min_score": lexical_min,
+            },
+            "score_summary": _score_summary(lexical_rows, "score"),
+        }
+    if plan.semantic_stage_id is not None:
+        semantic_started = time.perf_counter()
+        semantic_min = SEMANTIC_MIN_SCORE if plan.semantic_min_similarity is None else plan.semantic_min_similarity
+        semantic_by_id, retrieval_status = score_semantic_evidence_blocks(
+            value,
+            blocks,
+            field_metadata=field_metadata,
+            source_document_id=source_document_id,
+            projection=projection,
+            provider=provider,
+            model=model,
+            query=query_text,
+            limit=plan.semantic_fetch_k,
+            min_similarity=semantic_min,
+        )
+        retrieval_seconds += time.perf_counter() - semantic_started
+        semantic_fallback = retrieval_status.get("semantic") == "fallback"
+        observations[plan.semantic_stage_id] = {
+            "elapsed_seconds": time.perf_counter() - semantic_started,
+            "input_count": len(blocks),
+            "output_count": len(semantic_by_id),
+            "parameters": {
+                "scope_size": len(blocks),
+                "fetch_k": plan.semantic_fetch_k,
+                "min_similarity": semantic_min,
+            },
+            "status": "unavailable" if semantic_fallback else "completed",
+            "fallback_reason": retrieval_status.get("reason") if semantic_fallback else None,
+            "score_summary": _score_summary(list(semantic_by_id.values()), "score"),
+            "provider": provider,
+            "model": model,
+        }
+    items = merge_lexical_semantic_evidence(blocks, lexical_by_id, semantic_by_id, retrieval_status)
+    shared_retrieval_seconds = retrieval_seconds
 
     if plan.rerank_stage_id is not None:
         rerank_started = time.perf_counter()
@@ -506,6 +583,40 @@ def execute_reviewer_evidence_pipeline(
                 "elapsed_seconds": time.perf_counter() - rerank_started,
                 "input_count": 0,
                 "output_count": 0,
+            }
+
+    if plan.mmr_stage_id is not None:
+        mmr_started = time.perf_counter()
+        mmr_limit = max(1, int(plan.mmr_limit or plan.selection_limit or limit))
+        mmr_lambda = 0.72 if plan.mmr_lambda is None else plan.mmr_lambda
+        min_relevance = 0.0 if plan.mmr_min_relevance is None else plan.mmr_min_relevance
+        parameters = {"limit": mmr_limit, "lambda_mult": mmr_lambda, "min_relevance": min_relevance}
+        input_count = len(items)
+        if not items or float(items[0].get("score") or 0.0) < min_relevance:
+            items = []
+            observations[plan.mmr_stage_id] = {
+                "elapsed_seconds": time.perf_counter() - mmr_started,
+                "input_count": input_count,
+                "output_count": 0,
+                "parameters": parameters,
+                "fallback_reason": f"Top relevance did not reach {min_relevance:.2f}.",
+            }
+        else:
+            selected_mmr = select_evidence_mmr(items, limit=mmr_limit, lambda_mult=mmr_lambda)
+            items = [
+                {
+                    **row,
+                    "mmr_score": round(float(row.get("mmr_score") or 0.0), 4),
+                    "method": row.get("method") or MMR_METHOD,
+                }
+                for row in selected_mmr
+            ]
+            observations[plan.mmr_stage_id] = {
+                "elapsed_seconds": time.perf_counter() - mmr_started,
+                "input_count": input_count,
+                "output_count": len(items),
+                "parameters": parameters,
+                "score_summary": _score_summary(items, "mmr_score"),
             }
 
     support_rejected: list[dict[str, Any]] = []
@@ -658,4 +769,6 @@ def execute_reviewer_evidence_pipeline(
         "trace_id": trace.run_id,
         "shared_retrieval_elapsed_ms": max(0, int(shared_retrieval_seconds * 1000)),
     }
+    for item in selected:
+        item.pop("vector", None)
     return EvidencePipelineExecution(items=selected, status=status, trace=trace)

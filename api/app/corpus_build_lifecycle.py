@@ -144,7 +144,10 @@ class BuildLifecycleMixin:
             return dict(fallback)
         with self._lock:
             current = self._runtime_requests.get(build_id)
-            return dict(current) if isinstance(current, dict) and current else dict(fallback)
+            resolved = dict(current) if isinstance(current, dict) and current else dict(fallback)
+            if "_capacity_priority" in fallback:
+                resolved["_capacity_priority"] = fallback["_capacity_priority"]
+            return resolved
 
 
     def _interactive_llm_request(self, build_id: str, override: dict[str, Any] | None = None) -> dict[str, Any]:

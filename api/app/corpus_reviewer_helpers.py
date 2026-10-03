@@ -16,13 +16,19 @@ from .metadata_schema import MetadataSchema
 from .reviewer_context import current_reviewer
 
 
+def _pending_second_opinion(record: dict[str, Any], field: str) -> dict[str, Any] | None:
+    """A sealed field independent of request/reviewer context."""
+    item = (record.get("second_opinion") or {}).get(field)
+    if isinstance(item, dict) and not item.get("done") and item.get("first_reviewer"):
+        return item
+    return None
+
+
 def _second_opinion_owed(record: dict[str, Any], field: str) -> dict[str, Any] | None:
     """The pending second-opinion entry for this field if the current reviewer, not the first, is the one asked."""
     me = current_reviewer.get()
-    item = (record.get("second_opinion") or {}).get(field)
-    if me and isinstance(item, dict) and not item.get("done") and item.get("first_reviewer") and item["first_reviewer"] != me:
-        return item
-    return None
+    item = _pending_second_opinion(record, field)
+    return item if me and item is not None and item["first_reviewer"] != me else None
 
 
 def _present_for_reviewer(record: dict[str, Any]) -> bool:

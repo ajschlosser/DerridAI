@@ -1,14 +1,18 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 """Materialize evidence-bound metadata exemplars from authoritative reviewed records.
 
-Human review writes the corpus RecordRevision first and appends a durable audit
-binding/outbox item in SQLite. This module consumes that outbox: it derives the
-current complete exemplar set for an affected build, replaces that build's Chroma
-scope, and acknowledges the outbox only after the derived projection succeeds.
+Human review writes canonical state before derived indexing. Ordinary projection
+reconciles complete exemplar sets for dirty Records; full scope recovery remains
+available. Only captured dirty events are acknowledged after successful writes.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
+import time
+from contextlib import nullcontext
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
@@ -26,6 +30,8 @@ from .semantic_identity_store import registry_factory
 from .system_store import system_store
 
 PROJECTION = "metadata_exemplars"
+PROJECTION_BATCH_SIZE = 100
+DERIVATION_VERSION = 1
 
 # Last projection failure per build (process-local). The outbox stays dirty until a
 # projection succeeds, so an unreachable embedding provider would otherwise leave
@@ -40,14 +46,32 @@ def record_projection_result(build_id: str, error: str = "") -> None:
         _last_errors.pop(build_id, None)
 
 
-def projection_backlog() -> dict[str, Any]:
+def projection_backlog(repo: Any = None) -> dict[str, Any]:
     """Unprojected reviewed-metadata work, with the most recent failure per build."""
     dirty = system_store.list_semantic_memory_dirty(PROJECTION, limit=1000)
     scopes = sorted({str(row.get("scope_id") or "") for row in dirty if str(row.get("scope_id") or "")})
+    count = len(dirty)
+    if repo is not None:
+        summary = system_store.semantic_memory_dirty_summary(PROJECTION)
+        count = sum(int(row["dirty"]) for row in summary)
+        scope_ids = {str(row["scope_id"]) for row in summary if row["scope_id"]}
+        offset = 0
+        while True:
+            listing = repo.list_builds(offset=offset, limit=100)
+            for build in listing["items"]:
+                build_id = str(build["build_id"])
+                pending = repo.metadata_exemplar_dirty_count(build_id)
+                if pending:
+                    count += pending
+                    scope_ids.add(build_id)
+            offset += len(listing["items"])
+            if offset >= listing["total"]:
+                break
+        scopes = sorted(scope_ids)
     return {
-        "dirty": len(dirty),
+        "dirty": count,
         "scopes": scopes,
-        "errors": {scope: _last_errors[scope] for scope in scopes if scope in _last_errors},
+        "errors": {scope: _last_errors[scope] for scope in [*scopes, "recovery"] if scope in _last_errors},
     }
 
 
@@ -97,8 +121,21 @@ def derive_build_metadata_exemplars(
 ) -> list[dict[str, Any]]:
     """Derive the complete current evidence-bound exemplar set for one build."""
 
+    return _derive_metadata_exemplars(repo, build_id, repo.load_records(build_id))
+
+
+def derive_record_metadata_exemplars(
+    repo: Any, build_id: str, record_ids: list[str],
+) -> list[dict[str, Any]]:
+    """Derive complete exemplar sets for selected current Records, not the corpus."""
+    rows = [row for row in repo.get_records(build_id, record_ids) if row is not None]
+    return _derive_metadata_exemplars(repo, build_id, rows)
+
+
+def _derive_metadata_exemplars(
+    repo: Any, build_id: str, rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     build = repo.get_build(build_id)
-    rows = repo.load_records(build_id)
     asset_id = str(build.get("asset_id") or "")
     blocks_by_id: dict[str, dict[str, Any]] = {}
     if asset_id:
@@ -133,16 +170,27 @@ def derive_build_metadata_exemplars(
             )
             if not field or not trusted or _second_opinion_owed(row, field):
                 continue
+            exemplar_field = (
+                f"{field}.{assertion.member_name}"
+                if assertion.container_field_id and assertion.member_name
+                else field
+            )
             exemplar = build_metadata_exemplar(
                 row,
-                field,
+                exemplar_field,
                 blocks_by_id,
                 schema_id=schema_id,
                 schema_version=schema_version,
                 source_document_id=source_document_id,
-                field_id=str(assertion.field_id or field_ids.get(field, "")),
+                field_id=str(
+                    assertion.member_field_id
+                    or assertion.field_id
+                    or field_ids.get(field, "")
+                ),
                 schema=schema,
                 registry=registry_for(row),
+                assertion_override=assertion,
+                value_override=assertion.value,
             )
             if exemplar is not None:
                 exemplars.append(exemplar)
@@ -175,54 +223,84 @@ def derive_build_metadata_exemplars(
 
 
 def _dirty_items_for_build(repo: Any, build_id: str) -> list[dict[str, Any]]:
-    rows = system_store.list_semantic_memory_dirty(PROJECTION, limit=1000)
-    explicit = [row for row in rows if str(row.get("scope_id") or "") == build_id]
-    legacy = [row for row in rows if not str(row.get("scope_id") or "")]
-    if not legacy:
-        return explicit
-    record_ids = {
-        str(row.get("record_id") or "")
-        for row in repo.load_records(build_id)
-        if str(row.get("record_id") or "")
-    }
-    explicit.extend(
-        row for row in legacy
-        if str(row.get("record_id") or "") in record_ids
+    after = None
+    while True:
+        legacy = system_store.list_semantic_memory_dirty(
+            PROJECTION, unscoped=True, limit=PROJECTION_BATCH_SIZE, after=after,
+        )
+        if not legacy:
+            break
+        record_ids = {
+            str(row["record_id"]) for row in repo.get_records(
+                build_id, [str(item.get("record_id") or "") for item in legacy],
+            ) if row is not None
+        }
+        matched = [str(row["item_id"]) for row in legacy if str(row.get("record_id") or "") in record_ids]
+        if matched:
+            system_store.resolve_semantic_memory_scope(matched, build_id)
+        if len(legacy) < PROJECTION_BATCH_SIZE:
+            break
+        after = str(legacy[-1]["created_at"]), str(legacy[-1]["item_id"])
+    return system_store.list_semantic_memory_dirty(
+        PROJECTION, scope_id=build_id, limit=PROJECTION_BATCH_SIZE,
     )
-    return explicit
 
 
 def dirty_metadata_exemplar_build_ids(repo: Any) -> list[str]:
     """Resolve dirty outbox rows to builds, including pre-scope legacy rows."""
 
-    dirty = system_store.list_semantic_memory_dirty(PROJECTION, limit=1000)
+    dirty = system_store.semantic_memory_dirty_summary(PROJECTION)
     scopes = {
         str(row.get("scope_id") or "")
         for row in dirty
         if str(row.get("scope_id") or "")
     }
-    unresolved = {
-        str(row.get("record_id") or "")
-        for row in dirty
-        if not str(row.get("scope_id") or "") and str(row.get("record_id") or "")
-    }
-    if unresolved:
-        listing = repo.list_builds(offset=0, limit=1000)
+    offset = 0
+    existing = set()
+    while True:
+        listing = repo.list_builds(offset=offset, limit=100)
         for build in listing.get("items") or []:
             build_id = str(build.get("build_id") or "")
             if not build_id:
                 continue
-            ids = {
-                str(row.get("record_id") or "")
-                for row in repo.load_records(build_id)
-                if str(row.get("record_id") or "")
-            }
-            if ids & unresolved:
+            existing.add(build_id)
+            journal = getattr(repo, "metadata_exemplar_dirty", None)
+            state = getattr(repo, "metadata_exemplar_state", None)
+            if callable(journal) and (journal(build_id, limit=1) or (
+                callable(state) and (
+                    state(build_id)[0] or state(build_id)[1] != _build_context(repo, build_id)
+                )
+            )):
                 scopes.add(build_id)
-                unresolved -= ids
-            if not unresolved:
-                break
-    return sorted(scopes)
+            if _dirty_items_for_build(repo, build_id):
+                scopes.add(build_id)
+        offset += len(listing.get("items") or [])
+        if not listing.get("items") or offset >= int(listing.get("total") or offset):
+            break
+    return sorted(scopes & existing)
+
+
+def _build_context(repo: Any, build_id: str) -> str:
+    build = repo.get_build(build_id)
+    dependencies: dict[str, Any] = {
+        key: build.get(key) for key in (
+            "schema", "asset_id", "source_document_id", "editorial_memory_reset_at", "manifest",
+        )
+    }
+    dependencies["derivation_version"] = DERIVATION_VERSION
+    root = getattr(repo, "root", None)
+    if root is not None:
+        paths = [Path(root) / "builds" / build_id / "semantic_aliases.json"]
+        asset_id = str(build.get("asset_id") or "")
+        if asset_id:
+            paths.append(repo.asset_blocks_path(asset_id))
+        for path in paths:
+            try:
+                stat = path.stat()
+                dependencies[str(path.name)] = (stat.st_mtime_ns, stat.st_size)
+            except FileNotFoundError:
+                dependencies[str(path.name)] = None
+    return hashlib.sha256(json.dumps(dependencies, sort_keys=True, default=str).encode()).hexdigest()
 
 
 def project_build_metadata_exemplars(
@@ -234,24 +312,54 @@ def project_build_metadata_exemplars(
 ) -> dict[str, Any]:
     """Make one build's Chroma scope match current authoritative reviewed state."""
 
-    dirty = _dirty_items_for_build(repo, build_id)
-    if not dirty and not force:
-        return {"scope_id": build_id, "skipped": True, "desired": 0, "acknowledged": 0}
-
-    exemplars = derive_build_metadata_exemplars(repo, build_id)
-    stats = dict(index.rebuild_scope(build_id, exemplars))
-    item_ids = [
-        str(row.get("item_id") or "")
-        for row in dirty
-        if str(row.get("item_id") or "")
-    ]
-    acknowledged = system_store.complete_semantic_memory_dirty(item_ids)
-    return {
-        "scope_id": build_id,
-        "skipped": False,
-        **stats,
-        "acknowledged": acknowledged,
-    }
+    writer = getattr(index, "projection_writer", None)
+    with writer() if callable(writer) else nullcontext():
+        dirty = _dirty_items_for_build(repo, build_id)
+        journal_reader = getattr(repo, "metadata_exemplar_dirty", None)
+        journal = journal_reader(build_id, limit=PROJECTION_BATCH_SIZE) if callable(journal_reader) else []
+        context = _build_context(repo, build_id)
+        state_reader = getattr(repo, "metadata_exemplar_state", None)
+        previous = state_reader(build_id) if callable(state_reader) else ("", "")
+        full = force or any(not item.get("record_id") for item in [*dirty, *journal])
+        full = full or (callable(state_reader) and previous[1] != context)
+        # Do not contact an unavailable vector service for a clean worker checkpoint.
+        if not dirty and not journal and not full and not previous[0]:
+            return {"scope_id": build_id, "skipped": True, "desired": 0, "acknowledged": 0, "pending": False}
+        epoch_reader = getattr(index, "collection_epoch", None)
+        try:
+            epoch = epoch_reader() if callable(epoch_reader) else ""
+        except Exception:
+            if callable(journal_reader) and not dirty and not journal:
+                repo.invalidate_metadata_exemplars(build_id, schedule=False)
+            raise
+        full = full or (callable(state_reader) and previous[0] != epoch)
+        if not dirty and not journal and not full:
+            return {"scope_id": build_id, "skipped": True, "desired": 0, "acknowledged": 0, "pending": False}
+        record_ids = sorted({str(item["record_id"]) for item in [*dirty, *journal] if item.get("record_id")})
+        started = time.monotonic()
+        exemplars = (
+            derive_build_metadata_exemplars(repo, build_id) if full
+            else derive_record_metadata_exemplars(repo, build_id, record_ids)
+        )
+        derived_ms = round((time.monotonic() - started) * 1000, 3)
+        stats = dict(
+            index.rebuild_scope(build_id, exemplars) if full
+            else index.reconcile_records(build_id, record_ids, exemplars)
+        )
+        item_ids = [str(row["item_id"]) for row in dirty if row.get("item_id")]
+        acknowledged = system_store.complete_semantic_memory_dirty(item_ids)
+        if callable(journal_reader):
+            repo.complete_metadata_exemplar_dirty(build_id, journal)
+            repo.save_metadata_exemplar_state(build_id, epoch, context)
+        return {
+            "scope_id": build_id, "skipped": False, **stats,
+            "mode": "rebuild" if full else "incremental",
+            "records": None if full else len(record_ids), "derivation_ms": derived_ms,
+            "acknowledged": acknowledged,
+            "pending": bool(_dirty_items_for_build(repo, build_id)) or bool(
+                journal_reader(build_id, limit=1) if callable(journal_reader) else []
+            ),
+        }
 
 
 def diagnose_build_metadata_exemplars(repo: Any, build_id: str) -> dict[str, Any]:

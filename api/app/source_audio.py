@@ -176,7 +176,31 @@ def diarize_with_whisperx(path: Path) -> list[dict[str, Any]]:
                         "speaker": speaker,
                     }
                 )
-    return turns
+    return normalize_speaker_labels(turns)
+
+
+def normalize_speaker_labels(turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Give provider-specific voice clusters stable, human-facing labels.
+
+    Diarizers commonly start at ``SPEAKER_00`` and may return arbitrary labels.
+    DerridAI numbers distinct voices by first appearance from ``SPEAKER_1`` while
+    retaining the provider label as extraction provenance.
+    """
+    labels: dict[str, str] = {}
+    normalized: list[dict[str, Any]] = []
+    for turn in turns:
+        provider_label = str(turn.get("speaker") or "").strip()
+        if not provider_label:
+            continue
+        label = labels.setdefault(provider_label, f"SPEAKER_{len(labels) + 1}")
+        normalized.append(
+            {
+                **turn,
+                "speaker": label,
+                "provider_speaker": provider_label,
+            }
+        )
+    return normalized
 
 
 def speaker_for_interval(
@@ -339,6 +363,11 @@ def extract_audio(
                 else "complete"
                 if turns
                 else "no_speakers",
+                "voice_labels": {
+                    str(turn["speaker"]): str(turn.get("provider_speaker") or turn["speaker"])
+                    for turn in turns
+                    if turn.get("speaker")
+                },
                 "duration_seconds": duration,
             },
             "media_kind": "audio",

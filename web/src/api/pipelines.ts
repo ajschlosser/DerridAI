@@ -13,6 +13,8 @@ import type {
   ResearchPipelineBenchmarkCaseCreate,
   ResearchPipelineBenchmarkRequest,
   ResearchPipelineBenchmarkRun,
+  EvidencePipelineComparisonRequest,
+  EvidencePipelineComparisonResult,
   ResearchPipelineComparisonRequest,
   ResearchPipelineComparisonResult,
   PipelineValidationResponse,
@@ -89,6 +91,24 @@ export const pipelinesApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  compareEvidenceSuggestion: (body: EvidencePipelineComparisonRequest) =>
+    apiRequest<EvidencePipelineComparisonResult>(
+      "/api/system/pipelines/compare/evidence-suggestion",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  compareEvidenceRecovery: (body: EvidencePipelineComparisonRequest) =>
+    apiRequest<EvidencePipelineComparisonResult>(
+      "/api/system/pipelines/compare/evidence-recovery",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
 
   createResearchBenchmarkCase: (body: ResearchPipelineBenchmarkCaseCreate) =>
     apiRequest<{ case: ResearchPipelineBenchmarkCase; created?: boolean }>(

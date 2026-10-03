@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from .corpus_publication import serialize_public_record, validate_publication_record
+from .field_assertions import current_assertions
 
 _SOURCE_INTEGRITY_KEYS = (
     "missing_block_ids",
@@ -50,6 +51,49 @@ def evaluate_celf_conformance(
         for span in spans:
             if not isinstance(span, dict) or str(span.get("source_document_id") or source_id) != source_id:
                 core.append({"code": "source_span_document_mismatch", "record_id": record_id})
+    # Repeatable scholarly values are conformant only when every projected member
+    # has its own stable, independently recoverable assertion target.
+    for source_record in records:
+        record_id = str(source_record.get("record_id") or "")
+        member_assertions = {
+            (
+                assertion.field_name,
+                assertion.instance_id,
+                assertion.member_name,
+            )
+            for assertion in current_assertions(source_record)
+            if assertion.container_field_id
+            and assertion.instance_id
+            and assertion.member_field_id
+            and assertion.member_name
+            and assertion.value_status == "present"
+        }
+        for field_name, value in source_record.items():
+            if not isinstance(value, list) or not value or not all(isinstance(row, dict) for row in value):
+                continue
+            if not all("instance_id" in row for row in value):
+                continue
+            instance_ids = [str(row.get("instance_id") or "") for row in value]
+            if any(not instance_id for instance_id in instance_ids) or len(instance_ids) != len(set(instance_ids)):
+                core.append({
+                    "code": "repeatable_instance_identity_invalid",
+                    "record_id": record_id,
+                    "field": field_name,
+                })
+                continue
+            for row in value:
+                instance_id = str(row["instance_id"])
+                for member_name, member_value in row.items():
+                    if member_name == "instance_id" or member_value in (None, "", []):
+                        continue
+                    if (field_name, instance_id, member_name) not in member_assertions:
+                        core.append({
+                            "code": "repeatable_member_assertion_missing",
+                            "record_id": record_id,
+                            "field": field_name,
+                            "instance_id": instance_id,
+                            "member": member_name,
+                        })
     publication: list[dict[str, Any]] = []
     for record in normalized_records:
         for error in validate_publication_record(record):

@@ -1,17 +1,18 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
-import { esc, icon } from "./html";
-import {
-  chromaRecordEditorHtml,
-  recordEditorHtml,
-  recordHistoryDialogHtml,
-} from "./recordDialogMarkup";
+import { recordEditorField } from "./recordEditorFields";
 import { createRecordDialogCopy } from "./recordDialogCopy";
 import { openBulkFieldEditorDialog } from "../composables/bulkFieldEditorDialog";
 import { openMergeFilesDialog } from "../composables/mergeFilesDialog";
 import { openMessageDialog } from "../composables/messageDialog";
 import { toast } from "../composables/notifications";
 import { openOcrCleanupDialog as openOcrCleanupDialogHost } from "../composables/ocrCleanupDialog";
+import {
+  openRecordFieldEditorDialog,
+  type RecordEditorSection,
+} from "../composables/recordFieldEditorDialog";
+import { openUpsertQueueDialog } from "../composables/upsertQueueDialog";
+import { openRecordHistoryDialog } from "../composables/recordHistoryDialog";
 
 // The dialogs for editing, merging, subsetting and cleaning records and for the upsert queue, drawn as HTML strings. Moved
 // verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -32,9 +33,7 @@ type Helper =
   | "clearRecordUpdates"
   | "cloneAuditValue"
   | "dbUnavailableReason"
-  | "decorateDisabledControls"
   | "download"
-  | "fieldEditor"
   | "fileJsonl"
   | "formatTimestamp"
   | "hasCorpusDb"
@@ -46,7 +45,6 @@ type Helper =
   | "navigateTo"
   | "needsReviewItems"
   | "parseBulkFieldValue"
-  | "parseEditor"
   | "pendingChangesForRow"
   | "pendingUpsertRows"
   | "persistFileNow"
@@ -63,7 +61,6 @@ type Helper =
   | "selectedRecord"
   | "selectedReviewItems"
   | "shell"
-  | "showAppModal"
   | "tr"
   | "trf"
   | "uid"
@@ -163,9 +160,7 @@ export function createRecordDialogs(deps: Deps) {
     clearRecordUpdates,
     cloneAuditValue,
     dbUnavailableReason,
-    decorateDisabledControls,
     download,
-    fieldEditor,
     fileJsonl,
     fileTimers,
     formatTimestamp,
@@ -178,7 +173,6 @@ export function createRecordDialogs(deps: Deps) {
     navigateTo,
     needsReviewItems,
     parseBulkFieldValue,
-    parseEditor,
     pendingChangesForRow,
     pendingUpsertRows,
     persistFileNow,
@@ -195,15 +189,12 @@ export function createRecordDialogs(deps: Deps) {
     selectedRecord,
     selectedReviewItems,
     shell,
-    showAppModal,
     tr,
     trf,
     uid,
     upsertRows,
   } = deps;
   const copy = createRecordDialogCopy(tr, trf);
-  // The legacy code queries the page freely; untyped, as it was written.
-  const document: Any = globalThis.document;
   function openMergeDialog() {
     if (state.files.length < 2) return toast(copy.mergeNeedTwo, { tone: "warning" });
     openMergeFilesDialog({
@@ -417,68 +408,50 @@ export function createRecordDialogs(deps: Deps) {
       i = selectedIndex(f),
       r = selectedRecord();
     if (!r) return;
-    const dialog = document.createElement("dialog");
-    const used = new Set();
-    const groups = [];
+    const used = new Set<string>();
+    const sections: RecordEditorSection[] = [];
     for (const group of EDITOR_GROUPS) {
-      const fields = group.fields.filter((k: Any) => k in r);
-      if (!fields.length) continue;
-      fields.forEach((k: Any) => used.add(k));
-      groups.push(
-        `<section class="editor-section"><h3>${esc(tr(group.key, group.fallback))}</h3><div class="editor-grid">${fields.map((k: Any) => fieldEditor(k, r[k])).join("")}</div></section>`,
-      );
+      const keys = group.fields.filter((k) => k in r);
+      if (!keys.length) continue;
+      keys.forEach((k) => used.add(k));
+      sections.push({
+        title: tr(group.key, group.fallback),
+        fields: keys.map((k) => recordEditorField(k, r[k], label)),
+      });
     }
     const other = Object.keys(r).filter((k) => !used.has(k) && k !== "updates");
     if (other.length)
-      groups.push(
-        `<section class="editor-section"><h3>${esc(tr("record.group_other"))}</h3><div class="editor-grid">${other.map((k) => fieldEditor(k, r[k])).join("")}</div></section>`,
-      );
-    dialog.innerHTML = recordEditorHtml(
-      { subtitle: `${r.record_id || ""} · ${r.work || f.name}`, groups: groups.join("") },
-      tr,
-    );
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    dialog.querySelectorAll("[data-close]").forEach(
-      (b: Any) =>
-        (b.onclick = () => {
-          dialog.close();
-          dialog.remove();
-        }),
-    );
-    dialog.querySelector("form").onsubmit = (e: Any) => {
-      e.preventDefault();
-      const next = { ...r };
-      try {
-        dialog
-          .querySelectorAll("[data-key]")
-          .forEach((el: Any) => (next[el.dataset.key] = parseEditor(el)));
-      } catch (error: Any) {
-        openMessageDialog({
-          title: copy.saveFailed,
-          message: error.message,
-          tone: "danger",
-        });
-        return;
-      }
-      if ("text_length" in next) next.text_length = String(next.text || "").length;
-      const changes: Any = {};
-      for (const [field, value] of Object.entries(next))
-        if (field !== "updates" && !sameValue(r[field], value)) changes[field] = value;
-      const count = applyRecordChanges(f, i, changes, { source: "manual" });
-      dialog.close();
-      dialog.remove();
-      shell();
-      renderView();
-      count
-        ? toast(copy.saved(count), { tone: "success" })
-        : toast(copy.noChanges, { tone: "warning" });
-    };
+      sections.push({
+        title: tr("record.group_other"),
+        fields: other.map((k) => recordEditorField(k, r[k], label)),
+      });
+    openRecordFieldEditorDialog({
+      title: tr("record.edit"),
+      subtitle: `${r.record_id || ""} · ${r.work || f.name}`,
+      help: "",
+      footerNote: tr("records.editor.local_note"),
+      saveLabel: tr("records.editor.save"),
+      parseErrorTitle: copy.saveFailed,
+      sections,
+      save: async (values) => {
+        const next = { ...r, ...values };
+        if ("text_length" in next) next.text_length = String(next.text || "").length;
+        const changes: Any = {};
+        for (const [field, value] of Object.entries(next))
+          if (field !== "updates" && !sameValue(r[field], value)) changes[field] = value;
+        const count = applyRecordChanges(f, i, changes, { source: "manual" });
+        shell();
+        renderView();
+        count
+          ? toast(copy.saved(count), { tone: "success" })
+          : toast(copy.noChanges, { tone: "warning" });
+        return true;
+      },
+    });
   }
   function openStoreRecordEditor(record: Any) {
     const chromaId = record._chroma_id;
     if (!chromaId) return toast(tr("record.no_storage_id"), { tone: "warning" });
-    const dialog = document.createElement("dialog");
     const editable = Object.keys(record).filter(
       (k) =>
         k !== "_chroma_id" &&
@@ -486,143 +459,93 @@ export function createRecordDialogs(deps: Deps) {
         k !== "_updates_count" &&
         !k.startsWith("_researcher_"),
     );
-    dialog.innerHTML = chromaRecordEditorHtml(
-      {
-        chromaId,
-        store: state.activeStore,
-        fields: editable.map((k) => fieldEditor(k, record[k])).join(""),
-      },
-      tr,
-    );
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((b: Any) => (b.onclick = close));
-    dialog.querySelector("form").onsubmit = async (e: Any) => {
-      e.preventDefault();
-      const raw = { ...record };
-      delete raw._chroma_id;
-      const changes: Any = {};
-      try {
-        dialog.querySelectorAll("[data-key]").forEach((el: Any) => {
-          const value = parseEditor(el);
-          if (!sameValue(raw[el.dataset.key], value)) changes[el.dataset.key] = value;
-        });
-      } catch (error: Any) {
-        openMessageDialog({
-          title: copy.parseFailed,
-          message: error.message,
-          tone: "danger",
-        });
-        return;
-      }
-      if (!Object.keys(changes).length) return close();
-      const timestamp = new Date().toISOString(),
-        batchId = uid();
-      const auditEntries = Object.entries(changes).map(([field, newValue]) => ({
-        field_name: field,
-        old_value: cloneAuditValue(raw[field]),
-        new_value: cloneAuditValue(newValue),
-        timestamp,
-        source: "chroma_manual",
-        batch_id: batchId,
-        initiated_by: state.userContext?.username || null,
-      }));
-      try {
-        await api(
-          `/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(chromaId)}`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({
-              changes,
-              audit_entries: auditEntries,
-              document_field: "text",
-              embedding_field: "embedding",
-            }),
-          },
-        );
+    openRecordFieldEditorDialog({
+      title: tr("records.chroma.edit"),
+      subtitle: `${chromaId} · ${state.activeStore}`,
+      help: tr("records.chroma.help"),
+      footerNote: "",
+      saveLabel: tr("records.chroma.save"),
+      parseErrorTitle: copy.parseFailed,
+      sections: [
+        {
+          title: tr("records.chroma.section"),
+          fields: editable.map((k) => recordEditorField(k, record[k], label)),
+        },
+      ],
+      save: async (values) => {
+        const raw = { ...record };
+        delete raw._chroma_id;
+        const changes: Any = {};
+        for (const [field, value] of Object.entries(values))
+          if (!sameValue(raw[field], value)) changes[field] = value;
+        if (!Object.keys(changes).length) return true;
+        const timestamp = new Date().toISOString(),
+          batchId = uid();
+        const auditEntries = Object.entries(changes).map(([field, newValue]) => ({
+          field_name: field,
+          old_value: cloneAuditValue(raw[field]),
+          new_value: cloneAuditValue(newValue),
+          timestamp,
+          source: "chroma_manual",
+          batch_id: batchId,
+          initiated_by: state.userContext?.username || null,
+        }));
+        try {
+          await api(
+            `/api/stores/${encodeURIComponent(state.activeStore)}/records/${encodeURIComponent(chromaId)}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                changes,
+                audit_entries: auditEntries,
+                document_field: "text",
+                embedding_field: "embedding",
+              }),
+            },
+          );
+        } catch (error: Any) {
+          toast(copy.chromaFailed(error.message), { tone: "danger" });
+          return false;
+        }
         state.storeWorksStore = "";
-        close();
         toast(copy.chromaUpdated, { tone: "success" });
         renderView();
-      } catch (error: Any) {
-        toast(copy.chromaFailed(error.message), { tone: "danger" });
-      }
-    };
+        return true;
+      },
+    });
   }
   function openRecordHistoryBrowser(file: Any, index: Any) {
     const record = file?.records?.[index];
     if (!record) return;
-    let versions = recordHistoryVersions(record);
-    if (versions.length <= 1) return toast(copy.noHistory, { tone: "warning" });
-    let cursor = versions.length - 1;
-    const dialog = document.createElement("dialog");
-    dialog.className = "record-history-dialog";
-    const close = () => {
-      dialog.close();
-      dialog.remove();
+    if (recordHistoryVersions(record).length <= 1)
+      return toast(copy.noHistory, { tone: "warning" });
+    const versions = () => recordHistoryVersions(file.records[index]);
+    // The caller owns the domain work; the dialog only browses and asks.
+    const restoreTo = (version: Any, done: (count: number) => string, none: string) => {
+      const count = restoreRecordHistoryVersion(file, index, version);
+      if (!count) {
+        toast(none, { tone: "warning" });
+        return false;
+      }
+      shell();
+      renderView();
+      toast(done(count), { tone: "success" });
+      return true;
     };
-    const render = () => {
-      versions = recordHistoryVersions(file.records[index]);
-      cursor = Math.max(0, Math.min(cursor, versions.length - 1));
-      const version = versions[cursor];
-      const previous = cursor > 0 ? versions[cursor - 1] : null;
-      const changed = previous ? historyVersionChanges(previous.record, version.record) : [];
-      const currentIndex = versions.length - 1;
-      const isCurrent = cursor === currentIndex;
-      const text = String(version.record.text || "");
-      const diffs = changed
-        .map(
-          (field: Any) =>
-            `<details class="history-version-diff"><summary><b>${esc(label(field))}</b><span>${esc(tr("records.history.changed"))}</span></summary><div class="history-diff-values"><div><small>${esc(tr("records.history.previous"))}</small><pre>${esc(jsonPretty(previous?.record?.[field]))}</pre></div><div><small>${esc(tr("records.history.this_version"))}</small><pre>${esc(jsonPretty(version.record?.[field]))}</pre></div></div></details>`,
-        )
-        .join("");
-      dialog.innerHTML = recordHistoryDialogHtml(
-        {
-          recordId: file.records[index]?.record_id || trf("dashboard.record_n", { n: index + 1 }),
-          changeSets: versions.length - 1,
-          olderDisabled: cursor <= 0,
-          newerDisabled: cursor >= currentIndex,
-          versionLabel: version.label,
-          isCurrent,
-          versionMeta: `${version.timestamp ? formatTimestamp(version.timestamp) : tr("records.history.before_edits")}${version.source ? ` · ${version.source}` : ""}${version.model ? ` · ${version.model}` : ""}`,
-          changed,
-          words: text.trim() ? text.trim().split(/\s+/).length : 0,
-          chars: text.length.toLocaleString(),
-          diffs,
-          work: version.record.work || tr("records.history.untitled"),
-          authorYear: `${version.record.document_author || ""} · ${version.record.year || ""}`,
-          preview: `${text.slice(0, 5000)}${text.length > 5000 ? "…" : ""}`,
-          restoreOriginalDisabled: cursor === 0 && isCurrent,
-          restoreDisabled: isCurrent,
-        },
-        { tr, trf },
-      );
-      dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-      dialog.querySelector("#historyOlder").onclick = () => {
-        cursor--;
-        render();
-      };
-      dialog.querySelector("#historyNewer").onclick = () => {
-        cursor++;
-        render();
-      };
-      dialog.querySelector("#historyRestore").onclick = async () => {
-        if (isCurrent) return;
-        const count = restoreRecordHistoryVersion(file, index, version);
-        if (!count) return toast(copy.nothingToRestore, { tone: "warning" });
-        versions = recordHistoryVersions(file.records[index]);
-        cursor = versions.length - 1;
-        shell();
-        renderView();
-        render();
-        toast(copy.restoredFields(count, version.label), { tone: "success" });
-      };
-      dialog.querySelector("#historyUndoAll").onclick = async () => {
-        const original = versions[0];
+    openRecordHistoryDialog({
+      recordId: record.record_id || trf("dashboard.record_n", { n: index + 1 }),
+      versions: () => versions().map((version: Any) => ({ ...version })),
+      changedFields: (previous, current) => historyVersionChanges(previous, current),
+      fieldLabel: (field) => String(label(field)),
+      formatValue: (value) => String(jsonPretty(value)),
+      formatTimestamp: (value) => String(formatTimestamp(value)),
+      restore: async (version) =>
+        restoreTo(
+          version,
+          (count) => copy.restoredFields(count, version.label),
+          copy.nothingToRestore,
+        ),
+      restoreOriginal: async () => {
         if (
           !(await openMessageDialog({
             title: copy.restoreOriginalTitle,
@@ -631,28 +554,17 @@ export function createRecordDialogs(deps: Deps) {
             cancelLabel: tr("common.cancel"),
           }))
         )
-          return;
-        const count = restoreRecordHistoryVersion(file, index, original);
-        if (!count) return toast(copy.alreadyOriginal, { tone: "warning" });
-        versions = recordHistoryVersions(file.records[index]);
-        cursor = versions.length - 1;
-        shell();
-        renderView();
-        render();
-        toast(copy.restoredOriginal(count), { tone: "success" });
-      };
-      dialog.querySelector("#historyClear").onclick = async () => {
-        if (!(await clearRecordUpdates(file, index))) return;
-        close();
+          return false;
+        return restoreTo(versions()[0], copy.restoredOriginal, copy.alreadyOriginal);
+      },
+      clear: async () => {
+        if (!(await clearRecordUpdates(file, index))) return false;
         shell();
         renderView();
         toast(copy.historyCleared, { tone: "success" });
-      };
-      decorateDisabledControls(dialog);
-    };
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    render();
+        return true;
+      },
+    });
   }
   async function openUpsertQueue() {
     if (!hasCorpusDb())
@@ -663,89 +575,43 @@ export function createRecordDialogs(deps: Deps) {
       });
     if (!state.activeStore) return toast(copy.selectCollection, { tone: "warning" });
     if (allRows().length) await refreshPresenceForRows(allRows());
-    const _rows = pendingUpsertRows();
-    const dialog = document.createElement("dialog");
-    dialog.className = "queue-dialog wide-queue-dialog";
-
-    const render = () => {
-      const currentRows = pendingUpsertRows();
-      dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("vector.unsynced_changes"))}</h2><div class="dialog-subtitle">${esc(state.activeStore)} · ${currentRows.length} ${esc(tr("dynamic.records"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-    <div class="db">
-      <div class="queue-explainer"><b>${esc(tr("vector.unsynced_changes_what"))}</b><p>${esc(tr("vector.unsynced_changes_help"))}</p></div><div class="queue-bulk-actions">${currentRows.length ? `<button class="btn small" id="queueSelectAll">${esc(tr("ui.select_all"))}</button><button class="btn small" id="queueSelectNone">${esc(tr("ui.clear_selection"))}</button>` : ""}</div>
-      <div class="upsert-queue-list">${
-        currentRows
-          .map((row: Any) => {
-            const info = recordDbStatus(row.file, row.index, row.record);
-            const key = localRecordKey(row.file, row.index);
-            const changes = pendingChangesForRow(row);
-            return `<section class="upsert-queue-card">
-          <div class="upsert-queue-head">
-            <label class="upsert-queue-item"><input type="checkbox" data-upsert-key="${esc(key)}" checked><span><b>${esc(row.record.record_id || `Record ${row.index + 1}`)}</b><small>${esc(row.record.work || row.file.name)} · ${esc(row.file.name)}</small></span><span class="db-status ${info.kind}"><i></i>${esc(info.label)}</span></label>
-            <div class="tools"><button class="btn small" data-review-queue="${esc(key)}">${esc(trf("records.upsert.review_n", { count: changes.length }))}</button><button class="btn small danger" data-remove-queue="${esc(key)}">${esc(tr("records.upsert.remove"))}</button></div>
-          </div>
-          <div class="queue-change-list hidden" data-queue-changes="${esc(key)}">${changes.map((change: Any) => `<div class="queue-change-row"><b>${esc(label(change.field_name || "field"))}</b><span>${esc(change.source || tr("jobs.preview.manual"))}${change.timestamp ? ` · ${esc(formatTimestamp(change.timestamp))}` : ""}</span><details><summary>${esc(tr("records.upsert.values"))}</summary><div class="queue-change-values"><pre>${esc(jsonPretty(change.old_value))}</pre><span>→</span><pre>${esc(jsonPretty(change.new_value))}</pre></div></details></div>`).join("")}</div>
-        </section>`;
-          })
-          .join("") || `<div class="llm-empty">${esc(tr("vector.no_unsynced_changes"))}</div>`
-      }</div>
-    </div>
-      <div class="da"><button class="btn" data-close>${esc(tr("common.close"))}</button>${currentRows.length ? `<button class="btn primary" id="upsertQueued">${icon("database")}${esc(tr("vector.sync_selected"))}</button>` : ""}</div>`;
-
-      const close = () => {
-        dialog.close();
-        dialog.remove();
+    const itemFor = (row: Any) => {
+      const info = recordDbStatus(row.file, row.index, row.record);
+      return {
+        key: String(localRecordKey(row.file, row.index)),
+        recordId: String(row.record.record_id || `Record ${row.index + 1}`),
+        source: `${row.record.work || row.file.name} · ${row.file.name}`,
+        status: { kind: String(info.kind), label: String(info.label) },
+        changes: pendingChangesForRow(row).map((change: Any) => ({
+          field: String(label(change.field_name || "field")),
+          source: String(change.source || tr("jobs.preview.manual")),
+          when: change.timestamp ? String(formatTimestamp(change.timestamp)) : "",
+          oldValue: String(jsonPretty(change.old_value)),
+          newValue: String(jsonPretty(change.new_value)),
+        })),
       };
-      dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-      dialog
-        .querySelector("#queueSelectAll")
-        ?.addEventListener("click", () =>
-          dialog.querySelectorAll("[data-upsert-key]").forEach((box: Any) => (box.checked = true)),
+    };
+    const rowByKey = (key: string) =>
+      pendingUpsertRows().find((row: Any) => String(localRecordKey(row.file, row.index)) === key);
+    openUpsertQueueDialog({
+      store: String(state.activeStore),
+      items: () => pendingUpsertRows().map(itemFor),
+      remove: (key) => {
+        const row = rowByKey(key);
+        if (!row) return;
+        removeFromUpsertQueue(row);
+        shell();
+      },
+      sync: async (keys) => {
+        const wanted = new Set(keys);
+        const chosen = pendingUpsertRows().filter((row: Any) =>
+          wanted.has(String(localRecordKey(row.file, row.index))),
         );
-      dialog
-        .querySelector("#queueSelectNone")
-        ?.addEventListener("click", () =>
-          dialog.querySelectorAll("[data-upsert-key]").forEach((box: Any) => (box.checked = false)),
-        );
-      dialog.querySelectorAll("[data-review-queue]").forEach(
-        (button: Any) =>
-          (button.onclick = () => {
-            const panel = dialog.querySelector(
-              `[data-queue-changes="${CSS.escape(button.dataset.reviewQueue)}"]`,
-            );
-            panel?.classList.toggle("hidden");
-          }),
-      );
-      dialog.querySelectorAll("[data-remove-queue]").forEach(
-        (button: Any) =>
-          (button.onclick = () => {
-            const row = currentRows.find(
-              (item: Any) => localRecordKey(item.file, item.index) === button.dataset.removeQueue,
-            );
-            if (row) {
-              removeFromUpsertQueue(row);
-              render();
-              shell();
-            }
-          }),
-      );
-      dialog.querySelector("#upsertQueued")?.addEventListener("click", async () => {
-        const selected = new Set(
-          [...dialog.querySelectorAll("[data-upsert-key]:checked")].map((x) => x.dataset.upsertKey),
-        );
-        const chosen = currentRows.filter((row: Any) =>
-          selected.has(localRecordKey(row.file, row.index)),
-        );
-        if (!chosen.length) return toast(copy.selectQueued, { tone: "warning" });
-        close();
         await upsertRows(chosen, "queued records");
         shell();
         renderView();
-      });
-    };
-
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    render();
+      },
+    });
   }
   return {
     openMergeDialog,

@@ -10,7 +10,7 @@ export default defineConfig({
   testMatch: "legacy-dom-baseline.spec.ts",
   timeout: 30_000,
   fullyParallel: true,
-  workers: isCI ? 2 : undefined,
+  workers: 2,
   retries: 0,
   snapshotPathTemplate: "{snapshotDir}/{testFilePath}-snapshots/{arg}{ext}",
   reporter: isCI ? "github" : "list",
@@ -28,7 +28,7 @@ export default defineConfig({
   webServer: {
     command: `npx vite preview --host 127.0.0.1 --port ${appPort} --strictPort`,
     url: `http://127.0.0.1:${appPort}`,
-    reuseExistingServer: !isCI && !process.env.APP_PORT,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 });

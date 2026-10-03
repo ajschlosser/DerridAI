@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { ref } from "vue";
+import { ref, watch } from "vue";
+import { flushPromises } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as graphqlClient from "../../src/api/graphql/client";
 
@@ -127,6 +128,57 @@ function setup(overrides: Record<string, unknown> = {}) {
 }
 
 describe("useCorpusReviewRecords", () => {
+  it("keeps the open Record mounted throughout a background refresh", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    await state.reviewRecords.refreshRecords();
+    const selections: Array<string | null> = [];
+    const stop = watch(state.selectedRecord, (value) => selections.push(value?.record_id ?? null), {
+      flush: "sync",
+    });
+    let release!: (records: unknown[]) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((resolve) => (release = resolve)),
+    );
+    const refreshing = state.reviewRecords.refreshRecord("r1");
+    await flushPromises();
+    expect(state.selectedRecord.value?.record_id).toBe("r1");
+    release([record("r1", 2)]);
+    await refreshing;
+    stop();
+    expect(selections).not.toContain(null);
+    expect(state.selectedRecord.value?.record_revision).toBe(2);
+  });
+
+  it("does not reactivate an unchanged selection on queue-only refresh", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    await state.reviewRecords.refreshRecords();
+    state.activateRecord.mockClear();
+    await state.reviewRecords.refreshRecords();
+    expect(state.activateRecord).not.toHaveBeenCalled();
+  });
+
+  it("preserves a draft begun while the same Record's refresh is in flight", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    await state.reviewRecords.refreshRecords();
+    let release!: (records: unknown[]) => void;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((resolve) => (release = resolve)),
+    );
+    const refreshing = state.reviewRecords.refreshRecord("r1");
+    await flushPromises();
+    state.selectedRecord.value = record("r1", 1, { text: "Draft started during refresh" });
+    state.setActiveDraft(true);
+    release([record("r1", 2, { text: "Server text" })]);
+    await refreshing;
+    expect(state.selectedRecord.value?.text).toBe("Draft started during refresh");
+  });
+
   it("does not let a delayed queue response override a newer manual selection", async () => {
     const state = setup();
     let resolvePage!: (value: unknown) => void;
