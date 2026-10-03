@@ -78,7 +78,8 @@ test("Roles retains the permission editor through atomic failure and retry", asy
   await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: "System", exact: true }).click();
-  await page.getByRole("button", { name: "Roles & permissions", exact: true }).click();
+  await page.getByRole("button", { name: "Users & roles", exact: true }).click();
+  await page.getByRole("button", { name: "Manage permissions", exact: true }).click();
   await expect(page.locator(".role-editor")).toBeVisible();
   const editor = await page.locator(".role-editor").elementHandle();
   let fail = true;
