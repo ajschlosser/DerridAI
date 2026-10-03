@@ -110,7 +110,7 @@ test("clone editor explains disabled operations for the selected stage", async (
     "/iframe.html?id=pipelines-version-editor-panel--inspect-only-stage&viewMode=story",
   );
   await expect(page.getByText("Purpose is fixed for this version.")).toBeVisible();
-  await page.locator(".stage-row", { hasText: "mmr" }).click();
+  await page.locator(".stage-row", { hasText: "source-diversity" }).click();
   await expect(page.locator(".stage-fit-note").first()).toContainText("stays inspect-only");
   await page.getByText("Advanced").click();
   await page.getByLabel(/Show operations this workflow cannot run/).check();
