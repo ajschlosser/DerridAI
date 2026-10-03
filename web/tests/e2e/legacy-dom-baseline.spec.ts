@@ -828,7 +828,9 @@ const scenarios: Scenario[] = [
       const clean = page.getByRole("button", { name: /Clean OCR artifacts/i });
       await expect(clean).toBeVisible();
       await clean.click();
-      await expect(page.locator("dialog[open], [role=dialog][aria-modal=true]").last()).toBeVisible();
+      await expect(
+        page.locator("dialog[open], [role=dialog][aria-modal=true]").last(),
+      ).toBeVisible();
     },
   },
   { name: "search-loaded", nav: "Search", load: true },
