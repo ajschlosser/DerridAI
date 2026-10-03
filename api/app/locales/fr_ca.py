@@ -2357,6 +2357,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'metadata_memory.kind_positive_help': "Valeur révisée pouvant servir de précédent positif pour des passages semblables.",
  'metadata_memory.kind_correction_help': "Correction révisée qui conserve la valeur rejetée du modèle comme exemple de ce qu’il faut éviter.",
  'metadata_memory.page': "Page",
+ 'metadata_memory.record_revision': "{record} · rév. {revision}",
  'metadata_memory.source_stale': "Révision source périmée",
  'metadata_memory.source_stale_help': "La révision de la notice source référencée par cette entrée de mémoire ne peut pas être confirmée comme actuelle.",
  'metadata_memory.evidence_unresolved': "Les références aux blocs de preuve sont conservées, mais leur texte source n’a pas pu être résolu.",
