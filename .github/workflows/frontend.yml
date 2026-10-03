@@ -107,6 +107,7 @@ jobs:
             CONTRACT=true
             FORMAT=true
             PUBLICATION=true
+            UNIT_FULL=true
             UNIT_SHARDS='["1/2","2/2"]'
           else
             git diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/derridai-changed-paths
@@ -123,7 +124,7 @@ jobs:
             if [ "$EVENT_NAME" = "push" ] && [ "$A11Y" = true ]; then
               A11Y_FULL=true
             fi
-            if [ "$EVENT_NAME" = "push" ]; then
+            if [ "$EVENT_NAME" = "push" ] || [ "$UNIT_FULL" = true ]; then
               UNIT_SHARDS='["1/2","2/2"]'
             else
               UNIT_SHARDS='["related"]'
