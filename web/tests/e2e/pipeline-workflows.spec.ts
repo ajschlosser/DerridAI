@@ -24,6 +24,8 @@ const stories = [
   ["pipelines-stage-navigator--default", ".stage-navigator"],
   ["pipelines-strategy-inspector--used", ".strategy-inspector"],
   ["pipelines-comparison-result--benchmark-with-drift-warning", ".comparison-result"],
+  ["pipelines-comparison-workspace--default", ".comparison-workspace"],
+  ["pipelines-evidence-comparison-result--default", ".comparison-result"],
   ["pipelines-benchmark-case-list--default", ".case-list"],
   ["pipelines-studio-help-dialog--open", "[role=dialog]"],
   ["pipelines-data-type-chip--all-types", ".type-chip"],

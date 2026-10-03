@@ -7,6 +7,7 @@ import pytest
 from app import config
 from app import cross_encoder as cross_encoder_module
 from app.pipelines.defaults import built_in_pipeline
+from app.pipelines.comparison import compare_evidence_runs, summarize_evidence_suggestion_run
 from app.pipelines.evidence import (
     compile_evidence_pipeline,
     execute_reviewer_evidence_pipeline,
@@ -92,8 +93,8 @@ def test_current_evidence_execution_preserves_separate_lexical_semantic_signals(
     trace = {stage.stage_id: stage for stage in result.trace.stages}
     assert trace["lexical"].output_count == 1
     assert trace["semantic"].output_count == 1
-    assert trace["lexical"].elapsed_ms is None
-    assert trace["semantic"].elapsed_ms is None
+    assert trace["lexical"].elapsed_ms is not None
+    assert trace["semantic"].elapsed_ms is not None
     for stage_id in ("lexical", "semantic"):
         assert trace[stage_id].parameters["scope_size"] == len(blocks)
 
@@ -240,3 +241,171 @@ def test_support_and_provenance_gates_cannot_expose_bypass_edges() -> None:
     )
     with pytest.raises(ValueError, match="cannot expose a bypass edge"):
         compile_evidence_pipeline(provenance_bypass)
+
+
+def _drop_retriever(source, *, keep: str):
+    drop = "semantic" if keep == "lexical" else "lexical"
+    stages = []
+    for stage in source.stages:
+        if stage.id == drop:
+            continue
+        if stage.id == "query":
+            stages.append(stage.model_copy(update={"next": [keep]}))
+        else:
+            stages.append(stage)
+    return source.model_copy(
+        update={"pipeline_id": f"evidence.{keep}-only", "built_in": False, "stages": stages}
+    )
+
+
+def test_single_retriever_suggestion_pipeline_runs_only_that_search() -> None:
+    source = built_in_pipeline("evidence.reviewer.current", 2)
+    pipeline = _drop_retriever(source, keep="lexical")
+    plan = compile_evidence_pipeline(pipeline)
+    assert plan.lexical_stage_id == "lexical"
+    assert plan.semantic_stage_id is None
+
+    blocks = [
+        {"block_id": "b1", "text": "Hospitality welcomes the stranger."},
+        {"block_id": "b2", "text": "Unrelated meteorological notes."},
+    ]
+    result = execute_reviewer_evidence_pipeline(
+        pipeline=pipeline,
+        resolved_hash=None,
+        value="hospitality",
+        blocks=blocks,
+        field_metadata={"name": "topic", "label": "Topic"},
+        source_document_id="doc",
+        projection=LocalProjection({"b1": [1.0, 0.0], "b2": [0.0, 1.0]}),
+    )
+    assert [item["block_id"] for item in result.items] == ["b1"]
+    assert result.items[0]["lexical_score"] == 1.0
+    assert result.items[0]["semantic_score"] is None
+    trace = {stage.stage_id: stage for stage in result.trace.stages}
+    assert "semantic" not in trace
+    assert trace["lexical"].output_count == 1
+
+
+def test_retriever_fetch_k_and_min_score_bound_the_search() -> None:
+    source = built_in_pipeline("evidence.reviewer.current", 2)
+    stages = []
+    for stage in source.stages:
+        if stage.id == "semantic":
+            continue
+        if stage.id == "query":
+            stages.append(stage.model_copy(update={"next": ["lexical"]}))
+        elif stage.id == "lexical":
+            stages.append(stage.model_copy(update={"config": {"fetch_k": 1, "min_score": 0.9}}))
+        else:
+            stages.append(stage)
+    pipeline = source.model_copy(
+        update={"pipeline_id": "evidence.lexical-bounded", "built_in": False, "stages": stages}
+    )
+    blocks = [
+        {"block_id": "b1", "text": "Hospitality is named here."},
+        {"block_id": "b2", "text": "A weaker hospitality mention later."},
+    ]
+    result = execute_reviewer_evidence_pipeline(
+        pipeline=pipeline,
+        resolved_hash=None,
+        value="hospitality",
+        blocks=blocks,
+        field_metadata={"name": "topic", "label": "Topic"},
+        source_document_id="doc",
+        projection=LocalProjection({}),
+        limit=5,
+    )
+    assert len(result.items) == 1
+    trace = {stage.stage_id: stage for stage in result.trace.stages}
+    assert trace["lexical"].parameters["fetch_k"] == 1
+    assert trace["lexical"].parameters["min_score"] == 0.9
+    assert trace["lexical"].output_count == 1
+
+
+def test_optional_mmr_stage_compiles_and_runs_before_support() -> None:
+    source = built_in_pipeline("evidence.reviewer.current", 2)
+    stages = []
+    for stage in source.stages:
+        if stage.id in {"semantic", "lexical"}:
+            stages.append(stage.model_copy(update={"next": ["mmr"]}))
+        elif stage.id == "support":
+            stages.append(stage)
+        else:
+            stages.append(stage)
+    stages.insert(
+        3,
+        source.stages[0].model_copy(
+            update={
+                "id": "mmr",
+                "strategy": "select.mmr",
+                "config": {"limit": 1, "lambda_mult": 1.0},
+                "next": ["support"],
+                "on_empty": None,
+                "on_error": None,
+                "on_timeout": None,
+                "on_unavailable": None,
+            }
+        ),
+    )
+    pipeline = source.model_copy(
+        update={"pipeline_id": "evidence.with-mmr", "built_in": False, "stages": stages}
+    )
+    plan = compile_evidence_pipeline(pipeline)
+    assert plan.mmr_stage_id == "mmr"
+    blocks = [{"block_id": "b1", "text": "Hospitality welcomes the stranger."}]
+    result = execute_reviewer_evidence_pipeline(
+        pipeline=pipeline,
+        resolved_hash=None,
+        value="hospitality",
+        blocks=blocks,
+        field_metadata={"name": "topic", "label": "Topic"},
+        source_document_id="doc",
+        projection=LocalProjection({"b1": [1.0, 0.0]}),
+    )
+    assert result.items[0]["block_id"] == "b1"
+    assert "mmr" in {stage.stage_id for stage in result.trace.stages}
+
+
+def test_suggestion_comparison_keeps_hashes_and_omits_source_text() -> None:
+    source = built_in_pipeline("evidence.reviewer.current", 2)
+    lexical = _drop_retriever(source, keep="lexical")
+    blocks = [{"block_id": "b1", "text": "Hospitality welcomes the stranger. private source text"}]
+    kwargs = dict(
+        resolved_hash=None,
+        value="hospitality",
+        blocks=blocks,
+        field_metadata={"name": "topic", "label": "Topic"},
+        source_document_id="doc",
+        projection=LocalProjection({"b1": [1.0, 0.0]}),
+    )
+    left = execute_reviewer_evidence_pipeline(pipeline=source, **kwargs)
+    right = execute_reviewer_evidence_pipeline(pipeline=lexical, **kwargs)
+    compared = compare_evidence_runs(
+        summarize_evidence_suggestion_run(left),
+        summarize_evidence_suggestion_run(right),
+    )
+    assert compared["non_persistent"] is True
+    assert compared["left"]["pipeline"]["pipeline_id"] == "evidence.reviewer.current"
+    assert compared["right"]["pipeline"]["pipeline_id"] == "evidence.lexical-only"
+    assert compared["comparison"]["shared_block_ids"] == ["b1"]
+    assert "private source text" not in str(compared)
+
+
+def test_comparison_source_projection_uses_chroma_store(monkeypatch) -> None:
+    from app.pipelines import comparison as comparison_module
+
+    captured = {}
+
+    class DummyStore:
+        pass
+
+    class DummyProjection:
+        def __init__(self, store):
+            captured["store"] = store
+
+    monkeypatch.setattr(comparison_module, "store", DummyStore(), raising=False)
+    monkeypatch.setattr("app.services.store", DummyStore())
+    monkeypatch.setattr("app.source_embeddings.SourceEmbeddingProjection", DummyProjection)
+    projection = comparison_module.comparison_source_projection()
+    assert isinstance(projection, DummyProjection)
+    assert captured["store"] is not None

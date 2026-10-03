@@ -11,6 +11,7 @@ from app import cross_encoder as cross_encoder_module
 from app.pipelines import manager as manager_module
 from app.pipelines import store as store_module
 from app.pipelines.defaults import built_in_assignment, built_in_pipeline
+from app.pipelines.comparison import compare_evidence_runs, summarize_evidence_recovery_run
 from app.pipelines.evidence import compile_evidence_pipeline
 from app.pipelines.evidence_recovery import (
     MISSING_SOURCE_DOCUMENT,
@@ -18,6 +19,7 @@ from app.pipelines.evidence_recovery import (
     ClosedChoiceAnswer,
     compile_recovery_pipeline,
     execute_evidence_recovery,
+    execute_recovery_pipeline,
 )
 from app.pipelines.manager import PipelineManager
 from app.pipelines.models import InputBinding
@@ -450,11 +452,28 @@ def test_active_recovery_graph_cannot_omit_provenance(tmp_path) -> None:
 def test_other_adapters_reject_recovery_only_settings() -> None:
     reviewer = built_in_pipeline("evidence.reviewer.current", 2)
     with_min = reviewer.model_copy(update={"stages": [
-        stage.model_copy(update={"config": {"min_score": 0.5}}) if stage.id == "lexical" else stage
+        stage.model_copy(update={"config": {**stage.config, "min_score": 0.4}})
+        if stage.id == "lexical"
+        else stage
         for stage in reviewer.stages
     ]})
-    with pytest.raises(ValueError, match="does not apply min_score"):
-        compile_evidence_pipeline(with_min)
+    plan = compile_evidence_pipeline(with_min)
+    assert plan.lexical_min_score == 0.4
+
+    with_role = reviewer.model_copy(update={"stages": [
+        stage.model_copy(update={"on_empty": "llm_choice"}) if stage.id == "support" else stage
+        for stage in reviewer.stages
+    ] + [
+        reviewer.stages[-1].model_copy(update={
+            "id": "llm_choice",
+            "strategy": "llm.closed_choice_evidence",
+            "config": {"provider_role": "primary"},
+            "next": ["provenance"],
+            "enabled": True,
+        }),
+    ]})
+    with pytest.raises(ValueError, match="does not apply provider_role"):
+        compile_evidence_pipeline(with_role)
 
 
 def test_missing_source_document_identity_is_reported_before_any_work(monkeypatch):
@@ -524,3 +543,42 @@ def test_unbound_recovery_run_carries_no_rewired_warning(monkeypatch, traces) ->
     _use(monkeypatch, built_in_pipeline(*CELF))
     _recover("calm", [{"block_id": "b1", "text": "calm calm calm"}], field="mood")
     assert traces[-1].warnings == []
+
+
+def test_recovery_comparison_does_not_persist_a_trace(monkeypatch) -> None:
+    saved = []
+    monkeypatch.setattr(store_module.pipeline_store, "put_run", lambda trace: saved.append(trace))
+    left_pipeline = built_in_pipeline(*CELF)
+    right_pipeline = built_in_pipeline(*CASCADE)
+    blocks = [{"block_id": "b1", "text": "calm private source text"}]
+    sides = []
+    for pipeline in (left_pipeline, right_pipeline):
+        plan = compile_recovery_pipeline(pipeline)
+        items, winner, trace = execute_recovery_pipeline(
+            plan,
+            resolved_hash=pipeline_hash(pipeline),
+            value="calm",
+            blocks=blocks,
+            field="mood",
+            field_metadata={"name": "mood"},
+            source_document_id="doc",
+            projection=Projection({"b1": [1.0, 0.0]}),
+            llm_choice=None,
+            llm_skip_reason="comparison",
+        )
+        sides.append(
+            summarize_evidence_recovery_run(
+                pipeline=pipeline,
+                resolved_hash=pipeline_hash(pipeline),
+                items=items,
+                winner=winner,
+                trace=trace,
+                celf_compliant=plan.celf_compliant,
+                compliance_reason=plan.compliance_reason,
+            )
+        )
+    compared = compare_evidence_runs(sides[0], sides[1])
+    assert saved == []
+    assert compared["left"]["pipeline"]["celf_compliant"] is True
+    assert compared["right"]["pipeline"]["celf_compliant"] is False
+    assert "private source text" not in str(compared)

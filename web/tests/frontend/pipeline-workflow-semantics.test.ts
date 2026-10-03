@@ -156,7 +156,7 @@ describe("pipeline workflow domain helpers", () => {
     const ids = (key: keyof typeof groups) => groups[key].map((item) => item.strategy_id);
     expect(ids("supported")).toContain("validate.evidence_support");
     expect(ids("output_contract")).toContain("llm.generate_answer");
-    expect(ids("inspect_only")).toContain("select.mmr");
+    expect(ids("supported")).toContain("select.mmr");
   });
 
   it("reads phases from the actual graph, repeating validation after generation", () => {

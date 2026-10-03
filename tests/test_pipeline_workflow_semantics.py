@@ -172,7 +172,7 @@ def test_purpose_compatibility_is_deterministic_and_explains_output_contracts() 
     assert set(first) == {item.strategy_id for item in strategy_registry.list()}
     assert first["validate.evidence_support"] == "supported"
     assert first["llm.generate_answer"] == "output_contract"
-    assert first["select.mmr"] == "inspect_only"
+    assert first["select.mmr"] == "supported"
     for strategy_id in PURPOSE_ADAPTERS["evidence_suggestion"].supported_strategies:
         assert first[strategy_id] == "supported"
 
