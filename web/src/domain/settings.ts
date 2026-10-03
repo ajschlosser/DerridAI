@@ -116,14 +116,16 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     labelKey: "settings.nav.overview",
     labelFallback: "Overview",
     descriptionKey: "settings.nav.overview_help",
-    descriptionFallback: "Find settings by task, review important defaults, and jump to related workspaces.",
+    descriptionFallback:
+      "Find settings by task, review important defaults, and jump to related workspaces.",
   },
   {
     id: "preferences",
     labelKey: "settings.nav.preferences",
     labelFallback: "Preferences",
     descriptionKey: "settings.nav.preferences_help",
-    descriptionFallback: "Appearance, interface language, accessibility, notifications, and viewer behavior.",
+    descriptionFallback:
+      "Appearance, interface language, accessibility, notifications, and viewer behavior.",
   },
   {
     id: "research",
@@ -137,7 +139,8 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     labelKey: "settings.nav.retrieval_indexing",
     labelFallback: "Retrieval & indexing",
     descriptionKey: "settings.nav.retrieval_indexing_help",
-    descriptionFallback: "Embedding defaults, retrieval strategy, reranking, evidence budgets, and scope.",
+    descriptionFallback:
+      "Embedding defaults, retrieval strategy, reranking, evidence budgets, and scope.",
     adminOnly: true,
   },
   {
@@ -386,7 +389,8 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     labelKey: "settings.data_workspaces_title",
     labelFallback: "Data workspaces",
     helpKey: "settings.data_workspaces_help",
-    helpFallback: "Inspect operational System Data or open Corpus Data without duplicating those workspaces inside Settings.",
+    helpFallback:
+      "Inspect operational System Data or open Corpus Data without duplicating those workspaces inside Settings.",
     keywords: ["system data", "corpus data", "databases", "stores", "vector stores"],
     targetId: "settings-heading-data-workspaces",
   },
@@ -420,7 +424,8 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     labelKey: "settings.providers_title",
     labelFallback: "Provider status",
     helpKey: "settings.providers_help",
-    helpFallback: "Review configured LLM provider health and open the Providers workspace to manage profiles.",
+    helpFallback:
+      "Review configured LLM provider health and open the Providers workspace to manage profiles.",
     keywords: ["provider", "model", "ollama", "openai", "health"],
     targetId: "settings-section-providers",
   },
