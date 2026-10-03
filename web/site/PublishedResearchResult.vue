@@ -133,7 +133,8 @@ const answerSegments = computed<AnswerSegment[]>(() => {
             @click="onOpenRecord(item.recordId)"
           >
             <span class="published-evidence-copy">
-              <strong>[​{{ item.evidenceId }}] {{ item.work || item.recordId }}</strong>
+              <span class="sr-only">{{ openRecordLabel }}: </span>
+              <strong>[{{ item.evidenceId }}] {{ item.work || item.recordId }}</strong>
               <small>{{
                 item.citation ||
                 recordsById.get(String(item.recordId))?.full_citation ||
