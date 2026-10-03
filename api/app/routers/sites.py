@@ -26,7 +26,10 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..http_auth import require_admin
-from ..site_embeddings import BrowserEmbeddingUnavailableError, browser_embedding_profile
+from ..site_embeddings import (
+    BrowserEmbeddingUnavailableError,
+    browser_embedding_profile,
+)
 from ..site_publication import (
     build_local_site_file,
     build_nginx_site_bundle,
