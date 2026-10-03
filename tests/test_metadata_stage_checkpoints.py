@@ -253,6 +253,14 @@ def test_metadata_families_checkpoint_independently_and_record_execution_ledger(
     assert record['metadata_execution_ledger']['discourse']['timeout_seconds']==90
     assert record['metadata_execution_ledger']['discourse']['input_chars']>0
     assert 'metadata_stage_results' not in record
+    from app.corpus_metadata_enrichment_execution import (
+        _materialized_family_fingerprint,
+    )
+
+    for entry in record["metadata_execution_ledger"].values():
+        assert entry["materialized_fingerprint"] == _materialized_family_fingerprint(
+            record, entry["requested_fields"],
+        )
 
 
 def test_metadata_resume_recomputes_legacy_raw_family_checkpoint(tmp_path,monkeypatch):
@@ -320,4 +328,3 @@ def test_record_store_concurrent_writes_remain_valid_jsonl(tmp_path):
         thread.join()
     assert not failures
     assert repo.load_records(build_id) in (rows_a, rows_b)
-

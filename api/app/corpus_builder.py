@@ -56,6 +56,7 @@ from .corpus_enrichment_helpers import (
     _merge_enrichment_snapshot as _merge_enrichment_snapshot,
 )
 from .corpus_enrichment_helpers import (
+    _merge_preparation_snapshot,
     _metadata_family_states,
 )
 from .corpus_enrichment_helpers import (
@@ -839,6 +840,10 @@ def _apply_synthetic_record_pages(records: list[dict[str, Any]], records_per_pag
         record["page_number_source"] = "record_grouping"
 
 
+class RecordStateConflict(ValueError):
+    """A conditional Record write lost a concurrent canonical-state race."""
+
+
 class PdfCorpusRepository:
     def __init__(self, root: Path | None = None) -> None:
         self.root = root or corpus_root()
@@ -1173,6 +1178,16 @@ class PdfCorpusRepository:
         with self._lock:
             self.get_asset(asset_id)
             return self._load_block_rows(asset_id)
+
+    def load_selected_blocks(self, asset_id: str, block_ids: list[str]) -> list[dict[str, Any]]:
+        from .source_block_index import load_selected_blocks
+
+        if not block_ids:
+            return []
+        with self._lock:
+            if not isinstance(_json_read(self.asset_meta_path(asset_id)), dict):
+                raise KeyError(asset_id)
+            return load_selected_blocks(self.asset_blocks_path(asset_id), block_ids)
 
     def update_page_labels(self, asset_id: str, labels: dict[int, str | None]) -> dict[str, Any]:
         """Apply explicit scholarly page-label overrides to a source asset.
@@ -1975,7 +1990,9 @@ class PdfCorpusRepository:
         system_store.mark_semantic_map_dirty(build_id, reason="records_saved")
         self._notify_metadata_projection(build_id)
 
-    def update_record(self, build_id: str, record: dict[str, Any]) -> None:
+    def update_record(
+        self, build_id: str, record: dict[str, Any], *, expected_queue_version: int | None = None,
+    ) -> None:
         """Persist one validated record without rebuilding the whole JSONL file.
 
         The SQLite index is authoritative for interactive reads. JSONL is a
@@ -2005,6 +2022,12 @@ class PdfCorpusRepository:
                 ).fetchone()
                 if row is None:
                     raise KeyError(record_id)
+                if expected_queue_version is not None:
+                    version = connection.execute(
+                        "SELECT state_version FROM review_queue_rows WHERE record_id=?", (record_id,),
+                    ).fetchone()
+                    if version is None or int(version[0]) != expected_queue_version:
+                        raise RecordStateConflict("Record changed during preparation; retry the merge against current state.")
                 connection.execute(
                     "UPDATE corpus_records SET payload = ? WHERE record_id = ?",
                     (payload, record_id),
@@ -2405,6 +2428,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # in memory so a reviewer can hot-swap profiles for subsequently scheduled
         # metadata work while the public build manifest remains secret-free.
         self._runtime_requests: dict[str, dict[str, Any]] = {}
+        from .metadata_request_coalescer import MetadataRequestCoalescer
+
+        self._metadata_request_coalescer = MetadataRequestCoalescer()
         # Semantic projections are persisted as rebuildable System Data. Per-build
         # locks make generation single-flight so concurrent Record/Work opens join
         # one materialization instead of repeating graph traversal.
@@ -2434,6 +2460,39 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._provider_epoch: dict[str, int] = {}  # bumped whenever a build's provider is switched, so a running pass can notice
         self._mark_interrupted()
         self._recover_metadata_exemplar_projections()
+
+    def _persist_preparation_records(
+        self, build_id: str, base: list[dict[str, Any]], workers: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Merge optional preparation without replacing the canonical Record set."""
+        baseline = {str(row["record_id"]): row for row in base}
+        allowed = self._allowed_fields(build_id)
+        for worker in workers:
+            record_id = str(worker["record_id"])
+            if record_id not in baseline:
+                raise ValueError("Preparation cannot introduce a new Record identity.")
+            for attempt in range(3):
+                with self._lock:
+                    live = self.repo.get_records(build_id, [record_id], include_queue_version=True)[0]
+                    if live is None:
+                        break
+                    merged = _merge_preparation_snapshot(baseline[record_id], live, worker, allowed)
+                    if merged == live:
+                        break
+                    try:
+                        self.repo.update_record(
+                            build_id, merged, expected_queue_version=int(live["queue_state_version"]),
+                        )
+                    except RecordStateConflict:
+                        if attempt == 2:
+                            raise
+                        continue
+                    except KeyError:
+                        if self.repo.get_records(build_id, [record_id])[0] is None:
+                            break
+                        raise
+                    break
+        return self.repo.load_records(build_id)
 
     def _run_document_intelligence(
         self,
@@ -2512,10 +2571,11 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         """Recompute text-bound annotations and the graph after review/text changes."""
         build = self.repo.get_build(build_id)
         records = self.repo.load_records(build_id)
+        preparation_base = json.loads(json.dumps(records))
         manifest = build.get("manifest") if isinstance(build.get("manifest"), dict) else {}
         request = build.get("request") if isinstance(build.get("request"), dict) else {}
         self._run_document_intelligence(build_id, records, manifest, request)
-        self.repo.save_records(build_id, records)
+        self._persist_preparation_records(build_id, preparation_base, records)
         graph = self.semantic_content_graph(build_id)
         return {
             "document_intelligence": self.document_intelligence(build_id),
@@ -3651,6 +3711,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         Runs after record construction and deterministic cleanup, before metadata
         enrichment, so garbled OCR is not sent to discourse/quotation/indexing.
         """
+        preparation_base = json.loads(json.dumps(records))
         try:
             threshold = float(request.get("noise_unusable_threshold"))
         except (TypeError, ValueError):
@@ -3718,7 +3779,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     "Source extraction issue: inspect the affected source, correct the reviewed "
                     "record text when appropriate, or rebuild/re-extract the source before acceptance."
                 )
-        self.repo.save_records(build_id, records)
+        records[:] = self._persist_preparation_records(build_id, preparation_base, records)
         trash_quality = _trash_quality_report(records, source_quality)
         current_build = self.repo.get_build(build_id)
         current_build["trash_quality"] = trash_quality
@@ -3972,6 +4033,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
 
         self._update(build_id, stage="constructing_records", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.36))
         records = self.repo.load_records(build_id) if resume and not source_scope_repair else []
+        preparation_base = json.loads(json.dumps(records))
         if not records:
             records = _construct_records(asset, source_blocks, boundaries)
             if records_per_page and _can_use_synthetic_record_pages(asset):
@@ -4074,7 +4136,12 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             # Persist deterministic records before any metadata call. A provider
             # failure can therefore never discard successful segmentation work.
             self.repo.save_records(build_id, records)
-            self._update(build_id, record_count=len(records), boundary_count=len(boundaries))
+            self._update(
+                build_id, record_count=len(records), boundary_count=len(boundaries),
+                topology_persisted_at=self.repo.get_build(build_id).get("topology_persisted_at") or iso_now(),
+            )
+            records = self.repo.load_records(build_id)
+            preparation_base = json.loads(json.dumps(records))
             # Canonical topology is readable before optional derived work; review
             # remains locked until preparation and enrichment scheduling complete.
             source_projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
@@ -4110,7 +4177,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             current_build = self.repo.get_build(build_id)
             current_build["memory_prefill"] = memory_prefill
             self.repo.save_build(current_build)
-        self.repo.save_records(build_id, records)
+        records = self._persist_preparation_records(build_id, preparation_base, records)
+        preparation_base = json.loads(json.dumps(records))
         guidance = request.get("run_guidance") if isinstance(request.get("run_guidance"), dict) else {}
         for record in records:
             matches = find_guidance_matches(str(record.get("text") or ""), guidance)
@@ -4130,11 +4198,18 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         )
         self._run_document_intelligence(build_id, records, manifest, request)
 
-        self.repo.save_records(build_id, records)
+        records = self._persist_preparation_records(build_id, preparation_base, records)
         trash_quality = self._apply_source_illegibility(
             build_id, records, request, source_quality, asset.get("pages") or [],
         )
-        self._update(build_id, stage="enriching", progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42), boundary_count=len(boundaries), record_count=len(records), source_problem_count=sum(1 for record in records if record.get("source_quality_issues")), trash_quality=trash_quality)
+        self._update(
+            build_id, stage="enriching",
+            progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.42),
+            boundary_count=len(boundaries), record_count=len(records),
+            source_problem_count=sum(1 for record in records if record.get("source_quality_issues")),
+            trash_quality=trash_quality,
+            review_available_at=self.repo.get_build(build_id).get("review_available_at") or iso_now(),
+        )
 
         return records
 
@@ -4249,21 +4324,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         self, build_id: str, request: dict[str, Any], manifest: dict[str, Any], records: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """Schedule incomplete records and merge worker checkpoints with live human edits."""
+        preparation_base = json.loads(json.dumps(records))
         total = max(1, len(records))
         pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
         priority_ids = {str(value) for value in request.get("_priority_record_ids", [])}
         pending.sort(key=lambda index: (0 if str(records[index].get("record_id") or "") in priority_ids else 1, index))
         already_complete = len(records) - len(pending)
         metadata_started_at = self.repo.get_build(build_id).get("metadata_started_at") or iso_now()
-        self._update(
-            build_id,
-            metadata_enriched_count=already_complete,
-            metadata_enrichment_total=len(records),
-            metadata_concurrency=max(1, min(64, int(request.get("max_concurrent_requests") or 1))),
-            metadata_started_at=metadata_started_at,
-            metadata_last_progress_at=iso_now(),
-            metadata_settle_requested=False,
-        )
         # Metadata enrichment is book-length work and may take minutes on a
         # local model. Track readiness per record so completed records can be
         # reviewed immediately instead of locking the entire book until the
@@ -4278,7 +4345,18 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 record.setdefault("metadata_stage_status", {})
             else:
                 record["metadata_enrichment_state"] = "complete"
-        self.repo.save_records(build_id, records)
+        records = self._persist_preparation_records(build_id, preparation_base, records)
+        total = max(1, len(records))
+        pending = [index for index, record in enumerate(records) if not record.get("metadata_complete")]
+        pending.sort(key=lambda index: (0 if str(records[index].get("record_id") or "") in priority_ids else 1, index))
+        already_complete = len(records) - len(pending)
+        self._update(
+            build_id, metadata_enriched_count=already_complete,
+            metadata_enrichment_total=len(records),
+            metadata_concurrency=max(1, min(64, int(request.get("max_concurrent_requests") or 1))),
+            metadata_started_at=metadata_started_at, metadata_last_progress_at=iso_now(),
+            metadata_settle_requested=False,
+        )
         max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
         metadata_families = ("discourse", "quotation", "indexing")
         # Fast mode still exposes all three family states, but deliberately
@@ -4399,6 +4477,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         )
                         self.repo.update_record(build_id, merged)
                         records[index] = merged
+                        build = self.repo.get_build(build_id)
+                        if not build.get("metadata_first_settled_at"):
+                            self._update(build_id, metadata_first_settled_at=iso_now())
                     # The terminal realtime hint means a subsequent read can observe
                     # the enriched Record. Emit it only after the durable merge/save.
                     note_record_metadata(build_id, completed_id, "record_completed")

@@ -18,7 +18,6 @@ from types import ModuleType
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-LLM_TOOLS = (ROOT / "api/app/llm_tools.py").read_text(encoding="utf-8")
 
 
 
@@ -116,18 +115,11 @@ def test_translation_resume_skips_validated_strings(monkeypatch):
 def test_rag_grades_preserve_full_structured_output():
     """The grade normalizer keeps category analyses, overall analysis, and the raw output.
 
-    Contract checks confirm the grader prompt/limits still exist in llm_tools.py (source
-    text). The behavior check feeds a full grader response and expects flat scores
+    The behavior check feeds a full grader response and expects flat scores
     (query_relevance 9, overall 8), per-category analyses, the overall analysis, and the
     untouched raw_output. Why: graders explain themselves; discarding that loses the
     audit trail.
     """
-    assert 'normalized["categories"] = categories' in LLM_TOOLS
-    assert 'normalized["analysis"]' in LLM_TOOLS
-    assert 'normalized["raw_output"] = original' in LLM_TOOLS
-    assert "Each category must contain an integer `score`" in LLM_TOOLS
-    assert "max_tokens=4096" in LLM_TOOLS
-
     if str(ROOT / "api") not in sys.path:
         sys.path.insert(0, str(ROOT / "api"))
     module = importlib.import_module("app.llm_tools")

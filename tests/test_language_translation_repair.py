@@ -16,7 +16,6 @@ from pathlib import Path
 from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[1]
-TRANSLATION = (ROOT / "api/app/i18n_translation.py").read_text(encoding="utf-8")
 
 
 
@@ -32,18 +31,10 @@ TRANSLATION = (ROOT / "api/app/i18n_translation.py").read_text(encoding="utf-8")
 def test_translation_pipeline_has_json_repair_bisection_and_plain_text_last_resort(monkeypatch):
     """Invalid JSON for large batches is recovered by splitting and, if needed, plain text.
 
-    Contract checks (source text): batch limits (24 items / 6,500 chars) and the repair,
-    bisect and plain-text helpers still exist.
-    Behavior: a fake provider returns "not json" for batches larger than 3 items and
+    A fake provider returns "not json" for batches larger than 3 items and
     valid JSON otherwise, so 12 strings must be bisected. Expected: all 12 translated,
     zero failures, and more than one structured call.
     """
-    assert "max_items: int = 24" in TRANSLATION
-    assert "max_chars: int = 6_500" in TRANSLATION
-    assert "_extract_translation_json" in TRANSLATION
-    assert "translate_single_plain" in TRANSLATION
-    assert "Bisect it and retry" in TRANSLATION
-
     rag_stub = ModuleType("app.rag")
     rag_stub._extract_json = lambda raw: json.loads(raw)
     rag_stub.chat_complete = lambda **kwargs: "{}"

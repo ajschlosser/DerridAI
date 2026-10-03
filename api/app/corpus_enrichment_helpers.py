@@ -185,6 +185,63 @@ def _merge_enrichment_snapshot(live: dict[str, Any], worker: dict[str, Any], all
     return merged
 
 
+def _merge_preparation_snapshot(
+    base: dict[str, Any], live: dict[str, Any], worker: dict[str, Any],
+    allowed_fields: set[str],
+) -> dict[str, Any]:
+    """Apply preparation deltas only to unchanged documentary and field state."""
+    source_keys = (
+        "record_id", "record_revision", "text", "source_document_id", "source_asset_id",
+        "source_spans", "source_block_ids", "source_unit_ids", "source_extracted_text",
+    )
+    missing = object()
+    if any(worker.get(key, missing) != base.get(key, missing) for key in source_keys):
+        raise ValueError("Preparation cannot change authoritative text, revision, or source bindings.")
+    if any(live.get(key, missing) != base.get(key, missing) for key in source_keys):
+        return json.loads(json.dumps(live))
+    frozen = {"__text__", "__review__"} & set(live.get("human_touched_fields") or [])
+    if frozen - set(base.get("human_touched_fields") or []):
+        return json.loads(json.dumps(live))
+    merged = json.loads(json.dumps(live))
+    base = json.loads(json.dumps(base))
+    live = json.loads(json.dumps(live))
+    worker = json.loads(json.dumps(worker))
+    migrate_record_assertions(base)
+    migrate_record_assertions(live)
+    migrate_record_assertions(worker)
+    protected = {
+        *source_keys, *allowed_fields, "queue_state_version",
+        "field_assertions", "current_field_assertions",
+        "metadata_field_status", "metadata_evidence",
+        "human_touched_at", "human_touched_fields", "metadata_decisions",
+        "review_disposition", "accepted", "rejected", "reviewed_at", "reviewed_by",
+    }
+    for key in set(base) | set(worker):
+        if key in protected or worker.get(key, missing) == base.get(key, missing) or live.get(key, missing) != base.get(key, missing):
+            continue
+        if key in worker:
+            merged[key] = json.loads(json.dumps(worker[key]))
+        else:
+            merged.pop(key, None)
+    for field in allowed_fields:
+        if frozen:
+            continue
+        baseline = [item.model_dump(mode="json") for item in current_assertions(base) if item.field_name == field]
+        current = [item.model_dump(mode="json") for item in current_assertions(live) if item.field_name == field]
+        proposals = [item for item in current_assertions(worker) if item.field_name == field]
+        if current != baseline or any(item["authority_status"] in {"human_confirmed", "human_override"} for item in current):
+            continue
+        proposed_ids = {item.field_id for item in proposals}
+        for item in baseline:
+            if item["field_id"] not in proposed_ids:
+                merged["current_field_assertions"].pop(item["field_id"], None)
+        for assertion in proposals:
+            if assertion.model_dump(mode="json") not in baseline:
+                store_assertion(merged, assertion)
+    project_record_assertions(merged)
+    return merged
+
+
 def _initial_enrichment_operation(build_id: str, records: list[dict[str, Any]], *, started_at: str | None = None) -> dict[str, Any]:
     """Describe the book-scale first pass so the review workspace can start another immediately."""
     total = len(records)
@@ -228,4 +285,3 @@ def _prepend_metadata_priority(build: dict[str, Any], record_id: str) -> None:
         if str(value) != record_id
     ]
     build["metadata_priority_record_ids"] = [record_id, *priority][-100:]
-

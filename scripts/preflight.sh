@@ -47,7 +47,7 @@ PLAN=$(printf '%s\n' "$CHANGED" | "$PY" scripts/preflight_plan.py --format shell
 }
 eval "$PLAN"
 
-say "plan: backend=$BACKEND frontend=$FRONTEND contract=$CONTRACT format=$FORMAT publication=$PUBLICATION generated=$GENERATED legacy=$LEGACY"
+say "plan: backend=$BACKEND frontend=$FRONTEND unit=$FRONTEND_UNIT build=$FRONTEND_BUILD sdk=$SDK storybook=$STORYBOOK e2e=$E2E a11y=$A11Y legacy=$LEGACY contract=$CONTRACT publication=$PUBLICATION"
 
 # 1. Freshness: CI tests the merge with master, so a stale branch is tested against a tree
 #    the author never ran.
@@ -119,7 +119,8 @@ if [ "$CONTRACT" = true ]; then
     tests/test_frontend_api_contract.py tests/test_frontend_graphql_contract.py
 fi
 
-# 7. Frontend static, unit, build, and Storybook gates.
+# 7. Frontend gates are selected by ownership. Expensive browser/catalogue work is not
+#    useful when an SDK-only, API-client-only, or test-only change cannot affect those surfaces.
 if [ "$FRONTEND" = true ]; then
   if [ ! -x web/node_modules/.bin/eslint ]; then
     say "web/node_modules missing; cannot run required frontend gates (run: cd web && npm ci)"
@@ -128,20 +129,41 @@ if [ "$FRONTEND" = true ]; then
     web_gate "frontend lint" npm run lint
     web_gate "application typecheck" npm run typecheck:app
     web_gate "test typecheck" npm run typecheck:tests
-    web_gate "legacy snapshot ownership" npm run check:legacy-snapshots
-    web_gate "frontend unit tests" npm run test:unit
-    web_gate "production build" npm run build:ci
-    web_gate "Storybook build" npm run build-storybook
+    if [ "$LEGACY" = true ]; then
+      web_gate "legacy snapshot ownership" npm run check:legacy-snapshots
+    fi
+    if [ "$FRONTEND_UNIT" = true ]; then
+      gate "related frontend unit tests" bash scripts/run_frontend_related_tests.sh "$MERGE_BASE" HEAD
+    fi
+    if [ "$FRONTEND_BUILD" = true ]; then
+      web_gate "production app build" npm run build:app:ci
+    fi
+    if [ "$SDK" = true ]; then
+      web_gate "SDK distribution and package checks" npm run build:sdk:ci
+    fi
   fi
 fi
 
-# 8. Browser suites run in CI. Opt in locally for complete browser acceptance.
-if [ "$FRONTEND" = true ] && [ "${DERRIDAI_PREFLIGHT_BROWSER:-0}" = 1 ]; then
-  web_gate "legacy browser tests" npm run test:e2e:legacy -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
-  web_gate "composed UI browser tests" npm run test:e2e -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
-  web_gate "accessibility browser tests" npm run test:e2e:a11y -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
-elif [ "$FRONTEND" = true ]; then
-  say "local browser gates omitted; CI runs them (opt in with DERRIDAI_PREFLIGHT_BROWSER=1)"
+# 8. Browser suites are opt-in locally and retain the same surface ownership as CI.
+if [ "${DERRIDAI_PREFLIGHT_BROWSER:-0}" = 1 ]; then
+  if [ "$STORYBOOK" = true ]; then
+    web_gate "Storybook build" npm run build-storybook
+  fi
+  if [ "$LEGACY" = true ]; then
+    web_gate "legacy browser tests" npm run test:e2e:legacy -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
+  fi
+  if [ "$E2E" = true ]; then
+    web_gate "composed UI browser tests" npm run test:e2e -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
+  fi
+  if [ "$A11Y" = true ]; then
+    if [ "$A11Y_FULL" = true ]; then
+      DERRIDAI_A11Y_SCOPE=full web_gate "accessibility browser tests" npm run test:e2e:a11y -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
+    else
+      DERRIDAI_A11Y_SCOPE=representative web_gate "representative accessibility browser tests" npm run test:e2e:a11y -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
+    fi
+  fi
+elif [ "$STORYBOOK" = true ] || [ "$LEGACY" = true ] || [ "$E2E" = true ] || [ "$A11Y" = true ]; then
+  say "local browser gates omitted; CI runs the affected surfaces (opt in with DERRIDAI_PREFLIGHT_BROWSER=1)"
 fi
 
 # 9. Publication paths require the dedicated generated-artifact acceptance check.

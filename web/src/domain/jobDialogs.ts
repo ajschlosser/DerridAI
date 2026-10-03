@@ -1,7 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { openMessageDialog } from "../composables/messageDialog";
-import { icon } from "./html";
 import { realtime } from "../realtime";
 import { followResource } from "../realtime/follow";
 import {
@@ -12,7 +11,13 @@ import {
 } from "../composables/jobReviewDialog";
 import { openRecordPreviewDialog } from "../composables/recordPreviewDialog";
 import { createJobDialogCopy } from "./jobDialogCopy";
-import { llmTaskLauncherHtml } from "./llmToolMarkup";
+import {
+  closeLlmTaskLauncherDialog,
+  openLlmTaskLauncherDialog,
+  type LlmLauncherProfile,
+  type LlmLauncherRunMode,
+  type LlmLauncherSubmission,
+} from "../composables/llmTaskLauncherDialog";
 import { openPdfDraftRecordDialog } from "../composables/pdfDraftRecordDialog";
 import {
   openLlmToolResultDialog,
@@ -70,7 +75,6 @@ type Helper =
   | "sanitizeResearchGeneration"
   | "shell"
   | "shellRefreshHook"
-  | "showAppModal"
   | "startJobPolling"
   | "syncJobProgressToasts"
   | "tr"
@@ -121,7 +125,6 @@ export function createJobDialogs(deps: Deps) {
     sanitizeResearchGeneration,
     shell,
     shellRefreshHook,
-    showAppModal,
     startJobPolling,
     syncJobProgressToasts,
     tr,
@@ -132,8 +135,6 @@ export function createJobDialogs(deps: Deps) {
     warmupProviderProfile,
   } = deps;
   const copy = createJobDialogCopy(tr, trf);
-  // The legacy code queries the page freely; untyped, as it was written.
-  const document: Any = globalThis.document;
   async function openJobDetails(jobId: Any) {
     let job: Any;
     try {
@@ -853,104 +854,97 @@ export function createJobDialogs(deps: Deps) {
       );
       if (independent) profileId = independent.id;
     }
-    let runMode =
-      task === "rag_grade_batch" ? "background" : isResearcher() ? "foreground" : "background";
-    const dialog = document.createElement("dialog");
-    dialog.className = "llm-tool-launcher";
-
-    const render = () => {
-      const profile = providerProfile(profileId);
-      const status = state.providerStatuses?.[profile.id] || {};
-      const sameModel = Boolean(
-        generationModel &&
-          String(profile.model || "") === String(generationModel) &&
-          (!generationProvider || profile.type === generationProvider),
-      );
-      dialog.innerHTML = llmTaskLauncherHtml(
-        {
-          title,
-          description,
-          contextText,
-          sameModel,
-          profiles,
-          profile,
-          status,
-          task,
-          runMode,
-          isResearcher: isResearcher(),
-          providerDisplayName,
-        },
-        tr,
-      );
-      const close = () => {
-        dialog.close();
-        dialog.remove();
+    const runModes: LlmLauncherRunMode[] =
+      task === "rag_grade_batch"
+        ? ["background"]
+        : isResearcher()
+          ? ["foreground"]
+          : ["background", "foreground"];
+    const launcherProfiles = profiles.map((item: Any): LlmLauncherProfile => {
+      const status = state.providerStatuses?.[item.id] || {};
+      return {
+        id: item.id,
+        label: providerDisplayName(item),
+        type: String(item.type || ""),
+        model: String(item.model || ""),
+        autoModel: item.type === "openai" && item.model_mode === "auto",
+        maxConcurrentRequests: item.max_concurrent_requests ?? 1,
+        numCtx: item.num_ctx ?? 16384,
+        think: String(item.think ?? "false"),
+        numPredict: item.num_predict ?? 4096,
+        temperature: item.temperature ?? 0,
+        topP: item.top_p ?? 1,
+        seed: item.seed ?? "",
+        extraOptions: item.extra_options || "{}",
+        available: Boolean(status.available),
+        statusError: status.error || "",
       };
-      dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-      dialog.querySelector("#toolProvider").onchange = (e: Any) => {
-        profileId = e.target.value;
-        render();
-      };
-      dialog.querySelector("#toolRunMode").onchange = (e: Any) => {
-        runMode = e.target.value;
-        render();
-      };
-      dialog.querySelector("#toolProviders")?.addEventListener("click", () => {
-        close();
-        navigateTo("providers");
-      });
-      dialog.querySelector("#toolWarm").onclick = async () => {
-        const el = dialog.querySelector("#toolStatus");
-        el.textContent = tr("providers.warming");
-        await warmupProviderProfile(profileId);
-        el.textContent =
-          state.providerWarmups?.[profileId]?.message || tr("jobs.tool.warmup_requested");
-      };
-      dialog.querySelector("#runLlmTask").onclick = async () => {
-        const active = providerProfile(profileId);
-        if (!active) return toast(copy.chooseProfile, { tone: "warning" });
+    });
+    openLlmTaskLauncherDialog({
+      title,
+      description,
+      contextText,
+      generationProvider,
+      generationModel,
+      profiles: launcherProfiles,
+      profileId,
+      runMode: runModes[0] === "foreground" ? "foreground" : "background",
+      runModes,
+      canManageProviders: !isResearcher(),
+      manageProviders: () => navigateTo("providers"),
+      warm: async (id: string) => {
+        await warmupProviderProfile(id);
+        return state.providerWarmups?.[id]?.message || tr("jobs.tool.warmup_requested");
+      },
+      run: async (form: LlmLauncherSubmission) => {
+        const refuse = (message: string, tone: "warning" | "danger") => {
+          toast(message, { tone });
+          return false;
+        };
+        const runMode = form.runMode;
+        const active = providerProfile(form.profileId);
+        if (!active) return refuse(copy.chooseProfile, "warning");
         if (!["ollama", "openai"].includes(String(active.type || "")))
-          return toast(copy.profileUnsupported, { tone: "warning" });
+          return refuse(copy.profileUnsupported, "warning");
         const config = providerRequestConfig(active, { textReview: true });
         let extra: Any = {};
         try {
-          extra = JSON.parse(dialog.querySelector("#toolExtra").value || "{}");
+          extra = JSON.parse(form.extraOptions || "{}");
           if (!extra || Array.isArray(extra) || typeof extra !== "object")
             throw new Error("Advanced options must be an object");
         } catch (error: Any) {
-          return toast(error.message, { tone: "danger" });
+          return refuse(error.message, "danger");
         }
-        const n = (id: Any) => {
-          const raw = dialog.querySelector(`#${id}`)?.value;
+        const n = (raw: string) => {
           if (raw === "" || raw == null) return null;
           const value = Number(raw);
           return Number.isFinite(value) ? value : null;
         };
-        let think = false;
+        let think: boolean | string = false;
         if (active.type === "ollama") {
-          const raw = dialog.querySelector("#toolThink")?.value || "false";
+          const raw = form.think || "false";
           think = raw === "true" ? true : ["low", "medium", "high"].includes(raw) ? raw : false;
         }
         const generation = sanitizeResearchGeneration({
           ...config.ollama,
-          num_ctx: active.type === "ollama" ? n("toolCtx") : null,
-          num_predict: n("toolPredict") ?? 4096,
+          num_ctx: active.type === "ollama" ? n(form.numCtx) : null,
+          num_predict: n(form.numPredict) ?? 4096,
           think,
-          temperature: n("toolTemp") ?? 0,
-          top_p: n("toolTopP") ?? 1,
-          seed: n("toolSeed"),
+          temperature: n(form.temperature) ?? 0,
+          top_p: n(form.topP) ?? 1,
+          seed: n(form.seed),
           extra_options: extra,
         });
         const model =
           active.type === "openai" && active.model_mode === "auto"
             ? "auto"
-            : String(dialog.querySelector("#toolModel")?.value || "").trim();
-        if (!model) return toast(copy.selectModel, { tone: "warning" });
+            : String(form.model || "").trim();
+        if (!model) return refuse(copy.selectModel, "warning");
         if (
           task === "rag_grade" &&
           (!String(payload.question || "").trim() || !String(payload.answer || "").trim())
         )
-          return toast(copy.gradeRequiresQa, { tone: "warning" });
+          return refuse(copy.gradeRequiresQa, "warning");
         const direct = {
           ...payload,
           provider: active.type,
@@ -959,20 +953,17 @@ export function createJobDialogs(deps: Deps) {
           api_key: active.type === "openai" ? active.api_key || "" : null,
           generation,
         };
-        const button = dialog.querySelector("#runLlmTask");
-        button.disabled = true;
-        button.textContent =
-          runMode === "background" ? tr("jobs.tool.starting") : tr("jobs.tool.running");
         try {
           if (runMode === "background") {
+            const concurrency = Math.max(
+              1,
+              Math.min(64, Number(active.max_concurrent_requests) || 1),
+            );
             const body = {
               task,
               label: title,
               provider_profile_id: active.id,
-              max_concurrent_requests: Math.max(
-                1,
-                Math.min(64, Number(active.max_concurrent_requests) || 1),
-              ),
+              max_concurrent_requests: concurrency,
               pdf: task.startsWith("pdf_") ? direct : null,
               grade: task === "rag_grade" ? direct : null,
               grade_batch:
@@ -984,10 +975,7 @@ export function createJobDialogs(deps: Deps) {
                       api_key: direct.api_key,
                       generation: direct.generation,
                       provider_profile_id: active.id,
-                      max_concurrent_requests: Math.max(
-                        1,
-                        Math.min(64, Number(active.max_concurrent_requests) || 1),
-                      ),
+                      max_concurrent_requests: concurrency,
                     }
                   : null,
             };
@@ -998,26 +986,23 @@ export function createJobDialogs(deps: Deps) {
             state.jobs = [job, ...state.jobs.filter((item: Any) => item.id !== job.id)];
             syncJobProgressToasts();
             startJobPolling();
-            close();
             toast(copy.startedBackground(title), { tone: "success" });
           } else {
             if (task === "rag_grade_batch")
               throw new Error("Cache-wide grading runs as a background operation.");
             const endpoint = task === "rag_grade" ? "/api/rag/grade" : "/api/pdf/llm";
             const result = await api(endpoint, { method: "POST", body: JSON.stringify(direct) });
-            close();
+            // Close first so the result dialog opens over the page, not over the launcher.
+            closeLlmTaskLauncherDialog();
             if (onForegroundResult) await onForegroundResult(result);
           }
+          return true;
         } catch (error: Any) {
-          button.disabled = false;
-          button.innerHTML = `${icon("spark")}${runMode === "background" ? tr("jobs.tool.start_background") : tr("jobs.tool.run_now")}`;
           toast(copy.failed(title, error.message), { tone: "danger" });
+          return false;
         }
-      };
-    };
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    render();
+      },
+    });
   }
   function openPdfDraftRecord(record: Any) {
     openPdfDraftRecordDialog({

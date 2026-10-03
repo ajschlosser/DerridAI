@@ -138,3 +138,15 @@ export function bindSharedState<T extends object, S extends object>(
   }
   return target as T & Omit<S, "version">;
 }
+
+/** Shell layout preferences: the collapsed sidebar and collection list, the operation dock and collapsed panels. */
+export function createLayoutState() {
+  return {
+    sidebarCollapsed: false,
+    collectionsCollapsed: false,
+    operationToastsMinimized: false,
+    operationStackPosition: null as { left: number; top: number } | null,
+    collapsedPanels: {} as Record<string, boolean>,
+  };
+}
+export const layoutState = shallowReactive(createLayoutState());
