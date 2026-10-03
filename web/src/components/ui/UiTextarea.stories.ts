@@ -28,7 +28,8 @@ const meta = {
     template: '<UiTextarea v-bind="args" aria-label="Extraction instruction" rows="4" />',
   }),
   args: {
-    modelValue: "Identify the position holder and preserve uncertainty when the passage is ambiguous.",
+    modelValue:
+      "Identify the position holder and preserve uncertainty when the passage is ambiguous.",
   },
 } satisfies Meta<typeof UiTextarea>;
 export default meta;

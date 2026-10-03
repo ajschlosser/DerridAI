@@ -39,7 +39,8 @@ describe("metadata schema form contract", () => {
         const tag = match[0];
         // File selection cannot be represented by the ordinary text-input primitive. It is
         // intentionally visually hidden behind the localized Import action.
-        if (path.endsWith("MetadataSchemaEditor.vue") && /<input\b[^>]*type="file"/.test(tag)) continue;
+        if (path.endsWith("MetadataSchemaEditor.vue") && /<input\b[^>]*type="file"/.test(tag))
+          continue;
         offenders.push(`${path}: ${tag.replace(/\s+/g, " ")}`);
       }
     }

@@ -95,10 +95,9 @@ const valueIsRecommended = computed(
     !props.multiple && Boolean(pendingQuery.value) && recommendedSet.value.has(pendingQuery.value),
 );
 const describedby = computed(() => {
-  const ids = [
-    props.describedby,
-    valueIsRecommended.value ? `${comboId}-recommended` : "",
-  ].filter(Boolean);
+  const ids = [props.describedby, valueIsRecommended.value ? `${comboId}-recommended` : ""].filter(
+    Boolean,
+  );
   return ids.length ? ids.join(" ") : undefined;
 });
 const activeDescendant = computed(() =>

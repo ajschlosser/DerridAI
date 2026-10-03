@@ -165,7 +165,14 @@ function setMemberValues(member: SchemaMember, text: string) {
     <section class="config-section" :aria-labelledby="id('basics-heading')">
       <header class="section-heading">
         <h4 :id="id('basics-heading')">{{ t("block_identity", "Identity") }}</h4>
-        <p>{{ t("field_identity_help", "Define what the field is, where its value lives, and how it appears during review.") }}</p>
+        <p>
+          {{
+            t(
+              "field_identity_help",
+              "Define what the field is, where its value lives, and how it appears during review.",
+            )
+          }}
+        </p>
       </header>
 
       <div class="form-grid">
@@ -182,17 +189,15 @@ function setMemberValues(member: SchemaMember, text: string) {
           <UiInput :id="id('label')" v-model="field.label" maxlength="80" />
         </UiField>
         <UiField :label="t('field_type', 'Type')" :control-id="id('type')">
-          <UiSelect
-            :id="id('type')"
-            :model-value="field.type"
-            @update:model-value="setFieldType"
-          >
+          <UiSelect :id="id('type')" :model-value="field.type" @update:model-value="setFieldType">
             <option value="text">{{ t("type_text", "Text") }}</option>
             <option value="number">{{ t("type_number", "Number") }}</option>
             <option value="boolean">{{ t("type_boolean", "Yes / no") }}</option>
             <option value="choice">{{ t("type_choice", "One of a list") }}</option>
             <option value="list">{{ t("type_list", "List of texts") }}</option>
-            <option value="repeatable">{{ t("type_repeatable", "Repeatable structured field") }}</option>
+            <option value="repeatable">
+              {{ t("type_repeatable", "Repeatable structured field") }}
+            </option>
           </UiSelect>
         </UiField>
         <UiField :label="t('field_group', 'Group')" :control-id="id('group')">
@@ -217,7 +222,9 @@ function setMemberValues(member: SchemaMember, text: string) {
               <option value="scholarly">{{ t("role_scholarly", "Scholarly metadata") }}</option>
               <option value="structural">{{ t("role_structural", "Structural metadata") }}</option>
               <option value="document">{{ t("role_document", "Document metadata") }}</option>
-              <option value="operational">{{ t("role_operational", "Operational / utility") }}</option>
+              <option value="operational">
+                {{ t("role_operational", "Operational / utility") }}
+              </option>
             </UiSelect>
           </template>
         </UiField>
@@ -265,22 +272,24 @@ function setMemberValues(member: SchemaMember, text: string) {
 
     <section class="config-section" :aria-labelledby="id('extraction-heading')">
       <header class="section-heading">
-        <h4 :id="id('extraction-heading')">{{ t("instruction", "What the model should look for") }}</h4>
+        <h4 :id="id('extraction-heading')">
+          {{ t("instruction", "What the model should look for") }}
+        </h4>
         <p>{{ t("instruction_help") }}</p>
       </header>
 
-      <UiField :label="t('instruction', 'What the model should look for')" :control-id="id('instruction')" wide>
+      <UiField
+        :label="t('instruction', 'What the model should look for')"
+        :control-id="id('instruction')"
+        wide
+      >
         <UiTextarea :id="id('instruction')" v-model="field.instruction" rows="3" />
       </UiField>
 
       <div v-if="field.type === 'choice'" class="values">
         <h5>{{ t("allowed_values", "Allowed values") }}</h5>
         <div v-for="(value, valueIndex) in field.values" :key="valueIndex" class="value-row">
-          <UiInput
-            v-model="value.value"
-            :aria-label="t('value', 'Allowed value')"
-            maxlength="80"
-          />
+          <UiInput v-model="value.value" :aria-label="t('value', 'Allowed value')" maxlength="80" />
           <UiInput
             v-model="value.definition"
             :aria-label="t('definition', 'What it means (optional)')"
@@ -295,7 +304,12 @@ function setMemberValues(member: SchemaMember, text: string) {
           />
         </div>
         <div class="values-foot">
-          <UiButton size="small" icon="plus" :label="t('add_value', 'Add a value')" @click="addValue" />
+          <UiButton
+            size="small"
+            icon="plus"
+            :label="t('add_value', 'Add a value')"
+            @click="addValue"
+          />
           <UiCheckbox
             v-model="field.strict"
             :label="t('strict', 'The model may only return these values')"
@@ -306,7 +320,10 @@ function setMemberValues(member: SchemaMember, text: string) {
 
       <div v-if="field.type === 'repeatable'" class="repeatable-editor">
         <div class="form-grid">
-          <UiField :label="t('repeatable_max_items', 'Maximum instances')" :control-id="id('max-items')">
+          <UiField
+            :label="t('repeatable_max_items', 'Maximum instances')"
+            :control-id="id('max-items')"
+          >
             <UiInput
               :id="id('max-items')"
               :model-value="field.max_items ?? 8"
@@ -316,12 +333,19 @@ function setMemberValues(member: SchemaMember, text: string) {
               @update:model-value="field.max_items = Number($event ?? 8)"
             />
           </UiField>
-          <UiField :label="t('repeatable_instance_label', 'Instance label pattern')" :control-id="id('instance-label')">
+          <UiField
+            :label="t('repeatable_instance_label', 'Instance label pattern')"
+            :control-id="id('instance-label')"
+          >
             <UiInput :id="id('instance-label')" v-model="field.instance_label" maxlength="120" />
           </UiField>
         </div>
 
-        <div v-for="(member, memberIndex) in field.members" :key="member.field_id" class="member-card">
+        <div
+          v-for="(member, memberIndex) in field.members"
+          :key="member.field_id"
+          class="member-card"
+        >
           <div class="member-grid">
             <UiInput v-model="member.name" :aria-label="t('field_name', 'Field name')" />
             <UiInput v-model="member.label" :aria-label="t('field_label', 'Label')" />
@@ -382,7 +406,14 @@ function setMemberValues(member: SchemaMember, text: string) {
     <section class="config-section" :aria-labelledby="id('policy-heading')">
       <header class="section-heading">
         <h4 :id="id('policy-heading')">{{ t("field_policy", "Field policy") }}</h4>
-        <p>{{ t("field_policy_help", "Choose the evidence, confidence, and human-review requirements for this field.") }}</p>
+        <p>
+          {{
+            t(
+              "field_policy_help",
+              "Choose the evidence, confidence, and human-review requirements for this field.",
+            )
+          }}
+        </p>
       </header>
       <div class="policy-grid">
         <UiCheckbox
@@ -405,7 +436,14 @@ function setMemberValues(member: SchemaMember, text: string) {
 
     <details class="advanced-section">
       <summary>{{ t("linguistic_guidance", "Linguistic guidance") }}</summary>
-      <p class="section-note">{{ t("linguistic_guidance_help", "Optional POS and named-entity hints narrow which spans DerridAI should consider for this field.") }}</p>
+      <p class="section-note">
+        {{
+          t(
+            "linguistic_guidance_help",
+            "Optional POS and named-entity hints narrow which spans DerridAI should consider for this field.",
+          )
+        }}
+      </p>
       <div class="nlp-hints">
         <UiField
           :label="t('pos_tags', 'POS tags (optional)')"
@@ -462,7 +500,9 @@ function setMemberValues(member: SchemaMember, text: string) {
             :aria-describedby="matchingNoteId"
             @update:model-value="setMatchingMode"
           >
-            <option value="">{{ t("value_matching_default", "DerridAI default for this field") }}</option>
+            <option value="">
+              {{ t("value_matching_default", "DerridAI default for this field") }}
+            </option>
             <option v-for="mode in MATCHING_MODES" :key="mode" :value="mode">
               {{ t(`value_matching_${mode}`) }}
             </option>
@@ -478,8 +518,12 @@ function setMemberValues(member: SchemaMember, text: string) {
             :model-value="field.equivalence_profile.collection_semantics ?? 'set'"
             @update:model-value="setMatchingOrder"
           >
-            <option value="set">{{ t("value_matching_order_set", "Order does not matter") }}</option>
-            <option value="ordered">{{ t("value_matching_order_ordered", "Order matters") }}</option>
+            <option value="set">
+              {{ t("value_matching_order_set", "Order does not matter") }}
+            </option>
+            <option value="ordered">
+              {{ t("value_matching_order_ordered", "Order matters") }}
+            </option>
           </UiSelect>
         </UiField>
         <UiField
@@ -569,14 +613,18 @@ function setMemberValues(member: SchemaMember, text: string) {
             type="number"
             min="0"
             max="20"
-            :disabled="!field.retrieval_profile.enabled || !field.retrieval_profile.include_corrections"
+            :disabled="
+              !field.retrieval_profile.enabled || !field.retrieval_profile.include_corrections
+            "
             @update:model-value="field.retrieval_profile.max_corrections = Number($event ?? 0)"
           />
         </UiField>
       </div>
 
       <div class="match-fields" role="group" :aria-labelledby="matchTitleId">
-        <h5 :id="matchTitleId">{{ t("memory_match_fields", "Prefer precedents that agree on") }}</h5>
+        <h5 :id="matchTitleId">
+          {{ t("memory_match_fields", "Prefer precedents that agree on") }}
+        </h5>
         <p class="section-note">{{ t("memory_match_fields_help") }}</p>
         <p v-if="!matchOptions?.length" class="section-note">
           {{ t("memory_match_none", "No other fields are available to compare.") }}

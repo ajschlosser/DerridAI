@@ -67,8 +67,12 @@ const descriptionId = computed(() => (props.description ? `${id.value}-descripti
       @change="emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
     />
     <span class="ui-checkbox-copy" :class="{ 'sr-only': hideLabel && !description }">
-      <span class="ui-checkbox-label" :class="{ 'sr-only': hideLabel && description }">{{ label }}</span>
-      <span v-if="description" :id="descriptionId" class="ui-checkbox-description">{{ description }}</span>
+      <span class="ui-checkbox-label" :class="{ 'sr-only': hideLabel && description }">{{
+        label
+      }}</span>
+      <span v-if="description" :id="descriptionId" class="ui-checkbox-description">{{
+        description
+      }}</span>
     </span>
   </label>
 </template>

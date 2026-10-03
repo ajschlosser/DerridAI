@@ -25,7 +25,8 @@ const meta = {
   render: (args) => ({
     components: { UiSelect },
     setup: () => ({ args }),
-    template: '<UiSelect v-bind="args" aria-label="Field type"><option value="text">Text</option><option value="choice">Controlled choice</option><option value="repeatable">Repeatable structure</option></UiSelect>',
+    template:
+      '<UiSelect v-bind="args" aria-label="Field type"><option value="text">Text</option><option value="choice">Controlled choice</option><option value="repeatable">Repeatable structure</option></UiSelect>',
   }),
   args: { modelValue: "text" },
 } satisfies Meta<typeof UiSelect>;
@@ -38,6 +39,7 @@ export const Disabled: Story = {
   render: (args) => ({
     components: { UiSelect },
     setup: () => ({ args }),
-    template: '<UiSelect v-bind="args" aria-label="Field type" disabled><option value="text">Text</option><option value="choice">Controlled choice</option></UiSelect>',
+    template:
+      '<UiSelect v-bind="args" aria-label="Field type" disabled><option value="text">Text</option><option value="choice">Controlled choice</option></UiSelect>',
   }),
 };

@@ -311,7 +311,6 @@ describe("the schema editor", () => {
     w.unmount();
   });
 
-
   it("keeps built-in fields navigable while their inspector controls remain disabled", async () => {
     const w = await mountEditor();
     const fieldButtons = w.findAll("button.field-select");

@@ -200,13 +200,11 @@ async function openSchemas(page: Page, options: { french?: boolean } = {}) {
 
 async function expectAxeClean(page: Page) {
   const scan = await runAxe(page, (builder) =>
-    builder
-      .include(".schemas-page")
-      .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]),
+    builder.include(".schemas-page").withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]),
   );
   expect(
-    scan.violations.map((violation) =>
-      `${violation.id}: ${violation.nodes.map((node) => node.target).join(" ")}`,
+    scan.violations.map(
+      (violation) => `${violation.id}: ${violation.nodes.map((node) => node.target).join(" ")}`,
     ),
   ).toEqual([]);
 }
@@ -284,7 +282,9 @@ test("schema workspace reflows at 320px with WCAG text spacing", async ({ page }
   await expect(page.getByRole("button", { name: "Save schema" })).toBeVisible();
 
   expect(
-    await page.locator(".schemas-page").evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+    await page
+      .locator(".schemas-page")
+      .evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
   ).toBe(true);
   await expectAxeClean(page);
 });
@@ -330,7 +330,9 @@ test("French schema authoring keeps long translated labels usable", async ({ pag
   await expect(page.getByText("Configuration du champ")).toBeVisible();
 
   expect(
-    await page.locator(".schemas-page").evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+    await page
+      .locator(".schemas-page")
+      .evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
   ).toBe(true);
   await expectAxeClean(page);
 });

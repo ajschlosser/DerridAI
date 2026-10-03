@@ -46,6 +46,7 @@ export const Number: Story = {
   render: (args) => ({
     components: { UiInput },
     setup: () => ({ args }),
-    template: '<UiInput v-bind="args" aria-label="Similarity threshold" min="0" max="1" step="0.05" />',
+    template:
+      '<UiInput v-bind="args" aria-label="Similarity threshold" min="0" max="1" step="0.05" />',
   }),
 };

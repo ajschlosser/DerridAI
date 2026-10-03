@@ -79,7 +79,9 @@ const sections = computed(() =>
     return { group, all, shown };
   }),
 );
-const totalShown = computed(() => sections.value.reduce((count, section) => count + section.shown.length, 0));
+const totalShown = computed(() =>
+  sections.value.reduce((count, section) => count + section.shown.length, 0),
+);
 
 function policy(field: SchemaField) {
   const memory =
@@ -232,7 +234,9 @@ function isEdge(field: SchemaField, by: -1 | 1) {
                   <span v-if="field.role && field.role !== 'scholarly'" class="chip">
                     {{ t(`role_${field.role}`, field.role) }}
                   </span>
-                  <span v-for="label in policy(field)" :key="label" class="chip is-policy">{{ label }}</span>
+                  <span v-for="label in policy(field)" :key="label" class="chip is-policy">{{
+                    label
+                  }}</span>
                 </span>
               </button>
 
@@ -274,11 +278,20 @@ function isEdge(field: SchemaField, by: -1 | 1) {
         :aria-labelledby="`field-inspector-${draft.fields.indexOf(selected)}`"
       >
         <header class="field-inspector-header">
-          <p class="field-inspector-kicker">{{ t("field_configuration", "Field configuration") }}</p>
+          <p class="field-inspector-kicker">
+            {{ t("field_configuration", "Field configuration") }}
+          </p>
           <h3 :id="`field-inspector-${draft.fields.indexOf(selected)}`">
             {{ selected.label || selected.name || t("new_field", "New metadata field") }}
           </h3>
-          <p>{{ t("field_configuration_help", "Configure what this field means and how DerridAI should populate and review it.") }}</p>
+          <p>
+            {{
+              t(
+                "field_configuration_help",
+                "Configure what this field means and how DerridAI should populate and review it.",
+              )
+            }}
+          </p>
         </header>
         <fieldset class="field-inspector-controls" :disabled="readonly">
           <SchemaFieldForm
@@ -292,7 +305,14 @@ function isEdge(field: SchemaField, by: -1 | 1) {
       <section v-else class="field-inspector field-inspector-empty" aria-live="polite">
         <AppIcon name="edit" aria-hidden="true" />
         <h3>{{ t("select_field", "Select a field") }}</h3>
-        <p>{{ t("select_field_help", "Choose a field to configure it, or add a new field to a prompt group.") }}</p>
+        <p>
+          {{
+            t(
+              "select_field_help",
+              "Choose a field to configure it, or add a new field to a prompt group.",
+            )
+          }}
+        </p>
       </section>
     </div>
   </div>

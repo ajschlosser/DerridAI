@@ -184,6 +184,7 @@ Reorganize `SchemaFieldForm.vue` around user intent while preserving serializati
 Recommended sections:
 
 **Basics**
+
 - label;
 - stable/editable key/name;
 - type;
@@ -193,25 +194,30 @@ Recommended sections:
 - review visibility.
 
 **Extraction**
+
 - model/extraction instruction;
 - controlled values;
 - repeatable member structure when applicable.
 
 **Evidence & review**
+
 - evidence requirements;
 - confidence/assessment behavior;
 - review requirements.
 
 **Linguistic guidance**
+
 - POS hints;
 - NER hints.
 
 **Value matching**
+
 - matching mode;
 - order sensitivity;
 - identity-kind behavior.
 
 **Memory & retrieval**
+
 - reviewed-precedent behavior;
 - similarity threshold;
 - maximum examples;
@@ -402,21 +408,21 @@ Do not weaken tests, suppress axe rules, or add broad exceptions merely to obtai
 
 ## Definition of done
 
-| Area | Required state |
-| --- | --- |
-| Form consistency | Metadata Schemas uses shared ordinary-control primitives; feature-local control sizing/skinning is gone. |
-| UX | The current schema, selected field, save state, and current configuration context are immediately understandable. |
-| Field editing | Fields use navigator + inspector rather than an expanding form inside a table row. |
-| Schema semantics | Existing serialization, stable identities, built-in behavior, prompt groups, document policy, memory/retrieval settings, and preview semantics remain intact. |
-| i18n | All application-authored copy is externalized and present in both canonical built-in locales with placeholder parity. |
-| French | Primary flows are explicitly tested in `fr-CA`, including long strings and narrow layouts. |
-| Keyboard | Complete primary flow works without a pointer with predictable focus behavior. |
-| Accessibility | WCAG 2.2 AA requirements are verified beyond automated axe checks. |
-| Responsive | All core task capability remains available at narrow widths and with enlarged/translated text. |
-| Themes | Light, dark, increased contrast, forced colors, and reduced motion are supported. |
-| Regression prevention | Static tests prevent reintroduction of ad hoc controls and local primitive-style overrides in Metadata Schemas. |
-| Storybook | New primitives and representative schema states have stories. |
-| CI | Required test/build/lint/typecheck/accessibility gates are green. |
+| Area                  | Required state                                                                                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Form consistency      | Metadata Schemas uses shared ordinary-control primitives; feature-local control sizing/skinning is gone.                                                      |
+| UX                    | The current schema, selected field, save state, and current configuration context are immediately understandable.                                             |
+| Field editing         | Fields use navigator + inspector rather than an expanding form inside a table row.                                                                            |
+| Schema semantics      | Existing serialization, stable identities, built-in behavior, prompt groups, document policy, memory/retrieval settings, and preview semantics remain intact. |
+| i18n                  | All application-authored copy is externalized and present in both canonical built-in locales with placeholder parity.                                         |
+| French                | Primary flows are explicitly tested in `fr-CA`, including long strings and narrow layouts.                                                                    |
+| Keyboard              | Complete primary flow works without a pointer with predictable focus behavior.                                                                                |
+| Accessibility         | WCAG 2.2 AA requirements are verified beyond automated axe checks.                                                                                            |
+| Responsive            | All core task capability remains available at narrow widths and with enlarged/translated text.                                                                |
+| Themes                | Light, dark, increased contrast, forced colors, and reduced motion are supported.                                                                             |
+| Regression prevention | Static tests prevent reintroduction of ad hoc controls and local primitive-style overrides in Metadata Schemas.                                               |
+| Storybook             | New primitives and representative schema states have stories.                                                                                                 |
+| CI                    | Required test/build/lint/typecheck/accessibility gates are green.                                                                                             |
 
 ## Progress log
 

@@ -374,21 +374,13 @@ defineExpose({ select, draft });
         :aria-labelledby="`schema-tab-${tab}`"
         class="schema-panel"
       >
-        <SchemaFieldsTable
-          v-if="tab === 'fields'"
-          :draft="draft"
-          :readonly="readonly"
-        />
+        <SchemaFieldsTable v-if="tab === 'fields'" :draft="draft" :readonly="readonly" />
         <SchemaDocumentFieldsPanel
           v-else-if="tab === 'document'"
           :draft="draft"
           :readonly="readonly"
         />
-        <SchemaGroupsPanel
-          v-else-if="tab === 'groups'"
-          :draft="draft"
-          :readonly="readonly"
-        />
+        <SchemaGroupsPanel v-else-if="tab === 'groups'" :draft="draft" :readonly="readonly" />
         <SchemaPreviewPanel
           v-else
           :draft="draft"

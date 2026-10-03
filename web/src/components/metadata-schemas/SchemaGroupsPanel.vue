@@ -122,11 +122,7 @@ function removeGroup() {
         >
           <UiInput id="schema-group-fields-heading" v-model="group.fields_heading" />
         </UiField>
-        <UiField
-          :label="t('intro', 'Opening instructions')"
-          control-id="schema-group-intro"
-          wide
-        >
+        <UiField :label="t('intro', 'Opening instructions')" control-id="schema-group-intro" wide>
           <UiTextarea id="schema-group-intro" v-model="group.intro" rows="4" />
         </UiField>
         <UiField

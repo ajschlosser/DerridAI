@@ -37,6 +37,7 @@ export const Invalid: Story = { args: { invalid: true } };
 export const LongFrenchCopy: Story = {
   args: {
     label: "Exiger des preuves pour chaque valeur proposée",
-    description: "La valeur doit être reliée à un passage source précis afin que la décision puisse être vérifiée pendant la révision.",
+    description:
+      "La valeur doit être reliée à un passage source précis afin que la décision puisse être vérifiée pendant la révision.",
   },
 };
