@@ -124,10 +124,20 @@ import {
 import { api } from "../domain/legacyApi";
 import { parsePastedRecord } from "../domain/pastedRecord";
 import { providerRequestConfig } from "../domain/providerRequest";
+import { decorateDisabledControls, showAppModal } from "../domain/disabledControls";
+import {
+  activeFile,
+  bulkEditRowsForScope,
+  cleanRows,
+  download,
+  downloadBlob,
+  fileJsonl,
+  needsReviewItems,
+  selectedRecord,
+} from "../domain/sharedRecordScopes";
 import { recordHistoryVersions, upsertAuditDelta } from "../domain/recordHistory";
 import { barChart, lineChart, multiLineChart, pieChart, statList } from "../domain/dashboardCharts";
 import { createOperationPresenters } from "../domain/operationPresenters";
-import { createFieldFormatting } from "../domain/fieldFormatting";
 import {
   workIndex,
   dateKeys,
@@ -162,8 +172,21 @@ import {
   storeReceipt,
 } from "../domain/storeAvailability";
 import { registerOperationHooks } from "../domain/operationHooks";
-import { createSearchFacets } from "../domain/searchFacets";
-import { createRecordPresenters } from "../domain/recordPresenters";
+import {
+  searchFacets as sharedSearchFacets,
+  evidenceSelection as sharedEvidenceSelection,
+} from "../domain/sharedSearchSupport";
+import {
+  label,
+  display,
+  normalizeRagGrade,
+  parseBulkFieldValue,
+  parseWorkMetadataValue,
+  pages,
+  recordFields,
+  dbSearchWhere,
+} from "../domain/sharedRecordHelpers";
+import { recordPresenters as sharedRecordPresenters } from "../domain/sharedRecordPresenters";
 import { providerProfilesService, warmupProviderProfile } from "../domain/sharedProviderProfiles";
 import { createSearchWorkspace } from "../domain/searchWorkspace";
 import { createRecordsWorkspace } from "../domain/recordsWorkspace";
@@ -188,7 +211,7 @@ import { createDashboardRenderer } from "../domain/dashboardRenderer";
 import { createPdfExplorerRenderer } from "../domain/pdfExplorerRenderer";
 import { createJobDialogs } from "../domain/jobDialogs";
 import { createWorkDialogs } from "../domain/workDialogs";
-import { createRecordDialogs } from "../domain/recordDialogs";
+import { recordDialogs } from "../domain/sharedRecordDialogs";
 import { createOperationDock } from "../domain/operationDock";
 import { copyCitation, copyJsonToClipboard } from "../domain/clipboardCopy";
 import {
@@ -214,8 +237,7 @@ import {
   refreshShell,
   shell,
 } from "../domain/sharedWorkspaceStorage";
-import { createEvidenceSelection } from "../domain/evidenceSelection";
-import { createRecordEditing } from "../domain/recordEditing";
+import * as sharedRecordEditing from "../domain/sharedRecordEditing";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
 import { createPdfLinking } from "../domain/pdfLinking";
 import { clearFileDerivedState as clearFileDerivedStateOf } from "../domain/fileDerivedState";
@@ -231,7 +253,7 @@ import { compareSearchIndex, lookupRecord } from "../domain/sharedCompareLibrary
 import { recordOptionLabel } from "../domain/recordOptionLabel";
 import { loadStorePage, researcherDbRecords } from "../domain/sharedStoreRecords";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
-import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
+import { annotationsWorkspace } from "../domain/sharedAnnotations";
 import { slimSemanticSource } from "../domain/semanticMap";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import {
@@ -245,7 +267,7 @@ import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 import { refreshStores } from "../domain/sharedStores";
 import { createCorpusWorkspaceHydration } from "../domain/corpusWorkspaceHydration";
-import { canAccessPage, hasCapability, isResearcher } from "../domain/sharedSession";
+import { canAccessPage, canUse, hasCapability, isResearcher } from "../domain/sharedSession";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { applyAppearance } from "../domain/sharedAppearance";
 import { relativeTimeLabel } from "../domain/relativeTimeLabel";
@@ -278,8 +300,6 @@ function translateLegacyDom(root = document.querySelector("#main")) {
   return translateLegacyDomCompat(state, root);
 }
 
-const { label, display, normalizeRagGrade, parseBulkFieldValue, parseWorkMetadataValue } =
-  createFieldFormatting({ tr });
 const {
   searchFacetRawValues,
   searchFacetDisplay,
@@ -296,18 +316,7 @@ const {
   searchSimilarity,
   searchMatchReasons,
   rowMatchesListFilters,
-} = createSearchFacets({
-  tr,
-  label,
-  display,
-  pages,
-  recordFields,
-  uid: () => uid(),
-  dbSearchWhere,
-  filterOpsForField,
-  recordDbStatus: (...args) => recordDbStatus(...args),
-  getSearchFacetFilters: () => state.searchFacetFilters,
-});
+} = sharedSearchFacets;
 const {
   uniqueWorkValues,
   normalizedRecordAnnotation,
@@ -331,16 +340,7 @@ const {
   metadataSearchable,
   searchRecordOptions,
   ragGradeEvidencePayload,
-} = createRecordPresenters({
-  tr,
-  trf,
-  pages,
-  label,
-  display,
-  recordDbStatus: (...args) => recordDbStatus(...args),
-  allAnnotations: () => allAnnotations(),
-  compareSearchIndex: () => compareSearchIndex(),
-});
+} = sharedRecordPresenters;
 const {
   ensureProviderProfiles,
   providerProfiles,
@@ -791,21 +791,7 @@ const {
   clearAllUpdates,
   historyVersionChanges,
   restoreRecordHistoryVersion,
-} = createRecordEditing({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  allRows: (...args) => allRows(...args),
-  cloneAuditValue: (...args) => cloneAuditValue(...args),
-  invalidateCorpusCache: (...args) => invalidateCorpusCache(...args),
-  label: (...args) => label(...args),
-  persistFile: (...args) => persistFile(...args),
-  renderView: (...args) => renderView(...args),
-  sameValue: (...args) => sameValue(...args),
-  shell: (...args) => shell(...args),
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-  uid: (...args) => uid(...args),
-});
+} = sharedRecordEditing;
 const {
   reviewKey,
   reviewItemFromKey,
@@ -823,18 +809,7 @@ const {
   selectedEvidencePayload,
   setReviewSelected,
   clearReviewSelection,
-} = createEvidenceSelection({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  hasCapability: (...args) => hasCapability(...args),
-  localRecordKey: (...args) => localRecordKey(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  ragEvidenceRecordPayload: (...args) => ragEvidenceRecordPayload(...args),
-  recordDbStatus: (...args) => recordDbStatus(...args),
-  shellRefreshHook: refreshShell,
-  storeReceipt: (...args) => storeReceipt(...args),
-  tr: (...args) => tr(...args),
-});
+} = sharedEvidenceSelection;
 const {
   applyOperationStackPosition,
   setOperationDockMinimized,
@@ -998,28 +973,7 @@ const {
   openAnnotationsWorkspaceRecord,
   openAnnotationsWorkspaceWork,
   removeAnnotationsWorkspaceItem,
-} = createAnnotationsWorkspace({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  allRows: (...args) => allRows(...args),
-  api: (...args) => api(...args),
-  applyRecordChanges: (...args) => applyRecordChanges(...args),
-  canUse: (...args) => canUse(...args),
-  dateKeys: (...args) => dateKeys(...args),
-  hasCapability: (...args) => hasCapability(...args),
-  isResearcher: (...args) => isResearcher(...args),
-  label: (...args) => label(...args),
-  memoCorpus: (...args) => memoCorpus(...args),
-  navigateTo: (...args) => navigateTo(...args),
-  persistFileNow: (...args) => persistFileNow(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  recordStores: (...args) => recordStores(...args),
-  refreshStores: (...args) => refreshStores(...args),
-  reviewItemFromKey: (...args) => reviewItemFromKey(...args),
-  reviewKey: (...args) => reviewKey(...args),
-  syncUrl: (...args) => syncUrl(...args),
-  tr: (...args) => tr(...args),
-});
+} = annotationsWorkspace;
 const {
   jobLabel,
   jobProviderSummary,
@@ -1136,11 +1090,6 @@ function currentContext() {
 
 const uid = () => crypto.randomUUID();
 const clearFileDerivedState = (fileId) => clearFileDerivedStateOf(state, fileId);
-const activeFile = () => state.files.find((f) => f.id === state.activeFileId) || null;
-const selectedRecord = () => {
-  const f = activeFile();
-  return f?.records[selectedIndex(f)] || null;
-};
 
 // Corpus-derived data is read far more often than it changes. Keep one flattened
 // index and memoized derived values instead of rebuilding thousands of row
@@ -1188,21 +1137,6 @@ const {
   workIndex: (...args) => workIndex(...args),
   workMetadataControlSpec: (...args) => workMetadataControlSpec(...args),
 });
-function userCapabilities() {
-  return {
-    viewSharedPages: hasCapability("page.dashboard"),
-    annotate: hasCapability("annotations.write"),
-    compare: hasCapability("page.compare"),
-    research: hasCapability("rag.run"),
-    editLocalRecords: hasCapability("records.edit"),
-    manageCorpus: hasCapability("corpus.manage"),
-    manageUsers: hasCapability("users.manage"),
-    configureProviders: hasCapability("providers.manage"),
-  };
-}
-function canUse(feature) {
-  return Boolean(userCapabilities()[feature]);
-}
 function setUserContext(user) {
   const priorId = state.userContext?.id;
   state.userContext = user || null;
@@ -1220,128 +1154,6 @@ function viewDisabledReason(view) {
   if (view === "faq" && !hasChromaService())
     return "ChromaDB is unavailable, so the Response Library cannot be opened.";
   return "";
-}
-/** @param {Document | Element} [root=document] */
-function decorateDisabledControls(root = document) {
-  root.querySelectorAll?.("button:disabled,input:disabled,select:disabled").forEach((control) => {
-    if (control.closest?.(".disabled-control-tooltip")) return;
-    const explicit = control.dataset.disabledReason;
-    const existingTitle = String(control.title || "").trim();
-    const id = (control.id || "").toLowerCase();
-    const text = String(control.textContent || "")
-      .trim()
-      .toLowerCase();
-    const pageAction = String(control.dataset.page || "")
-      .split(":")
-      .at(-1);
-    let reason =
-      explicit ||
-      existingTitle ||
-      tr(
-        "runtime.disabled.unavailable",
-        "This action is unavailable until its required selection or data is available.",
-      );
-    if (!explicit && !existingTitle && (pageAction === "first" || pageAction === "prev"))
-      reason = tr("runtime.disabled.first_page", "You are already on the first page.");
-    else if (!explicit && !existingTitle && (pageAction === "next" || pageAction === "last"))
-      reason = tr("runtime.disabled.last_page", "You are already on the last page.");
-    else if (!explicit && !existingTitle && control.dataset.up !== undefined)
-      reason = tr("runtime.disabled.column_first", "This column is already first.");
-    else if (!explicit && !existingTitle && control.dataset.down !== undefined)
-      reason = tr("runtime.disabled.column_last", "This column is already last.");
-    else if (id === "breadcrumbback")
-      reason = tr(
-        "runtime.disabled.no_earlier_location",
-        "There is no earlier navigation location.",
-      );
-    else if (id === "breadcrumbforward")
-      reason = tr(
-        "runtime.disabled.no_forward_location",
-        "There is no forward navigation location.",
-      );
-    else if (id === "loadraghistory")
-      reason = tr("runtime.disabled.choose_rag_question", "Choose a previous RAG question first.");
-    else if (id === "applyjobselected" || id === "applyselectedchanges")
-      reason = tr(
-        "runtime.disabled.select_proposed_change",
-        "Select at least one proposed change first.",
-      );
-    else if (id === "nukeeverything") reason = tr("config.nuke.type_to_enable_help");
-    else if (id === "linkpdf")
-      reason = tr(
-        "runtime.disabled.pdf_page_linked",
-        "The current PDF page is already linked to this record.",
-      );
-    else if (id === "runsearch")
-      reason = tr(
-        "runtime.disabled.semantic_search_precomputed",
-        "Semantic search is unavailable for precomputed-only collections.",
-      );
-    else if (["ragmodel", "toolmodel", "touchmodel"].includes(id))
-      reason = tr(
-        "runtime.disabled.model_automatic",
-        "The provider is configured to choose the model automatically.",
-      );
-    else if (id === "columnadd")
-      reason = tr("runtime.disabled.all_fields_shown", "Every available field is already shown.");
-    else if (id === "importactive")
-      reason = tr("runtime.disabled.load_select_jsonl_tab", "Load and select a JSONL tab first.");
-    else if (id === "importall")
-      reason = tr("runtime.disabled.load_jsonl_tab", "Load at least one JSONL tab first.");
-    else if (["extractpage", "extractall", "pdfllmclean", "pdfllmdraft"].includes(id))
-      reason = tr(
-        "runtime.disabled.load_pdf_text_page",
-        "Load a PDF page with extractable text first.",
-      );
-    else if (["pdfllmlink", "linkcurrentpdf"].includes(id))
-      reason = tr(
-        "runtime.disabled.load_records_before_link",
-        "Load JSONL records before linking a PDF page.",
-      );
-    else if (
-      ["collectionembeddingprovider", "collectionembeddingmodel", "saveembeddingsettings"].includes(
-        id,
-      )
-    )
-      reason = tr(
-        "runtime.disabled.embedding_locked",
-        "Embedding settings are locked after a collection contains records; create a new empty collection to change them.",
-      );
-    else if (id === "runtouchup")
-      reason = tr(
-        "runtime.disabled.configure_llm",
-        "Configure a reachable LLM provider and model before running this operation.",
-      );
-    else if (text.includes("cancelling"))
-      reason = tr(
-        "runtime.disabled.cancelling",
-        "Cancellation has already been requested for this operation.",
-      );
-    else if (/upsert|sync|rag/.test(id)) reason = dbUnavailableReason() || reason;
-    else if (/prev|older/.test(id))
-      reason = tr("runtime.disabled.no_previous", "There is no previous item or older version.");
-    else if (/next|newer/.test(id))
-      reason = tr("runtime.disabled.no_next", "There is no next item or newer version.");
-    else if (/merge/.test(id))
-      reason = tr("runtime.disabled.merge_two_tabs", "Load at least two JSONL tabs to merge them.");
-    else if (/subset|bulk|export/.test(id))
-      reason = tr("runtime.disabled.load_records", "Load JSONL records first.");
-    else if (/edit/.test(id))
-      reason = tr("runtime.disabled.select_record", "Select a record first.");
-    if (explicit) reason = explicit;
-    control.title = reason;
-    if (control.tagName === "BUTTON" && !control.closest(".disabled-control-tooltip")) {
-      const wrapper = document.createElement("span");
-      wrapper.className = "disabled-control-tooltip";
-      wrapper.dataset.tooltip = reason;
-      control.parentNode?.insertBefore(wrapper, control);
-      wrapper.appendChild(control);
-    }
-  });
-}
-function showAppModal(dialog) {
-  decorateDisabledControls(dialog);
-  dialog.showModal();
 }
 
 // Subset files for the Vue Records view: the sources, fields and file creation, over the loaded files.
@@ -1363,53 +1175,7 @@ const {
   openStoreRecordEditor,
   openRecordHistoryBrowser,
   openUpsertQueue,
-} = createRecordDialogs({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  activeFile: (...args) => activeFile(...args),
-  allRows: (...args) => allRows(...args),
-  api: (...args) => api(...args),
-  applyRecordChanges: (...args) => applyRecordChanges(...args),
-  bulkEditRowsForScope: (...args) => bulkEditRowsForScope(...args),
-  cleanRows: (...args) => cleanRows(...args),
-  clearRecordUpdates: (...args) => clearRecordUpdates(...args),
-  cloneAuditValue: (...args) => cloneAuditValue(...args),
-  dbUnavailableReason: (...args) => dbUnavailableReason(...args),
-  download: (...args) => download(...args),
-  fileJsonl: (...args) => fileJsonl(...args),
-  fileTimers,
-  formatTimestamp: (...args) => formatTimestamp(...args),
-  hasCorpusDb: (...args) => hasCorpusDb(...args),
-  historyVersionChanges: (...args) => historyVersionChanges(...args),
-  idbDelete: (...args) => idbDelete(...args),
-  jsonPretty: (...args) => jsonPretty(...args),
-  label: (...args) => label(...args),
-  localRecordKey: (...args) => localRecordKey(...args),
-  navigateTo: (...args) => navigateTo(...args),
-  needsReviewItems: (...args) => needsReviewItems(...args),
-  parseBulkFieldValue: (...args) => parseBulkFieldValue(...args),
-  pendingChangesForRow: (...args) => pendingChangesForRow(...args),
-  pendingUpsertRows: (...args) => pendingUpsertRows(...args),
-  persistFileNow: (...args) => persistFileNow(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  recordDbStatus: (...args) => recordDbStatus(...args),
-  recordFields: (...args) => recordFields(...args),
-  recordHistoryVersions: (...args) => recordHistoryVersions(...args),
-  refreshPresenceForRows: (...args) => refreshPresenceForRows(...args),
-  removeFromUpsertQueue: (...args) => removeFromUpsertQueue(...args),
-  renderView: (...args) => renderView(...args),
-  restoreRecordHistoryVersion: (...args) => restoreRecordHistoryVersion(...args),
-  sameValue: (...args) => sameValue(...args),
-  selectedIndex: (...args) => selectedIndex(...args),
-  selectedRecord: (...args) => selectedRecord(...args),
-  selectedReviewItems: (...args) => selectedReviewItems(...args),
-  shell: (...args) => shell(...args),
-  showAppModal: (...args) => showAppModal(...args),
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-  uid: (...args) => uid(...args),
-  upsertRows: (...args) => upsertRows(...args),
-});
+} = recordDialogs;
 
 const idbGetAll = workspaceDb.getAll;
 const idbGet = workspaceDb.get;
@@ -1423,13 +1189,6 @@ function responseCacheStore() {
   return state.stores.find(isResponseCacheStore) || null;
 }
 
-function pages(r) {
-  if (r.page_start == null && r.page_end == null) return "—";
-  return r.page_end != null && r.page_end !== r.page_start
-    ? `${display(r.page_start)}–${display(r.page_end)}`
-    : display(r.page_start);
-}
-
 function pageInfo(total, page) {
   const pages = Math.max(1, Math.ceil(total / state.pageSize));
   page = Math.max(1, Math.min(pages, page || 1));
@@ -1441,13 +1200,6 @@ function pageInfo(total, page) {
   };
 }
 
-function recordFields() {
-  if (corpusCache.fields) return corpusCache.fields;
-  const set = new Set();
-  allRows().forEach((x) => Object.keys(x.record).forEach((k) => set.add(k)));
-  corpusCache.fields = [...set].sort();
-  return corpusCache.fields;
-}
 function tableAvailableFields(rows, extra = []) {
   const cachedRows = allRows();
   if (rows === cachedRows) {
@@ -1475,19 +1227,6 @@ function setListFilterValue(fileId, key, value) {
   if (value === "" || value == null) delete state.listFilters[fileId][key];
   else state.listFilters[fileId][key] = value;
   persistPrefs();
-}
-
-function needsReviewItems(rows = null) {
-  if (rows === null) {
-    return memoCorpus("needs-review-items", () =>
-      allRows()
-        .filter((row) => row.record.needs_review === true)
-        .map((row) => ({ ...row, key: reviewKey(row.file, row.index) })),
-    );
-  }
-  return rows
-    .filter((row) => row.record.needs_review === true)
-    .map((row) => ({ ...row, key: reviewKey(row.file, row.index) }));
 }
 
 function setActiveStore(name) {
@@ -1541,30 +1280,6 @@ function searchByMetadata(field, value, { contains = false } = {}) {
   navigateTo("global");
 }
 
-function bulkEditRowsForScope(scope) {
-  if (scope === "selected") return selectedReviewItems();
-  if (scope === "active") {
-    const file = activeFile();
-    return file
-      ? file.records.map((record, index) => ({ file, record, index, key: reviewKey(file, index) }))
-      : [];
-  }
-  if (scope === "work") {
-    const selected = selectedRecord();
-    const work = selected?.work;
-    return work ? allRows().filter((row) => row.record.work === work) : [];
-  }
-  return allRows();
-}
-
-function dbSearchWhere() {
-  return Object.fromEntries(
-    Object.entries(state.dbSearchWhere || {}).filter(
-      ([, value]) => String(value ?? "").trim() !== "",
-    ),
-  );
-}
-
 // 0.36.10 native Search bridge. SearchView owns presentation while the runtime
 // continues to own browser-local corpus state, Chroma transport, evidence
 // selection, URL serialization, and the existing LLM review workflows.
@@ -1594,32 +1309,6 @@ function cleanRecord(f, i) {
   );
 }
 
-function cleanRows(rows) {
-  const batchId = uid();
-  let recordsChanged = 0,
-    fieldsChanged = 0;
-  for (const row of rows) {
-    const current = row.file.records[row.index];
-    const cleaned = stripLigaturesAndArtifacts(current?.text);
-    if (!cleaned.changed) continue;
-    const n = applyRecordChanges(
-      row.file,
-      row.index,
-      { text: cleaned.text },
-      { source: "ocr_cleanup", batchId },
-    );
-    if (n) {
-      recordsChanged++;
-      fieldsChanged += n;
-    }
-  }
-  shell();
-  renderView();
-  toast(trf("dynamic.cleaned_records", { records: recordsChanged, changes: fieldsChanged }), {
-    tone: "success",
-  });
-}
-
 function exportMenu() {
   const dialog = document.createElement("dialog");
   dialog.innerHTML = `<div class="dh"><h2 style="margin:0;font-size:16px">${esc(tr("export.title"))}</h2><button class="btn" data-close>${esc(tr("ui.close"))}</button></div><div class="db"><div class="tools"><button class="btn" data-export="current">${esc(tr("export.current"))}</button><button class="btn" data-export="changed">${esc(tr("export.changed"))}</button><button class="btn" data-export="all">${esc(tr("export.all"))}</button><button class="btn" data-export="aggregate">${esc(tr("export.aggregate"))}</button><button class="btn" data-export="both">${esc(tr("export.changed_aggregate"))}</button></div></div>`;
@@ -1637,22 +1326,6 @@ function exportMenu() {
         dialog.remove();
       }),
   );
-}
-function downloadBlob(blob, name) {
-  const u = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = u;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(u), 500);
-}
-function download(name, text) {
-  downloadBlob(new Blob([text], { type: "application/x-ndjson" }), name);
-}
-function fileJsonl(f) {
-  return f.records.map((r) => JSON.stringify(r)).join("\n") + "\n";
 }
 function doExport(kind) {
   const current = activeFile(),
