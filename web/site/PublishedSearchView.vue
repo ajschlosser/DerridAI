@@ -5,6 +5,7 @@ Copyright © 2026  Aaron John Schlosser, PhD
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import type { PublicationRecord, SearchResult } from "../sdk/src/types";
 import UiButton from "../src/components/ui/UiButton.vue";
 import UiInput from "../src/components/ui/UiInput.vue";
 import UiSelect from "../src/components/ui/UiSelect.vue";
@@ -32,7 +33,7 @@ const status = ref(
   }),
 );
 const statusTone = ref<"" | "warning" | "error">("");
-const results = ref<any[]>([]);
+const results = ref<SearchResult[]>([]);
 const searchedQuery = ref("");
 const methods = ref({
   text: mode.value !== "semantic",
@@ -43,7 +44,7 @@ const methods = ref({
 const localIndexVisible = computed(
   () =>
     Boolean(site.capabilities.value?.localIndex) &&
-    !Boolean(site.capabilities.value?.localIndex?.usesPublishedVectors),
+    !site.capabilities.value?.localIndex?.usesPublishedVectors,
 );
 const resultCountText = computed(() =>
   site.t("site.runtime.results_count", { count: results.value.length }),
@@ -126,7 +127,7 @@ async function runSearch() {
   }
 }
 
-function snippet(record: any): string {
+function snippet(record: PublicationRecord): string {
   return snippetText(
     String(record.text || ""),
     searchedQuery.value,
@@ -134,7 +135,7 @@ function snippet(record: any): string {
   );
 }
 
-function segments(record: any) {
+function segments(record: PublicationRecord) {
   return highlightSegments(snippet(record), searchedQuery.value, site.locale.value);
 }
 </script>
