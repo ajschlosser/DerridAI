@@ -17,17 +17,21 @@
  */
 
 import { deleteAllDerridaiBrowserState as deleteAllDerridaiBrowserStateCompat } from "../services/workspaceDb";
+import { bindJobsState } from "../state/jobsState";
+import { bindWorkspaceGroups } from "../state/workspaceState";
 import { createBackupWorkspace } from "./backupWorkspace";
 import { cancelPendingPrefs } from "./prefsPersistence";
 import { serializableRecordsFile } from "./recordsFiles";
 import { providerProfilesService } from "./sharedProviderProfiles";
 import { tr, trf } from "./sharedTranslate";
-import { state } from "./sharedUrlState";
 import { fileTimers, persistFileNow } from "./sharedWorkspacePersistence";
 import { workspaceDb, workspacePrefs } from "./sharedWorkspaceStorage";
 
 // Dropping the browser-local workspace, and full backup / restore, over the shared state and database, usable without
-// the legacy runtime. The runtime uses these same instances.
+// the legacy runtime. Backup/restore needs both the workspace groups and background-job state because active jobs block
+// destructive snapshot operations. These accessors point at the same shared stores the runtime uses.
+const backupState = bindJobsState(bindWorkspaceGroups({}));
+
 export async function deleteWorkspaceDatabase() {
   cancelPendingPrefs();
   for (const timer of fileTimers.values()) clearTimeout(timer);
@@ -40,7 +44,7 @@ export const deleteAllDerridaiBrowserState = () =>
 
 export const { backupContainsCredentials, downloadFullBackup, restoreFullBackup } =
   createBackupWorkspace({
-    state,
+    state: backupState,
     deleteWorkspaceDatabase,
     idbPut: workspaceDb.put,
     persistFileNow,
