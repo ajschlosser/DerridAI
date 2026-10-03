@@ -21,6 +21,8 @@ import { toast } from "../composables/notifications";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
+import { updateSearchQuery } from "../domain/sharedSearchQuery";
+import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { useI18nStore } from "../stores/i18n";
 import { useNewerData } from "../composables/useNewerData";
 import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
@@ -332,7 +334,7 @@ async function load(options: { refresh?: boolean; autoRun?: boolean } = {}) {
   if (mustCreateDatabase && next.capabilities.can_manage_database && !redirectedForDatabase) {
     redirectedForDatabase = true;
     toast(i18n.t("search.redirect_database"), { tone: "info" });
-    runtime.openDatabaseCreationFromResearch();
+    openDatabaseCreationFromResearch();
     return;
   }
   redirectedForDatabase = false;
@@ -346,7 +348,7 @@ async function load(options: { refresh?: boolean; autoRun?: boolean } = {}) {
 }
 function applyQuery(value: string) {
   query.value = value;
-  runtime.updateSearchQuery(value, { replace: true });
+  updateSearchQuery(value, { replace: true });
   if (databaseMode.value) return;
   window.clearTimeout(localSearchTimer);
   localSearchTimer = window.setTimeout(() => {
@@ -358,7 +360,7 @@ function applyQuery(value: string) {
 async function runSearch() {
   if (!snapshot.value) return;
   const submitted = query.value.trim();
-  runtime.updateSearchQuery(query.value, { replace: true });
+  updateSearchQuery(query.value, { replace: true });
   // Re-running the same query may keep its rows visible; a different query must not leave the
   // previous results standing in as the current result.
   const ticket = ++searchTicket;
@@ -373,7 +375,7 @@ async function runSearch() {
 
 async function clearQuery() {
   query.value = "";
-  runtime.updateSearchQuery("", { replace: true });
+  updateSearchQuery("", { replace: true });
   if (databaseMode.value) {
     await readSnapshot(() =>
       Promise.resolve(runtime.getSearchWorkspaceSnapshot({ refresh: false, autoRun: false })),
@@ -395,7 +397,7 @@ async function changeScope(next: SearchScope) {
   await syncFilterSchema(applied);
   if (request !== readRequest) return;
   if (next === "database" && !applied.has_database && applied.capabilities.can_manage_database)
-    runtime.openDatabaseCreationFromResearch();
+    openDatabaseCreationFromResearch();
 }
 async function changeStore(value: string) {
   runtime.setSearchStore(value);
@@ -437,7 +439,7 @@ async function clearFacets() {
 }
 async function clearAll() {
   query.value = "";
-  runtime.updateSearchQuery("", { replace: true });
+  updateSearchQuery("", { replace: true });
   runtime.clearSearchAllFilters();
   await load({ refresh: false, autoRun: false });
 }
@@ -772,7 +774,7 @@ onBeforeUnmount(() => {
         :action-label="
           snapshot.capabilities.can_manage_database ? i18n.t('search.empty_state_action') : ''
         "
-        @action="runtime.openDatabaseCreationFromResearch()"
+        @action="openDatabaseCreationFromResearch()"
       />
 
       <template v-else>

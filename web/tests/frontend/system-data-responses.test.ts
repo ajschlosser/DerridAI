@@ -37,10 +37,6 @@ vi.mock("../../src/composables/messageDialog", () => ({
   openMessageDialog: vi.fn(),
 }));
 
-vi.mock("../../src/runtime/runtimeBridge", () => ({
-  formatTimestamp: (value: string) => value,
-}));
-
 import { systemApi } from "../../src/api/system";
 import { openMessageDialog } from "../../src/composables/messageDialog";
 import SystemDataResponses from "../../src/components/system-data/SystemDataResponses.vue";

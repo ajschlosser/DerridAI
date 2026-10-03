@@ -27,6 +27,7 @@ import {
 } from "./runtimeConstants";
 import { decompressUrlState } from "./urlState";
 import { toast } from "../composables/notifications";
+import { createUpdateSearchQuery } from "./searchQuery";
 
 // The Search workspace: building the results, facets and columns the Search view shows, and the commands it sends
 // (scope, query, filters, sort, paging, selection, running a search). Moved verbatim from the legacy runtime; the
@@ -408,13 +409,7 @@ export function createSearchWorkspace(deps: Deps) {
     shell();
     return getSearchWorkspaceSnapshot({ refresh: true, autoRun: false });
   }
-  function updateSearchQuery(value: Any, { replace = true } = {}) {
-    state.globalSearch = String(value || "");
-    state.globalPage = 1;
-    persistPrefs();
-    syncUrl({ replace });
-    return state.globalSearch;
-  }
+  const updateSearchQuery = createUpdateSearchQuery({ state, persistPrefs, syncUrl });
   function setSearchAdvancedOpen(value: Any) {
     state.globalAdvancedOpen = Boolean(value);
     persistPrefs();

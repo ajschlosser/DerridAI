@@ -49,16 +49,8 @@ export const viewForPath = (...args: Parameters<typeof runtime.viewForPath>) =>
   runtime.viewForPath(...args);
 export const triggerImport = (...args: Parameters<typeof runtime.triggerImport>) =>
   runtime.triggerImport(...args);
-export const triggerOperations = (...args: Parameters<typeof runtime.triggerOperations>) =>
-  runtime.triggerOperations(...args);
-export const formatTimestamp = (...args: Parameters<typeof runtime.formatTimestamp>) =>
-  runtime.formatTimestamp(...args);
-export const refreshStores = (...args: Parameters<typeof runtime.refreshStores>) =>
-  runtime.refreshStores(...args);
 export const responseCacheStore = (...args: Parameters<typeof runtime.responseCacheStore>) =>
   runtime.responseCacheStore(...args);
-export const enhanceCollapsibles = (...args: Parameters<typeof runtime.enhanceCollapsibles>) =>
-  runtime.enhanceCollapsibles(...args);
 export const getResponseFaqPage = (...args: Parameters<typeof runtime.getResponseFaqPage>) =>
   runtime.getResponseFaqPage(...args);
 export const gradeResponseFaqRecord = (
