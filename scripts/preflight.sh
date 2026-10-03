@@ -2,7 +2,7 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 #
 # Change-aware merge-readiness gate. Run it by hand (`scripts/preflight.sh`) or let
-# `.githooks/pre-push` run it. The hook enables browser checks as well.
+# `.githooks/pre-push` run it. Browser checks are opt-in locally and mandatory in CI.
 # Set DERRIDAI_SKIP_PREFLIGHT=1 to bypass (CI will still enforce everything).
 set -u
 
@@ -135,23 +135,24 @@ if [ "$FRONTEND" = true ]; then
   fi
 fi
 
-# 8. Browser gates are mandatory from the pre-push hook. Set the same variable when
-#    invoking this script manually for a complete merge-readiness run.
+# 8. Browser suites run in CI. Opt in locally for complete browser acceptance.
 if [ "$FRONTEND" = true ] && [ "${DERRIDAI_PREFLIGHT_BROWSER:-0}" = 1 ]; then
   web_gate "legacy browser tests" npm run test:e2e:legacy -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
   web_gate "composed UI browser tests" npm run test:e2e -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
   web_gate "accessibility browser tests" npm run test:e2e:a11y -- --workers="${DERRIDAI_PREFLIGHT_BROWSER_WORKERS:-2}"
 elif [ "$FRONTEND" = true ]; then
-  say "browser gates not run; use DERRIDAI_PREFLIGHT_BROWSER=1 for complete readiness"
+  say "local browser gates omitted; CI runs them (opt in with DERRIDAI_PREFLIGHT_BROWSER=1)"
 fi
 
 # 9. Publication paths require the dedicated generated-artifact acceptance check.
-if [ "$PUBLICATION" = true ]; then
+if [ "$PUBLICATION" = true ] && [ "${DERRIDAI_PREFLIGHT_BROWSER:-0}" = 1 ]; then
   say "running publication artifact acceptance"
   "$PY" scripts/build_publication_acceptance_fixtures.py .tmp/publication-acceptance &&
     (cd web && DERRIDAI_PUBLICATION_FIXTURE_DIR=../.tmp/publication-acceptance \
       npx playwright test -c playwright.publication.config.ts) &&
     sh scripts/check_publication_artifacts.sh .tmp/publication-acceptance || fail=1
+elif [ "$PUBLICATION" = true ]; then
+  say "local publication browser/Docker acceptance omitted; CI runs it (opt in with DERRIDAI_PREFLIGHT_BROWSER=1)"
 fi
 
 [ "$fail" -eq 0 ] && say "ok"

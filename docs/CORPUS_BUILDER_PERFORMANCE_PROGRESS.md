@@ -89,6 +89,7 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 - The full backend rerun passes **1,933 tests**, with **18 optional cases skipped**, when the Windows temporary root is quoted for pytest's argument parser. Full frontend units pass **1,482 tests**. The hook also exposed a relative `GIT_DIR` inherited by frontend build subprocesses; preflight now clears that hook-local addressing after entering the repository so nested Git freshness checks rediscover the correct worktree.
 - Publication acceptance's three browser cases and the packaged nginx Docker build/start/health/redirect/stop checks pass. The Docker check uses session-unique image/container names and cleans them afterward; it is not a full application Docker-build or release-readiness claim.
 - SDK package validation no longer depends on POSIX `/dev/null` redirection; native Windows `build:ci` passes. Preflight browser concurrency defaults to two workers and can be narrowed with `DERRIDAI_PREFLIGHT_BROWSER_WORKERS` on a contended host without skipping cases or relaxing assertions. The affected static Storybook selection passes **89 tests**.
+- At the user's request, local pre-push checks no longer force browser suites or publication browser/Docker acceptance. CI coverage is unchanged; explicit `DERRIDAI_PREFLIGHT_BROWSER=1` still runs complete local browser acceptance. Static checks, backend/contracts, frontend units, production and Storybook builds, formatting, and generated-artifact gates remain enabled according to impact.
 
 ## Persistence checkpoint (2026-10-02)
 
