@@ -41,13 +41,8 @@ const compareLibrary = vi.hoisted(() => ({
   ),
   ensureCompareLibrary: vi.fn(async () => undefined),
 }));
-const runtime = vi.hoisted(() => ({
-  copyJsonToClipboard: vi.fn(),
-  copyCitation: vi.fn(),
-  // Only the runtime-owned fields; the shared Compare fields come from the compare store.
-  state: { researcherCompareA: "", researcherCompareB: "" },
-}));
-vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
+const clipboard = vi.hoisted(() => ({ copyJsonToClipboard: vi.fn(), copyCitation: vi.fn() }));
+vi.mock("../../src/domain/clipboardCopy", () => ({ ...clipboard }));
 vi.mock("../../src/domain/sharedCompareLibrary", () => ({ ...compareLibrary }));
 
 import CompareView from "../../src/views/CompareView.vue";

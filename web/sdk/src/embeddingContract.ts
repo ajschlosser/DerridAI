@@ -19,7 +19,7 @@
 import type { EmbeddingContract, ProviderDescriptor } from "./types";
 
 export interface EmbeddingContractMismatch {
-  field: "model" | "revision";
+  field: "model" | "revision" | "variant";
   expected: string;
   actual: string;
 }
@@ -31,7 +31,7 @@ export function embeddingDescriptorMismatches(
   if (!contract) return [];
 
   const mismatches: EmbeddingContractMismatch[] = [];
-  const pairs: Array<EmbeddingContractMismatch["field"]> = ["model", "revision"];
+  const pairs: Array<EmbeddingContractMismatch["field"]> = ["model", "revision", "variant"];
   for (const field of pairs) {
     const expected = String(contract[field] ?? "").trim();
     const actual = String(descriptor[field] ?? "").trim();

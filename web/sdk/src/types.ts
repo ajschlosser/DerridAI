@@ -61,6 +61,8 @@ export interface EmbeddingContract {
   model?: string;
   dimension?: number | null;
   revision?: string;
+  /** Vector-changing preprocessing/runtime details such as prefixes, pooling, normalization, or quantization. */
+  variant?: string;
   distance_metric?: "cosine" | "dot" | "euclidean" | string;
   text_field?: string;
 }
