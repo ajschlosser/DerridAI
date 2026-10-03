@@ -703,7 +703,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           :model-value="section"
           :items="visibleSections"
           :nav-label="i18n.t('settings.contents')"
-          @select="contentsOpen = false"
+          @select="goSection"
         />
       </aside>
       <div class="settings-pane">
