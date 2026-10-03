@@ -73,6 +73,7 @@ test("Users exposes accounts before roles, retries locally and retains rows", as
 });
 
 test("Roles retains the permission editor through atomic failure and retry", async ({ page }) => {
+  await page.clock.install();
   await mockBackend(page, { role: "admin" });
   await page.goto(APP);
   await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
@@ -95,7 +96,9 @@ test("Roles retains the permission editor through atomic failure and retry", asy
       });
     else await route.fallback();
   });
-  await page.locator(".roles-page").getByRole("button", { name: "Refresh", exact: true }).click();
+  // There is no manual refresh: cached data is revalidated when the window regains focus after it went stale.
+  await page.clock.fastForward(31_000);
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
   await expect(
     page.locator(".roles-page").getByRole("button", { name: "Create role", exact: true }),
   ).toBeDisabled();
@@ -108,7 +111,7 @@ test("Roles retains the permission editor through atomic failure and retry", asy
     page.locator(".roles-page").getByRole("button", { name: "Create role", exact: true }),
   ).toBeEnabled();
   expect(await editor!.evaluate((node) => node.isConnected)).toBe(true);
-  expect(reads).toBe(2);
+  expect(reads).toBe(3); // Revalidation, shared automatic retry, local retry.
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
     (
