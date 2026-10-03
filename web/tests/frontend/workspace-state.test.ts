@@ -17,6 +17,7 @@ import {
   useCorpusStore,
   useAnnotationsStore,
   useFaqStore,
+  useConfigStore,
   useLayoutStore,
   useListsStore,
   useSearchStore,
@@ -245,5 +246,24 @@ describe("table list state", () => {
     expect(lists.pages).toBe(pages);
     state.pageSize = 100;
     state.pages = {};
+  });
+});
+
+describe("configuration, PDF and review state", () => {
+  it("keeps the runtime's defaults and shares them with their stores", () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.ragConfig.k).toBe(64);
+    expect(state.appConfig.chat_provider).toBe("ollama");
+    expect(state.llmConfig.num_ctx).toBe(16384);
+    expect(state.pdf.page).toBe(1);
+    expect(state.reviewSelection.size).toBe(0);
+    expect(state.selectedEvidence).toEqual({});
+
+    const config = useConfigStore();
+    expect(config.ragConfig).toBe(state.ragConfig);
+    state.ragConfig = { ...state.ragConfig, k: 8 };
+    expect(config.ragConfig.k).toBe(8);
+    config.ragConfig = { ...config.ragConfig, k: 64 };
   });
 });

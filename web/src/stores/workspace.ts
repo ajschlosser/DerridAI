@@ -4,10 +4,13 @@ import { defineStore } from "pinia";
 import {
   annotationsState,
   compareState,
+  configState,
   corpusState,
   faqState,
   layoutState,
   listState,
+  pdfState,
+  reviewState,
   searchState,
   vectorState,
   worksState,
@@ -45,3 +48,12 @@ export const useFaqStore = defineStore("faq", () => ({ ...toRefs(faqState) }));
 
 /** Table lists: selection, search, filters, paging, sort and columns per list; persisted by the runtime. */
 export const useListsStore = defineStore("lists", () => ({ ...toRefs(listState) }));
+
+/** Research, application and LLM configuration as loaded from the server. */
+export const useConfigStore = defineStore("config", () => ({ ...toRefs(configState) }));
+
+/** PDF Explorer document and viewing state. */
+export const usePdfStore = defineStore("pdf", () => ({ ...toRefs(pdfState) }));
+
+/** Review selection and chosen evidence. */
+export const useReviewStore = defineStore("review", () => ({ ...toRefs(reviewState) }));

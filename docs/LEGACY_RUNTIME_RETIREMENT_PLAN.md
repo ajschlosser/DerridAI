@@ -211,7 +211,8 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] shell layout preferences (`layoutState` / `useLayoutStore`: `sidebarCollapsed`, `collectionsCollapsed`, `operationToastsMinimized`, `operationStackPosition`, `collapsedPanels`). `App.vue` reads the sidebar flag from the store, so `sidebarCollapsed` left the shell snapshot. Persisted prefs keys are unchanged
   - [x] annotations (`annotationsState` / `useAnnotationsStore`) and FAQ (`faqState` / `useFaqStore`) slices; persistence keys unchanged
   - [x] table lists (`listState` / `useListsStore`: `selected`, `searches`, `listFilters`, `pages`, `pageSize`, `sorts`, `tableColumns`)
-  - [ ] remaining slices still plain fields on `createRuntimeState` (PDF, rag/app/llm config), then replace `urlFromState`/`applyUrlState`, then delete the runtime
+  - [x] configuration (`configState` / `useConfigStore`: `ragConfig`, `appConfig`, `llmConfig`), PDF Explorer (`pdfState` / `usePdfStore`) and review selection (`reviewState` / `useReviewStore`: `reviewSelection`, `selectedEvidence`)
+  - [ ] remaining plain fields on `createRuntimeState` are small (`view`, `userContext`, health/provider status, upsert and operation progress, translations); then replace `urlFromState`/`applyUrlState`, then delete the runtime
 
 Notes for the next session:
 
