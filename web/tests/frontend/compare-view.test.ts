@@ -27,7 +27,7 @@ const records = {
   a: { record_id: "r-a", work: "Glas", document_author: "Derrida", text: "left" },
   b: { record_id: "r-b", work: "Glas", document_author: "Derrida", text: "right" },
 };
-const runtime = vi.hoisted(() => ({
+const compareLibrary = vi.hoisted(() => ({
   getCompareLibrary: vi.fn(() => [
     { value: "f::0", label: "tab.jsonl · r-a · Glas", search: "derrida" },
     { value: "f::1", label: "tab.jsonl · r-b · Glas", search: "derrida" },
@@ -40,12 +40,15 @@ const runtime = vi.hoisted(() => ({
         : null,
   ),
   ensureCompareLibrary: vi.fn(async () => undefined),
+}));
+const runtime = vi.hoisted(() => ({
   copyJsonToClipboard: vi.fn(),
   copyCitation: vi.fn(),
   // Only the runtime-owned fields; the shared Compare fields come from the compare store.
   state: { researcherCompareA: "", researcherCompareB: "" },
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
+vi.mock("../../src/domain/sharedCompareLibrary", () => ({ ...compareLibrary }));
 
 import CompareView from "../../src/views/CompareView.vue";
 import { compareState, createCompareState, touchCorpus } from "../../src/state/workspaceState";
@@ -103,13 +106,13 @@ describe("CompareView", () => {
 
   it("reads the record library again when the loaded corpus changes while it is open", async () => {
     const wrapper = await mountView();
-    const before = runtime.getCompareLibrary.mock.calls.length;
-    runtime.getCompareLibrary.mockReturnValueOnce([
+    const before = compareLibrary.getCompareLibrary.mock.calls.length;
+    compareLibrary.getCompareLibrary.mockReturnValueOnce([
       { value: "f2::0", label: "new.jsonl · r-new · Late Work", search: "late" },
     ] as never);
     touchCorpus();
     await flushPromises();
-    expect(runtime.getCompareLibrary.mock.calls.length).toBeGreaterThan(before);
+    expect(compareLibrary.getCompareLibrary.mock.calls.length).toBeGreaterThan(before);
     wrapper.unmount();
   });
 });

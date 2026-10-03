@@ -761,19 +761,6 @@ export function createSearchWorkspace(deps: Deps) {
     }
     return safe;
   }
-  function researcherDbRecords() {
-    const map = new Map();
-    for (const item of state.storeSearchResults || []) {
-      const record = item.record || {};
-      const id = String(item.id || record._chroma_id || record.record_id || "");
-      if (id) map.set(id, { ...record, _chroma_id: id });
-    }
-    for (const record of state.storeRecords || []) {
-      const id = String(record._chroma_id || record.record_id || "");
-      if (id && !map.has(id)) map.set(id, record);
-    }
-    return [...map.values()];
-  }
   return {
     localSearchBaseRows,
     searchScope,
@@ -808,6 +795,5 @@ export function createSearchWorkspace(deps: Deps) {
     getSearchShareHref,
     restoreSearchViewFromHref,
     safeDbSearchWhere,
-    researcherDbRecords,
   };
 }
