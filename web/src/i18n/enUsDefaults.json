@@ -9223,5 +9223,9 @@
   "settings.evidence_budget_title": "Evidence budget",
   "settings.evidence_budget_help": "Limit how much text each evidence item and the complete evidence packet can contribute to a research run.",
   "settings.retrieval_scope_title": "Retrieval scope",
-  "settings.retrieval_scope_help": "Choose which document languages and retrieval routes participate in evidence acquisition."
+  "settings.retrieval_scope_help": "Choose which document languages and retrieval routes participate in evidence acquisition.",
+  "settings.review_execution_title": "Review execution",
+  "settings.review_execution_help": "Choose the provider profile, review preset, and whether default LLM review runs in the foreground or background.",
+  "settings.evaluation_defaults_title": "Evaluation defaults",
+  "settings.evaluation_defaults_help": "Control optional evaluation behavior separately from the review execution settings above."
 }
