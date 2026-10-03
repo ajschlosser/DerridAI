@@ -25,6 +25,7 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 - Current continuation branch: `ajschlosser-corpus-builder-performance-0ef`; merged #455 used `ajschlosser-corpus-builder-performance-fce`.
 - Continuation baseline: merged #455 at `6312cedc`, with merged #454 at workspace HEAD `c9377472`. Earlier checkpoint descriptions below retain their historical validation scope.
 - Integrated merged #427 at `c8e671cd` before the scheduling continuation; local performance and refresh changes reapplied without conflicts.
+- PR preparation integrated current `origin/master` at `19247817`. Reviewer changes are committed at `d5c9543e`; the locale-export regression fix is committed separately at `905ddce1`.
 - Working scope: demand-gated reviewer work, bounded precedent resolution, shared reads, clean repository read transactions, explicit keyboard absence decisions, and validated text-only preparation readiness. Earlier metadata/structural and resumed-topology readiness, broader computational caching, live end-to-end contention measurements, and evaluated review assistance remain open.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
@@ -68,6 +69,13 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 ## Validation and measurements
 
 Focused validation is recorded below by checkpoint; overlapping test counts are not additive. The synthetic persistence benchmark verifies fewer full-store writes, not an end-to-end speedup. Shared-machine disk variability prevents a reliable elapsed-time conclusion. Live-model preparation and human-review measurements remain outstanding.
+
+## PR preparation follow-up
+
+- Fixed the English fallback exporter to preserve both single- and double-quoted Python dictionary keys, then regenerated the fallback through the existing exporter. Behavioral coverage exercises both quote forms, escaped key quotes, adjacent value literals, and escaped newlines. All six locale regressions and 17 schema-editor tests pass; canonical/export dictionary equality is restored.
+- Final merged preflight passed backend lint, mypy (262 source files), Python syntax, all 15 REST/GraphQL contracts, frontend lint, application/test typechecks, 132 directly selected and 406 related frontend test executions, and the production application build. Frontend counts overlap and are not additive.
+- The full backend run passed 2,186 tests with 20 skips and two failures: optional installed-English-model expectations for publication-place ranking and recognition of Hobbes. Both failures reproduce on a clean `master` snapshot at `3a2e41dc`; the later master update changes only frontend/docs. Windows temporary-path failures were resolved with a short private pytest root, without modifying publication behavior; the hook, reconciliation, and publication suites also passed all 92 cases in an isolated rerun.
+- Full preflight is **not green** because of those two baseline NLP failures. No push, Docker-build, release-readiness, live-provider, real-source, or human-review success is implied by these results. Earlier production-browser and Storybook results retain their checkpoint scope.
 
 ## Source-block demand continuation (2026-10-03)
 
