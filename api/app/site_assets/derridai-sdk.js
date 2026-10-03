@@ -367,6 +367,13 @@ var DerridAI = (function(exports) {
   function throwIfAborted$2(signal) {
     if (signal?.aborted) throw new DOMException("Operation aborted.", "AbortError");
   }
+  /**
+   * Give rendering, input, and cancellation a chance to run between embedding batches.
+   *
+   * Embedding providers are allowed to do CPU-heavy browser work. Awaiting a resolved provider promise only
+   * returns to the microtask queue, which can still starve rendering across a large Record chunk. A real task
+   * boundary keeps long local-index builds responsive without changing provider semantics.
+   */
   async function yieldBetweenIndexBatches(signal) {
     throwIfAborted$2(signal);
     const scheduler = globalThis.scheduler;
