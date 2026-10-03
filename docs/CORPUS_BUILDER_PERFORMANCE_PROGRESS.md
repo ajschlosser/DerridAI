@@ -22,10 +22,10 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 ## Baseline and branch
 
-- Current continuation branch: `ajschlosser-corpus-builder-performance-586`; the merged #439 increment used `ajschlosser-corpus-builder-performance-865`.
-- Continuation baseline: merged #439 at `cd9b1b49`, including bounded source lookup/in-flight sharing, exact materialized-family reuse, readiness milestones, and conditional preparation persistence. Earlier checkpoint descriptions below retain their historical validation scope.
+- Current continuation branch: `ajschlosser-corpus-builder-performance-b75`; merged #444 used `ajschlosser-corpus-builder-performance-586`.
+- Continuation baseline: merged #444 at `69b97500`, including transactional enrichment handoffs and exact Document Intelligence context freshness. Earlier checkpoint descriptions below retain their historical validation scope.
 - Integrated merged #427 at `c8e671cd` before the scheduling continuation; local performance and refresh changes reapplied without conflicts.
-- Working scope: transactional changed-row enrichment handoffs and exact Document Intelligence context freshness. Earlier readiness, broader caching, contention measurements, and evaluated review assistance remain planned.
+- Working scope: optimistic automatic validation and review-safe manager handoffs, including consistent final-validation readiness. Earlier preparation readiness, broader caching, end-to-end contention measurements, and evaluated review assistance remain planned.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
 ## Checkpoints
@@ -46,8 +46,10 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 | Review refresh continuity              | Merged #430                 | Same-Record refresh preserves mounted panes, evidence/page selection, and in-flight drafts             |
 | Record-local source-block lookup       | Merged #439                 | File-version-bound offset index; selected rows/bytes and output equivalence measured below             |
 | Conditional preparation persistence    | Merged #439                 | Changed-Record deltas, transactional queue-version checks, stale/retired/authority regressions         |
-| Automatic enrichment handoffs          | Local continuation          | Transactional current-row retry/rerun/requeue writes and changed-row final validation                  |
-| Document annotation context            | Local continuation          | Exact transactional documentary epochs, stale-snapshot rejection, bounded metadata-hint checks         |
+| Automatic enrichment handoffs          | Merged #444                 | Transactional current-row retry/rerun/requeue writes and changed-row final validation                  |
+| Document annotation context            | Merged #444                 | Exact transactional documentary epochs, stale-snapshot rejection, bounded metadata-hint checks         |
+| Optimistic automatic validation        | Local continuation          | Computation outside repository/writer locks; conflict retries preserve current Records and topology    |
+| Review-safe validation handoff         | Local continuation          | Manager review overlaps validation; guarded summary handoff and consistent final-phase readiness       |
 | Evaluated learning / review assistance | Pending                     | Requires held-out evaluation                                                                           |
 
 ## Validation and measurements
@@ -59,6 +61,34 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 1. Establish isolated real-source and end-to-end timing baselines, including browser/save tail latency, before claiming progress toward 50%.
 2. Extend exact reuse to other computational stages and refine consumed-dependency scopes. Record-local source lookup, bounded in-flight sharing, and materialized family checking are implemented below; real-source/cold-load/contention validation remains outstanding.
 3. Evaluate earlier readiness, scheduling, and review assistance separately from repository queue improvements.
+
+## Review-safe manager validation handoff continuation (2026-10-02)
+
+### PR preparation follow-up
+
+- Merged current `origin/master` at `401ca637` and retained its copyright/licence updates. Windows checkout line endings were normalized for local checks without changing published source content.
+- Pre-commit checks now batch staged files in groups of at most 32 and honour intentional ESLint ignores while still blocking real warnings/errors. Seven hook regressions pass, and the complete staged merge passed its formatting, Ruff, and ESLint gates. The incoming CSS-token migration script's import ordering was corrected.
+- Initial full preflight passed 2,116 backend tests (18 skipped), 12 directly selected and 27 related frontend test executions (six overlap), application/test typechecks, frontend lint, and the production app build. Its only failure was ten upstream pipeline type errors. User-approved fixes retain closed Pydantic validation for dynamically supplied port/trace states, narrow static severity types, and type the unchanged benchmark defaults; complete mypy now passes all 262 checked source files. Eighty-two focused pipeline/schema regressions pass, including default isolation, invalid port/status rejection, and unchanged generated contracts.
+- The merged production app and rebuilt Storybook passed three review-refresh browser cases, including final-validation saves and WCAG checks in light and dark. Final combined preflight remains a required pre-push gate. Docker, live-provider, real-source/save-tail, and human-review measurements remain outstanding.
+
+### Implementation checkpoint
+
+- Extended the preceding optimistic validation checkpoint to release the manager coordination lock during decoding, validation, and change encoding as well. Capture and commit acquire manager before repository locks; the commit guard remains held through the separate build-summary save. A full captured build comparison catches changes that do not write Records, including operational/reviewer counters, rather than overwriting them with the validation candidate.
+- Actual text edits, metadata decisions, and disposition commands commit while validation is paused, on initial finalization, retries, and rerun closure. Validation recomputes the changed scope afterward. Independent-build review remains available without invalidating an unchanged build. Summary handoff still serializes review; a summary-storage failure stays visible while already committed Records remain durable and notified.
+- Removed the rerun coordinator's outer whole-validation lock. Initial finalization no longer recomputes validation from its obsolete worker BuildScope; final, retry, and rerun closure reread current build state under the short handoff guard. Retry closure reads selected identities only and skips retired rows. Closing coordinators check cancellation received during validation rather than reporting ordinary completion.
+- Backend and frontend readiness now permit review in `finalizing_review`. Source preparation, topology construction, and initial Document Intelligence still block review; publication gates, human ownership, evidence rules, locale strings, and prompt contracts are unchanged. Browser coverage checks the existing reviewed-text editor and sparse revision-bound save; no new component or UI label was introduced.
+- Canonical handoff tests isolate asynchronous vector-service retries so provider availability does not race the exact snapshot/conflict assertions. Derived exemplar behavior is covered separately in the related suite. This checkpoint supersedes the preceding checkpoint's retained-manager-lock limitation, not its unmeasured latency caveats.
+- Validation: 288 related backend tests passed across scoped manager/validation and persistence runs (16 skipped benchmarks), plus 15 REST/GraphQL contract tests and 32 focused frontend unit tests. Application and test/config typechecks, touched-file Ruff/mypy/ESLint, and formatting checks passed. Production application and static Storybook builds passed; three production-browser regressions passed, including final-validation revision-bound saves and WCAG checks in light and dark. This was not full preflight; SDK/package checks, Docker, and live-provider acceptance were not run.
+- Full validation remains corpus-wide, and capture/commit, projection repair, operation-summary reads, and review commands themselves still require work under locks. Real-source/live-provider, browser/save-tail percentiles, first-reviewable preparation improvement, and human-review measurements remain outstanding. No 50% improvement or whole-plan completion is claimed. Changes are uncommitted and unpushed.
+
+## Optimistic automatic validation continuation (2026-10-02)
+
+- Continued from merged #444. Automatic final, retry, and rerun validation now captures canonical rows in a short SQLite transaction, releases the repository and writer locks during decoding/domain validation/encoding, and commits only changed rows in a second transaction. Selected completion merges retain their existing locked transactional path.
+- The same open SQLite connection checks `PRAGMA data_version` under the commit writer lock. Any intervening commit, including direct canonical SQL writes, topology replacement, or projection repair, discards the candidate and recomputes from current rows. This does not rely on rebuildable queue counters retaining their values. The exact metadata schema is checked separately, and automatic validation reloads the build contract on each attempt; conflicts are bounded to three attempts and then raise a visible validation conflict rather than install stale results.
+- Record payloads, documentary-context updates, queue contributions, and dirty journals still commit together. Notifications follow successful commit only. No-op validation writes no rows and emits no projection notification; a conflicted no-op still reloads current state. Failed or topology-changing callbacks commit no candidate changes.
+- Deterministic concurrency tests pause actual automatic validation while both an independent repository writer and a writer using the same repository successfully commit before validation resumes. Validation reruns against the intervening decision. Additional cases preserve human assertions, corrected text/revisions, retirement/reordering, schema changes, and raw SQL changes; selected optimistic reconciliation decodes/writes only the requested extant identity.
+- Validation: **206 related backend regressions passed**, ten opt-in benchmarks skipped, across two isolated processes; **15 REST/GraphQL contracts passed** separately. The handoff suite includes **20 additional regressions**. One combined-process run exposed a restart/projection dirty-flag failure; the individual case and its complete persistence suite passed separately. Touched-file Ruff, builder mypy, and document formatting also passed.
+- Full validation remains corpus-wide. Snapshot capture/commit, cold projection repair, and changed-row queue updates still use writer transactions; the manager's coordination lock remains held during automatic validation, so this does not establish same-manager review-save responsiveness or a measured save-tail improvement. Build summaries remain a separate post-Record durability boundary. Earlier review stays locked during preparation, and publication gates are unchanged. No real-source/live-provider, browser, Docker, full-preflight, human-review timing, 50% improvement, or whole-plan completion is claimed. This continuation is uncommitted and unpushed.
 
 ## Transactional enrichment handoff continuation (2026-10-02)
 

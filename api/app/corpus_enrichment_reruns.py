@@ -251,27 +251,31 @@ class EnrichmentRerunsMixin:
                     self._update(build_id, status="running", stage="metadata_retry", progress=min(0.979, 0.96 + 0.019 * (processed / total)), metadata_operation=op)
                 if self._cancelled(build_id):
                     raise InterruptedError("Metadata retry cancelled")
-            final_build = self._reconcile_and_validate(build_id)
-            records = self.repo.load_records(build_id)
-            target_remaining = 0
-            for record in records:
-                rid = str(record.get("record_id") or "")
-                if rid not in target_fields:
-                    continue
-                incomplete_now = set(str(value) for value in record.get("metadata_incomplete_fields") or [])
-                target_remaining += sum(1 for field in target_fields[rid] if field in incomplete_now)
-            unresolved_after = int((final_build.get("metadata_issue_summary") or {}).get("fields_unresolved") or 0)
-            op = dict(final_build.get("metadata_operation") or {})
-            op.update({
-                "state": "completed", "finished_at": iso_now(),
-                "records_processed": len(target_indices),
-                "fields_remaining": target_remaining,
-                "fields_resolved": max(0, int(op.get("fields_total") or 0) - target_remaining),
-                "unresolved_fields_after": unresolved_after,
-            })
-            final_build["metadata_operation"] = op
-            self._refresh_workflow_fields(final_build)
-            self.repo.save_build(final_build)
+            self._reconcile_and_validate(build_id)
+            with self._lock:
+                if self._cancelled(build_id):
+                    raise InterruptedError("Metadata retry cancelled")
+                final_build = self.repo.get_build(build_id)
+                records = self.repo.get_records(build_id, list(target_fields))
+                target_remaining = 0
+                for record in records:
+                    if record is None:
+                        continue
+                    rid = str(record.get("record_id") or "")
+                    incomplete_now = set(str(value) for value in record.get("metadata_incomplete_fields") or [])
+                    target_remaining += sum(1 for field in target_fields[rid] if field in incomplete_now)
+                unresolved_after = int((final_build.get("metadata_issue_summary") or {}).get("fields_unresolved") or 0)
+                op = dict(final_build.get("metadata_operation") or {})
+                op.update({
+                    "state": "completed", "finished_at": iso_now(),
+                    "records_processed": len(target_indices),
+                    "fields_remaining": target_remaining,
+                    "fields_resolved": max(0, int(op.get("fields_total") or 0) - target_remaining),
+                    "unresolved_fields_after": unresolved_after,
+                })
+                final_build["metadata_operation"] = op
+                self._refresh_workflow_fields(final_build)
+                self.repo.save_build(final_build)
         except Exception as exc:
             build = self.repo.get_build(build_id)
             op = dict(build.get("metadata_operation") or {})
@@ -850,9 +854,13 @@ class EnrichmentRerunsMixin:
                     op["converged"] = True
                     break
             self._share_generalizable_learning(build_id)
+            self._reconcile_and_validate(build_id)
             with self._lock:
-                final = self._reconcile_and_validate(build_id)
-                op.update({"state": op["state"] if op.get("state") == "cancelled" else "completed", "finished_at": iso_now()})
+                final = self.repo.get_build(build_id)
+                op.update({
+                    "state": "cancelled" if op.get("state") == "cancelled" or self._cancelled(build_id) else "completed",
+                    "finished_at": iso_now(),
+                })
                 final["metadata_operation"] = op
                 final["metadata_enrichment_runs"] = [({**r, **op} if r.get("operation_id") == operation_id else r) for r in final.get("metadata_enrichment_runs") or []]
                 final.update({"status": "awaiting_review", "stage": "review", "progress": 1.0, "cancel_requested": False})

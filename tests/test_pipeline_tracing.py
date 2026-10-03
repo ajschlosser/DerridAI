@@ -16,10 +16,16 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+import pytest
 from app.models import RAGRunRequest
 from app.pipelines.defaults import built_in_pipeline
+from app.pipelines.evidence_tracing import build_evidence_trace
 from app.pipelines.service import pipeline_hash
+from app.pipelines.trace_safety import trace_stage
 from app.pipelines.tracing import build_research_trace
+from pydantic import ValidationError
 
 
 def _result() -> dict:
@@ -107,6 +113,58 @@ def _result() -> dict:
             },
         ],
     }
+
+
+@pytest.mark.parametrize("status", [
+    "pending", "running", "completed", "skipped", "unavailable", "timed_out", "failed",
+])
+def test_stage_trace_preserves_valid_status_and_sanitization(status: str) -> None:
+    trace = trace_stage(
+        "retrieve", "retrieve.lexical_bm25", status=status,
+        elapsed_seconds=0.1, parameters={"api_key": "private", "limit": 3},
+    )
+    assert trace.status == status
+    assert trace.elapsed_ms == 100
+    assert trace.parameters == {"api_key": "[redacted]", "limit": 3}
+
+
+def test_stage_trace_rejects_unknown_status() -> None:
+    with pytest.raises(ValidationError) as exc:
+        trace_stage("retrieve", "retrieve.lexical_bm25", status="not-a-status")
+    assert exc.value.errors()[0]["loc"] == ("status",)
+
+
+def test_research_trace_rejects_unknown_run_status() -> None:
+    with pytest.raises(ValidationError) as exc:
+        build_research_trace(
+            run_id="invalid-status", owner=None,
+            request=RAGRunRequest(prompt="Trace", source_collection="derrida_primary"),
+            result=_result(), status="not-a-status",
+            started_at="2026-10-02T20:00:00+00:00",
+            finished_at="2026-10-02T20:00:04+00:00",
+        )
+    assert exc.value.errors()[0]["loc"] == ("status",)
+
+
+@pytest.mark.parametrize("status", ["completed", "not-a-status"])
+def test_evidence_trace_validates_run_status_and_preserves_pipeline(status: str) -> None:
+    pipeline = built_in_pipeline("evidence.reviewer.current", 2)
+    assert pipeline is not None
+    now = datetime(2026, 10, 2, tzinfo=UTC)
+    kwargs = {
+        "run_id": "evidence-status", "pipeline": pipeline,
+        "resolved_hash": pipeline_hash(pipeline),
+        "started_at": now, "finished_at": now, "observations": {}, "status": status,
+    }
+    if status == "not-a-status":
+        with pytest.raises(ValidationError) as exc:
+            build_evidence_trace(**kwargs)
+        assert exc.value.errors()[0]["loc"] == ("status",)
+    else:
+        trace = build_evidence_trace(**kwargs)
+        assert trace.status == status
+        assert trace.resolved_pipeline == pipeline.model_dump(mode="json")
+        assert trace.total_elapsed_ms == 0
 
 
 def test_research_trace_records_cross_encoder_attempt_and_explicit_fallback() -> None:
