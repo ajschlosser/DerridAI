@@ -41,6 +41,8 @@ Administrators can create additional **custom roles**. A custom role starts from
 
 Role capabilities are enforced by both navigation and the API. Unsaved permission changes stay visible until you save, and leaving the page or switching roles asks for confirmation.
 
+Users shows account rows as soon as they load, even while role choices are pending. Account and role-choice failures have separate Retry controls. Failed account refreshes retain the previous rows with an out-of-date notice. Roles refreshes permissions and account assignments together; failed refreshes keep the previous editor visible and disable mutations until Retry succeeds. Refresh preserves unsaved permission changes. Authorization failures clear retained administrative data.
+
 Researcher-visible corpus text is transformed on the API before it is returned to the browser. `text` is passed through a dependency-free Edmundson-style extractive summarizer with values from `topics`, `concepts`, and `persons` treated as bonus terms. Summaries contain at most 2–3 selected sentence extracts joined by `[...]` and respect `RESEARCHER_TEXT_MAX_CHARS` (default `1600`). Text-valued entries inside the record `updates` audit history are sanitized by the same policy. The full corpus text remains available internally to the RAG pipeline for retrieval/generation, but is not exposed in researcher job results or read-only corpus search.
 
 ### Sign-in protection
