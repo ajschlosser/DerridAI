@@ -24,6 +24,34 @@ Use the root [README](../README.md) for installation and first-run setup. Use [C
 
 ## Application composition
 
+The local backend map is summarized below; [`app/README.md`](app/README.md) documents the module-level boundaries in more detail.
+
+```mermaid
+flowchart TD
+    Entry["app/main.py"]
+    App["app/application.py"]
+    Routers["app/routers/ · REST"]
+    GraphQL["app/graphql/ · read-only GraphQL"]
+    Realtime["app/realtime/ · WebSocket"]
+    Reads["app/celf_queries/"]
+    Domains["Corpus / Research / Pipelines / Jobs / Providers"]
+    Stores["Canonical + system stores"]
+    Chroma["Derived Chroma projections"]
+
+    Entry --> App
+    App --> Routers
+    App --> GraphQL
+    App --> Realtime
+    Routers --> Domains
+    Routers --> Reads
+    GraphQL --> Reads
+    Reads --> Stores
+    Reads --> Chroma
+    Domains --> Stores
+    Domains -. derived indexing / retrieval .-> Chroma
+```
+
+
 The backend is intentionally split by responsibility:
 
 - `app/main.py` — minimal ASGI entrypoint.
