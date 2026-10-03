@@ -43,11 +43,18 @@ export function matchesPublicationModel(
   const expected = modelName(contract?.model);
   const actual = modelName(descriptor.model);
   if (!expected || !actual || expected !== actual) return false;
-  // Prefixes and similar changes alter the vectors, so they no longer match what was published.
-  if (descriptor.variant) return false;
   const expectedRevision = String(contract?.revision ?? "");
   const actualRevision = String(descriptor.revision ?? "");
-  return !expectedRevision || !actualRevision || expectedRevision === actualRevision;
+  if (expectedRevision && actualRevision && expectedRevision !== actualRevision) return false;
+
+  // Prefixes, dtype, pooling and normalization can change vectors even when the model name is identical.
+  // Legacy publications did not record a variant, so a provider that declares one remains incompatible.
+  const expectedVariant = String(contract?.variant ?? "");
+  const actualVariant = String(descriptor.variant ?? "");
+  if (expectedVariant || actualVariant) {
+    return Boolean(expectedVariant && actualVariant && expectedVariant === actualVariant);
+  }
+  return true;
 }
 
 function indexKey(publicationId: string, fingerprint: string): string {
