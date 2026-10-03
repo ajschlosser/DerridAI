@@ -1,5 +1,5 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-"""Derive local preflight obligations from changed repository paths."""
+"""Derive local and CI test obligations from changed repository paths."""
 
 from __future__ import annotations
 
@@ -13,6 +13,13 @@ from dataclasses import asdict, dataclass
 class PreflightPlan:
     backend: bool = False
     frontend: bool = False
+    frontend_unit: bool = False
+    frontend_build: bool = False
+    storybook: bool = False
+    e2e: bool = False
+    a11y: bool = False
+    a11y_full: bool = False
+    sdk: bool = False
     contract: bool = False
     format: bool = False
     publication: bool = False
@@ -41,13 +48,46 @@ PUBLICATION_PATHS = {
     "api/app/routers/sites.py",
     "api/app/site_assets/derridai-site.js",
     "api/app/site_assets/derridai-sdk.js",
-    "web/vite.sdk.ts",
-    "web/vite.sdk.package.ts",
+    "web/vite.sdk.config.ts",
+    "web/vite.sdk.package.config.ts",
     "web/playwright.publication.config.ts",
     "scripts/build_publication_acceptance_fixtures.py",
     "scripts/check_publication_artifacts.sh",
-    ".github/workflows/frontend.yml",
 }
+
+CONTRACT_BACKEND_PREFIXES = (
+    "api/app/routers/",
+    "api/app/graphql/",
+    "api/app/celf_queries/",
+)
+
+FRONTEND_UI_PREFIXES = (
+    "web/src/components/",
+    "web/src/views/",
+    "web/src/router/",
+    "web/src/stores/",
+    "web/src/composables/",
+    "web/src/runtime/",
+)
+
+A11Y_FULL_PATHS = {
+    "web/src/style.css",
+    "web/src/styles/tokens.css",
+    "web/tests/e2e/corpus-builder-theme-sweep.spec.ts",
+    "web/playwright.a11y.config.ts",
+}
+
+
+def _mark_full_frontend(plan: PreflightPlan) -> None:
+    plan.frontend = True
+    plan.frontend_unit = True
+    plan.frontend_build = True
+    plan.storybook = True
+    plan.e2e = True
+    plan.a11y = True
+    plan.a11y_full = True
+    plan.legacy = True
+    plan.sdk = True
 
 
 def build_plan(paths: list[str]) -> PreflightPlan:
@@ -57,10 +97,26 @@ def build_plan(paths: list[str]) -> PreflightPlan:
         if not path:
             continue
 
-        if path == ".github/workflows/frontend.yml" or path.startswith("scripts/"):
-            plan.backend = plan.frontend = plan.contract = plan.format = True
+        if path == ".github/workflows/frontend.yml":
+            plan.backend = plan.contract = plan.format = True
+            _mark_full_frontend(plan)
+        elif path.startswith("scripts/"):
+            # Repository automation should test the automation it can affect, not every application surface.
+            plan.backend = True
+            if path in {
+                "scripts/check_frontend_api_contract.py",
+                "scripts/check_frontend_graphql_contract.py",
+            }:
+                plan.contract = True
+            if path in PUBLICATION_PATHS:
+                plan.publication = True
         elif path.startswith("api/"):
-            plan.backend = plan.contract = True
+            plan.backend = True
+            if (
+                path.startswith(CONTRACT_BACKEND_PREFIXES)
+                or path in {"api/app/application.py", "api/app/models.py"}
+            ):
+                plan.contract = True
         elif path in {
             "tests/test_frontend_api_contract.py",
             "tests/test_frontend_graphql_contract.py",
@@ -70,10 +126,58 @@ def build_plan(paths: list[str]) -> PreflightPlan:
         elif path.startswith("tests/") or path in {"ruff.toml", "mypy.ini"}:
             plan.backend = True
 
+        # SDK/publication work is a frontend concern but does not require the app browser suite.
+        if (
+            path.startswith("web/sdk/")
+            or path.startswith("web/tests/fixtures/sdk-consumer/")
+            or path == "web/scripts/check-sdk-consumer.mjs"
+            or path.startswith("web/vite.sdk")
+            or path == "api/app/site_assets/derridai-sdk.js"
+        ):
+            plan.frontend = plan.frontend_unit = plan.sdk = True
+            plan.publication = True
+
         if path.startswith("web/src/api/"):
-            plan.frontend = plan.contract = True
-        elif path.startswith("web/"):
-            plan.frontend = plan.format = True
+            plan.frontend = plan.frontend_unit = plan.frontend_build = plan.contract = True
+        elif path.startswith("web/tests/frontend/"):
+            plan.frontend = plan.frontend_unit = True
+        elif path.startswith("web/tests/e2e/legacy-dom"):
+            plan.frontend = plan.frontend_build = plan.legacy = True
+        elif path == "web/tests/e2e/corpus-builder-theme-sweep.spec.ts":
+            plan.frontend = plan.storybook = plan.a11y = plan.a11y_full = True
+        elif path.startswith("web/tests/e2e/static-site-"):
+            plan.frontend = True
+            plan.publication = True
+        elif path.startswith("web/tests/e2e/"):
+            plan.frontend = plan.frontend_build = plan.storybook = plan.e2e = True
+        elif path.startswith("web/.storybook/") or path.startswith("web/.storybook"):
+            plan.frontend = plan.storybook = plan.e2e = plan.a11y = plan.a11y_full = True
+        elif path in {"web/vite.config.ts", "web/tsconfig.json", "web/tsconfig.tests.json"}:
+            plan.frontend = plan.frontend_unit = plan.frontend_build = True
+        elif path in {"web/package.json", "web/package-lock.json"}:
+            _mark_full_frontend(plan)
+            plan.publication = True
+        elif path.startswith("web/src/"):
+            if ".stories." in path:
+                plan.frontend = plan.storybook = plan.a11y = True
+            else:
+                plan.frontend = plan.frontend_unit = plan.frontend_build = True
+                if path.startswith(FRONTEND_UI_PREFIXES) or path in {
+                    "web/src/App.vue",
+                    "web/src/style.css",
+                }:
+                    plan.storybook = plan.e2e = True
+                if (
+                    path.startswith(("web/src/components/", "web/src/views/"))
+                    or path in A11Y_FULL_PATHS
+                ):
+                    plan.a11y = True
+                if path.startswith("web/src/runtime/") or path == "web/src/App.vue":
+                    plan.legacy = True
+
+        if path in A11Y_FULL_PATHS or path.startswith("web/src/components/ui/"):
+            plan.a11y = plan.a11y_full = True
+            plan.storybook = True
 
         if path in {
             "README.md",
@@ -106,7 +210,7 @@ def build_plan(paths: list[str]) -> PreflightPlan:
             plan.generated = True
 
         if path.startswith(("web/src/domain/", "web/tests/e2e/legacy-dom")):
-            plan.legacy = True
+            plan.legacy = plan.legacy or path.startswith("web/tests/e2e/legacy-dom")
 
     return plan
 
