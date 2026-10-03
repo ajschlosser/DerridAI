@@ -5630,6 +5630,8 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'settings.default_provider': 'Profil de fournisseur par défaut',
  'settings.default_provider_help': 'Utilisé lorsqu’un flux ne choisit pas lui-même de profil. Les '
                                        'identifiants restent sur la page Fournisseurs.',
+ 'settings.data_workspaces_title': 'Espaces de données',
+ 'settings.data_workspaces_help': 'Inspectez les données système opérationnelles ou ouvrez les données de corpus sans dupliquer ces espaces de travail dans Paramètres.',
  'settings.desktop_notifications': 'Notifications de bureau',
  'settings.download_backup': 'Télécharger une sauvegarde complète',
  'settings.embedding_model': 'Modèle d’intégration par défaut',
