@@ -10393,6 +10393,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'site.runtime.transformers_source_hub': 'Hugging Face Hub',
  'site.runtime.transformers_source_local': 'Fichiers de modèle que je sers',
  'site.runtime.transformers_unsupported_browser': 'Ce navigateur ne peut pas décompresser l’environnement d’exécution Transformers.js intégré.',
+ 'site.runtime.display': 'Affichage',
  'site.runtime.display_controls': 'Commandes d\'affichage et de langue',
  'site.runtime.finish': 'Terminer',
  'site.runtime.high_contrast': 'Contraste élevé',
