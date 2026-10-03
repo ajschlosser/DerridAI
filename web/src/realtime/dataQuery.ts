@@ -48,12 +48,15 @@ export function useDataQuery<T>(
     /** Extra key parts (ids, filters); refetch follows them when reactive. */
     detail?: MaybeRefOrGetter<unknown[]>;
     enabled?: MaybeRefOrGetter<boolean>;
+    /** Override the cache's normal mount-freshness policy for audit surfaces that must revalidate. */
+    refetchOnMount?: MaybeRefOrGetter<boolean | "always">;
   } = {},
 ) {
   return useQuery({
     queryKey: computed(() => dataKey(resource, ...(toValue(options.detail) ?? []))),
     queryFn: fetcher,
     enabled: computed(() => toValue(options.enabled) ?? true),
+    refetchOnMount: computed(() => toValue(options.refetchOnMount) ?? true),
     // Fallback only: a live socket replaces polling entirely.
     refetchInterval: computed(() => (realtimeFallback.value ? FALLBACK_POLL_MS : false)),
   } as UseQueryOptions<T>);
