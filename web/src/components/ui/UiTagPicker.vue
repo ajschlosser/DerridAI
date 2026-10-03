@@ -32,15 +32,22 @@ const props = withDefaults(
     placeholder?: string;
     removeLabel: string;
     disabled?: boolean;
+    inputId?: string;
+    describedby?: string;
+    invalid?: boolean;
   }>(),
   {
     modelValue: () => [],
     placeholder: "",
     disabled: false,
+    inputId: "",
+    describedby: "",
+    invalid: false,
   },
 );
 const emit = defineEmits<{ "update:modelValue": [value: string[]] }>();
 const id = useId();
+const resolvedInputId = computed(() => props.inputId || `${id}-input`);
 const query = ref("");
 const open = ref(false);
 const active = ref(-1);
@@ -121,7 +128,11 @@ function keydown(event: KeyboardEvent) {
 
 <template>
   <div class="ui-tag-picker">
-    <div class="tag-shell" :data-disabled="disabled ? 'true' : 'false'">
+    <div
+      class="tag-shell"
+      :data-disabled="disabled ? 'true' : 'false'"
+      :data-invalid="invalid ? 'true' : 'false'"
+    >
       <span v-for="value in modelValue || []" :key="value" class="tag-chip">
         <span>{{ value }}</span>
         <button
@@ -134,11 +145,14 @@ function keydown(event: KeyboardEvent) {
         </button>
       </span>
       <input
+        :id="resolvedInputId"
         ref="input"
         v-model="query"
         type="text"
         role="combobox"
         :aria-label="label"
+        :aria-describedby="describedby || undefined"
+        :aria-invalid="invalid ? 'true' : undefined"
         aria-autocomplete="list"
         :aria-expanded="open && filtered.length > 0"
         :aria-controls="`${id}-listbox`"
@@ -198,6 +212,9 @@ function keydown(event: KeyboardEvent) {
 .tag-shell:focus-within {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
+}
+.tag-shell[data-invalid="true"] {
+  border-color: var(--tone-danger-border);
 }
 .tag-shell[data-disabled="true"] {
   opacity: 0.65;
