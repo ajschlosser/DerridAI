@@ -72,11 +72,31 @@ _lock = threading.Lock()
 
 
 class RuntimeUnavailableError(RuntimeError):
-    """The runtime could not be downloaded or verified; nothing partial is kept."""
+    """The Transformers.js runtime could not be downloaded or verified; nothing partial is kept."""
 
 
 def runtime_dir() -> Path:
     return Path(settings.chroma_data_root) / "transformers_runtime" / f"transformers-{TRANSFORMERS_VERSION}"
+
+
+def legacy_runtime_dir() -> Path:
+    """Previous cache location, retained only so upgrades do not redownload verified runtime assets."""
+    return Path(settings.chroma_data_root) / "site_runtime" / f"transformers-{TRANSFORMERS_VERSION}"
+
+
+def _adopt_legacy_cache_unlocked() -> None:
+    """Move the old ambiguously named cache into the explicit Transformers.js cache location."""
+    target = runtime_dir()
+    legacy = legacy_runtime_dir()
+    if target.exists() or not legacy.exists():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        legacy.replace(target)
+    except OSError:
+        # Cross-device or unusual filesystems can reject a directory rename. Leave the old cache intact; the
+        # normal verified download path remains safe and a later administrator cleanup can remove it.
+        return
 
 
 def _verified(path: Path, item: dict[str, Any]) -> bool:
@@ -93,23 +113,25 @@ def _verified(path: Path, item: dict[str, Any]) -> bool:
 
 
 def is_cached() -> bool:
-    """True when every pinned file is present with the right size (cheap; digests are checked on use)."""
-    directory = runtime_dir()
-    for item in ARTIFACTS:
-        try:
-            if (directory / item["filename"]).stat().st_size != int(item["size"]):
+    """True when every pinned Transformers.js file has the right size; digests are checked on use."""
+    with _lock:
+        _adopt_legacy_cache_unlocked()
+        directory = runtime_dir()
+        for item in ARTIFACTS:
+            try:
+                if (directory / item["filename"]).stat().st_size != int(item["size"]):
+                    return False
+            except OSError:
                 return False
-        except OSError:
-            return False
-    return True
+        return True
 
 
 def delete_runtime() -> None:
-    """Remove the cached runtime so the next export downloads it again."""
-    directory = runtime_dir()
+    """Remove cached Transformers.js files so the next export downloads them again."""
     with _lock:
-        if directory.exists():
-            shutil.rmtree(directory)
+        for directory in (runtime_dir(), legacy_runtime_dir()):
+            if directory.exists():
+                shutil.rmtree(directory)
 
 
 def _download(
@@ -171,10 +193,11 @@ def ensure_runtime(
     opener: Callable[..., Any] = urllib.request.urlopen,
     on_progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, bytes]:
-    """Return the pinned runtime files by role, downloading any that are missing or fail verification."""
-    directory = runtime_dir()
+    """Return pinned Transformers.js runtime files, downloading missing or invalid artifacts."""
     total_bytes = sum(int(item["size"]) for item in ARTIFACTS)
     with _lock:
+        _adopt_legacy_cache_unlocked()
+        directory = runtime_dir()
         directory.mkdir(parents=True, exist_ok=True)
         received_before = 0
         for item in ARTIFACTS:
@@ -190,7 +213,7 @@ def ensure_runtime(
 
 def notice_text() -> str:
     lines = [
-        "Third-party runtime packaged into this site at the exporting administrator's request.",
+        "Third-party Transformers.js runtime packaged into this site at the exporting administrator's request.",
         "It was downloaded unmodified from the pinned sources below and verified by SHA-256.",
         "",
     ]
@@ -208,7 +231,7 @@ def notice_text() -> str:
 
 
 def runtime_info() -> dict[str, Any]:
-    """Describe the cached runtime for the export dialog without downloading anything."""
+    """Describe the cached Transformers.js runtime for the export dialog without downloading anything."""
     return {
         "version": TRANSFORMERS_VERSION,
         "cached": is_cached(),
