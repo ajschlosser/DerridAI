@@ -1,4 +1,4 @@
-/*
+<!--
  * This file is part of DerridAI, a cELF-compliant research workspace
  * Copyright © 2026  Aaron John Schlosser, PhD
  *
@@ -14,7 +14,7 @@
  *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+ -->
 
 <script setup lang="ts">
 import { computed, useId } from "vue";
