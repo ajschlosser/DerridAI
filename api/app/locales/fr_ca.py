@@ -5814,6 +5814,10 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
                                        'llection de la base Chroma active.',
  'settings.restore_confirm_title': 'Restaurer une sauvegarde complète DerridAI?',
  'settings.restore_upsert': 'Restaurer les éléments retirés de la file d’insertion',
+ 'settings.review_execution_title': 'Exécution de la révision',
+ 'settings.review_execution_help': 'Choisissez le profil de fournisseur, le préréglage de révision et l’exécution LLM au premier plan ou en arrière-plan.',
+ 'settings.evaluation_defaults_title': 'Valeurs par défaut d’évaluation',
+ 'settings.evaluation_defaults_help': 'Contrôlez le comportement d’évaluation facultatif séparément des paramètres d’exécution de la révision.',
  'settings.review_help': 'Choix du fournisseur, préréglage de révision et exécution interactive ou'
                                        ' en arrière-plan.',
  'settings.review_preset': 'Préréglage de révision par défaut',
