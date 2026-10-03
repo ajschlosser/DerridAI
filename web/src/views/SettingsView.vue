@@ -38,8 +38,10 @@ import UiField from "../components/ui/UiField.vue";
 import UiHealthChip from "../components/ui/UiHealthChip.vue";
 import DataRetentionSettings from "../components/settings/DataRetentionSettings.vue";
 import DocumentNlpLanguagePacks from "../components/settings/DocumentNlpLanguagePacks.vue";
+import SettingsAccessPanel from "../components/settings/SettingsAccessPanel.vue";
 import SettingsNav from "../components/settings/SettingsNav.vue";
 import SettingsOverview from "../components/settings/SettingsOverview.vue";
+import SettingsTroubleshootingPanel from "../components/settings/SettingsTroubleshootingPanel.vue";
 import SettingsSearch, { type SettingsSearchHit } from "../components/settings/SettingsSearch.vue";
 import SettingsSection from "../components/settings/SettingsSection.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
@@ -1636,29 +1638,13 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           </SettingsSection>
         </div>
 
-        <div
-          v-if="isAdmin"
-          v-show="section === 'access'"
-          id="settings-section-security"
-        >
-          <SettingsSection
-            section-id="security"
-            :title="i18n.t('settings.security_title')"
-            :description="i18n.t('settings.security_help')"
-            :persistence="persistKind('link')"
-            status="readonly"
-            :status-label="statusLabel('readonly')"
-          >
-            <p class="note">{{ i18n.t("roles.users_link_help") }}</p>
-            <template #actions>
-              <UiButton icon="users" :label="i18n.t('nav.users')" @click="go('/users')" />
-              <UiButton icon="roles" :label="i18n.t('nav.roles')" @click="go('/roles')" />
-            </template>
-          </SettingsSection>
-        </div>
+        <SettingsAccessPanel
+          v-if="isAdmin && section === 'access'"
+          @navigate="go"
+        />
 
         <div
-          v-if="isAdmin && ['services', 'data', 'troubleshooting'].includes(section)"
+          v-if="isAdmin && ['services', 'data'].includes(section)"
           id="settings-system-groups"
         >
           <SettingsSection
@@ -1738,78 +1724,20 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               />
             </template>
           </SettingsSection>
-          <SettingsSection
-            v-if="section === 'troubleshooting'"
-            section-id="viewer"
-            :title="i18n.t('settings.viewer_title')"
-            :description="i18n.t('settings.viewer_help')"
-            :persistence="persistKind('browser')"
-          >
-            <p class="note">
-              {{
-                i18n.t(
-                  "settings.viewer_recovery_help",
-                  "These actions reset local interface state. They do not delete corpus records or reviewed research data.",
-                )
-              }}
-            </p>
-            <template #actions>
-              <UiButton :label="i18n.t('settings.reset_columns')" @click="resetColumns" />
-              <UiButton :label="i18n.t('settings.expand_panels')" @click="expandPanels" />
-              <UiButton :label="i18n.t('settings.expand_sidebar')" @click="expandSidebar" />
-              <UiButton
-                :label="i18n.t('settings.restore_upsert')"
-                @click="clearUpsertSuppressions"
-              />
-              <UiButton
-                variant="danger"
-                icon="history"
-                :label="i18n.t('settings.clear_updates')"
-                @click="openUpdates"
-              />
-              <UiButton icon="dashboard" :label="i18n.t('nav.home')" @click="go('/', 'home')" />
-            </template>
-          </SettingsSection>
-          <SettingsSection
-            v-if="section === 'troubleshooting'"
-            class="settings-danger-zone"
-            section-id="nuke"
-            :title="i18n.t('config.nuke.title')"
-            :description="i18n.t('config.nuke.help')"
-            :persistence="persistKind('backend')"
-            status="readonly"
-          >
-            <p class="settings-danger-summary">
-              {{
-                i18n.t(
-                  "config.nuke.scope_help",
-                  "This operation destroys workspace state. Create a backup first if you may need to recover it.",
-                )
-              }}
-            </p>
-            <p class="info error">{{ i18n.t("config.nuke.irreversible") }}</p>
-            <UiField
-              :label="i18n.t('config.nuke.type_to_enable')"
-              :hint="i18n.t('config.nuke.type_to_enable_help')"
-            >
-              <input
-                id="settings-field-nuke"
-                class="control"
-                v-model="nukePhrase"
-                autocomplete="off"
-              />
-            </UiField>
-            <template #actions>
-              <UiButton
-                variant="danger"
-                :label="i18n.t('config.nuke.button')"
-                :disabled="nukePhrase !== 'NUKE'"
-                :disabled-reason="i18n.t('config.nuke.type_to_enable_help')"
-                @click="openNuke"
-              />
-            </template>
-          </SettingsSection>
         </div>
+
+        <SettingsTroubleshootingPanel
+          v-if="isAdmin && section === 'troubleshooting'"
+          :nuke-phrase="nukePhrase"
+          @update:nuke-phrase="nukePhrase = $event"
+          @reset-columns="resetColumns"
+          @expand-panels="expandPanels"
+          @expand-sidebar="expandSidebar"
+          @restore-upsert="clearUpsertSuppressions"
+          @clear-updates="openUpdates"
+          @open-nuke="openNuke"
+          @navigate="go"
+        />
       </div>
     </div>
 
@@ -1874,19 +1802,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
   width: 100%;
   max-width: 1040px;
   min-width: 0;
-}
-.settings-danger-zone {
-  margin-top: 20px;
-  padding: 16px;
-  border: 1px solid var(--danger);
-  border-radius: 12px;
-  background: var(--panel-2);
-}
-.settings-danger-summary {
-  margin: 0;
-  max-width: 68ch;
-  color: var(--muted);
-  line-height: 1.5;
 }
 .settings-locale-row {
   display: flex;
