@@ -77,6 +77,9 @@ function load(schema: MetadataSchema, fresh = false) {
     field.pos_tags ||= [];
     field.ner_tags ||= [];
     field.scope ||= "record";
+    field.members ||= [];
+    field.max_items = field.type === "repeatable" ? field.max_items || 8 : null;
+    field.instance_label ||= "{label} {number}";
   }
   next.document_fields = completeDocumentFields(next.document_fields);
   draft.value = next;

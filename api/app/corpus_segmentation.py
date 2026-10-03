@@ -721,6 +721,8 @@ def source_unit_record_boundaries(
 
 def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boundaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     boundary_map = {item["after_block_id"]: item for item in boundaries}
+    voice_assignments = asset.get("voice_assignments")
+    voice_assignments = voice_assignments if isinstance(voice_assignments, dict) else {}
     groups: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
     for block in blocks:
@@ -743,12 +745,18 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
         layout_region = layout_regions[0] if layout_regions and len(set(layout_regions)) == 1 else None
         thread_languages = sorted({str(block.get("thread_language") or "").strip() for block in group if str(block.get("thread_language") or "").strip()})
         speakers = [str(block.get("speaker") or "").strip() for block in group if str(block.get("speaker") or "").strip()]
-        uniform_speaker = speakers[0] if speakers and len(set(speakers)) == 1 and (not audio or len(speakers) == len(group)) else None
+        uniform_voice = speakers[0] if speakers and len(set(speakers)) == 1 and (not audio or len(speakers) == len(group)) else None
+        assigned = voice_assignments.get(uniform_voice) if uniform_voice else None
+        assigned_name = str(assigned.get("display_name") or "").strip() if isinstance(assigned, dict) else ""
+        uniform_speaker = assigned_name or uniform_voice
         source_spans = []
         for block in group:
             span = {"source_document_id": asset["asset_id"], "source_unit_id": block["block_id"], "block_id": block["block_id"], "page": block.get("page"), "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")}
             if block.get("speaker"):
                 span["speaker"] = block.get("speaker")
+                assignment = voice_assignments.get(str(block.get("speaker")))
+                if isinstance(assignment, dict) and str(assignment.get("display_name") or "").strip():
+                    span["resolved_speaker"] = str(assignment["display_name"]).strip()
             if block.get("start") is not None:
                 span["start"] = block.get("start")
                 span["end"] = block.get("end")
@@ -802,9 +810,13 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
                 record,
                 "speaker",
                 uniform_speaker,
-                method="source_span_speaker",
-                reason="Speaker label assigned when the source was loaded.",
-                confidence=0.95,
+                method="human_voice_assignment" if assigned_name else "source_span_speaker",
+                reason=(
+                    f"Reviewer assigned {uniform_voice} to this person."
+                    if assigned_name
+                    else "Speaker label assigned when the source was loaded."
+                ),
+                confidence=1.0 if assigned_name else 0.95,
             )
         project_record_assertions(record)
         records.append(record)

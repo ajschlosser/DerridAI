@@ -185,6 +185,12 @@ function removeGroup() {
 .schema-field.wide {
   grid-column: 1 / -1;
 }
+.checkbox-field {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  align-self: end;
+  min-block-size: 40px;
+}
 .schema-field :is(input, select, textarea) {
   inline-size: 100%;
   font-weight: 500;

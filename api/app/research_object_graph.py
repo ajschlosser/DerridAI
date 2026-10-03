@@ -287,11 +287,18 @@ def build_record_graph(
                     hidden_assertions += 1
                     continue
                 field_name = str(assertion.get("field_name") or assertion.get("field_id") or "field")
+                member_name = str(assertion.get("member_name") or "")
+                instance_id = str(assertion.get("instance_id") or "")
+                assertion_label = (
+                    f"{field_name}.{member_name} [{instance_id}]"
+                    if member_name and instance_id
+                    else field_name
+                )
                 value = assertion.get("value")
                 node = graph.add_node(
                     "FieldAssertion",
                     assertion_id,
-                    label=field_name,
+                    label=assertion_label,
                     summary=_present(value),
                     status=str(assertion.get("authority_status") or assertion.get("evaluation_status") or "") or None,
                     details={
@@ -300,6 +307,10 @@ def build_record_graph(
                             for key in (
                                 "field_id",
                                 "field_name",
+                                "container_field_id",
+                                "instance_id",
+                                "member_field_id",
+                                "member_name",
                                 "value",
                                 "derivation_method",
                                 "evaluation_status",

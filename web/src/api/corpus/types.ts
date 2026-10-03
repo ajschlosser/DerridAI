@@ -89,6 +89,17 @@ export interface PdfAsset {
   warnings: string[];
   metadata: Record<string, unknown>;
   media_kind?: string;
+  voice_assignments?: Record<
+    string,
+    {
+      voice_id: string;
+      display_name: string;
+      authority: "human" | "unassigned";
+      reviewer?: string;
+      updated_at?: string | null;
+    }
+  >;
+  voice_assignment_revision?: number;
   source_illegibility?: number;
   deterministic_checked_at?: string;
   initial_metadata?: {

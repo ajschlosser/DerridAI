@@ -170,16 +170,27 @@ def _derive_metadata_exemplars(
             )
             if not field or not trusted or _second_opinion_owed(row, field):
                 continue
+            exemplar_field = (
+                f"{field}.{assertion.member_name}"
+                if assertion.container_field_id and assertion.member_name
+                else field
+            )
             exemplar = build_metadata_exemplar(
                 row,
-                field,
+                exemplar_field,
                 blocks_by_id,
                 schema_id=schema_id,
                 schema_version=schema_version,
                 source_document_id=source_document_id,
-                field_id=str(assertion.field_id or field_ids.get(field, "")),
+                field_id=str(
+                    assertion.member_field_id
+                    or assertion.field_id
+                    or field_ids.get(field, "")
+                ),
                 schema=schema,
                 registry=registry_for(row),
+                assertion_override=assertion,
+                value_override=assertion.value,
             )
             if exemplar is not None:
                 exemplars.append(exemplar)

@@ -16,7 +16,7 @@ import time
 from collections import Counter
 from typing import TYPE_CHECKING, Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from .config import APP_VERSION
 from .corpus_llm_helpers import _stage_limits, _validate_execution_budget
@@ -60,9 +60,6 @@ from .metadata_schema import (
 from .metadata_schema_store import SchemaNotFound
 from .rag import _citation_strings
 
-if TYPE_CHECKING:
-    from pydantic import BaseModel
-
 
 def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]:
     """Keep only well-formed values for fields the schema scopes to the whole corpus rather than to each record.
@@ -74,8 +71,19 @@ def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]
     if not isinstance(raw, dict):
         raise ValueError("Work-wide metadata must be a field-to-value object.")
     fields = {f.name: f for f in schema.fields}
+    repeatable_fields = {
+        field.name: field for field in schema.fields
+        if field.type == "repeatable" and field.scope == "corpus"
+    }
+    record_edit = edit_model(schema, BaseModel)
     cleaned: dict[str, Any] = {}
     for name, value in raw.items():
+        if name in repeatable_fields:
+            try:
+                cleaned[name] = getattr(record_edit.model_validate({name: value}), name)
+            except ValidationError as exc:
+                raise ValueError(f"'{name}' is not valid repeatable work metadata: {exc}") from exc
+            continue
         field = fields.get(name)
         if field is None or field.scope == "record":
             raise ValueError(f"'{name}' is not a work-wide field in the selected metadata schema.")

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Copyright 2026 Aaron John Schlosser, PhD.
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import UiDialog from "./ui/UiDialog.vue";
 import UiButton from "./ui/UiButton.vue";
 import { hasPages, timeLabel } from "../domain/sourceMedia";
@@ -18,6 +18,7 @@ const props = withDefaults(
     pageCount: number;
     text: string;
     blocks?: SourceBlock[];
+    voiceAssignments?: Record<string, string>;
     pageWidth?: number;
     pageHeight?: number;
     busy?: boolean;
@@ -25,8 +26,16 @@ const props = withDefaults(
   }>(),
   { blocks: () => [], pageWidth: 0, pageHeight: 0, busy: false, printedPage: null },
 );
-const emit = defineEmits<{ close: []; pageChange: [page: number]; saveText: [text: string] }>();
+const emit = defineEmits<{
+  close: [];
+  pageChange: [page: number];
+  saveText: [text: string];
+  saveVoiceAssignments: [assignments: Record<string, string>];
+}>();
 const i18n = useI18nStore();
+const voices = computed(() =>
+  Array.from(new Set(props.blocks.map((block) => String(block.speaker || "")).filter(Boolean))),
+);
 const draft = ref("");
 watch(
   () => [props.open, props.text] as const,
@@ -83,8 +92,28 @@ function move(delta: number) {
           :src="audioUrl"
           :aria-label="i18n.t('pdf_corpus.media_kind.audio')"
         />
+        <fieldset v-if="audioUrl && voices.length" class="voice-assignments">
+          <legend>{{ i18n.t("pdf_corpus.voice_assignments_title") }}</legend>
+          <label v-for="voice in voices" :key="voice">
+            <span>{{ voice }}</span>
+            <input
+              :value="voiceAssignments?.[voice] || ''"
+              :disabled="busy"
+              :placeholder="i18n.t('pdf_corpus.voice_assignment_placeholder')"
+              @change="
+                emit('saveVoiceAssignments', {
+                  ...(voiceAssignments || {}),
+                  [voice]: ($event.target as HTMLInputElement).value,
+                })
+              "
+            />
+          </label>
+        </fieldset>
         <article v-for="block in pdfUrl ? [] : blocks" :key="block.block_id">
-          <b>{{ timeLabel(block.start, block.end) }} {{ block.speaker }}</b>
+          <b
+            >{{ timeLabel(block.start, block.end) }}
+            {{ voiceAssignments?.[String(block.speaker || "")] || block.speaker }}</b
+          >
           <p>{{ block.text }}</p>
         </article>
       </section>
@@ -194,6 +223,28 @@ audio {
 .transcription-pane :is(textarea, summary):focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
+}
+.voice-assignments {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.voice-assignments label {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.voice-assignments input {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
 }
 @media (max-width: 850px) {
   .transcription-grid {
