@@ -25,6 +25,7 @@ import { FALLBACK_POLL_MS, realtime as defaultRealtime } from "../realtime";
 import type { RealtimeClient } from "../realtime/client";
 import { TERMINAL_JOB_STATUSES, type JobEvent } from "../realtime/protocol";
 import { toast } from "../composables/notifications";
+import { registerJobsActions } from "./jobsActions";
 import { registerJobsPause } from "./jobsPause";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -518,7 +519,7 @@ export function createJobsWorkspace(deps: Deps) {
     }
     updateOperationStackCount();
   }
-  return {
+  const actions = {
     refreshJobs,
     reconcileJobs,
     applyJobEvent,
@@ -535,4 +536,6 @@ export function createJobsWorkspace(deps: Deps) {
     maybeDesktopNotify,
     syncJobProgressToasts,
   };
+  registerJobsActions(actions);
+  return actions;
 }
