@@ -24,7 +24,9 @@ from .config import settings
 from .corpus_enrichment_feedback import enrichment_informational_event
 from .corpus_enrichment_helpers import (
     _enrichment_pass_indices,
+    _merge_enrichment_snapshot,
     _prepend_metadata_priority,
+    _record_source_matches,
 )
 from .corpus_llm_helpers import _validate_execution_budget
 from .corpus_record_quality import iso_now
@@ -75,6 +77,8 @@ class EnrichmentRerunsMixin:
         def _cancelled(self, build_id: str) -> bool: ...
         def _update(self, build_id: str, **changes: Any) -> dict[str, Any]: ...
         def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]], *, persist_records: bool = True) -> dict[str, Any]: ...
+        def _reconcile_and_validate(self, build_id: str) -> dict[str, Any]: ...
+        def _allowed_fields(self, build_id: str) -> set[str]: ...
         def _refresh_workflow_fields(self, build: dict[str, Any]) -> dict[str, Any]: ...
         def _schema_for(self, build_id: str) -> MetadataSchema: ...
         def _schema_of_build(self, build: dict[str, Any]) -> MetadataSchema: ...
@@ -148,6 +152,11 @@ class EnrichmentRerunsMixin:
         try:
             build = self.repo.get_build(build_id)
             records = self.repo.load_records(build_id)
+            # Queued ordinals may have moved or retired before this worker starts.
+            target_indices = [
+                index for index, record in enumerate(records)
+                if str(record.get("record_id") or "") in target_fields
+            ]
             manifest = build.get("manifest") or {}
             total = max(1, len(target_indices))
             max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
@@ -200,11 +209,24 @@ class EnrichmentRerunsMixin:
                         )
                         updated["metadata_needs_attention"] = True
                         updated["metadata_attention_reasons"] = [f"Metadata retry failed: {exc}"]
-                    records[index] = updated
-                    after = set(updated.get("metadata_incomplete_fields") or [])
+                    record_id = str(records[index]["record_id"])
+                    baseline = records[index]
+                    allowed = self._allowed_fields(build_id)
+
+                    def merge_retry(
+                        rows: list[dict[str, Any]], baseline: dict[str, Any] = baseline,
+                        updated: dict[str, Any] = updated, allowed: set[str] = allowed,
+                    ) -> None:
+                        if rows and _record_source_matches(rows[0], baseline):
+                            rows[0] = _merge_enrichment_snapshot(rows[0], updated, allowed)
+
+                    current = self.repo.reconcile_records(build_id, merge_retry, record_ids=[record_id])
+                    after = set(current[0].get("metadata_incomplete_fields") or []) if current else set(before)
                     resolved += sum(1 for field in before if field not in after)
                     processed += 1
-                    self.repo.save_records(build_id, records)
+                    if current:
+                        records[index] = current[0]
+                        note_record_metadata(build_id, record_id, "record_completed")
                     op = dict(self.repo.get_build(build_id).get("metadata_operation") or {})
                     op.update({
                         "state": "running", "records_processed": processed,
@@ -214,7 +236,8 @@ class EnrichmentRerunsMixin:
                     self._update(build_id, status="running", stage="metadata_retry", progress=min(0.979, 0.96 + 0.019 * (processed / total)), metadata_operation=op)
                 if self._cancelled(build_id):
                     raise InterruptedError("Metadata retry cancelled")
-            final_build = self._rewrite_and_validate(build_id, records)
+            final_build = self._reconcile_and_validate(build_id)
+            records = self.repo.load_records(build_id)
             target_remaining = 0
             for record in records:
                 rid = str(record.get("record_id") or "")
@@ -682,6 +705,7 @@ class EnrichmentRerunsMixin:
                     request_used = request
                     record_started = submitted_at
                     candidate_error = exc
+                failure: dict[str, Any] = {}
                 if candidate_error is not None:
                     failure = {
                         "run_id": run_id,
@@ -693,21 +717,31 @@ class EnrichmentRerunsMixin:
                 # edited this or any other record while the model was thinking.
                 result: dict[str, Any]
                 with self._lock:
-                    live_records = self.repo.load_records(build_id)
-                    live = next((row for row in live_records if str(row.get("record_id") or "") == record_id), None)
-                    if live is None:
-                        continue
-                    if candidate is None:
-                        live["metadata_enrichment_history"] = (list(live.get("metadata_enrichment_history") or []) + [failure])[-30:]
-                        result = {"outcome": "failed"}
-                    elif live.get("text") != snapshot[index].get("text"):
-                        result = {"outcome": "skipped"}
-                    else:
+                    was_accepted = False
+                    result = {"outcome": "skipped"}
+
+                    def merge_candidate(
+                        rows: list[dict[str, Any]], baseline: dict[str, Any] = snapshot[index],
+                        candidate: dict[str, Any] | None = candidate,
+                        failure: dict[str, Any] = failure, request_used: dict[str, Any] = request_used,
+                    ) -> None:
+                        nonlocal result, was_accepted
+                        if not rows:
+                            return
+                        live = rows[0]
+                        if not _record_source_matches(live, baseline):
+                            return
+                        if candidate is None:
+                            live["metadata_enrichment_history"] = (list(live.get("metadata_enrichment_history") or []) + [failure])[-30:]
+                            result = {"outcome": "failed"}
+                            return
                         was_accepted = str(live.get("review_disposition") or "pending") == "accepted"
                         result = self._merge_enrichment_candidate(live, candidate, families, run_id, request_used, profile, schema=pass_schema, pass_number=pass_number)
-                        if was_accepted and result["outcome"] != "unchanged":
-                            totals["records_reopened"] += 1
-                    self.repo.save_records(build_id, live_records)
+                    current = self.repo.reconcile_records(build_id, merge_candidate, record_ids=[record_id])
+                    if not current:
+                        continue
+                    if was_accepted and result["outcome"] != "unchanged":
+                        totals["records_reopened"] += 1
                 # The event promises that an immediate read sees the merged result.
                 note_record_metadata(build_id, record_id, "record_completed")
                 self._ledger.append(
@@ -802,7 +836,7 @@ class EnrichmentRerunsMixin:
                     break
             self._share_generalizable_learning(build_id)
             with self._lock:
-                final = self._rewrite_and_validate(build_id, self.repo.load_records(build_id))
+                final = self._reconcile_and_validate(build_id)
                 op.update({"state": op["state"] if op.get("state") == "cancelled" else "completed", "finished_at": iso_now()})
                 final["metadata_operation"] = op
                 final["metadata_enrichment_runs"] = [({**r, **op} if r.get("operation_id") == operation_id else r) for r in final.get("metadata_enrichment_runs") or []]

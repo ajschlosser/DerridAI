@@ -414,6 +414,17 @@ class MetadataEnrichmentExecutionMixin:
                 current_build.get("metadata_priority_record_ids") or []
             ):
                 request = {**request, "_capacity_priority": "foreground"}
+            annotations = record.get("document_intelligence")
+            document_run = current_build.get("document_intelligence") or {}
+            if isinstance(annotations, dict) and (
+                not annotations.get("document_context_epoch")
+                or annotations["document_context_epoch"] != self.repo.document_context(build_id)
+                or not isinstance(document_run, dict)
+                or document_run.get("status") != "ok"
+                or document_run.get("stale")
+                or annotations.get("analysis_id") != document_run.get("analysis_id")
+            ):
+                record["document_intelligence"] = {**annotations, "stale": True}
         request = experiment.with_arm(request, str(record.get("record_id") or ""))
         off = experiment.disabled(request)
         schema = self._schema_for(build_id)
