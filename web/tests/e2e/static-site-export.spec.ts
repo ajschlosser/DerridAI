@@ -46,7 +46,7 @@ test("single-file export works directly from file://", async ({ page }) => {
   const searchRegion = page.getByRole("region", { name: "Search" });
   await searchRegion.getByRole("searchbox", { name: "Search" }).fill("hospitality");
   await searchRegion.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.getByText("1 results")).toBeVisible();
+  await expect(page.getByText("1 results", { exact: true })).toBeVisible();
   await expect(
     page.getByText("Hospitality exceeds the economy of conditional exchange."),
   ).toBeVisible();
