@@ -18,9 +18,18 @@
 
 import { computed, inject, provide, ref } from "vue";
 import type {
+  Annotation,
+  AnnotationInput,
+  ClientEvent,
+  GenerationRequest,
+  GenerationResult,
   LocalIndexStatus,
   PublicationManifest,
   PublicationRecord,
+  ResearchRequest,
+  ResearchResponse,
+  SearchRequest,
+  SearchResponse,
   SearchWarning,
 } from "../sdk/src/types";
 
@@ -82,16 +91,34 @@ interface ProviderError extends Error {
   status?: number;
 }
 
+interface ClientCapabilities {
+  browse: boolean;
+  lexicalSearch: boolean;
+  semanticSearch: boolean;
+  annotations: boolean;
+  research: boolean;
+  publicationVectors: {
+    available: boolean;
+    model?: string;
+    dimension?: number | null;
+  };
+  provider: {
+    embeddings: boolean;
+    generation: boolean;
+  };
+  localIndex: LocalIndexStatus | null;
+}
+
 interface SdkClient {
   publication: { info(): PublicationManifest; works(): PublicationManifest["works"] };
   records: { get(recordId: string): Promise<PublicationRecord | null> };
-  search(request: Record<string, unknown>): Promise<any>;
-  research(request: Record<string, unknown>): Promise<any>;
-  capabilities(): Promise<any>;
+  search(request: SearchRequest): Promise<SearchResponse>;
+  research(request: ResearchRequest): Promise<ResearchResponse>;
+  capabilities(): Promise<ClientCapabilities>;
   citations: { format(record: PublicationRecord): { plain: string } };
   annotations: {
-    list(): Promise<any[]>;
-    add(input: Record<string, unknown>): Promise<any>;
+    list(): Promise<Annotation[]>;
+    add(input: AnnotationInput): Promise<Annotation>;
     remove(id: string): Promise<void>;
   };
   index: {
@@ -100,7 +127,7 @@ interface SdkClient {
     clear(): Promise<void>;
   };
   events: {
-    subscribe(listener: (event: any) => void): () => void;
+    subscribe(listener: (event: ClientEvent) => void): () => void;
   };
 }
 
@@ -111,13 +138,63 @@ interface DerridAISdk {
 
 interface HostCapabilities {
   storage?: unknown;
-  generation?: unknown;
+  generation?: {
+    descriptor(): Record<string, unknown>;
+    generate(
+      request: GenerationRequest,
+      options?: { signal?: AbortSignal },
+    ): Promise<GenerationResult>;
+  };
 }
 
 interface TransformersBundle {
   engine_b64: string;
   wasm_factory_b64: string;
   wasm_gzip_b64: string;
+}
+
+interface ProviderResponse {
+  data?: unknown[];
+  error?: { message?: unknown };
+  detail?: unknown;
+  choices?: Array<{ message?: { content?: unknown } }>;
+}
+
+interface ModelProgress {
+  status?: string;
+  file?: string;
+  progress?: number;
+}
+
+interface TransformersTensor {
+  tolist(): number[][];
+  dispose?(): void;
+}
+
+type TransformersExtractor = (
+  input: string[],
+  options: { pooling: string; normalize: boolean },
+) => Promise<TransformersTensor>;
+
+interface TransformersRuntime {
+  env: {
+    allowRemoteModels: boolean;
+    allowLocalModels: boolean;
+    useBrowserCache: boolean;
+    backends?: {
+      onnx?: {
+        wasm?: {
+          wasmPaths?: { mjs: string; wasm: string };
+          numThreads?: number;
+        };
+      };
+    };
+  };
+  pipeline(
+    task: "feature-extraction",
+    model: string,
+    options: Record<string, unknown>,
+  ): Promise<TransformersExtractor>;
 }
 
 declare global {
@@ -193,14 +270,19 @@ function directionForLocale(code: string): "rtl" | "ltr" {
 }
 
 export function createPublishedSiteContext() {
-  const publicationPackage = window.__DERRIDAI_SITE_PACKAGE__;
-  const sdk = window.DerridAI;
-  if (!publicationPackage?.manifest || !Array.isArray(publicationPackage.chunks)) {
+  const publicationPackageCandidate = window.__DERRIDAI_SITE_PACKAGE__;
+  const sdkCandidate = window.DerridAI;
+  if (
+    !publicationPackageCandidate?.manifest ||
+    !Array.isArray(publicationPackageCandidate.chunks)
+  ) {
     throw new Error("This DerridAI publication package is incomplete.");
   }
-  if (!sdk?.createClient || !sdk?.dataSources?.inline) {
+  if (!sdkCandidate?.createClient || !sdkCandidate?.dataSources?.inline) {
     throw new Error("The DerridAI SDK could not be loaded.");
   }
+  const publicationPackage: PublishedSitePackage = publicationPackageCandidate;
+  const sdk: DerridAISdk = sdkCandidate;
 
   const publication = publicationPackage.manifest;
   const publicationId = String(publication.publication_id || "publication");
@@ -230,7 +312,7 @@ export function createPublishedSiteContext() {
   const recordDialog = ref<RecordDialogState | null>(null);
   const activeDevice = ref("");
   const client = ref<SdkClient | null>(null);
-  const capabilities = ref<any>(null);
+  const capabilities = ref<ClientCapabilities | null>(null);
 
   const publishedBrowserProfile = {
     model: "Xenova/multilingual-e5-small",
@@ -565,7 +647,7 @@ export function createPublishedSiteContext() {
     return headers;
   }
 
-  async function providerJson(url: string, init: RequestInit): Promise<any> {
+  async function providerJson(url: string, init: RequestInit): Promise<ProviderResponse> {
     let response: Response;
     try {
       response = await fetch(url, init);
@@ -579,7 +661,7 @@ export function createPublishedSiteContext() {
       );
     }
     const text = await response.text();
-    let body: any = {};
+    let body: ProviderResponse = {};
     try {
       body = text ? JSON.parse(text) : {};
     } catch {
@@ -691,11 +773,11 @@ export function createPublishedSiteContext() {
     };
   }
 
-  let transformersRuntime: Promise<any> | null = null;
-  let modelProgressListener: ((info: any) => void) | null = null;
-  const transformersExtractors = new Map<string, Promise<any>>();
+  let transformersRuntime: Promise<TransformersRuntime> | null = null;
+  let modelProgressListener: ((info: ModelProgress) => void) | null = null;
+  const transformersExtractors = new Map<string, Promise<TransformersExtractor>>();
 
-  async function loadTransformersRuntime(): Promise<any> {
+  async function loadTransformersRuntime(): Promise<TransformersRuntime> {
     if (transformersRuntime) return transformersRuntime;
     transformersRuntime = (async () => {
       const delivery = publication.features?.transformers_runtime || "inline";
@@ -719,7 +801,7 @@ export function createPublishedSiteContext() {
           wasm: blobUrl(await gunzip(base64Bytes(bundle.wasm_gzip_b64)), "application/wasm"),
         };
       }
-      const runtime = await import(/* @vite-ignore */ engineUrl);
+      const runtime = (await import(/* @vite-ignore */ engineUrl)) as TransformersRuntime;
       runtime.env.allowRemoteModels = true;
       runtime.env.allowLocalModels = false;
       runtime.env.useBrowserCache = true;
@@ -747,7 +829,7 @@ export function createPublishedSiteContext() {
     return "wasm";
   }
 
-  function transformersExtractor(profile: LocalModelSettings): Promise<any> {
+  function transformersExtractor(profile: LocalModelSettings): Promise<TransformersExtractor> {
     const key = [
       profile.model,
       profile.revision || "",
@@ -846,7 +928,7 @@ export function createPublishedSiteContext() {
     const descriptor = () => ({ id: profile.id, type: "openai", model });
     return {
       descriptor,
-      async generate(request: any, options: { signal?: AbortSignal } = {}) {
+      async generate(request: GenerationRequest, options: { signal?: AbortSignal } = {}) {
         const base = providerBase(profile);
         const body = await providerJson(`${base}/chat/completions`, {
           method: "POST",
@@ -906,7 +988,7 @@ export function createPublishedSiteContext() {
 
   function subscribeProgress(setStatus: (message: string) => void): () => void {
     if (!client.value) return () => undefined;
-    return client.value.events.subscribe((event: any) => {
+    return client.value.events.subscribe((event: ClientEvent) => {
       if (event.type === "embedding-start") {
         setStatus(t("site.runtime.activity_vector_embedding"));
         return;
@@ -946,7 +1028,7 @@ export function createPublishedSiteContext() {
   }
 
   async function testLocalModel(
-    onProgress?: (info: any) => void,
+    onProgress?: (info: ModelProgress) => void,
   ): Promise<{ ok: boolean; message: string }> {
     const profile = localModel.value;
     if (!profile.model) {
@@ -1004,10 +1086,13 @@ export function createPublishedSiteContext() {
         cache: "no-store",
       });
       const models: DiscoveredModel[] = (body.data || [])
-        .map((item: any) => ({
-          name: String(item?.id || ""),
-          detail: [item?.owned_by].filter(Boolean).join(" · "),
-        }))
+        .map((item) => {
+          const model = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+          return {
+            name: String(model.id || ""),
+            detail: [model.owned_by].filter(Boolean).join(" · "),
+          };
+        })
         .filter((item: DiscoveredModel) => item.name);
       const unique: DiscoveredModel[] = [];
       const seen = new Set<string>();
@@ -1109,14 +1194,14 @@ export function createPublishedSiteContext() {
     prepareLocalModel?: boolean;
     signal?: AbortSignal;
     onIndexProgress?: (indexed: number, total: number) => void;
-    onModelProgress?: (info: any) => void;
+    onModelProgress?: (info: ModelProgress) => void;
   } = {}): Promise<LocalIndexStatus> {
     if (options.prepareLocalModel) {
       saveLocalModel();
       await rebuildClient();
     }
     if (!client.value) throw new Error(t("site.runtime.index_no_provider"));
-    const stop = client.value.events.subscribe((event: any) => {
+    const stop = client.value.events.subscribe((event: ClientEvent) => {
       if (event.type === "index-progress") {
         options.onIndexProgress?.(Number(event.indexed || 0), Number(event.total || 0));
       }
