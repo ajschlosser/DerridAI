@@ -32,7 +32,9 @@ function mountForm(over: Partial<SchemaField> = {}) {
   });
   const wrapper = mount(SchemaFieldForm, { props: { field, groupKeys: ["indexing"] } });
   const matching = () =>
-    wrapper.findAll("details.advanced-section").find((item) => item.text().includes("Value matching"))!;
+    wrapper
+      .findAll("details.advanced-section")
+      .find((item) => item.text().includes("Value matching"))!;
   return { field, wrapper, matching };
 }
 
