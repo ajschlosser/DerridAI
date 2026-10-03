@@ -30,20 +30,22 @@ import {
 } from "../../api/metadataSchemas";
 import AppIcon from "../AppIcon.vue";
 import UiButton from "../ui/UiButton.vue";
+import UiInput from "../ui/UiInput.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 import SchemaFieldForm from "./SchemaFieldForm.vue";
 
-// A schema's fields as a scannable table, one section per prompt group. Each row states the field's policy
-// (evidence, confidence, human review, memory) at a glance, which the specification asks a schema editor to
-// publish; a row expands in place into the full form so nothing needs a page of its own.
+// Fields are navigation first and editing second: select a field from the grouped navigator,
+// then configure it in a stable inspector. This keeps browsing available for read-only built-ins
+// and avoids placing a very large form inside a table row.
 const props = defineProps<{ draft: MetadataSchema; readonly: boolean }>();
 const { t } = useSchemaCopy();
 
 const root = ref<HTMLElement | null>(null);
 const filter = ref("");
-const open = ref<SchemaField | null>(null);
+const selected = ref<SchemaField | null>(props.draft.fields[0] || null);
 const groupKeys = computed(() => props.draft.groups.map((g) => g.key));
 const i18n = useI18nStore();
+
 /**
  * Fields a retrieval policy may name as analogy conditions: the locked core and every
  * other saved field. A field without a stable identity yet (never saved) is left out,
@@ -59,20 +61,18 @@ function matchOptionsFor(field: SchemaField) {
     .map((other) => ({ fieldId: other.field_id, label: other.label || other.name }));
   return [...core, ...others];
 }
-const needle = computed(() => filter.value.trim().toLowerCase());
 
+const needle = computed(() => filter.value.trim().toLowerCase());
 const sections = computed(() =>
   props.draft.groups.map((group) => {
-    const all = props.draft.fields.filter((f) => f.group === group.key);
+    const all = props.draft.fields.filter((field) => field.group === group.key);
     const shown = needle.value
-      ? all.filter((f) => `${f.name} ${f.label}`.toLowerCase().includes(needle.value))
+      ? all.filter((field) => `${field.name} ${field.label}`.toLowerCase().includes(needle.value))
       : all;
     return { group, all, shown };
   }),
 );
-const totalShown = computed(() => sections.value.reduce((n, s) => n + s.shown.length, 0));
-
-const toggle = (field: SchemaField) => (open.value = open.value === field ? null : field);
+const totalShown = computed(() => sections.value.reduce((count, section) => count + section.shown.length, 0));
 
 function policy(field: SchemaField) {
   const memory =
@@ -86,22 +86,48 @@ function policy(field: SchemaField) {
   ].filter(Boolean) as string[];
 }
 
+function selectField(field: SchemaField) {
+  selected.value = field;
+}
+
 async function addField(group: string) {
   const field = blankField(group);
   props.draft.fields.push(field);
   filter.value = "";
   await nextTick();
-  // Pick up the reactive proxy the array now holds, so the new row expands and can be focused.
-  open.value = props.draft.fields[props.draft.fields.length - 1];
+  selected.value = props.draft.fields[props.draft.fields.length - 1];
   await nextTick();
-  root.value?.querySelector<HTMLInputElement>('.field-form input[maxlength="40"]')?.focus();
+  root.value?.querySelector<HTMLInputElement>(".field-inspector input[maxlength='40']")?.focus();
 }
-function removeField(field: SchemaField) {
-  const index = props.draft.fields.indexOf(field);
+
+async function removeField(field: SchemaField) {
+  const fields = props.draft.fields;
+  const index = fields.indexOf(field);
   if (index < 0) return;
-  props.draft.fields.splice(index, 1);
-  if (open.value === field) open.value = null;
+
+  const sameGroup = fields.filter((candidate) => candidate.group === field.group);
+  const groupIndex = sameGroup.indexOf(field);
+  const replacement =
+    sameGroup[groupIndex + 1] ||
+    sameGroup[groupIndex - 1] ||
+    fields[index + 1] ||
+    fields[index - 1] ||
+    null;
+
+  fields.splice(index, 1);
+  if (selected.value === field) selected.value = replacement;
+  await nextTick();
+
+  if (replacement) {
+    const replacementIndex = props.draft.fields.indexOf(replacement);
+    root.value
+      ?.querySelector<HTMLButtonElement>(`[data-field-index="${replacementIndex}"]`)
+      ?.focus();
+  } else {
+    root.value?.querySelector<HTMLButtonElement>(".add-field-button")?.focus();
+  }
 }
+
 /** Reorder within a group: swap with the nearest neighbour that shares the group. */
 function moveField(field: SchemaField, by: -1 | 1) {
   const fields = props.draft.fields;
@@ -111,8 +137,9 @@ function moveField(field: SchemaField, by: -1 | 1) {
   if (from < 0 || to < 0 || to >= fields.length) return;
   [fields[from], fields[to]] = [fields[to], fields[from]];
 }
+
 function isEdge(field: SchemaField, by: -1 | 1) {
-  const list = props.draft.fields.filter((f) => f.group === field.group);
+  const list = props.draft.fields.filter((candidate) => candidate.group === field.group);
   return list[by === -1 ? 0 : list.length - 1] === field;
 }
 </script>
@@ -124,7 +151,7 @@ function isEdge(field: SchemaField, by: -1 | 1) {
       <label class="panel-search">
         <span class="sr-only">{{ t("filter_fields", "Filter fields") }}</span>
         <AppIcon class="panel-search-icon" name="search" aria-hidden="true" />
-        <input
+        <UiInput
           v-model="filter"
           type="search"
           autocomplete="off"
@@ -143,117 +170,121 @@ function isEdge(field: SchemaField, by: -1 | 1) {
       </p>
     </div>
 
-    <div class="ui-table-scroll table-frame">
-      <table class="fields-table ui-table" :aria-label="t('fields', 'Fields')">
-        <thead>
-          <tr>
-            <th scope="col">{{ t("field_label", "Label") }}</th>
-            <th scope="col">{{ t("field_type", "Type") }}</th>
-            <th scope="col">{{ t("field_policy", "Field policy") }}</th>
-            <th scope="col" class="actions-col">
-              <span class="sr-only">{{ t("actions", "Actions") }}</span>
-            </th>
-          </tr>
-        </thead>
-        <template v-for="section in sections" :key="section.group.key">
-          <tbody>
-            <tr class="group-row">
-              <th colspan="3" scope="colgroup">
-                {{ section.group.label }}
+    <div class="fields-workspace">
+      <nav class="field-navigator" :aria-label="t('fields', 'Fields')">
+        <section v-for="section in sections" :key="section.group.key" class="field-group">
+          <header class="field-group-header">
+            <div>
+              <h3>{{ section.group.label }}</h3>
+              <p>
                 <code>{{ section.group.key }}</code>
-                <small v-if="section.group.key === CORE_GROUP">{{
-                  t("holds_core", "holds the locked core")
-                }}</small>
-              </th>
-              <td class="actions-col">
-                <UiButton
-                  size="small"
-                  icon="plus"
-                  :disabled="readonly"
-                  :label="t('add_field', 'Add a field')"
-                  @click="addField(section.group.key)"
-                />
-              </td>
-            </tr>
-            <tr v-if="!section.all.length" class="empty-row">
-              <td colspan="4">{{ t("no_fields_in_group", "No fields in this group yet.") }}</td>
-            </tr>
-            <template
+                <span v-if="section.group.key === CORE_GROUP">
+                  · {{ t("holds_core", "holds the locked core") }}
+                </span>
+              </p>
+            </div>
+            <UiButton
+              size="small"
+              icon="plus"
+              button-class="add-field-button"
+              :disabled="readonly"
+              :label="t('add_field', 'Add a field')"
+              @click="addField(section.group.key)"
+            />
+          </header>
+
+          <p v-if="!section.all.length" class="field-group-empty">
+            {{ t("no_fields_in_group", "No fields in this group yet.") }}
+          </p>
+          <p v-else-if="needle && !section.shown.length" class="field-group-empty">
+            {{ t("no_match", "No fields match the filter.") }}
+          </p>
+
+          <ul v-if="section.shown.length" class="field-list">
+            <li
               v-for="field in section.shown"
               :key="field.field_id || draft.fields.indexOf(field)"
+              class="field-list-item"
+              :class="{ selected: selected === field }"
             >
-              <tr class="field-row" :class="{ selected: open === field }" @click="toggle(field)">
-                <td>
-                  <button
-                    type="button"
-                    class="row-toggle"
-                    :aria-expanded="open === field"
-                    :aria-controls="`field-detail-${field.name || 'new'}`"
-                  >
-                    <span class="chevron" :class="{ open: open === field }" aria-hidden="true"
-                      >▸</span
-                    >
-                    <span class="row-title">{{
-                      field.label || field.name || t("new_field", "New metadata field")
-                    }}</span>
-                  </button>
-                  <code v-if="field.name" class="row-name">{{ field.name }}</code>
-                </td>
-                <td>
+              <button
+                type="button"
+                class="field-select"
+                :data-field-index="draft.fields.indexOf(field)"
+                :aria-current="selected === field ? 'true' : undefined"
+                @click="selectField(field)"
+              >
+                <span class="field-select-main">
+                  <span class="field-title">
+                    {{ field.label || field.name || t("new_field", "New metadata field") }}
+                  </span>
+                  <code v-if="field.name">{{ field.name }}</code>
+                </span>
+                <span class="field-meta">
                   <span class="chip">{{ field.type }}</span>
-                  <span v-if="field.role && field.role !== 'scholarly'" class="chip">{{
-                    field.role
-                  }}</span>
-                </td>
-                <td>
-                  <span v-for="label in policy(field)" :key="label" class="chip is-policy">{{
-                    label
-                  }}</span>
-                </td>
-                <td class="actions-col" @click.stop>
-                  <UiButton
-                    icon-only
-                    size="small"
-                    icon="download"
-                    button-class="flip"
-                    :label="t('up', 'Move up')"
-                    :disabled="readonly || isEdge(field, -1)"
-                    @click="moveField(field, -1)"
-                  />
-                  <UiButton
-                    icon-only
-                    size="small"
-                    icon="download"
-                    :label="t('down', 'Move down')"
-                    :disabled="readonly || isEdge(field, 1)"
-                    @click="moveField(field, 1)"
-                  />
-                  <UiButton
-                    icon-only
-                    size="small"
-                    icon="trash"
-                    :label="t('remove_field', 'Remove field')"
-                    :disabled="readonly"
-                    @click="removeField(field)"
-                  />
-                </td>
-              </tr>
-              <tr v-if="open === field" class="detail-row">
-                <td :id="`field-detail-${field.name || 'new'}`" colspan="4">
-                  <SchemaFieldForm
-                    :field="field"
-                    :group-keys="groupKeys"
-                    :match-options="matchOptionsFor(field)"
-                  />
-                </td>
-              </tr>
-            </template>
-            <tr v-if="needle && section.all.length && !section.shown.length" class="empty-row">
-              <td colspan="4">{{ t("no_match", "No fields match the filter.") }}</td>
-            </tr>
-          </tbody>
-        </template>
-      </table>
+                  <span v-if="field.role && field.role !== 'scholarly'" class="chip">{{ field.role }}</span>
+                  <span v-for="label in policy(field)" :key="label" class="chip is-policy">{{ label }}</span>
+                </span>
+              </button>
+
+              <div class="field-actions" :aria-label="t('actions', 'Actions')">
+                <UiButton
+                  icon-only
+                  size="small"
+                  icon="download"
+                  button-class="flip"
+                  :label="t('up', 'Move up')"
+                  :disabled="readonly || isEdge(field, -1)"
+                  @click="moveField(field, -1)"
+                />
+                <UiButton
+                  icon-only
+                  size="small"
+                  icon="download"
+                  :label="t('down', 'Move down')"
+                  :disabled="readonly || isEdge(field, 1)"
+                  @click="moveField(field, 1)"
+                />
+                <UiButton
+                  icon-only
+                  size="small"
+                  icon="trash"
+                  :label="t('remove_field', 'Remove field')"
+                  :disabled="readonly"
+                  @click="removeField(field)"
+                />
+              </div>
+            </li>
+          </ul>
+        </section>
+      </nav>
+
+      <section
+        v-if="selected"
+        class="field-inspector"
+        :aria-labelledby="`field-inspector-${draft.fields.indexOf(selected)}`"
+      >
+        <header class="field-inspector-header">
+          <p class="field-inspector-kicker">{{ t("field_configuration", "Field configuration") }}</p>
+          <h3 :id="`field-inspector-${draft.fields.indexOf(selected)}`">
+            {{ selected.label || selected.name || t("new_field", "New metadata field") }}
+          </h3>
+          <p>{{ t("field_configuration_help", "Configure what this field means and how DerridAI should populate and review it.") }}</p>
+        </header>
+        <fieldset class="field-inspector-controls" :disabled="readonly">
+          <SchemaFieldForm
+            :field="selected"
+            :group-keys="groupKeys"
+            :match-options="matchOptionsFor(selected)"
+          />
+        </fieldset>
+      </section>
+
+      <section v-else class="field-inspector field-inspector-empty" aria-live="polite">
+        <AppIcon name="edit" aria-hidden="true" />
+        <h3>{{ t("select_field", "Select a field") }}</h3>
+        <p>{{ t("select_field_help", "Choose a field to configure it, or add a new field to a prompt group.") }}</p>
+      </section>
     </div>
   </div>
 </template>
@@ -261,31 +292,30 @@ function isEdge(field: SchemaField, by: -1 | 1) {
 <style scoped>
 .fields-panel {
   display: grid;
-  gap: 10px;
+  gap: var(--space-3);
 }
 .panel-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 14px;
+  gap: var(--space-2) var(--space-4);
   align-items: center;
 }
 .panel-search {
   position: relative;
   flex: 1 1 14rem;
-  max-inline-size: 22rem;
+  max-inline-size: 24rem;
 }
-.panel-search input {
-  inline-size: 100%;
-  min-block-size: 36px;
-  padding-inline-start: 34px;
+.panel-search :deep(.ui-control) {
+  padding-inline-start: 2.125rem;
 }
 .panel-search-icon {
   position: absolute;
-  inset-inline-start: 10px;
+  z-index: 1;
+  inset-inline-start: 0.625rem;
   inset-block-start: 50%;
   translate: 0 -50%;
-  inline-size: 16px;
-  block-size: 16px;
+  inline-size: 1rem;
+  block-size: 1rem;
   color: var(--text-tertiary);
   pointer-events: none;
 }
@@ -298,92 +328,124 @@ function isEdge(field: SchemaField, by: -1 | 1) {
 .locked-core {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-1);
   align-items: center;
   margin: 0 0 0 auto;
   color: var(--text-secondary);
   font-size: var(--fs-sm);
 }
 .locked-core :deep(svg) {
-  inline-size: 14px;
-  block-size: 14px;
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
 }
 code {
-  padding: 1px 6px;
+  padding: 0.0625rem 0.375rem;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: var(--surface-inset);
   font-size: var(--fs-xs);
 }
-.table-frame {
+.fields-workspace {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.8fr) minmax(0, 1.4fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+.field-navigator,
+.field-inspector {
+  min-inline-size: 0;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-overlay);
+  border-radius: var(--radius-card);
   background: var(--surface-card);
 }
-.fields-table {
-  inline-size: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: var(--fs-sm);
+.field-navigator {
+  overflow: hidden;
 }
-.fields-table th,
-.fields-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  text-align: start;
-  vertical-align: middle;
+.field-group + .field-group {
+  border-block-start: 1px solid var(--border-subtle);
 }
-.group-row th,
-.group-row td {
-  background: var(--surface-inset);
-  font-weight: var(--fw-semibold);
-}
-.group-row th code {
-  margin-inline: 6px;
-}
-.group-row small {
-  color: var(--text-tertiary);
-  font-weight: 500;
-}
-.field-row {
-  cursor: pointer;
-}
-.field-row.selected td:first-child {
-  box-shadow: inset 3px 0 0 var(--accent-fg);
-}
-.row-toggle {
-  display: inline-flex;
-  gap: 6px;
+.field-group-header {
+  display: flex;
+  gap: var(--space-3);
   align-items: center;
-  margin-inline-end: 8px;
-  padding: 2px 4px;
+  justify-content: space-between;
+  padding: var(--space-3);
+  background: var(--surface-inset);
+}
+.field-group-header h3,
+.field-group-header p {
+  margin: 0;
+}
+.field-group-header h3 {
+  font-size: var(--fs-base);
+}
+.field-group-header p {
+  margin-block-start: var(--space-1);
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+.field-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.field-list-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  border-block-start: 1px solid var(--border-subtle);
+}
+.field-list-item:first-child {
+  border-block-start: 0;
+}
+.field-list-item.selected {
+  box-shadow: inset 3px 0 0 var(--accent-fg);
+  background: var(--surface-selected);
+}
+.field-select {
+  display: grid;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: var(--control-height);
+  padding: var(--space-3);
   border: 0;
-  border-radius: var(--radius-control);
-  background: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-primary);
   font: inherit;
-  font-weight: var(--fw-semibold);
   text-align: start;
   cursor: pointer;
 }
-.row-toggle:focus-visible {
+.field-select:hover {
+  background: var(--surface-hover);
+}
+.field-select:focus-visible {
+  position: relative;
+  z-index: 1;
   outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
+  outline-offset: calc(var(--focus-ring-offset) * -1);
 }
-.chevron {
-  display: inline-block;
-  color: var(--text-tertiary);
-  transition: rotate var(--motion-fast) var(--ease-standard);
+.field-select-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
 }
-.chevron.open {
-  rotate: 90deg;
+.field-title {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-bold);
+}
+.field-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
 }
 .chip {
   display: inline-block;
-  margin: 1px 4px 1px 0;
-  padding: 2px 8px;
+  padding: 0.125rem 0.5rem;
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-inset);
   color: var(--text-secondary);
   font-size: var(--fs-xs);
@@ -393,24 +455,95 @@ code {
   background: var(--surface-selected);
   color: var(--accent-fg);
 }
-.actions-col {
-  inline-size: 1%;
-  white-space: nowrap;
-  text-align: end;
+.field-actions {
+  display: flex;
+  gap: var(--space-1);
+  padding-inline-end: var(--space-2);
 }
-.actions-col :deep(.flip svg) {
+.field-actions :deep(.flip svg) {
   rotate: 180deg;
 }
-.empty-row td {
+.field-group-empty {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+}
+.field-inspector {
+  position: sticky;
+  inset-block-start: calc(var(--control-height) + var(--space-6));
+  overflow: clip;
+}
+.field-inspector-header {
+  padding: var(--space-4);
+  border-block-end: 1px solid var(--border-subtle);
+  background: var(--surface-inset);
+}
+.field-inspector-header h3,
+.field-inspector-header p {
+  margin: 0;
+}
+.field-inspector-header h3 {
+  margin-block: var(--space-1) var(--space-2);
+  font-size: var(--fs-lg);
+}
+.field-inspector-header > p:last-child {
+  max-inline-size: var(--measure);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+.field-inspector-kicker {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.field-inspector-controls {
+  margin: 0;
+  padding: var(--space-4);
+  border: 0;
+  min-inline-size: 0;
+}
+.field-inspector-empty {
+  display: grid;
+  place-items: center;
+  min-block-size: 18rem;
+  padding: var(--space-6);
+  text-align: center;
+}
+.field-inspector-empty :deep(svg) {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
   color: var(--text-tertiary);
 }
-.detail-row > td {
-  padding: 14px 16px 18px;
-  background: var(--surface-page);
+.field-inspector-empty h3,
+.field-inspector-empty p {
+  margin: 0;
 }
-@media (max-width: 820px) {
+.field-inspector-empty p {
+  max-inline-size: 32rem;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+}
+@media (max-width: 960px) {
+  .fields-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .field-inspector {
+    position: static;
+  }
   .locked-core {
-    margin: 0;
+    margin-inline-start: 0;
+  }
+}
+@media (max-width: 560px) {
+  .field-list-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .field-actions {
+    padding: 0 var(--space-3) var(--space-3);
   }
 }
 </style>
