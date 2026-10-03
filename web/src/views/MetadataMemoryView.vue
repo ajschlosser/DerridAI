@@ -19,14 +19,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { metadataMemoryApi, type MetadataMemoryPayload } from "../api/metadataMemory";
+import type { MetadataMemoryListFilters, MetadataMemoryPayload } from "../api/metadataMemory";
+import MetadataMemoryFilters from "../components/metadata-memory/MetadataMemoryFilters.vue";
 import MetadataMemoryRelations from "../components/metadata-memory/MetadataMemoryRelations.vue";
 import MetadataMemoryTable from "../components/metadata-memory/MetadataMemoryTable.vue";
-import AppIcon from "../components/AppIcon.vue";
 import UiButton from "../components/ui/UiButton.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UiTooltip from "../components/ui/UiTooltip.vue";
-import { useDataQuery } from "../realtime/dataQuery";
+import { useMetadataMemoryData } from "../composables/useMetadataMemoryData";
 import { useI18nStore } from "../stores/i18n";
 
 const i18n = useI18nStore();
@@ -34,64 +35,16 @@ const route = useRoute();
 const router = useRouter();
 const pageSize = 50;
 const searchDebounceMs = 300;
-const error = ref("");
 const offset = ref(Math.max(0, Number(route.query.offset) || 0));
 const query = ref(String(route.query.q || ""));
 const field = ref(String(route.query.field || ""));
 const kind = ref(String(route.query.kind || ""));
 const buildId = ref(String(route.query.build || ""));
 const language = ref(String(route.query.language || ""));
-const payload = ref<MetadataMemoryPayload>({
-  items: [],
-  total: 0,
-  offset: 0,
-  limit: pageSize,
-  summary: { entries: 0, evidence_bound: 0, corrections: 0, fields: 0, backends: 0 },
-  facets: { fields: [], kinds: [], languages: [], builds: [] },
-  derived: true,
-  authoritative_source: "",
-  available: true,
-  error: "",
-});
 let searchTimer: number | undefined;
 let applyingRouteState = false;
 
-const pageStart = computed(() => (payload.value.total ? offset.value + 1 : 0));
-const pageEnd = computed(() => Math.min(offset.value + pageSize, payload.value.total));
-const canPrevious = computed(() => offset.value > 0 && !loading.value);
-const canNext = computed(() => offset.value + pageSize < payload.value.total && !loading.value);
-const stats = computed(() => [
-  { key: "entries", value: payload.value.summary.entries },
-  { key: "evidence_bound", value: payload.value.summary.evidence_bound },
-  { key: "corrections", value: payload.value.summary.corrections },
-  { key: "fields", value: payload.value.summary.fields },
-]);
-
-function kindLabel(value: string): string {
-  if (value === "positive") return i18n.t("metadata_memory.kind_positive");
-  if (value === "correction") return i18n.t("metadata_memory.kind_correction");
-  return value;
-}
-
-const activeFilters = computed(() => {
-  const chips: Array<{ key: string; label: string; clear: () => void }> = [];
-  const add = (key: string, name: string, value: string, clear: () => void) => {
-    if (value) chips.push({ key, label: `${name}: ${value}`, clear });
-  };
-  add("q", i18n.t("metadata_memory.search"), query.value.trim(), () => (query.value = ""));
-  add("field", i18n.t("metadata_memory.field"), field.value, () => (field.value = ""));
-  add(
-    "kind",
-    i18n.t("metadata_memory.kind"),
-    kind.value ? kindLabel(kind.value) : "",
-    () => (kind.value = ""),
-  );
-  add("build", i18n.t("metadata_memory.build"), buildId.value, () => (buildId.value = ""));
-  add("language", i18n.t("metadata_memory.language"), language.value, () => (language.value = ""));
-  return chips;
-});
-
-function snapshot() {
+function snapshot(): MetadataMemoryListFilters {
   return {
     limit: pageSize,
     offset: offset.value,
@@ -102,35 +55,53 @@ function snapshot() {
     q: query.value.trim(),
   };
 }
-// The applied filters are the query key; realtime invalidation of `metadata_exemplars` refetches
-// the current page without touching them.
-const applied = ref(snapshot());
-const memoryQuery = useDataQuery(
-  "metadata_exemplars",
-  () => metadataMemoryApi.list(applied.value),
-  {
-    detail: () => [applied.value],
-  },
+
+const applied = ref<MetadataMemoryListFilters>(snapshot());
+const { payload, loading, ready, waiting, refreshing, readError, clearForNewQuery, refetch } =
+  useMetadataMemoryData(applied);
+
+const emptyFacets: MetadataMemoryPayload["facets"] = {
+  fields: [],
+  kinds: [],
+  languages: [],
+  builds: [],
+};
+const facets = computed(() => payload.value?.facets ?? emptyFacets);
+const total = computed(() => payload.value?.total ?? 0);
+const pageStart = computed(() => (total.value ? offset.value + 1 : 0));
+const pageEnd = computed(() => Math.min(offset.value + pageSize, total.value));
+const canPrevious = computed(() => ready.value && offset.value > 0 && !loading.value);
+const canNext = computed(
+  () => ready.value && offset.value + pageSize < total.value && !loading.value,
 );
-const loading = computed(() => memoryQuery.isFetching.value);
-watch(
-  () => memoryQuery.data.value,
-  (next) => {
-    if (!next) return;
-    payload.value = next;
-    error.value = !next.available && next.error ? next.error : "";
-  },
+const hasFilters = computed(() =>
+  Boolean(
+    query.value.trim() ||
+      field.value ||
+      kind.value ||
+      buildId.value ||
+      language.value,
+  ),
 );
-watch(
-  () => memoryQuery.error.value,
-  (failure) => {
-    if (failure) error.value = failure instanceof Error ? failure.message : String(failure);
-  },
-);
+const stats = computed(() => {
+  const summary = payload.value?.summary;
+  if (!summary) return [];
+  return [
+    { key: "entries", value: summary.entries },
+    { key: "evidence_bound", value: summary.evidence_bound },
+    { key: "corrections", value: summary.corrections },
+    { key: "fields", value: summary.fields },
+  ];
+});
+
 async function load() {
   const next = snapshot();
-  if (JSON.stringify(next) === JSON.stringify(applied.value)) await memoryQuery.refetch();
-  else applied.value = next;
+  if (JSON.stringify(next) === JSON.stringify(applied.value)) {
+    await refetch();
+    return;
+  }
+  clearForNewQuery();
+  applied.value = next;
 }
 
 function syncRoute(nextOffset = offset.value, push = false) {
@@ -177,7 +148,6 @@ function goTo(next: number) {
   void load();
 }
 
-// Selects apply immediately; free text waits for a pause in typing.
 watch([field, kind, buildId, language], () => {
   if (!applyingRouteState) applyFilters();
 });
@@ -186,6 +156,19 @@ watch(query, () => {
   window.clearTimeout(searchTimer);
   searchTimer = window.setTimeout(applyFilters, searchDebounceMs);
 });
+
+// A bookmarked page can outlive the result set it pointed into.  Correct the offset instead of
+// rendering a successful-but-empty slice when newer memory contains fewer rows.
+watch(payload, (next) => {
+  if (!next) return;
+  const lastOffset = next.total > 0 ? Math.floor((next.total - 1) / pageSize) * pageSize : 0;
+  if (offset.value <= lastOffset) return;
+  offset.value = lastOffset;
+  syncRoute(lastOffset);
+  clearForNewQuery();
+  applied.value = snapshot();
+});
+
 watch(
   () => [
     route.query.q,
@@ -227,6 +210,7 @@ watch(
     void load();
   },
 );
+
 onBeforeUnmount(() => window.clearTimeout(searchTimer));
 </script>
 
@@ -237,8 +221,7 @@ onBeforeUnmount(() => window.clearTimeout(searchTimer));
       :title="i18n.t('metadata_memory.title')"
       title-id="metadata-memory-title"
       :description="i18n.t('metadata_memory.help')"
-    >
-    </UiPageHeader>
+    />
 
     <p class="memory-contract">
       <strong>{{ i18n.t("metadata_memory.authority_title") }}</strong>
@@ -247,7 +230,11 @@ onBeforeUnmount(() => window.clearTimeout(searchTimer));
 
     <MetadataMemoryRelations />
 
-    <section class="memory-summary" :aria-label="i18n.t('metadata_memory.summary')">
+    <section
+      v-if="ready"
+      class="memory-summary"
+      :aria-label="i18n.t('metadata_memory.summary')"
+    >
       <article v-for="stat in stats" :key="stat.key" class="card">
         <span class="stat-label">
           {{ i18n.t(`metadata_memory.${stat.key}`) }}
@@ -256,112 +243,87 @@ onBeforeUnmount(() => window.clearTimeout(searchTimer));
         <strong>{{ stat.value.toLocaleString(i18n.locale) }}</strong>
       </article>
     </section>
+    <UiLoadingState
+      v-else-if="waiting"
+      class="memory-summary-loading"
+      variant="skeleton"
+      :skeleton-count="4"
+      :label="i18n.t('metadata_memory.loading')"
+    />
 
-    <p v-if="error" class="info error" role="alert">
-      {{ i18n.t("metadata_memory.unavailable") }}: {{ error }}
-    </p>
+    <div v-if="readError" class="info error memory-read-error" role="alert">
+      <p>
+        {{
+          i18n.tf(ready ? "metadata_memory.refresh_failed" : "metadata_memory.read_failed", {
+            message: readError,
+          })
+        }}
+      </p>
+      <UiButton
+        :label="i18n.t('ui.retry')"
+        :disabled="loading"
+        @click="refetch"
+      />
+    </div>
 
-    <section class="card memory-table-card" aria-labelledby="metadata-memory-table-title">
+    <section
+      class="card memory-table-card"
+      aria-labelledby="metadata-memory-table-title"
+      :aria-busy="waiting || refreshing"
+    >
       <header class="table-heading">
         <div>
           <h2 id="metadata-memory-table-title">{{ i18n.t("metadata_memory.precedents") }}</h2>
-          <p role="status">
+          <p role="status" aria-live="polite">
             {{
-              loading
-                ? i18n.t("metadata_memory.updating")
-                : i18n.tf("metadata_memory.showing", {
-                    start: pageStart,
-                    end: pageEnd,
-                    total: payload.total,
-                  })
+              waiting
+                ? i18n.t("metadata_memory.loading")
+                : refreshing
+                  ? i18n.t("metadata_memory.updating")
+                  : ready
+                    ? i18n.tf("metadata_memory.showing", {
+                        start: pageStart,
+                        end: pageEnd,
+                        total,
+                      })
+                    : i18n.t("metadata_memory.unavailable")
             }}
           </p>
         </div>
       </header>
 
-      <form class="memory-filters" role="search" @submit.prevent="applyFilters">
-        <label class="filter-search">
-          <span>{{ i18n.t("metadata_memory.search") }}</span>
-          <input
-            v-model="query"
-            class="control"
-            type="search"
-            :placeholder="i18n.t('metadata_memory.search_placeholder')"
-          />
-        </label>
-        <label>
-          <span>{{ i18n.t("metadata_memory.field") }}</span>
-          <select v-model="field" class="control">
-            <option value="">{{ i18n.t("metadata_memory.all_fields") }}</option>
-            <option v-for="value in payload.facets.fields" :key="value" :value="value">
-              {{ value }}
-            </option>
-          </select>
-        </label>
-        <label>
-          <span>{{ i18n.t("metadata_memory.kind") }}</span>
-          <select v-model="kind" class="control">
-            <option value="">{{ i18n.t("metadata_memory.all_kinds") }}</option>
-            <option v-for="value in payload.facets.kinds" :key="value" :value="value">
-              {{ kindLabel(value) }}
-            </option>
-          </select>
-        </label>
-        <label>
-          <span>{{ i18n.t("metadata_memory.build") }}</span>
-          <select v-model="buildId" class="control">
-            <option value="">{{ i18n.t("metadata_memory.all_builds") }}</option>
-            <option v-for="value in payload.facets.builds" :key="value" :value="value">
-              {{ value }}
-            </option>
-          </select>
-        </label>
-        <label>
-          <span>{{ i18n.t("metadata_memory.language") }}</span>
-          <select v-model="language" class="control">
-            <option value="">{{ i18n.t("metadata_memory.all_languages") }}</option>
-            <option v-for="value in payload.facets.languages" :key="value" :value="value">
-              {{ value }}
-            </option>
-          </select>
-        </label>
-      </form>
-
-      <ul
-        v-if="activeFilters.length"
-        class="filter-chips"
-        :aria-label="i18n.t('metadata_memory.active_filters')"
-      >
-        <li v-for="chip in activeFilters" :key="chip.key">
-          <button
-            type="button"
-            class="chip"
-            :aria-label="i18n.tf('metadata_memory.remove_filter', { label: chip.label })"
-            @click="chip.clear()"
-          >
-            {{ chip.label }} <AppIcon name="close" />
-          </button>
-        </li>
-        <li>
-          <button type="button" class="chip-clear" @click="clearFilters">
-            {{ i18n.t("metadata_memory.clear_filters") }}
-          </button>
-        </li>
-      </ul>
-
-      <MetadataMemoryTable
-        :items="payload.items"
-        :loading="loading"
-        :filtered="activeFilters.length > 0"
+      <MetadataMemoryFilters
+        v-model:query="query"
+        v-model:field="field"
+        v-model:kind="kind"
+        v-model:build-id="buildId"
+        v-model:language="language"
+        :facets="facets"
+        @apply="applyFilters"
+        @clear="clearFilters"
       />
 
-      <footer class="pagination">
+      <UiLoadingState
+        v-if="waiting"
+        class="memory-table-loading"
+        variant="skeleton"
+        :label="i18n.t('metadata_memory.loading')"
+      />
+
+      <MetadataMemoryTable
+        v-else-if="ready && payload"
+        :items="payload.items"
+        :loading="refreshing"
+        :filtered="hasFilters"
+      />
+
+      <footer v-if="ready" class="pagination" :aria-label="i18n.t('metadata_memory.pagination')">
         <UiButton
           :label="i18n.t('common.previous')"
           :disabled="!canPrevious"
           @click="goTo(Math.max(0, offset - pageSize))"
         />
-        <span>{{ pageStart }}–{{ pageEnd }} / {{ payload.total }}</span>
+        <span>{{ pageStart }}–{{ pageEnd }} / {{ total }}</span>
         <UiButton
           :label="i18n.t('common.next')"
           :disabled="!canNext"
@@ -407,6 +369,19 @@ onBeforeUnmount(() => window.clearTimeout(searchTimer));
 .memory-summary strong {
   font-size: 1.55rem;
 }
+.memory-summary-loading,
+.memory-table-loading {
+  padding: 14px;
+}
+.memory-read-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.memory-read-error p {
+  margin: 0;
+}
 .memory-table-card {
   min-width: 0;
   padding: 0;
@@ -423,63 +398,6 @@ onBeforeUnmount(() => window.clearTimeout(searchTimer));
   margin: 4px 0 0;
   color: var(--text-secondary, var(--muted));
 }
-.memory-filters {
-  display: grid;
-  grid-template-columns: minmax(220px, 1.6fr) repeat(4, minmax(130px, 1fr));
-  gap: 10px;
-  align-items: end;
-  padding: 0 14px 12px;
-}
-.memory-filters label {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  color: var(--text-secondary, var(--muted));
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-.filter-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  padding: 0 14px 12px;
-  list-style: none;
-}
-.chip,
-.chip-clear {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 28px;
-  padding: 3px 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: var(--surface-inset);
-  color: inherit;
-  font: inherit;
-  font-size: 0.8125rem;
-  cursor: pointer;
-}
-.chip:hover {
-  background: var(--surface-hover);
-}
-.chip-clear {
-  border-color: transparent;
-  background: none;
-  color: var(--accent-fg, var(--accent));
-  font-weight: 700;
-  text-decoration: underline;
-}
-.chip:focus-visible,
-.chip-clear:focus-visible {
-  outline: var(--focus-ring-width, 3px) solid var(--focus-ring);
-  outline-offset: 2px;
-}
-.chip :deep(svg) {
-  width: 12px;
-  height: 12px;
-}
 .pagination {
   display: flex;
   justify-content: space-between;
@@ -488,18 +406,17 @@ onBeforeUnmount(() => window.clearTimeout(searchTimer));
   padding: 12px 14px;
 }
 @media (max-width: 1000px) {
-  .memory-summary,
-  .memory-filters {
+  .memory-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .filter-search {
-    grid-column: 1 / -1;
   }
 }
 @media (max-width: 650px) {
-  .memory-summary,
-  .memory-filters {
+  .memory-summary {
     grid-template-columns: 1fr;
+  }
+  .memory-read-error {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>
