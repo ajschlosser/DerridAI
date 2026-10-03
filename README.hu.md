@@ -20,13 +20,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ![DerridAI logó](https://repository-images.githubusercontent.com/1336867942/1ef2d928-ee57-480e-addb-5caf6acc1754)
 
-[English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [العربية](README.ar.md)
+[English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [বাংলা](README.bn.md) · [العربية](README.ar.md) · [简体中文](README.zh-CN.md)
 
 A DerridAI helyi futtatásra épülő, provenienciát megőrző kutatási környezet tudományos korpuszok létrehozásához, ellenőrzéséhez, kereséséhez és lekérdezéséhez. Egyetlen Docker-alkalmazásban egyesíti a forrásbevitelt, az ember által felügyelt korpuszépítést, a bizonyítékhoz kötött metaadat-gazdagítást, a származtatott vektoros/keresési indexeket és a bizonyítékalapú retrieval-augmented generation (RAG) folyamatot.
 
 A DerridAI egyben a **cELF 1.0 — Capta-Enriched Lexical Format** eredeti referencia-implementációja, amely provenienciát megőrző információs architektúrát határoz meg MI-támogatott dokumentumkutatáshoz. A rendszer külön és ellenőrizhetően kezeli a forrásazonosságot, a rekordazonosságot és revíziót, a metaadat-állításokat, a bizonyítékot, a generált állításokat és a támogatási kapcsolatokat, ahelyett hogy mindezt egy átláthatatlan vektoradatbázisba lapítaná.
 
-Aktuális verzió: **0.81.0 — Fall River** ([kiadási jegyzetek](docs/notes/0.81.0.md)). Ez a README az aktuális `master` architektúrát írja le, beleértve az Exeter utáni, már beolvasztott változásokat is.
+Aktuális verzió: **0.81.0 — Fall River** ([kiadási jegyzetek](docs/notes/0.81.0.md)). Az alkalmazás verziószáma Fall River óta nem változott; ez a README az aktuális `master` ágat írja le, beleértve a 0.81.0 utáni, a címkézett kiadásban még nem szereplő munkát is.
+
+## Az aktuális `master` állapota
+
+Az aktuális ág jelentősen továbbfejlődött a 0.81.0 címke óta, miközben az alkalmazás verziója továbbra is 0.81.0. Az alábbi összefoglaló a jelenlegi terméket írja le, nem új kiadási jegyzet.
+
+- **A Corpus Builder ma már fokozatos Beállítás → Build → Áttekintés → Közzététel munkafolyamat.** Támogatja a korlátozott párhuzamos gazdagítást, az explicit korpusztopológia- és Record-méretválasztást, a folytatható és revíziótudatos ellenőrzést, a tartós Record-lokális sorokat, a publikációs blokkolók célzott javítását, az ismételhető metaadatcsoportokat, az audio beszélő-hozzárendelést és az ellenőrzött előkészítés közbeni biztonságos szövegrevíziót.
+- **A metaadat- és bizonyítékfeldolgozás kevesebb modellmunkával erősebb szemantikát tart meg.** A determinisztikus/candidate-first routing, a szemantikai azonosság és értékegyenértékűség, a támogatással validált evidence cascade v2, a strukturált kimenetek javítása/osztályozása és a Metadata Memory inkrementális egyeztetése csökkenti a késleltetést anélkül, hogy a retrieval relevanciát vagy hibás kimenetet bizonyítékká emelné.
+- **A Pipeline Studio explicit módon modellezi a végrehajtható számítást.** Szerver által kezelt célok, stratégia-családok, tudományos hatások, típusos portok, feloldott wiring, stage-trace-ek, hatókör-/komplexitásmetrikák, hangolható retrieval-paraméterek és nem tartós összehasonlítások több Search, Research, reviewer-evidence, recovery, szegmentációs és enrichment útvonalat fednek le.
+- **A Works hordozható kutatási webhelyeket tud publikálni.** A statikus exportok a DerridAI SDK-t külön Vue runtime-mal kombinálják böngészéshez, annotációkhoz, böngészőbeli szemantikus indexeléshez, olvasó által konfigurált providerekhez és bizonyítékhoz kötött Research-höz, anélkül hogy az export kanonikus korpuszállapottá válna.
+- **A realtime invalidáció és a fokozatos betöltés egyre több pollingot és üres képernyős frissítést vált ki.** A Works, Record, Search, Research, Response Library, Languages, Relationships, Accounts/Roles, Metadata Memory és más felületek megtartják a hasznos tartalmat, elkülönítik a hibákat, helyi újrapróbálást adnak és eldobják az elavult válaszokat.
+- **A frontend folytatja a legacy runtime kivezetését.** Router-vezérelt navigáció, Vue dialógusok/értesítések, megosztott domain/state modulok, Pinia slice-ok és kiszervezett segédek csökkentik a csatolást; a megmaradó kompatibilitási kód izolált.
+- **A cELF és a fejlesztői infrastruktúra szigorodott.** A specifikáció terméksemleges, profil- és proveniencia-központú, általánosított `EvidenceRef` locator-szemantikával; architektúratérképek dokumentálják a kritikus határokat; erősebb lett a CI/pre-push kiválasztás, a repository-higiénia és a copyright-ellenőrzés.
 
 ## Mit tud a DerridAI?
 
