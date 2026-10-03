@@ -669,9 +669,9 @@ test("a provider the reader configures powers vector + LLM Research with method 
   expect(
     await evidencePane.evaluate((element) => getComputedStyle(element).position),
   ).toBe("sticky");
-  expect(await evidencePanel.evaluate((element) => getComputedStyle(element).alignContent)).toBe(
-    "start",
-  );
+  expect(
+    await evidencePanel.evaluate((element) => getComputedStyle(element).alignContent),
+  ).toBe("start");
 
   await inlineCitation.click();
   await expect(page).toHaveURL(/#research-evidence-E1$/);
