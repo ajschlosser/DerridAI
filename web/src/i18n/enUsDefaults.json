@@ -9193,6 +9193,7 @@
   "site.runtime.transformers_source_hub": "Hugging Face Hub",
   "site.runtime.transformers_source_local": "Model files I serve",
   "site.runtime.transformers_unsupported_browser": "This browser cannot unpack the embedded Transformers.js runtime.",
+  "site.runtime.display": "Display",
   "site.runtime.display_controls": "Display and language controls",
   "site.runtime.finish": "Finish",
   "site.runtime.high_contrast": "High contrast",
