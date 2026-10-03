@@ -184,7 +184,7 @@ function usedBy(strategy: PipelineStrategy) {
 .stacked-heading small {
   color: var(--text-secondary);
   font-size: 0.75rem;
-  font-weight: var(--fw-normal);
+  font-weight: 400;
 }
 .strategy-table td,
 .strategy-table tbody th {
@@ -257,7 +257,7 @@ function usedBy(strategy: PipelineStrategy) {
 .strategy-effect {
   color: var(--text-secondary);
   font-size: 0.75rem;
-  font-weight: var(--fw-normal);
+  font-weight: 400;
   line-height: 1.35;
 }
 .family-label,
