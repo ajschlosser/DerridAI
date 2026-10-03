@@ -28,7 +28,6 @@ const runtime = vi.hoisted(() => ({
   setSearchScope: vi.fn(async () => ({})),
   notifyToast: vi.fn(),
   openCollectionCreationWizard: vi.fn(),
-  persistPrefs: vi.fn(),
   pendingUpsertRows: vi.fn(() => []),
   upsertRows: vi.fn(),
   exportStoreJsonl: vi.fn(),

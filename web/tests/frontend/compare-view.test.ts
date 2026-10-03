@@ -28,7 +28,6 @@ const records = {
   b: { record_id: "r-b", work: "Glas", document_author: "Derrida", text: "right" },
 };
 const runtime = vi.hoisted(() => ({
-  persistPrefs: vi.fn(),
   getCompareLibrary: vi.fn(() => [
     { value: "f::0", label: "tab.jsonl · r-a · Glas", search: "derrida" },
     { value: "f::1", label: "tab.jsonl · r-b · Glas", search: "derrida" },

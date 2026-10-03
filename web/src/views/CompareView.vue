@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { useAuthStore } from "../stores/auth";
 import { useCompareStore } from "../stores/workspace";
 import { corpusState } from "../state/workspaceState";
@@ -133,7 +134,7 @@ function persist() {
   workspace.compareFilter = filter.value;
   workspace.compareMode =
     sourceA.value === "scratch" && sourceB.value === "scratch" ? "paste" : "workspace";
-  runtime.persistPrefs?.();
+  persistPrefs();
 }
 function refreshLibrary() {
   library.value = runtime.getCompareLibrary?.() || [];
