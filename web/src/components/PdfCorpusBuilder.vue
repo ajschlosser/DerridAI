@@ -1886,6 +1886,16 @@ async function ensureReviewHydrated(preferredId = "") {
   await refreshRecords(false, preferredId);
   if (selectedRecord.value && !sourceBlocks.value.length) await refreshBlocks();
 }
+let reviewHydrationRetryTimer: number | undefined;
+
+function scheduleReviewHydrationRetry() {
+  if (reviewHydrationRetryTimer !== undefined) window.clearTimeout(reviewHydrationRetryTimer);
+  reviewHydrationRetryTimer = window.setTimeout(() => {
+    reviewHydrationRetryTimer = undefined;
+    if (hasRecordTopology.value && !reviewHydrated.value) void ensureReviewHydrated();
+  }, 250);
+}
+
 async function refreshAll() {
   await Promise.all([
     refreshProviders(),
@@ -1903,11 +1913,10 @@ async function refreshAll() {
   await refreshBuild();
   await ensureReviewHydrated(String(route.query.record || ""));
   // A second post-paint hydration closes the lifecycle race where build.json is
-  // restored before the records route is available after a hard refresh. This is
-  // deliberately independent of any form control interaction.
-  window.setTimeout(() => {
-    if (hasRecordTopology.value && !reviewHydrated.value) void ensureReviewHydrated();
-  }, 250);
+  // restored before the records route is available after a hard refresh. Keep only
+  // one retry alive and cancel it with the component so an old Corpus Builder cannot
+  // keep issuing review/source reads after navigation or test teardown.
+  scheduleReviewHydrationRetry();
 }
 // Reading the record in context is a per-browser preference.
 const showRecordContext = ref(true);
@@ -1946,9 +1955,13 @@ function activateRecord(record: CorpusRecord) {
   if (!sameRecord) metadataEditorDirty.value = false;
   selectedRecordId.value = record.record_id;
   selectedRecord.value = record;
-  selectedEvidenceField.value = "";
-  selectedPdfPage.value = Number(record.pdf_pages?.[0] || 1);
-  reviewInspectorTab.value = selectedMetadataBlocked.value ? "metadata" : reviewInspectorTab.value;
+  if (!sameRecord) {
+    selectedEvidenceField.value = "";
+    selectedPdfPage.value = Number(record.pdf_pages?.[0] || 1);
+    reviewInspectorTab.value = selectedMetadataBlocked.value
+      ? "metadata"
+      : reviewInspectorTab.value;
+  }
   if (!preserveActiveDraft) {
     let saved = "";
     try {
@@ -2437,6 +2450,10 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", reviewShortcut);
+  if (reviewHydrationRetryTimer !== undefined) {
+    window.clearTimeout(reviewHydrationRetryTimer);
+    reviewHydrationRetryTimer = undefined;
+  }
   stopPolling();
 });
 defineExpose({

@@ -8,9 +8,68 @@ import threading
 import pytest
 from app.concurrency import (
     CapacityCancelled,
+    CapacityPriority,
     ConcurrencyCoordinator,
     provider_capacity_key,
 )
+
+
+def test_foreground_overtakes_background_without_starving_it() -> None:
+    coordinator = ConcurrencyCoordinator()
+    held = coordinator.acquire("provider_generation", "test", 1)
+    order: list[str] = []
+    failures: list[BaseException] = []
+    threads: list[threading.Thread] = []
+
+    def enqueue(name: str, priority: CapacityPriority) -> None:
+        queued = threading.Event()
+
+        def worker() -> None:
+            try:
+                with coordinator.acquire(
+                    "provider_generation", "test", 1, priority=priority,
+                    on_wait=lambda _: queued.set(),
+                ):
+                    order.append(name)
+            except BaseException as exc:
+                failures.append(exc)
+
+        thread = threading.Thread(target=worker)
+        threads.append(thread)
+        thread.start()
+        assert queued.wait(timeout=3)
+
+    try:
+        enqueue("background-1", "background")
+        enqueue("background-2", "background")
+        for index in range(5):
+            enqueue(f"foreground-{index}", "foreground")
+    finally:
+        held.release()
+        for thread in threads:
+            thread.join(timeout=5)
+
+    assert not failures
+    assert not any(thread.is_alive() for thread in threads)
+    assert order == [
+        "foreground-0", "foreground-1", "foreground-2", "background-1",
+        "foreground-3", "foreground-4", "background-2",
+    ]
+    assert coordinator.snapshot("provider_generation", "test").waiting == 0
+
+
+def test_wait_callback_failure_removes_priority_queue_entry() -> None:
+    coordinator = ConcurrencyCoordinator()
+    with coordinator.acquire("provider_generation", "test", 1):
+        def fail(_snapshot) -> None:
+            raise RuntimeError("progress failure")
+
+        with pytest.raises(RuntimeError, match="progress failure"):
+            coordinator.acquire(
+                "provider_generation", "test", 1, priority="foreground", on_wait=fail,
+            )
+    with coordinator.acquire("provider_generation", "test", 1):
+        assert coordinator.snapshot("provider_generation", "test").active == 1
 
 
 def test_provider_capacity_key_prefers_named_profile() -> None:
@@ -68,7 +127,8 @@ def test_coordinator_bounds_parallel_callers_and_releases_all_slots() -> None:
     assert settled.waiting == 0
 
 
-def test_cancelled_waiter_never_acquires_or_leaks_capacity() -> None:
+@pytest.mark.parametrize("priority", ["background", "foreground"])
+def test_cancelled_waiter_never_acquires_or_leaks_capacity(priority: CapacityPriority) -> None:
     coordinator = ConcurrencyCoordinator()
     held = coordinator.acquire("provider_generation", "profile:test", 1)
     cancel = threading.Event()
@@ -83,6 +143,7 @@ def test_cancelled_waiter_never_acquires_or_leaks_capacity() -> None:
                 "profile:test",
                 1,
                 cancelled=cancel.is_set,
+                priority=priority,
                 poll_seconds=0.01,
             )
         except CapacityCancelled:

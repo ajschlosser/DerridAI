@@ -68,6 +68,10 @@ Extend existing source embeddings, precedent caches, family checkpoints, and sel
 
 Stage fingerprints include only consumed inputs: authoritative text and relevant neighbours; span/topology/page-map versions; relevant schema/instruction hashes; provider/model configuration and known revision; prompt/pipeline/validator versions; applicable document metadata, guidance, and memory snapshot.
 
+Post-#428 continuation bounds reads of the existing source-embedding cache: partial synchronization and vector lookup fetch only selected source-unit identities in bounded batches. Full-snapshot pruning remains document-wide. This removes whole-document vector reads from narrow reuse paths; it does not implement the broader semantic-stage fingerprinting or concurrent request coalescing below. Work-count evidence and remaining validation limits are in the progress tracker.
+
+The next local checkpoint adds exact dependency fingerprints and response revalidation to existing raw metadata-family checkpoints. Unchanged raw families avoid provider calls; changed family prompts/configuration/source locators or unknown legacy provenance force recomputation, with reuse/invalidation retained in the execution ledger. Already materialized completed-family resume behavior is unchanged. This is a Record-scoped crash-checkpoint improvement, not a general completed-stage cache or in-flight request coalescer.
+
 - Store validated results, provenance, and dependency fingerprints; record reuse in execution history.
 - Coalesce concurrent identical requests and invalidate only dependent stages.
 - Keep failure/malformed states distinct from reusable valid results.
@@ -125,6 +129,8 @@ With cached navigation already fast, halve review effort by reducing repeated re
 Acceptance: compare active time, corrections, reopened decisions, and independent quality assessment; 50% is most plausible for recurring metadata patterns. No automatic human-confirmed status by similarity.
 
 ## 8. Scheduling and contention
+
+The local continuation bounds pending Record tasks to the Record-worker count in initial enrichment, retries, and rerun passes. Shared provider and Ollama gates now prioritize reviewer-triggered metadata work, Research, and tools, with FIFO ordering within each class and a background turn after at most three foreground admissions while background work waits. Capacity limits and ownership/publication policy remain unchanged. Earlier readiness, dedicated capacity reservation, and contention measurements remain planned; these increments do not establish an elapsed-time improvement.
 
 Extend existing shared provider capacity and family parallelism; do not indiscriminately increase worker counts.
 

@@ -9,6 +9,10 @@ const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtureRoot = join(webRoot, "tests", "fixtures", "sdk-consumer");
 const workspace = mkdtempSync(join(tmpdir(), "derridai-sdk-consumer-"));
 
+const npmCli = process.env.npm_execpath;
+const npmCommand = npmCli ? process.execPath : "npm";
+const npmArgs = (args) => (npmCli ? [npmCli, ...args] : args);
+
 function run(command, args, cwd) {
   execFileSync(command, args, {
     cwd,
@@ -32,7 +36,11 @@ try {
   cpSync(fixtureRoot, consumerDir, { recursive: true });
 
   const packed = JSON.parse(
-    output("npm", ["pack", "./sdk", "--json", "--pack-destination", packDir], webRoot),
+    output(
+      npmCommand,
+      npmArgs(["pack", "./sdk", "--json", "--pack-destination", packDir]),
+      webRoot,
+    ),
   );
   if (!Array.isArray(packed) || packed.length !== 1 || !packed[0]?.filename) {
     throw new Error("npm pack did not return exactly one SDK package.");
@@ -61,10 +69,18 @@ try {
   };
   writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
-  run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], consumerDir);
-  run(join(webRoot, "node_modules", ".bin", "tsc"), ["-p", "tsconfig.json"], consumerDir);
-  run("node", ["dist-ts/index.js"], consumerDir);
-  run(join(webRoot, "node_modules", ".bin", "vite"), ["build"], consumerDir);
+  run(npmCommand, npmArgs(["install", "--ignore-scripts", "--no-audit", "--no-fund"]), consumerDir);
+  run(
+    process.execPath,
+    [join(webRoot, "node_modules", "typescript", "bin", "tsc"), "-p", "tsconfig.json"],
+    consumerDir,
+  );
+  run(process.execPath, ["dist-ts/index.js"], consumerDir);
+  run(
+    process.execPath,
+    [join(webRoot, "node_modules", "vite", "bin", "vite.js"), "build"],
+    consumerDir,
+  );
 } finally {
   rmSync(workspace, { recursive: true, force: true });
 }
