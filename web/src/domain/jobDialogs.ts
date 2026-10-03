@@ -1,7 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { openMessageDialog } from "../composables/messageDialog";
-import { esc, icon } from "./html";
+import { icon } from "./html";
 import { realtime } from "../realtime";
 import { followResource } from "../realtime/follow";
 import { llmReviewDialogHtml } from "./jobReviewMarkup";
@@ -14,6 +14,7 @@ import {
   type LlmToolResultBody,
   type LlmToolResultRequest,
 } from "../composables/llmToolResultDialog";
+import { openJobDetailsDialog } from "../composables/jobDetailsDialog";
 import { toast } from "../composables/notifications";
 
 // The dialogs opened from background jobs and LLM tasks: job details and results, RAG results, record previews, the LLM
@@ -141,8 +142,6 @@ export function createJobDialogs(deps: Deps) {
       }
       return toast(copy.loadDetailsFailed(error.message), { tone: "danger" });
     }
-    const dialog = document.createElement("dialog");
-    dialog.className = "job-details-dialog";
     const events = job.events || [];
     const request = job.request || {};
     const safeRequest = cloneAuditValue(request);
@@ -212,70 +211,59 @@ export function createJobDialogs(deps: Deps) {
       };
     }
 
-    dialog.innerHTML = `<div class="dh">
-    <div><h2 class="dialog-title">${esc(trf("operations.details_title", { label: jobLabel(job) }))}</h2><div class="dialog-subtitle">${esc(job.id)} · ${esc(tr(`operations.status.${job.status}`, String(job.status || "")))} · ${esc(trf("operations.created", { when: formatTimestamp(job.created_at) }))}</div></div>
-    <button class="btn icon-only" data-close>${icon("close")}</button>
-  </div>
-  <div class="db job-details-body">
-    <section class="job-detail-summary">
-      ${[
-        [tr("operations.fact.operation"), job.type],
-        [tr("operations.fact.started_by"), job.owner || "—"],
+    const active = ["queued", "running", "cancelling"].includes(job.status);
+    const reviewable =
+      job.type === "llm" && (job.pending_result_count ?? (job.results || []).length) > 0;
+    const openable =
+      (["rag", "llm_tool"].includes(job.type) && job.status === "completed") ||
+      (job.type === "pdf_corpus" && ["completed", "blocked"].includes(job.status));
+    const openLabel = reviewable
+      ? active
+        ? tr("operations.panel.action_review_partial")
+        : tr("operations.panel.action_review")
+      : job.type === "pdf_corpus"
+        ? tr("pdf_corpus.open_build")
+        : tr("operations.panel.action_open_result");
+    const when = (value: Any) => (value ? formatTimestamp(value) : "—");
+    openJobDetailsDialog({
+      title: trf("operations.details_title", { label: jobLabel(job) }),
+      subtitle: `${job.id} · ${tr(`operations.status.${job.status}`, String(job.status || ""))} · ${trf("operations.created", { when: formatTimestamp(job.created_at) })}`,
+      facts: (
         [
-          tr("operations.fact.status"),
-          tr(`operations.status.${job.status}`, String(job.status || "")),
-        ],
-        [tr("operations.fact.provider"), job.provider],
-        [tr("operations.fact.model"), job.model],
-        [tr("operations.fact.progress"), `${job.completed}/${job.total}`],
-        [tr("operations.fact.failed"), job.failed || 0],
-        [tr("operations.fact.started"), job.started_at ? formatTimestamp(job.started_at) : "—"],
-        [tr("operations.fact.finished"), job.finished_at ? formatTimestamp(job.finished_at) : "—"],
-        [
-          tr("operations.fact.cancel_requested"),
-          job.cancel_requested_at ? formatTimestamp(job.cancel_requested_at) : "—",
-        ],
-      ]
-        .map(([name, value]) => `<div><span>${esc(name)}</span><b>${esc(value ?? "—")}</b></div>`)
-        .join("")}
-    </section>
-    ${job.fatal_error ? `<div class="info error">${esc(job.fatal_error)}</div>` : ""}
-    <section class="card-inset">
-      <div class="rag-result-section-head"><div><b>${esc(tr("operations.request_config"))}</b><div class="note">${esc(tr("operations.api_keys_omitted"))}</div></div></div>
-      <pre class="job-detail-json">${esc(JSON.stringify(safeRequest, null, 2))}</pre>
-    </section>
-    <section class="card-inset">
-      <div class="rag-result-section-head"><div><b>${esc(tr("operations.timeline"))}</b><div class="note">${esc(trf("operations.recorded_events", { count: events.length }))}</div></div></div>
-      <div class="job-event-list">${events.map((event: Any, index: Any) => `<div class="job-event ${index === events.length - 1 ? "latest" : ""}"><time>${esc(formatTimestamp(event.timestamp))}</time><b>${esc(label(event.stage || "event"))}</b><span>${event.current != null && event.total != null ? `${event.current}/${event.total} · ` : ""}${esc(event.detail || "")}</span></div>`).join("") || `<div class="note">${esc(tr("operations.no_events"))}</div>`}</div>
-    </section>
-    <section class="card-inset">
-      <div class="rag-result-section-head"><b>${esc(tr("operations.result_summary"))}</b></div>
-      <pre class="job-detail-json">${esc(JSON.stringify(resultSummary, null, 2))}</pre>
-    </section>
-  </div>
-  <div class="da">
-    <button class="btn" data-close>${esc(tr("ui.close"))}</button>
-    ${["queued", "running", "cancelling"].includes(job.status) ? (job.cancel_requested || job.status === "cancelling" ? `<button class="btn" disabled>${esc(tr("operations.cancelling"))}</button>` : `<button class="btn danger" id="detailsCancelJob">${esc(tr("operations.cancel_operation"))}</button>`) : ""}
-    ${job.type === "llm" && (job.pending_result_count ?? (job.results || []).length) > 0 ? `<button class="btn primary" id="detailsOpenResult">${esc(["queued", "running", "cancelling"].includes(job.status) ? tr("operations.panel.action_review_partial") : tr("operations.panel.action_review"))}</button>` : ""}
-    ${(["rag", "llm_tool"].includes(job.type) && job.status === "completed") || (job.type === "pdf_corpus" && ["completed", "blocked"].includes(job.status)) ? `<button class="btn primary" id="detailsOpenResult">${job.type === "pdf_corpus" ? esc(tr("pdf_corpus.open_build")) : esc(tr("operations.panel.action_open_result"))}</button>` : ""}
-  </div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    dialog.querySelector("#detailsCancelJob")?.addEventListener("click", async () => {
-      const updated = await cancelBackgroundJob(job.id);
-      if (updated) {
-        close();
-        openJobDetails(job.id);
-      }
-    });
-    dialog.querySelector("#detailsOpenResult")?.addEventListener("click", () => {
-      close();
-      openJobResults(job.id);
+          [tr("operations.fact.operation"), job.type],
+          [tr("operations.fact.started_by"), job.owner || "—"],
+          [
+            tr("operations.fact.status"),
+            tr(`operations.status.${job.status}`, String(job.status || "")),
+          ],
+          [tr("operations.fact.provider"), job.provider],
+          [tr("operations.fact.model"), job.model],
+          [tr("operations.fact.progress"), `${job.completed}/${job.total}`],
+          [tr("operations.fact.failed"), job.failed || 0],
+          [tr("operations.fact.started"), when(job.started_at)],
+          [tr("operations.fact.finished"), when(job.finished_at)],
+          [tr("operations.fact.cancel_requested"), when(job.cancel_requested_at)],
+        ] as Any[]
+      ).map(([name, value]) => ({ name: String(name), value: String(value ?? "—") })),
+      fatalError: job.fatal_error ? String(job.fatal_error) : "",
+      requestJson: JSON.stringify(safeRequest, null, 2),
+      events: events.map((event: Any, index: Any) => ({
+        when: formatTimestamp(event.timestamp),
+        stage: label(event.stage || "event"),
+        detail: `${event.current != null && event.total != null ? `${event.current}/${event.total} · ` : ""}${event.detail || ""}`,
+        latest: index === events.length - 1,
+      })),
+      resultJson: JSON.stringify(resultSummary, null, 2),
+      cancel: !active
+        ? "none"
+        : job.cancel_requested || job.status === "cancelling"
+          ? "cancelling"
+          : "cancel",
+      onCancel: async () => {
+        if (await cancelBackgroundJob(job.id)) openJobDetails(job.id);
+      },
+      openResult:
+        reviewable || openable ? { label: openLabel, run: () => openJobResults(job.id) } : null,
     });
   }
   async function openJobResults(jobId: Any) {

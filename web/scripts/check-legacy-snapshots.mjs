@@ -21,6 +21,9 @@ const nonSnapshotScenarios = new Set([
   "dialog-merge",
   "dialog-ocr-cleanup",
   "record-edit-sheet",
+  "dialog-job-details-0",
+  "dialog-job-details-1",
+  "dialog-job-details-2",
 ]);
 
 const hasDynamicJobDetails = spec.includes("dialog-job-details-${index}");
