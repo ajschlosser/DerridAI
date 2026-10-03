@@ -1036,6 +1036,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             :status-label="statusLabel(groupStatus.review)"
           >
             <div class="config-grid">
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.review_execution_title") }}</h3>
+                <p>{{ i18n.t("settings.review_execution_help") }}</p>
+              </div>
               <UiField
                 :label="i18n.t('settings.default_provider')"
                 :hint="i18n.t('settings.default_provider_help')"
@@ -1080,6 +1084,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   <option value="background">{{ i18n.t("settings.run_background") }}</option>
                 </select>
               </UiField>
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.evaluation_defaults_title") }}</h3>
+                <p>{{ i18n.t("settings.evaluation_defaults_help") }}</p>
+              </div>
               <label class="check-item field-full"
                 ><input
                   id="settings-field-rag-auto-grade"
