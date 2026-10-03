@@ -172,3 +172,17 @@ export function createFaqState() {
   };
 }
 export const faqState = shallowReactive(createFaqState());
+
+/** Table lists: the selection, search text, filters, page, sort and visible columns, each keyed by list name. */
+export function createListState() {
+  return {
+    selected: {} as Loose,
+    searches: {} as Loose,
+    listFilters: {} as Loose,
+    pages: {} as Loose,
+    pageSize: 100,
+    sorts: {} as Loose,
+    tableColumns: {} as Loose,
+  };
+}
+export const listState = shallowReactive(createListState());

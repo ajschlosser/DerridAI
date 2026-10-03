@@ -7,6 +7,7 @@ import {
   corpusState,
   faqState,
   layoutState,
+  listState,
   searchState,
   vectorState,
   worksState,
@@ -41,3 +42,6 @@ export const useAnnotationsStore = defineStore("annotations", () => ({
 
 /** FAQ view: search text, page and expanded entries; persisted by the runtime. */
 export const useFaqStore = defineStore("faq", () => ({ ...toRefs(faqState) }));
+
+/** Table lists: selection, search, filters, paging, sort and columns per list; persisted by the runtime. */
+export const useListsStore = defineStore("lists", () => ({ ...toRefs(listState) }));

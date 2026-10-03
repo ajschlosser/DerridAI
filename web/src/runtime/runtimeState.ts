@@ -7,6 +7,7 @@ import {
   corpusState,
   faqState,
   layoutState,
+  listState,
   searchState,
   vectorState,
   worksState,
@@ -19,12 +20,6 @@ export function createRuntimeState() {
   const state = {
     userContext: null,
     view: "home",
-    selected: {},
-    searches: {},
-    listFilters: {},
-    pages: {},
-    pageSize: 100,
-    sorts: {},
     researcherRecordId: "",
     researcherCompareA: "",
     researcherCompareB: "",
@@ -56,7 +51,6 @@ export function createRuntimeState() {
     translations: { locale: "en-US", dictionary: {}, base: {} },
     providerStatuses: {},
     providerWarmups: {},
-    tableColumns: {},
     upsertState: {},
     upsertIgnored: {},
     operationProgress: {},
@@ -175,7 +169,8 @@ export function createRuntimeState() {
   const withCorpus = bindSharedState(withWorks, corpusState);
   const withLayout = bindSharedState(withCorpus, layoutState);
   const withAnnotations = bindSharedState(withLayout, annotationsState);
-  return bindSharedState(withAnnotations, faqState);
+  const withFaq = bindSharedState(withAnnotations, faqState);
+  return bindSharedState(withFaq, listState);
 }
 
 export type RuntimeState = ReturnType<typeof createRuntimeState>;

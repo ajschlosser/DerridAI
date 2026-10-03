@@ -18,6 +18,7 @@ import {
   useAnnotationsStore,
   useFaqStore,
   useLayoutStore,
+  useListsStore,
   useSearchStore,
   useVectorStore,
   useWorksStore,
@@ -219,5 +220,30 @@ describe("annotations and FAQ state", () => {
     expect(annotations.serverAnnotations).toEqual([{ id: "a" }]);
     state.faqPage = 1;
     state.serverAnnotations = [];
+  });
+});
+
+describe("table list state", () => {
+  it("keeps the runtime's defaults and shares them with the lists store", async () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.pageSize).toBe(100);
+    expect(state.selected).toEqual({});
+    expect(state.tableColumns).toEqual({});
+
+    const lists = useListsStore();
+    const seen: number[] = [];
+    watch(
+      () => lists.pageSize,
+      (value) => seen.push(value),
+    );
+    state.pageSize = 50;
+    await nextTick();
+    expect(seen).toEqual([50]);
+    const pages = state.pages as Record<string, number>;
+    pages.works = 2;
+    expect(lists.pages).toBe(pages);
+    state.pageSize = 100;
+    state.pages = {};
   });
 });
