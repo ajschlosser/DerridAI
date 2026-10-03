@@ -249,7 +249,8 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] Vue callers of `runtime.persistPrefs` / `runtime.navigateTo` (DashboardView, VectorStoresView, CompareView, SettingsView, LlmReviewWorkspace, PdfExplorerSurface) import `persistPrefs` and `navigateTo` from the shared modules; the two view tests no longer mock `persistPrefs`. Typecheck and full Vitest pass; no Playwright run
   - [x] `runtime.navigateView` is gone (it was `navigateTo(view, { href })`): App.vue, SettingsView, RecordView and SemanticMapFrame call `navigateTo` from `domain/sharedNavigation`; the bridge export is deleted and the four tests mock `sharedNavigation`. Typecheck and full Vitest pass; no Playwright
   - [x] `renderView` left the runtime: it is now `renderView` in `domain/sharedNavigation.ts` (unmount operations panel unless home, guard access, normalise the URL, refresh the shell on native routes), and `setRenderViewHook` is deleted. Covered by `tests/frontend/render-view.test.ts`; typecheck and full Vitest (264 files) pass; no Playwright run
-  - [ ] next: count what still imports `runtime.js` and retire it in slices
+  - [x] import census (2026-10-03): 29 non-test files still import `runtime.js`. `reviewKey` and `isEvidenceSelected` are now plain exports of `domain/evidenceSelection.ts`, and `PdfExplorerSurface.vue` no longer calls them through the runtime
+  - [ ] next: retire the remaining `runtime.*` members in slices. The provider-profile getters (`getProviderProfilesForUi`, `getDefaultProviderProfileId`; 9 Vue callers) are the largest group, but `createProviderProfiles` still needs the runtime's `api`, `uid` and `warmupProviderProfile`, so extract those first
 
 Notes for the next session:
 
