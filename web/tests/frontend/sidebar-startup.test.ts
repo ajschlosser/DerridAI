@@ -346,7 +346,7 @@ describe("sidebar at sign-in", () => {
 
   it("places Settings breadcrumbs under System on direct loads", async () => {
     const { wrapper, router } = await signIn("admin");
-    await router.push("/settings/workspace");
+    await router.push("/settings/preferences");
     await flushPromises();
 
     const crumbs = wrapper.find(".vue-breadcrumb-path");
