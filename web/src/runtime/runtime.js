@@ -127,7 +127,6 @@ import { providerRequestConfig } from "../domain/providerRequest";
 import { recordHistoryVersions, upsertAuditDelta } from "../domain/recordHistory";
 import { barChart, lineChart, multiLineChart, pieChart, statList } from "../domain/dashboardCharts";
 import { createOperationPresenters } from "../domain/operationPresenters";
-import { createFieldFormatting } from "../domain/fieldFormatting";
 import {
   workIndex,
   dateKeys,
@@ -162,7 +161,20 @@ import {
   storeReceipt,
 } from "../domain/storeAvailability";
 import { registerOperationHooks } from "../domain/operationHooks";
-import { createSearchFacets } from "../domain/searchFacets";
+import {
+  searchFacets as sharedSearchFacets,
+  evidenceSelection as sharedEvidenceSelection,
+} from "../domain/sharedSearchSupport";
+import {
+  label,
+  display,
+  normalizeRagGrade,
+  parseBulkFieldValue,
+  parseWorkMetadataValue,
+  pages,
+  recordFields,
+  dbSearchWhere,
+} from "../domain/sharedRecordHelpers";
 import { createRecordPresenters } from "../domain/recordPresenters";
 import { providerProfilesService, warmupProviderProfile } from "../domain/sharedProviderProfiles";
 import { createSearchWorkspace } from "../domain/searchWorkspace";
@@ -214,7 +226,6 @@ import {
   refreshShell,
   shell,
 } from "../domain/sharedWorkspaceStorage";
-import { createEvidenceSelection } from "../domain/evidenceSelection";
 import { createRecordEditing } from "../domain/recordEditing";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
 import { createPdfLinking } from "../domain/pdfLinking";
@@ -278,8 +289,6 @@ function translateLegacyDom(root = document.querySelector("#main")) {
   return translateLegacyDomCompat(state, root);
 }
 
-const { label, display, normalizeRagGrade, parseBulkFieldValue, parseWorkMetadataValue } =
-  createFieldFormatting({ tr });
 const {
   searchFacetRawValues,
   searchFacetDisplay,
@@ -296,18 +305,7 @@ const {
   searchSimilarity,
   searchMatchReasons,
   rowMatchesListFilters,
-} = createSearchFacets({
-  tr,
-  label,
-  display,
-  pages,
-  recordFields,
-  uid: () => uid(),
-  dbSearchWhere,
-  filterOpsForField,
-  recordDbStatus: (...args) => recordDbStatus(...args),
-  getSearchFacetFilters: () => state.searchFacetFilters,
-});
+} = sharedSearchFacets;
 const {
   uniqueWorkValues,
   normalizedRecordAnnotation,
@@ -823,18 +821,7 @@ const {
   selectedEvidencePayload,
   setReviewSelected,
   clearReviewSelection,
-} = createEvidenceSelection({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  hasCapability: (...args) => hasCapability(...args),
-  localRecordKey: (...args) => localRecordKey(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  ragEvidenceRecordPayload: (...args) => ragEvidenceRecordPayload(...args),
-  recordDbStatus: (...args) => recordDbStatus(...args),
-  shellRefreshHook: refreshShell,
-  storeReceipt: (...args) => storeReceipt(...args),
-  tr: (...args) => tr(...args),
-});
+} = sharedEvidenceSelection;
 const {
   applyOperationStackPosition,
   setOperationDockMinimized,
@@ -1423,13 +1410,6 @@ function responseCacheStore() {
   return state.stores.find(isResponseCacheStore) || null;
 }
 
-function pages(r) {
-  if (r.page_start == null && r.page_end == null) return "—";
-  return r.page_end != null && r.page_end !== r.page_start
-    ? `${display(r.page_start)}–${display(r.page_end)}`
-    : display(r.page_start);
-}
-
 function pageInfo(total, page) {
   const pages = Math.max(1, Math.ceil(total / state.pageSize));
   page = Math.max(1, Math.min(pages, page || 1));
@@ -1441,13 +1421,6 @@ function pageInfo(total, page) {
   };
 }
 
-function recordFields() {
-  if (corpusCache.fields) return corpusCache.fields;
-  const set = new Set();
-  allRows().forEach((x) => Object.keys(x.record).forEach((k) => set.add(k)));
-  corpusCache.fields = [...set].sort();
-  return corpusCache.fields;
-}
 function tableAvailableFields(rows, extra = []) {
   const cachedRows = allRows();
   if (rows === cachedRows) {
@@ -1555,14 +1528,6 @@ function bulkEditRowsForScope(scope) {
     return work ? allRows().filter((row) => row.record.work === work) : [];
   }
   return allRows();
-}
-
-function dbSearchWhere() {
-  return Object.fromEntries(
-    Object.entries(state.dbSearchWhere || {}).filter(
-      ([, value]) => String(value ?? "").trim() !== "",
-    ),
-  );
 }
 
 // 0.36.10 native Search bridge. SearchView owns presentation while the runtime
