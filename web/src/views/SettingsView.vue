@@ -493,12 +493,6 @@ function providerReady(profile: ProviderProfile) {
   const status = workspace.providerStatuses?.[profile.id];
   return Boolean(status?.available);
 }
-function providerChecked(profile: ProviderProfile) {
-  const stamp = workspace.providerStatuses?.[profile.id]?.checked_at;
-  if (!stamp) return i18n.t("settings.not_checked");
-  const date = new Date(stamp);
-  return Number.isNaN(date.getTime()) ? stamp : date.toLocaleString(i18n.locale);
-}
 async function saveNotifications() {
   workspace.appConfig.desktop_notifications = notificationsOn.value;
   await persistWorkspace();
@@ -759,7 +753,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           @select="goSection"
         >
           <template #footer>
-            <AppBuildInfo :show-commit="isAdmin" />
+            <div class="settings-about">
+              <h3>{{ i18n.t("about.title") }}</h3>
+              <AppBuildInfo :show-commit="isAdmin" />
+            </div>
           </template>
         </SettingsOverview>
 
@@ -1601,6 +1598,14 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
   width: 100%;
   max-width: 1040px;
   min-width: 0;
+}
+.settings-about {
+  display: grid;
+  gap: 6px;
+}
+.settings-about h3 {
+  margin: 0;
+  font-size: 0.875rem;
 }
 .settings-locale-row {
   display: flex;
