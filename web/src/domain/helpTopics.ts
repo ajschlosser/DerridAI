@@ -659,7 +659,6 @@ export function visibleGlossary(
     .sort((a, b) => a.term.localeCompare(b.term));
 }
 
-
 /** Task-first Help Center entry points visible to the current role. */
 export function visibleStarters(
   isAdmin: boolean,
