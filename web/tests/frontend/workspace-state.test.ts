@@ -37,7 +37,10 @@ import {
   useConfigStore,
   useLayoutStore,
   useListsStore,
+  useRecordViewStore,
   useSearchStore,
+  useStatusStore,
+  useUpsertProgressStore,
   useVectorStore,
   useWorksStore,
 } from "../../src/stores/workspace";
@@ -282,5 +285,41 @@ describe("configuration, PDF and review state", () => {
     state.ragConfig = { ...state.ragConfig, k: 8 };
     expect(config.ragConfig.k).toBe(8);
     config.ragConfig = { ...config.ragConfig, k: 64 };
+  });
+});
+
+describe("service status state", () => {
+  it("is shared between the runtime state and the status store", () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    const store = useStatusStore();
+    expect(state.health).toBeNull();
+    expect(state.warmup).toEqual({ status: "idle", message: "" });
+    expect(state.providerStatuses).toEqual({});
+
+    state.health = { ok: true };
+    state.providerWarmups = { local: { status: "ready" } };
+    expect(store.health).toEqual({ ok: true });
+    expect(store.providerWarmups).toEqual({ local: { status: "ready" } });
+
+    store.llmStatus = { available: true };
+    expect(state.llmStatus).toEqual({ available: true });
+  });
+});
+
+describe("record view and upsert progress state", () => {
+  it("shares fields between the runtime state and their stores", () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    const view = useRecordViewStore();
+    const upsert = useUpsertProgressStore();
+    expect(state.dashboardMetricIndex).toBe(0);
+    expect(state.lastViewedRecord).toBeNull();
+    expect(state.operationProgress).toEqual({});
+
+    state.researcherCompareA = "a";
+    expect(view.researcherCompareA).toBe("a");
+    upsert.foregroundUpsertActive = true;
+    expect(state.foregroundUpsertActive).toBe(true);
   });
 });

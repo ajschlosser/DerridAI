@@ -157,6 +157,7 @@ import { createRecordDialogs } from "../domain/recordDialogs";
 import { createOperationDock } from "../domain/operationDock";
 import { createModalDialogs } from "../domain/modalDialogs";
 import { createNavigation } from "../domain/navigation";
+import { sharedUrlStateCodec } from "../domain/sharedUrlState";
 import { pathViewMap, viewFromPath, viewPathMap } from "../domain/navigation";
 import { createWorkspacePersistence } from "../domain/workspacePersistence";
 import { createEvidenceSelection } from "../domain/evidenceSelection";
@@ -856,6 +857,7 @@ const {
   applyUrlState,
   navigateTo,
 } = createNavigation({
+  codec: sharedUrlStateCodec,
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
   activeFile: (...args) => activeFile(...args),
@@ -3151,6 +3153,10 @@ document.addEventListener(
  */
 function syncFromLocation() {
   applyUrlState();
+  repaintAfterLocationChange();
+}
+/** Persist and repaint after the shared URL state has been applied (by the runtime or by the router). */
+function repaintAfterLocationChange() {
   persistPrefs();
   shell();
   renderView();
@@ -3159,7 +3165,6 @@ function syncFromLocation() {
 function viewForPath(path) {
   return viewFromPath(path);
 }
-window.addEventListener("popstate", syncFromLocation);
 
 let metadataSearchDelegationWired = false;
 function wireMetadataSearchDelegation() {
@@ -3344,6 +3349,7 @@ export {
   setShellRefreshHook,
   setUrlSyncHook,
   syncFromLocation,
+  repaintAfterLocationChange,
   viewForPath,
   pauseRuntime,
   refreshJobs,

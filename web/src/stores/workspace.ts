@@ -26,9 +26,13 @@ import {
   faqState,
   layoutState,
   listState,
+  navigationState,
   pdfState,
+  recordViewState,
   reviewState,
   searchState,
+  statusState,
+  upsertProgressState,
   vectorState,
   worksState,
 } from "../state/workspaceState";
@@ -74,3 +78,17 @@ export const usePdfStore = defineStore("pdf", () => ({ ...toRefs(pdfState) }));
 
 /** Review selection and chosen evidence. */
 export const useReviewStore = defineStore("review", () => ({ ...toRefs(reviewState) }));
+
+/** API health, provider status and warm-up state. */
+export const useStatusStore = defineStore("status", () => ({ ...toRefs(statusState) }));
+
+/** Viewed/compared record, dashboard metric and in-record find state. */
+export const useRecordViewStore = defineStore("recordView", () => ({ ...toRefs(recordViewState) }));
+
+/** Foreground upsert and operation progress. */
+export const useUpsertProgressStore = defineStore("upsertProgress", () => ({
+  ...toRefs(upsertProgressState),
+}));
+
+/** The workspace view currently showing. */
+export const useNavigationStore = defineStore("navigation", () => ({ ...toRefs(navigationState) }));
