@@ -140,7 +140,7 @@ function usedBy(strategy: PipelineStrategy) {
 }
 .strategy-table {
   width: 100%;
-  min-width: 700px;
+  min-width: 760px;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
@@ -295,7 +295,7 @@ function usedBy(strategy: PipelineStrategy) {
   border: 0;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1120px) {
   .strategy-table-scroll {
     position: static;
     max-height: none;
