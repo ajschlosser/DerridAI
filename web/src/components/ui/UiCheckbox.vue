@@ -29,6 +29,9 @@ const props = withDefaults(
     invalid?: boolean;
     inputId?: string;
     hideLabel?: boolean;
+    name?: string;
+    required?: boolean;
+    value?: string;
   }>(),
   {
     modelValue: false,
@@ -37,6 +40,9 @@ const props = withDefaults(
     invalid: false,
     inputId: "",
     hideLabel: false,
+    name: "",
+    required: false,
+    value: "",
   },
 );
 const emit = defineEmits<{ "update:modelValue": [value: boolean] }>();
@@ -53,6 +59,9 @@ const descriptionId = computed(() => (props.description ? `${id.value}-descripti
       type="checkbox"
       :checked="modelValue"
       :disabled="disabled"
+      :name="name || undefined"
+      :required="required"
+      :value="value || undefined"
       :aria-invalid="invalid ? 'true' : undefined"
       :aria-describedby="descriptionId"
       @change="emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
