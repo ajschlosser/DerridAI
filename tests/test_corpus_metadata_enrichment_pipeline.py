@@ -12,10 +12,13 @@ escalates only after validation/provider failure.
 from __future__ import annotations
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 from app import corpus_builder as cb
+from app.corpus_metadata_enrichment_execution import _materialized_family_fingerprint
 from app.pipelines import manager as manager_module
 from app.pipelines import store as store_module
 from app.pipelines.corpus_metadata_enrichment import (
@@ -114,6 +117,147 @@ def test_exact_family_checkpoint_reuses_validated_result(monkeypatch, manager, t
     assert ledger["dependency_fingerprint"]
     assert ledger["reused_at"]
     assert ledger["model_invocations"] == 1
+
+
+def _materialize_answer(record):
+    record["label"] = record["metadata_stage_results"]["discourse"]["label"]
+    record.pop("metadata_stage_results")
+    ledger = record["metadata_execution_ledger"]["discourse"]
+    ledger["requested_fields"] = ["label"]
+    ledger["materialized_fingerprint"] = _materialized_family_fingerprint(record, ["label"])
+
+
+def test_materialized_family_reuses_exact_dependencies_without_raw_response(monkeypatch, manager, traces):
+    calls = _provider(monkeypatch, {"primary-model": [VALID]})
+    record, (_, _, error) = _enrich(manager, REQUEST)
+    assert error is None
+    _materialize_answer(record)
+    restored = json.loads(json.dumps(record))
+    callbacks = []
+    result = manager._execute_metadata_tasks(
+        restored, REQUEST, [("discourse", PROMPT, Answer, 512, SCHEMA)], "",
+        lambda snapshot, family, state, error: callbacks.append((family, state)),
+    )
+    assert result == [("discourse", {"metadata": {}, "field_evidence": {}, "review_reason": ""}, None)]
+    assert len(calls) == 1
+    assert restored["label"] == "ok"
+    assert restored["metadata_execution_ledger"]["discourse"]["materialized_reuse_count"] == 1
+    assert callbacks == [("discourse", "complete")]
+    assert not restored["metadata_stage_results"]
+
+
+@pytest.mark.parametrize("change", [
+    "prompt", "text", "revision", "spans", "model", "pipeline", "output",
+    "evidence", "status", "unknown_output", "explicit_retry",
+])
+def test_materialized_family_invalidates_changed_inputs_or_outputs(
+    monkeypatch, manager, traces, change,
+):
+    calls = _provider(monkeypatch, {"primary-model": [VALID, VALID], "changed-model": [VALID]})
+    record, (_, _, error) = _enrich(manager, REQUEST)
+    assert error is None
+    _materialize_answer(record)
+    request, prompt = dict(REQUEST), PROMPT
+    if change == "prompt":
+        prompt += " New guidance."
+    elif change == "text":
+        record["text"] = "Changed text."
+    elif change == "revision":
+        record["record_revision"] = 2
+    elif change == "spans":
+        record["source_spans"] = [{"block_id": "changed"}]
+    elif change == "model":
+        request["model"] = "changed-model"
+    elif change == "pipeline":
+        _use(monkeypatch, [{"settings": {"provider_role": "primary", "attempts": 2}}, {}])
+    elif change == "output":
+        record["label"] = "changed materialization"
+    elif change == "evidence":
+        record["metadata_evidence"] = {"label": {"block_ids": ["different"]}}
+    elif change == "status":
+        record["metadata_field_status"] = {"label": {"status": "unresolved"}}
+    elif change == "unknown_output":
+        record["metadata_execution_ledger"]["discourse"].pop("materialized_fingerprint")
+    elif change == "explicit_retry":
+        record["metadata_stage_status"]["discourse"] = "queued"
+    results = manager._execute_metadata_tasks(
+        record, request, [("discourse", prompt, Answer, 512, SCHEMA)], "", None,
+    )
+    assert len(calls) == 2
+    assert results == [("discourse", {"label": "ok"}, None)]
+    if change != "explicit_retry":
+        assert record["metadata_execution_ledger"]["discourse"]["checkpoint_invalidation_reason"].startswith("materialized_")
+
+
+def test_legacy_materialized_resume_is_not_reported_as_exact_reuse(monkeypatch, manager, traces):
+    monkeypatch.setattr(manager, "_chat_json", lambda *args, **kwargs: pytest.fail("legacy resume called provider"))
+    record = {"record_id": "r1", "text": "Text.", "label": "historical", "metadata_stage_status": {"discourse": "complete"}}
+    results = manager._execute_metadata_tasks(
+        record, REQUEST, [("discourse", PROMPT, Answer, 512, SCHEMA)], "", None,
+    )
+    assert results[0][2] is None
+    assert record["label"] == "historical"
+    assert not record["metadata_execution_ledger"].get("discourse")
+
+
+def test_materialized_invalidation_is_family_local_and_citation_independent(monkeypatch, manager, traces):
+    calls = _provider(monkeypatch, {"primary-model": [VALID, VALID, VALID]})
+    record = {"record_id": "r1", "text": "Text."}
+    tasks = [
+        ("discourse", PROMPT, Answer, 512, SCHEMA),
+        ("quotation", "Quote classification.", Answer, 512, "derridai_record_quotation"),
+    ]
+    manager._execute_metadata_tasks(record, REQUEST, tasks, "", None)
+    record.pop("metadata_stage_results")
+    for entry in record["metadata_execution_ledger"].values():
+        entry["materialized_fingerprint"] = _materialized_family_fingerprint(record, entry["requested_fields"])
+    record["inline_citation"] = "Different citation style"
+    record["full_citation"] = "Different formatting of the same source facts"
+    tasks[1] = ("quotation", "Updated quotation instructions.", Answer, 512, "derridai_record_quotation")
+    results = manager._execute_metadata_tasks(record, REQUEST, tasks, "", None)
+    assert len(calls) == 3
+    assert all(error is None for _, _, error in results)
+    assert record["metadata_execution_ledger"]["discourse"]["materialized_reuse_count"] == 1
+    assert record["metadata_execution_ledger"]["quotation"]["checkpoint_invalidation_reason"] == "materialized_dependencies_changed"
+
+
+def test_unavailable_pipeline_does_not_certify_materialized_reuse(monkeypatch, manager, traces):
+    calls = _provider(monkeypatch, {"primary-model": [VALID]})
+    record, (_, _, error) = _enrich(manager, REQUEST)
+    assert error is None
+    _materialize_answer(record)
+
+    def unavailable(_feature):
+        raise RuntimeError("Assignment unavailable.")
+
+    monkeypatch.setattr(manager_module.pipeline_manager, "resolve", unavailable)
+    result = manager._execute_metadata_tasks(
+        record, REQUEST, [("discourse", PROMPT, Answer, 512, SCHEMA)], "", None,
+    )
+    assert result[0][1] is None and "Assignment unavailable" in str(result[0][2])
+    assert record["label"] == "ok"
+    assert not record["metadata_execution_ledger"]["discourse"].get("materialized_reuse_count")
+    assert len(calls) == 1
+
+
+def test_materialized_fingerprint_binds_repeatable_member_assertions():
+    from app.field_assertions import create_model_assertion, store_assertion
+
+    record = {"record_id": "r1", "label": [{"name": "same value"}]}
+    container = create_model_assertion(record, "label", record["label"], method="test")
+    member = container.model_copy(update={
+        "assertion_id": "member-one", "field_id": "label.instance.name",
+        "container_field_id": container.field_id, "member_field_id": "name",
+        "instance_id": "instance", "member_name": "name", "value": "same value",
+    })
+    store_assertion(record, member)
+    before = _materialized_family_fingerprint(record, ["label"])
+    revised = member.model_copy(update={
+        "assertion_id": "member-two", "evidence": [{"block_ids": ["changed-source"]}],
+    })
+    store_assertion(record, revised)
+    assert record["label"] == [{"name": "same value"}]
+    assert _materialized_family_fingerprint(record, ["label"]) != before
 
 
 @pytest.mark.parametrize("change", [
@@ -239,6 +383,103 @@ def test_unavailable_pipeline_cannot_reuse_a_raw_checkpoint(monkeypatch, manager
     assert "Assignment unavailable" in str(result[0][2])
     assert "discourse" not in record["metadata_stage_results"]
     assert record["metadata_execution_ledger"]["discourse"]["state"] != "complete"
+
+
+def test_concurrent_family_calls_share_provider_and_keep_separate_run_ledgers(
+    monkeypatch, manager, traces,
+):
+    from test_metadata_stage_checkpoints import _install_minimal_build
+
+    build = _install_minimal_build(manager.repo)
+    bid = build["build_id"]
+    record = {"record_id": "r1", "record_revision": 1, "text": "Text."}
+    manager.repo.save_records(bid, [record])
+    started, release, joined = threading.Event(), threading.Event(), threading.Event()
+    calls = []
+
+    def provider(**kwargs):
+        calls.append(kwargs["model"])
+        started.set()
+        assert release.wait(5)
+        return VALID
+
+    monkeypatch.setattr(cb, "chat_complete", provider)
+    tasks = [("discourse", PROMPT, Answer, 512, SCHEMA)]
+
+    def execute():
+        snapshot = dict(record)
+        result = manager._execute_metadata_tasks(snapshot, REQUEST, tasks, bid, None)
+        return snapshot, result
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        leader = pool.submit(execute)
+        assert started.wait(5)
+        pending = next(iter(manager._metadata_request_coalescer._pending.values()))
+        original = pending.result
+
+        def waiting(*args, **kwargs):
+            joined.set()
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(pending, "result", waiting)
+        follower = pool.submit(execute)
+        try:
+            assert joined.wait(5)
+        finally:
+            release.set()
+        first, first_results = leader.result()
+        second, second_results = follower.result()
+    assert first_results == second_results == [("discourse", {"label": "ok"}, None)]
+    assert len(calls) == 1
+    assert len(traces) == 2
+    ledgers = [row["metadata_execution_ledger"]["discourse"] for row in (first, second)]
+    assert sorted(row["model_invocations"] for row in ledgers) == [0, 1]
+    assert sorted(row["inflight_coalesced_calls"] for row in ledgers) == [0, 1]
+    assert not manager._metadata_request_coalescer._pending
+
+
+@pytest.mark.parametrize("change", ["build", "fingerprint", "credential", "role", "prompt", "tokens", "run"])
+def test_inflight_sharing_is_exact_and_scope_bound(monkeypatch, manager, change):
+    request = {**WITH_REVIEW, "_metadata_dependency_fingerprint": "exact-snapshot"}
+    started, release = threading.Event(), threading.Event()
+    calls = []
+
+    def generate(*args, **kwargs):
+        calls.append(kwargs["build_id"])
+        if len(calls) == 1:
+            started.set()
+            assert release.wait(5)
+        return {"label": "ok"}
+
+    monkeypatch.setattr(manager, "_chat_json", generate)
+    leader = manager._structured_metadata_invoker(request, PROMPT, Answer, 512, SCHEMA, "one")
+    revised = dict(request)
+    bid, prompt, tokens, role = "one", PROMPT, 512, "primary"
+    if change == "build":
+        bid = "two"
+    elif change == "fingerprint":
+        revised["_metadata_dependency_fingerprint"] = "different-record-or-revision"
+    elif change == "credential":
+        revised["api_key"] = "separate-authorized-provider-account"
+    elif change == "role":
+        role = "review"
+    elif change == "prompt":
+        prompt += " Repair."
+    elif change == "tokens":
+        tokens = 1024
+    elif change == "run":
+        revised["run_id"] = "explicit-new-recomputation"
+    different = manager._structured_metadata_invoker(revised, prompt, Answer, tokens, SCHEMA, bid)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(leader, "primary", 1, False)
+        assert started.wait(5)
+        try:
+            assert different(role, 1, False) == {"label": "ok"}
+            assert len(calls) == 2
+        finally:
+            release.set()
+        assert first.result() == {"label": "ok"}
+    assert not manager._metadata_request_coalescer._pending
 
 
 SCENARIOS = {

@@ -70,6 +70,7 @@ from .evidence_suggestions import (
 )
 from .field_assertions import (
     current_assertion_by_name,
+    current_assertions,
     migrate_record_assertions,
     reopen_assertion,
 )
@@ -80,6 +81,7 @@ from .metadata_candidates import (
 )
 from .metadata_precedents_cache import CACHE_KEY as PRECEDENTS_CACHE_KEY
 from .metadata_precedents_cache import build_precedents_cache
+from .metadata_request_coalescer import MetadataRequestCoalescer
 from .metadata_schema import (
     CORE_FIELDS,
     CORE_GROUP,
@@ -160,6 +162,29 @@ def _has_quotation_signal(record: dict[str, Any], source_text: str) -> bool:
         or any(token in source_text for token in ('“', '”', '"', '«', '»', '‘', '’'))
         or bool(re.search(r"\b(?:quotes?|writes?|says?|according to|cites?)\b", source_text, re.I))
     )
+
+
+def _materialized_family_fingerprint(record: dict[str, Any], fields: list[str]) -> str:
+    assertions = current_assertions(record)
+    dependencies = {
+        "contract": "metadata-materialized-family-v1",
+        "fields": {
+            field: {
+                "value": record.get(field),
+                "status": (record.get("metadata_field_status") or {}).get(field),
+                "evidence": (record.get("metadata_evidence") or {}).get(field),
+                "assertions": [
+                    assertion.model_dump(mode="json")
+                    for assertion in sorted(assertions, key=lambda item: item.field_id)
+                    if assertion.field_name == field
+                ],
+            }
+            for field in fields
+        },
+    }
+    return hashlib.sha256(json.dumps(
+        dependencies, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    ).encode("utf-8")).hexdigest()
 
 
 def _field_has_strong_memory_prefill(record: dict[str, Any], field_name: str) -> bool:
@@ -264,6 +289,7 @@ class MetadataEnrichmentExecutionMixin:
         repo: Any
         _ledger: Any
         _progressive_metadata_index: Any
+        _metadata_request_coalescer: MetadataRequestCoalescer
 
         def _adaptive_family_should_skip(self, build_id: str | None, family: str, request: dict[str, Any]) -> tuple[bool, str]: ...
         def _append_warning(self, build_id: str, message: str) -> None: ...
@@ -1171,10 +1197,16 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             prior = persisted_stage_results.get(task_name)
             prior_state = str(stage_status.get(task_name) or "")
             # A fully materialized family no longer needs its bulky raw response.
-            # Its status is sufficient to skip the provider on crash-safe resume;
-            # the normalized metadata/evidence already lives on the record. Failed
-            # and user-skipped families are also terminal until an explicit retry.
-            if prior_state == "complete" and task_name not in persisted_stage_results:
+            # Tracked normalized outputs must match both dependencies and output
+            # state below. Historical untracked families retain resume semantics.
+            # Failed/user-skipped families remain terminal until an explicit retry.
+            prior_ledger = stage_ledger.get(task_name)
+            materialized = prior_state == "complete" and task_name not in persisted_stage_results
+            if materialized and (
+                not isinstance(prior_ledger, dict) or not prior_ledger.get("dependency_fingerprint")
+            ):
+                # Historical normalized families retain their resume semantics.
+                # They are not reported as exact dependency-validated cache hits.
                 stage_results.append((task_name, {"metadata": {}, "field_evidence": {}, "review_reason": ""}, None))
                 continue
             if prior_state in {"failed", "needs_review", "skipped"}:
@@ -1213,6 +1245,30 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             )
             prior_ledger = stage_ledger.get(task_name)
             invalidation_reason: str | None = None
+            if materialized and isinstance(prior_ledger, dict):
+                fields = prior_ledger.get("requested_fields")
+                output_matches = (
+                    isinstance(fields, list)
+                    and prior_ledger.get("materialized_fingerprint") == _materialized_family_fingerprint(record, fields)
+                )
+                if (
+                    dependency_fingerprint is not None
+                    and prior_ledger.get("dependency_fingerprint") == dependency_fingerprint
+                    and output_matches
+                ):
+                    stage_ledger[task_name] = {
+                        **prior_ledger,
+                        "materialized_reuse_count": int(prior_ledger.get("materialized_reuse_count") or 0) + 1,
+                        "reused_at": iso_now(),
+                    }
+                    stage_results.append((task_name, {"metadata": {}, "field_evidence": {}, "review_reason": ""}, None))
+                    if stage_callback:
+                        stage_callback(record, task_name, "complete", None)
+                    continue
+                invalidation_reason = (
+                    "materialized_dependencies_changed" if output_matches
+                    else "materialized_output_changed_or_unknown"
+                )
             if task_name in persisted_stage_results and not isinstance(prior, dict):
                 invalidation_reason = "checkpoint_validation_failed"
                 persisted_stage_results.pop(task_name, None)
@@ -1266,6 +1322,8 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             counted_request = {
                 **active_request,
                 "_structured_call_counter": model_call_counter,
+                "_metadata_dependency_fingerprint": dependency_fingerprint,
+                "_metadata_task_name": task_name,
             }
             if stage_callback:
                 stage_callback(record, task_name, "running", None)
@@ -1395,6 +1453,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "recovery_max_output_tokens": recovery_max_tokens,
                     "residual_contradiction_fields": residual_contradictions,
                     "model_invocations": model_invocations,
+                    "inflight_coalesced_calls": int(model_call_counter.get("coalesced") or 0),
                 }
                 if not residual_contradictions:
                     stage_ledger[task_name]["dependency_fingerprint"] = dependency_fingerprint
@@ -1410,6 +1469,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     ok=True,
                     requested_fields=requested_fields,
                     requested_field_count=len(requested_fields),
+                    inflight_coalesced_calls=int(model_call_counter.get("coalesced") or 0),
                     input_chars=len(prompt),
                     max_output_tokens=max_tokens,
                     attempts_allowed=ledger_context["attempts_allowed"],
@@ -1498,17 +1558,50 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         def invoke(role: str, attempts: int, escalated: bool) -> dict[str, Any]:
             if role not in _provider_roles(active_request):
                 raise LookupError("No review provider is configured for this build.")
-            return self._chat_json(
-                active_request,
-                prompt,
-                response_model=response_model,
-                max_tokens=max_tokens,
-                schema_name=schema_name,
-                build_id=build_id,
-                attempts=attempts,
-                roles=(role,),
-                escalated=escalated,
+            def generate() -> dict[str, Any]:
+                return self._chat_json(
+                    active_request, prompt, response_model=response_model,
+                    max_tokens=max_tokens, schema_name=schema_name, build_id=build_id,
+                    attempts=attempts, roles=(role,), escalated=escalated,
+                )
+
+            fingerprint = active_request.get("_metadata_dependency_fingerprint")
+            if not build_id or not fingerprint:
+                return generate()
+            configuration = active_request.get("_review_provider") if role == "review" else active_request
+            if not isinstance(configuration, dict):
+                raise LookupError("No review provider is configured for this build.")
+            # Credentials scope sharing but this key never leaves process memory.
+            provider, model, endpoint, secret, generation = _llm_config(configuration)
+            key = hashlib.sha256(json.dumps({
+                "build": build_id, "dependencies": fingerprint, "role": role,
+                "provider": provider, "model": model, "endpoint": endpoint,
+                "credential": secret, "generation": generation.model_dump(mode="json") if generation else None,
+                "prompt": prompt, "tokens": max_tokens, "schema": response_model.model_json_schema(),
+                "schema_name": schema_name, "attempts": attempts, "escalated": escalated,
+                "run_id": active_request.get("run_id"),
+            }, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+            def reusable(value: dict[str, Any]) -> bool:
+                try:
+                    validated = response_model.model_validate(value).model_dump(mode="json")
+                except ValidationError:
+                    logger.debug("Metadata response is not eligible for in-flight reuse: %s", schema_name)
+                    return False
+                return not _structured_output_contradiction_fields(validated)
+
+            result, joined = self._metadata_request_coalescer.run(
+                key, generate, reusable=reusable,
+                timeout=attempts * _stage_timeouts(active_request).get(
+                    str(active_request.get("_metadata_task_name") or ""), 300,
+                ) + 30,
             )
+            if joined:
+                result = response_model.model_validate(result).model_dump(mode="json")
+                counter = active_request.get("_structured_call_counter")
+                if isinstance(counter, dict):
+                    counter["coalesced"] = int(counter.get("coalesced") or 0) + 1
+            return result
 
         return invoke
 
@@ -2244,8 +2337,8 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         # Preserve exact terminal states (complete/failed/skipped) from execution
         # instead of flattening every exception into a generic needs_review state.
         # After normalization the raw successful response objects are redundant;
-        # stage_status plus normalized record fields are enough to resume without
-        # re-running already settled families.
+        # normalized fields and their output fingerprint allow exact reuse without
+        # retaining the bulky raw response.
         record["metadata_stage_status"] = dict(stage_status)
         record.pop("metadata_stage_results", None)
         inline, full = _citation_strings(record)
@@ -2298,6 +2391,18 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     status["reason_code"] = "blind_review"
                     status["auto_populated"] = False
                     status["reason"] = ""
+        for family, entry in (normalized.get("metadata_execution_ledger") or {}).items():
+            if (
+                isinstance(entry, dict)
+                and entry.get("state") == "complete"
+                and entry.get("dependency_fingerprint")
+                and isinstance(entry.get("requested_fields"), list)
+                and not entry.get("residual_contradiction_fields")
+                and any(name == family and failure is None for name, _result, failure in stage_results)
+            ):
+                entry["materialized_fingerprint"] = _materialized_family_fingerprint(
+                    normalized, entry["requested_fields"],
+                )
         return normalized
 
 

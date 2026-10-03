@@ -4,6 +4,7 @@ import { defineStore } from "pinia";
 import {
   compareState,
   corpusState,
+  layoutState,
   searchState,
   vectorState,
   worksState,
@@ -27,3 +28,6 @@ export const useWorksStore = defineStore("works", () => ({ ...toRefs(worksState)
 
 /** The loaded JSONL files and the active one. Watch `version` for edits the runtime makes in place. */
 export const useCorpusStore = defineStore("corpus", () => ({ ...toRefs(corpusState) }));
+
+/** Shell layout preferences (collapsed sidebar, operation dock position, collapsed panels); persisted by the runtime. */
+export const useLayoutStore = defineStore("layout", () => ({ ...toRefs(layoutState) }));

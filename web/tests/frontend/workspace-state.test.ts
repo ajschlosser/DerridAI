@@ -6,6 +6,7 @@ import { nextTick, watch } from "vue";
 import {
   compareState,
   corpusState,
+  layoutState,
   searchState,
   touchCorpus,
   vectorState,
@@ -14,6 +15,7 @@ import {
 import {
   useCompareStore,
   useCorpusStore,
+  useLayoutStore,
   useSearchStore,
   useVectorStore,
   useWorksStore,
@@ -159,5 +161,33 @@ describe("per-view workspace state", () => {
     state.activeFileId = null;
     state.worksSearch = "";
     state.workOverview = "";
+  });
+});
+
+describe("shell layout state", () => {
+  it("keeps the runtime's fields and defaults, and shares them with the layout store", async () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.sidebarCollapsed).toBe(false);
+    expect(state.collectionsCollapsed).toBe(false);
+    expect(state.operationToastsMinimized).toBe(false);
+    expect(state.operationStackPosition).toBeNull();
+    expect(state.collapsedPanels).toEqual({});
+
+    const layout = useLayoutStore();
+    const seen: boolean[] = [];
+    watch(
+      () => layout.sidebarCollapsed,
+      (value) => seen.push(value),
+    );
+    state.sidebarCollapsed = true;
+    await nextTick();
+    expect(seen).toEqual([true]);
+    expect(layoutState.sidebarCollapsed).toBe(true);
+
+    const panels = state.collapsedPanels;
+    panels.notes = true;
+    expect(layout.collapsedPanels).toBe(panels);
+    layoutState.sidebarCollapsed = false;
   });
 });

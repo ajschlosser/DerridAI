@@ -129,19 +129,24 @@ def derive_record_metadata_exemplars(
 ) -> list[dict[str, Any]]:
     """Derive complete exemplar sets for selected current Records, not the corpus."""
     rows = [row for row in repo.get_records(build_id, record_ids) if row is not None]
-    return _derive_metadata_exemplars(repo, build_id, rows)
+    return _derive_metadata_exemplars(repo, build_id, rows, selected=True)
 
 
 def _derive_metadata_exemplars(
-    repo: Any, build_id: str, rows: list[dict[str, Any]],
+    repo: Any, build_id: str, rows: list[dict[str, Any]], *, selected: bool = False,
 ) -> list[dict[str, Any]]:
     build = repo.get_build(build_id)
     asset_id = str(build.get("asset_id") or "")
     blocks_by_id: dict[str, dict[str, Any]] = {}
     if asset_id:
+        block_ids = list(dict.fromkeys(
+            str(block_id) for row in rows for block_id in (row.get("source_block_ids") or [])
+            if str(block_id)
+        ))
+        blocks = repo.load_selected_blocks(asset_id, block_ids) if selected else repo.load_blocks(asset_id)
         blocks_by_id = {
             str(block.get("block_id") or ""): block
-            for block in repo.load_blocks(asset_id)
+            for block in blocks
             if isinstance(block, dict) and str(block.get("block_id") or "")
         }
 

@@ -10,6 +10,7 @@ import {
 } from "vue-router";
 import { createNavigationHistory, type HistoryEntryTitle } from "./router/navigationHistory";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
+import { useLayoutStore } from "./stores/workspace";
 import { useAuthStore } from "./stores/auth";
 import { useI18nStore } from "./stores/i18n";
 import AuthScreen from "./components/AuthScreen.vue";
@@ -64,6 +65,7 @@ const router = useRouter();
 const route = useRoute();
 const navigationHistory = createNavigationHistory(router);
 const shell = useShellStore();
+const layout = useLayoutStore();
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const semanticMap = useSemanticMapStore();
@@ -82,7 +84,7 @@ const commandShortcut =
     ? "⌘K"
     : "Ctrl K";
 const s = computed(() => shell.snapshot);
-const effectiveSidebarCollapsed = computed(() => s.value.sidebarCollapsed || narrowSidebar.value);
+const effectiveSidebarCollapsed = computed(() => layout.sidebarCollapsed || narrowSidebar.value);
 
 const pageCapability: Record<string, string> = {
   home: "page.dashboard",

@@ -91,6 +91,7 @@ def test_completion_is_durable_before_notification_and_after_restart(build_facto
         assert event == "record_completed"
         restarted = cb.PdfCorpusRepository(repo.root)
         assert restarted.get_record(build_id, record_id)["metadata_complete"]
+        assert restarted.get_build(build_id)["metadata_first_settled_at"]
         raise InterruptedError("simulated stop after durable completion")
 
     monkeypatch.setattr(cb, "note_record_metadata", interrupt_after_commit)
@@ -102,6 +103,22 @@ def test_completion_is_durable_before_notification_and_after_restart(build_facto
     exported = [json.loads(line) for line in restarted.build_records_path(build_id).read_text(encoding="utf-8").splitlines()]
     assert exported == restarted.load_records(build_id)
     assert not restarted.records_projection_dirty(build_id)
+
+
+def test_first_settled_milestone_is_not_reset_by_later_completions(build_factory, monkeypatch):
+    repo, build_id, manager = build_factory(count=3)
+    seen = []
+
+    def completed_notification(_build, record_id, event):
+        assert event == "record_completed"
+        snapshot = repo.get_build(build_id)
+        seen.append(snapshot["metadata_first_settled_at"])
+        assert repo.get_record(build_id, record_id)["metadata_enrichment_state"] == "complete"
+
+    monkeypatch.setattr(cb, "note_record_metadata", completed_notification)
+    manager._schedule_build_enrichment(build_id, {}, {}, repo.load_records(build_id))
+    assert len(seen) == 3
+    assert len(set(seen)) == 1
 
 
 def test_failed_worker_preserves_source_and_reports_failure(build_factory, monkeypatch):
@@ -138,8 +155,8 @@ def test_completion_does_not_rewrite_the_corpus(build_factory, monkeypatch):
     monkeypatch.setattr(repo, "load_records", loaded)
     result = manager._schedule_build_enrichment(build_id, {}, {}, records)
     assert all(row["metadata_complete"] for row in result)
-    assert saves == [4]  # Initial queue checkpoint only; completion writes target rows.
-    assert len(loads) == 1  # One final authoritative handoff, not one read per completion.
+    assert saves == []  # Queue initialization and completion both write target rows.
+    assert len(loads) == 2  # Queue initialization reconciliation plus final handoff, not per completion.
 
 
 @pytest.mark.parametrize("workers", [1, 3])

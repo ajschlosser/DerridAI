@@ -587,7 +587,12 @@ def test_topology_is_durable_before_optional_embedding_work(monkeypatch, tmp_pat
     def inspect_projection(*args, **kwargs):
         stored = repo.load_records(build["build_id"])
         observed.append(len(stored))
-        assert repo.get_build(build["build_id"])["record_count"] == len(stored)
+        snapshot = repo.get_build(build["build_id"])
+        assert snapshot["record_count"] == len(stored)
+        assert snapshot["topology_persisted_at"]
+        assert not snapshot.get("review_available_at")
+        with pytest.raises(ValueError, match="not editable"):
+            manager._assert_human_review_available(build["build_id"])
         return {"status": "ready"}
     monkeypatch.setattr(cb.SourceEmbeddingProjection, "sync", inspect_projection)
     monkeypatch.setattr(cb, "chat_complete", lambda **kwargs: "{}")
@@ -597,6 +602,8 @@ def test_topology_is_durable_before_optional_embedding_work(monkeypatch, tmp_pat
         "topology_policy": {"mode": "source_units", "source_units_per_record": 1},
     })
     assert observed == [3]
+    final = repo.get_build(build["build_id"])
+    assert final["topology_persisted_at"] <= final["review_available_at"] <= final["metadata_first_settled_at"]
     manager._executor.shutdown(wait=True)
 
 

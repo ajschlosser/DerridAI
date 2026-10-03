@@ -94,6 +94,20 @@ function install(pack: LanguagePack) {
   );
 }
 
+function cancelInstall(pack: LanguagePack) {
+  const jobId = pack.active_job?.id;
+  if (!jobId) return;
+  return run(pack.pack_id, () => documentNlpApi.cancelInstall(jobId));
+}
+
+function uninstall(pack: LanguagePack) {
+  return run(pack.pack_id, () => documentNlpApi.uninstallPack(pack.pack_id));
+}
+
+function removePack(pack: LanguagePack) {
+  return run(pack.pack_id, () => documentNlpApi.removePack(pack.pack_id));
+}
+
 function addPack() {
   let entry: Record<string, unknown>;
   try {
@@ -206,7 +220,7 @@ onBeforeUnmount(() => {
               v-if="pack.active_job"
               size="small"
               :label="i18n.t('settings.nlp_packs_cancel')"
-              @click="run(pack.pack_id, () => documentNlpApi.cancelInstall(pack.active_job!.id))"
+              @click="cancelInstall(pack)"
             />
             <template v-else>
               <UiButton
@@ -222,7 +236,7 @@ onBeforeUnmount(() => {
                 size="small"
                 :label="i18n.t('settings.nlp_packs_uninstall')"
                 :disabled="Boolean(busy)"
-                @click="run(pack.pack_id, () => documentNlpApi.uninstallPack(pack.pack_id))"
+                @click="uninstall(pack)"
               />
               <UiButton
                 v-if="pack.origin === 'custom'"
@@ -230,7 +244,7 @@ onBeforeUnmount(() => {
                 variant="danger"
                 :label="i18n.t('settings.nlp_packs_remove')"
                 :disabled="Boolean(busy)"
-                @click="run(pack.pack_id, () => documentNlpApi.removePack(pack.pack_id))"
+                @click="removePack(pack)"
               />
             </template>
           </td>

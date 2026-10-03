@@ -2789,7 +2789,6 @@ function getShellSnapshot() {
   ).length;
   return {
     view: state.view,
-    sidebarCollapsed: state.sidebarCollapsed,
     files: state.files.map((file) => describeRecordsFile(file, state.activeFileId)),
     context: ctx,
     totalLoaded,
