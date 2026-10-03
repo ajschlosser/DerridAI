@@ -28,21 +28,14 @@ A saved pipeline definition is data over a closed strategy registry. Definitions
 
 ```mermaid
 flowchart LR
-    Definition["Pipeline definition
-models.py / definition_store.py"]
-    Registry["Closed strategy registry
-registry.py"]
-    Purpose["Purpose contract
-purposes.py"]
-    Wiring["Typed port wiring
-contracts.py / wiring.py"]
-    Validate["Validation + assignment
-service.py / manager.py"]
-    Adapter["Purpose runtime adapter
-workflows.py + feature adapter"]
+    Definition["Pipeline definition<br/>models.py / definition_store.py"]
+    Registry["Closed strategy registry<br/>registry.py"]
+    Purpose["Purpose contract<br/>purposes.py"]
+    Wiring["Typed port wiring<br/>contracts.py / wiring.py"]
+    Validate["Validation + assignment<br/>service.py / manager.py"]
+    Adapter["Purpose runtime adapter<br/>workflows.py + feature adapter"]
     Stages["Server-owned strategies"]
-    Trace["Bounded run trace
-tracing.py / trace_store.py"]
+    Trace["Bounded run trace<br/>tracing.py / trace_store.py"]
     Metrics["Latency / complexity / metrics"]
     Bench["Benchmark + comparison"]
 
