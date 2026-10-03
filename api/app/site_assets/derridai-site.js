@@ -1234,7 +1234,6 @@
           node("strong", { text: record.work || record.record_id }),
           node("div", { class: "meta", text: client.citations.format(record).plain }),
         ),
-        node("span", { class: "score", text: Number(item.score || 0).toFixed(3) }),
       ),
       node("div", { class: "snippet" }, ...highlighted(snippet, searchedQuery)),
       node("button", {
@@ -1246,20 +1245,24 @@
   }
 
   function searchView() {
-    const panel = node("section", {
-      class: "panel",
+    const recordCount = (publication.works || []).reduce(
+      (sum, item) => sum + Number(item.record_count || 0),
+      0,
+    );
+    const surface = node("section", {
+      class: "search-surface",
       "aria-labelledby": "search-heading",
     });
-    const heading = node("h2", { id: "search-heading", text: t("site.runtime.search") });
     const query = node("input", {
       class: "control",
       type: "search",
       placeholder: t("site.runtime.search_placeholder"),
-      "aria-label": t("site.runtime.search"),
+      "aria-label": t("site.runtime.search_query_label"),
+      autocomplete: "off",
     });
     const submit = node("button", {
       class: "primary",
-      type: "button",
+      type: "submit",
       text: t("site.runtime.search"),
     });
     const mode = node(
@@ -1315,8 +1318,71 @@
       placeholder: t("site.runtime.filter_value"),
       "aria-label": t("site.runtime.filter_value"),
     });
-    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
-    const results = node("div", { class: "stack", "aria-live": "polite" });
+    const clearFilters = node("button", {
+      type: "button",
+      text: t("site.runtime.clear_filters"),
+      on: {
+        click: () => {
+          work.value = "";
+          field.value = "";
+          value.value = "";
+          work.focus();
+        },
+      },
+    });
+    const status = node("div", {
+      class: "status",
+      role: "status",
+      "aria-live": "polite",
+      text: t("site.runtime.search_prompt", { count: recordCount.toLocaleString(locale) }),
+    });
+    const results = node("div", { class: "search-results", "aria-live": "polite" });
+    const resultsHeading = node(
+      "div",
+      { class: "results-heading", hidden: true },
+      node("h2", { text: t("site.runtime.search_results") }),
+      node("span", { class: "meta" }),
+    );
+    const resultCount = resultsHeading.querySelector(".meta");
+    const form = node(
+      "form",
+      {
+        class: "search-form",
+        role: "search",
+        "aria-label": t("site.runtime.search"),
+        on: {
+          submit: (event) => {
+            event.preventDefault();
+            run();
+          },
+        },
+      },
+      node("div", { class: "search-row", "data-tour": "search" }, query, submit),
+      node(
+        "div",
+        { class: "search-toolbar" },
+        node(
+          "label",
+          { class: "search-mode-field" },
+          node("span", { text: t("site.runtime.search_mode") }),
+          mode,
+        ),
+        methods,
+      ),
+      node(
+        "details",
+        { class: "search-refine", "data-tour": "filters" },
+        node("summary", { text: t("site.runtime.refine_search") }),
+        node(
+          "div",
+          { class: "filters" },
+          node("label", { class: "field" }, node("span", { text: t("site.runtime.work_filter") }), work),
+          node("label", { class: "field" }, node("span", { text: t("site.runtime.field_filter") }), field),
+          node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_value") }), value),
+          node("div", { class: "field" }, node("span", { class: "sr-only", text: t("site.runtime.clear_filters") }), clearFilters),
+        ),
+      ),
+    );
 
     async function run() {
       submit.disabled = true;
@@ -1328,11 +1394,10 @@
             ? t("site.runtime.activity_vector_search")
             : t("site.runtime.activity_hybrid_search");
       results.replaceChildren();
+      resultsHeading.hidden = true;
       const stopProgress = progressListener(status);
       try {
         const searchedQuery = query.value;
-        // Highlighting is a lexical affordance. Semantic and hybrid ranking may return relevant Records that
-        // do not contain the query terms, so only explicit Keyword mode receives a highlight query.
         const highlightQuery = mode.value === "keyword" ? searchedQuery : "";
         const filters = {};
         if (work.value) filters.work = work.value;
@@ -1356,6 +1421,10 @@
               warning,
             })
           : t("site.runtime.results_count", { count: response.results.length });
+        resultsHeading.hidden = false;
+        resultCount.textContent = t("site.runtime.results_count", {
+          count: response.results.length,
+        });
         if (!response.results.length) {
           results.append(node("div", { class: "empty", text: t("site.runtime.no_results") }));
         } else {
@@ -1372,27 +1441,18 @@
       }
     }
 
-    submit.addEventListener("click", run);
-    query.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") run();
-    });
-
-    panel.append(
-      heading,
-      methods,
-      node("div", { class: "search-row", "data-tour": "search" }, query, submit),
+    surface.append(
       node(
         "div",
-        { class: "filters", "data-tour": "filters" },
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.search_mode") }), mode),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.work_filter") }), work),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.field_filter") }), field),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_value") }), value),
+        { class: "search-head" },
+        node("h2", { id: "search-heading", text: t("site.runtime.search") }),
+        node("p", { text: t("site.runtime.search_intro") }),
       ),
+      form,
       status,
       browserSemanticIndexSection(),
     );
-    return node("div", { class: "stack" }, panel, results);
+    return node("div", { class: "stack" }, surface, resultsHeading, results);
   }
 
   function worksView() {
