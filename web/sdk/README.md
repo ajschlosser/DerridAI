@@ -4,6 +4,8 @@
 
 The DerridAI SDK is the framework-neutral research library used by published DerridAI sites and custom “bring your own site” integrations. It is written in TypeScript and can be consumed either as an ESM package with declarations or as the browser IIFE exposed as `globalThis.DerridAI`.
 
+The SDK is not the DerridAI Published Site Runtime. A published site's runtime is the complete browser execution package: publication data, this SDK, the optional DerridAI reference interface, and browser dependencies required by enabled features. The SDK can be used independently of that generated-site runtime and independently of `derridai-site.js`.
+
 The SDK owns publication semantics, progressive Record loading, filtering, lexical/semantic/hybrid retrieval, embedding-contract validation, MMR diversification, evidence-packet construction, deterministic citation resolution, annotations, and Research orchestration. It does not render DOM and does not require Vue, React, Pinia, Vue Router, or the DerridAI application frontend.
 
 AI execution is transport-neutral. A host application injects embedding and generation capabilities as TypeScript/JavaScript objects. The SDK does not accept an API endpoint or API key and does not make direct browser-to-model-provider requests.

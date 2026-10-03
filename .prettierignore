@@ -16,7 +16,7 @@ web/tests/e2e/legacy-dom-baseline.spec.ts-snapshots/
 # Generated snapshot artifacts are updated by their owning test runner.
 *.snap
 
-# Packaged static-site runtime is shipped verbatim as a standalone browser distribution asset.
+# Published-site browser assets are shipped verbatim: the reference interface and reusable SDK are distinct.
 api/app/site_assets/derridai-site.js
 api/app/site_assets/derridai-sdk.js
 

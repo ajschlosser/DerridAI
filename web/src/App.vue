@@ -19,6 +19,8 @@ import MessageDialogHost from "./components/MessageDialogHost.vue";
 import RemoveWorkDialog from "./components/RemoveWorkDialog.vue";
 import SeparateWorksDialog from "./components/SeparateWorksDialog.vue";
 import BulkFieldEditorDialog from "./components/BulkFieldEditorDialog.vue";
+import JobDetailsDialog from "./components/JobDetailsDialog.vue";
+import JobReviewDialog from "./components/JobReviewDialog.vue";
 import LlmToolResultDialog from "./components/LlmToolResultDialog.vue";
 import PdfDraftRecordDialog from "./components/PdfDraftRecordDialog.vue";
 import RecordPreviewDialog from "./components/RecordPreviewDialog.vue";
@@ -766,6 +768,8 @@ watch(
   <RecordFieldEditorDialog />
   <UpsertQueueDialog />
   <RecordPreviewDialog />
+  <JobDetailsDialog />
+  <JobReviewDialog />
   <LlmToolResultDialog />
   <PdfDraftRecordDialog />
   <WorkMetadataEditorDialog />

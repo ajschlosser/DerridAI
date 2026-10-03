@@ -19,6 +19,28 @@ function throwIfAborted(signal?: AbortSignal): void {
 }
 
 /**
+ * Give rendering, input, and cancellation a chance to run between embedding batches.
+ *
+ * Embedding providers are allowed to do CPU-heavy browser work. Awaiting a resolved provider promise only
+ * returns to the microtask queue, which can still starve rendering across a large Record chunk. A real task
+ * boundary keeps long local-index builds responsive without changing provider semantics.
+ */
+async function yieldBetweenIndexBatches(signal?: AbortSignal): Promise<void> {
+  throwIfAborted(signal);
+  const scheduler = (
+    globalThis as typeof globalThis & {
+      scheduler?: { yield?: () => Promise<void> };
+    }
+  ).scheduler;
+  if (scheduler?.yield) {
+    await scheduler.yield();
+  } else {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  throwIfAborted(signal);
+}
+
+/**
  * Vectors computed in this client with the reader's own embedding model. They are derived from the published
  * Records, keyed by publication and exact model, and never replace or alter the publication's own vectors.
  */
@@ -140,6 +162,9 @@ export class LocalVectorIndex {
         await this.store.put(this.publicationId, fingerprint, descriptor, entries);
         indexed += entries.length;
         this.events.emit({ type: "index-progress", runId, indexed, total });
+        if (start + batchSize < embeddable.length) {
+          await yieldBetweenIndexBatches(signal);
+        }
       }
       if (dimension) await writeEmpty(empty);
       else deferredEmpty.push(...empty);

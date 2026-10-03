@@ -737,6 +737,7 @@ const scenarios: Scenario[] = [
   ...[0, 1, 2].map(
     (index): Scenario => ({
       name: `dialog-job-details-${index}`,
+      contains: [" details"],
       load: true,
       target: "dialog",
       fixtures: jobFixtures(FINISHED_JOBS),
@@ -745,6 +746,7 @@ const scenarios: Scenario[] = [
   ),
   {
     name: "dialog-job-results-review",
+    contains: ["LLM review changes"],
     load: true,
     target: "dialog",
     fixtures: jobFixtures(FINISHED_JOBS),

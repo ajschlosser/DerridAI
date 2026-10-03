@@ -45,7 +45,7 @@ function strings() {
     "site.runtime.display_controls": "Display and language controls",
     "site.runtime.skip_to_content": "Skip to main content",
     "site.runtime.site_title": "Research site",
-    "site.runtime.powered_by_sdk": "Published with DerridAI",
+    "site.runtime.powered_by": "Published with DerridAI",
     "site.runtime.publication_summary": "{works} works · {records} records · published {date}",
     "site.runtime.method_disclosure": "Technology used for this operation",
     "site.runtime.method_text": "Text search",
@@ -647,10 +647,10 @@ test("the built-in browser model builds a semantic index in one compatibility-fi
   await mountProviderSite(page, { transformers_runtime: "files" });
 
   await page.getByRole("button", { name: "Models", exact: true }).click();
-  await expect(page.getByLabel("Embedding model")).toHaveValue("Xenova/bge-m3");
+  await expect(page.getByLabel("Embedding model")).toHaveValue("Xenova/multilingual-e5-small");
   await expect(page.getByLabel("Where to run the model")).toHaveValue("wasm");
   await expect(page.locator('[data-index="ready"]')).toContainText(
-    "Published vectors use bge-m3:latest; this browser uses Xenova/bge-m3",
+    "Published vectors use bge-m3:latest; this browser uses Xenova/multilingual-e5-small",
   );
 
   // Search exposes the same complete happy path. The reader does not need to visit Models or run a separate
@@ -686,7 +686,7 @@ test("the built-in browser model builds a semantic index in one compatibility-fi
   );
   expect(pipelineCall).toMatchObject({
     task: "feature-extraction",
-    model: "Xenova/bge-m3",
+    model: "Xenova/multilingual-e5-small",
     options: {
       device: "wasm",
       dtype: "q8",

@@ -22,8 +22,13 @@ from ..pipelines.benchmark import (
     build_research_benchmark_run,
 )
 from ..pipelines.comparison import (
+    EvidencePipelineComparisonRequest,
     ResearchPipelineComparisonRequest,
+    compare_evidence_runs,
     compare_research_dry_runs,
+    comparison_source_projection,
+    summarize_evidence_recovery_run,
+    summarize_evidence_suggestion_run,
 )
 from ..pipelines.latency import strategy_latency
 from ..pipelines.manager import pipeline_manager
@@ -337,6 +342,104 @@ def compare_research_pipelines(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return compare_research_dry_runs(left, right)
+
+
+def _evidence_pipeline(ref: Any, *, purpose: str):
+    pipeline = pipeline_manager.get_definition(ref.pipeline_id, ref.version)
+    if pipeline is None:
+        raise ValueError(f"Pipeline {ref.pipeline_id!r}@{ref.version} was not found.")
+    if pipeline.purpose != purpose:
+        raise ValueError(
+            f"Pipeline {pipeline.pipeline_id}@{pipeline.version} is a {pipeline.purpose} "
+            f"pipeline, not a {purpose} pipeline."
+        )
+    return pipeline
+
+
+@router.post("/compare/evidence-suggestion")
+def compare_evidence_suggestion_pipelines(
+    body: EvidencePipelineComparisonRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Run two saved reviewer-evidence pipelines on the same value and blocks.
+
+    The comparison never writes a corpus record, review decision, or pipeline
+    trace. It does not bind evidence.
+    """
+
+    require_admin(request)
+    from ..pipelines.evidence import execute_reviewer_evidence_pipeline
+
+    try:
+        sides = []
+        projection = comparison_source_projection()
+        for ref in (body.left, body.right):
+            pipeline = _evidence_pipeline(ref, purpose="evidence_suggestion")
+            execution = execute_reviewer_evidence_pipeline(
+                pipeline=pipeline,
+                resolved_hash=pipeline_hash(pipeline),
+                value=body.value,
+                blocks=list(body.blocks),
+                field_metadata=body.field_metadata or {"name": body.field, "label": body.field},
+                source_document_id=body.source_document_id,
+                projection=projection,
+                limit=body.limit,
+            )
+            sides.append(summarize_evidence_suggestion_run(execution))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return compare_evidence_runs(sides[0], sides[1])
+
+
+@router.post("/compare/evidence-recovery")
+def compare_evidence_recovery_pipelines(
+    body: EvidencePipelineComparisonRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Run two saved evidence-recovery pipelines on the same value and blocks.
+
+    The comparison walks the cascade in memory and does not persist a run trace
+    or attach evidence to a record.
+    """
+
+    require_admin(request)
+    from ..pipelines.evidence_recovery import (
+        compile_recovery_pipeline,
+        execute_recovery_pipeline,
+    )
+
+    try:
+        sides = []
+        projection = comparison_source_projection()
+        for ref in (body.left, body.right):
+            pipeline = _evidence_pipeline(ref, purpose="evidence_recovery")
+            plan = compile_recovery_pipeline(pipeline)
+            items, winner, trace = execute_recovery_pipeline(
+                plan,
+                resolved_hash=pipeline_hash(pipeline),
+                value=body.value,
+                blocks=list(body.blocks),
+                field=body.field,
+                field_metadata=body.field_metadata or {"name": body.field, "label": body.field},
+                source_document_id=body.source_document_id,
+                projection=projection,
+                llm_choice=None,
+                llm_skip_reason="Evidence-recovery comparison does not call a language model.",
+            )
+            sides.append(
+                summarize_evidence_recovery_run(
+                    pipeline=pipeline,
+                    resolved_hash=pipeline_hash(pipeline),
+                    items=items,
+                    winner=winner,
+                    trace=trace,
+                    celf_compliant=plan.celf_compliant,
+                    compliance_reason=plan.compliance_reason,
+                )
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return compare_evidence_runs(sides[0], sides[1])
 
 
 def _same_benchmark_fixture(

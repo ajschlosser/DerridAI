@@ -135,7 +135,7 @@
         "retrieve.token_overlap": "inspect_only",
         "select.memory_hints": "inspect_only",
         "select.metadata_quotas": "inspect_only",
-        "select.mmr": "inspect_only",
+        "select.mmr": "supported",
         "select.source_diversity": "inspect_only",
         "select.top_k": "supported",
         "validate.citation_binding": "output_contract",

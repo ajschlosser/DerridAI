@@ -406,6 +406,71 @@ export type ResearchPipelineComparisonResult = {
   };
 };
 
+export type EvidencePipelineComparisonSide = {
+  pipeline: {
+    pipeline_id?: string | null;
+    pipeline_version?: number | null;
+    pipeline_hash?: string | null;
+    purpose?: string | null;
+    celf_compliant?: boolean;
+    compliance_reason?: string;
+  };
+  elapsed_seconds?: number | null;
+  winning_strategy?: string | null;
+  stages: Array<{
+    stage_id: string;
+    strategy?: string | null;
+    status?: string | null;
+    elapsed_ms?: number | null;
+    input_count?: number | null;
+    output_count?: number | null;
+    fallback_reason?: string | null;
+  }>;
+  candidates: Array<{
+    block_id: string;
+    rank: number;
+    score?: number | null;
+    lexical_score?: number | null;
+    semantic_score?: number | null;
+    cross_encoder_score?: number | null;
+    mmr_score?: number | null;
+    support_score?: number | null;
+    method?: string | null;
+  }>;
+};
+
+export type EvidencePipelineComparisonResult = {
+  non_persistent: boolean;
+  left: EvidencePipelineComparisonSide;
+  right: EvidencePipelineComparisonSide;
+  comparison: {
+    shared_block_ids: string[];
+    left_only_block_ids: string[];
+    right_only_block_ids: string[];
+    shared_count: number;
+    union_count: number;
+    jaccard_overlap: number;
+    rank_changes: Array<{
+      block_id: string;
+      left_rank: number;
+      right_rank: number;
+      rank_delta: number;
+    }>;
+    elapsed_seconds_delta?: number | null;
+  };
+};
+
+export type EvidencePipelineComparisonRequest = {
+  value: unknown;
+  blocks: Array<{ block_id: string; text: string; source_unit_id?: string }>;
+  field: string;
+  field_metadata?: Record<string, unknown>;
+  source_document_id?: string;
+  left: { pipeline_id: string; version: number };
+  right: { pipeline_id: string; version: number };
+  limit?: number;
+};
+
 export type ResearchPipelineComparisonRequest = {
   request: {
     prompt: string;
