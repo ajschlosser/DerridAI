@@ -233,16 +233,6 @@ watch(
   },
   { immediate: true },
 );
-watch(
-  () => props.record,
-  (record) => {
-    if (!props.open) {
-      original.value = clone(record || {});
-      draft.value = clone(record || {});
-    }
-  },
-  { deep: false },
-);
 function close() {
   emit("close");
 }
