@@ -57,19 +57,28 @@
   if (!availableLocales.includes(locale)) locale = availableLocales[0] || "en-US";
   let theme = readLocal(themeKey) === "dark" ? "dark" : "light";
   let highContrast = readLocal(contrastKey) === "high";
-  // Keep the automatic browser profile compatibility-first. A publication may have been embedded by a much
-  // larger model (for example BGE-M3), but rebuilding every Record with that model on a single browser main
-  // thread can exhaust memory or make the page unresponsive. Readers can still select those models explicitly.
+  // Keep the automatic browser profile compatibility-first. New publications carry this
+  // contract explicitly so precomputed browser-ready vectors and query embeddings stay aligned.
+  const publishedBrowserProfile = {
+    model: "Xenova/multilingual-e5-small",
+    revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+    dtype: "q8",
+    pooling: "mean",
+    normalize: true,
+    query_prefix: "query: ",
+    document_prefix: "passage: ",
+    ...(publication.browser_embedding_profile || {}),
+  };
   const TRANSFORMERS_SUGGESTIONS = [
     {
-      id: "Xenova/multilingual-e5-small",
-      revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
-      dtype: "q8",
-      pooling: "mean",
-      normalize: true,
+      id: publishedBrowserProfile.model,
+      revision: publishedBrowserProfile.revision,
+      dtype: publishedBrowserProfile.dtype,
+      pooling: publishedBrowserProfile.pooling,
+      normalize: publishedBrowserProfile.normalize !== false,
       note: "site.runtime.transformers_model_multilingual_small",
-      query_prefix: "query: ",
-      document_prefix: "passage: ",
+      query_prefix: publishedBrowserProfile.query_prefix,
+      document_prefix: publishedBrowserProfile.document_prefix,
     },
     {
       id: "Xenova/all-MiniLM-L6-v2",
@@ -86,7 +95,7 @@
       note: "site.runtime.transformers_model_bge_m3",
     },
   ];
-  const DEFAULT_TRANSFORMERS_MODEL = "Xenova/multilingual-e5-small";
+  const DEFAULT_TRANSFORMERS_MODEL = String(publishedBrowserProfile.model);
   const DEFAULT_TRANSFORMERS_DEVICE = "wasm";
   const MODEL_CACHE_NAME = "transformers-cache";
 
@@ -208,20 +217,20 @@
     :root{
       font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
       color-scheme:light;
-      --bg:#ffffff;--fg:#111827;--muted:#4b5563;--surface:#f8fafc;--raised:#e5e7eb;
-      --border:#6b7280;--accent:#005ea8;--accent-text:#ffffff;--danger:#b42318;
+      --bg:#ffffff;--fg:#111827;--muted:#4b5563;--surface:#f7f8fa;--raised:#eef1f4;
+      --border:#697586;--border-subtle:#d7dde4;--accent:#005ea8;--accent-text:#ffffff;--danger:#b42318;
       --success:#166534;--warning:#7c4a03;--mark-bg:#fde68a;--mark-fg:#111827;--shadow:0 12px 32px rgba(17,24,39,.18)
     }
     :root[data-theme="dark"]{
       color-scheme:dark;
-      --bg:#111827;--fg:#f9fafb;--muted:#d1d5db;--surface:#1f2937;--raised:#374151;
-      --border:#9ca3af;--accent:#8ecbff;--accent-text:#0b1725;--danger:#ffb4ab;
+      --bg:#111827;--fg:#f9fafb;--muted:#d1d5db;--surface:#171f2d;--raised:#283446;
+      --border:#a6afbc;--border-subtle:#3d495a;--accent:#8ecbff;--accent-text:#0b1725;--danger:#ffb4ab;
       --success:#9ee6b1;--warning:#ffd38a;--mark-bg:#facc15;--mark-fg:#111827;--shadow:0 12px 32px rgba(0,0,0,.55)
     }
     :root[data-contrast="high"]{
       color-scheme:dark;
       --bg:#000000;--fg:#ffffff;--muted:#ffffff;--surface:#000000;--raised:#1a1a1a;
-      --border:#ffffff;--accent:#ffdf00;--accent-text:#000000;--danger:#ff8a80;
+      --border:#ffffff;--border-subtle:#ffffff;--accent:#ffdf00;--accent-text:#000000;--danger:#ff8a80;
       --success:#9cff9c;--warning:#ffe66d;--mark-bg:#ffdf00;--mark-fg:#000000;--shadow:0 0 0 2px #ffffff
     }
     *{box-sizing:border-box}
@@ -240,28 +249,39 @@
     .skip-link{position:fixed;left:.75rem;top:.75rem;z-index:1000;transform:translateY(-180%);background:var(--accent);color:var(--accent-text);padding:.65rem .85rem;border-radius:.4rem;font-weight:700}
     .skip-link:focus{transform:none}
     .shell{min-height:100vh}
-    .top{border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:5}
-    .top-inner,.main{width:min(1180px,calc(100% - 2rem));margin:auto}
-    .top-inner{display:flex;gap:.8rem;align-items:center;padding:.8rem 0;flex-wrap:wrap}
+    .top{border-bottom:1px solid var(--border-subtle);background:var(--bg);position:sticky;top:0;z-index:5}
+    .top-inner,.main{width:min(1080px,calc(100% - 2rem));margin:auto}
+    .top-inner{display:flex;gap:.8rem;align-items:center;padding:.72rem 0;flex-wrap:wrap}
     .brand{min-width:13rem;flex:1}.brand strong{display:block;font-size:1.05rem}.brand small,.muted,.meta{color:var(--muted)}
-    nav{display:flex;gap:.4rem;flex-wrap:wrap}
-    nav button[aria-current="page"]{background:var(--raised);font-weight:800;border-width:2px}
+    nav{display:flex;gap:.15rem;flex-wrap:wrap}
+    nav button{min-height:2.5rem;border-color:transparent;border-radius:.3rem;background:transparent;padding:.4rem .65rem}
+    nav button[aria-current="page"]{background:transparent;color:var(--accent);border-color:transparent;border-bottom:3px solid var(--accent);font-weight:800}
     .header-controls{display:flex;gap:.45rem;align-items:end;flex-wrap:wrap}
     .compact-field{display:grid;gap:.18rem;min-width:8rem}.compact-field>span{font-size:.78rem;font-weight:800;color:var(--muted)}
     .control{width:100%;border:1px solid var(--border);border-radius:.5rem;background:var(--bg);padding:.5rem .65rem}
     .toggle{display:flex;align-items:center;gap:.45rem;min-height:2.75rem;padding:.35rem .55rem;border:1px solid var(--border);border-radius:.5rem;background:var(--bg);font-weight:700}
     .toggle input{width:1.1rem;height:1.1rem}
-    .main{padding:1.2rem 0 2.4rem;scroll-margin-top:6rem}
-    .hero{margin-bottom:1.2rem}.hero h1{margin:.15rem 0;font-size:clamp(1.45rem,3vw,2.25rem)}.hero p{max-width:70ch;color:var(--muted)}
-    .panel,.card{border:1px solid var(--border);border-radius:.75rem;background:var(--surface);padding:1rem}
+    .main{padding:1.15rem 0 2.4rem;scroll-margin-top:6rem}
+    .hero{margin-bottom:1rem}.hero h1{margin:.1rem 0;font-size:clamp(1.4rem,2.8vw,2.05rem);letter-spacing:-.015em}.hero p{max-width:68ch;margin:.35rem 0 0;color:var(--muted)}
+    .panel,.card{border:1px solid var(--border-subtle);border-radius:.7rem;background:var(--surface);padding:1rem}
     .stack{display:grid;gap:.8rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:.8rem}
-    .search-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.6rem}.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:.7rem;margin-top:.8rem}
+    .search-surface{border:1px solid var(--border-subtle);border-radius:.85rem;background:var(--surface);padding:clamp(.9rem,2vw,1.25rem)}
+    .search-head{display:grid;gap:.2rem;margin-bottom:.8rem}.search-head h2{margin:0;font-size:1.08rem}.search-head p{max-width:68ch;margin:0;color:var(--muted)}
+    .search-form{display:grid;gap:.65rem}.search-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.55rem}
+    .search-row .control{min-height:3rem;font-size:1.04rem;background:var(--bg)}
+    .search-toolbar{display:flex;gap:.75rem;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    .search-mode-field{display:flex;gap:.45rem;align-items:center;color:var(--muted);font-size:.86rem;font-weight:700}
+    .search-mode-field .control{width:auto;min-width:9rem;min-height:2.4rem;padding:.35rem .55rem}
+    .search-refine{border-top:1px solid var(--border-subtle);padding-top:.2rem}.search-refine summary{width:max-content;max-width:100%;padding:.4rem 0;cursor:pointer;font-weight:750}
+    .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:.7rem;margin:.45rem 0 .15rem}
+    .search-results{display:grid;gap:0}.results-heading{display:flex;gap:.75rem;align-items:end;justify-content:space-between;padding:.2rem 0 .55rem;border-bottom:1px solid var(--border-subtle)}
+    .results-heading h2{margin:0;font-size:1rem}.results-heading .meta{font-size:.85rem}
     .field{display:grid;gap:.3rem}.field>span{font-size:.82rem;font-weight:800;color:var(--muted)}
-    .result{display:grid;gap:.5rem}.result-head{display:flex;gap:.7rem;justify-content:space-between;align-items:start}
+    .result{display:grid;gap:.45rem;padding:1rem 0;border:0;border-bottom:1px solid var(--border-subtle);border-radius:0;background:transparent}.result-head{display:flex;gap:.7rem;justify-content:space-between;align-items:start}.result .meta{font-size:.88rem}.result button{justify-self:start;min-height:2.35rem;padding:.35rem .65rem;background:transparent}
     mark{background:var(--mark-bg);color:var(--mark-fg);border-radius:.2em;padding:0 .12em;font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:.15em}
     .score{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.875rem}.snippet{white-space:pre-wrap}
-    .chips,.method-strip{display:flex;flex-wrap:wrap;gap:.4rem}.chip,.method-badge{font-size:.82rem;padding:.25rem .55rem;border-radius:999px;background:var(--raised);border:1px solid var(--border)}
-    .method-strip{margin:.75rem 0}.method-badge[data-active="true"]{border-width:2px;font-weight:800}.method-badge[data-active="false"]{opacity:.72}
+    .chips,.method-strip{display:flex;flex-wrap:wrap;gap:.35rem}.chip,.method-badge{font-size:.78rem;padding:.18rem .48rem;border-radius:999px;background:transparent;border:1px solid var(--border-subtle)}
+    .method-strip{margin:0}.method-badge[data-active="true"]{border-color:var(--border);font-weight:750}.method-badge[data-active="false"]{opacity:.64}
     .method-badge .state{margin-inline-start:.25rem;font-weight:700}
     .status{min-height:1.5rem;color:var(--muted);margin:.6rem 0}.status.error{color:var(--danger);font-weight:700}.status.warning{color:var(--warning);font-weight:700}.status.success{color:var(--success);font-weight:700}
     .empty{text-align:center;padding:2.3rem;color:var(--muted)}
@@ -295,7 +315,7 @@
     .footer{margin-top:3rem;border-top:1px solid var(--border);padding:1.2rem 0 2.5rem;color:var(--muted);font-size:.875rem}
     [hidden]{display:none!important}progress{width:100%;height:1rem;accent-color:var(--accent)}
     .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
-    @media(max-width:760px){.research-layout{grid-template-columns:1fr}.search-row{grid-template-columns:1fr}.top{position:static}.top-inner,.main{width:min(100% - 1rem,1180px)}.main{scroll-margin-top:1rem}.header-controls{width:100%}}
+    @media(max-width:760px){.research-layout{grid-template-columns:1fr}.search-row{grid-template-columns:1fr}.search-toolbar{align-items:flex-start;flex-direction:column}.top{position:static}.top-inner,.main{width:min(100% - 1rem,1080px)}.main{scroll-margin-top:1rem}.header-controls{width:100%}}
     @media(forced-colors:active){.tour-spot{outline:4px solid Highlight}mark{background:Mark;color:MarkText;forced-color-adjust:none}button,.control,.panel,.card,.method-badge,.toggle{forced-color-adjust:auto}.method-badge[data-active="true"]{outline:2px solid CanvasText}}
   `;
   document.head.appendChild(style);
@@ -1214,7 +1234,6 @@
           node("strong", { text: record.work || record.record_id }),
           node("div", { class: "meta", text: client.citations.format(record).plain }),
         ),
-        node("span", { class: "score", text: Number(item.score || 0).toFixed(3) }),
       ),
       node("div", { class: "snippet" }, ...highlighted(snippet, searchedQuery)),
       node("button", {
@@ -1226,20 +1245,24 @@
   }
 
   function searchView() {
-    const panel = node("section", {
-      class: "panel",
+    const recordCount = (publication.works || []).reduce(
+      (sum, item) => sum + Number(item.record_count || 0),
+      0,
+    );
+    const surface = node("section", {
+      class: "search-surface",
       "aria-labelledby": "search-heading",
     });
-    const heading = node("h2", { id: "search-heading", text: t("site.runtime.search") });
     const query = node("input", {
       class: "control",
       type: "search",
       placeholder: t("site.runtime.search_placeholder"),
-      "aria-label": t("site.runtime.search"),
+      "aria-label": t("site.runtime.search_query_label"),
+      autocomplete: "off",
     });
     const submit = node("button", {
       class: "primary",
-      type: "button",
+      type: "submit",
       text: t("site.runtime.search"),
     });
     const mode = node(
@@ -1295,8 +1318,71 @@
       placeholder: t("site.runtime.filter_value"),
       "aria-label": t("site.runtime.filter_value"),
     });
-    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
-    const results = node("div", { class: "stack", "aria-live": "polite" });
+    const clearFilters = node("button", {
+      type: "button",
+      text: t("site.runtime.clear_filters"),
+      on: {
+        click: () => {
+          work.value = "";
+          field.value = "";
+          value.value = "";
+          work.focus();
+        },
+      },
+    });
+    const status = node("div", {
+      class: "status",
+      role: "status",
+      "aria-live": "polite",
+      text: t("site.runtime.search_prompt", { count: recordCount.toLocaleString(locale) }),
+    });
+    const results = node("div", { class: "search-results", "aria-live": "polite" });
+    const resultsHeading = node(
+      "div",
+      { class: "results-heading", hidden: true },
+      node("h2", { text: t("site.runtime.search_results") }),
+      node("span", { class: "meta" }),
+    );
+    const resultCount = resultsHeading.querySelector(".meta");
+    const form = node(
+      "form",
+      {
+        class: "search-form",
+        role: "search",
+        "aria-label": t("site.runtime.search"),
+        on: {
+          submit: (event) => {
+            event.preventDefault();
+            run();
+          },
+        },
+      },
+      node("div", { class: "search-row", "data-tour": "search" }, query, submit),
+      node(
+        "div",
+        { class: "search-toolbar" },
+        node(
+          "label",
+          { class: "search-mode-field" },
+          node("span", { text: t("site.runtime.search_mode") }),
+          mode,
+        ),
+        methods,
+      ),
+      node(
+        "details",
+        { class: "search-refine", "data-tour": "filters" },
+        node("summary", { text: t("site.runtime.refine_search") }),
+        node(
+          "div",
+          { class: "filters" },
+          node("label", { class: "field" }, node("span", { text: t("site.runtime.work_filter") }), work),
+          node("label", { class: "field" }, node("span", { text: t("site.runtime.field_filter") }), field),
+          node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_value") }), value),
+          node("div", { class: "field" }, node("span", { class: "sr-only", text: t("site.runtime.clear_filters") }), clearFilters),
+        ),
+      ),
+    );
 
     async function run() {
       submit.disabled = true;
@@ -1308,11 +1394,10 @@
             ? t("site.runtime.activity_vector_search")
             : t("site.runtime.activity_hybrid_search");
       results.replaceChildren();
+      resultsHeading.hidden = true;
       const stopProgress = progressListener(status);
       try {
         const searchedQuery = query.value;
-        // Highlighting is a lexical affordance. Semantic and hybrid ranking may return relevant Records that
-        // do not contain the query terms, so only explicit Keyword mode receives a highlight query.
         const highlightQuery = mode.value === "keyword" ? searchedQuery : "";
         const filters = {};
         if (work.value) filters.work = work.value;
@@ -1336,6 +1421,10 @@
               warning,
             })
           : t("site.runtime.results_count", { count: response.results.length });
+        resultsHeading.hidden = false;
+        resultCount.textContent = t("site.runtime.results_count", {
+          count: response.results.length,
+        });
         if (!response.results.length) {
           results.append(node("div", { class: "empty", text: t("site.runtime.no_results") }));
         } else {
@@ -1352,27 +1441,18 @@
       }
     }
 
-    submit.addEventListener("click", run);
-    query.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") run();
-    });
-
-    panel.append(
-      heading,
-      methods,
-      node("div", { class: "search-row", "data-tour": "search" }, query, submit),
+    surface.append(
       node(
         "div",
-        { class: "filters", "data-tour": "filters" },
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.search_mode") }), mode),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.work_filter") }), work),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.field_filter") }), field),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_value") }), value),
+        { class: "search-head" },
+        node("h2", { id: "search-heading", text: t("site.runtime.search") }),
+        node("p", { text: t("site.runtime.search_intro") }),
       ),
+      form,
       status,
       browserSemanticIndexSection(),
     );
-    return node("div", { class: "stack" }, panel, results);
+    return node("div", { class: "stack" }, surface, resultsHeading, results);
   }
 
   function worksView() {
