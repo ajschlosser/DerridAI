@@ -30,12 +30,16 @@ watch(view, (next, previous) => {
 watch(
   () => current.value !== null,
   async (isOpen) => {
+    // Close while the native dialog is still mounted so focus returns to the
+    // opener before Vue removes the inactive host from the application DOM.
+    if (!isOpen) {
+      const dialog = dialogRef.value;
+      if (dialog?.open) dialog.close();
+      return;
+    }
     await nextTick();
     const dialog = dialogRef.value;
-    if (!dialog) return;
-    if (!isOpen) {
-      if (dialog.open) dialog.close();
-    } else if (!dialog.open) {
+    if (dialog && !dialog.open) {
       defaultSelection();
       dialog.showModal();
     }
@@ -67,6 +71,7 @@ const rejectSelected = () => run(() => current.value!.actions.rejectSelected(pic
 
 <template>
   <dialog
+    v-if="current"
     ref="dialogRef"
     class="job-results-dialog"
     aria-labelledby="jobReviewTitle"
