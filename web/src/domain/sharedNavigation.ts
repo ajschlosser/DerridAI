@@ -26,14 +26,23 @@ import {
   sharedUrlStateCodec,
   state,
 } from "./sharedUrlState";
-import { persistPrefs, shell } from "./sharedWorkspaceStorage";
+import { persistPrefs, refreshShell, shell } from "./sharedWorkspaceStorage";
+import { unmountOperationsPanel } from "../runtime/operationsPanelHost";
 
 // Navigation over the shared workspace state, usable without the legacy runtime. The runtime uses this same instance
-// (one URL-sync hook, one snapshot), and installs `setRenderViewHook` for the part of a transition that still lives
-// there: unmounting the legacy operations panel and normalising the URL after a view change.
-let renderViewHook: () => void = () => {};
-export function setRenderViewHook(hook: unknown) {
-  renderViewHook = typeof hook === "function" ? (hook as () => void) : () => {};
+// (one URL-sync hook, one snapshot). `renderView` is the tail of every view transition: unmount the legacy operations
+// panel, guard access and normalise the URL.
+export function renderView() {
+  // Native Vue routes do not mount `#main`; compatibility rendering must not overwrite them with a URL sync.
+  if (!document.querySelector("#main")) {
+    unmountOperationsPanel();
+    refreshShell();
+    return null;
+  }
+  if (state.view !== "home") unmountOperationsPanel();
+  if (!canAccessView(sessionState.userContext, state.view)) state.view = "home";
+  syncUrl({ replace: true });
+  return null;
 }
 
 export const {
@@ -53,7 +62,7 @@ export const {
   canAccessPage: (view: string) => canAccessView(sessionState.userContext, view),
   dbSearchWhere,
   persistPrefs,
-  renderView: () => renderViewHook(),
+  renderView,
   selectedIndex,
   shell,
 });
