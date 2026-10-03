@@ -220,9 +220,6 @@ def build_plan(paths: list[str]) -> PreflightPlan:
         ):
             plan.generated = True
 
-        if path.startswith(("web/src/domain/", "web/tests/e2e/legacy-dom")):
-            plan.legacy = plan.legacy or path.startswith("web/tests/e2e/legacy-dom")
-
     return plan
 
 
