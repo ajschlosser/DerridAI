@@ -56,3 +56,39 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 export const Editable: Story = {};
 export const ReadOnly: Story = { args: { readonly: true } };
+
+export const Empty: Story = {
+  args: {
+    draft: {
+      ...draft(),
+      fields: [],
+    },
+  },
+};
+
+export const FrenchLengthStress: Story = {
+  args: {
+    draft: {
+      ...draft(),
+      name: "Schéma de métadonnées pour l’analyse des attributions et des positions discursives",
+      fields: [
+        {
+          ...blankField("discourse"),
+          name: "position_discursive_detaillee",
+          label: "Position discursive détaillée et attribution au détenteur de la position",
+          type: "choice",
+          evidence: true,
+          assess: true,
+          review: true,
+        },
+        {
+          ...blankField("discourse"),
+          name: "expressions_conceptuelles",
+          label: "Expressions conceptuelles et formulations apparentées",
+          type: "list",
+        },
+      ],
+    },
+  },
+  parameters: { locale: "fr-CA" },
+};
