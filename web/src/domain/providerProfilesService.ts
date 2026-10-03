@@ -30,7 +30,7 @@ interface Deps {
   persistPrefs: () => void;
   uid: () => string;
   isResearcher: () => boolean;
-  warmupProviderProfile: (profile: Loose, options?: Loose) => Promise<unknown>;
+  warmupProviderProfile: (profileId?: string | null) => Promise<unknown>;
 }
 
 export function createProviderProfiles(deps: Deps) {

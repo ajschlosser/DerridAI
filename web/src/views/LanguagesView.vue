@@ -30,6 +30,10 @@ import {
 import { jobsApi, type JobSummary } from "../api/jobs";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../runtime/runtime.js";
+import {
+  getProviderProfilesForUi,
+  getDefaultProviderProfileId,
+} from "../domain/sharedProviderProfiles";
 import { followResource } from "../realtime/follow";
 import LanguageFlag from "../components/LanguageFlag.vue";
 import ProviderProfileSelect from "../components/ProviderProfileSelect.vue";
@@ -329,8 +333,8 @@ function setInstallFlag(value: string) {
   installFlagTouched.value = true;
 }
 function refreshProviderProfiles() {
-  providerProfiles.value = (runtime.getProviderProfilesForUi?.() || []) as ProviderProfile[];
-  const preferred = runtime.getDefaultProviderProfileId?.() || "";
+  providerProfiles.value = (getProviderProfilesForUi() || []) as ProviderProfile[];
+  const preferred = getDefaultProviderProfileId() || "";
   if (!providerProfiles.value.some((item) => item.id === selectedProviderId.value)) {
     selectedProviderId.value = providerProfiles.value.some((item) => item.id === preferred)
       ? preferred
@@ -1318,7 +1322,7 @@ onUnmounted(() => {
               <ProviderProfileSelect
                 v-model="selectedProviderId"
                 :profiles="providerProfiles"
-                :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
+                :default-profile-id="getDefaultProviderProfileId() || ''"
                 :label="i18n.t('language.provider_profile')"
                 :help="i18n.t('language.content_policy_generate_help')"
                 :empty-title="i18n.t('language.no_provider_profiles')"
@@ -1687,7 +1691,7 @@ onUnmounted(() => {
                 <ProviderProfileSelect
                   v-model="selectedProviderId"
                   :profiles="providerProfiles"
-                  :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
+                  :default-profile-id="getDefaultProviderProfileId() || ''"
                   :label="i18n.t('language.provider_profile')"
                   :help="i18n.t('language.provider_profile_help')"
                   :empty-title="i18n.t('language.no_provider_profiles')"

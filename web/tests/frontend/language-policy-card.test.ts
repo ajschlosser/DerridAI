@@ -39,6 +39,10 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("../../src/api/system", () => ({ systemApi: api.system }));
 vi.mock("../../src/api/jobs", () => ({ jobsApi: api.jobs }));
+vi.mock("../../src/domain/sharedProviderProfiles", () => ({
+  getDefaultProviderProfileId: api.runtime.getDefaultProviderProfileId,
+  getProviderProfilesForUi: api.runtime.getProviderProfilesForUi,
+}));
 vi.mock("../../src/runtime/runtime.js", () => ({
   notifyToast: api.runtime.notifyToast,
   getDefaultProviderProfileId: api.runtime.getDefaultProviderProfileId,
