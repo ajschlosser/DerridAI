@@ -229,7 +229,7 @@ test("schema authoring is keyboard-operable and announces a save", async ({ page
   await expect(page.locator(".field-inspector fieldset")).toHaveAttribute("disabled", "");
 
   await page.getByRole("button", { name: "Duplicate", exact: true }).click();
-  await expect(page.getByText("Not saved yet")).toBeVisible();
+  await expect(page.locator(".schema-status").getByText("Not saved yet")).toBeVisible();
 
   const addField = page.getByRole("button", { name: "Add a field", exact: true }).first();
   await addField.click();
