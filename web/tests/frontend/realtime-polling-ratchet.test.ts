@@ -35,7 +35,10 @@ function sources(dir: string): string[] {
 
 function offenders(pattern: RegExp, allowed: Set<string>): string[] {
   return sources(SRC)
-    .map((path) => ({ file: relative(SRC, path), text: readFileSync(path, "utf8") }))
+    .map((path) => ({
+      file: relative(SRC, path).replace(/\\/g, "/"),
+      text: readFileSync(path, "utf8"),
+    }))
     .filter(({ file, text }) => pattern.test(text) && !allowed.has(file))
     .map(({ file }) => file);
 }
