@@ -144,7 +144,7 @@ import { createJobDialogs } from "../domain/jobDialogs";
 import { createWorkDialogs } from "../domain/workDialogs";
 import { createRecordDialogs } from "../domain/recordDialogs";
 import { createOperationDock } from "../domain/operationDock";
-import { createModalDialogs } from "../domain/modalDialogs";
+import { copyCitation, copyJsonToClipboard } from "../domain/clipboardCopy";
 import {
   getUrlSyncHook,
   navSnapshot,
@@ -807,7 +807,6 @@ const {
   reviewKey,
   reviewItemFromKey,
   selectedReviewItems,
-  copyCitation,
   workspaceEvidenceKey,
   dbEvidenceKey,
   selectedEvidenceEntries,
@@ -824,9 +823,7 @@ const {
 } = createEvidenceSelection({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  fullCitation: (...args) => fullCitation(...args),
   hasCapability: (...args) => hasCapability(...args),
-  inlineCitation: (...args) => inlineCitation(...args),
   localRecordKey: (...args) => localRecordKey(...args),
   persistPrefs: (...args) => persistPrefs(...args),
   ragEvidenceRecordPayload: (...args) => ragEvidenceRecordPayload(...args),
@@ -834,12 +831,6 @@ const {
   shellRefreshHook: refreshShell,
   storeReceipt: (...args) => storeReceipt(...args),
   tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-});
-const { copyJsonToClipboard } = createModalDialogs({
-  state,
-  trf: (...args) => trf(...args),
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
 });
 const {
   applyOperationStackPosition,
