@@ -20,7 +20,7 @@ export interface WorksPrepareResult {
 export interface WorksService {
   getSnapshot(): WorksSnapshot | undefined;
   prepare(): Promise<WorksPrepareResult | undefined>;
-  activate(): Promise<WorksPrepareResult | undefined>;
+  activate(onHydrated?: () => void): Promise<WorksPrepareResult | undefined>;
   setQuery(value: string): void;
   setOverview(work: string): void;
   setView(patch: WorksViewPatch): void;
@@ -55,9 +55,10 @@ export const worksService: WorksService = {
 
   prepare: () => runtime.prepareWorksWorkspace?.() as Promise<WorksPrepareResult | undefined>,
 
-  async activate() {
+  async activate(onHydrated) {
     runtime.state.view = "works";
     await runtime.ensureCorpusWorkspaceLoaded?.();
+    onHydrated?.();
     return runtime.prepareWorksWorkspace?.() as Promise<WorksPrepareResult | undefined>;
   },
 

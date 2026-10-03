@@ -23,6 +23,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
+from .document_intelligence import record_annotations_current
 from .nlp_annotations import current_terms
 from .semantic_content_graph import _slug, document_entity_node_id
 from .semantic_identity import text_key
@@ -250,9 +251,13 @@ class _SemanticIndex:
         }
         if analysis.get("status") == "unavailable":
             layer["status"] = "unavailable"
+            return layer, []
         if not isinstance(local, dict):
             return layer, []
-        if analysis.get("stale") or local.get("record_text_sha256") != _sha256(str(record.get("text") or "")):
+        if (
+            analysis.get("stale") or not record_annotations_current(record)
+            or (analysis.get("analysis_id") and local.get("analysis_id") != analysis["analysis_id"])
+        ):
             layer["status"] = "stale"
             return layer, []
         layer["status"] = str(local.get("status") or "ok")

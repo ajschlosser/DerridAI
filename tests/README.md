@@ -22,10 +22,10 @@ DerridAI separates tests by the kind of boundary they exercise rather than by re
 | Integration      | `integration`                                        | Multiple real application subsystems exercised together. Use this only when a fake would hide the behavior being tested. |
 | Characterization | `characterization` / `npm run test:characterization` | Behavior-preservation tests for legacy/refactoring-sensitive surfaces, including the legacy DOM baseline.                |
 | Workflow         | `npm run test:workflow`                              | Browser-level user workflows against built Storybook and the production Vue app.                                         |
-| Accessibility    | `npm run test:accessibility`                         | Exhaustive WCAG-oriented Storybook scans.                                                                                |
+| Accessibility    | `npm run test:accessibility`                         | WCAG-oriented Storybook scans; PRs use a representative matrix, while master/global-a11y changes run the full catalogue. |
 | Slow             | `slow`                                               | Orthogonal marker for intentionally expensive backend cases.                                                             |
 
-Pytest uses strict marker registration. Add a category deliberately when a test crosses a boundary; do not use markers to hide flaky tests. The PR backend gate runs all non-contract backend tests in parallel, while the API contract has its own focused gate.
+Pytest uses strict marker registration. Add a category deliberately when a test crosses a boundary; do not use markers to hide flaky tests. The PR backend gate runs all non-contract backend tests in parallel, while the API contract has its own focused gate. Frontend PR unit coverage runs changed tests plus Vitest's dependency-related tests; master and test-infrastructure changes run the complete unit suite. Legacy DOM characterization, SDK/package validation, publication acceptance, composed browser workflows, and Storybook accessibility are separate ownership gates so an unrelated change does not re-run them.
 
 ## How to read a test file
 

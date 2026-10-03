@@ -185,19 +185,26 @@ def _merge_enrichment_snapshot(live: dict[str, Any], worker: dict[str, Any], all
     return merged
 
 
+_RECORD_SOURCE_KEYS = (
+    "record_id", "record_revision", "text", "source_document_id", "source_asset_id",
+    "source_spans", "source_block_ids", "source_unit_ids", "source_extracted_text",
+)
+
+
+def _record_source_matches(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    missing = object()
+    return all(left.get(key, missing) == right.get(key, missing) for key in _RECORD_SOURCE_KEYS)
+
+
 def _merge_preparation_snapshot(
     base: dict[str, Any], live: dict[str, Any], worker: dict[str, Any],
     allowed_fields: set[str],
 ) -> dict[str, Any]:
     """Apply preparation deltas only to unchanged documentary and field state."""
-    source_keys = (
-        "record_id", "record_revision", "text", "source_document_id", "source_asset_id",
-        "source_spans", "source_block_ids", "source_unit_ids", "source_extracted_text",
-    )
     missing = object()
-    if any(worker.get(key, missing) != base.get(key, missing) for key in source_keys):
+    if not _record_source_matches(worker, base):
         raise ValueError("Preparation cannot change authoritative text, revision, or source bindings.")
-    if any(live.get(key, missing) != base.get(key, missing) for key in source_keys):
+    if not _record_source_matches(live, base):
         return json.loads(json.dumps(live))
     frozen = {"__text__", "__review__"} & set(live.get("human_touched_fields") or [])
     if frozen - set(base.get("human_touched_fields") or []):
@@ -210,7 +217,7 @@ def _merge_preparation_snapshot(
     migrate_record_assertions(live)
     migrate_record_assertions(worker)
     protected = {
-        *source_keys, *allowed_fields, "queue_state_version",
+        *_RECORD_SOURCE_KEYS, *allowed_fields, "queue_state_version",
         "field_assertions", "current_field_assertions",
         "metadata_field_status", "metadata_evidence",
         "human_touched_at", "human_touched_fields", "metadata_decisions",

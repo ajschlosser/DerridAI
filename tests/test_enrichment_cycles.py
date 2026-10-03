@@ -97,7 +97,7 @@ def make_manager(tmp_path: Path, rows: list[dict], *, real_validation: bool = Fa
     manager._validate_execution_budget = lambda request: None
     if not real_validation:
         # Whole-build validation needs the real source asset; it is not under test here.
-        manager._rewrite_and_validate = lambda build_id, records: repo.get_build(build_id)
+        manager._reconcile_and_validate = lambda build_id: repo.get_build(build_id)
     return manager, repo, build["build_id"]
 
 

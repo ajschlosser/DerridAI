@@ -753,3 +753,25 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 });
+
+describe("Works progressive loading", () => {
+  it("renders the title before preparation completes without an empty-state flash", async () => {
+    setActivePinia(createPinia());
+    let finish!: () => void;
+    runtime.prepareWorksWorkspace.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ error: "" });
+        }),
+    );
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(adminSnapshot());
+    const wrapper = mount(WorksView);
+    await flushPromises();
+    expect(wrapper.find("#works-page-title").exists()).toBe(true);
+    expect(wrapper.find(".empty").exists()).toBe(false);
+    finish();
+    await flushPromises();
+    expect(wrapper.find("#worksGrid").exists()).toBe(true);
+    wrapper.unmount();
+  });
+});

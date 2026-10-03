@@ -317,6 +317,11 @@ def build_semantic_content_graph(
     rewritten.
     """
     analysis = analysis if isinstance(analysis, dict) else {}
+    if analysis.get("stale"):
+        analysis = {
+            **analysis, "status": "stale", "entity_clusters": [], "entities": [],
+            "characters": [], "quotations": [], "events": [],
+        }
     graph = _Graph()
     cluster_nodes: dict[str, str] = {}
     node_aliases: dict[str, str] = {}

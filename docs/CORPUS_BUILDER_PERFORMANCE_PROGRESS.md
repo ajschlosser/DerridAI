@@ -6,10 +6,10 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 ## Baseline and branch
 
-- Current continuation branch: `ajschlosser-corpus-builder-performance-865`; the previous increment used `ajschlosser-corpus-builder-performance-f8e`.
-- Continuation baseline: merged #430 at `662a373e`, including bounded source-cache reads, exact raw-family checkpoints, bounded task admission, provider scheduling, and review-refresh continuity. Earlier checkpoint descriptions below retain their historical validation scope.
+- Current continuation branch: `ajschlosser-corpus-builder-performance-586`; the merged #439 increment used `ajschlosser-corpus-builder-performance-865`.
+- Continuation baseline: merged #439 at `cd9b1b49`, including bounded source lookup/in-flight sharing, exact materialized-family reuse, readiness milestones, and conditional preparation persistence. Earlier checkpoint descriptions below retain their historical validation scope.
 - Integrated merged #427 at `c8e671cd` before the scheduling continuation; local performance and refresh changes reapplied without conflicts.
-- Working scope: bounded source-embedding projection reads, exact raw metadata-family checkpoint reuse, bounded Record-task admission, and stable background review refreshes. Broader caching and scheduling priorities remain planned.
+- Working scope: transactional changed-row enrichment handoffs and exact Document Intelligence context freshness. Earlier readiness, broader caching, contention measurements, and evaluated review assistance remain planned.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
 ## Checkpoints
@@ -28,8 +28,10 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 | Dependency-aware enrichment caching    | Partial                     | Exact raw/materialized family fingerprints plus bounded in-flight sharing; other stages remain planned |
 | Readiness / scheduling                 | Partial                     | Bounded admission and provider priorities delivered; earlier safe review-readiness work remains        |
 | Review refresh continuity              | Merged #430                 | Same-Record refresh preserves mounted panes, evidence/page selection, and in-flight drafts             |
-| Record-local source-block lookup       | Local continuation          | File-version-bound offset index; selected rows/bytes and output equivalence measured below             |
-| Conditional preparation persistence    | Local continuation          | Changed-Record deltas, transactional queue-version checks, stale/retired/authority regressions         |
+| Record-local source-block lookup       | Merged #439                 | File-version-bound offset index; selected rows/bytes and output equivalence measured below             |
+| Conditional preparation persistence    | Merged #439                 | Changed-Record deltas, transactional queue-version checks, stale/retired/authority regressions         |
+| Automatic enrichment handoffs          | Local continuation          | Transactional current-row retry/rerun/requeue writes and changed-row final validation                  |
+| Document annotation context            | Local continuation          | Exact transactional documentary epochs, stale-snapshot rejection, bounded metadata-hint checks         |
 | Evaluated learning / review assistance | Pending                     | Requires held-out evaluation                                                                           |
 
 ## Validation and measurements
@@ -41,6 +43,25 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 1. Establish isolated real-source and end-to-end timing baselines, including browser/save tail latency, before claiming progress toward 50%.
 2. Extend exact reuse to other computational stages and refine consumed-dependency scopes. Record-local source lookup, bounded in-flight sharing, and materialized family checking are implemented below; real-source/cold-load/contention validation remains outstanding.
 3. Evaluate earlier readiness, scheduling, and review assistance separately from repository queue improvements.
+
+## Transactional enrichment handoff continuation (2026-10-02)
+
+- Continued from merged #439 without counting its improvements again. Removed full-corpus replacement from automatic initial requeue, metadata-retry completion, rerun-pass completion, and final automatic review validation. Actual topology changes and existing explicitly supplied structural/review rewrites retain their full-replacement path.
+- Repository reconciliation takes current canonical rows under `BEGIN IMMEDIATE`, runs deterministic domain reconciliation, and writes only changed rows with their queue contributions in the same transaction. Selected work decodes only existing requested identities, deduplicates requests, and ignores retired IDs. Callback failure or attempted identity/order/topology replacement rolls back. Vector invalidation and notifications follow Record commit.
+- Retry and rerun proposals are checked against exact Record identity, revision, text, and source bindings; a changed documentary context is skipped rather than silently rebound. Existing human-authority merge rules remain intact. Retries queued against old ordinals resolve their captured stable Record IDs when execution begins. Final validation ignores stale worker topology and derives current validation/review state from canonical rows.
+- Deterministic work-count regressions verify one changed-row queue update for a one-Record change, zero changed-row writes for no-op reconciliation or repeated settled validation, and one full snapshot read per rerun pass rather than per completion. Requeue, retry, rerun, and final handoff tests forbid full-store saves. Restart reads committed rows; explicit JSONL refresh reproduces current SQLite state. Concurrent external writers cannot interleave with the reconciliation callback; later writes remain intact.
+- Full validation still scans all Records and holds the SQLite writer transaction through deterministic source/metadata validation. This trades a coherent snapshot for potential contention; no save-tail or first-reviewable latency gain is claimed. Build JSON summaries are saved after Record commit and remain a separate durability boundary. JSONL stays visibly dirty until explicit projection refresh or publication/export, rather than being rewritten at each enrichment handoff.
+- Final validation: the complete backend regression suite passed **2,030 tests**, with 18 opt-in cases skipped; **15 REST/GraphQL contracts passed** separately. This includes **24 new handoff regressions**. Touched-file Ruff and mypy for all three changed source modules passed. Tests used an isolated restored Python 3.12.11 environment with the workflow's dependency selection (excluding sentence-transformers); dependency manifests and generated artifacts are unchanged. No full-preflight claim is made.
+- Earlier review remains locked during preparation. Document-wide annotation/checkpoint freshness, readiness UX, real-source/live-provider measurements, concurrent-build/save-tail timing, and human-review studies remain outstanding. No 50% improvement, whole-plan completion, browser/Docker coverage, or release readiness is claimed. Changes are uncommitted and unpushed.
+
+## Exact document annotation context continuation (2026-10-02)
+
+- Added a rebuildable SQLite documentary-context projection: one source-order ordinal and SHA-256 per Record, plus an opaque per-build epoch. It consumes text, source identity/locators, extraction text, and topology, not semantic metadata or revision-only changes. Ordinary writes reconcile only canonical dirty identities before queue repair clears the shared journal. Equivalent full replacement preserves the epoch; initialization, contract changes, or missing-table repair rebuild and conservatively invalidate previous bindings. No additional source-text copy is stored.
+- Version 2 Document Intelligence results/local annotations bind that epoch, a unique analysis ID, and local documentary fingerprints. The captured input must match current canonical context; source/topology changes during analysis leave a visible stale result without installing current annotations. Identity/reordering/source changes invalidate even when concatenated text is identical. Provider output cannot override the server's contract, input digests, source identity, offset map, or binding identifiers.
+- Metadata routing checks the current epoch and latest successful analysis ID before using document-derived quotation/entity hints. This also protects unchanged Records when another Record changes the whole-document context. Existing record-local text checks remain, with additional source-fingerprint checks. Stale graph construction excludes the document layer; stale/unavailable map layers contain no document mentions. A failed rerun writes an unavailable checkpoint and invalidates the graph instead of exposing the prior successful checkpoint as the new result. Legacy successful checkpoints without a context binding remain inspectable but require reanalysis before reuse.
+- Deterministic work-count coverage establishes zero Record fingerprint calculations for five unchanged epoch reads, and only the changed Record's fingerprint for a metadata write. Worker-entry hint checks forbid whole-corpus loading. Full analysis scope verification and cold repair remain document-wide work; no end-to-end, contention, p95, or first-reviewable speedup is claimed.
+- Final validation: **2,053 backend regressions passed**, with 18 opt-in cases skipped, plus **15 REST/GraphQL contracts**. This includes **23 new freshness regressions** and the preceding 24 handoff cases. Ruff passed for all touched source/tests; mypy passed for all eight changed/new source modules. Dependency manifests and generated artifacts remain unchanged. No complete-preflight, frontend/browser, Docker, live-provider, or human-review result is claimed.
+- Earlier review remains locked; moving optional work off the readiness-critical path, coordinated structural edits, frontend/browser readiness, real-source/provider timing, and human-review studies remain outstanding. Both tranches form one focused PR continuation; they do not claim release readiness.
 
 ## Conditional preparation persistence continuation (2026-10-02)
 

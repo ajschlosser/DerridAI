@@ -142,6 +142,7 @@ const selected = computed(
 .strategies-workspace {
   display: grid;
   gap: var(--space-3);
+  container-type: inline-size;
 }
 .workspace-heading h2 {
   margin: 0;
@@ -162,13 +163,26 @@ const selected = computed(
 }
 .strategies-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 380px);
   gap: var(--space-4);
   align-items: start;
 }
-@media (max-width: 960px) {
+@media (max-width: 1120px) {
   .strategies-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+@container (max-width: 1120px) {
+  .strategies-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .strategies-layout :deep(.strategy-table-scroll),
+  .strategies-layout :deep(.strategy-inspector) {
+    position: static;
+    max-height: none;
+  }
+  .strategies-layout :deep(.strategy-inspector) {
+    overflow: visible;
   }
 }
 </style>

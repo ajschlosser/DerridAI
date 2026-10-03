@@ -35,7 +35,11 @@ Document Intelligence runs after deterministic cleanup so every offset is bound 
 
 The build records a SHA-256 of that complete text. Each Record projection also records a SHA-256 of its text. Human text edits immediately discard the affected record-local NLP projection. The retained document analysis remains available for audit but is reported as **stale** until rerun. A stale run is never projected into the current Semantic Content Graph.
 
-Record split/merge operations do not make a provider result authoritative. A rerun remaps fresh whole-document annotations to the current topology.
+Version 2 annotation runs additionally bind a derived documentary-context epoch and a unique analysis ID. `corpus_document_context.py` maintains one hash and source-order ordinal per Record in the build's SQLite store. Text, source identity/locators, extraction text, and topology changes advance the epoch transactionally with canonical writes; metadata-only changes, revision-only changes, and equivalent full snapshots do not. The projection stores hashes and identifiers, not another copy of source text, and can be rebuilt. Repair invalidates old epoch bindings conservatively.
+
+The analyzer's input snapshot must match that context before execution. A change during analysis leaves the retained result visibly stale and prevents installation of current Record annotations. Local annotations also bind their own documentary fingerprint. Metadata routing checks the context and latest successful analysis ID before using quotation/entity hints, without loading all Records. A text change elsewhere in the document can therefore invalidate coreference or speaker hints even when the current Record's own text is unchanged.
+
+Record split/merge operations do not make a provider result authoritative. A rerun remaps fresh whole-document annotations to the current topology. Legacy successful checkpoints lacking an exact context binding remain inspectable but require **Reanalyse document** before reuse. A failed rerun records an unavailable checkpoint and invalidates current graph projections rather than making an older success appear to be the new result. Provider output cannot replace server-owned source identity, text digests, offset maps, or contract version.
 
 ## Providers
 

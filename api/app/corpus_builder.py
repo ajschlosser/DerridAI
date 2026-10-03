@@ -33,7 +33,11 @@ from typing import Any
 import fitz
 from pydantic import BaseModel, ValidationError
 
-from . import corpus_queue_projection, metadata_exemplar_journal
+from . import (
+    corpus_document_context,
+    corpus_queue_projection,
+    metadata_exemplar_journal,
+)
 from .autonomous import Policy as AutonomousPolicy
 from .celf_conformance import evaluate_celf_conformance
 from .concurrency import (
@@ -1739,6 +1743,7 @@ class PdfCorpusRepository:
                 "ON corpus_records (ordinal)"
             )
             corpus_queue_projection.initialize(connection)
+            corpus_document_context.initialize(connection)
             metadata_exemplar_journal.initialize(connection)
             connection.commit()
             with connection:
@@ -1781,6 +1786,8 @@ class PdfCorpusRepository:
     def save_checkpoint(self, build_id: str, name: str, payload: Any) -> None:
         self.get_build(build_id)
         _json_write(self.build_checkpoint_path(build_id, name), payload)
+        if name == "document_intelligence":
+            system_store.mark_semantic_map_dirty(build_id, reason="document_intelligence_checkpoint")
 
     def load_checkpoint(self, build_id: str, name: str, default: Any = None) -> Any:
         self.get_build(build_id)
@@ -2032,6 +2039,7 @@ class PdfCorpusRepository:
                     "UPDATE corpus_records SET payload = ? WHERE record_id = ?",
                     (payload, record_id),
                 )
+                corpus_document_context.ensure(connection)
                 corpus_queue_projection.update_rows(connection, [(int(row[0]), record)])
                 connection.commit()
             self._remember_fixed_point(payload, self._schema_signature(self._record_schema(build_id)))
@@ -2045,6 +2053,76 @@ class PdfCorpusRepository:
         callback = self._metadata_projection_callback
         if callback is not None:
             callback(build_id)
+
+    def reconcile_records(
+        self, build_id: str, reconcile: Callable[[list[dict[str, Any]]], None], *,
+        record_ids: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Apply a deterministic reconciliation to current rows in one writer transaction.
+
+        The callback must not call a provider or write other durable state. Full-scope
+        validation still reads all Records, but only changed rows are persisted.
+        """
+        schema = self._record_schema(build_id)
+        signature = self._schema_signature(schema)
+        changed: list[tuple[int, dict[str, Any], str]] = []
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                self._ensure_review_projection(connection, build_id)
+                if record_ids is None:
+                    rows = connection.execute(
+                        "SELECT record_id, ordinal, payload FROM corpus_records ORDER BY ordinal"
+                    ).fetchall()
+                else:
+                    rows = [
+                        row for record_id in dict.fromkeys(record_ids)
+                        if (row := connection.execute(
+                            "SELECT record_id, ordinal, payload FROM corpus_records WHERE record_id=?",
+                            (record_id,),
+                        ).fetchone()) is not None
+                    ]
+                records = [self._decode_migrated(str(row[2]), schema, signature) for row in rows]
+                before = json.loads(json.dumps(records))
+                reconcile(records)
+                if [record.get("record_id") for record in records] != [row[0] for row in rows]:
+                    raise ValueError("Reconciliation cannot change Record identities or topology.")
+                for row, original, record in zip(rows, before, records):
+                    if record != original:
+                        migrated, payload = self._encode_migrated(record, schema, signature)
+                        changed.append((int(row[1]), migrated, payload))
+                if changed:
+                    self._set_records_projection_state(build_id, dirty=True)
+                    connection.executemany(
+                        "UPDATE corpus_records SET payload=? WHERE record_id=?",
+                        [(payload, str(record["record_id"])) for _ordinal, record, payload in changed],
+                    )
+                    corpus_document_context.ensure(connection)
+                    corpus_queue_projection.update_rows(
+                        connection, [(ordinal, record) for ordinal, record, _payload in changed],
+                    )
+                connection.commit()
+            if changed:
+                self._invalidate_review_records_cache(build_id)
+        if changed:
+            note_resource_changed("corpus_records")
+            system_store.mark_semantic_map_dirty(build_id, reason="records_reconciled")
+            self._notify_metadata_projection(build_id)
+        return records
+
+    def document_context(
+        self, build_id: str, records: list[dict[str, Any]] | None = None,
+    ) -> str | None:
+        """Read the current annotation epoch; optionally verify a captured scope."""
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                epoch = corpus_document_context.ensure(connection)
+                if records is not None and not corpus_document_context.matches(connection, records):
+                    return None
+                return epoch
 
     def invalidate_metadata_exemplars(self, build_id: str, *, schedule: bool = True) -> None:
         self._bootstrap_records_db(build_id)
@@ -2271,6 +2349,7 @@ class PdfCorpusRepository:
     def _ensure_review_projection(
         self, connection: sqlite3.Connection, build_id: str, *, rebuild: bool = False,
     ) -> None:
+        corpus_document_context.ensure(connection)
         schema = self._record_schema(build_id)
         signature = self._schema_signature(schema)
         identity = hashlib.sha256(
@@ -2502,6 +2581,8 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         request: dict[str, Any],
     ) -> dict[str, Any]:
         """Refresh all text-bound linguistic projections without changing scholarly authority."""
+        context_epoch = self.repo.document_context(build_id, records)
+        analysis_id = uuid.uuid4().hex
         schema = self._schema_for(build_id)
         language = str(manifest.get("language") or "")
         annotation_results = [
@@ -2519,6 +2600,14 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 language=language,
                 request=request,
             )
+            analysis["analysis_id"] = analysis_id
+            analysis["document_context_epoch"] = context_epoch
+            if context_epoch is None or self.repo.document_context(build_id) != context_epoch:
+                analysis["stale"] = True
+                analysis["warnings"] = [
+                    *(analysis.get("warnings") or []),
+                    "Documentary text, source bindings, or topology changed during analysis; reanalyse the current scope.",
+                ]
             projection_counts = project_annotations_to_records(records, analysis)
             self.repo.save_checkpoint(build_id, "document_intelligence", analysis)
             semantic_graph = build_semantic_content_graph(
@@ -2544,6 +2633,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 "warnings": analysis.get("warnings") or [],
                 "reason": analysis.get("reason"),
                 "text_sha256": analysis.get("text_sha256"),
+                "document_context_epoch": context_epoch,
+                "stale": bool(analysis.get("stale")),
+                "analysis_id": analysis_id,
             }
             build["semantic_content_graph"] = semantic_graph.get("summary") or {}
             self.repo.save_build(build)
@@ -2563,7 +2655,10 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 "profile": str(request.get("document_intelligence_profile") or "scholarly"),
                 "selected_provider": str(request.get("document_nlp_provider") or "auto"),
                 "reason": str(exc),
+                "document_context_epoch": context_epoch,
+                "analysis_id": analysis_id,
             }
+            self.repo.save_checkpoint(build_id, "document_intelligence", build["document_intelligence"])
             self.repo.save_build(build)
             return dict(build["document_intelligence"])
 
@@ -2592,11 +2687,19 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             return {}
         current_text, _ = document_text_for_records(records)
         current_sha256 = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
+        context_epoch = self.repo.document_context(build_id, records)
         return {
             **value,
             "stale": bool(
-                value.get("text_sha256")
-                and value.get("text_sha256") != current_sha256
+                value.get("stale")
+                or (value.get("text_sha256") and value.get("text_sha256") != current_sha256)
+                or (
+                    value.get("status") == "ok"
+                    and (
+                        context_epoch is None
+                        or value.get("document_context_epoch") != context_epoch
+                    )
+                )
             ),
             "current_text_sha256": current_sha256,
         }
@@ -2646,15 +2749,10 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             for row in records:
                 _present_for_reviewer(row)
             analysis = self._document_intelligence_for_records(build_id, records)
-            graph_analysis = (
-                {"profile": analysis.get("profile"), "status": "stale"}
-                if analysis.get("stale")
-                else analysis
-            )
             schema = self._schema_for(build_id)
             graph = build_semantic_content_graph(
                 records,
-                graph_analysis,
+                analysis,
                 schema=schema,
                 registry=build_registry(self.repo, build_id, schema=schema, records=records),
             )
@@ -4379,8 +4477,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
 
         if pending:
             # Records share the bounded family pool. Family checkpoints and
-            # completed results persist through targeted SQLite writes; JSONL is
-            # refreshed at the final review handoff, not after every completion.
+            # completed results persist through targeted SQLite writes; JSONL
+            # remains a dirty-tracked projection until explicit refresh/export.
             with (
                 ThreadPoolExecutor(
                     max_workers=max_workers,
@@ -4502,9 +4600,11 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             # running. Clear the one-shot marker and immediately schedule the
             # changed records again against their new reviewed text.
             priority_ids = [str(row.get("record_id") or "") for row in requeued]
-            for row in requeued:
-                row.pop("metadata_requeue_requested", None)
-            self.repo.save_records(build_id, settled_records)
+            def clear_requeue(rows: list[dict[str, Any]]) -> None:
+                for row in rows:
+                    row.pop("metadata_requeue_requested", None)
+            self.repo.reconcile_records(build_id, clear_requeue, record_ids=priority_ids)
+            settled_records = self.repo.load_records(build_id)
             prioritized_request = dict(request)
             prioritized_request["_priority_record_ids"] = priority_ids
             return self._schedule_build_enrichment(build_id, prioritized_request, manifest, settled_records)
@@ -4529,7 +4629,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # All automatic workers have now settled. Recompute the authoritative
         # record/metadata queues once before handing control to human review so
         # the first review screen is already internally consistent.
-        self._rewrite_and_validate(build_id, records)
+        self._reconcile_and_validate(build_id)
         records = self.repo.load_records(build_id)
         profile = self._profile_of_build(build)
         validation = self.validate_records(source_blocks, records, profile)
@@ -4574,6 +4674,25 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         persist_records: bool = True,
     ) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
+        self._validate_record_states(build, records)
+        if persist_records:
+            self.repo.save_records(build_id, records)
+        self.repo.save_build(build)
+        return build
+
+    def _reconcile_and_validate(self, build_id: str) -> dict[str, Any]:
+        """Validate current topology without restoring a settled worker snapshot."""
+        with self._lock:
+            build = self.repo.get_build(build_id)
+            self.repo.reconcile_records(
+                build_id, lambda records: self._validate_record_states(build, records),
+            )
+            build["records_projection"] = self.repo.get_build(build_id).get("records_projection")
+            self.repo.save_build(build)
+            return build
+
+    def _validate_record_states(self, build: dict[str, Any], records: list[dict[str, Any]]) -> None:
+        """Derive validation and review state without performing durable writes."""
         automation_running = str(build.get("status") or "") in {"queued", "running"} and str(build.get("stage") or "") in {"enriching", "metadata_retry"}
         # A re-run pass overlaps review too. Its records already finished their first
         # enrichment, so it only needs the running state preserved (below), not the
@@ -4606,8 +4725,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 _sync_record_metadata_state(record, profile)
                 _enforce_review_invariants(record)
             _decorate_review_state(record)
-        if persist_records:
-            self.repo.save_records(build_id, records)
         # Review counts are derived only after metadata state and review invariants
         # have been synchronized. Otherwise a record reopened by validation could
         # still be reported as accepted until the next request, which is exactly
@@ -4617,8 +4734,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             automation_running=automation_running, pass_running=pass_running,
         )
         self._refresh_workflow_fields(build)
-        self.repo.save_build(build)
-        return build
 
     def _record_review_aggregate(self, record: dict[str, Any], automation_running: bool) -> dict[str, Any]:
         return record_review_aggregate(record, automation_running)

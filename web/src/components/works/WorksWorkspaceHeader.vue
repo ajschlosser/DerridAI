@@ -39,7 +39,12 @@ const i18n = useI18nStore();
 // Synchronization is deliberately absent: it changes derived database state, so it lives with the
 // corpus-database context rather than among the commands that act on the loaded library.
 const items = computed<UiMenuItem[]>(() => [
-  { id: "separate", label: i18n.t("works.separate_jsonl"), icon: "filter" },
+  {
+    id: "separate",
+    label: i18n.t("works.separate_jsonl"),
+    icon: "filter",
+    reason: props.canManageCorpus ? undefined : props.corpusManageDeniedReason,
+  },
   {
     id: "populate-all",
     label: i18n.t("works.populate_all_metadata"),

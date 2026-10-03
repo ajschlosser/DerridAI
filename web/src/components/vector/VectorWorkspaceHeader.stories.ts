@@ -1,3 +1,4 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import VectorWorkspaceHeader from "./VectorWorkspaceHeader.vue";
 const health = {
@@ -37,5 +38,15 @@ export const Unavailable: Story = {
       path: null,
       url: "http://chroma:8000",
     },
+  },
+};
+
+export const Loading: Story = {
+  args: {
+    health: null,
+    healthLoading: true,
+    collectionCount: undefined,
+    canCreate: false,
+    createDisabledReason: "Loading provider choices…",
   },
 };

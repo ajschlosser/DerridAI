@@ -1,5 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import UiLoadingState from "../ui/UiLoadingState.vue";
 import UiButton from "../ui/UiButton.vue";
 import UiHealthChip from "../ui/UiHealthChip.vue";
 import UiPageHeader from "../ui/UiPageHeader.vue";
@@ -9,6 +10,9 @@ import type { ChromaHealth } from "../../types/vector";
 const props = defineProps<{
   health: ChromaHealth | null;
   collectionCount?: number;
+  healthLoading?: boolean;
+  canCreate?: boolean;
+  createDisabledReason?: string;
 }>();
 const emit = defineEmits<{ create: []; connection: [] }>();
 const i18n = useI18nStore();
@@ -28,7 +32,9 @@ const i18n = useI18nStore();
           {{ Number(props.collectionCount).toLocaleString(i18n.locale) }}
           {{ i18n.t("vector.collections") }}
         </span>
+        <UiLoadingState v-if="healthLoading" variant="inline" :label="i18n.t('loading.health')" />
         <UiHealthChip
+          v-else
           :available="Boolean(props.health?.available)"
           :label="
             props.health?.available
@@ -46,6 +52,8 @@ const i18n = useI18nStore();
           :label="i18n.t('vector.new_collection_short')"
           icon="plus"
           variant="primary"
+          :disabled="canCreate === false"
+          :disabled-reason="createDisabledReason"
           @click="emit('create')"
         />
       </div>
