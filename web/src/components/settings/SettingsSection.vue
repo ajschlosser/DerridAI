@@ -17,7 +17,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import UiCard from "../ui/UiCard.vue";
 import SettingsSaveState from "./SettingsSaveState.vue";
 import type { SaveStatus } from "../../domain/settings";
 
@@ -35,11 +34,9 @@ withDefaults(
 );
 </script>
 <template>
-  <UiCard
-    :as="'section'"
+  <section
     class="settings-section"
-    :padded="false"
-    :heading-id="`settings-heading-${sectionId}`"
+    :aria-labelledby="`settings-heading-${sectionId}`"
   >
     <header class="settings-section-head">
       <div>
@@ -57,13 +54,17 @@ withDefaults(
     <footer v-if="$slots.actions" class="settings-section-actions">
       <slot name="actions" />
     </footer>
-  </UiCard>
+  </section>
 </template>
 <style scoped>
 .settings-section {
   display: grid;
   gap: 16px;
-  padding: 20px;
+  padding: 4px 0 24px;
+  border-bottom: 1px solid var(--line);
+}
+.settings-section + .settings-section {
+  padding-top: 8px;
 }
 .settings-section-head {
   display: flex;
@@ -107,7 +108,7 @@ withDefaults(
 }
 @media (max-width: 640px) {
   .settings-section {
-    padding: 16px;
+    padding-bottom: 20px;
   }
   .settings-section-head :is(h2, h3) {
     font-size: 1.125rem;
