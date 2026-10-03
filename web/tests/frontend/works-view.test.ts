@@ -526,9 +526,7 @@ describe("WorksView", () => {
     await chooseMenuItem(wrapper, "More actions", "Create site");
 
     const dialog = wrapper.get(".create-site-dialog");
-    const recommended = dialog.get(
-      "input[name='site-vector-profile'][value='browser-default']",
-    );
+    const recommended = dialog.get("input[name='site-vector-profile'][value='browser-default']");
     expect(recommended.element).toHaveProperty("checked", true);
     expect(dialog.text()).toContain("Xenova/multilingual-e5-small");
     expect(dialog.text()).toContain("384");
