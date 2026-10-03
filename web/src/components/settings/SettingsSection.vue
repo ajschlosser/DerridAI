@@ -46,7 +46,11 @@ withDefaults(
         }}</component>
         <p class="settings-section-copy">{{ description }}</p>
       </div>
-      <SettingsSaveState v-if="statusLabel" :status="status" :label="statusLabel" />
+      <SettingsSaveState
+        v-if="statusLabel && status !== 'saved' && status !== 'readonly'"
+        :status="status"
+        :label="statusLabel"
+      />
     </header>
     <div class="settings-section-body">
       <slot />
