@@ -30,6 +30,7 @@ import {
 import { jobsApi, type JobSummary } from "../api/jobs";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../runtime/runtime.js";
+import { navigateTo } from "../domain/sharedNavigation";
 import {
   getProviderProfilesForUi,
   getDefaultProviderProfileId,
@@ -1069,7 +1070,7 @@ onUnmounted(() => {
       </div>
       <div class="translation-progress-actions">
         <strong>{{ installProgress }}%</strong
-        ><button type="button" class="btn tiny" @click="runtime.triggerOperations?.()">
+        ><button type="button" class="btn tiny" @click="navigateTo('home')">
           {{ i18n.t("language.track_operations") }}
         </button>
       </div>
@@ -1089,7 +1090,7 @@ onUnmounted(() => {
         <button type="button" class="btn primary" @click="openResumeDialog">
           {{ i18n.t("language.resume_translation") }}
         </button>
-        <button type="button" class="btn tiny" @click="runtime.triggerOperations?.()">
+        <button type="button" class="btn tiny" @click="navigateTo('home')">
           {{ i18n.t("language.track_operations") }}
         </button>
       </div>

@@ -20,6 +20,7 @@
 // research, and the cached-answer page. Moved verbatim from the legacy runtime; the runtime's state object and helpers are
 // passed in as dependencies.
 import { providerRequestConfig } from "./providerRequest";
+import { createGetResearchJob } from "./researchJobLookup";
 import { cloneAuditValue } from "./recordValues";
 import {
   normalizedResearchConfig,
@@ -311,13 +312,7 @@ export function createResearchWorkspace(deps: Deps) {
       .map(researchJobForUi)
       .filter(Boolean);
   }
-  async function getResearchJob(jobId: Any) {
-    const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
-    const index = state.jobs.findIndex((item: Any) => item.id === job.id);
-    if (index >= 0) state.jobs[index] = { ...state.jobs[index], ...job };
-    else state.jobs.unshift(job);
-    return researchJobForUi(job);
-  }
+  const getResearchJob = createGetResearchJob({ api, state });
   async function cancelResearchJob(jobId: Any) {
     if (isResearcher() && !hasCapability("rag.jobs.own"))
       throw new Error("Your role cannot manage Research jobs.");

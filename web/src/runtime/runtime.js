@@ -192,6 +192,7 @@ import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import { touchCorpus } from "../state/workspaceState";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
+import { refreshStores } from "../domain/sharedStores";
 import { canAccessPage, hasCapability, isResearcher } from "../domain/sharedSession";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { relativeTimeLabel } from "../domain/relativeTimeLabel";
@@ -1563,32 +1564,6 @@ async function deleteWorkspaceDatabase() {
 }
 const deleteAllDerridaiBrowserState = () =>
   deleteAllDerridaiBrowserStateCompat(deleteWorkspaceDatabase);
-async function persistCurrentPdfAsset() {
-  if (!state.pdf.file) return;
-  try {
-    const blob =
-      state.pdf.file instanceof Blob
-        ? state.pdf.file
-        : new Blob([await state.pdf.file.arrayBuffer()], { type: "application/pdf" });
-    await idbPut("assets", {
-      key: "current_pdf",
-      blob,
-      name: state.pdf.name || state.pdf.file.name || "current.pdf",
-      title: state.pdf.title || "",
-      author: state.pdf.author || "",
-      page: state.pdf.page || 1,
-      rotation: state.pdf.rotation || 0,
-      text: state.pdf.text || "",
-      search: state.pdf.search || "",
-      relatedSearch: state.pdf.relatedSearch || "",
-      extractionSource: state.pdf.extractionSource || "",
-      extractError: state.pdf.extractError || "",
-      saved_at: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.warn("Could not persist current PDF asset", error);
-  }
-}
 async function restoreCurrentPdfAsset() {
   try {
     const asset = await idbGet("assets", "current_pdf");
@@ -1766,82 +1741,6 @@ function setActiveStore(name) {
 function relativeTime(value) {
   return relativeTimeLabel(value, Date.now(), { tr, trf, locale: state.translations?.locale });
 }
-
-function collapseKeyFor(element, index) {
-  const heading =
-    element
-      .querySelector(".cardhead b,.cardhead h2,.section-title-row h3,.dash-chart-title")
-      ?.textContent?.trim() ||
-    element.getAttribute("aria-label") ||
-    element.className ||
-    element.tagName;
-  return `${state.view}::${heading}::${index}`;
-}
-function enhanceCollapsibles(root = document.querySelector("#main")) {
-  if (!root) return;
-  const targets = [
-    ...root.querySelectorAll(
-      ".card:not(.work):not(.faq-card),.card-inset,.dash-chart,.provider-profile-card,.rag-live-job",
-    ),
-  ];
-  targets.forEach((element, index) => {
-    if (
-      element.dataset.collapsibleReady === "1" ||
-      element.closest("dialog") ||
-      element.matches("[data-no-collapse=true]") ||
-      element.closest("[data-no-collapse=true]")
-    )
-      return;
-    let host =
-      element.querySelector(":scope > .cardhead") ||
-      element.querySelector(":scope > .dash-chart-head") ||
-      element.querySelector(":scope > .provider-profile-card-head") ||
-      element.querySelector(":scope > .rag-live-job-head") ||
-      element.querySelector(":scope > .section-title-row");
-    if (!host) return;
-    const fullHeight = Math.max(element.scrollHeight, element.getBoundingClientRect().height);
-    const headerHeight = Math.max(30, host.getBoundingClientRect().height || 30);
-    if (fullHeight <= headerHeight * 2) {
-      element.dataset.collapsibleReady = "skip";
-      return;
-    }
-    element.dataset.collapsibleReady = "1";
-    const key = collapseKeyFor(element, index);
-    element.dataset.collapseKey = key;
-    const collapsed = Boolean(state.collapsedPanels?.[key]);
-    element.classList.toggle("ui-collapsed", collapsed);
-    const compactTitle = document.createElement("span");
-    compactTitle.className = "ui-collapse-title";
-    compactTitle.textContent =
-      element
-        .querySelector(
-          ":scope > .cardhead b,:scope > .dash-chart-head .dash-chart-title,:scope > .section-title-row h3,:scope > .rag-live-job-head b",
-        )
-        ?.textContent?.trim() ||
-      element.querySelector(":scope > .provider-profile-card-head [data-profile-field='name']")
-        ?.value ||
-      element.querySelector("h1,h2,h3,h4,b")?.textContent?.trim() ||
-      "Section";
-    host.appendChild(compactTitle);
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "ui-collapse-toggle";
-    button.title = collapsed ? "Expand" : "Collapse";
-    button.setAttribute("aria-label", button.title);
-    button.textContent = collapsed ? "＋" : "−";
-    button.onclick = (e) => {
-      e.stopPropagation();
-      const next = !element.classList.contains("ui-collapsed");
-      element.classList.toggle("ui-collapsed", next);
-      button.textContent = next ? "＋" : "−";
-      button.title = next ? "Expand" : "Collapse";
-      state.collapsedPanels[key] = next;
-      persistPrefs();
-    };
-    host.appendChild(button);
-  });
-}
-let collapsibleObserver = null;
 
 function searchByMetadata(field, value, { contains = false } = {}) {
   const raw = String(value ?? "").trim();
@@ -2217,16 +2116,6 @@ function recordOptionForKey(key) {
   return { value: key, label: recordOptionLabel(item.file, item.record, item.index) };
 }
 
-async function refreshStores() {
-  const data = await api("/api/stores");
-  state.stores = data.stores || [];
-  state.storesLastFetchedAt = Date.now();
-  const corpus = recordStores();
-  if (state.activeStore && !corpus.some((store) => store.name === state.activeStore))
-    state.activeStore = "";
-  if (!state.activeStore && corpus.length) state.activeStore = corpus[0].name;
-  return state.stores;
-}
 async function refreshStoreWorks(force = false) {
   if (!state.activeStore) {
     state.storeWorks = [];
@@ -2780,9 +2669,6 @@ function triggerUpsertQueue() {
     ? openUpsertQueue()
     : toast(tr("runtime.toast.cannot_manage_dbs"), { tone: "warning" });
 }
-function triggerOperations() {
-  return navigateTo("home");
-}
 function triggerExport() {
   return canUse("manageCorpus")
     ? exportMenu()
@@ -3258,7 +3144,6 @@ export {
   touchupSubmitBackground,
   touchupApplyResults,
   triggerUpsertQueue,
-  triggerOperations,
   triggerExport,
   triggerEdit,
   getProviderProfilesForUi,
@@ -3289,9 +3174,7 @@ export {
   copyJsonToClipboard,
   copyCitation,
   formatTimestamp,
-  refreshStores,
   responseCacheStore,
-  enhanceCollapsibles,
   dashboardTotals,
   activeFile,
   allLinkedRowsForLoadedPdf,
@@ -3305,7 +3188,6 @@ export {
   loadedPdfPagesForRecord,
   pages,
   pdfDisplayTitle,
-  persistCurrentPdfAsset,
   recordOptionForKey,
   recordOptionLabel,
   reviewKey,

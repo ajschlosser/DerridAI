@@ -25,6 +25,8 @@ import {
   hasCapability,
   isResearcher as sessionIsResearcher,
 } from "../domain/sharedSession";
+import { enhanceCollapsibles } from "../domain/collapsiblePanels";
+import { refreshStores } from "../domain/sharedStores";
 import { syncUrl } from "../domain/sharedNavigation";
 import { formatTimestamp } from "../domain/recordTableHelpers";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
@@ -82,7 +84,7 @@ async function refresh() {
   isResearcher.value = sessionIsResearcher();
   if (isResearcher.value) {
     try {
-      await runtime.refreshStores();
+      await refreshStores();
       if (!state.activeStore) state.activeStore = runtime.recordStores()[0]?.name || "";
       if (state.activeStore) await runtime.refreshStoreWorks(true);
     } catch (error) {
@@ -264,7 +266,7 @@ async function refresh() {
 
   await nextTick();
   if (mainEl.value) {
-    runtime.enhanceCollapsibles(mainEl.value);
+    enhanceCollapsibles(mainEl.value);
     runtime.decorateDisabledControls(mainEl.value);
   }
 }
@@ -294,7 +296,7 @@ async function goSearch() {
   if (semantic) {
     if (!state.activeStore) {
       try {
-        await runtime.refreshStores();
+        await refreshStores();
       } catch {
         // Best effort: keep going with what we have.
       }

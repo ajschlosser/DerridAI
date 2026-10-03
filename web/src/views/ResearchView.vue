@@ -37,6 +37,7 @@ import type {
   ResearchWorkspaceSnapshot,
 } from "../types/research";
 import * as runtime from "../runtime/runtime.js";
+import { getResearchJob } from "../domain/sharedResearchJobs";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { followResource } from "../realtime/follow";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
@@ -280,7 +281,7 @@ async function loadWorkspace(refresh = true) {
     if (noDatabase.value) return;
     hydrate(snapshot, { preserveDraft: Boolean(workspace.value), preserveActive: true });
     if (requestedJobId) {
-      activeJob.value = (await runtime.getResearchJob(requestedJobId)) as ResearchJob;
+      activeJob.value = (await getResearchJob(requestedJobId)) as ResearchJob;
       if (!jobs.value.some((job) => job.id === activeJob.value?.id))
         jobs.value = [activeJob.value, ...jobs.value];
       activeEvidenceIndex.value = 0;
@@ -289,7 +290,7 @@ async function loadWorkspace(refresh = true) {
         .querySelector(".research-answer-workspace")
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (activeJob.value?.status === "completed" && !activeJob.value.result) {
-      activeJob.value = (await runtime.getResearchJob(activeJob.value.id)) as ResearchJob;
+      activeJob.value = (await getResearchJob(activeJob.value.id)) as ResearchJob;
     }
     schedulePoll();
   } catch (error) {
@@ -405,7 +406,7 @@ async function refreshLiveJobs() {
             result: activeJob.value.result || summary.result,
           };
           if (["completed", "failed", "cancelled"].includes(summary.status))
-            activeJob.value = (await runtime.getResearchJob(summary.id)) as ResearchJob;
+            activeJob.value = (await getResearchJob(summary.id)) as ResearchJob;
         }
       }
     } else {
@@ -419,7 +420,7 @@ async function refreshLiveJobs() {
       );
       if (activeSessionJobs.length) {
         const refreshed = await Promise.all(
-          activeSessionJobs.map((job) => runtime.getResearchJob(job.id) as Promise<ResearchJob>),
+          activeSessionJobs.map((job) => getResearchJob(job.id) as Promise<ResearchJob>),
         );
         const byId = new Map(refreshed.map((job) => [job.id, job]));
         jobs.value = jobs.value.map((job) => byId.get(job.id) || job);
@@ -462,7 +463,7 @@ async function openJob(job: ResearchJob) {
   try {
     if (route.query.job) await router.replace({ path: "/rag" });
     activeJob.value =
-      job.status === "completed" ? ((await runtime.getResearchJob(job.id)) as ResearchJob) : job;
+      job.status === "completed" ? ((await getResearchJob(job.id)) as ResearchJob) : job;
     activeEvidenceIndex.value = 0;
     runsDrawer.value?.close();
     await nextTick();
