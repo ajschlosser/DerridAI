@@ -46,4 +46,9 @@ export const { warmupProviderProfile } = createProviderWarmup({
   providerRequestConfig,
 });
 
-export const { getProviderProfilesForUi, getDefaultProviderProfileId } = providerProfilesService;
+export const {
+  getProviderProfilesForUi,
+  getDefaultProviderProfileId,
+  defaultProviderProfile,
+  providerDisplayName,
+} = providerProfilesService;

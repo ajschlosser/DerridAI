@@ -20,6 +20,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { toast } from "../composables/notifications";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import { compactNumber } from "../domain/numberFormatting";
+import { defaultProviderProfile, providerDisplayName } from "../domain/sharedProviderProfiles";
+import { relativeTime } from "../domain/sharedRelativeTime";
+import { applyUiTheme } from "../domain/sharedUiTheme";
 import {
   canAccessPage,
   hasCapability,
@@ -164,7 +168,7 @@ async function refresh() {
             .sort((a, b) => b.totalWords - a.totalWords)
             .slice(0, 5)
             .map((item) => ({ key: item.work, value: item.totalWords })),
-          format: (value: number) => runtime.compactNumber(value),
+          format: (value: number) => compactNumber(value),
         },
         {
           id: "records",
@@ -234,7 +238,7 @@ async function refresh() {
       }));
 
   works.value = workItems.sort((a, b) => a.work.localeCompare(b.work));
-  currentProvider.value = runtime.defaultProviderProfile();
+  currentProvider.value = defaultProviderProfile();
   currentLanguage.value = state.translations?.info?.name || state.translations?.locale || "";
   currentLanguageFlag.value = state.translations?.info?.flag || "🌐";
   latestAnnotation.value =
@@ -415,7 +419,7 @@ function openRecentRecord(fileId: string, index: number) {
 }
 
 async function setUiTheme(value: string) {
-  runtime.applyUiTheme(value);
+  applyUiTheme(value);
   persistPrefs();
   toast(i18n.t("dashboard.appearance_saved"), {
     tone: "success",
@@ -643,7 +647,7 @@ onBeforeUnmount(() => {
               "
             >
               <span class="dashboard-overview-icon"><AppIcon name="list" /></span>
-              <strong>{{ isResearcher ? "—" : runtime.compactNumber(words) }}</strong>
+              <strong>{{ isResearcher ? "—" : compactNumber(words) }}</strong>
               <small>{{ i18n.t("dashboard.total_words") }}</small>
             </button>
             <button data-dashboard-nav="vector" @click="goNav('vector')">
@@ -758,7 +762,7 @@ onBeforeUnmount(() => {
                   />
                 </span>
                 <time>{{
-                  runtime.relativeTime(
+                  relativeTime(
                     item.kind === "record" ? (item.update as Any).timestamp : item.timestamp,
                   )
                 }}</time>
@@ -955,7 +959,7 @@ onBeforeUnmount(() => {
               <span>{{ i18n.t("dashboard.default_provider") }}</span>
               <b>{{
                 currentProvider
-                  ? runtime.providerDisplayName(currentProvider)
+                  ? providerDisplayName(currentProvider)
                   : i18n.t("dashboard.not_configured")
               }}</b>
             </div>
