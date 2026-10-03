@@ -25,10 +25,10 @@ export function parseEnUsPy(text) {
   if (start < 0) throw new Error("EN_US dict not found");
   const body = text.slice(start);
   const map = {};
-  const keyRe = /'((?:\\'|[^'])*)'\s*:/g;
+  const keyRe = /'((?:\\.|[^'\\])*)'\s*:|"((?:\\.|[^"\\])*)"\s*:/g;
   let match;
   while ((match = keyRe.exec(body))) {
-    const key = match[1].replace(/\\'/g, "'");
+    const key = (match[1] ?? match[2]).replace(/\\(['"\\])/g, "$1");
     let i = keyRe.lastIndex;
     const parts = [];
     // A long value may be wrapped in parentheses: 'key': ('first part ' 'second part').
