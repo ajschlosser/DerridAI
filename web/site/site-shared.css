@@ -24,8 +24,9 @@
   --surface-selected: var(--raised, #eef1f4);
   --surface-disabled: var(--raised, #eef1f4);
   --text-primary: var(--fg, #111827);
+  --text-secondary: var(--muted, #4b5563);
   --text-tertiary: var(--muted, #4b5563);
-  --border-subtle: var(--border-subtle, #d7dde4);
+  --accent-fg: var(--accent, #005ea8);
   --border-strong: var(--border, #697586);
   --border-interactive: var(--border, #697586);
   --tone-danger-bg: var(--surface, #f7f8fa);
