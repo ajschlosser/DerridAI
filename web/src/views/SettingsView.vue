@@ -1359,6 +1359,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               {{ i18n.t("settings.validation_summary") }}
             </p>
             <div class="config-grid">
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.retrieval_strategy_title") }}</h3>
+                <p>{{ i18n.t("settings.retrieval_strategy_help") }}</p>
+              </div>
               <UiField
                 :label="i18n.t('settings.rag_k')"
                 :tooltip="i18n.t('help.glossary.top_k.definition')"
@@ -1421,6 +1425,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   <option value="none">{{ i18n.t("settings.reranker_none") }}</option>
                 </select>
               </UiField>
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.evidence_budget_title") }}</h3>
+                <p>{{ i18n.t("settings.evidence_budget_help") }}</p>
+              </div>
               <UiField
                 :label="i18n.t('settings.rag_record_chars')"
                 :tooltip="i18n.t('help.glossary.max_chars_evidence.definition')"
@@ -1447,6 +1455,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   :aria-invalid="Boolean(ragErrors.evidence_total_char_limit)"
                 />
               </UiField>
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.retrieval_scope_title") }}</h3>
+                <p>{{ i18n.t("settings.retrieval_scope_help") }}</p>
+              </div>
               <fieldset id="settings-field-rag-locales" class="field field-full">
                 <legend>{{ i18n.t("settings.rag_locales") }}</legend>
                 <div class="language-checks">
@@ -1953,6 +1965,29 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 }
 .field-full {
   grid-column: 1/-1;
+}
+.settings-group-label {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+}
+.settings-group-label:not(:first-child) {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.settings-group-label h3,
+.settings-group-label p {
+  margin: 0;
+}
+.settings-group-label h3 {
+  font-size: 0.9375rem;
+}
+.settings-group-label p {
+  max-width: 68ch;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 .ui-field-error {
   color: var(--danger);
