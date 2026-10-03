@@ -21,6 +21,7 @@ import { toast } from "../composables/notifications";
 import { openMessageDialog } from "../composables/messageDialog";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import { selectedIndex } from "../domain/sharedUrlState";
 import { isEvidenceSelected, reviewKey } from "../domain/evidenceSelection";
 import { enhanceCollapsibles } from "../domain/collapsiblePanels";
 import { persistCurrentPdfAsset } from "../domain/pdfAssetPersistence";
@@ -156,7 +157,7 @@ async function refresh() {
   hasRecordOptions.value = state.files.some((file: Any) => file.records.length > 0);
   const currentRecordKey =
     selectedFile.value && selected.value
-      ? `${selectedFile.value.id}::${runtime.selectedIndex(selectedFile.value)}`
+      ? `${selectedFile.value.id}::${selectedIndex(selectedFile.value)}`
       : "";
   currentOption.value =
     selectedFile.value && selected.value
@@ -165,7 +166,7 @@ async function refresh() {
           label: runtime.recordOptionLabel(
             selectedFile.value,
             selected.value,
-            runtime.selectedIndex(selectedFile.value),
+            selectedIndex(selectedFile.value),
           ),
         }
       : null;
@@ -338,7 +339,7 @@ function returnToSelectedRecord() {
   if (!selectedFile.value) return;
   navigateTo("record", {
     fileId: selectedFile.value.id,
-    index: runtime.selectedIndex(selectedFile.value),
+    index: selectedIndex(selectedFile.value),
   });
 }
 function openLinkedRecord(fileId: string, index: number) {

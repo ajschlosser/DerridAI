@@ -68,7 +68,6 @@ import {
 } from "../domain/citations";
 import { describeRecordsFile, serializableRecordsFile } from "../domain/recordsFiles";
 import {
-  applyAppearance as applyAppearanceCompat,
   applyUiTheme as applyUiThemeCompat,
   setTranslationDictionary as setTranslationDictionaryCompat,
   syncColorScheme as syncColorSchemeCompat,
@@ -164,7 +163,7 @@ import {
   navigateTo,
   renderView,
 } from "../domain/sharedNavigation";
-import { sharedUrlStateCodec } from "../domain/sharedUrlState";
+import { selectedIndex, sharedUrlStateCodec } from "../domain/sharedUrlState";
 import { pathViewMap, viewFromPath, viewPathMap } from "../domain/navigation";
 import { createWorkspacePersistence } from "../domain/workspacePersistence";
 import { cancelPendingPrefs } from "../domain/prefsPersistence";
@@ -195,6 +194,7 @@ import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 import { refreshStores } from "../domain/sharedStores";
 import { canAccessPage, hasCapability, isResearcher } from "../domain/sharedSession";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
+import { applyAppearance } from "../domain/sharedAppearance";
 import { relativeTimeLabel } from "../domain/relativeTimeLabel";
 import { createRecordSubsets } from "../domain/recordSubsets";
 
@@ -207,9 +207,6 @@ function syncColorScheme() {
 }
 function applyUiTheme(theme) {
   return applyUiThemeCompat(state, theme);
-}
-function applyAppearance(patch = {}) {
-  return applyAppearanceCompat(state, patch);
 }
 
 function setTranslationDictionary(locale, dictionary = {}, base = {}, info = {}) {
@@ -1174,8 +1171,6 @@ async function stableJsonlFileIdentity(text) {
   return { id: `jsonl-${hex.slice(0, 24)}`, content_hash: hex };
 }
 const activeFile = () => state.files.find((f) => f.id === state.activeFileId) || null;
-const selectedIndex = (f) =>
-  Math.max(0, Math.min((f?.records.length || 1) - 1, state.selected[f?.id] ?? 0));
 const selectedRecord = () => {
   const f = activeFile();
   return f?.records[selectedIndex(f)] || null;
