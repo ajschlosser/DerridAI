@@ -44,6 +44,9 @@ export const navigateView = (...args: Parameters<typeof runtime.navigateView>) =
   runtime.navigateView(...args);
 export const syncFromLocation = (...args: Parameters<typeof runtime.syncFromLocation>) =>
   runtime.syncFromLocation(...args);
+export const repaintAfterLocationChange = (
+  ...args: Parameters<typeof runtime.repaintAfterLocationChange>
+) => runtime.repaintAfterLocationChange(...args);
 export const viewForPath = (...args: Parameters<typeof runtime.viewForPath>) =>
   runtime.viewForPath(...args);
 export const triggerImport = (...args: Parameters<typeof runtime.triggerImport>) =>

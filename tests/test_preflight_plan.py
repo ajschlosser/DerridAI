@@ -73,6 +73,15 @@ def test_component_change_gets_related_units_and_representative_browser_quality(
     assert not plan.legacy
 
 
+def test_search_view_change_runs_legacy_characterization():
+    plan = build_plan(["web/src/views/SearchView.vue"])
+
+    assert plan.frontend
+    assert plan.frontend_build
+    assert plan.e2e
+    assert plan.legacy
+
+
 def test_shared_ui_or_global_css_change_requires_full_a11y():
     component = build_plan(["web/src/components/ui/UiButton.vue"])
     stylesheet = build_plan(["web/src/styles/tokens.css"])

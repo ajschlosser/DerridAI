@@ -28,6 +28,8 @@ import {
 } from "vue-router";
 import RouteNavigationFeedback from "./components/shell/RouteNavigationFeedback.vue";
 import { createRouteLoading } from "./router/routeLoading";
+import { sharedUrlStateCodec } from "./domain/sharedUrlState";
+import { createRuntimeLocationSync } from "./router/runtimeLocationSync";
 import { createNavigationHistory, type HistoryEntryTitle } from "./router/navigationHistory";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
 import { useLayoutStore } from "./stores/workspace";
@@ -562,18 +564,23 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  stopRouteSync();
+  runtimeLocationSync.dispose();
   navigationHistory.dispose();
   routeLoading.dispose();
   window.removeEventListener(CHOOSE_CORPUS_FILES_EVENT, openCorpusFilePicker);
 });
 
 // The router is the authority on where the user is. When a navigation settles on a path that belongs to a different
-// runtime view (RouterLink, a deep link, a redirect), pull the runtime view along instead of letting the two drift.
-const stopRouteSync = router.afterEach((to, _from, failure) => {
-  if (failure || !runtimeStarted.value) return;
-  const view = runtime.viewForPath(to.path);
-  if (view && view !== runtime.state.view) runtime.syncFromLocation();
+// runtime view (RouterLink, a deep link, a redirect) or comes from browser back/forward, pull the runtime along instead
+// of letting the two drift.
+const runtimeLocationSync = createRuntimeLocationSync(router, {
+  isStarted: () => runtimeStarted.value,
+  viewForPath: (path) => runtime.viewForPath(path),
+  currentView: () => runtime.state.view,
+  sync: () => {
+    sharedUrlStateCodec.applyUrlState();
+    runtime.repaintAfterLocationChange();
+  },
 });
 
 watch(
