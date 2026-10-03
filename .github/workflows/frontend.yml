@@ -295,22 +295,25 @@ jobs:
       - name: Typecheck tests and test configuration
         run: npm run typecheck:tests
       - name: Guard legacy snapshot ownership
+        if: needs.changes.outputs.legacy == 'true'
         run: npm run check:legacy-snapshots
 
   frontend-unit:
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.frontend_unit == 'true'
     name: frontend-unit (${{ matrix.shard }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: ["1/2", "2/2"]
+        shard: ${{ fromJSON(needs.changes.outputs.unit_shards) }}
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -318,12 +321,20 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install frontend dependencies
         run: npm ci --no-audit --no-fund
-      - name: Unit/component tests
+      - name: Related unit/component tests
+        if: matrix.shard == 'related'
+        working-directory: .
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash scripts/run_frontend_related_tests.sh "$BASE_SHA" "$HEAD_SHA"
+      - name: Full unit/component test shard
+        if: matrix.shard != 'related'
         run: npm run test:unit -- --shard=${{ matrix.shard }}
 
   frontend-build:
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.frontend_build == 'true'
     name: frontend-build
     runs-on: ubuntu-latest
     defaults:
@@ -339,9 +350,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --no-audit --no-fund
       - name: Build production app once
-        run: npm run build:ci
-      - name: Build Storybook once
-        run: npm run build-storybook
+        run: npm run build:app:ci
       - name: Upload production build
         uses: actions/upload-artifact@v4
         with:
@@ -350,6 +359,46 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
+
+  frontend-sdk:
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true'
+    name: frontend-sdk
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate SDK browser distribution and package consumer
+        run: npm run build:sdk:ci
+
+  frontend-storybook:
+    needs: changes
+    if: needs.changes.outputs.storybook == 'true'
+    name: frontend-storybook
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build Storybook once
+        run: npm run build-storybook
       - name: Upload Storybook build
         uses: actions/upload-artifact@v4
         with:
@@ -358,9 +407,10 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
+
   frontend-legacy:
     needs: [changes, frontend-build]
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.legacy == 'true'
     name: frontend-legacy (${{ matrix.shard }})
     runs-on: ubuntu-latest
     strategy:
@@ -396,8 +446,8 @@ jobs:
         run: npm run test:e2e:legacy -- --shard=${{ matrix.shard }}
 
   frontend-e2e:
-    needs: [changes, frontend-build]
-    if: needs.changes.outputs.frontend == 'true'
+    needs: [changes, frontend-build, frontend-storybook]
+    if: needs.changes.outputs.e2e == 'true'
     name: frontend-e2e (${{ matrix.shard }})
     runs-on: ubuntu-latest
     strategy:
@@ -444,8 +494,8 @@ jobs:
         run: npm run test:e2e -- --shard=${{ matrix.shard }}
 
   frontend-a11y:
-    needs: [changes, frontend-build]
-    if: needs.changes.outputs.frontend == 'true'
+    needs: [changes, frontend-storybook]
+    if: needs.changes.outputs.a11y == 'true'
     name: frontend-a11y
     runs-on: ubuntu-latest
     defaults:
@@ -474,6 +524,8 @@ jobs:
           name: frontend-storybook-${{ github.run_id }}
           path: web/storybook-static
       - name: Corpus Builder WCAG 2.2 AA sweep
+        env:
+          DERRIDAI_A11Y_SCOPE: ${{ needs.changes.outputs.a11y_scope }}
         run: npm run test:e2e:a11y
 
   publication-artifacts:
