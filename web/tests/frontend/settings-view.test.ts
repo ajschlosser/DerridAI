@@ -165,7 +165,7 @@ describe("SettingsView", () => {
 
   it("lands on a task-oriented settings overview", async () => {
     const { wrapper } = await mountView("admin", { section: "overview" });
-    expect(wrapper.get("#settings-overview-title").text()).toContain("Overview");
+    expect(wrapper.get("#settings-overview-title").text()).toBe("Settings overview");
     expect(wrapper.text()).toContain("Preferences");
     expect(wrapper.text()).toContain("Research & review");
     expect(wrapper.text()).toContain("Data & storage");
