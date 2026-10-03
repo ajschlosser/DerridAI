@@ -30,6 +30,8 @@ const props = withDefaults(
     wide?: boolean;
     required?: boolean;
     persistence?: string;
+    /** Explicitly associates the visible label with one native/simple composite control. */
+    controlId?: string;
   }>(),
   {
     hint: "",
@@ -39,6 +41,7 @@ const props = withDefaults(
     wide: false,
     required: false,
     persistence: "",
+    controlId: "",
   },
 );
 
@@ -51,9 +54,25 @@ const describedby = computed(
     undefined,
 );
 </script>
+
 <template>
-  <label class="ui-field" :class="{ wide, invalid: Boolean(error) }">
-    <span class="ui-field-label">
+  <component
+    :is="controlId ? 'div' : 'label'"
+    class="ui-field"
+    :class="{ wide, invalid: Boolean(error) }"
+  >
+    <label v-if="controlId" class="ui-field-label" :for="controlId">
+      {{ label }}
+      <UiTooltip
+        v-if="tooltip"
+        :text="tooltip"
+        :label="tooltipLabel || `${label}: ${tooltip}`"
+        placement="bottom"
+      />
+      <span v-if="required" class="ui-field-required" aria-hidden="true"> *</span>
+      <span v-if="persistence" class="ui-field-persist">{{ persistence }}</span>
+    </label>
+    <span v-else class="ui-field-label">
       {{ label }}
       <UiTooltip
         v-if="tooltip"
@@ -64,15 +83,20 @@ const describedby = computed(
       <span v-if="required" class="ui-field-required" aria-hidden="true"> *</span>
       <span v-if="persistence" class="ui-field-persist">{{ persistence }}</span>
     </span>
-    <slot :describedby="describedby" :invalid="Boolean(error)" />
+    <slot
+      :describedby="describedby"
+      :invalid="Boolean(error)"
+      :control-id="controlId || undefined"
+    />
     <span v-if="hint" :id="hintId" class="ui-field-hint">{{ hint }}</span>
     <span v-if="error" :id="errorId" class="ui-field-error" role="alert">{{ error }}</span>
-  </label>
+  </component>
 </template>
+
 <style scoped>
 .ui-field {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
   min-width: 0;
 }
 .ui-field.wide {
@@ -82,32 +106,32 @@ const describedby = computed(
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
-  font-size: 0.8125rem;
-  font-weight: 700;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
   color: var(--text-primary);
 }
 .ui-field-required {
   color: var(--tone-danger-fg);
 }
 .ui-field-persist {
-  margin-left: auto;
-  font-weight: 650;
+  margin-inline-start: auto;
+  font-weight: var(--fw-semibold);
   color: var(--text-tertiary);
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 .ui-field-hint {
-  font-size: 0.8125rem;
-  line-height: 1.45;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
   color: var(--text-tertiary);
 }
 .ui-field-error {
-  font-size: 0.8125rem;
-  line-height: 1.45;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
   color: var(--tone-danger-fg);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 .ui-field.invalid :deep(input),
 .ui-field.invalid :deep(select),
