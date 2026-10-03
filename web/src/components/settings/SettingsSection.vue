@@ -75,11 +75,9 @@ withDefaults(
 }
 .settings-kicker {
   margin: 0 0 4px;
-  font-size: 0.8125rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
 }
 .settings-section-head :is(h2, h3) {
   margin: 0;
