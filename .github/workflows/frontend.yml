@@ -70,6 +70,15 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      frontend_unit: ${{ steps.filter.outputs.frontend_unit }}
+      unit_shards: ${{ steps.filter.outputs.unit_shards }}
+      frontend_build: ${{ steps.filter.outputs.frontend_build }}
+      storybook: ${{ steps.filter.outputs.storybook }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+      a11y: ${{ steps.filter.outputs.a11y }}
+      a11y_scope: ${{ steps.filter.outputs.a11y_scope }}
+      legacy: ${{ steps.filter.outputs.legacy }}
+      sdk: ${{ steps.filter.outputs.sdk }}
       contract: ${{ steps.filter.outputs.contract }}
       format: ${{ steps.filter.outputs.format }}
       publication: ${{ steps.filter.outputs.publication }}
@@ -85,72 +94,61 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ] || [ -z "$BASE_SHA" ] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
-            echo "backend=true" >> "$GITHUB_OUTPUT"
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-            echo "contract=true" >> "$GITHUB_OUTPUT"
-            echo "format=true" >> "$GITHUB_OUTPUT"
-            echo "publication=true" >> "$GITHUB_OUTPUT"
-            exit 0
+            BACKEND=true
+            FRONTEND=true
+            FRONTEND_UNIT=true
+            FRONTEND_BUILD=true
+            STORYBOOK=true
+            E2E=true
+            A11Y=true
+            A11Y_FULL=true
+            LEGACY=true
+            SDK=true
+            CONTRACT=true
+            FORMAT=true
+            PUBLICATION=true
+            UNIT_SHARDS='["1/2","2/2"]'
+          else
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/derridai-changed-paths
+            PLAN=$(python3 scripts/preflight_plan.py --format shell < /tmp/derridai-changed-paths)
+            eval "$PLAN"
+
+            # Keep merge-to-master exhaustive without making every PR pay for every browser catalogue.
+            if [ "$EVENT_NAME" = "push" ] && [ "$FRONTEND_BUILD" = true ]; then
+              STORYBOOK=true
+              E2E=true
+              LEGACY=true
+              A11Y=true
+            fi
+            if [ "$EVENT_NAME" = "push" ] && [ "$A11Y" = true ]; then
+              A11Y_FULL=true
+            fi
+            if [ "$EVENT_NAME" = "push" ]; then
+              UNIT_SHARDS='["1/2","2/2"]'
+            else
+              UNIT_SHARDS='["related"]'
+            fi
           fi
 
-          backend=false
-          frontend=false
-          contract=false
-          format=false
-          publication=false
-          while IFS= read -r path; do
-            case "$path" in
-              .github/workflows/frontend.yml|scripts/*)
-                backend=true
-                frontend=true
-                contract=true
-                format=true
-                ;;
-              api/*)
-                backend=true
-                contract=true
-                ;;
-              tests/test_frontend_api_contract.py|tests/test_frontend_graphql_contract.py|pytest.ini)
-                backend=true
-                contract=true
-                ;;
-              tests/*|ruff.toml|mypy.ini)
-                backend=true
-                ;;
-              web/src/api/*)
-                frontend=true
-                contract=true
-                ;;
-              web/*)
-                frontend=true
-                format=true
-                ;;
-              README.md|CONTRIBUTING.md|AGENTS.md|docs/*|.prettierignore|.editorconfig)
-                format=true
-                ;;
-            esac
+          A11Y_SCOPE=skip
+          if [ "$A11Y" = true ]; then
+            if [ "$A11Y_FULL" = true ]; then A11Y_SCOPE=full; else A11Y_SCOPE=representative; fi
+          fi
 
-            # Prettier owns supported text formats across the repository, not
-            # only files under web/. Keep this separate from domain ownership
-            # above so e.g. api/README.md and JSON fixtures still get checked.
-            case "$path" in
-              *.md|*.json|*.yml|*.yaml|*.js|*.mjs|*.cjs|*.ts|*.tsx|*.vue|*.css|*.scss|*.html)
-                format=true
-                ;;
-            esac
-
-            case "$path" in
-              api/app/site_publication.py|api/app/routers/sites.py|api/app/site_assets/derridai-site.js|api/app/site_assets/derridai-sdk.js|web/sdk/*|web/vite.sdk*.ts|web/playwright.publication.config.ts|web/tests/e2e/static-site-*.spec.ts|web/tests/fixtures/sdk-consumer/*|web/scripts/check-sdk-consumer.mjs|scripts/build_publication_acceptance_fixtures.py|scripts/check_publication_artifacts.sh|.github/workflows/frontend.yml)
-                publication=true
-                ;;
-            esac
-          done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
-
-          echo "backend=$backend" >> "$GITHUB_OUTPUT"
-          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
-          echo "contract=$contract" >> "$GITHUB_OUTPUT"
-          echo "format=$format" >> "$GITHUB_OUTPUT"
-          echo "publication=$publication" >> "$GITHUB_OUTPUT"
+          echo "backend=$BACKEND" >> "$GITHUB_OUTPUT"
+          echo "frontend=$FRONTEND" >> "$GITHUB_OUTPUT"
+          echo "frontend_unit=$FRONTEND_UNIT" >> "$GITHUB_OUTPUT"
+          echo "unit_shards=$UNIT_SHARDS" >> "$GITHUB_OUTPUT"
+          echo "frontend_build=$FRONTEND_BUILD" >> "$GITHUB_OUTPUT"
+          echo "storybook=$STORYBOOK" >> "$GITHUB_OUTPUT"
+          echo "e2e=$E2E" >> "$GITHUB_OUTPUT"
+          echo "a11y=$A11Y" >> "$GITHUB_OUTPUT"
+          echo "a11y_scope=$A11Y_SCOPE" >> "$GITHUB_OUTPUT"
+          echo "legacy=$LEGACY" >> "$GITHUB_OUTPUT"
+          echo "sdk=$SDK" >> "$GITHUB_OUTPUT"
+          echo "contract=$CONTRACT" >> "$GITHUB_OUTPUT"
+          echo "format=$FORMAT" >> "$GITHUB_OUTPUT"
+          echo "publication=$PUBLICATION" >> "$GITHUB_OUTPUT"
 
   format-check:
     needs: changes
