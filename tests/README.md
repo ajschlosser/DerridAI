@@ -28,6 +28,32 @@ The tests need no Docker, Ollama, GPU, or real ChromaDB. Files that import `app.
 
 ## Test taxonomy
 
+The test architecture mirrors the boundaries it protects:
+
+```mermaid
+flowchart LR
+    Backend["api/app"]
+    Frontend["web/src"]
+
+    Pytest["tests/
+pytest regression + contract + integration"]
+    Vitest["web/tests/frontend
+Vitest + Vue Test Utils"]
+    Browser["web/tests/e2e
+Playwright + axe"]
+    CI["Ownership-aware CI gates"]
+
+    Backend --> Pytest
+    Frontend --> Vitest
+    Frontend --> Browser
+    Pytest --> CI
+    Vitest --> CI
+    Browser --> CI
+```
+
+Frontend test placement is documented in [`web/tests/README.md`](../web/tests/README.md), with focused maps for [Vitest](../web/tests/frontend/README.md) and [Playwright](../web/tests/e2e/README.md).
+
+
 DerridAI separates tests by the kind of boundary they exercise rather than by release number:
 
 | Category         | Pytest marker / frontend command                     | Purpose                                                                                                                  |
