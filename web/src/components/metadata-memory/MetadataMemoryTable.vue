@@ -185,7 +185,11 @@ function toggle(id: string) {
               {{ i18n.t("metadata_memory.evidence_unresolved") }}
             </p>
             <p v-else class="note">{{ i18n.t("metadata_memory.context_only") }}</p>
-            <div v-if="expanded.has(item.id)" :id="detailsId(item)" class="memory-details">
+            <div
+              :id="detailsId(item)"
+              class="memory-details"
+              :hidden="!expanded.has(item.id)"
+            >
               <small v-if="item.evidence_block_ids.length">
                 {{ i18n.t("metadata_memory.blocks") }}: {{ item.evidence_block_ids.join(", ") }}
               </small>
