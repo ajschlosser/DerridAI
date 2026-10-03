@@ -73,16 +73,10 @@
   },
   "expected": {
     "cluster_id": "7",
-    "aliases": [
-      "Elizabeth",
-      "the woman",
-      "she"
-    ],
+    "aliases": ["Elizabeth", "the woman", "she"],
     "agent_lemma": "walk",
     "agent_start_char": 10,
     "possession_text": "home",
-    "excludes": [
-      "g"
-    ]
+    "excludes": ["g"]
   }
 }
