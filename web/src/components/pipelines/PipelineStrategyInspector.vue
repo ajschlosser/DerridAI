@@ -313,7 +313,7 @@ const configKeys = computed(() => {
   border-radius: var(--radius-card);
   background: var(--surface-card);
 }
-@media (min-width: 961px) {
+@media (min-width: 1181px) {
   .strategy-inspector {
     position: sticky;
     top: var(--pipeline-studio-sticky-top, var(--space-3));
