@@ -43,6 +43,20 @@ function open(over: Partial<JobDetailsRequest> = {}) {
 }
 
 describe("JobDetailsDialog", () => {
+  it("does not leave an inactive dialog in the application DOM", async () => {
+    const wrapper = mount(JobDetailsDialog, { attachTo: document.body });
+    expect(wrapper.find("dialog").exists()).toBe(false);
+
+    open();
+    await flushPromises();
+    expect(wrapper.find("dialog[open]").exists()).toBe(true);
+
+    closeJobDetailsDialog();
+    await flushPromises();
+    expect(wrapper.find("dialog").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it("renders job text as text, never as markup", async () => {
     const wrapper = mount(JobDetailsDialog, { attachTo: document.body });
     open({
