@@ -5751,6 +5751,12 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
                                        'nce et préchauffages se configurent à la page Fournisseurs'
                                        '. Les secrets ne sont jamais affichés ici.',
  'settings.providers_title': 'Fournisseurs et modèles',
+ 'settings.retrieval_strategy_title': 'Stratégie de repérage',
+ 'settings.retrieval_strategy_help': 'Contrôlez le nombre de candidats conservés et leur reclassement avant l’assemblage des preuves.',
+ 'settings.evidence_budget_title': 'Budget de preuves',
+ 'settings.evidence_budget_help': 'Limitez la quantité de texte que chaque élément de preuve et le paquet complet peuvent fournir à une recherche.',
+ 'settings.retrieval_scope_title': 'Portée du repérage',
+ 'settings.retrieval_scope_help': 'Choisissez les langues documentaires et les voies de repérage utilisées pour l’acquisition des preuves.',
  'settings.rag_automatic_sizing': 'Dimensionnement automatique',
  'settings.rag_automatic_sizing_control': 'Adapter le repérage à la taille des fiches',
  'settings.rag_automatic_sizing_help': 'Adaptez la profondeur du repérage à la taille médiane des fiches et restaurez un contexte borné du même document sans augmenter les plafonds du reclassement ni du budget de preuves.',
