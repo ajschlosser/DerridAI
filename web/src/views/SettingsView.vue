@@ -1636,11 +1636,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
         />
 
         <div
-          v-if="isAdmin && ['services', 'data'].includes(section)"
-          id="settings-system-groups"
+          v-if="isAdmin && section === 'services'"
+          id="settings-services-resources"
         >
           <SettingsSection
-            v-if="section === 'services'"
             section-id="language-packs"
             :title="i18n.t('settings.nlp_packs_title')"
             :description="i18n.t('settings.nlp_packs_help')"
