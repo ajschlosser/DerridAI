@@ -235,6 +235,17 @@ describe("WorksView", () => {
         download_bytes: 14_871_000,
         inline_bytes: 5_700_000,
       },
+      browser_embedding_profile: {
+        model: "Xenova/multilingual-e5-small",
+        revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+        dimension: 384,
+        dtype: "q8",
+        pooling: "mean",
+        normalize: true,
+        query_prefix: "query: ",
+        document_prefix: "passage: ",
+        download_bytes: 118_308_185,
+      },
     });
     siteApi.exportSite.mockResolvedValue({
       blob: new Blob(["site"], { type: "application/zip" }),
@@ -510,6 +521,21 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
+  it("defaults to browser-ready multilingual semantic vectors", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    const recommended = dialog.get(
+      "input[name='site-vector-profile'][value='browser-default']",
+    );
+    expect(recommended.element).toHaveProperty("checked", true);
+    expect(dialog.text()).toContain("Xenova/multilingual-e5-small");
+    expect(dialog.text()).toContain("384");
+    expect(dialog.text()).toContain("Recommended");
+    wrapper.unmount();
+  });
+
   it("creates a static site from selected works in the active corpus database", async () => {
     const wrapper = await mountWorks();
     await chooseMenuItem(wrapper, "More actions", "Create site");
@@ -533,7 +559,7 @@ describe("WorksView", () => {
       export_format: "two-file",
       record_profile: "complete",
       include_transformers: true,
-      include_vectors: true,
+      vector_strategy: "browser-default",
       provider_proxy_upstream: null,
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
@@ -561,7 +587,7 @@ describe("WorksView", () => {
       export_format: "two-file",
       record_profile: "complete",
       include_transformers: true,
-      include_vectors: true,
+      vector_strategy: "browser-default",
       provider_proxy_upstream: null,
     });
     wrapper.unmount();
@@ -588,7 +614,7 @@ describe("WorksView", () => {
       export_format: "nginx-docker",
       record_profile: "complete",
       include_transformers: true,
-      include_vectors: true,
+      vector_strategy: "browser-default",
       provider_proxy_upstream: null,
     });
     wrapper.unmount();
@@ -617,7 +643,7 @@ describe("WorksView", () => {
       export_format: "nginx-docker",
       record_profile: "complete",
       include_transformers: true,
-      include_vectors: true,
+      vector_strategy: "browser-default",
       provider_proxy_upstream: "http://localhost:11434/v1",
     });
     wrapper.unmount();
@@ -629,14 +655,14 @@ describe("WorksView", () => {
 
     const dialog = wrapper.get(".create-site-dialog");
     await dialog.get("[data-site-work='Glas']").setValue(true);
-    await dialog.get("input[name='site-vector-profile'][value='false']").setValue(true);
+    await dialog.get("input[name='site-vector-profile'][value='browser']").setValue(true);
     await dialog.get("form").trigger("submit");
     await flushPromises();
 
     expect(siteApi.exportSite).toHaveBeenCalledWith(
       expect.objectContaining({
         works: ["Glas"],
-        include_vectors: false,
+        vector_strategy: "browser",
       }),
     );
     wrapper.unmount();
@@ -658,6 +684,17 @@ describe("WorksView", () => {
         cached: true,
         download_bytes: 14_871_000,
         inline_bytes: 5_700_000,
+      },
+      browser_embedding_profile: {
+        model: "Xenova/multilingual-e5-small",
+        revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+        dimension: 384,
+        dtype: "q8",
+        pooling: "mean",
+        normalize: true,
+        query_prefix: "query: ",
+        document_prefix: "passage: ",
+        download_bytes: 118_308_185,
       },
     });
     const cached = await mountWorks();
