@@ -1,0 +1,53 @@
+# Temporary maintenance workflow for PR #452.
+# It formats the same changed-file set enforced by the repository format-check job.
+name: Format metadata schemas refactor
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'task/metadata-schemas-refactor'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: Apply repository Prettier rules
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only --diff-filter=ACMRTUXB -z "$BASE_SHA" "$HEAD_SHA" -- \
+            '*.md' '*.json' '*.yml' '*.yaml' '*.js' '*.mjs' '*.cjs' \
+            '*.ts' '*.tsx' '*.vue' '*.css' '*.scss' '*.html' \
+            | xargs -0 --no-run-if-empty ./web/node_modules/.bin/prettier \
+              --write --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
+      - name: Commit formatting
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if git diff --quiet; then
+            echo "No formatting changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "format: apply Prettier to metadata schemas refactor"
+          git push origin "HEAD:$HEAD_REF"
