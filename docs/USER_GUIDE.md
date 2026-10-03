@@ -826,7 +826,7 @@ Select any node, shared node, or relation endpoint to **walk** to it: a node vie
 
 The POS/NER term layer is computed per Record when Document Intelligence runs (and when a Record is split or merged). Builds analysed before it existed show the layer as **Not analysed yet** until **Reanalyse document** is run; a Record whose text changed shows it as **Stale**.
 
-If reviewed text changes after analysis, the panel marks Document Intelligence **stale**. Select **Reanalyse document** to refresh text-bound annotations and the relationship map. Stale document annotations are not used to build the current graph.
+If reviewed text, source bindings, or Record topology changes after analysis, the panel marks Document Intelligence **stale**, even when the concatenated text happens to remain identical. Select **Reanalyse document** to refresh text-bound annotations and the relationship map. Stale document annotations are not used to build the current graph or supply metadata hints. Ordinary metadata-only edits do not invalidate the document analysis. Older analyses without exact context bindings also require reanalysis before reuse; a failed reanalysis is shown as unavailable rather than reusing the previous successful result.
 
 Records enriched before this behavior existed are not changed automatically. **Retry metadata** skips completed metadata families by design, so it will not repopulate them. To repopulate an affected record, use **Run metadata enrichment again** (or **Rerun** on a family) and choose **Discourse / attribution**; this clears only LLM-owned values in that family and keeps reviewer-owned, deterministic, and inherited values. Rebuilding also works.
 

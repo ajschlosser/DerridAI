@@ -22,9 +22,10 @@ from collections import Counter, defaultdict
 from typing import Any
 from urllib.parse import urlparse
 
+from .corpus_document_context import record_fingerprint
 from .nlp_annotations import language_code, load_pipeline
 
-DOCUMENT_INTELLIGENCE_VERSION = 1
+DOCUMENT_INTELLIGENCE_VERSION = 2
 MAX_DOCUMENT_CHARS = 4_000_000
 MAX_PROMPT_ENTITIES = 16
 BOOKNLP_TIMEOUT_SECONDS = 900
@@ -81,6 +82,7 @@ def document_text_for_records(
                 "start": start,
                 "end": cursor,
                 "text_sha256": _sha256(text),
+                "source_fingerprint": record_fingerprint(record),
                 "source_unit_ids": [
                     str(value)
                     for value in (
@@ -324,7 +326,13 @@ def _normalize_provider_result(result: dict[str, Any]) -> dict[str, Any]:
         )
 
     return {
-        **result,
+        **{
+            key: value for key, value in result.items()
+            if key not in {
+                "version", "source_document_id", "text_sha256", "text_length", "record_spans",
+                "profile", "selected_provider", "document_context_epoch", "analysis_id", "stale",
+            }
+        },
         "entities": normalized_entities,
         "entity_clusters": clusters,
         "quotations": normalized_quotes,
@@ -435,6 +443,22 @@ def project_annotations_to_records(
     analysis: dict[str, Any],
 ) -> dict[str, int]:
     """Attach compact, hash-bound projections to intersecting Records."""
+    text, current_spans = document_text_for_records(records)
+    binding_fields = ("record_id", "start", "end", "text_sha256", "source_fingerprint")
+    bound_spans = [
+        {key: span.get(key) for key in binding_fields}
+        for span in analysis.get("record_spans") or [] if isinstance(span, dict)
+    ]
+    expected_spans = [{key: span[key] for key in binding_fields} for span in current_spans]
+    if analysis.get("stale") or (
+        analysis.get("text_sha256") and analysis["text_sha256"] != _sha256(text)
+    ) or (
+        int(analysis.get("version") or 1) >= 2 and bound_spans != expected_spans
+    ):
+        analysis["stale"] = True
+        for record in records:
+            record.pop("document_intelligence", None)
+        return {"entity_mentions": 0, "quotations": 0, "events": 0}
     spans = [
         item for item in (analysis.get("record_spans") or [])
         if isinstance(item, dict) and item.get("record_id")
@@ -518,7 +542,10 @@ def project_annotations_to_records(
         record["document_intelligence"] = {
             "version": DOCUMENT_INTELLIGENCE_VERSION,
             "document_sha256": analysis.get("text_sha256"),
+            "document_context_epoch": analysis.get("document_context_epoch"),
+            "analysis_id": analysis.get("analysis_id"),
             "record_text_sha256": _sha256(str(record.get("text") or "")),
+            "record_source_fingerprint": record_fingerprint(record),
             "provider": analysis.get("provider"),
             "provider_version": analysis.get("provider_version"),
             "model": analysis.get("model"),
@@ -536,6 +563,18 @@ def project_annotations_to_records(
 
 
 
+def record_annotations_current(record: dict[str, Any]) -> bool:
+    data = record.get("document_intelligence")
+    if not isinstance(data, dict) or data.get("stale"):
+        return False
+    if data.get("record_text_sha256") != _sha256(str(record.get("text") or "")):
+        return False
+    return (
+        int(data.get("version") or 1) < 2
+        or data.get("record_source_fingerprint") == record_fingerprint(record)
+    )
+
+
 def current_quotations(record: dict[str, Any]) -> list[dict[str, Any]] | None:
     """Current Record quotation projections, or None when unavailable/stale.
 
@@ -545,7 +584,7 @@ def current_quotations(record: dict[str, Any]) -> list[dict[str, Any]] | None:
     data = record.get("document_intelligence")
     if not isinstance(data, dict) or data.get("status") != "ok":
         return None
-    if data.get("record_text_sha256") != _sha256(str(record.get("text") or "")):
+    if not record_annotations_current(record):
         return None
     return [item for item in (data.get("quotations") or []) if isinstance(item, dict)]
 
@@ -555,7 +594,7 @@ def prompt_hints(record: dict[str, Any], field_names: list[str]) -> dict[str, An
     data = record.get("document_intelligence")
     if not isinstance(data, dict) or data.get("status") != "ok":
         return {}
-    if data.get("record_text_sha256") != _sha256(str(record.get("text") or "")):
+    if not record_annotations_current(record):
         return {}
     entities = [
         item for item in (data.get("entities") or [])
