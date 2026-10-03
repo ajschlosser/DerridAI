@@ -36,6 +36,7 @@ const runtime = vi.hoisted(() => ({
   getResearchJob: vi.fn(),
   getShellSnapshot: vi.fn(() => ({})),
 }));
+vi.mock("../../src/domain/sharedSearchWorkspace", () => ({ searchWorkspace: runtime }));
 // Vue's template proxy probes the namespace for reactivity flags; a strict module
 // mock throws on unknown keys, so declare them.
 vi.mock("../../src/runtime/runtime.js", () => ({

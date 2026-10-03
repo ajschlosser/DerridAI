@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { toast } from "../composables/notifications";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import * as runtime from "../runtime/runtime.js";
+import { searchWorkspace } from "../domain/sharedSearchWorkspace";
 import { updateSearchQuery } from "../domain/sharedSearchQuery";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { useI18nStore } from "../stores/i18n";
@@ -320,7 +320,7 @@ async function readSnapshot(operation: () => Promise<unknown>) {
 async function load(options: { refresh?: boolean; autoRun?: boolean } = {}) {
   const next = await readSnapshot(() =>
     Promise.resolve(
-      runtime.getSearchWorkspaceSnapshot({
+      searchWorkspace.getSearchWorkspaceSnapshot({
         refresh: options.refresh !== false,
         autoRun: options.autoRun !== false,
       }),
@@ -365,7 +365,7 @@ async function runSearch() {
   // previous results standing in as the current result.
   const ticket = ++searchTicket;
   searchPhase.value = shownQuery.value === submitted ? "refreshing" : "pending";
-  const next = await readSnapshot(() => Promise.resolve(runtime.runSearchWorkspace()));
+  const next = await readSnapshot(() => Promise.resolve(searchWorkspace.runSearchWorkspace()));
   if (ticket !== searchTicket) return;
   searchPhase.value = "idle";
   if (!next) return;
@@ -378,20 +378,22 @@ async function clearQuery() {
   updateSearchQuery("", { replace: true });
   if (databaseMode.value) {
     await readSnapshot(() =>
-      Promise.resolve(runtime.getSearchWorkspaceSnapshot({ refresh: false, autoRun: false })),
+      Promise.resolve(
+        searchWorkspace.getSearchWorkspaceSnapshot({ refresh: false, autoRun: false }),
+      ),
     );
     return;
   }
   await load({ refresh: false, autoRun: false });
 }
 async function updateMmrOption(key: "fetch_k" | "lambda_mult", value: number) {
-  runtime.setSearchMmrOptions({ [key]: value });
+  searchWorkspace.setSearchMmrOptions({ [key]: value });
   await load({ refresh: false, autoRun: false });
 }
 async function changeScope(next: SearchScope) {
   searchTicket += 1;
   searchPhase.value = "idle";
-  const applied = await readSnapshot(() => Promise.resolve(runtime.setSearchScope(next)));
+  const applied = await readSnapshot(() => Promise.resolve(searchWorkspace.setSearchScope(next)));
   if (!applied) return;
   const request = readRequest;
   await syncFilterSchema(applied);
@@ -400,63 +402,67 @@ async function changeScope(next: SearchScope) {
     openDatabaseCreationFromResearch();
 }
 async function changeStore(value: string) {
-  runtime.setSearchStore(value);
+  searchWorkspace.setSearchStore(value);
   await load({ refresh: false, autoRun: false });
 }
 async function changeMethod(value: SearchMethod) {
-  runtime.setSearchMethod(value);
+  searchWorkspace.setSearchMethod(value);
   await load({ refresh: false, autoRun: false });
 }
 async function changeLayout(value: SearchLayout) {
-  runtime.setSearchLayout(value);
+  searchWorkspace.setSearchLayout(value);
   await load({ refresh: false, autoRun: false });
 }
 async function changePageSize(value: number) {
-  runtime.setSearchPageSize(value);
+  searchWorkspace.setSearchPageSize(value);
   await load({ refresh: false, autoRun: false });
 }
 async function changePage(page: number) {
-  runtime.setSearchPage(page);
+  searchWorkspace.setSearchPage(page);
   await load({ refresh: false, autoRun: false });
   document
     .querySelector(".search-results-panel")
     ?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 async function sortBy(key: string) {
-  runtime.setSearchSort(key);
+  searchWorkspace.setSearchSort(key);
   await load({ refresh: false, autoRun: false });
 }
 async function toggleFacet(field: string, value: string) {
-  runtime.toggleSearchFacet(field, value);
+  searchWorkspace.toggleSearchFacet(field, value);
   await load({ refresh: false, autoRun: false });
 }
 async function removeFacet(field: string, value: string) {
   await toggleFacet(field, value);
 }
 async function clearFacets() {
-  runtime.clearSearchFacetFilters();
+  searchWorkspace.clearSearchFacetFilters();
   await load({ refresh: false, autoRun: false });
 }
 async function clearAll() {
   query.value = "";
   updateSearchQuery("", { replace: true });
-  runtime.clearSearchAllFilters();
+  searchWorkspace.clearSearchAllFilters();
   await load({ refresh: false, autoRun: false });
 }
 async function toggleAdvanced(open: boolean) {
   advancedOpen.value = open;
-  runtime.setSearchAdvancedOpen(open);
+  searchWorkspace.setSearchAdvancedOpen(open);
 }
 async function addAdvancedFilter() {
   const op = newFilterOp.value;
   const requiresValue = !["empty", "notempty"].includes(op);
   if (requiresValue && !newFilterValue.value.trim()) return;
-  runtime.addSearchAdvancedFilter({ field: newFilterField.value, op, value: newFilterValue.value });
+  searchWorkspace.addSearchAdvancedFilter({
+    field: newFilterField.value,
+    op,
+    value: newFilterValue.value,
+  });
   newFilterValue.value = "";
   await load({ refresh: false, autoRun: false });
 }
 async function removeAdvancedFilter(filter: SearchFilter) {
-  runtime.removeSearchAdvancedFilter(filter.id);
+  searchWorkspace.removeSearchAdvancedFilter(filter.id);
   await load({ refresh: false, autoRun: false });
 }
 async function loadSchema(id: string) {
@@ -507,24 +513,24 @@ function suggestionsFor(field: string) {
 }
 
 async function resultAction(result: SearchResult, action: string) {
-  await runtime.searchResultAction(result.key, action);
+  await searchWorkspace.searchResultAction(result.key, action);
   if (action === "evidence" || action === "select") await load({ refresh: false, autoRun: false });
 }
 async function toggleResultSelected(result: SearchResult, selected: boolean) {
-  runtime.setSearchResultSelected(result.key, selected);
+  searchWorkspace.setSearchResultSelected(result.key, selected);
   await load({ refresh: false, autoRun: false });
 }
 async function togglePageSelected(selected: boolean) {
-  runtime.setSearchPageSelected(resultKeys.value, selected);
+  searchWorkspace.setSearchPageSelected(resultKeys.value, selected);
   await load({ refresh: false, autoRun: false });
 }
 async function selectionAction(action: string) {
-  runtime.runSearchSelectionAction(action);
-  if (action === "clear") runtime.clearSearchSelection();
+  searchWorkspace.runSearchSelectionAction(action);
+  if (action === "clear") searchWorkspace.clearSearchSelection();
   await load({ refresh: false, autoRun: false });
 }
 async function clearSelection() {
-  runtime.clearSearchSelection();
+  searchWorkspace.clearSearchSelection();
   await load({ refresh: false, autoRun: false });
 }
 
@@ -535,12 +541,12 @@ function openColumns() {
 }
 // The columns dialog closes itself when its choice is applied.
 async function saveColumns() {
-  runtime.setSearchColumns(draftColumns.value);
+  searchWorkspace.setSearchColumns(draftColumns.value);
   await load({ refresh: false, autoRun: false });
 }
 // Reset restores the default columns (an empty choice) and closes the dialog.
 async function resetColumns() {
-  runtime.setSearchColumns([]);
+  searchWorkspace.setSearchColumns([]);
   columnsDialog.value?.close();
   await load({ refresh: false, autoRun: false });
 }
@@ -564,7 +570,7 @@ function closeSaveView() {
 function saveCurrentView() {
   const name = saveViewName.value.trim();
   if (!name) return;
-  const href = runtime.getSearchShareHref();
+  const href = searchWorkspace.getSearchShareHref();
   const now = new Date().toISOString();
   const existing = savedViews.value.find(
     (item) => item.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
@@ -590,7 +596,7 @@ async function openSavedView(view: SavedSearchView | RecentSearchEntry) {
   searchPhase.value = "idle";
   // A restored view describes a different search; its results are not yet known.
   shownQuery.value = null;
-  await readSnapshot(() => Promise.resolve(runtime.restoreSearchViewFromHref(view.href)));
+  await readSnapshot(() => Promise.resolve(searchWorkspace.restoreSearchViewFromHref(view.href)));
 }
 function removeSavedView(id: string) {
   savedViews.value = savedViews.value.filter((item) => item.id !== id);
@@ -598,7 +604,7 @@ function removeSavedView(id: string) {
 }
 async function copyLink() {
   try {
-    await navigator.clipboard.writeText(runtime.getSearchShareHref());
+    await navigator.clipboard.writeText(searchWorkspace.getSearchShareHref());
     toast(i18n.t("search.link_copied"), { tone: "success" });
   } catch (exc) {
     toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
@@ -608,7 +614,7 @@ function recordRecentSearch() {
   if (!snapshot.value) return;
   const q = query.value.trim();
   if (!q && !hasFilters.value) return;
-  const href = runtime.getSearchShareHref();
+  const href = searchWorkspace.getSearchShareHref();
   const entry: RecentSearchEntry = {
     id: crypto.randomUUID(),
     query: q || i18n.t("search.filtered_view"),
