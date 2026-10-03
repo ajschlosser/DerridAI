@@ -71,18 +71,18 @@ export interface MetadataMemoryPayload {
   error?: string;
 }
 
+export interface MetadataMemoryListFilters {
+  limit?: number;
+  offset?: number;
+  field?: string;
+  kind?: string;
+  build_id?: string;
+  language?: string;
+  q?: string;
+}
+
 export const metadataMemoryApi = {
-  list: (
-    filters: {
-      limit?: number;
-      offset?: number;
-      field?: string;
-      kind?: string;
-      build_id?: string;
-      language?: string;
-      q?: string;
-    } = {},
-  ) => {
+  list: (filters: MetadataMemoryListFilters = {}) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {
       if (value !== undefined && value !== null && String(value).trim() !== "") {
