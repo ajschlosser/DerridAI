@@ -39,7 +39,7 @@ import UiHealthChip from "../components/ui/UiHealthChip.vue";
 import DataRetentionSettings from "../components/settings/DataRetentionSettings.vue";
 import DocumentNlpLanguagePacks from "../components/settings/DocumentNlpLanguagePacks.vue";
 import SettingsNav from "../components/settings/SettingsNav.vue";
-import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
+import SettingsOverview from "../components/settings/SettingsOverview.vue";
 import SettingsSearch, { type SettingsSearchHit } from "../components/settings/SettingsSearch.vue";
 import SettingsSection from "../components/settings/SettingsSection.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
@@ -50,7 +50,7 @@ import {
   SETTINGS_SECTIONS,
   cloneJson,
   filterSettingsFields,
-  isSettingsSectionId,
+  resolveSettingsSectionId,
   normalizeAppearance,
   normalizeEmbedding,
   normalizeRag,
@@ -129,28 +129,30 @@ const defaultProfileId = computed(() =>
   String(runtime.getDefaultProviderProfileId?.() || reviewDraft.value.default_provider_profile),
 );
 const localeInfo = computed(() => i18n.languages.find((item) => item.code === i18n.locale));
-const visibleSections = computed(() => {
-  const ids: SettingsSectionId[] = ["workspace", "language"];
-  if (isAdmin.value) ids.push("research", "review", "providers", "retrieval", "security", "system");
-  else ids.push("research");
-  return SETTINGS_SECTIONS.filter((section) => ids.includes(section.id)).map((section) => ({
-    id: section.id,
-    label: i18n.t(section.labelKey, section.labelFallback),
-    description: i18n.t(section.descriptionKey, section.descriptionFallback),
-  }));
-});
+const visibleSections = computed(() =>
+  SETTINGS_SECTIONS.filter((item) => !item.adminOnly || isAdmin.value).map((item) => ({
+    id: item.id,
+    label: i18n.t(item.labelKey, item.labelFallback),
+    description: i18n.t(item.descriptionKey, item.descriptionFallback),
+    path: `/settings/${item.id}`,
+  })),
+);
 const section = computed<SettingsSectionId>({
   get() {
-    const raw = String(route.params.section || "workspace");
-    const requested = isSettingsSectionId(raw) ? raw : "workspace";
-    return visibleSections.value.some((item) => item.id === requested)
-      ? requested
-      : visibleSections.value[0]?.id || "workspace";
+    const raw = String(route.params.section || "overview");
+    const requested = resolveSettingsSectionId(raw) || "overview";
+    return visibleSections.value.some((item) => item.id === requested) ? requested : "overview";
   },
   set(id) {
     void router.push({ name: "settings-section", params: { section: id }, query: route.query });
   },
 });
+const overviewItems = computed(() =>
+  visibleSections.value.filter((item) => item.id !== "overview").map((item) => ({
+    ...item,
+    path: `/settings/${item.id}`,
+  })),
+);
 const appearanceDirty = computed(() => !sameSettings(appearanceDraft.value, appearanceSaved.value));
 const reviewDirty = computed(() => !sameSettings(reviewDraft.value, reviewSaved.value));
 // Audio transcription has its own endpoint and key so it is never confused with a chat profile.
@@ -204,6 +206,16 @@ async function testAudio() {
   }
 }
 onMounted(loadAudio);
+watch(
+  () => String(route.params.section || "overview"),
+  (raw) => {
+    const resolved = resolveSettingsSectionId(raw);
+    if (resolved && resolved !== raw) {
+      void router.replace({ name: "settings-section", params: { section: resolved }, query: route.query });
+    }
+  },
+  { immediate: true },
+);
 const embeddingProbe = ref<SystemEmbeddingStatus | null>(null);
 const embeddingProbing = ref(false);
 async function testEmbedding() {
@@ -233,28 +245,23 @@ const ragDirty = computed(() => !sameSettings(ragDraft.value, ragSaved.value));
 const dirty = computed(
   () => appearanceDirty.value || reviewDirty.value || embeddingDirty.value || ragDirty.value,
 );
-const pageStatus = computed<SaveStatus>(() => {
-  const values = Object.values(groupStatus.value);
-  if (values.includes("failed")) return "failed";
-  if (values.includes("saving")) return "saving";
-  if (values.includes("success")) return "success";
-  if (dirty.value) return "dirty";
-  return "saved";
-});
+
 const searchHits = computed<SettingsSearchHit[]>(() => {
   const fields = filterSettingsFields(query.value, (key, fallback) => i18n.t(key, fallback));
   const allowed = new Set(visibleSections.value.map((item) => item.id));
   return fields
     .filter((field) => allowed.has(field.section))
-    .map((field) => ({
-      id: field.id,
-      section: field.section,
-      label: i18n.t(field.labelKey, field.labelFallback),
-      group: i18n.t(
-        SETTINGS_SECTIONS.find((item) => item.id === field.section)?.labelKey || "",
-        field.section,
-      ),
-    }));
+    .map((field) => {
+      const group = SETTINGS_SECTIONS.find((item) => item.id === field.section);
+      return {
+        id: field.id,
+        section: field.section,
+        label: i18n.t(field.labelKey, field.labelFallback),
+        group: group ? i18n.t(group.labelKey, group.labelFallback) : field.section,
+        targetId: field.targetId,
+        advanced: field.advanced,
+      };
+    });
 });
 const backupCounts = computed(() => ({
   files: Number(workspace.files?.length || 0),
@@ -420,15 +427,18 @@ function goSection(id: SettingsSectionId) {
   );
 }
 function chooseSearch(hit: SettingsSearchHit) {
+  if (hit.advanced) advancedOpen.value = true;
   goSection(hit.section);
   query.value = "";
-  void nextTick(
-    () =>
-      document.getElementById(`settings-field-${hit.id}`)?.focus?.() ||
-      document
-        .getElementById(`settings-section-${hit.section}`)
-        ?.scrollIntoView({ block: "start" }),
-  );
+  void nextTick(() => {
+    const target =
+      document.getElementById(hit.targetId || `settings-field-${hit.id}`) ||
+      document.getElementById(`settings-section-${hit.section}`);
+    target?.scrollIntoView({ block: "center" });
+    if (target instanceof HTMLElement && target.matches("input, select, textarea, button, a[href]")) {
+      target.focus();
+    }
+  });
 }
 function go(path: string, view?: string) {
   if (view) runtime.navigateView(view);
@@ -660,11 +670,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       :title="i18n.t('context.config.title')"
       title-id="settings-page-title"
       :description="i18n.t('settings.page_help')"
-    >
-      <template #actions>
-        <SettingsSaveState :status="pageStatus" :label="statusLabel(pageStatus)" />
-      </template>
-    </UiPageHeader>
+    />
     <p v-if="pageError" class="info error" role="alert">{{ pageError }}</p>
     <div class="settings-toolbar">
       <SettingsSearch
@@ -694,18 +700,33 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
     <div class="settings-layout">
       <aside class="settings-rail" :class="{ open: contentsOpen }">
         <SettingsNav
-          v-model="section"
+          :model-value="section"
           :items="visibleSections"
-          :tablist-label="i18n.t('settings.contents')"
-          @select="goSection"
+          :nav-label="i18n.t('settings.contents')"
+          @select="contentsOpen = false"
         />
       </aside>
       <div class="settings-pane">
+        <SettingsOverview
+          v-if="section === 'overview'"
+          :title="i18n.t('settings.nav.overview', 'Settings overview')"
+          :description="
+            i18n.t(
+              'settings.nav.overview_help',
+              'Find settings by task, review important defaults, and jump to related workspaces.',
+            )
+          "
+          :nav-label="i18n.t('settings.contents')"
+          :items="overviewItems"
+        >
+          <template #footer>
+            <AppBuildInfo :show-commit="isAdmin" />
+          </template>
+        </SettingsOverview>
+
         <div
-          v-show="section === 'workspace'"
+          v-show="section === 'preferences'"
           id="settings-section-workspace"
-          role="tabpanel"
-          aria-labelledby="settings-nav-workspace"
         >
           <SettingsSection
             section-id="workspace"
@@ -790,23 +811,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               />
             </template>
           </SettingsSection>
-          <SettingsSection
-            section-id="about"
-            :title="i18n.t('about.title')"
-            :description="i18n.t('about.help')"
-            :persistence="persistKind('readonly')"
-            status="readonly"
-            :status-label="statusLabel('readonly')"
-          >
-            <AppBuildInfo :show-commit="isAdmin" />
-          </SettingsSection>
         </div>
 
         <div
-          v-show="section === 'language'"
+          v-show="section === 'preferences'"
           id="settings-section-language"
-          role="tabpanel"
-          aria-labelledby="settings-nav-language"
         >
           <SettingsSection
             section-id="language"
@@ -854,13 +863,21 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               />
             </template>
           </SettingsSection>
+          <SettingsSection
+            v-if="isAdmin"
+            section-id="notifications"
+            :title="i18n.t('settings.desktop_notifications')"
+            :description="i18n.t('settings.notifications_help')"
+            :persistence="persistKind('browser')"
+          >
+            <template #actions>
+            </template>
+          </SettingsSection>
         </div>
 
         <div
           v-show="section === 'research'"
           id="settings-section-research"
-          role="tabpanel"
-          aria-labelledby="settings-nav-research"
         >
           <SettingsSection
             v-if="isAdmin"
@@ -944,10 +961,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 
         <div
           v-if="isAdmin"
-          v-show="section === 'review'"
+          v-show="section === 'research'"
           id="settings-section-review"
-          role="tabpanel"
-          aria-labelledby="settings-nav-review"
         >
           <SettingsSection
             section-id="review"
@@ -1029,10 +1044,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 
         <div
           v-if="isAdmin"
-          v-show="section === 'providers'"
+          v-show="section === 'services'"
           id="settings-section-providers"
-          role="tabpanel"
-          aria-labelledby="settings-nav-providers"
         >
           <SettingsSection
             section-id="providers"
@@ -1166,8 +1179,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           v-if="isAdmin"
           v-show="section === 'retrieval'"
           id="settings-section-retrieval"
-          role="tabpanel"
-          aria-labelledby="settings-nav-retrieval"
         >
           <SettingsSection
             section-id="retrieval"
@@ -1518,10 +1529,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 
         <div
           v-if="isAdmin"
-          v-show="section === 'security'"
+          v-show="section === 'access'"
           id="settings-section-security"
-          role="tabpanel"
-          aria-labelledby="settings-nav-security"
         >
           <SettingsSection
             section-id="security"
@@ -1540,13 +1549,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
         </div>
 
         <div
-          v-if="isAdmin"
-          v-show="section === 'system'"
-          id="settings-section-system"
-          role="tabpanel"
-          aria-labelledby="settings-nav-system"
+          v-if="isAdmin && ['services', 'data', 'troubleshooting'].includes(section)"
+          id="settings-system-groups"
         >
           <SettingsSection
+            v-if="section === 'services'"
             section-id="language-packs"
             :title="i18n.t('settings.nlp_packs_title')"
             :description="i18n.t('settings.nlp_packs_help')"
@@ -1555,6 +1562,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             <DocumentNlpLanguagePacks />
           </SettingsSection>
           <SettingsSection
+            v-if="section === 'data'"
             section-id="data-retention"
             :title="i18n.t('settings.retention_title')"
             :description="i18n.t('settings.retention_help')"
@@ -1563,6 +1571,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             <DataRetentionSettings />
           </SettingsSection>
           <SettingsSection
+            v-if="section === 'data'"
             section-id="backup"
             :title="i18n.t('settings.backup')"
             :description="i18n.t('settings.backup_help')"
@@ -1601,6 +1610,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             </template>
           </SettingsSection>
           <SettingsSection
+            v-if="section === 'troubleshooting'"
             section-id="viewer"
             :title="i18n.t('settings.viewer_title')"
             :description="i18n.t('settings.viewer_help')"
@@ -1645,12 +1655,22 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             </template>
           </SettingsSection>
           <SettingsSection
+            v-if="section === 'troubleshooting'"
+            class="settings-danger-zone"
             section-id="nuke"
             :title="i18n.t('config.nuke.title')"
             :description="i18n.t('config.nuke.help')"
             :persistence="persistKind('backend')"
             status="readonly"
           >
+            <p class="settings-danger-summary">
+              {{
+                i18n.t(
+                  "config.nuke.scope_help",
+                  "This operation destroys workspace state. Create a backup first if you may need to recover it.",
+                )
+              }}
+            </p>
             <p class="info error">{{ i18n.t("config.nuke.irreversible") }}</p>
             <UiField
               :label="i18n.t('config.nuke.type_to_enable')"
@@ -1734,8 +1754,18 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 }
 .settings-pane {
   display: grid;
-  gap: 16px;
+  gap: 18px;
   min-width: 0;
+}
+.settings-danger-zone {
+  margin-top: 20px;
+  border-color: var(--danger);
+}
+.settings-danger-summary {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--muted);
+  line-height: 1.5;
 }
 .settings-locale-row {
   display: flex;
