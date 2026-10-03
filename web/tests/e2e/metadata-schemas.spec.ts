@@ -248,7 +248,7 @@ test("schema authoring is keyboard-operable and announces a save", async ({ page
 
   await page.getByRole("tab", { name: "Prompt groups" }).click();
   await expect(page.getByLabel("Group", { exact: true })).toBeVisible();
-  await page.getByRole("tab", { name: "Fields" }).click();
+  await page.getByRole("tab", { name: "Fields", exact: true }).click();
 
   await page.getByRole("button", { name: "Add a field", exact: true }).first().click();
   const currentItem = page.locator(".field-list-item.selected");
