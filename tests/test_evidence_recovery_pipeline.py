@@ -10,8 +10,11 @@ from app import config
 from app import cross_encoder as cross_encoder_module
 from app.pipelines import manager as manager_module
 from app.pipelines import store as store_module
+from app.pipelines.comparison import (
+    compare_evidence_runs,
+    summarize_evidence_recovery_run,
+)
 from app.pipelines.defaults import built_in_assignment, built_in_pipeline
-from app.pipelines.comparison import compare_evidence_runs, summarize_evidence_recovery_run
 from app.pipelines.evidence import compile_evidence_pipeline
 from app.pipelines.evidence_recovery import (
     MISSING_SOURCE_DOCUMENT,

@@ -6,8 +6,11 @@ import dataclasses
 import pytest
 from app import config
 from app import cross_encoder as cross_encoder_module
+from app.pipelines.comparison import (
+    compare_evidence_runs,
+    summarize_evidence_suggestion_run,
+)
 from app.pipelines.defaults import built_in_pipeline
-from app.pipelines.comparison import compare_evidence_runs, summarize_evidence_suggestion_run
 from app.pipelines.evidence import (
     compile_evidence_pipeline,
     execute_reviewer_evidence_pipeline,

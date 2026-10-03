@@ -403,7 +403,10 @@ def compare_evidence_recovery_pipelines(
     """
 
     require_admin(request)
-    from ..pipelines.evidence_recovery import compile_recovery_pipeline, execute_recovery_pipeline
+    from ..pipelines.evidence_recovery import (
+        compile_recovery_pipeline,
+        execute_recovery_pipeline,
+    )
 
     try:
         sides = []
