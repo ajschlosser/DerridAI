@@ -61,7 +61,9 @@ const createSiteBusy = ref(false);
 const createSiteError = ref("");
 const createSiteLanguages = ref<SiteExportOptions["languages"]>([]);
 const createSiteTransformers = ref<SiteExportOptions["transformers_runtime"] | undefined>();
-const createSiteBrowserEmbedding = ref<SiteExportOptions["browser_embedding_profile"] | undefined>();
+const createSiteBrowserEmbedding = ref<
+  SiteExportOptions["browser_embedding_profile"] | undefined
+>();
 const createSiteProgress = ref<{ file: string; received: number; total: number } | null>(null);
 
 async function openCreateSite() {
