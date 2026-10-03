@@ -26,8 +26,13 @@ regular expressions; the last test uses a temporary SQLite system repository.
 from __future__ import annotations
 
 import ast
+import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -123,6 +128,31 @@ def test_frontend_english_defaults_match_builtin_en_us():
     assert exported == english
 
 
+def test_locale_export_parser_preserves_both_key_quotes_and_adjacent_values():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required to exercise the locale exporter")
+    source = r"""EN_US = {
+        'single': 'one',
+        "double": "two",
+        "joined": ('three ' "four"),
+        "escaped\"key": "escaped",
+        'line': 'first\nsecond',
+    }"""
+    script = (
+        "import { parseEnUsPy } from './scripts/parse-en-us-locale.mjs';"
+        f"process.stdout.write(JSON.stringify(parseEnUsPy({json.dumps(source)})));"
+    )
+    result = subprocess.run(
+        [node, "--input-type=module", "-e", script],
+        cwd=ROOT, text=True, capture_output=True, check=True,
+    )
+    assert json.loads(result.stdout) == {
+        "single": "one", "double": "two", "joined": "three four",
+        'escaped"key': "escaped", "line": "first\nsecond",
+    }
+
+
 
 
 def test_builtin_dictionaries_bootstrap_current_values_and_preserve_admin_edits(tmp_path, monkeypatch):
@@ -213,4 +243,3 @@ def test_metadata_schema_copy_keys_exist_in_both_builtins():
 
     assert required - set(english) == set()
     assert required - set(french) == set()
-

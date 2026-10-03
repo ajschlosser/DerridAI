@@ -210,14 +210,17 @@ class ReviewActionsMixin:
             session: Any = ...,
         ) -> dict[str, Any]: ...
 
-    def _assert_human_review_available(self, build_id: str, record: dict[str, Any] | None = None, *, structural: bool = False) -> dict[str, Any]:
+    def _assert_human_review_available(self, build_id: str, record: dict[str, Any] | None = None, *, structural: bool = False, text_only: bool = False) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         if str(build.get("status") or "") in {"queued", "running"}:
             stage = str(build.get("stage") or "")
-            # Once segmentation has persisted the authoritative record topology,
-            # non-structural review operations are available immediately. Bulk
-            # review actions do not target one record object, so record=None must
-            # not accidentally turn them into structural operations.
+            if (
+                text_only and not structural
+                and stage in {"constructing_records", "document_intelligence"}
+                and build.get("text_review_available_at")
+                and (build.get("topology_validation") or {}).get("valid") is True
+            ):
+                return build
             if stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun", "finalizing_review", "review"}:
                 return build
             raise ValueError("Records are not editable until segmentation is complete.")
@@ -637,7 +640,7 @@ class ReviewActionsMixin:
         """Save reviewer-corrected corpus text without destroying extraction provenance."""
         target = self.repo.get_record(build_id, record_id)
         previous_record = json.loads(json.dumps(target))
-        self._assert_human_review_available(build_id, target)
+        self._assert_human_review_available(build_id, target, text_only=True)
         current_revision = self._assert_record_revision(target, expected_revision)
         self._push_record_review_history(build_id, action="text_edit", record_id=record_id, previous_record=previous_record)
         cleaned = str(text or "").strip()

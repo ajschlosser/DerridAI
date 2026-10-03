@@ -68,6 +68,30 @@ describe("record review domain", () => {
 });
 
 describe("corpus lifecycle composable", () => {
+  it("unlocks only text after the current preparation's validated topology milestone", () => {
+    const current = ref<CorpusBuild | null>(
+      build({
+        status: "running",
+        stage: "constructing_records",
+        text_review_available_at: "2026-10-03T00:00:00Z",
+        topology_validation: { valid: true },
+      }),
+    );
+    const view = useCorpusBuildLifecycle(current, ref(3), ref<ReviewQueue>("all"), ref(false));
+    expect(view.textReviewLocked.value).toBe(false);
+    expect(view.reviewLocked.value).toBe(true);
+    expect(view.structuralReviewLocked.value).toBe(true);
+    current.value!.stage = "document_intelligence";
+    expect(view.textReviewLocked.value).toBe(false);
+    current.value!.stage = "segmenting";
+    expect(view.textReviewLocked.value).toBe(true);
+    current.value!.stage = "constructing_records";
+    current.value!.topology_validation = { valid: false };
+    expect(view.textReviewLocked.value).toBe(true);
+    current.value!.topology_validation = { valid: true };
+    current.value!.text_review_available_at = null;
+    expect(view.textReviewLocked.value).toBe(true);
+  });
   it("reacts to the build/review/finish cycle without treating enrichment as structural review", () => {
     const current = ref<CorpusBuild | null>(null),
       total = ref(0),

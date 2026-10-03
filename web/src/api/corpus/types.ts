@@ -687,6 +687,8 @@ export interface CorpusLlmTraceEntry {
 }
 
 export interface CorpusBuild {
+  /** Current preparation's safe text-edit boundary; not metadata or structural readiness. */
+  text_review_available_at?: string | null;
   /** The metadata schema this build was started with: its own copy, unaffected by later edits to the saved one. */
   schema?: MetadataSchema | null;
   schema_id?: string;

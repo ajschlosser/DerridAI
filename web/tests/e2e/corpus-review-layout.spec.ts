@@ -112,7 +112,7 @@ test.describe("at a wide desktop", () => {
     await expect(blocker).toContainText(/3 decision/);
     await page.locator("body").press("m");
     const first = page.locator('.decision-list [data-unresolved-field="true"]').first();
-    await expect(first.locator("input, select, textarea").first()).toBeFocused();
+    await expect(first.locator("[data-primary-action]").first()).toBeFocused();
     // The dock sits under the inspector, on one row, with the primary action last.
     const [inspector, dock] = await Promise.all([
       rect(page, ".review-inspector"),

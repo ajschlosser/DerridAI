@@ -63,6 +63,31 @@ const stubs = {
 };
 
 describe("Corpus Builder focus review interactions", () => {
+  it("shows text-only readiness without unlocking metadata or cleanup", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record, locked: true, textLocked: false, editingText: true, textDraft: record.text },
+      global: { stubs },
+    });
+    expect(
+      wrapper
+        .findAll("[role=status]")
+        .some((node) => node.text().includes("Text review is available")),
+    ).toBe(true);
+    expect(buttonByText(wrapper, "Save").attributes("disabled")).toBeUndefined();
+    expect(buttonByText(wrapper, "Clean text").attributes("disabled")).toBeDefined();
+    expect(wrapper.findComponent({ name: "CorpusMetadataResolutionPanel" }).props("busy")).toBe(
+      true,
+    );
+    await wrapper.setProps({ textLocked: undefined });
+    expect(buttonByText(wrapper, "Save").attributes("disabled")).toBeDefined();
+    expect(
+      wrapper
+        .findAll("[role=status]")
+        .some((node) => node.text().includes("Text review is available")),
+    ).toBe(false);
+    wrapper.unmount();
+  });
+
   it("focuses the close action on open and exposes modal semantics", async () => {
     const wrapper = mount(CorpusRecordFocusReview, {
       attachTo: document.body,

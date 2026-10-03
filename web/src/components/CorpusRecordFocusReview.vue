@@ -49,6 +49,7 @@ const props = withDefaults(
     busy?: boolean;
     /** The review is still being prepared; deciding waits. */
     locked?: boolean;
+    textLocked?: boolean;
     regionTypes?: string[];
     discourseRoles?: string[];
     confidenceCalibration?: Record<string, Record<string, Record<string, number>>>;
@@ -135,6 +136,7 @@ const props = withDefaults(
     llmProviderProfileId: "",
     llmModelOverride: "",
     activeRequests: 0,
+    textLocked: undefined,
   },
 );
 const emit = defineEmits<{
@@ -283,7 +285,8 @@ function handleTabKeydown(event: KeyboardEvent) {
   );
 }
 function requestSaveText() {
-  if (!String(props.textDraft || "").trim()) return;
+  if (props.busy || (props.textLocked ?? props.locked) || !String(props.textDraft || "").trim())
+    return;
   emit("saveText");
 }
 function openFieldEvidence(field: string) {
@@ -382,7 +385,7 @@ watch(
               <button
                 class="btn small"
                 type="button"
-                :disabled="busy"
+                :disabled="busy || locked"
                 @click="emit('openTextCleanup')"
               >
                 {{ i18n.t("pdf_corpus.clean_text") }}
@@ -390,13 +393,15 @@ watch(
               <UiTooltip
                 :text="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
                 trigger-mode="content"
-                :content-focusable="Boolean(busy || !String(textDraft || '').trim())"
+                :content-focusable="
+                  Boolean(busy || (textLocked ?? locked) || !String(textDraft || '').trim())
+                "
                 placement="bottom"
               >
                 <button
                   class="btn small primary"
                   type="button"
-                  :disabled="busy || !String(textDraft || '').trim()"
+                  :disabled="busy || (textLocked ?? locked) || !String(textDraft || '').trim()"
                   aria-keyshortcuts="Control+S Meta+S"
                   @click="requestSaveText"
                 >
@@ -406,7 +411,7 @@ watch(
               <button
                 class="btn small"
                 type="button"
-                :disabled="busy"
+                :disabled="busy || locked"
                 @click="emit('llmTouchup', textDraft || '')"
               >
                 {{ i18n.t("pdf_corpus.llm_touchup") }}
@@ -416,8 +421,8 @@ watch(
               v-if="canMarkReviewed"
               class="btn small"
               type="button"
-              :disabled="busy"
               @click="emit('markTextReviewed')"
+              :disabled="busy || (textLocked ?? locked)"
             >
               {{ i18n.t("pdf_corpus.mark_text_reviewed") }}
             </button>
@@ -432,7 +437,7 @@ watch(
             <button
               class="btn small"
               type="button"
-              :disabled="busy"
+              :disabled="busy || (!editingText && (textLocked ?? locked))"
               @click="editingText ? emit('cancelTextEdit') : emit('beginTextEdit', false)"
             >
               {{ editingText ? i18n.t("ui.cancel") : i18n.t("pdf_corpus.edit_text") }}
@@ -440,6 +445,9 @@ watch(
           </div>
         </header>
 
+        <p v-if="locked && textLocked === false" class="focus-note" role="status">
+          {{ i18n.t("pdf_corpus.text_review_available_preparation") }}
+        </p>
         <aside
           v-if="record.text_touchup_proposal?.status === 'pending_review'"
           class="focus-note touchup-note"
@@ -453,7 +461,7 @@ watch(
           <button
             class="btn small"
             type="button"
-            :disabled="busy"
+            :disabled="busy || (textLocked ?? locked)"
             @click="emit('beginTextEdit', true)"
           >
             {{ i18n.t("pdf_corpus.review_touchup_proposal") }}
@@ -690,6 +698,7 @@ watch(
       :editing="editingText"
       :busy="busy"
       :locked="locked"
+      :text-locked="textLocked ?? locked"
       :save-disabled="!String(textDraft || '').trim()"
       :blocking-count="blockingFields.length"
       :blocking-label="blockingLabel"

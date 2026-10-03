@@ -150,16 +150,36 @@ def test_only_english_and_french_have_bundled_default_models():
     }
 
 
-def test_real_spacy_pipeline_when_installed():
+@pytest.mark.parametrize("hobbes_label", ["PERSON", "GPE"])
+def test_person_candidates_follow_provider_tags_not_capitalization(monkeypatch, hobbes_label):
+    text = "Rousseau argues, against Hobbes, that Geneva is not Paris."
+    doc = FakeDoc(text)
+    doc.ents = [
+        Ent("Rousseau", "PERSON", text.index("Rousseau")),
+        Ent("Hobbes", hobbes_label, text.index("Hobbes")),
+        Ent("Geneva", "GPE", text.index("Geneva")),
+    ]
+    monkeypatch.setattr(nlp, "load_pipeline", lambda language: lambda text: doc)
+    result = nlp.annotate_record({"text": text, "region_language": ["English"]}, SCHEMA)
+    names = [candidate["text"] for candidate in result["fields"]["position_holder"]]
+    assert names == (["Rousseau", "Hobbes"] if hobbes_label == "PERSON" else ["Rousseau"])
+
+
+def test_real_spacy_pipeline_when_installed(monkeypatch):
     spacy = pytest.importorskip("spacy")
     try:
-        spacy.load(nlp.DEFAULT_MODELS["en"], exclude=["parser", "lemmatizer"])
-    except Exception:
+        pipeline = spacy.load(nlp.DEFAULT_MODELS["en"], exclude=["parser"])
+    except OSError:
         pytest.skip("English model not installed")
+    monkeypatch.setattr(nlp, "load_pipeline", lambda language: pipeline)
     record = {"text": "Rousseau argues, against Hobbes, that Geneva is not Paris.", "region_language": ["English"]}
     result = nlp.annotate_record(record, SCHEMA)
-    names = {c["text"] for c in result["fields"]["position_holder"]}
-    assert {"Rousseau", "Hobbes"} <= names
+    expected = [
+        {"start": ent.start_char, "end": ent.end_char, "text": ent.text, "source": "ner", "tag": "PERSON"}
+        for ent in pipeline(record["text"]).ents if ent.label_ == "PERSON"
+    ]
+    assert expected and result["status"] == "ok"
+    assert result["fields"]["position_holder"] == expected
 
 
 

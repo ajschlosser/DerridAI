@@ -245,6 +245,63 @@ def test_one_call_returns_every_kept_field(tmp_path, monkeypatch):
     assert fields["discourse_role"]["items"][0]["value"] == "reported_position"
     assert fields["speaker"]["items"] == [] and fields["speaker"]["mode"] == "none"
     single = manager.metadata_precedents(build_id, "t", "discourse_role")
-    assert fields["discourse_role"]["items"] == single["items"]
+    assert fields["discourse_role"]["candidates_pending"] is True
+    assert fields["discourse_role"]["items"] == [
+        {key: value for key, value in item.items() if key != "candidate_source_units"}
+        for item in single["items"]
+    ]
     assert fields["discourse_role"]["source"] == single["source"] == "enrichment"
-    assert fields["discourse_role"]["candidate_pipeline"]["pipeline_id"] == single["candidate_pipeline"]["pipeline_id"]
+    assert "candidate_pipeline" not in fields["discourse_role"]
+    assert single["candidate_pipeline"]["feature"] == "precedent_evidence_remap"
+
+
+def test_kept_references_read_only_referenced_records_and_source_units(tmp_path, monkeypatch):
+    repo, build_id, manager = _install(tmp_path, [_precedent(), _target()])
+    record = _enrich(repo, build_id, manager, monkeypatch)
+    ref = record[CACHE_KEY]["fields"]["discourse_role"]["refs"][0]
+    assert ref["record_id"] == "p1"
+    calls = []
+    original = repo.load_selected_blocks
+
+    def selected(asset_id, ids):
+        calls.append(set(ids))
+        return original(asset_id, ids)
+
+    def full_read(*args, **kwargs):
+        raise AssertionError("kept precedent resolution attempted a corpus-wide read")
+
+    monkeypatch.setattr(repo, "load_records", full_read)
+    monkeypatch.setattr(repo, "load_blocks", full_read)
+    monkeypatch.setattr(repo, "load_selected_blocks", selected)
+    result = manager.record_precedents(build_id, "t")
+    assert result["fields"]["discourse_role"]["items"][0]["record_id"] == "p1"
+    assert calls == [{"pb1", "pb2"}]
+    manager.metadata_precedents(build_id, "t", "discourse_role")
+    assert calls == [{"pb1", "pb2"}, {"pb1", "pb2"}, {"tb1", "tb2"}]
+
+
+def test_kept_batch_does_not_rank_candidates_or_access_the_embedder(tmp_path, monkeypatch):
+    repo, build_id, manager = _install(tmp_path, [_precedent(), _target()])
+    _enrich(repo, build_id, manager, monkeypatch)
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("closed precedent fields must not perform candidate ranking")
+
+    monkeypatch.setattr(manager, "_precedent_embedder", unexpected)
+    monkeypatch.setattr("app.corpus_editorial_memory.rank_candidates", unexpected)
+    result = manager.record_precedents(build_id, "t")["fields"]
+    assert result["discourse_role"]["candidates_pending"] is True
+    assert result["speaker"]["items"] == []
+    assert "candidates_pending" not in result["speaker"]
+
+
+def test_legacy_kept_references_remain_resolvable(tmp_path, monkeypatch):
+    repo, build_id, manager = _install(tmp_path, [_precedent(), _target()])
+    record = _enrich(repo, build_id, manager, monkeypatch)
+    record[CACHE_KEY]["version"] = 2
+    for entry in record[CACHE_KEY]["fields"].values():
+        for ref in entry["refs"]:
+            ref.pop("record_id", None)
+    repo.update_record(build_id, record)
+    result = manager.record_precedents(build_id, "t")
+    assert result["fields"]["discourse_role"]["items"][0]["record_id"] == "p1"

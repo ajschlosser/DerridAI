@@ -6759,6 +6759,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'pdf_corpus.text_save_hint': 'L’enregistrement confirme que vous avez révisé le texte de cette notice.',
  'pdf_corpus.save_and_mark_reviewed': 'Enregistrer et marquer comme révisé',
  'pdf_corpus.metadata_enrichment_pending': 'Enrichissement par LLM en attente',
+ 'pdf_corpus.text_review_available_preparation': 'La révision du texte est disponible. Les décisions sur les métadonnées et les modifications structurelles restent verrouillées pendant la préparation.',
  'pdf_corpus.metadata_enrichment_pending_help': 'Cette notice est modifiable maintenant, mais l’enrichissement de ses métadonnées par LLM n’est pas encore terminé. Les indices de confiance et les suggestions apparaîtront à mesure que chaque famille de métadonnées sera traitée.',
  'pdf_corpus.metadata_pipeline_trace_title': 'Comment les précédents de métadonnées ont été repérés',
  'pdf_corpus.metadata_pipeline_trace_help': ('Cette trace d’audit montre le pipeline de repérage enregistré exact utilisé pour cette notice, y compris la recherche '
