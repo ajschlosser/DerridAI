@@ -367,6 +367,8 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'export.current': 'Fichier actuel',
  'export.nothing': "Il n'y a aucun fichier à exporter.",
  'export.title': 'Exporter en JSONL',
+ 'faq.read_failed': 'Could not load saved responses: {message}',
+ 'faq.refresh_failed': 'Saved responses may be out of date. Refresh failed: {message}',
  'faq.archive_help': 'Parcourez ou recherchez les questions enregistrées, puis ouvrez-en une pour revoir sa réponse et '
                      'ses preuves.',
  'faq.browse_archive': 'Parcourir les recherches enregistrées',
@@ -4856,6 +4858,9 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'traceability.description.GeneratedClaim': 'Une affirmation substantielle identifiée dans un résultat de recherche généré.',
  'traceability.description.SupportBinding': 'Le lien explicite entre une affirmation générée et la preuve censée la soutenir, la qualifier, la contraster, la citer ou l’attribuer.',
  'traceability.description.ResearchRun': 'L’opération de recherche conservée qui relie l’état du corpus, les preuves, la génération et la validation.',
+ 'records.hydration_loading': 'Loading corpus workspace…',
+ 'records.hydration_failed': 'Could not load the corpus workspace: {message}',
+ 'records.hydration_export_failed': 'The collection could not be read. Retry to load the corpus workspace.',
  'records.choose_jsonl': 'Choisir des fichiers JSONL',
  'records.close_edited_help': '{name} contient des fiches modifiées depuis son chargement. La fermeture le retire de '
                               'l’espace de travail du navigateur; le fichier sur le disque n’est pas supprimé.',
