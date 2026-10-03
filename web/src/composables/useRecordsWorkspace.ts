@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ref, watch } from "vue";
+import { getCurrentScope, onScopeDispose, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
 import { corpusState } from "../state/workspaceState";
 import type { RecordsCell, RecordsListSnapshot, RecordsRow } from "../types/records";
@@ -32,6 +32,14 @@ import type { SubsetField, SubsetRequest, SubsetSource } from "../domain/recordS
  */
 export function useRecordsWorkspace() {
   const snapshot = ref<RecordsListSnapshot | null>(null);
+  const loading = ref(false);
+  const error = ref("");
+  let disposed = false;
+  let activation: Promise<void> | null = null;
+  if (getCurrentScope())
+    onScopeDispose(() => {
+      disposed = true;
+    });
 
   function load() {
     const next = runtime.getRecordsListSnapshot?.() as RecordsListSnapshot | undefined;
@@ -48,11 +56,26 @@ export function useRecordsWorkspace() {
     { flush: "post" },
   );
 
-  async function activate() {
+  function activate(): Promise<void> {
+    if (activation) return activation;
     runtime.state.view = "list";
+    loading.value = true;
+    error.value = "";
     load();
-    await runtime.ensureCorpusWorkspaceLoaded?.();
-    load();
+    activation = (async () => {
+      try {
+        const result = await runtime.ensureCorpusWorkspaceLoaded?.();
+        if (disposed) return;
+        if (result?.status === "error") throw result.error;
+        load();
+      } catch (failure) {
+        if (!disposed) error.value = failure instanceof Error ? failure.message : String(failure);
+      } finally {
+        if (!disposed) loading.value = false;
+        activation = null;
+      }
+    })();
+    return activation;
   }
   function setQuery(value: string) {
     runtime.setRecordsListQuery?.(value);
@@ -156,6 +179,8 @@ export function useRecordsWorkspace() {
 
   return {
     snapshot,
+    loading,
+    error,
     load,
     activate,
     setQuery,

@@ -25,13 +25,14 @@ import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = withDefaults(
   defineProps<{
+    ready?: boolean;
     fileName?: string;
     matched?: number;
     total?: number;
     flagged?: number;
     selected?: number;
   }>(),
-  { fileName: "", matched: 0, total: 0, flagged: 0, selected: 0 },
+  { ready: true, fileName: "", matched: 0, total: 0, flagged: 0, selected: 0 },
 );
 const emit = defineEmits<{ share: []; columns: []; import: [] }>();
 const i18n = useI18nStore();
@@ -67,7 +68,7 @@ const copyLinkHelp = computed(() => i18n.t("records.copy_view_link_help"));
       </div>
     </template>
     <template #meta>
-      <ul class="records-stats" :aria-label="i18n.t('records.workspace_stats')">
+      <ul v-if="ready" class="records-stats" :aria-label="i18n.t('records.workspace_stats')">
         <li>
           <b>{{ props.fileName || i18n.t("records.no_file") }}</b
           ><span>{{ i18n.t("records.active_tab") }}</span>

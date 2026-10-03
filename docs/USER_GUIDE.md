@@ -298,6 +298,8 @@ After workspace restoration and API health checks, the configured default model 
 
 ## JSONL workspace
 
+Records shows its title and import controls while its initial corpus tab loads. Until that read succeeds, it shows placeholders and withholds empty-workspace claims and counts. A failed initial corpus read offers Retry. Existing file rows remain visible while workspace activation is pending or fails; importing a file while collection discovery is pending takes precedence over automatic collection selection.
+
 Multiple JSONL files remain open as a local working set and persist through browser IndexedDB, including:
 
 - unsaved edits
