@@ -441,8 +441,8 @@ describe("purpose-aware editing", () => {
   });
 
   it("marks an inspect-only strategy on the current stage", () => {
-    const wrapper = mountStageEditor("select.mmr");
-    expect(wrapper.find('option[value="select.mmr"]').exists()).toBe(true);
+    const wrapper = mountStageEditor("select.source_diversity");
+    expect(wrapper.find('option[value="select.source_diversity"]').exists()).toBe(true);
     expect(text(wrapper.get(".stage-fit-note"))).toContain(
       "is not run by the Reviewer evidence suggestion adapter",
     );
