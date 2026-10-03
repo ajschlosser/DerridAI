@@ -21,7 +21,8 @@ import { toast } from "../composables/notifications";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
-import { navigateTo } from "../domain/sharedNavigation";
+import { navigateTo, syncUrl } from "../domain/sharedNavigation";
+import { dbSearchWhere } from "../domain/sharedUrlState";
 import { mlaPageSpan } from "../domain/citations";
 import { icon } from "../domain/html";
 import { commonWorkValue, workCoverUrl } from "../domain/workMetadata";
@@ -272,7 +273,7 @@ function corpusBuildPercent(job: Any) {
 
 async function persistAndRefresh() {
   persistPrefs();
-  runtime.syncUrl({ replace: true });
+  syncUrl({ replace: true });
   await refresh();
 }
 
@@ -325,7 +326,7 @@ async function goSearch() {
             query: state.globalSearch,
             mode,
             n_results: 100,
-            where: Object.keys(runtime.dbSearchWhere()).length ? runtime.dbSearchWhere() : null,
+            where: Object.keys(dbSearchWhere()).length ? dbSearchWhere() : null,
             fetch_k: Number(state.dbSearchFetchK || 100),
             lambda_mult: Number(state.dbSearchLambda ?? 0.7),
           }),

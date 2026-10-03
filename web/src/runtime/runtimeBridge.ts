@@ -28,8 +28,6 @@ export const getShellSnapshot = (...args: Parameters<typeof runtime.getShellSnap
 export const setTranslationDictionary = (
   ...args: Parameters<typeof runtime.setTranslationDictionary>
 ) => runtime.setTranslationDictionary(...args);
-export const renderView = (...args: Parameters<typeof runtime.renderView>) =>
-  runtime.renderView(...args);
 export const setUserContext = (...args: Parameters<typeof runtime.setUserContext>) =>
   runtime.setUserContext(...args);
 export const setShellRefreshHook = (...args: Parameters<typeof runtime.setShellRefreshHook>) =>

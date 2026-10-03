@@ -21,7 +21,9 @@ import { toast } from "../composables/notifications";
 import { openMessageDialog } from "../composables/messageDialog";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
-import { navigateTo } from "../domain/sharedNavigation";
+import { navigateTo, syncUrl } from "../domain/sharedNavigation";
+import { activeFile, selectedIndex } from "../domain/sharedUrlState";
+import { shell } from "../domain/sharedWorkspaceStorage";
 import { fullCitation } from "../domain/citations";
 import { highlight } from "../domain/recordFormatting";
 import AppIcon from "./AppIcon.vue";
@@ -147,12 +149,12 @@ async function refresh() {
   extractReady.value = Boolean(state.pdf.doc || state.pdf.file);
   linked.value = loaded.value ? runtime.linkedPdfRows(state.pdf.page) : [];
   allRelated.value = loaded.value ? runtime.allLinkedRowsForLoadedPdf() : [];
-  selectedFile.value = runtime.activeFile();
+  selectedFile.value = activeFile();
   selected.value = runtime.selectedRecord();
   hasRecordOptions.value = state.files.some((file: Any) => file.records.length > 0);
   const currentRecordKey =
     selectedFile.value && selected.value
-      ? `${selectedFile.value.id}::${runtime.selectedIndex(selectedFile.value)}`
+      ? `${selectedFile.value.id}::${selectedIndex(selectedFile.value)}`
       : "";
   currentOption.value =
     selectedFile.value && selected.value
@@ -161,7 +163,7 @@ async function refresh() {
           label: runtime.recordOptionLabel(
             selectedFile.value,
             selected.value,
-            runtime.selectedIndex(selectedFile.value),
+            selectedIndex(selectedFile.value),
           ),
         }
       : null;
@@ -233,7 +235,7 @@ async function onFileChange(event: Event) {
       state.pdf.extractError = copy.value.jsInitFailed(error.message);
     }
     await runtime.persistCurrentPdfAsset();
-    runtime.shell();
+    shell();
     await refresh();
   } catch (error: Any) {
     console.error("Could not open PDF", error);
@@ -255,7 +257,7 @@ async function setPage(page: Any) {
   state.pdf.extractError = "";
   state.pdf.extractionSource = "";
   await runtime.persistCurrentPdfAsset();
-  runtime.syncUrl({ replace: true });
+  syncUrl({ replace: true });
   await refresh();
 }
 
@@ -334,7 +336,7 @@ function returnToSelectedRecord() {
   if (!selectedFile.value) return;
   navigateTo("record", {
     fileId: selectedFile.value.id,
-    index: runtime.selectedIndex(selectedFile.value),
+    index: selectedIndex(selectedFile.value),
   });
 }
 function openLinkedRecord(fileId: string, index: number) {
@@ -403,7 +405,7 @@ watch(
 );
 
 onMounted(async () => {
-  runtime.syncUrl({ replace: true });
+  syncUrl({ replace: true });
   await refresh();
   document.addEventListener("click", onDocumentClick);
   window.addEventListener("derridai:pdf-explorer-refresh", onPdfExplorerRefreshRequested);

@@ -21,6 +21,7 @@ import { defineStore } from "pinia";
 import { systemApi, type LanguageInfo } from "../api/system";
 import { englishDefault, COMMON_KEY_ALIASES } from "../i18n/englishDefault";
 import * as runtime from "../runtime/runtimeBridge";
+import { renderView } from "../domain/sharedNavigation";
 
 let languageEventBridgeInstalled = false;
 
@@ -99,7 +100,7 @@ export const useI18nStore = defineStore("i18n", () => {
         name: data.name,
         flag: data.flag,
       });
-      if (document.querySelector("#main")) runtime.renderView();
+      if (document.querySelector("#main")) renderView();
     } finally {
       loading.value = false;
     }
