@@ -816,9 +816,20 @@ const scenarios: Scenario[] = [
   {
     name: "dialog-ocr-cleanup",
     contains: ["Clean OCR Artifacts"],
+    nav: "Record View",
     load: true,
     target: "dialog",
-    steps: openDialogFromRecords("Clean OCR Artifacts"),
+    steps: async (page) => {
+      // OCR cleanup is a Record View command. Reach it through the owning surface instead of
+      // relying on Records-list hydration timing or on an unrelated "More" menu being present.
+      const more = page.locator("summary[aria-label='More record actions']");
+      await expect(more).toBeVisible({ timeout: 10_000 });
+      await more.click();
+      const clean = page.getByRole("button", { name: /Clean OCR artifacts/i });
+      await expect(clean).toBeVisible();
+      await clean.click();
+      await expect(page.locator("dialog[open], [role=dialog][aria-modal=true]").last()).toBeVisible();
+    },
   },
   { name: "search-loaded", nav: "Search", load: true },
   {
