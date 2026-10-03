@@ -22,10 +22,7 @@ import { VueQueryPlugin } from "@tanstack/vue-query";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  metadataMemoryApi,
-  type MetadataMemoryPayload,
-} from "../../src/api/metadataMemory";
+import { metadataMemoryApi, type MetadataMemoryPayload } from "../../src/api/metadataMemory";
 import { queryClient } from "../../src/realtime/dataQuery";
 import { dataKey } from "../../src/realtime/resourceKeys";
 import { useI18nStore } from "../../src/stores/i18n";
@@ -296,7 +293,9 @@ describe("Metadata memory page", () => {
     const { wrapper } = await mountView();
     await flushPromises();
 
-    const targets = wrapper.findAll(".memory-relations a").map((anchor) => anchor.attributes("data-to"));
+    const targets = wrapper
+      .findAll(".memory-relations a")
+      .map((anchor) => anchor.attributes("data-to"));
     expect(targets.join()).toContain("semantic_memory_outbox");
     expect(targets.join()).toContain("system-data-metadata");
 
@@ -379,7 +378,9 @@ describe("Metadata memory page", () => {
     expect(wrapper.get(".memory-table").element).toBe(table);
     expect(wrapper.text()).toContain("Levinas");
     expect(wrapper.get(".memory-read-error").text()).toContain("may be out of date");
-    expect(wrapper.get(".memory-read-error").text()).toContain("projection temporarily unavailable");
+    expect(wrapper.get(".memory-read-error").text()).toContain(
+      "projection temporarily unavailable",
+    );
 
     list.mockResolvedValue(currentPayload());
     await wrapper.get(".memory-read-error button").trigger("click");
