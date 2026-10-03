@@ -38,7 +38,7 @@ BROWSER_EMBEDDING_PROFILE: dict[str, Any] = {
     "query_prefix": "query: ",
     "document_prefix": "passage: ",
     "model_file": "onnx/model_quantized.onnx",
-    "model_bytes": 118308185,
+    "model_bytes": 135390915,
 }
 
 _EXPECTED_SHA256 = {
