@@ -92,7 +92,9 @@ function toggle(id: string) {
   >
     <table class="memory-table ui-table" :class="{ 'is-loading': loading }">
       <caption class="sr-only">
-        {{ i18n.t("metadata_memory.table_scroll") }}
+        {{
+          i18n.t("metadata_memory.table_scroll")
+        }}
       </caption>
       <thead>
         <tr>
