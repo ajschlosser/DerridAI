@@ -29,10 +29,8 @@ flowchart TD
     UI["ui/ · reusable primitives"]
     Shell["shell/ · application chrome"]
     Shared["Root-level reusable components"]
-    DomainUI["Domain folders
-record · research · works · search · vector · settings · …"]
-    FeatureUI["Large feature surfaces
-corpus-builder/ · pipelines/"]
+    DomainUI["Domain folders<br/>record · research · works · search · vector · settings · …"]
+    FeatureUI["Large feature surfaces<br/>corpus-builder/ · pipelines/"]
     Views["views/"]
 
     UI --> Shared
