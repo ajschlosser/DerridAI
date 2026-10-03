@@ -102,11 +102,7 @@ function onRestoreFile(event: Event) {
           :label="i18n.t('settings.download_backup')"
           @click="emit('backup')"
         />
-        <UiButton
-          icon="upload"
-          :label="i18n.t('settings.restore_backup')"
-          @click="chooseRestore"
-        />
+        <UiButton icon="upload" :label="i18n.t('settings.restore_backup')" @click="chooseRestore" />
       </template>
     </SettingsSection>
   </div>
