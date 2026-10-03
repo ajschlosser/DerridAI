@@ -427,9 +427,9 @@ const liveJobs = (options: { finishAfterListings?: number } = {}): Fixtures => {
   };
 };
 
-/** Settings > System and operations, where the backup and restore buttons are. */
+/** Settings > Data & storage, where the backup and restore controls are. */
 const inBackupSection = async (page: Page) => {
-  await page.locator("button", { hasText: "System and operations" }).first().click();
+  await page.locator('a[href="/settings/data"]').first().click();
   await page.waitForTimeout(700);
 };
 const RESTORE_RESPONSE = {
