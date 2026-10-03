@@ -52,6 +52,7 @@ const runtime = vi.hoisted(() => ({
   pauseRuntime: vi.fn(),
   navigateView: vi.fn(),
   syncFromLocation: vi.fn(),
+  repaintAfterLocationChange: vi.fn(),
   viewForPath: vi.fn(),
   toggleSidebar: vi.fn(),
   state: {} as Record<string, unknown>,
@@ -478,11 +479,11 @@ describe("router and runtime stay in agreement", () => {
     );
 
     await router.push("/search");
-    expect(runtime.syncFromLocation).toHaveBeenCalledTimes(1);
+    expect(runtime.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
 
     runtime.state.view = "global";
     await router.push("/search?q=again");
-    expect(runtime.syncFromLocation).toHaveBeenCalledTimes(1);
+    expect(runtime.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 

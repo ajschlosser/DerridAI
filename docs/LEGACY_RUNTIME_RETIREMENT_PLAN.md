@@ -231,7 +231,13 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] table lists (`listState` / `useListsStore`: `selected`, `searches`, `listFilters`, `pages`, `pageSize`, `sorts`, `tableColumns`)
   - [x] configuration (`configState` / `useConfigStore`: `ragConfig`, `appConfig`, `llmConfig`), PDF Explorer (`pdfState` / `usePdfStore`) and review selection (`reviewState` / `useReviewStore`: `reviewSelection`, `selectedEvidence`)
   - [x] URL contract pinned by `tests/frontend/url-state-contract.test.ts` (path/`?view=`, file/record, store params, raw/compressed `ts=`, round trip, router-owned sub-paths). Finding: a known path wins over `?view=`, which only applies on a path with no view of its own
-  - [ ] remaining plain fields on `createRuntimeState` are small (`view`, `userContext`, health/provider status, upsert and operation progress, translations); then replace `urlFromState`/`applyUrlState`, then delete the runtime
+  - [x] service status (`statusState` / `useStatusStore`: `health`, `llmStatus`, `researcherProviderProfiles`, `providerStatuses`, `providerWarmups`, `warmup`); runtime, domain and persistence code unchanged
+  - [x] record view (`recordViewState` / `useRecordViewStore`: researcher record/compare ids, `dashboardMetricIndex`, `lastViewedRecord`, `recordFind*`) and upsert progress (`upsertProgressState` / `useUpsertProgressStore`: `foregroundUpsert*`, `upsertState`, `upsertIgnored`, `operationProgress`)
+  - [ ] remaining plain fields on `createRuntimeState` are `view`, `userContext`, `jobsPollTimer`, `storageReady` and translations
+  - [x] URL codec split out of `navigation.ts`: `domain/urlStateCodec.ts` (`urlFromState`, `applyUrlState`, table-state read/write; needs only `state`, `activeFile`, `selectedIndex`, `dbSearchWhere`) and `domain/viewPaths.ts` (view↔path maps; still re-exported from `navigation`). `syncUrl`/`navigateTo` remain in `navigation.ts` because they call `shell`/`renderView`/`persistPrefs`
+  - [x] the runtime's `popstate` listener is gone: `router/runtimeLocationSync.ts` resyncs the runtime after every settled router navigation that came from browser history (`history.listen` type `pop`, so same-view `ts=` changes still apply) or that lands on a different runtime view; guards and redirects now settle before the runtime repaints
+  - [x] the router side applies URLs without the runtime: `view` is a shared slice (`navigationState` / `useNavigationStore`), `bindWorkspaceGroups` binds every shared group onto any object, and `domain/sharedUrlState.ts` exports `sharedUrlStateCodec` over it (the runtime's `createNavigation` is handed the same codec). `runtimeLocationSync` in `App.vue` now calls `sharedUrlStateCodec.applyUrlState()` and then `runtime.repaintAfterLocationChange()` (persist, shell, `renderView`). `?view=` and `ts=` links are untouched: the codec is the same code
+  - [ ] next: move `syncUrl`/`navigateTo` onto the router (they still need `shell`/`renderView`/`persistPrefs`), then `renderView` and the runtime files
 
 Notes for the next session:
 
@@ -248,7 +254,7 @@ Notes for the next session:
 - Next: Step 3 (make `home`, `rag` and `corpus-builder` Vue-native, port `domain/*Dialogs.ts` family by family),
   retiring each family's snapshots with it.
 - Navigation debt from Step 1 is unchanged: `state.view` still follows the router only for paths in
-  `pathViewMap`, and the runtime's own `popstate` listener still exists alongside the router's.
+  `pathViewMap`, (the runtime's own `popstate` listener was removed in Step 4; see `router/runtimeLocationSync.ts`).
 - `npm run format:repo:check` reports unrelated files in this environment (generated `sdk/dist`, `.pytest_cache`).
 - Never run Prettier over `web/tests/e2e/**/*-snapshots`; it fails on them and rewrites some.
 - Step 3 correction (2026-10-01): `home`, `rag` and `corpus-builder` already render Vue views; what keeps them tied to

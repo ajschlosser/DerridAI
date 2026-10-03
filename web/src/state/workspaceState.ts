@@ -346,3 +346,94 @@ export function createReviewState() {
   };
 }
 export const reviewState = shallowReactive(createReviewState());
+
+/** Service status: API health, provider reachability, warm-up progress and the profiles a researcher may use. */
+export function createStatusState() {
+  return {
+    health: null as Loose | null,
+    llmStatus: null as Loose | null,
+    researcherProviderProfiles: [] as Loose[],
+    providerStatuses: {} as Loose,
+    providerWarmups: {} as Loose,
+    warmup: { status: "idle", message: "" } as Loose,
+  };
+}
+export const statusState = shallowReactive(createStatusState());
+
+/** The record currently viewed or compared, the dashboard metric shown, and the in-record find box. */
+export function createRecordViewState() {
+  return {
+    researcherRecordId: "",
+    researcherCompareA: "",
+    researcherCompareB: "",
+    dashboardMetricIndex: 0,
+    lastViewedRecord: null as Loose | null,
+    recordFind: "",
+    recordFindKey: "",
+  };
+}
+export const recordViewState = shallowReactive(createRecordViewState());
+
+/** Foreground upsert and per-operation progress. */
+export function createUpsertProgressState() {
+  return {
+    foregroundUpsertCancelRequested: false,
+    foregroundUpsertActive: false,
+    upsertState: {} as Loose,
+    upsertIgnored: {} as Loose,
+    operationProgress: {} as Loose,
+  };
+}
+export const upsertProgressState = shallowReactive(createUpsertProgressState());
+
+/** Which workspace view is showing. The router owns the URL; this follows it. */
+export function createNavigationState() {
+  return { view: "home" };
+}
+export const navigationState = shallowReactive(createNavigationState());
+
+/** Every shared group except background jobs, in the order they are bound onto a state object. */
+const sharedGroups = [
+  vectorState,
+  compareState,
+  searchState,
+  worksState,
+  corpusState,
+  layoutState,
+  annotationsState,
+  faqState,
+  listState,
+  configState,
+  pdfState,
+  reviewState,
+  statusState,
+  recordViewState,
+  upsertProgressState,
+  navigationState,
+];
+
+/** Binds every shared group onto `target`, so code that reads a workspace state object works without the runtime. */
+export type WorkspaceGroups = Omit<
+  ReturnType<typeof createVectorState> &
+    ReturnType<typeof createCompareState> &
+    ReturnType<typeof createSearchState> &
+    ReturnType<typeof createWorksState> &
+    ReturnType<typeof createCorpusState> &
+    ReturnType<typeof createLayoutState> &
+    ReturnType<typeof createAnnotationsState> &
+    ReturnType<typeof createFaqState> &
+    ReturnType<typeof createListState> &
+    ReturnType<typeof createConfigState> &
+    ReturnType<typeof createPdfState> &
+    ReturnType<typeof createReviewState> &
+    ReturnType<typeof createStatusState> &
+    ReturnType<typeof createRecordViewState> &
+    ReturnType<typeof createUpsertProgressState> &
+    ReturnType<typeof createNavigationState>,
+  "version"
+>;
+
+export function bindWorkspaceGroups<T extends object>(target: T): T & WorkspaceGroups {
+  for (const group of sharedGroups) bindSharedState(target, group);
+  return target as T & WorkspaceGroups;
+}

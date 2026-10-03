@@ -28,6 +28,8 @@ import {
 } from "vue-router";
 import RouteNavigationFeedback from "./components/shell/RouteNavigationFeedback.vue";
 import { createRouteLoading } from "./router/routeLoading";
+import { sharedUrlStateCodec } from "./domain/sharedUrlState";
+import { createRuntimeLocationSync } from "./router/runtimeLocationSync";
 import { createNavigationHistory, type HistoryEntryTitle } from "./router/navigationHistory";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
 import { useLayoutStore } from "./stores/workspace";
@@ -76,7 +78,7 @@ import {
   UTILITY_NAV_IDS,
   navIdForRoute,
 } from "./domain/appNavigation";
-import { SETTINGS_SECTIONS, isSettingsSectionId } from "./domain/settings";
+import { SETTINGS_SECTIONS, resolveSettingsSectionId } from "./domain/settings";
 import { viewConfig } from "./domain/runtimeConstants";
 import * as runtime from "./runtime/runtime.js";
 import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
@@ -324,8 +326,8 @@ const mobileNavGroups = computed<SidebarNavGroup[]>(() => [
 function translatedRouteTitle() {
   if (route.name === "record" && s.value.context.title) return s.value.context.title;
   if (route.name === "settings-section") {
-    const requested = String(route.params.section || "workspace");
-    const id = isSettingsSectionId(requested) ? requested : "workspace";
+    const requested = String(route.params.section || "overview");
+    const id = resolveSettingsSectionId(requested) || "overview";
     const section = SETTINGS_SECTIONS.find((item) => item.id === id);
     return section
       ? i18n.t(section.labelKey, section.labelFallback)
@@ -562,18 +564,23 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  stopRouteSync();
+  runtimeLocationSync.dispose();
   navigationHistory.dispose();
   routeLoading.dispose();
   window.removeEventListener(CHOOSE_CORPUS_FILES_EVENT, openCorpusFilePicker);
 });
 
 // The router is the authority on where the user is. When a navigation settles on a path that belongs to a different
-// runtime view (RouterLink, a deep link, a redirect), pull the runtime view along instead of letting the two drift.
-const stopRouteSync = router.afterEach((to, _from, failure) => {
-  if (failure || !runtimeStarted.value) return;
-  const view = runtime.viewForPath(to.path);
-  if (view && view !== runtime.state.view) runtime.syncFromLocation();
+// runtime view (RouterLink, a deep link, a redirect) or comes from browser back/forward, pull the runtime along instead
+// of letting the two drift.
+const runtimeLocationSync = createRuntimeLocationSync(router, {
+  isStarted: () => runtimeStarted.value,
+  viewForPath: (path) => runtime.viewForPath(path),
+  currentView: () => runtime.state.view,
+  sync: () => {
+    sharedUrlStateCodec.applyUrlState();
+    runtime.repaintAfterLocationChange();
+  },
 });
 
 watch(
