@@ -5,6 +5,7 @@ Copyright © 2026  Aaron John Schlosser, PhD
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import type { PublicationRecord, ResearchResponse, ResearchWarning } from "../sdk/src/types";
 import UiButton from "../src/components/ui/UiButton.vue";
 import UiTextarea from "../src/components/ui/UiTextarea.vue";
 import PublishedIndexStatus from "./PublishedIndexStatus.vue";
@@ -18,8 +19,8 @@ const running = ref(false);
 const status = ref("");
 const statusTone = ref<"" | "success" | "warning" | "error">("");
 const evidenceTarget = ref<HTMLElement | null>(null);
-const response = ref<any | null>(null);
-const recordsById = ref(new Map<string, any>());
+const response = ref<ResearchResponse | null>(null);
+const recordsById = ref(new Map<string, PublicationRecord>());
 const methods = ref({
   text: true,
   vector: site.semanticReady(),
@@ -29,7 +30,7 @@ const methods = ref({
 const localIndexVisible = computed(
   () =>
     Boolean(site.capabilities.value?.localIndex) &&
-    !Boolean(site.capabilities.value?.localIndex?.usesPublishedVectors),
+    !site.capabilities.value?.localIndex?.usesPublishedVectors,
 );
 
 const answerText = computed(() =>
@@ -77,7 +78,7 @@ async function runResearch() {
       },
     });
     recordsById.value = new Map(
-      (result.retrieval.results || []).map((item: any) => [
+      (result.retrieval.results || []).map((item) => [
         String(item.record?.record_id || ""),
         item.record,
       ]),
@@ -90,7 +91,7 @@ async function runResearch() {
     };
     const retrievalWarning = site.warningText(result.retrieval.warnings);
     const generationWarning = result.warnings.some(
-      (warning: any) => warning.code === "generation_unavailable",
+      (warning: ResearchWarning) => warning.code === "generation_unavailable",
     );
 
     if (result.answer) {
