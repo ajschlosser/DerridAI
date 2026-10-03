@@ -2642,17 +2642,30 @@
       node("span", { text: t("site.runtime.high_contrast") }),
     );
 
+    const display = node(
+      "details",
+      { class: "display-menu" },
+      node("summary", { text: t("site.runtime.display") }),
+      node(
+        "div",
+        {
+          class: "display-menu-body",
+          role: "group",
+          "aria-label": t("site.runtime.display_controls"),
+        },
+        node("label", { class: "compact-field" }, node("span", { text: t("site.runtime.language") }), languageSelect),
+        node("label", { class: "compact-field" }, node("span", { text: t("site.runtime.theme") }), themeSelect),
+        contrast,
+      ),
+    );
+
     return node(
       "div",
       {
         class: "header-controls",
         "data-tour": "controls",
-        role: "group",
-        "aria-label": t("site.runtime.display_controls"),
       },
-      node("label", { class: "compact-field" }, node("span", { text: t("site.runtime.language") }), languageSelect),
-      node("label", { class: "compact-field" }, node("span", { text: t("site.runtime.theme") }), themeSelect),
-      contrast,
+      display,
       node("button", {
         type: "button",
         "data-tour": "tutorial",
