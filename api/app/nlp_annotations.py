@@ -16,8 +16,9 @@
 
 """Deterministic, offline POS/NER candidates for schema fields.
 
-spaCy runs locally with pre-installed model packages (no network at runtime). Its
-output is a raw *candidate surface-form* layer: exact substrings of the record text
+spaCy runs locally with bundled English/French model packages and administrator-installed
+language packs (no network during corpus processing). Its output is a raw *candidate
+surface-form* layer: exact substrings of the record text
 with offsets and the linguistic tag that matched. A raw candidate is not scholarly
 authority and not evidence of a discourse role; a person named in a passage is not
 thereby its speaker, quoted speaker or position holder. Candidates guide model prompts
@@ -55,13 +56,12 @@ MAX_TERMS = 60
 # Universal POS runs kept as record terms. Function words are never dropped from the
 # text; they only end a run, so a term is always an exact contiguous span.
 TERM_POS_TAGS = ("PROPN", "NOUN")
-# The large pipelines recognise philosophers' names markedly better than the small
-# ones (measured on a Rousseau/Hobbes/Derrida sample); override per language with
-# SPACY_MODEL_EN / _FR / _DE, for example to a smaller model on constrained hosts.
+# English and French are the built-in baseline. Other languages remain explicit,
+# administrator-installed resources; SPACY_MODEL_<LANG> can still override either
+# the bundled baseline or a managed pack when an operator needs a custom model.
 DEFAULT_MODELS = {
-    "en": "en_core_web_lg",
-    "fr": "fr_core_news_lg",
-    "de": "de_core_news_lg",
+    "en": "en_core_web_sm",
+    "fr": "fr_core_news_sm",
 }
 # Non-English pipelines use different entity inventories; map to the shared vocabulary.
 _LABEL_ALIASES = {"PER": "PERSON"}
