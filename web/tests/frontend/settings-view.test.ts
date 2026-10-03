@@ -125,7 +125,7 @@ async function mountView(role: "admin" | "researcher", query: Record<string, str
       { path: "/", name: "home", component: { template: "<div>home</div>" } },
     ],
   });
-  const { section = "workspace", ...restQuery } = query;
+  const { section = "overview", ...restQuery } = query;
   await router.push({ name: "settings-section", params: { section }, query: restQuery });
   await router.isReady();
   const wrapper = mount(
@@ -162,6 +162,21 @@ describe("SettingsView", () => {
     runtime.state.ragConfig.search_types = ["similarity", "lexical", "mmr"];
   });
 
+
+  it("lands on a task-oriented settings overview", async () => {
+    const { wrapper } = await mountView("admin", { section: "overview" });
+    expect(wrapper.get("#settings-overview-title").text()).toContain("Overview");
+    expect(wrapper.text()).toContain("Preferences");
+    expect(wrapper.text()).toContain("Research & review");
+    expect(wrapper.text()).toContain("Data & storage");
+  });
+
+  it("canonicalizes legacy settings section URLs", async () => {
+    const { router } = await mountView("admin", { section: "workspace" });
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/settings/preferences");
+  });
+
   it("does not request server embedding defaults for researcher accounts", async () => {
     await mountView("researcher");
     expect(systemApi.embeddingDefaults).not.toHaveBeenCalled();
@@ -176,22 +191,22 @@ describe("SettingsView", () => {
     expect(wrapper.text()).not.toContain("Save RAG defaults");
   });
 
-  it("shows copyright and version without a git commit for researchers", async () => {
-    const { wrapper } = await mountView("researcher", { section: "workspace" });
+  it("shows copyright and version on Overview without a git commit for researchers", async () => {
+    const { wrapper } = await mountView("researcher", { section: "overview" });
     expect(wrapper.text()).toContain("About DerridAI");
     expect(wrapper.text()).toContain("The New England Transcendental Club of California");
     expect(wrapper.text()).not.toContain("Build vitest");
   });
 
-  it("shows the git commit on About for administrators", async () => {
-    const { wrapper } = await mountView("admin", { section: "workspace" });
+  it("shows the git commit on Overview for administrators", async () => {
+    const { wrapper } = await mountView("admin", { section: "overview" });
     expect(wrapper.text()).toContain("Build vitest");
   });
 
   it("deep-links an admin section from the URL", async () => {
     const { wrapper } = await mountView("admin", { section: "retrieval" });
     expect(wrapper.get("#settings-section-retrieval").isVisible()).toBe(true);
-    expect(wrapper.get("#settings-nav-retrieval").attributes("aria-selected")).toBe("true");
+    expect(wrapper.get("#settings-nav-retrieval").attributes("aria-current")).toBe("page");
   });
 
   it("preserves retrieval input after a validation failure", async () => {
@@ -213,7 +228,7 @@ describe("SettingsView", () => {
     runtime.flushWorkspacePrefs.mockRejectedValueOnce(
       new Error("IndexedDB preference persistence failed"),
     );
-    const { wrapper } = await mountView("admin", { section: "workspace" });
+    const { wrapper } = await mountView("admin", { section: "preferences" });
     const dark = wrapper.get("#settings-field-scheme");
     await dark.setValue("dark");
     await flushPromises();
@@ -269,7 +284,7 @@ describe("SettingsView", () => {
   });
 
   it("warns before leaving with unsaved changes", async () => {
-    const { wrapper, router } = await mountView("admin", { section: "workspace" });
+    const { wrapper, router } = await mountView("admin", { section: "preferences" });
     await wrapper.get("#settings-field-scheme").setValue("dark");
     await flushPromises();
     const pending = router.push("/");
@@ -281,6 +296,6 @@ describe("SettingsView", () => {
     cancel?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await pending.catch(() => undefined);
     await flushPromises();
-    expect(router.currentRoute.value.path).toBe("/settings/workspace");
+    expect(router.currentRoute.value.path).toBe("/settings/preferences");
   });
 });
