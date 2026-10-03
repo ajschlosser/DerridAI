@@ -579,6 +579,7 @@ def build_local_site_file(
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
     include_transformers: bool = True,
     include_vectors: bool = True,
+    vector_strategy: str | None = None,
 ) -> SiteBundle:
     """Create one self-contained HTML file for direct local use.
 
@@ -596,6 +597,7 @@ def build_local_site_file(
         languages=languages,
         record_profile=record_profile,
         include_vectors=include_vectors,
+        vector_strategy=vector_strategy,
     )
     files = _core_site_files(core)
     index_html = files["index.html"].decode("utf-8")
@@ -626,6 +628,7 @@ def build_local_site_file(
         work_count=core.work_count,
         record_profile=core.record_profile,
         include_vectors=core.include_vectors,
+        vector_strategy=core.vector_strategy,
     )
 
 
@@ -882,6 +885,7 @@ def build_nginx_site_bundle(
     record_profile: str = DEFAULT_SITE_RECORD_PROFILE,
     include_transformers: bool = True,
     include_vectors: bool = True,
+    vector_strategy: str | None = None,
     provider_proxy_upstream: str | None = None,
 ) -> SiteBundle:
     """Create a deployable multi-file site served by exactly one nginx container.
@@ -900,6 +904,7 @@ def build_nginx_site_bundle(
         languages=languages,
         record_profile=record_profile,
         include_vectors=include_vectors,
+        vector_strategy=vector_strategy,
         transformers_delivery="files",
     )
     files = _core_site_files(core)
@@ -932,4 +937,5 @@ def build_nginx_site_bundle(
         work_count=core.work_count,
         record_profile=core.record_profile,
         include_vectors=core.include_vectors,
+        vector_strategy=core.vector_strategy,
     )
