@@ -30,7 +30,7 @@ defineProps<{
   unsavedName: string;
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
-const { t, tf } = useSchemaCopy();
+const { t } = useSchemaCopy();
 </script>
 
 <template>
@@ -67,8 +67,8 @@ const { t, tf } = useSchemaCopy();
           <span v-if="item.description" class="schema-description">{{ item.description }}</span>
           <span class="schema-meta">
             <span>v{{ item.schema_version || "1.0.0" }}</span>
-            <span>{{ tf("group_count", { count: item.groups.length }) }}</span>
-            <span>{{ tf("field_count", { count: item.field_count }) }}</span>
+            <span>{{ t("col_groups", "Groups") }}: {{ item.groups.length }}</span>
+            <span>{{ t("col_fields", "Fields") }}: {{ item.field_count }}</span>
           </span>
         </button>
       </li>
