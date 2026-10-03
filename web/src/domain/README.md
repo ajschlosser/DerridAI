@@ -28,8 +28,7 @@ The directory is intentionally broad, but it should not become a dumping ground.
 flowchart LR
     API["api/ + realtime/"]
     Stores["stores/ + composables/"]
-    Domain["domain/
-state rules · presenters · codecs · transforms"]
+    Domain["domain/<br/>state rules · presenters · codecs · transforms"]
     Components["components/"]
     Views["views/"]
     Tests["tests/frontend/*-domain.test.ts"]
