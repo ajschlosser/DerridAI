@@ -58,8 +58,12 @@ export function useDataQuery<T>(
     queryKey: computed(() => dataKey(resource, ...(toValue(options.detail) ?? []))),
     queryFn: fetcher,
     enabled: computed(() => toValue(options.enabled) ?? true),
-    staleTime: computed(() => toValue(options.staleTime) ?? 30_000),
-    refetchOnMount: computed(() => toValue(options.refetchOnMount) ?? true),
+    ...(options.staleTime === undefined
+      ? {}
+      : { staleTime: computed(() => toValue(options.staleTime)!) }),
+    ...(options.refetchOnMount === undefined
+      ? {}
+      : { refetchOnMount: computed(() => toValue(options.refetchOnMount)!) }),
     // Fallback only: a live socket replaces polling entirely.
     refetchInterval: computed(() => (realtimeFallback.value ? FALLBACK_POLL_MS : false)),
   } as UseQueryOptions<T>);
