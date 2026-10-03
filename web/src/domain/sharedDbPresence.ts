@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { bindJobsState } from "../state/jobsState";
+import { bindWorkspaceGroups } from "../state/workspaceState";
 import { createDbPresenceUpsert } from "./dbPresenceUpsert";
 import { allRows, corpusCache, recordFingerprint } from "./corpusCache";
 import { api } from "./legacyApi";
@@ -27,7 +29,6 @@ import { formatTimestamp, localRecordKey } from "./recordTableHelpers";
 import { reviewItemFromKey, selectedReviewItems } from "./reviewItems";
 import { workIndex } from "./sharedCorpusAnalytics";
 import { tr, trf } from "./sharedTranslate";
-import { state } from "./sharedUrlState";
 import { persistPrefs } from "./sharedWorkspaceStorage";
 import {
   candidateChromaIds,
@@ -38,7 +39,10 @@ import {
 } from "./storeAvailability";
 
 // Database presence and the upsert queue over the shared state, usable without the legacy runtime. The runtime uses
-// this same instance.
+// this same instance. Database upserts also inspect and append background jobs, so bind the jobs slice explicitly;
+// bindWorkspaceGroups intentionally excludes it.
+const state = bindJobsState(bindWorkspaceGroups({}));
+
 export const {
   recordDbStatus,
   workDbStatus,
