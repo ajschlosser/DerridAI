@@ -81,3 +81,62 @@ export const FrenchLengthStress: Story = {
   },
   parameters: { locale: "fr-CA" },
 };
+
+export const ChoiceField: Story = {
+  args: {
+    field: field({
+      name: "stance",
+      label: "Stance",
+      type: "choice",
+      values: [
+        { value: "affirm", definition: "The position is affirmed." },
+        { value: "reject", definition: "The position is rejected." },
+      ],
+      strict: true,
+      evidence: true,
+      assess: true,
+      review: true,
+    }),
+  },
+};
+
+export const RepeatableField: Story = {
+  args: {
+    field: field({
+      name: "quotation_chain",
+      label: "Quotation chain",
+      type: "repeatable",
+      members: [
+        {
+          field_id: "member-speaker",
+          name: "speaker",
+          label: "Speaker",
+          type: "text",
+          values: [],
+          strict: false,
+          instruction: "Identify the speaker for this quotation layer.",
+          evidence: true,
+          assess: true,
+          review: true,
+          pos_tags: [],
+          ner_tags: ["PERSON"],
+        },
+      ],
+      max_items: 6,
+      instance_label: "Quotation {number}",
+    }),
+  },
+};
+
+export const EvidenceAndReview: Story = {
+  args: {
+    field: field({
+      evidence: true,
+      assess: true,
+      review: true,
+      instruction:
+        "Identify the attributed position while preserving uncertainty when the passage does not support a single holder.",
+    }),
+  },
+};
+
