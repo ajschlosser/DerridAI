@@ -56,7 +56,11 @@ function kindLabel(value: string): string {
   return value;
 }
 function sourceLabel(item: MetadataMemoryEntry): string {
-  return `${item.record_id}${item.record_revision ? ` · r${item.record_revision}` : ""}`;
+  if (!item.record_revision) return item.record_id;
+  return i18n.tf("metadata_memory.record_revision", {
+    record: item.record_id,
+    revision: item.record_revision,
+  });
 }
 function pageLabel(item: MetadataMemoryEntry): string {
   const { page_start: start, page_end: end } = item;
@@ -67,6 +71,10 @@ function pageLabel(item: MetadataMemoryEntry): string {
 }
 const hasDetails = (item: MetadataMemoryEntry) =>
   Boolean(item.context_text || item.evidence_block_ids.length);
+function detailsId(item: MetadataMemoryEntry) {
+  const safeId = item.id.replace(/[^A-Za-z0-9_-]/g, "-");
+  return `metadata-memory-details-${safeId}`;
+}
 function toggle(id: string) {
   const next = new Set(expanded.value);
   if (!next.delete(id)) next.add(id);
@@ -83,6 +91,9 @@ function toggle(id: string) {
     :aria-busy="loading"
   >
     <table class="memory-table ui-table" :class="{ 'is-loading': loading }">
+      <caption class="sr-only">
+        {{ i18n.t("metadata_memory.table_scroll") }}
+      </caption>
       <thead>
         <tr>
           <th scope="col">{{ i18n.t("metadata_memory.field_value") }}</th>
@@ -172,7 +183,7 @@ function toggle(id: string) {
               {{ i18n.t("metadata_memory.evidence_unresolved") }}
             </p>
             <p v-else class="note">{{ i18n.t("metadata_memory.context_only") }}</p>
-            <template v-if="expanded.has(item.id)">
+            <div v-if="expanded.has(item.id)" :id="detailsId(item)" class="memory-details">
               <small v-if="item.evidence_block_ids.length">
                 {{ i18n.t("metadata_memory.blocks") }}: {{ item.evidence_block_ids.join(", ") }}
               </small>
@@ -180,12 +191,13 @@ function toggle(id: string) {
                 <strong>{{ i18n.t("metadata_memory.indexed_context") }}</strong>
                 <p>{{ item.context_text }}</p>
               </div>
-            </template>
+            </div>
             <button
               v-if="hasDetails(item) || (item.evidence_text?.length ?? 0) > 220"
               type="button"
               class="details-toggle"
               :aria-expanded="expanded.has(item.id)"
+              :aria-controls="detailsId(item)"
               @click="toggle(item.id)"
             >
               {{
@@ -326,6 +338,17 @@ function toggle(id: string) {
 .details-toggle:focus-visible {
   outline: var(--focus-ring-width, 3px) solid var(--focus-ring);
   outline-offset: 2px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .empty-cell {
   padding: 32px !important;
