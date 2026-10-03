@@ -29,10 +29,8 @@ flowchart LR
     Source["web/src/"]
 
     subgraph Tests["web/tests/"]
-        Frontend["frontend/
-Vitest + Vue Test Utils + happy-dom"]
-        E2E["e2e/
-Playwright + axe"]
+        Frontend["frontend/<br/>Vitest + Vue Test Utils + happy-dom"]
+        E2E["e2e/<br/>Playwright + axe"]
         Fixtures["fixtures/"]
     end
 
