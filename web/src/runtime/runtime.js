@@ -128,7 +128,40 @@ import { recordHistoryVersions, upsertAuditDelta } from "../domain/recordHistory
 import { barChart, lineChart, multiLineChart, pieChart, statList } from "../domain/dashboardCharts";
 import { createOperationPresenters } from "../domain/operationPresenters";
 import { createFieldFormatting } from "../domain/fieldFormatting";
-import { createCorpusAnalytics } from "../domain/corpusAnalytics";
+import {
+  workIndex,
+  dateKeys,
+  topNeedsReviewWorkSeries,
+  needsReviewTimeline,
+  topFieldValues,
+  publicationYearSeries,
+  workRecordShares,
+  averageRecordLengthForTopWorks,
+  recentAuditChanges,
+} from "../domain/sharedCorpusAnalytics";
+import {
+  recordDbStatus,
+  workDbStatus,
+  refreshPresenceForRows,
+  updateDbStatusElements,
+  ignoredFingerprint,
+  pendingUpsertRows,
+  pendingChangesForRow,
+  removeFromUpsertQueue,
+  buildUpsertItems,
+  upsertRows,
+  rowsFromReviewSelection,
+} from "../domain/sharedDbPresence";
+import {
+  candidateChromaIds,
+  corpusStoreExists,
+  dbUnavailableReason,
+  hasChromaService,
+  hasCorpusDb,
+  recordStores,
+  storeReceipt,
+} from "../domain/storeAvailability";
+import { registerOperationHooks } from "../domain/operationHooks";
 import { createSearchFacets } from "../domain/searchFacets";
 import { createRecordPresenters } from "../domain/recordPresenters";
 import { providerProfilesService, warmupProviderProfile } from "../domain/sharedProviderProfiles";
@@ -183,7 +216,6 @@ import {
 } from "../domain/sharedWorkspaceStorage";
 import { createEvidenceSelection } from "../domain/evidenceSelection";
 import { createRecordEditing } from "../domain/recordEditing";
-import { createDbPresenceUpsert } from "../domain/dbPresenceUpsert";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
 import { createPdfLinking } from "../domain/pdfLinking";
 import { clearFileDerivedState as clearFileDerivedStateOf } from "../domain/fileDerivedState";
@@ -245,17 +277,6 @@ function translateLegacyDom(root = document.querySelector("#main")) {
   return translateLegacyDomCompat(state, root);
 }
 
-const {
-  workIndex,
-  dateKeys,
-  topNeedsReviewWorkSeries,
-  needsReviewTimeline,
-  topFieldValues,
-  publicationYearSeries,
-  workRecordShares,
-  averageRecordLengthForTopWorks,
-  recentAuditChanges,
-} = createCorpusAnalytics({ allRows, memoCorpus });
 const { label, display, normalizeRagGrade, parseBulkFieldValue, parseWorkMetadataValue } =
   createFieldFormatting({ tr });
 const {
@@ -762,6 +783,7 @@ const {
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
 });
+registerOperationHooks({ refreshOperationsPanelOnly, notifyVectorStoresChanged });
 const {
   applyRecordChanges,
   clearRecordUpdates,
@@ -1124,45 +1146,6 @@ const selectedRecord = () => {
 // wrapper objects on every render/chart/filter pass. Any persisted corpus edit
 // invalidates the cache synchronously.
 const {
-  recordDbStatus,
-  workDbStatus,
-  refreshPresenceForRows,
-  updateDbStatusElements,
-  ignoredFingerprint,
-  pendingUpsertRows,
-  pendingChangesForRow,
-  removeFromUpsertQueue,
-  buildUpsertItems,
-  upsertRows,
-  rowsFromReviewSelection,
-} = createDbPresenceUpsert({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  allRows: (...args) => allRows(...args),
-  api: (...args) => api(...args),
-  candidateChromaIds: (...args) => candidateChromaIds(...args),
-  corpusCache,
-  corpusStoreExists: (...args) => corpusStoreExists(...args),
-  dbUnavailableReason: (...args) => dbUnavailableReason(...args),
-  formatTimestamp: (...args) => formatTimestamp(...args),
-  hasCorpusDb: (...args) => hasCorpusDb(...args),
-  localRecordKey: (...args) => localRecordKey(...args),
-  notifyVectorStoresChanged: (...args) => notifyVectorStoresChanged(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  recordFingerprint: (...args) => recordFingerprint(...args),
-  refreshOperationsPanelOnly: (...args) => refreshOperationsPanelOnly(...args),
-  reviewItemFromKey: (...args) => reviewItemFromKey(...args),
-  selectedReviewItems: (...args) => selectedReviewItems(...args),
-  startJobPolling,
-  storeReceipt: (...args) => storeReceipt(...args),
-  syncJobProgressToasts,
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-  upsertAuditDelta: (...args) => upsertAuditDelta(...args),
-  upsertRecordPayload: (...args) => upsertRecordPayload(...args),
-  workIndex: (...args) => workIndex(...args),
-});
-const {
   openMixedWorkValuesDialog,
   openWorkMetadataEditor,
   openWorkMetadataLlmDialog,
@@ -1204,25 +1187,6 @@ const {
   workIndex: (...args) => workIndex(...args),
   workMetadataControlSpec: (...args) => workMetadataControlSpec(...args),
 });
-function hasChromaService() {
-  return state.health?.chroma?.available === true;
-}
-function hasCorpusDb() {
-  return hasChromaService() && recordStores().length > 0;
-}
-function dbUnavailableReason() {
-  if (!hasChromaService())
-    return tr(
-      "runtime.disabled.chroma_unavailable",
-      "ChromaDB is unavailable. Start/connect ChromaDB before using database features.",
-    );
-  if (!recordStores().length)
-    return tr(
-      "runtime.disabled.create_corpus_db",
-      "Create or restore a corpus vector database first.",
-    );
-  return "";
-}
 function userCapabilities() {
   return {
     viewSharedPages: hasCapability("page.dashboard"),
@@ -1454,14 +1418,8 @@ function serializableFile(file) {
   return serializableRecordsFile(file);
 }
 
-function recordStores() {
-  return state.stores.filter((store) => !isResponseCacheStore(store));
-}
 function responseCacheStore() {
   return state.stores.find(isResponseCacheStore) || null;
-}
-function corpusStoreExists(name) {
-  return Boolean(name && recordStores().some((store) => store.name === name));
 }
 
 let progressiveRenderToken = 0;
@@ -1491,20 +1449,6 @@ function pageInfo(total, page) {
   };
 }
 
-function storeReceipt(store, file, index) {
-  return state.upsertState?.[store]?.[localRecordKey(file, index)] || null;
-}
-function candidateChromaIds(file, index, record) {
-  const ids = [];
-  const receipt = storeReceipt(state.activeStore, file, index);
-  if (receipt?.chroma_id) ids.push(receipt.chroma_id);
-  const logical = record?.record_id;
-  if (logical != null && String(logical) !== "") {
-    ids.push(String(logical));
-    ids.push(`${file.name}::${logical}`);
-  }
-  return [...new Set(ids)];
-}
 function recordFields() {
   if (corpusCache.fields) return corpusCache.fields;
   const set = new Set();
