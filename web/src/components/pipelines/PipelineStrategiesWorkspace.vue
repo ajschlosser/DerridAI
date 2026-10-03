@@ -162,11 +162,11 @@ const selected = computed(
 }
 .strategies-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  grid-template-columns: minmax(0, 1.65fr) minmax(340px, 0.85fr);
   gap: var(--space-4);
   align-items: start;
 }
-@media (max-width: 960px) {
+@media (max-width: 1180px) {
   .strategies-layout {
     grid-template-columns: minmax(0, 1fr);
   }
