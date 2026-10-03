@@ -161,4 +161,6 @@ Stopping rule for this resumed run: the user clarified **20% remaining (80% used
 
 ### Latest handoff
 
-See [PROGRESS.md](PROGRESS.md) for the current checkpoint and ordered resume steps. Earlier stopping sections above are historical. Collection isolation and the data-table/search identity increment are both implemented; Search is the next surface.
+See [PROGRESS.md](PROGRESS.md) for the current checkpoint and ordered resume steps. Earlier stopping sections above are historical. Vector Stores collection isolation, the data-table/retrieval identity increment, and the Search surface are implemented; Research is the next surface.
+
+The Search increment also closed a correctness defect the loading audit exposed: `runSearchWorkspace` swallowed a failed corpus-database search into a toast and an empty result list, so a retrieval outage was presented as zero matching records. The failure reason now travels on the Search workspace snapshot as `search_error`, and the view reports it with Retry and withholds the result count. A failed read is not an empty corpus.
