@@ -1,5 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { ref } from "vue";
+import { onBeforeUnmount, ref } from "vue";
 import { worksService, type WorksViewPatch } from "../services/works";
 import type { WorksSnapshot } from "../types/works";
 
@@ -13,26 +13,49 @@ export function useWorksWorkspace() {
   const snapshot = ref<WorksSnapshot | null>(null);
   const error = ref("");
 
+  let request = 0;
+  onBeforeUnmount(() => {
+    request += 1;
+  });
+
   function load() {
     const next = worksService.getSnapshot();
     if (next) snapshot.value = next;
   }
 
-  async function prepare() {
+  async function read(operation: typeof worksService.prepare) {
+    const current = ++request;
     error.value = "";
-    const result = await worksService.prepare();
-    error.value = String(result?.error || "");
-    load();
-    return result;
+    try {
+      const result = await operation();
+      if (current !== request) return result;
+      error.value = String(result?.error || "");
+      if (!error.value) load();
+      return result;
+    } catch (cause) {
+      if (current !== request) return;
+      error.value = cause instanceof Error ? cause.message : String(cause);
+      if (
+        cause &&
+        typeof cause === "object" &&
+        "status" in cause &&
+        [401, 403].includes(Number(cause.status))
+      )
+        snapshot.value = null;
+    }
   }
-
-  async function activate() {
-    error.value = "";
-    const result = await worksService.activate();
-    error.value = String(result?.error || "");
-    load();
-    return result;
-  }
+  const prepare = () => read(worksService.prepare);
+  const activate = () =>
+    read(() => {
+      const current = request;
+      return worksService.activate(() => {
+        if (current !== request) return;
+        const next = worksService.getSnapshot();
+        // Local corpus hydration is authoritative; optional database/annotation reads can continue.
+        // Researcher summaries must await their authorized collection read.
+        if (next?.mode === "admin" && next.available) snapshot.value = next;
+      });
+    });
 
   function setQuery(value: string) {
     worksService.setQuery(value);
@@ -50,8 +73,17 @@ export function useWorksWorkspace() {
   }
 
   async function setStore(name: string) {
-    await worksService.setStore(name);
-    await prepare();
+    snapshot.value = null;
+    await read(async () => {
+      await worksService.setStore(name);
+      return worksService.prepare();
+    });
+  }
+
+  function reset() {
+    request += 1;
+    snapshot.value = null;
+    error.value = "";
   }
 
   async function syncWork(work: string) {
@@ -123,6 +155,7 @@ export function useWorksWorkspace() {
   return {
     snapshot,
     error,
+    reset,
     load,
     prepare,
     activate,

@@ -1,3 +1,4 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
@@ -8,6 +9,8 @@ import {
   useRoute,
   useRouter,
 } from "vue-router";
+import RouteNavigationFeedback from "./components/shell/RouteNavigationFeedback.vue";
+import { createRouteLoading } from "./router/routeLoading";
 import { createNavigationHistory, type HistoryEntryTitle } from "./router/navigationHistory";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
 import { useLayoutStore } from "./stores/workspace";
@@ -64,6 +67,7 @@ import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
 const router = useRouter();
 const route = useRoute();
 const navigationHistory = createNavigationHistory(router);
+const routeLoading = createRouteLoading(router);
 const shell = useShellStore();
 const layout = useLayoutStore();
 const auth = useAuthStore();
@@ -405,7 +409,9 @@ function navigateNative(path: string, runtimeView?: string) {
     runtime.navigateView(runtimeView, target);
     return;
   }
-  void router.push(target);
+  void router.push(target).catch(() => {
+    // The route feedback panel exposes the failure and recovery actions.
+  });
 }
 
 function navigate(view: string) {
@@ -541,6 +547,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopRouteSync();
   navigationHistory.dispose();
+  routeLoading.dispose();
   window.removeEventListener(CHOOSE_CORPUS_FILES_EVENT, openCorpusFilePicker);
 });
 
@@ -726,7 +733,29 @@ watch(
             route.name !== 'semanticmap',
         }"
       >
-        <div id="appContent" class="app-content-region" tabindex="-1"><RouterView /></div>
+        <div id="appContent" class="app-content-region" tabindex="-1">
+          <RouterView />
+          <Teleport to="body">
+            <RouteNavigationFeedback
+              v-if="routeLoading.visible.value || routeLoading.failed.value"
+              :destination="
+                i18n.t(
+                  String(
+                    (routeLoading.failed.value || routeLoading.destination.value)?.meta.titleKey ||
+                      'ui.loading',
+                  ),
+                  String(
+                    (routeLoading.failed.value || routeLoading.destination.value)?.meta
+                      .titleFallback || '',
+                  ),
+                )
+              "
+              :failed="Boolean(routeLoading.failed.value)"
+              @retry="routeLoading.retry"
+              @reload="routeLoading.reload"
+            />
+          </Teleport>
+        </div>
         <SemanticMapHost />
       </div>
     </section>

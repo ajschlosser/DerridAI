@@ -50,10 +50,10 @@ export const chromaApi = {
     apiRequest<{ works: string[]; stats: VectorWorkStat[] }>(
       `/api/stores/${encodeURIComponent(store)}/works`,
     ),
-  search: (store: string, body: Record<string, unknown>) =>
+  search: (store: string, body: Record<string, unknown>, signal?: AbortSignal) =>
     apiRequest<{ results: VectorSearchResult[]; pipeline?: StoreSearchPipelineIdentity }>(
       `/api/stores/${encodeURIComponent(store)}/search`,
-      { method: "POST", body: JSON.stringify(body) },
+      { method: "POST", body: JSON.stringify(body), signal },
     ),
   setLanguages: (store: string, body: { language_codes: string[]; collection_role: string }) =>
     apiRequest<VectorCollection>(`/api/stores/${encodeURIComponent(store)}/languages`, {

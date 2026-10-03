@@ -11,6 +11,33 @@ function fieldLabel(wrapper: ReturnType<typeof mount>, text: string) {
 describe("RecordEditSheet metadata cardinality", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
+  it("keeps the closed editor unhydrated until it is opened", async () => {
+    const wrapper = mount(RecordEditSheet, {
+      attachTo: document.body,
+      props: {
+        open: false,
+        record: { record_id: "r1", work: "First work" },
+      },
+    });
+    await flushPromises();
+    expect(wrapper.find(".record-edit-body input").exists()).toBe(false);
+
+    await wrapper.setProps({ record: { record_id: "r2", work: "Second work" } });
+    await flushPromises();
+    expect(wrapper.find(".record-edit-body input").exists()).toBe(false);
+
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+    expect((fieldLabel(wrapper, "Record ID").get("input").element as HTMLInputElement).value).toBe(
+      "r2",
+    );
+    expect((fieldLabel(wrapper, "Work").get("input").element as HTMLInputElement).value).toBe(
+      "Second work",
+    );
+
+    wrapper.unmount();
+  });
+
   it("does not infer known scalar cardinality from a legacy array value", async () => {
     const wrapper = mount(RecordEditSheet, {
       attachTo: document.body,

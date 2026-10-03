@@ -8,6 +8,8 @@ const props = defineProps<{
   collections: VectorCollection[];
   activeName: string;
   filter: string;
+  canCreate?: boolean;
+  createDisabledReason?: string;
 }>();
 const emit = defineEmits<{
   "update:filter": [string];
@@ -47,6 +49,8 @@ function statusOf(store: VectorCollection) {
         :label="i18n.t('vector.new_collection_short')"
         icon="plus"
         variant="primary"
+        :disabled="canCreate === false"
+        :disabled-reason="createDisabledReason"
         @click="emit('create')"
       />
     </div>
