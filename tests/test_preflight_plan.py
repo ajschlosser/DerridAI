@@ -115,6 +115,15 @@ def test_static_site_browser_test_stays_in_composed_browser_and_publication_gate
     assert plan.e2e
 
 
+def test_published_site_vue_source_runs_build_accessibility_and_publication_gates():
+    plan = build_plan(["web/site/PublishedResearchResult.vue"])
+
+    assert plan.frontend
+    assert plan.frontend_build
+    assert plan.a11y
+    assert plan.publication
+
+
 def test_publication_export_browser_test_does_not_force_general_app_e2e():
     plan = build_plan(["web/tests/e2e/static-site-export.spec.ts"])
 
