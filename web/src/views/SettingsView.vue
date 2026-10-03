@@ -1838,6 +1838,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 .settings-pane {
   display: grid;
   gap: 18px;
+  width: 100%;
+  max-width: 1040px;
   min-width: 0;
 }
 .settings-danger-zone {
