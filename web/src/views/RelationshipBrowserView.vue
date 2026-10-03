@@ -41,10 +41,14 @@ const graph = ref<ResearchObjectGraph | null>(null);
 const model = ref<DerridaiNormativeModel | null>(null);
 const loading = ref(false);
 const error = ref("");
+const modelLoading = ref(false);
+const modelError = ref("");
+let traceIdentity = "";
 // Remount the explorer when the record or requested lens changes.
-const explorerKey = computed(() => `${recordId.value}|${mode.value}`);
+const explorerKey = computed(() => `${store.value}|${recordId.value}|${mode.value}`);
 
 const latest = createLatestRequest();
+const latestModel = createLatestRequest();
 
 /**
  * A stored Record and its graph in one read: the server builds the graph from the stored projection,
@@ -70,25 +74,56 @@ async function readTrace(signal: AbortSignal) {
 
 async function load() {
   const ticket = latest.start();
-  record.value = null;
-  graph.value = null;
+  const identity = `${store.value}|${recordId.value}`;
+  if (traceIdentity !== identity) {
+    record.value = null;
+    graph.value = null;
+    traceIdentity = identity;
+  }
   error.value = "";
+  loading.value = false;
   if (!recordId.value) return;
   loading.value = true;
   try {
-    const [trace, m] = await Promise.all([
-      readTrace(ticket.signal),
-      runtime.getDerridaiNormativeModel(),
-    ]);
+    const trace = await readTrace(ticket.signal);
     if (!ticket.current()) return;
     record.value = trace.record;
     graph.value = trace.graph as ResearchObjectGraph;
-    model.value = m as DerridaiNormativeModel;
   } catch (exc) {
-    if (ticket.current() && !isAbortError(exc))
-      error.value = exc instanceof Error ? exc.message : String(exc);
+    if (!ticket.current() || isAbortError(exc)) return;
+    if (
+      exc &&
+      typeof exc === "object" &&
+      "status" in exc &&
+      [401, 403].includes(Number(exc.status))
+    ) {
+      record.value = null;
+      graph.value = null;
+    }
+    error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
     if (ticket.current()) loading.value = false;
+  }
+}
+async function loadModel() {
+  const ticket = latestModel.start();
+  modelLoading.value = true;
+  modelError.value = "";
+  try {
+    const value = await runtime.getDerridaiNormativeModel();
+    if (ticket.current()) model.value = value as DerridaiNormativeModel;
+  } catch (exc) {
+    if (!ticket.current() || isAbortError(exc)) return;
+    if (
+      exc &&
+      typeof exc === "object" &&
+      "status" in exc &&
+      [401, 403].includes(Number(exc.status))
+    )
+      model.value = null;
+    modelError.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    if (ticket.current()) modelLoading.value = false;
   }
 }
 
@@ -110,15 +145,13 @@ watch([recordId, store], () => {
   void load();
 });
 onMounted(() => {
-  // The model alone is browsable without a record.
-  if (!recordId.value)
-    void runtime
-      .getDerridaiNormativeModel()
-      .then((m: unknown) => (model.value = m as DerridaiNormativeModel))
-      .catch(() => undefined);
+  void loadModel();
   void load();
 });
-onBeforeUnmount(() => latest.cancel());
+onBeforeUnmount(() => {
+  latest.cancel();
+  latestModel.cancel();
+});
 </script>
 
 <template>
@@ -140,15 +173,24 @@ onBeforeUnmount(() => latest.cancel());
       <input id="relationshipRecordId" v-model="idInput" type="text" autocomplete="off" />
       <UiButton type="submit" :label="i18n.t('relationships.load')" />
     </form>
+    <div v-if="error" class="relationship-trace-status">
+      <UiButton :label="i18n.t('ui.retry')" @click="load" />
+    </div>
+    <div v-if="modelError" class="relationship-model-status" role="alert">
+      <p>{{ i18n.t("traceability.data_model") }}: {{ modelError }}</p>
+      <UiButton :label="i18n.t('ui.retry')" @click="loadModel" />
+    </div>
     <RecordTraceabilityExplorer
-      v-if="recordId || model"
+      v-if="recordId || model || modelLoading || modelError"
       :key="explorerKey"
       :graph="graph"
       :model="model"
+      :model-loading="modelLoading"
+      :model-error="modelError"
       :record="record"
       :loading="loading"
       :error="error"
-      :initial-mode="mode"
+      :initial-mode="recordId ? mode : 'model'"
     />
     <p v-else class="note">{{ i18n.t("relationships.empty") }}</p>
   </main>

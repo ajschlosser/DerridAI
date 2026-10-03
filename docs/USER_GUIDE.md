@@ -115,6 +115,8 @@ The choice is remembered in this browser.
 
 ## Relationship-map controls
 
+The Relationships workspace loads the retained record trace independently of the cELF model. Model failure has its own Retry and does not remove the trace. Same-record refresh retains the focused graph with Updating or an out-of-date error; changing record or store clears the previous trace.
+
 DerridAI uses the same interaction model for relational diagrams even when the domain and layout differ. The corpus term map uses movable chips, the build-wide semantic content graph uses a force layout with entity dots, the Record semantic map uses a radial layout, Traceability uses source-to-claim lanes with cards, and Pipeline Studio uses a directed stage graph. Their domain meanings remain separate; moving a card or node changes only the presentation, not the Record, cELF relationship, semantic assertion, pipeline definition, or other authoritative data.
 
 On these maps and diagrams:
