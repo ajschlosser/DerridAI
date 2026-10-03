@@ -35,6 +35,7 @@ def test_frontend_api_change_requires_contract_but_not_browser_catalogues():
 
     assert plan.frontend
     assert plan.frontend_unit
+    assert not plan.unit_full
     assert plan.frontend_build
     assert plan.contract
     assert plan.format
@@ -113,6 +114,7 @@ def test_workflow_change_exercises_all_quality_gate_shapes():
     assert plan.frontend
     assert plan.contract
     assert plan.frontend_unit
+    assert plan.unit_full
     assert plan.frontend_build
     assert plan.storybook
     assert plan.e2e
