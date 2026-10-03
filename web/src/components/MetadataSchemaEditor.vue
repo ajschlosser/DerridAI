@@ -179,8 +179,8 @@ async function save() {
       : metadataSchemasApi.update(selectedId.value, schema),
   );
   if (!saved) return;
-  notice.value = t("saved", "Schema saved.");
   await refresh(saved.id);
+  notice.value = t("saved", "Schema saved.");
   emit("saved", saved.id);
   emit("changed");
 }
@@ -224,8 +224,8 @@ async function importFile(event: Event) {
   }
   const imported = await guarded(() => metadataSchemasApi.importFile(payload));
   if (imported) {
-    notice.value = t("imported", "Schema imported.");
     await refresh(imported.id);
+    notice.value = t("imported", "Schema imported.");
     emit("changed");
   }
 }
