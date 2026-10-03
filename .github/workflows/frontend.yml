@@ -197,30 +197,12 @@ jobs:
             exit 0
           fi
 
-          # TEMPORARY formatting capture for PR 467; reverted after extracting Prettier output.
+          # Deleted files cannot be formatted; exclude them before passing paths to Prettier.
           git diff --name-only --diff-filter=ACMRTUXB -z "$BASE_SHA" "$HEAD_SHA" -- \
             '*.md' '*.json' '*.yml' '*.yaml' '*.js' '*.mjs' '*.cjs' \
             '*.ts' '*.tsx' '*.vue' '*.css' '*.scss' '*.html' \
             | xargs -0 --no-run-if-empty ./web/node_modules/.bin/prettier \
-              --write --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
-          for file in \
-            README.md \
-            api/README.md \
-            api/app/README.md \
-            api/app/pipelines/README.md \
-            tests/README.md \
-            web/README.md \
-            web/src/README.md \
-            web/src/api/README.md \
-            web/src/components/README.md \
-            web/src/components/pipelines/README.md \
-            web/src/features/corpus-builder/README.md; do
-            echo "::FORMAT:$file::"
-            base64 -w0 "$file"
-            echo
-            echo "::END_FORMAT::"
-          done
-          exit 1
+              --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
 
   backend-lint:
     needs: changes

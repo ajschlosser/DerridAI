@@ -67,13 +67,13 @@ The researcher-facing flow is **Setup → Build & review → Publish**. Internal
 
 ## Folder map
 
-| Folder | Responsibility |
-| --- | --- |
-| `composables/` | Build lifecycle, setup state, provider/source configuration, review decisions/navigation/records, text/metadata/boundary review, publication |
-| `domain/` | Workflow presentation, setup-state derivation, queue rows, review commands, metadata decisions, semantic map, record sizing, publication readiness |
-| `api/` | Focused REST-backed reads for review/document intelligence |
-| `graphql/` | Corpus queue, review-record, facet, text, and document-intelligence read documents |
-| `*.css` | Feature-level Corpus Builder shell/review styling |
+| Folder         | Responsibility                                                                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `composables/` | Build lifecycle, setup state, provider/source configuration, review decisions/navigation/records, text/metadata/boundary review, publication       |
+| `domain/`      | Workflow presentation, setup-state derivation, queue rows, review commands, metadata decisions, semantic map, record sizing, publication readiness |
+| `api/`         | Focused REST-backed reads for review/document intelligence                                                                                         |
+| `graphql/`     | Corpus queue, review-record, facet, text, and document-intelligence read documents                                                                 |
+| `*.css`        | Feature-level Corpus Builder shell/review styling                                                                                                  |
 
 ## Invariants
 

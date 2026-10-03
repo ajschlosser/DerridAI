@@ -51,16 +51,16 @@ REST is the command/mutation authority. GraphQL is a read-only cELF-aware façad
 
 ## Layout
 
-| Path | Responsibility |
-| --- | --- |
-| `http.ts` | Shared HTTP mechanics and common request behavior |
-| `corpus/` | Focused Corpus Builder API clients |
-| `graphql/` | GraphQL client, operations, generated/schema artifacts |
-| `auth.ts`, `jobs.ts`, `pipelines.ts`, `sites.ts`, `system.ts` | Domain REST clients |
-| `chroma.ts` | Chroma/vector administration client |
-| `metadataSchemas.ts`, `metadataMemory.ts` | Metadata schema and precedent-memory APIs |
-| `claims.ts`, `documentNlp.ts` | Claim and document-intelligence APIs |
-| `pdfCorpus.ts` | Historical/compatibility Corpus Builder client surface; source-media support is broader than PDF |
+| Path                                                          | Responsibility                                                                                   |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `http.ts`                                                     | Shared HTTP mechanics and common request behavior                                                |
+| `corpus/`                                                     | Focused Corpus Builder API clients                                                               |
+| `graphql/`                                                    | GraphQL client, operations, generated/schema artifacts                                           |
+| `auth.ts`, `jobs.ts`, `pipelines.ts`, `sites.ts`, `system.ts` | Domain REST clients                                                                              |
+| `chroma.ts`                                                   | Chroma/vector administration client                                                              |
+| `metadataSchemas.ts`, `metadataMemory.ts`                     | Metadata schema and precedent-memory APIs                                                        |
+| `claims.ts`, `documentNlp.ts`                                 | Claim and document-intelligence APIs                                                             |
+| `pdfCorpus.ts`                                                | Historical/compatibility Corpus Builder client surface; source-media support is broader than PDF |
 
 ## Rules
 

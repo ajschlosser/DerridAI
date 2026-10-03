@@ -94,16 +94,16 @@ flowchart LR
 
 ## Major subpackages
 
-| Path | Responsibility |
-| --- | --- |
-| `routers/` | REST HTTP adapters grouped by domain |
-| `celf_queries/` | Shared cELF-aware read services |
-| `graphql/` | Strawberry schema, permissions, loaders, and read resolvers |
-| `realtime/` | Authenticated WebSocket protocol, broker, subscriptions, and resources |
-| `pipelines/` | Typed/versioned computational pipeline system |
-| `metadata_schema_profiles/` | Server-provided metadata profile definitions |
-| `locales/` | Backend localization dictionaries |
-| `site_assets/` | Static publication assets |
+| Path                        | Responsibility                                                         |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `routers/`                  | REST HTTP adapters grouped by domain                                   |
+| `celf_queries/`             | Shared cELF-aware read services                                        |
+| `graphql/`                  | Strawberry schema, permissions, loaders, and read resolvers            |
+| `realtime/`                 | Authenticated WebSocket protocol, broker, subscriptions, and resources |
+| `pipelines/`                | Typed/versioned computational pipeline system                          |
+| `metadata_schema_profiles/` | Server-provided metadata profile definitions                           |
+| `locales/`                  | Backend localization dictionaries                                      |
+| `site_assets/`              | Static publication assets                                              |
 
 The large flat portion of this directory is intentional but should continue to move toward focused modules rather than a new monolith. New behavior belongs with the domain that owns its invariants.
 

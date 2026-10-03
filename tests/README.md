@@ -50,7 +50,6 @@ flowchart LR
 
 Frontend test placement is documented in [`web/tests/README.md`](../web/tests/README.md), with focused maps for [Vitest](../web/tests/frontend/README.md) and [Playwright](../web/tests/e2e/README.md).
 
-
 DerridAI separates tests by the kind of boundary they exercise rather than by release number:
 
 | Category         | Pytest marker / frontend command                     | Purpose                                                                                                                  |

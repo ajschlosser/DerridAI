@@ -53,19 +53,19 @@ flowchart TD
 
 ## Folder ownership
 
-| Folder | Primary concern |
-| --- | --- |
-| `ui/` | Shared accessible primitives and common interaction patterns |
-| `shell/` | Sidebar, topbar, route chrome, global navigation surfaces |
-| `corpus-builder/` | Setup, build, concurrent review, semantic inspection, and publish UI |
-| `pipelines/` | Pipeline Studio definitions, graph editor, execution traces, benchmarks, comparisons |
-| `record/`, `records/` | Single-record inspection/editing versus collection/workspace record surfaces |
-| `research/` | Research composer, evidence, claims, traceability, response presentation |
-| `metadata-schemas/`, `metadata-memory/` | Schema authoring and reviewed precedent inspection |
-| `works/` | Work aggregation and work-level editing |
-| `search/` | Search-specific controls and result presentation |
-| `semantic/`, `relations/` | Semantic graph/map and relation presentation |
-| `settings/`, `providers/`, `vector/`, `system-data/`, `capture/` | Administrative and infrastructure-facing product surfaces |
+| Folder                                                           | Primary concern                                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `ui/`                                                            | Shared accessible primitives and common interaction patterns                         |
+| `shell/`                                                         | Sidebar, topbar, route chrome, global navigation surfaces                            |
+| `corpus-builder/`                                                | Setup, build, concurrent review, semantic inspection, and publish UI                 |
+| `pipelines/`                                                     | Pipeline Studio definitions, graph editor, execution traces, benchmarks, comparisons |
+| `record/`, `records/`                                            | Single-record inspection/editing versus collection/workspace record surfaces         |
+| `research/`                                                      | Research composer, evidence, claims, traceability, response presentation             |
+| `metadata-schemas/`, `metadata-memory/`                          | Schema authoring and reviewed precedent inspection                                   |
+| `works/`                                                         | Work aggregation and work-level editing                                              |
+| `search/`                                                        | Search-specific controls and result presentation                                     |
+| `semantic/`, `relations/`                                        | Semantic graph/map and relation presentation                                         |
+| `settings/`, `providers/`, `vector/`, `system-data/`, `capture/` | Administrative and infrastructure-facing product surfaces                            |
 
 Root-level components are shared pieces that predate or span those domains. When ownership becomes clear, prefer a domain folder instead of adding another unrelated root-level component.
 

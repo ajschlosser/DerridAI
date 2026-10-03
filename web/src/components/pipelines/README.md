@@ -63,14 +63,14 @@ flowchart LR
 
 ## Component groups
 
-| Area | Representative components |
-| --- | --- |
-| Definitions/versioning | `PipelineDefinitionsWorkspace`, `PipelineDefinitionEditor`, `PipelineDefinitionDetail`, `PipelineVersionEditorPanel` |
-| Graph editing | `PipelineGraphDiagram`, `PipelineStageEditor`, `PipelineStagePalette`, `PipelineStagePorts`, `PipelineStageConnections` |
-| Strategies | `PipelineStrategiesWorkspace`, `PipelineStrategyTable`, `PipelineStrategyInspector`, `PipelineStrategyConfigFields` |
-| Execution history | `PipelineExecutionsWorkspace`, `PipelineExecutionList`, `PipelineExecutionInspector`, `PipelineRunTracePanel` |
-| Operational analysis | `PipelineAnalysisPanel`, `PipelineLatencyView`, `PipelineComplexityView`, `PipelineOperationsWorkspace` |
-| Evaluation | `PipelineBenchmarkWorkspace`, `PipelineBenchmarkCaseList`, `PipelineComparisonWorkspace`, comparison-result components |
+| Area                   | Representative components                                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Definitions/versioning | `PipelineDefinitionsWorkspace`, `PipelineDefinitionEditor`, `PipelineDefinitionDetail`, `PipelineVersionEditorPanel`    |
+| Graph editing          | `PipelineGraphDiagram`, `PipelineStageEditor`, `PipelineStagePalette`, `PipelineStagePorts`, `PipelineStageConnections` |
+| Strategies             | `PipelineStrategiesWorkspace`, `PipelineStrategyTable`, `PipelineStrategyInspector`, `PipelineStrategyConfigFields`     |
+| Execution history      | `PipelineExecutionsWorkspace`, `PipelineExecutionList`, `PipelineExecutionInspector`, `PipelineRunTracePanel`           |
+| Operational analysis   | `PipelineAnalysisPanel`, `PipelineLatencyView`, `PipelineComplexityView`, `PipelineOperationsWorkspace`                 |
+| Evaluation             | `PipelineBenchmarkWorkspace`, `PipelineBenchmarkCaseList`, `PipelineComparisonWorkspace`, comparison-result components  |
 
 ## Presentation rules
 

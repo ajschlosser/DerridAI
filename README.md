@@ -117,7 +117,6 @@ For developers working inside a subsystem, the local maps are more specific than
 - [Pipeline Studio components](web/src/components/pipelines/README.md)
 - [Frontend test architecture](web/tests/README.md)
 
-
 ### Runtime services
 
 - `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, and nginx. It is the browser application, proxies `/api/`, and consumes REST, GraphQL, and realtime notifications. Storybook is an opt-in development profile.

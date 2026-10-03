@@ -51,7 +51,6 @@ flowchart TD
     Domains -. derived indexing / retrieval .-> Chroma
 ```
 
-
 The backend is intentionally split by responsibility:
 
 - `app/main.py` — minimal ASGI entrypoint.

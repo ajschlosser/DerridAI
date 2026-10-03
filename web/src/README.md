@@ -63,23 +63,23 @@ This is an architectural direction, not a claim that every legacy import is alre
 
 ## Directory map
 
-| Path | Responsibility |
-| --- | --- |
-| `views/` | Route-level pages and workspace composition |
-| `features/` | Cohesive feature packages with domain/composable/API pieces |
-| `components/` | Reusable primitives, shell components, and domain UI |
-| `composables/` | Vue composables coordinating state, async work, and domain helpers |
-| `domain/` | Mostly framework-light domain transformations, presenters, codecs, and workspace rules |
-| `api/` | Typed REST/GraphQL transport clients |
-| `realtime/` | WebSocket connection and refresh bridge |
-| `stores/`, `state/` | Pinia and shared client state |
-| `router/` | Route definitions and route loading |
-| `runtime/` | Application bootstrap and remaining compatibility orchestration |
-| `services/` | Focused application services |
-| `i18n/` | Frontend locale resources |
-| `styles/` | Design tokens and shared styles |
-| `types/` | Shared TypeScript types |
-| `fragments/` | Shared GraphQL/document fragments |
+| Path                | Responsibility                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `views/`            | Route-level pages and workspace composition                                            |
+| `features/`         | Cohesive feature packages with domain/composable/API pieces                            |
+| `components/`       | Reusable primitives, shell components, and domain UI                                   |
+| `composables/`      | Vue composables coordinating state, async work, and domain helpers                     |
+| `domain/`           | Mostly framework-light domain transformations, presenters, codecs, and workspace rules |
+| `api/`              | Typed REST/GraphQL transport clients                                                   |
+| `realtime/`         | WebSocket connection and refresh bridge                                                |
+| `stores/`, `state/` | Pinia and shared client state                                                          |
+| `router/`           | Route definitions and route loading                                                    |
+| `runtime/`          | Application bootstrap and remaining compatibility orchestration                        |
+| `services/`         | Focused application services                                                           |
+| `i18n/`             | Frontend locale resources                                                              |
+| `styles/`           | Design tokens and shared styles                                                        |
+| `types/`            | Shared TypeScript types                                                                |
+| `fragments/`        | Shared GraphQL/document fragments                                                      |
 
 ## Placement guidance
 

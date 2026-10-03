@@ -54,16 +54,16 @@ flowchart LR
 
 ## File groups
 
-| Area | Primary modules |
-| --- | --- |
-| Contracts and definitions | `models.py`, `contracts.py`, `defaults.py`, `definition_store.py` |
-| Registry and purpose semantics | `registry.py`, `purposes.py`, `workflows.py` |
-| Validation and execution | `service.py`, `manager.py`, `wiring.py` |
-| Storage and search | `store.py`, `storage.py`, `store_search.py` |
-| Tracing and safety | `tracing.py`, `trace_store.py`, `trace_safety.py`, `evidence_tracing.py`, `research_tracing.py`, `metadata_precedent_tracing.py` |
-| Operational analysis | `latency.py`, `complexity.py`, `metrics.py`, `analysis.py` |
-| Evaluation | `benchmark.py`, `benchmark_store.py`, `comparison.py` |
-| Purpose adapters | `research.py`, `evidence_recovery.py`, `metadata_prefill.py`, `metadata_precedents.py`, `corpus_*.py`, and related focused adapters |
+| Area                           | Primary modules                                                                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Contracts and definitions      | `models.py`, `contracts.py`, `defaults.py`, `definition_store.py`                                                                   |
+| Registry and purpose semantics | `registry.py`, `purposes.py`, `workflows.py`                                                                                        |
+| Validation and execution       | `service.py`, `manager.py`, `wiring.py`                                                                                             |
+| Storage and search             | `store.py`, `storage.py`, `store_search.py`                                                                                         |
+| Tracing and safety             | `tracing.py`, `trace_store.py`, `trace_safety.py`, `evidence_tracing.py`, `research_tracing.py`, `metadata_precedent_tracing.py`    |
+| Operational analysis           | `latency.py`, `complexity.py`, `metrics.py`, `analysis.py`                                                                          |
+| Evaluation                     | `benchmark.py`, `benchmark_store.py`, `comparison.py`                                                                               |
+| Purpose adapters               | `research.py`, `evidence_recovery.py`, `metadata_prefill.py`, `metadata_precedents.py`, `corpus_*.py`, and related focused adapters |
 
 ## Non-negotiable boundaries
 

@@ -60,16 +60,16 @@ The browser/API transport split is intentional: REST owns commands and mutations
 
 ## Directory map
 
-| Path | Responsibility |
-| --- | --- |
-| `src/` | Production Vue application |
-| `tests/frontend/` | Vitest, Vue Test Utils, happy-dom, domain/component regression coverage |
-| `tests/e2e/` | Playwright workflow, accessibility, and browser characterization coverage |
-| `tests/fixtures/` | Frontend test fixtures |
-| `sdk/` | Published/consumable DerridAI client SDK |
-| `.storybook/` | Storybook configuration |
-| `scripts/` | Frontend-specific checks and generation helpers |
-| `public/` | Static assets copied into the frontend build |
+| Path              | Responsibility                                                            |
+| ----------------- | ------------------------------------------------------------------------- |
+| `src/`            | Production Vue application                                                |
+| `tests/frontend/` | Vitest, Vue Test Utils, happy-dom, domain/component regression coverage   |
+| `tests/e2e/`      | Playwright workflow, accessibility, and browser characterization coverage |
+| `tests/fixtures/` | Frontend test fixtures                                                    |
+| `sdk/`            | Published/consumable DerridAI client SDK                                  |
+| `.storybook/`     | Storybook configuration                                                   |
+| `scripts/`        | Frontend-specific checks and generation helpers                           |
+| `public/`         | Static assets copied into the frontend build                              |
 
 ## Development rules
 
