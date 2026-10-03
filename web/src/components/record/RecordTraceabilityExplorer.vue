@@ -39,16 +39,29 @@ const props = withDefaults(
     graph?: ResearchObjectGraph | null;
     model?: DerridaiNormativeModel | null;
     loading?: boolean;
+    modelLoading?: boolean;
+    modelError?: string;
     error?: string;
     /** The record being audited; passed to claim validation. */
     record?: Record<string, unknown> | null;
     /** Which lens to open on: this record's instance graph or the cELF model. */
     initialMode?: "trace" | "model";
   }>(),
-  { graph: null, model: null, loading: false, error: "", record: null, initialMode: "trace" },
+  {
+    graph: null,
+    model: null,
+    modelLoading: false,
+    modelError: "",
+    loading: false,
+    error: "",
+    record: null,
+    initialMode: "trace",
+  },
 );
 const i18n = useI18nStore();
 const mode = ref<"trace" | "model">(props.initialMode);
+const activeLoading = computed(() => (mode.value === "model" ? props.modelLoading : props.loading));
+const activeError = computed(() => (mode.value === "model" ? props.modelError : props.error));
 const focusId = ref("");
 const diagramOpen = ref(false);
 
@@ -67,7 +80,7 @@ type RelationshipGroup = {
 
 const modeTabs = computed(() => {
   const tabs = [{ id: "trace", label: i18n.t("traceability.this_record", "This record") }];
-  if (props.model)
+  if (props.model || props.modelLoading || props.modelError)
     tabs.push({ id: "model", label: i18n.t("traceability.data_model", "cELF model") });
   return tabs;
 });
@@ -295,7 +308,10 @@ function defaultFocus() {
 }
 
 function setMode(value: string) {
-  mode.value = value === "model" && props.model ? "model" : "trace";
+  mode.value =
+    value === "model" && (props.model || props.modelLoading || props.modelError)
+      ? "model"
+      : "trace";
 }
 
 function selectFocus(id: string) {
@@ -378,17 +394,18 @@ watch(mode, () => resetFocus());
       @update:model-value="setMode"
     />
 
-    <div v-if="loading" class="traceability-state" role="status">
-      <strong>{{ i18n.t("traceability.loading_title", "Building the trace…") }}</strong>
+    <div v-if="activeLoading" class="traceability-state" role="status">
+      <strong>{{ nodes.length ? i18n.t("loading.updating") : i18n.t("ui.loading") }}</strong>
       <span>{{
         i18n.t("traceability.loading", "Loading retained provenance relationships.")
       }}</span>
     </div>
-    <div v-else-if="error" class="traceability-state error" role="alert">
+    <div v-if="activeError" class="traceability-state error" role="alert">
       <strong>{{ i18n.t("traceability.error_title", "Trace unavailable") }}</strong>
-      <span>{{ error }}</span>
+      <span>{{ activeError }}</span>
+      <span v-if="nodes.length">{{ i18n.t("loading.stale") }}</span>
     </div>
-    <div v-else-if="!focus" class="traceability-state">
+    <div v-if="!focus && !activeLoading && !activeError" class="traceability-state">
       <strong>{{ i18n.t("traceability.empty_title", "Nothing to trace yet") }}</strong>
       <span>{{
         i18n.t(
@@ -398,7 +415,7 @@ watch(mode, () => resetFocus());
       }}</span>
     </div>
 
-    <template v-else>
+    <template v-if="focus">
       <section class="traceability-orientation" aria-labelledby="traceabilityOrientation">
         <div class="traceability-scope">
           <UiStatusBadge

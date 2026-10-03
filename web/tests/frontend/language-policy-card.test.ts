@@ -77,6 +77,21 @@ async function mountView() {
   return wrapper;
 }
 
+function pendingRead<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+function readDictionary(wrapper: ReturnType<typeof mount>, code = "en-US") {
+  return (wrapper.vm as unknown as { load(code: string, reset: boolean): Promise<void> }).load(
+    code,
+    false,
+  );
+}
 describe("researcher text policy card", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -208,5 +223,91 @@ describe("researcher text policy card", () => {
     });
     const wrapper = await mountView();
     expect(wrapper.find(".language-policy-terms").exists()).toBe(false);
+  });
+  it("makes the dictionary usable before a delayed policy without claiming absence", async () => {
+    const pending = pendingRead<unknown>();
+    api.system.languageContentPolicy.mockReturnValueOnce(pending.promise);
+    const wrapper = await mountView();
+    expect(wrapper.find(".language-identity-card input").exists()).toBe(true);
+    expect(wrapper.find(".language-policy-card .ui-loading-state").exists()).toBe(true);
+    expect(wrapper.find(".language-policy-card").text()).not.toContain("policy is missing");
+    pending.resolve({ code: "en-US", status: "missing", blocked_terms: [], contextual_terms: [] });
+    await flushPromises();
+    wrapper.unmount();
+  });
+  it("reports a policy read failure locally and retries only that read", async () => {
+    api.system.languageContentPolicy.mockRejectedValueOnce(new Error("Policy offline"));
+    const wrapper = await mountView();
+    const dictionaryReads = api.system.language.mock.calls.length;
+    expect(wrapper.get(".language-policy-card [role=alert]").text()).toContain("Policy offline");
+    expect(wrapper.find(".language-identity-card").exists()).toBe(true);
+    await wrapper.get(".language-policy-card [role=alert] button").trigger("click");
+    await flushPromises();
+    expect(api.system.language).toHaveBeenCalledTimes(dictionaryReads);
+    expect(wrapper.find(".language-policy-card [role=alert]").exists()).toBe(false);
+    wrapper.unmount();
+  });
+  it("retains the editor and edits made during a same-dictionary refresh", async () => {
+    const wrapper = await mountView();
+    const editor = wrapper.get(".language-identity-card").element;
+    const pending = pendingRead<unknown>();
+    api.system.language.mockReturnValueOnce(pending.promise);
+    const operation = readDictionary(wrapper);
+    await flushPromises();
+    expect(wrapper.get(".language-identity-card").element).toBe(editor);
+    await wrapper.get(".language-identity-card input").setValue("Unsaved name");
+    pending.resolve({ code: "en-US", name: "Server name", dictionary: { "app.name": "DerridAI" } });
+    await operation;
+    await flushPromises();
+    expect((wrapper.get(".language-identity-card input").element as HTMLInputElement).value).toBe(
+      "Unsaved name",
+    );
+    wrapper.unmount();
+  });
+  it("retains a loaded dictionary through failure with local retry", async () => {
+    const wrapper = await mountView();
+    api.system.language.mockRejectedValueOnce(new Error("Dictionary offline"));
+    await readDictionary(wrapper);
+    await flushPromises();
+    expect(wrapper.find(".language-identity-card").exists()).toBe(true);
+    expect(wrapper.get(".language-read-error").text()).toContain("Dictionary offline");
+    await wrapper.get(".language-read-error button").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".language-read-error").exists()).toBe(false);
+    wrapper.unmount();
+  });
+  it("clears previous dictionary and policy while a new locale loads and rejects older results", async () => {
+    const wrapper = await mountView();
+    const old = pendingRead<unknown>();
+    api.system.language.mockReturnValueOnce(old.promise);
+    const previous = readDictionary(wrapper, "fr-CA");
+    await flushPromises();
+    expect(wrapper.find(".language-identity-card").exists()).toBe(false);
+    api.system.language.mockResolvedValueOnce({
+      code: "de-DE",
+      name: "German",
+      dictionary: { "app.name": "DerridAI" },
+    });
+    await readDictionary(wrapper, "de-DE");
+    old.resolve({ code: "fr-CA", name: "French", dictionary: {} });
+    await previous;
+    await flushPromises();
+    expect(wrapper.get(".language-editor-hero").text()).toContain("German");
+    wrapper.unmount();
+  });
+  it("withholds initial counts and empty claims until bootstrap succeeds and can retry", async () => {
+    const pending = pendingRead<unknown>();
+    api.system.language.mockReturnValueOnce(pending.promise);
+    const wrapper = await mountView();
+    expect(wrapper.find(".language-workspace-stats").exists()).toBe(false);
+    expect(wrapper.find(".language-empty-list").exists()).toBe(false);
+    pending.reject(new Error("Bootstrap offline"));
+    await flushPromises();
+    expect(wrapper.get(".language-read-error").text()).toContain("Bootstrap offline");
+    await wrapper.get(".language-read-error button").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".language-workspace-stats").exists()).toBe(true);
+    expect(wrapper.find(".language-identity-card").exists()).toBe(true);
+    wrapper.unmount();
   });
 });

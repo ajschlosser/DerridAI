@@ -321,4 +321,26 @@ describe("ResearchObjectDiagram", () => {
     expect(wrapper.findAll(".diagram-edge.application")).toHaveLength(1);
     expect(wrapper.findAll(".diagram-edge.active").length).toBeGreaterThan(0);
   });
+  it("keeps the focused trace mounted while refreshing and after failure", async () => {
+    const wrapper = mount(RecordTraceabilityExplorer, { props: { graph, model } });
+    const focus = wrapper.get(".traceability-focus-card").element;
+    await wrapper.setProps({ loading: true });
+    expect(wrapper.get(".traceability-focus-card").element).toBe(focus);
+    await wrapper.setProps({ loading: false, error: "Read unavailable" });
+    expect(wrapper.get(".traceability-focus-card").element).toBe(focus);
+    expect(wrapper.get("[role=alert]").text()).toContain("Read unavailable");
+    wrapper.unmount();
+  });
+  it("exposes the pending model lens without blocking a loaded trace", async () => {
+    const wrapper = mount(RecordTraceabilityExplorer, { props: { graph, modelLoading: true } });
+    expect(wrapper.find(".traceability-focus-card").exists()).toBe(true);
+    const tab = wrapper.findAll("[role=tab]").find((item) => item.text() === "cELF model");
+    expect(tab).toBeDefined();
+    await tab!.trigger("click");
+    expect(wrapper.find(".traceability-focus-card").exists()).toBe(false);
+    expect(wrapper.find("[role=status]").exists()).toBe(true);
+    await wrapper.setProps({ modelLoading: false, modelError: "Model unavailable" });
+    expect(wrapper.get("[role=alert]").text()).toContain("Model unavailable");
+    wrapper.unmount();
+  });
 });
