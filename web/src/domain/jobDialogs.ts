@@ -4,7 +4,12 @@ import { openMessageDialog } from "../composables/messageDialog";
 import { icon } from "./html";
 import { realtime } from "../realtime";
 import { followResource } from "../realtime/follow";
-import { llmReviewDialogHtml } from "./jobReviewMarkup";
+import {
+  openJobReviewDialog,
+  type JobReviewApplyMode,
+  type JobReviewHandle,
+  type JobReviewView,
+} from "../composables/jobReviewDialog";
 import { openRecordPreviewDialog } from "../composables/recordPreviewDialog";
 import { createJobDialogCopy } from "./jobDialogCopy";
 import { llmTaskLauncherHtml } from "./llmToolMarkup";
@@ -310,11 +315,9 @@ export function createJobDialogs(deps: Deps) {
       return;
     }
 
-    const dialog = document.createElement("dialog");
-    dialog.className = "job-results-dialog";
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
     let liveTimer: Any = null;
+    let handle: JobReviewHandle | null = null;
+    const isLive = () => ["queued", "running", "cancelling"].includes(job.status);
 
     async function refreshJob() {
       try {
@@ -363,16 +366,6 @@ export function createJobDialogs(deps: Deps) {
 
     let selections = new Set<Any>();
 
-    function initializeSelections(flattened: Any) {
-      const valid = [...selections].filter((index) => index < flattened.length);
-      selections = new Set(valid);
-      if (!selections.size) {
-        flattened.forEach((item: Any, index: Any) => {
-          if (item.field !== "text") selections.add(index);
-        });
-      }
-    }
-
     async function resolveOnServer(action: Any, items: Any, { dismissJob = false } = {}) {
       return api(`/api/jobs/${encodeURIComponent(job.id)}/llm-results/resolve`, {
         method: "POST",
@@ -396,8 +389,7 @@ export function createJobDialogs(deps: Deps) {
           method: "POST",
           body: JSON.stringify({ dismiss: true }),
         });
-        dialog.close();
-        dialog.remove();
+        handle?.close();
         await refreshJobs({ rerender: state.view === "home" });
         toast(copy.rejectedRemoved, { tone: "success" });
       } catch (error: Any) {
@@ -405,7 +397,8 @@ export function createJobDialogs(deps: Deps) {
       }
     }
 
-    async function apply(mode: Any) {
+    async function apply(mode: JobReviewApplyMode, selected: number[]): Promise<boolean> {
+      selections = new Set(selected);
       const { successful, unchanged, flattened } = buildData();
       const batchId = uid();
       let fieldsApplied = 0;
@@ -516,7 +509,10 @@ export function createJobDialogs(deps: Deps) {
         }
       }
 
-      if (!resolveItems.length) return toast(copy.noResultsSelected, { tone: "warning" });
+      if (!resolveItems.length) {
+        toast(copy.noResultsSelected, { tone: "warning" });
+        return false;
+      }
 
       try {
         job = await resolveOnServer("accept", resolveItems);
@@ -525,17 +521,19 @@ export function createJobDialogs(deps: Deps) {
         shell();
         renderView();
         await refreshJobs({ rerender: state.view === "home" });
-        selections.clear();
-        render({ preserveScroll: true });
+        publish();
         toast(copy.accepted(resolveItems.length, fieldsApplied, job.pending_result_count || 0), {
           tone: "success",
         });
+        return true;
       } catch (error: Any) {
         toast(copy.localAppliedQueueFailed(error.message), { tone: "danger" });
+        return false;
       }
     }
 
-    async function rejectSelected() {
+    async function rejectSelected(selected: number[]): Promise<boolean> {
+      selections = new Set(selected);
       const { flattened } = buildData();
       const grouped = new Map();
       flattened.forEach((entry, index) => {
@@ -548,141 +546,123 @@ export function createJobDialogs(deps: Deps) {
         fields,
         resolve_record: false,
       }));
-      if (!items.length) return toast(copy.selectToReject, { tone: "warning" });
+      if (!items.length) {
+        toast(copy.selectToReject, { tone: "warning" });
+        return false;
+      }
       try {
         job = await resolveOnServer("reject", items);
-        selections.clear();
         await refreshJobs({ rerender: state.view === "home" });
-        render({ preserveScroll: true });
+        publish();
         toast(copy.rejectedRemain(job.pending_change_count || 0), { tone: "warning" });
+        return true;
       } catch (error: Any) {
         toast(copy.rejectSelectedFailed(error.message), { tone: "danger" });
+        return false;
       }
     }
 
-    function render({ preserveScroll = false } = {}) {
-      const tableBefore = dialog.querySelector(".job-change-table-wrap");
-      const scrollState = preserveScroll
-        ? {
-            dialog: dialog.scrollTop,
-            tableTop: tableBefore?.scrollTop || 0,
-            tableLeft: tableBefore?.scrollLeft || 0,
-          }
-        : null;
+    // The reviewer's selection is indices into the rows built here, in this order.
+    function buildView(): JobReviewView {
       const { successful, failures, unchanged, flattened } = buildData();
-      initializeSelections(flattened);
-      const noChangeCount = unchanged.length;
-      const active = ["queued", "running", "cancelling"].includes(job.status);
-      const statusText =
-        job.status === "cancelled" ? tr("jobs.review.cancelled_partial") : job.status;
+      const active = isLive();
       const pendingResults = job.pending_result_count ?? successful.length;
       const pendingChanges = job.pending_change_count ?? flattened.length;
       const remaining =
         job.remaining_record_count ?? Math.max(0, (job.total || 0) - (job.completed || 0));
-
-      dialog.innerHTML = llmReviewDialogHtml(
-        {
-          job,
-          flattened,
-          unchanged,
-          failures,
-          selections,
-          successful,
-          active,
-          remaining,
+      const statusText =
+        job.status === "cancelled" ? tr("jobs.review.cancelled_partial") : job.status;
+      const recordId = (item: Any) =>
+        String(item.local?.record?.record_id || item.result.record_id || item.result.key);
+      const state_ = job.resolution_state || "pending";
+      return {
+        title: job.mode === "auto" ? tr("jobs.review.auto_title") : tr("jobs.review.title"),
+        subtitle: trf("jobs.review.subtitle", {
+          completed: job.completed,
+          total: job.total,
           pendingResults,
           pendingChanges,
-          noChangeCount,
-          statusText,
+          remaining,
+          failures: failures.length,
+          status: statusText,
+        }),
+        active,
+        completed: job.completed || 0,
+        remaining,
+        noChangeCount: unchanged.length,
+        resolution: {
+          acceptedResults: job.accepted_results || 0,
+          acceptedFields: job.accepted_fields || 0,
+          rejectedResults: job.rejected_results || 0,
+          rejectedFields: job.rejected_fields || 0,
+          state: tr(`operations.decision.${state_}`, String(state_).replaceAll("_", " ")),
         },
-        { tr, trf, label, reviewDiffSides, reviewKey },
-      );
-
-      const close = () => {
-        if (liveTimer) liveTimer();
-        dialog.close();
-        dialog.remove();
+        failures: failures.map(
+          (result: Any) =>
+            `${result.record_id || result.key}: ${result.error?.message || tr("jobs.review.failed")}`,
+        ),
+        rows: flattened.map((item: Any) => {
+          const diff = reviewDiffSides(item.current, item.proposed);
+          return {
+            recordId: recordId(item),
+            copyKey: item.local ? String(reviewKey(item.local.file, item.local.index)) : "",
+            stale: item.stale,
+            isText: item.field === "text",
+            field: String(label(item.field)),
+            currentHtml: diff.left,
+            proposedHtml: diff.right,
+            rationale: item.rationale || "",
+          };
+        }),
+        unchanged: unchanged.map((item: Any) => ({
+          recordId: recordId(item),
+          work: String(item.local?.record?.work || ""),
+          stale: item.stale,
+        })),
+        discard: active && remaining > 0 ? "stop" : pendingResults > 0 ? "remove" : "none",
+        hasSuccessful: successful.length > 0,
       };
-      dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-      const syncSelectionUi = () => {
-        dialog.querySelectorAll("[data-job-change]").forEach((box: Any) => {
-          box.checked = selections.has(+box.dataset.jobChange);
-        });
-        const count = dialog.querySelector("#jobSelectedCount");
-        if (count) count.textContent = String(selections.size);
-        const applyButton = dialog.querySelector("#applyJobSelected");
-        if (applyButton) applyButton.disabled = !selections.size;
-      };
-      dialog.querySelector("#jobSelectAll")?.addEventListener("click", () => {
-        flattened.forEach((_, index) => selections.add(index));
-        syncSelectionUi();
-      });
-      dialog.querySelector("#jobSelectNone")?.addEventListener("click", () => {
-        selections.clear();
-        syncSelectionUi();
-      });
-      dialog.querySelector("#jobRejectSelected")?.addEventListener("click", rejectSelected);
-      dialog.querySelector("#rejectJob")?.addEventListener("click", rejectAndDismiss);
-      dialog.querySelector("#refreshLiveResults")?.addEventListener("click", async () => {
-        if (await refreshJob()) render({ preserveScroll: true });
-      });
-      dialog.querySelectorAll("[data-job-change]").forEach(
-        (box: Any) =>
-          (box.onchange = () => {
-            const index = +box.dataset.jobChange;
-            box.checked ? selections.add(index) : selections.delete(index);
-            syncSelectionUi();
-          }),
-      );
-      dialog.querySelectorAll("[data-preview-result]").forEach(
-        (button: Any) =>
-          (button.onclick = () => {
-            const entry = flattened[+button.dataset.previewResult];
-            if (entry?.local) openReviewRecordPreview(entry.local, entry.result);
-            else toast(copy.sourceGone, { tone: "danger" });
-          }),
-      );
-      dialog.querySelectorAll("[data-preview-unchanged]").forEach(
-        (button: Any) =>
-          (button.onclick = () => {
-            const entry = unchanged[+button.dataset.previewUnchanged];
-            if (entry?.local) openReviewRecordPreview(entry.local, entry.result);
-            else toast(copy.sourceGone, { tone: "danger" });
-          }),
-      );
-      dialog.querySelector("#markJobReviewed")?.addEventListener("click", () => apply("review"));
-      dialog.querySelector("#applyJobSelected")?.addEventListener("click", () => apply("selected"));
-      dialog.querySelector("#applyJobAll")?.addEventListener("click", () => apply("all"));
-      if (scrollState)
-        requestAnimationFrame(() => {
-          dialog.scrollTop = scrollState.dialog;
-          const table = dialog.querySelector(".job-change-table-wrap");
-          if (table) {
-            table.scrollTop = scrollState.tableTop;
-            table.scrollLeft = scrollState.tableLeft;
-          }
-        });
     }
+    const publish = () => handle?.update(buildView());
 
-    render();
-    if (["queued", "running", "cancelling"].includes(job.status)) {
+    handle = openJobReviewDialog(buildView(), {
+      apply,
+      rejectSelected,
+      discard: rejectAndDismiss,
+      refresh: async () => {
+        if (await refreshJob()) publish();
+      },
+      previewRow: (index) => {
+        const entry = buildData().flattened[index];
+        if (entry?.local) openReviewRecordPreview(entry.local, entry.result);
+        else toast(copy.sourceGone, { tone: "danger" });
+      },
+      previewUnchanged: (index) => {
+        const entry = buildData().unchanged[index];
+        if (entry?.local) openReviewRecordPreview(entry.local, entry.result);
+        else toast(copy.sourceGone, { tone: "danger" });
+      },
+      onClose: () => {
+        if (liveTimer) liveTimer();
+      },
+    });
+    if (isLive()) {
       // Follow this job's realtime events; REST polling only while the socket is unavailable.
       liveTimer = followResource({
         topic: `job:${job.id}`,
         fallbackMs: realtime.status === "idle" ? 4000 : undefined,
-        isDone: () =>
-          !dialog.isConnected || !["queued", "running", "cancelling"].includes(job.status),
+        isDone: () => !handle?.isOpen() || !isLive(),
         refresh: async () => {
-          if (!dialog.isConnected) return;
+          if (!handle?.isOpen()) return;
           const before = job.completed;
           const pendingBefore = job.pending_result_count;
           if (await refreshJob()) {
             if (
               job.completed !== before ||
               job.pending_result_count !== pendingBefore ||
-              !["queued", "running", "cancelling"].includes(job.status)
+              !isLive()
             ) {
-              render({ preserveScroll: true });
+              publish();
             }
           }
         },

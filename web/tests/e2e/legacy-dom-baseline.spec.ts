@@ -746,6 +746,7 @@ const scenarios: Scenario[] = [
   ),
   {
     name: "dialog-job-results-review",
+    contains: ["LLM review changes"],
     load: true,
     target: "dialog",
     fixtures: jobFixtures(FINISHED_JOBS),
