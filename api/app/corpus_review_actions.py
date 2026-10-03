@@ -960,18 +960,10 @@ class ReviewActionsMixin:
         return {"changed": len(changed_ids), "record_ids": changed_ids, "queue_counts": _queue_counts(persisted)}
 
 
-    @_serialize_record_mutation
     def record_view(self, build_id: str, record_id: str) -> dict[str, Any]:
-        # Fired every time a Record is opened, so it must stay a one-row write: a view counter
-        # changes no review state, and revalidating/rewriting the whole corpus made opening a
-        # Record cost as much as saving the entire build.
+        """Deprecated compatibility read; navigation no longer records canonical activity."""
         target = self.repo.get_record(build_id, record_id)
         activity = dict(target.get("activity") or {})
-        activity["human_view_count"] = int(activity.get("human_view_count") or 0) + 1
-        activity["last_human_viewed_at"] = iso_now()
-        target["activity"] = activity
-        target["human_view_count"] = activity["human_view_count"]
-        self.repo.update_record(build_id, target)
         return {"record_id": record_id, "activity": activity}
 
 

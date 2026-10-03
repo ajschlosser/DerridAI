@@ -1605,8 +1605,9 @@ def preview_pdf_corpus_record(build_id: str, record_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
 
 
-@router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/viewed")
+@router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/viewed", deprecated=True)
 def mark_pdf_corpus_record_viewed(build_id: str, record_id: str) -> dict[str, Any]:
+    """Compatibility read of historical activity; does not count opens or mutate Records."""
     try:
         return pdf_corpus_builds.record_view(build_id, record_id)
     except KeyError as exc:

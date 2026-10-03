@@ -536,6 +536,7 @@ watch(
             aria-labelledby="focus-tab-metadata"
           >
             <CorpusMetadataResolutionPanel
+              :active="tab === 'metadata'"
               :build-id="buildId"
               :schema="schema"
               :record="record"

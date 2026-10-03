@@ -24,7 +24,7 @@ import {
   usableOptions,
   withoutTransportItems,
 } from "../domain/metadataValues";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import type { CorpusRecord } from "../api/pdfCorpus";
 import type { PipelineRunTrace } from "../types/pipelines";
 import { useI18nStore } from "../stores/i18n";
@@ -47,22 +47,27 @@ import CorpusFieldPolicyBadges from "./CorpusFieldPolicyBadges.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
 import PipelineRunTracePanel from "./pipelines/PipelineRunTracePanel.vue";
 
-const props = defineProps<{
-  record: CorpusRecord;
-  regionTypes: string[];
-  discourseRoles: string[];
-  busy?: boolean;
-  batchSaving?: boolean;
-  savingField?: string;
-  savedField?: string;
-  confidenceCalibration?: Record<string, Record<string, Record<string, number>>>;
-  knownValues?: Record<string, string[]>;
-  schema?: MetadataSchema | null;
-  /** Fields the server requires before it will accept the record; they are listed first and marked. */
-  blockingFields?: string[];
-  /** Enables read-only metadata-precedent cross-references. */
-  buildId?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    record: CorpusRecord;
+    regionTypes: string[];
+    discourseRoles: string[];
+    busy?: boolean;
+    batchSaving?: boolean;
+    savingField?: string;
+    savedField?: string;
+    confidenceCalibration?: Record<string, Record<string, Record<string, number>>>;
+    knownValues?: Record<string, string[]>;
+    schema?: MetadataSchema | null;
+    /** Fields the server requires before it will accept the record; they are listed first and marked. */
+    blockingFields?: string[];
+    /** Enables read-only metadata-precedent cross-references. */
+    buildId?: string;
+    /** Keep editors mounted, but defer assistance until their inspector is visible. */
+    active?: boolean;
+  }>(),
+  { active: true },
+);
 const emit = defineEmits<{
   resolve: [field: string, value: unknown];
   noValue: [field: string];
@@ -300,23 +305,55 @@ const pendingSet = computed(() => new Set(attentionFields.value));
 // Precedents kept from the last enrichment arrive in one request per record, so each pending field shows its count
 // without being opened. A field without kept precedents (or a failed request) loads its own when opened.
 const keptPrecedents = ref<Record<string, MetadataPrecedents>>({});
+const precedentError = ref("");
+let precedentContext = "";
+let loadedPrecedentContext = "";
+let precedentRequestVersion = 0;
 watch(
   // A primitive key: polling replaces the record object, which must not clear and refetch kept precedents.
-  () => JSON.stringify([props.buildId, props.record.record_id, attentionFields.value.length > 0]),
-  async (key) => {
-    const [buildId, recordId, anyPending] = JSON.parse(key) as [string, string, boolean];
-    keptPrecedents.value = {};
-    if (!buildId || !anyPending) return;
-    try {
-      const result = await corpusBuilderApi.fieldPrecedents(buildId, recordId);
-      if (buildId === props.buildId && recordId === props.record.record_id)
-        keptPrecedents.value = result.fields || {};
-    } catch {
+  () =>
+    JSON.stringify([
+      props.buildId,
+      props.record.record_id,
+      props.record.record_revision,
+      attentionFields.value.length > 0,
+      props.active !== false,
+    ]),
+  async () => {
+    const context = JSON.stringify([
+      props.buildId,
+      props.record.record_id,
+      props.record.record_revision,
+    ]);
+    const version = ++precedentRequestVersion;
+    if (context !== precedentContext) {
+      precedentContext = context;
+      loadedPrecedentContext = "";
       keptPrecedents.value = {};
+      precedentError.value = "";
+    }
+    if (
+      props.active === false ||
+      !props.buildId ||
+      !attentionFields.value.length ||
+      loadedPrecedentContext === context
+    )
+      return;
+    precedentError.value = "";
+    try {
+      const result = await corpusBuilderApi.fieldPrecedents(props.buildId, props.record.record_id);
+      if (version === precedentRequestVersion) {
+        keptPrecedents.value = result.fields || {};
+        loadedPrecedentContext = context;
+      }
+    } catch (exc) {
+      if (version === precedentRequestVersion)
+        precedentError.value = exc instanceof Error ? exc.message : String(exc);
     }
   },
   { immediate: true },
 );
+onBeforeUnmount(() => (precedentRequestVersion += 1));
 // "Use this value" from a precedent fills that field's draft; the reviewer still chooses evidence and saves.
 const prefills = ref<Record<string, { value: unknown; key: number }>>({});
 let prefillKey = 0;
@@ -591,6 +628,7 @@ function displayValue(field: string) {
         }}</span
       >
     </header>
+    <p v-if="precedentError" role="alert">{{ precedentError }}</p>
     <p v-if="nlpProvenance" class="nlp-provenance">
       <b>{{ i18n.t("pdf_corpus.linguistic_analyzer_record") }}</b>
       <span>{{ nlpProvenanceLabel }}</span>
@@ -722,6 +760,8 @@ function displayValue(field: string) {
           v-if="buildId && pendingSet.has(field)"
           :build-id="buildId"
           :record-id="record.record_id"
+          :record-revision="record.record_revision"
+          :active="active"
           :field="field"
           :field-label="fieldLabel(field)"
           :preloaded="keptPrecedents[field] || null"

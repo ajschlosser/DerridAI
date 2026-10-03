@@ -37,6 +37,8 @@ const props = withDefaults(
   defineProps<{
     buildId: string;
     recordId: string;
+    recordRevision?: number;
+    active?: boolean;
     field: string;
     fieldLabel: string;
     /** This field's precedents kept from the last enrichment, when the record has them. */
@@ -53,7 +55,7 @@ const props = withDefaults(
       refresh?: boolean,
     ) => Promise<MetadataPrecedents>;
   }>(),
-  { preloaded: null, sourceBlockIds: () => [], canUse: true, load: undefined },
+  { preloaded: null, sourceBlockIds: () => [], canUse: true, load: undefined, active: true },
 );
 const emit = defineEmits<{ use: [value: unknown] }>();
 
@@ -75,18 +77,30 @@ const canRefresh = computed(() => result.value?.source !== "enrichment");
 
 watch(
   // A primitive key so a poll re-rendering the same record does not discard loaded precedents.
-  () => `${props.buildId}\u0000${props.recordId}\u0000${props.field}`,
+  () => JSON.stringify([props.buildId, props.recordId, props.recordRevision, props.field]),
   () => {
     requestVersion += 1;
     loading.value = false;
     fetched.value = null;
     error.value = "";
     usedKey.value = "";
-    if (open.value && !props.preloaded) void fetchPrecedents(false);
+    if (props.active !== false && open.value && !props.preloaded) void fetchPrecedents(false);
+  },
+);
+watch(
+  () => props.active !== false,
+  (active) => {
+    if (!active) {
+      requestVersion += 1;
+      loading.value = false;
+    } else if (open.value && !result.value && !loading.value) {
+      void fetchPrecedents(false);
+    }
   },
 );
 
 async function fetchPrecedents(refresh: boolean) {
+  if (props.active === false) return;
   const version = ++requestVersion;
   loading.value = true;
   error.value = "";

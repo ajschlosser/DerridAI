@@ -16,11 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, shallowMount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MetadataPrecedents } from "../../src/api/corpus";
 import CorpusFieldPrecedents from "../../src/components/CorpusFieldPrecedents.vue";
+import CorpusMetadataResolutionPanel from "../../src/components/CorpusMetadataResolutionPanel.vue";
+import { corpusBuilderApi, type CorpusRecord } from "../../src/api/corpus";
 import CorpusMetadataFieldEditor from "../../src/components/CorpusMetadataFieldEditor.vue";
 import { precedentEvidenceSuggestions } from "../../src/domain/metadataPrecedents";
 import CorpusRecordResearchClaims from "../../src/components/CorpusRecordResearchClaims.vue";
@@ -46,6 +48,77 @@ const precedents: MetadataPrecedents = {
   ],
 };
 
+describe("metadata inspector assistance demand", () => {
+  const record: CorpusRecord = {
+    record_id: "r1",
+    record_revision: 1,
+    text: "Passage",
+    text_length: 7,
+    source_block_ids: ["block-1"],
+    source_spans: [{ block_id: "block-1", page: 1 }],
+    stance: "questions",
+    metadata_review_fields: ["stance"],
+    metadata_field_status: { stance: { status: "model_inferred" } },
+  };
+  beforeEach(() => setActivePinia(createPinia()));
+  afterEach(() => vi.restoreAllMocks());
+
+  function panel(active = false) {
+    return shallowMount(CorpusMetadataResolutionPanel, {
+      props: { record, buildId: "b1", regionTypes: [], discourseRoles: [], active },
+    });
+  }
+
+  it("loads on demand, retains mounted editors, and reuses a loaded context", async () => {
+    const load = vi.spyOn(corpusBuilderApi, "fieldPrecedents").mockResolvedValue({
+      record_id: "r1",
+      fields: { stance: { ...precedents, field: "stance" } },
+    });
+    const wrapper = panel();
+    await flushPromises();
+    expect(load).not.toHaveBeenCalled();
+    const editor = wrapper.findComponent(CorpusMetadataFieldEditor);
+    editor.vm.$emit("dirty", true);
+    await wrapper.setProps({ active: true });
+    await flushPromises();
+    expect(load).toHaveBeenCalledTimes(1);
+    await wrapper.setProps({ active: false });
+    await wrapper.setProps({ active: true, record: { ...record } });
+    await flushPromises();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(wrapper.findComponent(CorpusMetadataFieldEditor).vm).toBe(editor.vm);
+    expect(wrapper.emitted("dirty")?.at(-1)).toEqual([true]);
+    expect(wrapper.findComponent(CorpusFieldPrecedents).props("active")).toBe(true);
+    await wrapper.setProps({ active: false, record: { ...record, record_revision: 2 } });
+    expect(load).toHaveBeenCalledTimes(1);
+    await wrapper.setProps({ active: true });
+    await flushPromises();
+    expect(load).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it("rejects a late response after hiding and surfaces current failures", async () => {
+    let release!: (result: {
+      record_id: string;
+      fields: Record<string, MetadataPrecedents>;
+    }) => void;
+    const load = vi
+      .spyOn(corpusBuilderApi, "fieldPrecedents")
+      .mockImplementationOnce(() => new Promise((resolve) => (release = resolve)))
+      .mockRejectedValueOnce(new Error("Precedent service unavailable"));
+    const wrapper = panel(true);
+    await wrapper.setProps({ active: false });
+    release({ record_id: "r1", fields: { stance: precedents } });
+    await flushPromises();
+    expect(wrapper.findComponent(CorpusFieldPrecedents).props("preloaded")).toBeNull();
+    await wrapper.setProps({ active: true });
+    await flushPromises();
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(wrapper.get("[role=alert]").text()).toBe("Precedent service unavailable");
+    wrapper.unmount();
+  });
+});
+
 describe("reviewed precedents in Record Review", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
@@ -70,6 +143,26 @@ describe("reviewed precedents in Record Review", () => {
     // A correction shows both the rejected model value and the reviewer's value.
     expect(wrapper.text()).toContain("angry");
     expect(wrapper.text()).toContain("calm");
+  });
+
+  it("defers an open field disclosure across hidden Record changes", async () => {
+    const load = vi.fn().mockResolvedValue(precedents);
+    const wrapper = mount(CorpusFieldPrecedents, {
+      props: { buildId: "b1", recordId: "r1", field: "mood", fieldLabel: "Mood", load },
+    });
+    await wrapper.get("button").trigger("click");
+    await flushPromises();
+    await wrapper.setProps({ active: false });
+    await wrapper.setProps({ recordId: "r3" });
+    expect(load).toHaveBeenCalledTimes(1);
+    await wrapper.setProps({ active: true });
+    await flushPromises();
+    expect(load).toHaveBeenLastCalledWith("b1", "r3", "mood", false);
+    expect(load).toHaveBeenCalledTimes(2);
+    await wrapper.setProps({ active: false });
+    await wrapper.setProps({ active: true });
+    expect(load).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
   });
 
   it("ignores a late precedent response from a different build", async () => {

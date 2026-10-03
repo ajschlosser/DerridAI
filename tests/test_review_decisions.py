@@ -368,7 +368,7 @@ def test_external_evidence_must_come_from_the_builds_own_source(tmp_path, monkey
 
 
 def test_review_decision_and_record_view_never_touch_the_whole_corpus(tmp_path: Path, monkeypatch):
-    """Latency contract: one decision/view is a single-row write, however large the corpus.
+    """Latency contract: decisions write one row; compatibility views do not write.
 
     Whole-corpus snapshots, validation and rewrites made every Accept click and every Record open
     scale with corpus size (and kept up to 40 full-corpus undo copies).
@@ -387,8 +387,8 @@ def test_review_decision_and_record_view_never_touch_the_whole_corpus(tmp_path: 
     monkeypatch.setattr(manager, "_rewrite_and_validate", forbidden)
 
     viewed = manager.record_view(bid, "r2")
-    assert viewed["activity"]["human_view_count"] == 1
-    assert repo.get_record(bid, "r2")["activity"]["human_view_count"] == 1
+    assert viewed["activity"] == {}
+    assert "activity" not in repo.get_record(bid, "r2")
 
     result = manager.review_decision(bid, "r1", "accepted", expected_revision=1, review_queue="all")
     assert result["applied"] is True and result["record"]["record_id"] == "r1"
@@ -402,6 +402,30 @@ def test_review_decision_and_record_view_never_touch_the_whole_corpus(tmp_path: 
     assert undo[-1]["record_id"] == "r1" and "records" not in undo[-1]
     # Projected pages reflect the write without a canonical corpus reparse.
     assert [r["review_disposition"] for r in repo.page_records(bid)["items"]][:2] == ["accepted", "pending"]
+
+
+def test_deprecated_record_view_preserves_history_without_mutation(tmp_path: Path, monkeypatch):
+    import pytest
+
+    record = rec("r1", "b1")
+    record["activity"] = {"human_view_count": 7, "last_human_viewed_at": "2026-09-01"}
+    record["human_view_count"] = 7
+    repo, build = install_repo(tmp_path, [record])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    bid = build["build_id"]
+    before = repo.get_record(bid, "r1")
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("navigation must not mutate canonical Records")
+
+    monkeypatch.setattr(repo, "update_record", forbidden)
+    monkeypatch.setattr(repo, "save_records", forbidden)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", forbidden)
+    for _ in range(2):
+        assert manager.record_view(bid, "r1") == {"record_id": "r1", "activity": record["activity"]}
+    assert repo.get_record(bid, "r1") == before
+    with pytest.raises(KeyError):
+        manager.record_view(bid, "missing")
 
 
 def test_reading_a_legacy_asset_infers_the_start_once_without_recursing(tmp_path: Path, monkeypatch):

@@ -32,6 +32,7 @@ from test_review_queues import cb, install_repo, ready_record
 
 # isort: split
 # The fixture module sets api on sys.path before importing the application.
+from app import corpus_queue_projection
 from app import corpus_review_queue as queue
 from app.corpus_reviewer_helpers import _present_for_reviewer
 from app.reviewer_context import current_reviewer
@@ -107,6 +108,47 @@ def test_blind_search_counts_and_facets_use_presented_values(corpus):
             assert page["metadata_values"] == queue.observed_metadata_values(presented)
         finally:
             current_reviewer.reset(token)
+
+
+@pytest.mark.parametrize("reviewer", ["", "alice", "bob", "carol"])
+def test_selected_facets_fetch_only_requested_values_with_reviewer_visibility(reviewer):
+    records = [ready_record("r1", "b1"), ready_record("r2", "b2")]
+    records[0].update(speaker="Sealed answer", second_opinion={"speaker": {"first_reviewer": "alice", "done": False}})
+    connection = sqlite3.connect(":memory:")
+    connection.execute("CREATE TABLE corpus_records(record_id TEXT PRIMARY KEY, ordinal INTEGER)")
+    corpus_queue_projection.initialize(connection)
+    corpus_queue_projection.update_rows(connection, list(enumerate(records)))
+    token = current_reviewer.set(reviewer)
+    try:
+        all_values = corpus_queue_projection.facets(connection)
+        requested = ["speaker", "speaker", "unknown'field"]
+        expected = {field: values for field, values in all_values.items() if field in requested}
+        fetched = []
+
+        class CountingCursor:
+            def __init__(self, cursor):
+                self.cursor = cursor
+
+            def fetchall(self):
+                rows = self.cursor.fetchall()
+                fetched.extend(rows)
+                return rows
+
+        class CountingConnection:
+            def __init__(self, connection):
+                self.connection = connection
+
+            def execute(self, sql, parameters):
+                return CountingCursor(self.connection.execute(sql, parameters))
+
+        actual = corpus_queue_projection.facets(CountingConnection(connection), requested)
+        assert actual == expected
+        assert len(fetched) == sum(len(values) for values in expected.values())
+        assert all(field == "speaker" for field, _ in fetched)
+        assert ("Sealed answer" in actual.get("speaker", [])) == (reviewer in {"", "alice"})
+    finally:
+        current_reviewer.reset(token)
+        connection.close()
 
 
 def test_live_cursors_survive_edits_and_reject_topology_or_context_changes(corpus):

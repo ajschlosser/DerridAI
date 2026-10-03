@@ -346,23 +346,28 @@ def build_aggregates(connection: sqlite3.Connection, running: bool) -> dict[str,
 
 def facets(connection: sqlite3.Connection, fields: list[str] | None = None) -> dict[str, list[str]]:
     reviewer = str(current_reviewer.get() or "")
+    selected_fields = list(dict.fromkeys(fields or []))
+    field_filter = f" AND field IN ({','.join('?' for _ in selected_fields)})" if selected_fields else ""
     if not reviewer:
-        rows = connection.execute("SELECT field,value FROM review_facet_totals WHERE scope='' AND n>0").fetchall()
+        rows = connection.execute(
+            f"SELECT field,value FROM review_facet_totals WHERE scope='' AND n>0{field_filter}",
+            selected_fields,
+        ).fetchall()
     else:
         scope = f"user:{reviewer}"
-        rows = connection.execute("""
+        source_field_filter = field_filter.replace("field IN", "f.field IN")
+        rows = connection.execute(f"""
             SELECT field,value FROM (
-                SELECT field,value,n FROM review_facet_totals WHERE scope='*'
-                UNION ALL SELECT field,value,n FROM review_facet_totals WHERE scope=?
+                SELECT field,value,n FROM review_facet_totals WHERE scope='*'{field_filter}
+                UNION ALL SELECT field,value,n FROM review_facet_totals WHERE scope=?{field_filter}
                 UNION ALL SELECT f.field,f.value,-1 FROM review_facets f
                     JOIN review_search s ON s.record_id=f.record_id AND s.scope=?
-                    WHERE f.scope='*'
+                    WHERE f.scope='*'{source_field_filter}
             ) GROUP BY field,value HAVING SUM(n)>0
-        """, (scope, scope)).fetchall()
+        """, (*selected_fields, scope, *selected_fields, scope, *selected_fields)).fetchall()
     result: dict[str, list[str]] = {}
     for field, value in rows:
-        if not fields or field in fields:
-            result.setdefault(field, []).append(value)
+        result.setdefault(field, []).append(value)
     return {field: sorted(values, key=str.casefold) for field, values in result.items()}
 
 

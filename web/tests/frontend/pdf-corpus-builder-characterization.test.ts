@@ -108,7 +108,7 @@ const defaultSchema = {
   fields: [],
 };
 
-async function mountBuilder(query = "", renderManifest = false) {
+async function mountBuilder(query = "", renderManifest = false, renderReview = false) {
   const pinia = createPinia();
   setActivePinia(pinia);
   useI18nStore().dictionary = {};
@@ -128,7 +128,12 @@ async function mountBuilder(query = "", renderManifest = false) {
       plugins: [pinia, router],
       stubs: renderManifest
         ? { CorpusBuildWorkspace: { template: '<div><slot name="manifest" /></div>' } }
-        : {},
+        : renderReview
+          ? {
+              CorpusReviewWorkspace: { template: '<div><slot name="inspector" /></div>' },
+              CorpusReviewInspector: { template: "<div><slot /></div>" },
+            }
+          : {},
     },
   });
   await flushPromises();
@@ -304,6 +309,74 @@ describe("PdfCorpusBuilder characterization", () => {
       wrapper.unmount();
     });
 
+    it("defers autocomplete outside Review and loads when the metadata inspector becomes visible", async () => {
+      const wrapper = await mountBuilder("?workspace=build&build=build-1");
+      expect(corpusReviewReads.metadataFacets).not.toHaveBeenCalled();
+      wrapper
+        .findComponent({ name: "CorpusBuilderWorkspaceHeader" })
+        .vm.$emit("workspace", "review");
+      await flushPromises();
+      expect(corpusReviewReads.metadataFacets).toHaveBeenCalledTimes(1);
+      wrapper.unmount();
+    });
+
+    it("keeps autocomplete available for the bulk editor when the metadata inspector is hidden", async () => {
+      const wrapper = await mountBuilder("?workspace=review&build=build-1");
+      const exposed = wrapper.vm as unknown as {
+        reviewInspectorTab: string;
+        bulkMetadataOpen: boolean;
+        metadataFacetsActive: boolean;
+      };
+      exposed.reviewInspectorTab = "evidence";
+      await flushPromises();
+      expect(exposed.metadataFacetsActive).toBe(false);
+      exposed.bulkMetadataOpen = true;
+      await flushPromises();
+      expect(exposed.metadataFacetsActive).toBe(true);
+      exposed.bulkMetadataOpen = false;
+      await flushPromises();
+      expect(exposed.metadataFacetsActive).toBe(false);
+      wrapper.unmount();
+    });
+
+    it("enables metadata assistance only for the visible inspector", async () => {
+      const wrapper = await mountBuilder("?workspace=review&build=build-1", false, true);
+      const exposed = wrapper.vm as unknown as {
+        reviewInspectorTab: string;
+        reviewWorkspaceMode: string;
+      };
+      exposed.reviewWorkspaceMode = "record";
+      exposed.reviewInspectorTab = "evidence";
+      await flushPromises();
+      const panel = wrapper.findComponent({ name: "CorpusMetadataResolutionPanel" });
+      expect(panel.props("active")).toBe(false);
+      exposed.reviewInspectorTab = "metadata";
+      await flushPromises();
+      expect(panel.props("active")).toBe(true);
+      exposed.reviewInspectorTab = "evidence";
+      await flushPromises();
+      expect(panel.props("active")).toBe(false);
+      expect(wrapper.findComponent({ name: "CorpusMetadataResolutionPanel" }).vm).toBe(panel.vm);
+      wrapper.unmount();
+    });
+
+    it("opens different Records without posting viewed activity", async () => {
+      const wrapper = await mountBuilder("?workspace=review&build=build-1");
+      const exposed = wrapper.vm as unknown as {
+        selectedRecord: typeof reviewRecord | null;
+        reviewRecords: { selectRecord: (record: typeof reviewRecord) => Promise<void> };
+      };
+      expect(exposed.selectedRecord?.record_id).toBe("record-1");
+      await exposed.reviewRecords.selectRecord({ ...reviewRecord, record_id: "record-2" });
+      await flushPromises();
+      expect(exposed.selectedRecord?.record_id).toBe("record-2");
+      await exposed.reviewRecords.selectRecord(reviewRecord);
+      await flushPromises();
+      expect(exposed.selectedRecord?.record_id).toBe("record-1");
+      expect(pdfCorpusApi.markViewed).not.toHaveBeenCalled();
+      wrapper.unmount();
+    });
+
     it("preserves the active inspector, evidence field and source page during refresh", async () => {
       const wrapper = await mountBuilder("?workspace=review&build=build-1");
       const exposed = wrapper.vm as unknown as {
@@ -319,6 +392,7 @@ describe("PdfCorpusBuilder characterization", () => {
       await flushPromises();
       const sourceReads = pdfCorpusApi.blocks.mock.calls.length;
       const viewed = pdfCorpusApi.markViewed.mock.calls.length;
+      expect(viewed).toBe(0);
       let release!: (records: unknown[]) => void;
       corpusReviewReads.records.mockImplementationOnce(
         () => new Promise((resolve) => (release = resolve)),

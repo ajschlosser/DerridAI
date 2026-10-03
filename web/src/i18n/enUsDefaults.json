@@ -2558,7 +2558,7 @@
   "pdf_corpus.metadata_enrichment_in_progress": "Metadata enrichment in progress",
   "pdf_corpus.enrichment_pass_number": "Pass {pass}",
   "pdf_corpus.default_model": "default model",
-  "pdf_corpus.record_activity_summary": "Viewed {views} · human reviews {human} · LLM reviews {llm} · enrichment passes {passes}",
+  "pdf_corpus.record_activity_summary": "Human reviews {human} · LLM reviews {llm} · enrichment passes {passes}",
   "pdf_corpus.change_dispute_values": "kept “{existing}”; the pass proposed “{proposed}”.",
   "pdf_corpus.add_metadata_section": "Add more details",
   "pdf_corpus.add_metadata_help": "These fields are empty on this record. Fill in any that apply, such as a quoted speaker.",

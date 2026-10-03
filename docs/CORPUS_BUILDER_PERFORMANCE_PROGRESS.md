@@ -22,10 +22,10 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 
 ## Baseline and branch
 
-- Current continuation branch: `ajschlosser-corpus-builder-performance-a2f`; merged #448 used `ajschlosser-corpus-builder-performance-b75`.
-- Continuation baseline: merged #448 at `1619f03f`, including optimistic automatic validation and review-safe manager handoffs. Earlier checkpoint descriptions below retain their historical validation scope.
+- Current continuation branch: `ajschlosser-corpus-builder-performance-fce`; merged #453 used `ajschlosser-corpus-builder-performance-a2f`.
+- Continuation baseline: merged #453 at `9b477ff5`, including transactional initial handoffs and batched enrichment queue setup. Earlier checkpoint descriptions below retain their historical validation scope.
 - Integrated merged #427 at `c8e671cd` before the scheduling continuation; local performance and refresh changes reapplied without conflicts.
-- Working scope: transactional initial family checkpoints/completions, documentary freshness checks, and batched initial enrichment queue setup. Earlier preparation readiness, broader caching, end-to-end contention measurements, and evaluated review assistance remain planned.
+- Working scope: retire automatic Record-open bookkeeping without losing historical activity or meaningful review events. Hidden optional work, earlier preparation readiness, broader caching, end-to-end contention measurements, and evaluated review assistance remain planned.
 - No 50% improvement is claimed. Live-model preparation and human review studies have not run.
 
 ## Checkpoints
@@ -50,8 +50,8 @@ Related contract: [implementation plan](CORPUS_BUILDER_PERFORMANCE_PLAN.md).
 | Document annotation context            | Merged #444                 | Exact transactional documentary epochs, stale-snapshot rejection, bounded metadata-hint checks           |
 | Optimistic automatic validation        | Merged #448                 | Computation outside repository/writer locks; conflict retries preserve current Records and topology      |
 | Review-safe validation handoff         | Merged #448                 | Manager review overlaps validation; guarded summary handoff and consistent final-phase readiness         |
-| Transactional initial handoffs         | Local continuation          | Initial checkpoints/completions merge current selected rows; stale context and no-op writes are rejected |
-| Batched initial enrichment queue setup | Local continuation          | One changed-row batch, review-safe optimistic retries, cancellation/settle preservation; timings below   |
+| Transactional initial handoffs         | Merged #453                 | Initial checkpoints/completions merge current selected rows; stale context and no-op writes are rejected |
+| Batched initial enrichment queue setup | Merged #453                 | One changed-row batch, review-safe optimistic retries, cancellation/settle preservation; timings below   |
 | Evaluated learning / review assistance | Pending                     | Requires held-out evaluation                                                                             |
 
 ## Validation and measurements
@@ -63,6 +63,29 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 1. Establish isolated real-source and end-to-end timing baselines, including browser/save tail latency, before claiming progress toward 50%.
 2. Extend exact reuse to other computational stages and refine consumed-dependency scopes. Record-local source lookup, bounded in-flight sharing, and materialized family checking are implemented below; real-source/cold-load/contention validation remains outstanding.
 3. Evaluate earlier readiness, scheduling, and review assistance separately from repository queue improvements.
+
+## Mutation-free Record navigation continuation (2026-10-03)
+
+- Removed the automatic `markViewed` POST when activating a different Record. Navigation no longer writes a view counter, queues exemplar work, or invalidates derived state through that bookkeeping path. Meaningful review/save events are unchanged.
+- Retained the legacy POST route and client method for compatibility, marked them deprecated, and made the manager operation a selected-Record read returning existing activity. Historical counts and timestamps remain intact; unknown Records still fail visibly. The ordinary activity summary now shows human reviews, LLM reviews, and enrichment passes, with matching English/French placeholders.
+- Fifteen review-decision regressions passed, including repeated compatibility calls that preserve historical activity and reject canonical writes, while existing single-row review decisions remain functional. Four locale regressions and touched-file Ruff passed. Frontend navigation/refresh characterization requires zero viewed calls; application typecheck and touched-file ESLint/Prettier passed after restoring missing frontend dependencies. Browser/live contention measurements have not run.
+- End-to-end latency attribution remains unmeasured. Hidden precedent assistance, source-block/facet demand gates, advanced-draft work, per-Record request sharing, and storage read/write decomposition are still outstanding. This increment does not claim lock-free reads, earlier readiness, or a percentage speedup.
+
+## Demand-gated metadata precedents continuation (2026-10-03)
+
+- The kept-mounted Metadata inspector now declares whether it is actually visible in Review. Its kept-precedent batch read waits for demand; open per-field disclosures also defer new requests while hidden, including when selection changes. Other callers retain their default active behavior. Editors remain mounted and dirty-state reporting is preserved.
+- Successfully loaded assistance is reused across hide/show and same-revision polling. Build, Record, or revision changes reset the assistance context. Hiding, changing context, or unmounting invalidates in-flight response installation; failures for the current visible context produce an alert instead of silently becoming an empty precedent list. This is response guarding, not cancellation of already-dispatched backend/provider work.
+- Fifty-two related frontend tests passed across five suites, covering inspector visibility wiring, hidden startup, reveal, loaded-context reuse, hidden Record/revision changes, retained editor instances/dirty state, late responses, visible failures, and open field disclosures. Application/test typechecks, touched-file ESLint/Prettier, and patch whitespace checks passed. Browser acceptance has not run. Source-block reads, autocomplete facets, advanced JSON/draft storage, request coalescing, and explicit backend cancellation remain separate follow-ups. No live/browser latency improvement is claimed.
+
+## Demand-gated autocomplete facets continuation (2026-10-03)
+
+- Queue refreshes no longer dispatch autocomplete facet reads in Corpus Builder unless a metadata inspector, bulk editor, or focus-review metadata consumer is visible. Loaded values survive hide/show within the same context; queue-generation changes and canonical mutation hints still invalidate them. Hidden invalidations defer the replacement read until demand returns.
+- Hiding cancels the client facet request and prevents late responses from installing values. Build/reviewer resets clear observed values as well as pending requests, so the preceding reviewer's autocomplete cannot survive a context reset. Current-request failures retain the existing visible error path. Client cancellation does not guarantee termination of server work already underway.
+- Focus review now passes its actual Metadata-tab visibility to the kept-mounted precedent editor; the underlying workspace suspends its own precedent consumer while the focus dialog is open. This closes the same hidden-assistance path in that compatibility surface without discarding its drafts.
+- Optional field subsets are now parameter-bound SQL predicates in every reviewer-aware facet branch rather than filtered after all rows reach Python. Duplicate names and unknown names retain existing semantics; blind-review subtraction still applies before presenting results. Corpus Builder still requests the whole build-wide field set when demanded; field-scoped UI requests and finer-grained facet invalidation are not implemented.
+- Added coverage for hidden startup, reveal/reuse, hidden generation invalidation, request cancellation, late responses, reviewer reset, failure reporting, workspace visibility, and the bulk-editor consumer. Source-block gating and lazy advanced JSON/draft storage remain outstanding; no live/browser latency or percentage improvement is claimed.
+- The final five-suite frontend run passed 94 tests, including focus review; application/test typechecks and touched-file ESLint passed. Four in-memory SQL regressions passed, using actual projection initialization and reviewer-specific row derivation, with fetched-row counts proving that unrequested fields do not reach Python. Touched Python Ruff passed. Broader disk-backed queue runs were stopped after stalls; a 30-second stack dump in the narrowed rerun showed existing projection schema initialization during fixture `save_records`, before the selected test exercised facet reads. That broader validation remains incomplete, and no browser acceptance result is claimed.
+- PR preparation subsequently completed the repository preflight against current `origin/master`: **2,169 backend tests passed, 18 skipped**, **15 REST/GraphQL contracts passed**, and frontend selection passed **83 directly selected** and **325 related** test executions (overlapping, not additive). Backend lint/mypy, Python syntax, frontend lint, application/test typechecks, changed-file formatting, and the production app build passed. The first preflight used an incorrectly quoted Windows pytest temporary path and failed from malformed/overlong paths; a correctly quoted short temporary path resolved those failures. This supersedes the earlier incomplete disk-backed reruns, but browser/Storybook/Docker acceptance and live latency measurements remain unrun.
 
 ## Batched initial enrichment queue setup continuation (2026-10-03)
 
