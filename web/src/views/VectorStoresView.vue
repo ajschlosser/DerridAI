@@ -5,6 +5,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
 import { chromaApi } from "../api/chroma";
+import { isAbortError } from "../api/graphql/client";
+import { createLatestRequest } from "../api/graphql/latestRequest";
 import { systemApi, type ProviderProfile } from "../api/system";
 import { vectorBrowseReads, type VectorBrowseRow } from "../features/vector-stores/api/browseReads";
 import { useAuthStore } from "../stores/auth";
@@ -101,7 +103,20 @@ const storeWork = ref(String(workspace.storeWork || ""));
 const searchQuery = ref(String(workspace.storeQuery || ""));
 const searchMode = ref(String(workspace.storeSearchMode || "hybrid"));
 const searchResults = ref<VectorSearchResult[]>([]);
-const searching = ref(false);
+type RegionPhase = "idle" | "pending" | "refreshing" | "ready" | "error" | "stale";
+type SearchIdentity = { collection: string; query: string; mode: string };
+const browseRequests = createLatestRequest();
+const searchRequests = createLatestRequest();
+const worksPhase = ref<RegionPhase>("idle");
+const worksError = ref("");
+const recordsPhase = ref<RegionPhase>("idle");
+const recordsError = ref("");
+const searchPhase = ref<RegionPhase>("idle");
+const searchError = ref("");
+const shownSearch = ref<SearchIdentity | null>(null);
+const inflightSearch = ref<SearchIdentity | null>(null);
+let shownWorksCollection = "";
+let shownRecordsIdentity = "";
 const role = ref("general");
 const languageCodes = ref<string[]>([]);
 const embeddingProvider = ref("ollama");
@@ -240,9 +255,7 @@ watch(
       hasCollections.value = false;
       collections.value = [];
       activeName.value = "";
-      records.value = [];
-      works.value = [];
-      searchResults.value = [];
+      clearBrowseAndSearch();
     }
   },
   { immediate: true },
@@ -256,9 +269,7 @@ watch(
     health.value = null;
     providerProfiles.value = [];
     error.value = "";
-    records.value = [];
-    works.value = [];
-    searchResults.value = [];
+    clearBrowseAndSearch();
   },
   { flush: "sync" },
 );
@@ -286,6 +297,7 @@ async function applyStores(stores: VectorCollection[]) {
   skipDetails = false;
   error.value = "";
   try {
+    const previousName = activeName.value;
     const previous = current.value;
     const preserveSettings =
       previous &&
@@ -303,6 +315,7 @@ async function applyStores(stores: VectorCollection[]) {
       activeName.value = String(workspace.activeStore || corpusStores[0]?.name || "");
     if (activeName.value && !corpusStores.some((store) => store.name === activeName.value))
       activeName.value = corpusStores[0]?.name || "";
+    if (activeName.value !== previousName) clearBrowseAndSearch();
     workspace.stores = corpusStores;
     persistWorkspace();
     pendingCount.value = runtime.pendingUpsertRows?.().length || 0;
@@ -332,29 +345,115 @@ async function applyStores(stores: VectorCollection[]) {
   }
 }
 
+function recordsIdentity() {
+  return JSON.stringify([activeName.value, storeWork.value, storePage.value]);
+}
+function recordScope(identity: string) {
+  if (!identity) return "";
+  const [collection, work] = JSON.parse(identity) as [string, string, number];
+  return `${collection}\0${work}`;
+}
+function searchKey(identity: SearchIdentity) {
+  return JSON.stringify([identity.collection, identity.query, identity.mode]);
+}
+const searchResultsArePrevious = computed(
+  () =>
+    Boolean(shownSearch.value) &&
+    Boolean(inflightSearch.value) &&
+    searchKey(shownSearch.value as SearchIdentity) !==
+      searchKey(inflightSearch.value as SearchIdentity),
+);
+function clearBrowseAndSearch() {
+  browseRequests.cancel();
+  searchRequests.cancel();
+  works.value = [];
+  records.value = [];
+  recordCount.value = 0;
+  shownWorksCollection = "";
+  shownRecordsIdentity = "";
+  worksPhase.value = "idle";
+  recordsPhase.value = "idle";
+  worksError.value = "";
+  recordsError.value = "";
+  searchResults.value = [];
+  shownSearch.value = null;
+  inflightSearch.value = null;
+  searchPhase.value = "idle";
+  searchError.value = "";
+}
 async function loadData() {
   if (!activeName.value) {
+    clearBrowseAndSearch();
+    return;
+  }
+  const collection = activeName.value;
+  const includeRecords = browseMode.value === "records";
+  const nextRecordsIdentity = recordsIdentity();
+  const retainedWorks =
+    shownWorksCollection === collection &&
+    (worksPhase.value === "ready" || worksPhase.value === "stale");
+  const retainedRecords =
+    includeRecords &&
+    shownRecordsIdentity === nextRecordsIdentity &&
+    (recordsPhase.value === "ready" || recordsPhase.value === "stale");
+  if (shownWorksCollection !== collection) {
     works.value = [];
     records.value = [];
     recordCount.value = 0;
-    return;
+    shownRecordsIdentity = "";
+    recordsPhase.value = "idle";
+    recordsError.value = "";
+    worksPhase.value = "pending";
+  } else worksPhase.value = retainedWorks ? "refreshing" : "pending";
+  worksError.value = "";
+  if (includeRecords) {
+    if (shownRecordsIdentity !== nextRecordsIdentity) {
+      records.value = [];
+      if (recordScope(shownRecordsIdentity) !== recordScope(nextRecordsIdentity))
+        recordCount.value = 0;
+      recordsPhase.value = "pending";
+    } else recordsPhase.value = retainedRecords ? "refreshing" : "pending";
+    recordsError.value = "";
   }
-  const includeRecords = browseMode.value === "records";
+  const ticket = browseRequests.start();
   try {
     const limit = Number(workspace.storePageSize) || 50;
-    const result = await vectorBrowseReads.browse(activeName.value, {
+    const result = await vectorBrowseReads.browse(collection, {
       includeRecords,
       offset: Math.max(0, (storePage.value - 1) * limit),
       limit,
       work: storeWork.value || undefined,
+      signal: ticket.signal,
     });
+    if (!ticket.current()) return;
     works.value = result.works;
-    if (includeRecords && result.page) {
-      records.value = result.page.rows;
-      recordCount.value = result.page.total;
+    shownWorksCollection = collection;
+    worksPhase.value = "ready";
+    worksError.value = "";
+    if (includeRecords) {
+      records.value = result.page?.rows || [];
+      recordCount.value = result.page?.total || 0;
+      shownRecordsIdentity = nextRecordsIdentity;
+      recordsPhase.value = "ready";
+      recordsError.value = "";
     }
   } catch (exc) {
-    toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+    if (!ticket.current() || isAbortError(exc)) return;
+    const message = exc instanceof Error ? exc.message : String(exc);
+    if (retainedWorks) worksPhase.value = "stale";
+    else {
+      works.value = [];
+      worksPhase.value = "error";
+    }
+    worksError.value = message;
+    if (includeRecords) {
+      if (retainedRecords) recordsPhase.value = "stale";
+      else {
+        records.value = [];
+        recordsPhase.value = "error";
+      }
+      recordsError.value = message;
+    }
   }
 }
 
@@ -404,12 +503,12 @@ async function applyConnection(body: ChromaConnectionUpdate) {
 }
 
 function selectCollection(name: string) {
+  if (name !== activeName.value) clearBrowseAndSearch();
   activeName.value = name;
   tab.value = "overview";
   browseMode.value = "works";
   storePage.value = 1;
   storeWork.value = "";
-  searchResults.value = [];
   persistWorkspace();
   void load({ details: false });
 }
@@ -440,21 +539,59 @@ function openWork(work: string) {
 }
 
 async function runSearch() {
-  if (!activeName.value || !searchQuery.value.trim() || semanticUnavailable.value) return;
-  searching.value = true;
-  persistWorkspace();
-  try {
-    const payload = await chromaApi.search(activeName.value, {
-      query: searchQuery.value.trim(),
-      mode: searchMode.value,
-      n_results: 30,
-    });
-    searchResults.value = payload.results || [];
-  } catch (exc) {
-    toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
-  } finally {
-    searching.value = false;
+  const query = searchQuery.value.trim();
+  if (!activeName.value || !query || semanticUnavailable.value) return;
+  const identity: SearchIdentity = {
+    collection: activeName.value,
+    query,
+    mode: searchMode.value,
+  };
+  const same =
+    Boolean(shownSearch.value) &&
+    searchKey(shownSearch.value as SearchIdentity) === searchKey(identity) &&
+    (searchPhase.value === "ready" || searchPhase.value === "stale");
+  if (shownSearch.value && shownSearch.value.collection !== identity.collection) {
+    searchResults.value = [];
+    shownSearch.value = null;
   }
+  inflightSearch.value = identity;
+  searchPhase.value = same ? "refreshing" : "pending";
+  searchError.value = "";
+  persistWorkspace();
+  const ticket = searchRequests.start();
+  try {
+    const payload = await chromaApi.search(
+      identity.collection,
+      { query: identity.query, mode: identity.mode, n_results: 30 },
+      ticket.signal,
+    );
+    if (!ticket.current()) return;
+    searchResults.value = payload.results || [];
+    shownSearch.value = identity;
+    inflightSearch.value = null;
+    searchPhase.value = "ready";
+    searchError.value = "";
+  } catch (exc) {
+    if (!ticket.current() || isAbortError(exc)) return;
+    searchError.value = exc instanceof Error ? exc.message : String(exc);
+    if (same) searchPhase.value = "stale";
+    else if (shownSearch.value?.collection === identity.collection) searchPhase.value = "error";
+    else {
+      searchResults.value = [];
+      shownSearch.value = null;
+      searchPhase.value = "error";
+    }
+  }
+}
+function clearSearch() {
+  searchRequests.cancel();
+  searchQuery.value = "";
+  searchResults.value = [];
+  shownSearch.value = null;
+  inflightSearch.value = null;
+  searchPhase.value = "idle";
+  searchError.value = "";
+  persistWorkspace();
 }
 
 async function saveLanguages() {
@@ -594,6 +731,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.clearTimeout(filterTimer);
   window.removeEventListener("derridai:vector-stores-changed", onStoresChanged);
+  browseRequests.cancel();
+  searchRequests.cancel();
 });
 </script>
 
@@ -786,36 +925,77 @@ onBeforeUnmount(() => {
                 role="tabpanel"
                 aria-labelledby="vector-browse-tab-works"
                 class="db-work-grid"
+                :aria-busy="worksPhase === 'pending' || worksPhase === 'refreshing'"
               >
-                <button
-                  v-for="item in works"
-                  :key="item.work"
-                  type="button"
-                  class="db-work-card"
-                  @click="openWork(item.work)"
+                <UiLoadingState
+                  v-if="worksPhase === 'pending'"
+                  :label="i18n.t('vector.browse_loading')"
+                  variant="skeleton"
+                />
+                <div
+                  v-else-if="worksPhase === 'error'"
+                  id="vector-works-status"
+                  class="info error"
+                  role="alert"
                 >
-                  <span
-                    ><b>{{ item.work }}</b
-                    ><small>{{ i18n.t("vector.open_work_records") }}</small></span
-                  ><strong>{{
-                    item.count == null ? "—" : Number(item.count).toLocaleString(i18n.locale)
-                  }}</strong>
-                </button>
-                <p v-if="!works.length" class="note">{{ i18n.t("research.no_work_metadata") }}</p>
+                  <p>{{ i18n.tf("vector.browse_failed", { message: worksError }) }}</p>
+                  <UiButton :label="i18n.t('ui.retry')" @click="loadData()" />
+                </div>
+                <template v-else>
+                  <UiLoadingState
+                    v-if="worksPhase === 'refreshing'"
+                    variant="inline"
+                    :label="i18n.t('loading.updating')"
+                  />
+                  <div
+                    v-if="worksPhase === 'stale'"
+                    id="vector-works-status"
+                    class="info error"
+                    role="alert"
+                  >
+                    <p>{{ i18n.t("loading.stale") }} {{ worksError }}</p>
+                    <UiButton :label="i18n.t('ui.retry')" @click="loadData()" />
+                  </div>
+                  <button
+                    v-for="item in works"
+                    :key="item.work"
+                    type="button"
+                    class="db-work-card"
+                    @click="openWork(item.work)"
+                  >
+                    <span
+                      ><b>{{ item.work }}</b
+                      ><small>{{ i18n.t("vector.open_work_records") }}</small></span
+                    ><strong>{{
+                      item.count == null ? "—" : Number(item.count).toLocaleString(i18n.locale)
+                    }}</strong>
+                  </button>
+                  <p
+                    v-if="(worksPhase === 'ready' || worksPhase === 'stale') && !works.length"
+                    class="note"
+                  >
+                    {{ i18n.t("research.no_work_metadata") }}
+                  </p>
+                </template>
               </div>
               <div
                 v-show="browseMode === 'records'"
                 id="vector-browse-panel-records"
                 role="tabpanel"
                 aria-labelledby="vector-browse-tab-records"
+                :aria-busy="recordsPhase === 'pending' || recordsPhase === 'refreshing'"
               >
                 <div class="toolbar store-record-toolbar">
                   <div>
                     <b>{{ storeWork || i18n.t("research.all_records") }}</b>
                     <div class="note">
-                      {{ recordCount.toLocaleString(i18n.locale) }}
-                      {{ i18n.t("dynamic.records") }} · {{ i18n.t("dynamic.page") }}
-                      {{ storePage }} {{ i18n.t("research.of") }} {{ maxPage }}
+                      {{
+                        recordsPhase === "pending"
+                          ? i18n.t("vector.records_loading")
+                          : `${recordCount.toLocaleString(i18n.locale)} ${i18n.t("dynamic.records")}`
+                      }}
+                      · {{ i18n.t("dynamic.page") }} {{ storePage }} {{ i18n.t("research.of") }}
+                      {{ maxPage }}
                     </div>
                   </div>
                   <div class="tools">
@@ -858,12 +1038,42 @@ onBeforeUnmount(() => {
                     />
                   </div>
                 </div>
+                <UiLoadingState
+                  v-if="recordsPhase === 'pending'"
+                  id="vector-records-status"
+                  :label="i18n.t('vector.records_loading')"
+                  variant="skeleton"
+                />
                 <div
+                  v-else-if="recordsPhase === 'error'"
+                  id="vector-records-status"
+                  class="info error"
+                  role="alert"
+                >
+                  <p>{{ i18n.tf("vector.records_failed", { message: recordsError }) }}</p>
+                  <UiButton :label="i18n.t('ui.retry')" @click="loadData()" />
+                </div>
+                <div
+                  v-else
                   class="tablewrap ui-table-scroll"
                   role="region"
                   :aria-label="i18n.t('dashboard.records')"
                   tabindex="0"
                 >
+                  <UiLoadingState
+                    v-if="recordsPhase === 'refreshing'"
+                    variant="inline"
+                    :label="i18n.t('loading.updating')"
+                  />
+                  <div
+                    v-if="recordsPhase === 'stale'"
+                    id="vector-records-status"
+                    class="info error"
+                    role="alert"
+                  >
+                    <p>{{ i18n.t("loading.stale") }} {{ recordsError }}</p>
+                    <UiButton :label="i18n.t('ui.retry')" @click="loadData()" />
+                  </div>
                   <table class="store-table ui-table">
                     <caption class="sr-only">
                       {{
@@ -892,7 +1102,11 @@ onBeforeUnmount(() => {
                         </td>
                         <td>{{ record.text_preview }}</td>
                       </tr>
-                      <tr v-if="!records.length">
+                      <tr
+                        v-if="
+                          (recordsPhase === 'ready' || recordsPhase === 'stale') && !records.length
+                        "
+                      >
                         <td colspan="4" class="note">{{ i18n.t("vector.no_matching_records") }}</td>
                       </tr>
                     </tbody>
@@ -937,22 +1151,36 @@ onBeforeUnmount(() => {
                   <UiButton
                     type="submit"
                     variant="primary"
-                    :label="searching ? i18n.t('search.searching') : i18n.t('ui.search')"
-                    :disabled="searching || semanticUnavailable"
+                    :label="i18n.t('ui.search')"
+                    :disabled="semanticUnavailable"
                     :disabled-reason="i18n.t('vector.precomputed_search_help')"
                   />
-                  <UiButton
-                    type="button"
-                    :label="i18n.t('ui.clear')"
-                    @click="
-                      searchQuery = '';
-                      searchResults = [];
-                      persistWorkspace();
-                    "
-                  />
+                  <UiButton type="button" :label="i18n.t('ui.clear')" @click="clearSearch" />
                 </div>
               </form>
-              <div class="vector-search-results">
+              <div
+                class="vector-search-results"
+                :aria-busy="searchPhase === 'pending' || searchPhase === 'refreshing'"
+              >
+                <UiLoadingState
+                  v-if="searchPhase === 'pending' || searchPhase === 'refreshing'"
+                  id="vector-search-status"
+                  variant="inline"
+                  :label="i18n.t('search.searching')"
+                />
+                <div
+                  v-if="searchPhase === 'error' || searchPhase === 'stale'"
+                  id="vector-search-status"
+                  class="info error"
+                  role="alert"
+                >
+                  <p>{{ i18n.tf("vector.search_failed", { message: searchError }) }}</p>
+                  <p v-if="searchPhase === 'stale'">{{ i18n.t("loading.stale") }}</p>
+                  <UiButton :label="i18n.t('ui.retry')" @click="runSearch()" />
+                </div>
+                <p v-if="searchResultsArePrevious && shownSearch" class="note">
+                  {{ i18n.tf("vector.search_previous", { query: shownSearch.query }) }}
+                </p>
                 <article
                   v-for="result in searchResults"
                   :key="String(result.id || result.record?._chroma_id || result.record?.record_id)"
@@ -972,8 +1200,11 @@ onBeforeUnmount(() => {
                     <div class="textcell">{{ snippet(result.record?.text) }}</div>
                   </div>
                 </article>
-                <p v-if="!searchResults.length" class="note">
+                <p v-if="searchPhase === 'idle'" class="note">
                   {{ i18n.t("vector.search_results_empty") }}
+                </p>
+                <p v-else-if="searchPhase === 'ready' && !searchResults.length" class="note">
+                  {{ i18n.t("vector.search_no_results") }}
                 </p>
               </div>
             </section>

@@ -6075,6 +6075,8 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'vector.background_build': 'Construction en arrière-plan',
  'vector.background_build_help': 'Après la création, {count} fiches sélectionnées seront placées dans une seule '
                                  'construction serveur en arrière-plan. Vous pouvez continuer à utiliser DerridAI.',
+ 'vector.browse_failed': 'Les œuvres n’ont pas pu être chargées. {message}',
+ 'vector.browse_loading': 'Chargement des œuvres…',
  'vector.browse_works': 'Parcourir les œuvres',
  'vector.browse_works_help': 'Ouvrez une œuvre pour ne parcourir que ses fiches dans cette collection.',
  'vector.build': 'Construction',
@@ -6313,6 +6315,8 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
                                      'requête n’est pas disponible.',
  'vector.query_embedding': 'Intégration de la requête',
  'vector.record_inspector': 'Inspecteur de fiche',
+ 'vector.records_failed': 'Les fiches n’ont pas pu être chargées. {message}',
+ 'vector.records_loading': 'Chargement des fiches…',
  'vector.retrieval_contract': 'Définir le contrat de recherche',
  'vector.retrieval_contract_help': 'L’identité du modèle d’intégration, la dimension, la métrique de distance et le '
                                    'mode de recherche forment un contrat durable validé avant la création.',
@@ -6327,7 +6331,10 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'vector.role_language_title': 'Rôle et langue',
  'vector.role_primary': 'Principale',
  'vector.running_preflight': 'Prévalidation en cours…',
+ 'vector.search_failed': 'La recherche n’a pas pu être effectuée. {message}',
  'vector.search_method': 'Méthode de recherche',
+ 'vector.search_no_results': 'Aucune fiche ne correspond à cette requête.',
+ 'vector.search_previous': 'Ces résultats correspondent à la requête précédente : {query}',
  'vector.search_results_empty': 'Les résultats de recherche apparaîtront ici.',
  'vector.select_collection': 'Sélectionnez une collection',
  'vector.select_collection_help': 'Choisissez une collection dans la liste pour gérer ses paramètres, synchroniser des '

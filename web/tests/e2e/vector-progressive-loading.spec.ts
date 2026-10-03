@@ -72,6 +72,55 @@ test("collection browsing is usable throughout a five-second health delay", asyn
     contentType: "application/json",
   });
 });
+test("collection contents stay pending until their own browse resolves", async ({ page }) => {
+  await start(page);
+  let release!: () => void;
+  const gate = new Promise<void>((done) => {
+    release = done;
+  });
+  await page.route("**/api/graphql", async (route) => {
+    const body = route.request().postDataJSON() as { operationName?: string } | null;
+    if (body?.operationName === "VectorStoreBrowse") await gate;
+    await route.fallback();
+  });
+  await open(page);
+  await page.locator("#vector-section-tab-data").click();
+  const works = page.locator("#vector-browse-panel-works");
+  await expect(works).toContainText("Loading works");
+  await expect(works).not.toContainText("No work metadata");
+  release();
+  await expect(works).toContainText("No work metadata was found");
+});
+test("retrieval search distinguishes a pending query from the idle prompt", async ({ page }) => {
+  await start(page);
+  let release!: () => void;
+  const gate = new Promise<void>((done) => {
+    release = done;
+  });
+  await page.route("**/api/stores/*/search", async (route) => {
+    await gate;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ results: [] }),
+    });
+  });
+  await open(page);
+  await page.locator("#vector-section-tab-retrieval").click();
+  const results = page.locator(".vector-search-results");
+  await expect(results).toContainText("Search results will appear here.");
+  await page.locator("#vector-store-query").fill("trace");
+  await page
+    .locator("form.vector-search-config")
+    .getByRole("button", { name: "Search", exact: true })
+    .click();
+  await expect(results).toContainText("Searching");
+  await expect(results).not.toContainText("Search results will appear here.");
+  await expect(results).not.toContainText("No records matched this query.");
+  release();
+  await expect(results).toContainText("No records matched this query.");
+  await expect(results).not.toContainText("Search results will appear here.");
+});
 test("provider failure stays local and retry does not reload collections", async ({ page }) => {
   await start(page);
   let offline = true;
