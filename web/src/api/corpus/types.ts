@@ -1129,6 +1129,8 @@ export interface CorpusBuild {
 
 export interface CorpusRecord {
   record_id: string;
+  /** Operational snapshot version, never canonical scholarly metadata. */
+  queue_state_version?: number;
   text: string;
   text_length: number;
   source_document_id?: string;

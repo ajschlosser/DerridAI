@@ -732,6 +732,47 @@ describe("useCorpusReviewRecords", () => {
     });
   });
 
+  it("reuses the saved payload only when queue reconciliation confirms its exact version", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage
+      .mockResolvedValueOnce(page([row("r1", 1, { state_version: 1 })]))
+      .mockResolvedValueOnce(page([row("r1", 2, { state_version: 2 })]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    await state.reviewRecords.refreshRecords();
+    const updated = record("r1", 2, { queue_state_version: 2, text: "Saved correction" });
+    state.reviewRecords.applyRecord(updated);
+    await flushPromises();
+    expect(corpusReviewReads.queuePage).toHaveBeenCalledTimes(2);
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(1);
+    expect(state.selectedRecord.value.text).toBe("Saved correction");
+  });
+
+  it.each([
+    ["newer completion", 2, 3, true],
+    ["unversioned compatibility response", undefined, 2, true],
+    ["optimistic copy of a versioned Record", 2, 2, false],
+  ])(
+    "reloads instead of trusting a %s",
+    async (_name, savedVersion, pageVersion, authoritative) => {
+      const state = setup();
+      corpusReviewReads.queuePage
+        .mockResolvedValueOnce(page([row("r1", 1, { state_version: 1 })]))
+        .mockResolvedValueOnce(page([row("r1", 2, { state_version: pageVersion })]));
+      corpusReviewReads.records
+        .mockResolvedValueOnce([record("r1")])
+        .mockResolvedValueOnce([record("r1", 2, { text: "Current canonical state" })]);
+      await state.reviewRecords.refreshRecords();
+      state.reviewRecords.applyRecord(
+        record("r1", 2, { queue_state_version: savedVersion, text: "Local save result" }),
+        authoritative,
+      );
+      if (!authoritative) await state.reviewRecords.refreshRecords();
+      await flushPromises();
+      expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+      expect(state.selectedRecord.value.text).toBe("Current canonical state");
+    },
+  );
+
   it("uses live cursors sequentially, actual offsets, and drops cursors on filter changes", async () => {
     const state = setup();
     corpusReviewReads.queuePage

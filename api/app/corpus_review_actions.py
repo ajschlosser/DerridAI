@@ -1195,7 +1195,7 @@ class ReviewActionsMixin:
         deferred: list[str] | None = None,
     ) -> dict[str, Any]:
         """Settle disputes and adjudication memory for decisions that are already persisted."""
-        current_record = self.repo.get_record(build_id, record_id)
+        current_record = self.repo.get_record(build_id, record_id, include_queue_version=True)
         previous_record = json.loads(json.dumps(current_record))
         warnings: list[str] = []
         if decision == "value":
@@ -1255,7 +1255,7 @@ class ReviewActionsMixin:
         record: dict[str, Any] | None = None,
         build: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        record = record if record is not None else self.repo.get_record(build_id, record_id)
+        record = record if record is not None else self.repo.get_record(build_id, record_id, include_queue_version=True)
         build = build if build is not None else self.repo.get_build(build_id)
         _decorate_review_state(record)
         return {

@@ -374,6 +374,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       recordError.value = "";
       requestedRecordId.value = target.record_id;
       cache.set(target.record_id, target);
+      cachedStateVersions.set(target.record_id, target.queue_state_version ?? null);
       if (!ticket.current()) return;
       options.activateRecord(target);
       prefetchNeighbours(target.record_id);
@@ -625,8 +626,17 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     });
     recordGenerations.set(record.record_id, (recordGenerations.get(record.record_id) || 0) + 1);
     remember(record);
+    // Only a canonical response can certify the payload reused after queue reconciliation.
+    cachedStateVersions.set(
+      record.record_id,
+      authoritative ? (record.queue_state_version ?? null) : null,
+    );
     const index = queueRows.value.findIndex((row) => row.record_id === record.record_id);
-    if (index >= 0) queueRows.value.splice(index, 1, queueRowFromRecord(record));
+    if (index >= 0)
+      queueRows.value.splice(index, 1, {
+        ...queueRowFromRecord(record),
+        state_version: authoritative ? (record.queue_state_version ?? null) : null,
+      });
     if (authoritative) {
       invalidateQueue();
       if (reviewHydrated.value) void reconcileQueue();

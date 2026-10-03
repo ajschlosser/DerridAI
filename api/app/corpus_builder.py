@@ -2068,12 +2068,14 @@ class PdfCorpusRepository:
 
     def update_record(
         self, build_id: str, record: dict[str, Any], *, expected_queue_version: int | None = None,
-    ) -> None:
+    ) -> dict[str, Any]:
         """Persist one validated record without rebuilding the whole JSONL file.
 
         The SQLite index is authoritative for interactive reads. JSONL is a
         publication projection and is marked dirty until an explicit projection
         refresh completes, so a process crash cannot make divergence invisible.
+        Return the committed payload with its transaction's operational version;
+        later notifications or writes cannot certify this payload as newer state.
         """
         if "queue_state_version" in record:
             record = dict(record)
@@ -2110,6 +2112,12 @@ class PdfCorpusRepository:
                 )
                 corpus_document_context.ensure(connection)
                 corpus_queue_projection.update_rows(connection, [(int(row[0]), record)])
+                version = connection.execute(
+                    "SELECT state_version FROM review_queue_rows WHERE record_id=?", (record_id,),
+                ).fetchone()
+                if version is None:
+                    raise RuntimeError("Committed Record requires a matching review queue row.")
+                state_version = int(version[0])
                 connection.commit()
             self._remember_fixed_point(payload, self._schema_signature(self._record_schema(build_id)))
             self._invalidate_review_records_cache(build_id)
@@ -2117,6 +2125,7 @@ class PdfCorpusRepository:
         note_resource_changed("corpus_records")
         system_store.mark_semantic_map_dirty(build_id, reason=f"record_updated:{record_id}")
         self._notify_metadata_projection(build_id)
+        return {**record, "queue_state_version": state_version}
 
     def _notify_metadata_projection(self, build_id: str) -> None:
         callback = self._metadata_projection_callback
@@ -2381,9 +2390,9 @@ class PdfCorpusRepository:
             decoded[record_id]["queue_state_version"] = version
         return [decoded.get(record_id) for record_id in requested]
 
-    def get_record(self, build_id: str, record_id: str) -> dict[str, Any]:
+    def get_record(self, build_id: str, record_id: str, *, include_queue_version: bool = False) -> dict[str, Any]:
         """Read one interactive record without parsing the complete corpus."""
-        record = self.get_records(build_id, [str(record_id)])[0]
+        record = self.get_records(build_id, [str(record_id)], include_queue_version=include_queue_version)[0]
         if record is None:
             raise KeyError(record_id)
         return record
@@ -4414,6 +4423,37 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             current_build = self.repo.get_build(build_id)
             current_build["memory_prefill"] = memory_prefill
             self.repo.save_build(current_build)
+        else:
+            # Recheck conserved source coverage, not an old readiness timestamp.
+            # Reviewed text and split/merge identities remain authoritative.
+            sizing_policy = _record_sizing_policy(request, self._profile_for(build_id))
+            validation_records = [
+                {**record, "text_length": len(str(record.get("text") or ""))}
+                for record in records
+            ]
+            topology_validation = _topology_sanity(validation_records, sizing_policy, source_blocks)
+            source_ids = {str(block["block_id"]) for block in source_blocks}
+            unknown_source_ids = sorted({
+                str(block_id)
+                for record in records
+                for block_id in record.get("source_block_ids") or []
+                if str(block_id) not in source_ids
+            })
+            if unknown_source_ids:
+                topology_validation["valid"] = False
+                topology_validation["issues"].append("topology.unknown_source")
+                topology_validation["findings"].append({
+                    "code": "topology.unknown_source", "severity": "error",
+                    "record_id": None, "auto_repairable": False,
+                    "params": {"count": len(unknown_source_ids), "block_ids": unknown_source_ids[:50]},
+                })
+            self._update(
+                build_id,
+                topology_validation=topology_validation,
+                topology_quality=_topology_quality_report(records, source_blocks, sizing_policy, topology_validation),
+                record_count=len(records),
+                text_review_available_at=iso_now() if topology_validation["valid"] else None,
+            )
         records = self._persist_preparation_records(build_id, preparation_base, records)
         preparation_base = json.loads(json.dumps(records))
         guidance = request.get("run_guidance") if isinstance(request.get("run_guidance"), dict) else {}
@@ -5115,7 +5155,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 bool(record.get("metadata_complete"))
             )
             build[field] = max(0, int(build.get(field) or 0) + int(after) - int(before))
-        self.repo.update_record(build_id, record)
+        persisted = self.repo.update_record(build_id, record)
+        record.clear()
+        record.update(persisted)
         running = str(build.get("status") or "") in {"queued", "running"}
         stage = str(build.get("stage") or "")
         automation_running = running and stage in {"enriching", "metadata_retry"}

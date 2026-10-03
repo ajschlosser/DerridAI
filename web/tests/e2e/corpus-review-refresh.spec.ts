@@ -348,8 +348,19 @@ for (const colorScheme of ["light", "dark"] as const) {
     }) => {
       await page.emulateMedia({ colorScheme });
       const original = CORPUS_RECORDS.find((record) => record.review_state === "metadata")!;
-      let record = { ...original };
+      let record = {
+        ...original,
+        queue_state_version: Number(original.record_revision || 1),
+      };
       let savedText = "";
+      let recordReads = 0;
+      let queueReads = 0;
+      page.on("request", (request) => {
+        if (!request.url().endsWith("/api/graphql") || request.method() !== "POST") return;
+        const operation = request.postDataJSON()?.operationName;
+        if (operation === "CorpusReviewRecords") recordReads += 1;
+        if (operation === "CorpusReviewQueue") queueReads += 1;
+      });
       await mockBackend(page, {
         fixtures: {
           [`/api/pdf/corpus-builds/${CORPUS_BUILD_ID}`]: {
@@ -386,6 +397,7 @@ for (const colorScheme of ["light", "dark"] as const) {
             text: savedText,
             text_length: savedText.length,
             record_revision: payload.expected_revision + 1,
+            queue_state_version: record.queue_state_version + 1,
           };
           await route.fulfill({ json: record });
         },
@@ -416,6 +428,13 @@ for (const colorScheme of ["light", "dark"] as const) {
       expect(accessibility.violations, JSON.stringify(accessibility.violations, null, 2)).toEqual(
         [],
       );
+      const readsBeforeSave = recordReads;
+      const queuesBeforeSave = queueReads;
+      const reconciled = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/api/graphql") &&
+          response.request().postDataJSON()?.operationName === "CorpusReviewQueue",
+      );
       await page
         .locator(".record-review-pane")
         .getByRole("button", { name: "Save", exact: true })
@@ -425,6 +444,15 @@ for (const colorScheme of ["light", "dark"] as const) {
         .toBe("A reviewed correction saved during final validation.");
       await expect(editor).toHaveCount(0);
       await expect(reader).toContainText(savedText);
+      await expect.poll(() => queueReads).toBeGreaterThan(queuesBeforeSave);
+      await reconciled;
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      expect(recordReads).toBe(readsBeforeSave);
     });
   }
 }
