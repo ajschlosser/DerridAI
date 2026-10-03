@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { toast } from "../composables/notifications";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { navigateTo } from "../domain/sharedNavigation";
 import { mlaPageSpan } from "../domain/citations";
@@ -297,7 +298,7 @@ async function goSearch() {
       persistPrefs();
       if (runtime.canAccessPage("vector")) {
         toast(i18n.t("search.redirect_database"), { tone: "info" });
-        runtime.openDatabaseCreationFromResearch();
+        openDatabaseCreationFromResearch();
       } else {
         navigateTo("global");
         toast(i18n.t("research.no_database"), {

@@ -37,6 +37,7 @@ import type {
   ResearchWorkspaceSnapshot,
 } from "../types/research";
 import * as runtime from "../runtime/runtime.js";
+import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { followResource } from "../realtime/follow";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 
@@ -641,7 +642,7 @@ onBeforeUnmount(() => {
           : i18n.t('research.empty_state_denied')
       "
       :action-label="canCreateDatabase ? i18n.t('research.empty_state_action') : ''"
-      @action="runtime.openDatabaseCreationFromResearch?.()"
+      @action="openDatabaseCreationFromResearch()"
     />
     <template v-else-if="workspace && config">
       <UiPageHeader

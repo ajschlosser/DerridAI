@@ -23,10 +23,14 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { VueQueryPlugin } from "@tanstack/vue-query";
 import { queryClient } from "../../src/realtime/dataQuery";
 
+const openDatabaseCreation = vi.hoisted(() => vi.fn());
+vi.mock("../../src/domain/databaseCreationRequest", () => ({
+  openDatabaseCreationFromResearch: openDatabaseCreation,
+}));
+
 const runtime = vi.hoisted(() => ({
   getResearchWorkspaceSnapshot: vi.fn(),
   getSearchWorkspaceSnapshot: vi.fn(),
-  openDatabaseCreationFromResearch: vi.fn(),
   notifyToast: vi.fn(),
   updateSearchQuery: vi.fn(),
   getResearchJob: vi.fn(),
@@ -93,9 +97,9 @@ describe("missing corpus database", () => {
 
     expect(wrapper.get(".accessible-empty-state h2").text()).toContain("corpus database");
     expect(runtime.notifyToast).not.toHaveBeenCalled();
-    expect(runtime.openDatabaseCreationFromResearch).not.toHaveBeenCalled();
+    expect(openDatabaseCreation).not.toHaveBeenCalled();
     await wrapper.get(".accessible-empty-state button").trigger("click");
-    expect(runtime.openDatabaseCreationFromResearch).toHaveBeenCalledTimes(1);
+    expect(openDatabaseCreation).toHaveBeenCalledTimes(1);
   });
 
   it("does not offer creation to a researcher without database access", async () => {
@@ -104,7 +108,7 @@ describe("missing corpus database", () => {
 
     expect(wrapper.find(".accessible-empty-state").exists()).toBe(true);
     expect(wrapper.find(".accessible-empty-state button").exists()).toBe(false);
-    expect(runtime.openDatabaseCreationFromResearch).not.toHaveBeenCalled();
+    expect(openDatabaseCreation).not.toHaveBeenCalled();
   });
 
   it("explains Search in place instead of redirecting when nothing is searchable", async () => {
@@ -115,8 +119,8 @@ describe("missing corpus database", () => {
 
     expect(wrapper.find(".accessible-empty-state").exists()).toBe(true);
     expect(runtime.notifyToast).not.toHaveBeenCalled();
-    expect(runtime.openDatabaseCreationFromResearch).not.toHaveBeenCalled();
+    expect(openDatabaseCreation).not.toHaveBeenCalled();
     await wrapper.get(".accessible-empty-state button").trigger("click");
-    expect(runtime.openDatabaseCreationFromResearch).toHaveBeenCalledTimes(1);
+    expect(openDatabaseCreation).toHaveBeenCalledTimes(1);
   });
 });

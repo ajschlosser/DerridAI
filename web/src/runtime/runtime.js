@@ -193,6 +193,7 @@ import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import { touchCorpus } from "../state/workspaceState";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
+import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { relativeTimeLabel } from "../domain/relativeTimeLabel";
 import { createRecordSubsets } from "../domain/recordSubsets";
 
@@ -379,7 +380,7 @@ const {
   label: (...args) => label(...args),
   navigateTo: (...args) => navigateTo(...args),
   openBulkFieldEditor: (...args) => openBulkFieldEditor(...args),
-  openDatabaseCreationFromResearch: (...args) => openDatabaseCreationFromResearch(...args),
+  openDatabaseCreationFromResearch,
   openStoreRecordEditor: (...args) => openStoreRecordEditor(...args),
   openTouchup: (...args) => openTouchup(...args),
   persistPrefs: (...args) => persistPrefs(...args),
@@ -673,7 +674,7 @@ const {
   memoCorpus: (...args) => memoCorpus(...args),
   mountOperationsPanelHost: (...args) => mountOperationsPanelHost(...args),
   navigateTo: (...args) => navigateTo(...args),
-  openDatabaseCreationFromResearch: (...args) => openDatabaseCreationFromResearch(...args),
+  openDatabaseCreationFromResearch,
   persistPrefs: (...args) => persistPrefs(...args),
   pieShareSeries: (...args) => pieShareSeries(...args),
   providerDisplayName: (...args) => providerDisplayName(...args),
@@ -2401,9 +2402,6 @@ const vectorCollectionBridge = createVectorCollectionBridge({
 function notifyVectorStoresChanged() {
   return vectorCollectionBridge.notifyVectorStoresChanged();
 }
-function openDatabaseCreationFromResearch() {
-  return vectorCollectionBridge.openDatabaseCreationFromResearch();
-}
 function openCollectionCreationWizard(options = {}) {
   return vectorCollectionBridge.openCollectionCreationWizard(options);
 }
@@ -3287,7 +3285,6 @@ export {
   registerExternalJob,
   dbUnavailableReason,
   hasCorpusDb,
-  openDatabaseCreationFromResearch,
   notifyVectorStoresChanged,
   openCollectionCreationWizard,
   upsertRows,
