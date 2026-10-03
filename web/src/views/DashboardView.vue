@@ -20,6 +20,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { toast } from "../composables/notifications";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import {
+  canAccessPage,
+  hasCapability,
+  isResearcher as sessionIsResearcher,
+} from "../domain/sharedSession";
+import { syncUrl } from "../domain/sharedNavigation";
+import { formatTimestamp } from "../domain/recordTableHelpers";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { navigateTo } from "../domain/sharedNavigation";
@@ -72,7 +79,7 @@ function metricBodyHtml() {
 
 async function refresh() {
   const state = runtime.state as unknown as Record<string, Any>;
-  isResearcher.value = runtime.isResearcher();
+  isResearcher.value = sessionIsResearcher();
   if (isResearcher.value) {
     try {
       await runtime.refreshStores();
@@ -189,16 +196,16 @@ async function refresh() {
   activeMetricIndex.value = state.dashboardMetricIndex as number;
 
   recent.value = isResearcher.value
-    ? runtime.hasCapability("activity.read")
+    ? hasCapability("activity.read")
       ? [
-          ...(runtime.hasCapability("annotations.read")
+          ...(hasCapability("annotations.read")
             ? ((state.serverAnnotations || []) as Any[]).map((annotation: Any) => ({
                 kind: "annotation",
                 timestamp: annotation.created_at || "",
                 annotation,
               }))
             : []),
-          ...(runtime.hasCapability("rag.jobs.own")
+          ...(hasCapability("rag.jobs.own")
             ? ((state.jobs || []) as Any[])
                 .filter((job: Any) => job.type === "rag")
                 .map((job: Any) => ({
@@ -229,7 +236,7 @@ async function refresh() {
   currentLanguage.value = state.translations?.info?.name || state.translations?.locale || "";
   currentLanguageFlag.value = state.translations?.info?.flag || "🌐";
   latestAnnotation.value =
-    !isResearcher.value || runtime.hasCapability("annotations.read")
+    !isResearcher.value || hasCapability("annotations.read")
       ? runtime.recentAnnotations(1)[0] || null
       : null;
   uiColorTheme.value = state.appConfig?.ui_color_theme || "green";
@@ -273,7 +280,7 @@ function corpusBuildPercent(job: Any) {
 
 async function persistAndRefresh() {
   persistPrefs();
-  runtime.syncUrl({ replace: true });
+  syncUrl({ replace: true });
   await refresh();
 }
 
@@ -296,7 +303,7 @@ async function goSearch() {
     state.globalSearchMode = "database";
     if (!state.activeStore) {
       persistPrefs();
-      if (runtime.canAccessPage("vector")) {
+      if (canAccessPage("vector")) {
         toast(i18n.t("search.redirect_database"), { tone: "info" });
         openDatabaseCreationFromResearch();
       } else {
@@ -870,7 +877,7 @@ onBeforeUnmount(() => {
       </section>
       <section class="dashboard-page-lower">
         <article
-          v-if="isResearcher && runtime.hasCapability('appearance.manage')"
+          v-if="isResearcher && hasCapability('appearance.manage')"
           class="card dashboard-quick-card dashboard-appearance-card"
         >
           <div class="dashboard-card-title">
@@ -1059,9 +1066,7 @@ onBeforeUnmount(() => {
                 (latestAnnotation as Any).annotation.author ||
                 i18n.t("annotations.unknown_author")
               }}</span>
-              <time>{{
-                runtime.formatTimestamp((latestAnnotation as Any).annotation.created_at)
-              }}</time>
+              <time>{{ formatTimestamp((latestAnnotation as Any).annotation.created_at) }}</time>
               <small>{{
                 (latestAnnotation as Any).record.record_id || i18n.t("nav.record")
               }}</small>

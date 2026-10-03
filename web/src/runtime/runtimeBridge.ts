@@ -51,8 +51,6 @@ export const triggerImport = (...args: Parameters<typeof runtime.triggerImport>)
   runtime.triggerImport(...args);
 export const triggerOperations = (...args: Parameters<typeof runtime.triggerOperations>) =>
   runtime.triggerOperations(...args);
-export const formatTimestamp = (...args: Parameters<typeof runtime.formatTimestamp>) =>
-  runtime.formatTimestamp(...args);
 export const refreshStores = (...args: Parameters<typeof runtime.refreshStores>) =>
   runtime.refreshStores(...args);
 export const responseCacheStore = (...args: Parameters<typeof runtime.responseCacheStore>) =>

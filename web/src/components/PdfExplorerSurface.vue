@@ -22,7 +22,7 @@ import { openMessageDialog } from "../composables/messageDialog";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
 import { isEvidenceSelected, reviewKey } from "../domain/evidenceSelection";
-import { navigateTo } from "../domain/sharedNavigation";
+import { navigateTo, syncUrl } from "../domain/sharedNavigation";
 import { fullCitation } from "../domain/citations";
 import { highlight } from "../domain/recordFormatting";
 import AppIcon from "./AppIcon.vue";
@@ -257,7 +257,7 @@ async function setPage(page: Any) {
   state.pdf.extractError = "";
   state.pdf.extractionSource = "";
   await runtime.persistCurrentPdfAsset();
-  runtime.syncUrl({ replace: true });
+  syncUrl({ replace: true });
   await refresh();
 }
 
@@ -405,7 +405,7 @@ watch(
 );
 
 onMounted(async () => {
-  runtime.syncUrl({ replace: true });
+  syncUrl({ replace: true });
   await refresh();
   document.addEventListener("click", onDocumentClick);
   window.addEventListener("derridai:pdf-explorer-refresh", onPdfExplorerRefreshRequested);

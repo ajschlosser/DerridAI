@@ -145,7 +145,6 @@ import { createRecordsWorkspace } from "../domain/recordsWorkspace";
 import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { createWorksWorkspace } from "../domain/worksWorkspace";
 import { createJobsWorkspace } from "../domain/jobsWorkspace";
-import { canAccessView, userHasCapability } from "../domain/pageAccess";
 import { createDashboardRenderer } from "../domain/dashboardRenderer";
 import { createPdfExplorerRenderer } from "../domain/pdfExplorerRenderer";
 import { createJobDialogs } from "../domain/jobDialogs";
@@ -193,6 +192,7 @@ import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import { touchCorpus } from "../state/workspaceState";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
+import { canAccessPage, hasCapability, isResearcher } from "../domain/sharedSession";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { relativeTimeLabel } from "../domain/relativeTimeLabel";
 import { createRecordSubsets } from "../domain/recordSubsets";
@@ -1313,12 +1313,6 @@ function dbUnavailableReason() {
     );
   return "";
 }
-function isResearcher() {
-  return Boolean(state.userContext && state.userContext.role !== "admin");
-}
-function hasCapability(capability) {
-  return userHasCapability(state.userContext, capability);
-}
 function userCapabilities() {
   return {
     viewSharedPages: hasCapability("page.dashboard"),
@@ -1333,9 +1327,6 @@ function userCapabilities() {
 }
 function canUse(feature) {
   return Boolean(userCapabilities()[feature]);
-}
-function canAccessPage(view) {
-  return canAccessView(state.userContext, view);
 }
 function setUserContext(user) {
   const priorId = state.userContext?.id;
