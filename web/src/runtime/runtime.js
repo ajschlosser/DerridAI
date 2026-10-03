@@ -771,7 +771,6 @@ const {
   ragGradeEvidencePayload: (...args) => ragGradeEvidencePayload(...args),
   ragGradeHtml: (...args) => ragGradeHtml(...args),
   refreshJobs: (...args) => refreshJobs(...args),
-  showAppModal: (...args) => showAppModal(...args),
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
 });
