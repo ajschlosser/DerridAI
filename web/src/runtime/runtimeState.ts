@@ -1,9 +1,11 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { bindJobsState } from "../state/jobsState";
 import {
+  annotationsState,
   bindSharedState,
   compareState,
   corpusState,
+  faqState,
   layoutState,
   searchState,
   vectorState,
@@ -26,11 +28,6 @@ export function createRuntimeState() {
     researcherRecordId: "",
     researcherCompareA: "",
     researcherCompareB: "",
-    annotationView: "works",
-    annotationSearch: "",
-    serverAnnotations: [],
-    serverAnnotationsStore: "",
-    annotationsFetchedAt: 0,
     dashboardMetricIndex: 0,
     lastViewedRecord: null,
     foregroundUpsertCancelRequested: false,
@@ -66,9 +63,6 @@ export function createRuntimeState() {
     jobsPollTimer: null,
     foregroundUpsertActive: false,
     warmup: { status: "idle", message: "" },
-    faqSearch: "",
-    faqPage: 1,
-    faqExpanded: {},
     ragConfig: {
       // Empty means "resolve the current system Research assignment". Once a
       // run or rerun pins an immutable pipeline version these fields preserve it.
@@ -179,7 +173,9 @@ export function createRuntimeState() {
   const withSearch = bindSharedState(withCompare, searchState);
   const withWorks = bindSharedState(withSearch, worksState);
   const withCorpus = bindSharedState(withWorks, corpusState);
-  return bindSharedState(withCorpus, layoutState);
+  const withLayout = bindSharedState(withCorpus, layoutState);
+  const withAnnotations = bindSharedState(withLayout, annotationsState);
+  return bindSharedState(withAnnotations, faqState);
 }
 
 export type RuntimeState = ReturnType<typeof createRuntimeState>;

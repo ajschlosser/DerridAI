@@ -2,8 +2,10 @@
 import { toRefs } from "vue";
 import { defineStore } from "pinia";
 import {
+  annotationsState,
   compareState,
   corpusState,
+  faqState,
   layoutState,
   searchState,
   vectorState,
@@ -31,3 +33,11 @@ export const useCorpusStore = defineStore("corpus", () => ({ ...toRefs(corpusSta
 
 /** Shell layout preferences (collapsed sidebar, operation dock position, collapsed panels); persisted by the runtime. */
 export const useLayoutStore = defineStore("layout", () => ({ ...toRefs(layoutState) }));
+
+/** Annotations workspace: view, filter and the annotations fetched from the server. */
+export const useAnnotationsStore = defineStore("annotations", () => ({
+  ...toRefs(annotationsState),
+}));
+
+/** FAQ view: search text, page and expanded entries; persisted by the runtime. */
+export const useFaqStore = defineStore("faq", () => ({ ...toRefs(faqState) }));

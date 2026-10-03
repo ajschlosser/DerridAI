@@ -150,3 +150,25 @@ export function createLayoutState() {
   };
 }
 export const layoutState = shallowReactive(createLayoutState());
+
+/** Annotations workspace: the works/records view, its filter, and the annotations fetched from the server. */
+export function createAnnotationsState() {
+  return {
+    annotationView: "works",
+    annotationSearch: "",
+    serverAnnotations: [] as Loose[],
+    serverAnnotationsStore: "",
+    annotationsFetchedAt: 0,
+  };
+}
+export const annotationsState = shallowReactive(createAnnotationsState());
+
+/** FAQ view: the search text, the page and which entries are expanded. */
+export function createFaqState() {
+  return {
+    faqSearch: "",
+    faqPage: 1,
+    faqExpanded: {} as Record<string, boolean>,
+  };
+}
+export const faqState = shallowReactive(createFaqState());

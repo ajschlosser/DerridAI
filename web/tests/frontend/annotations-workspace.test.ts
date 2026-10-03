@@ -2,11 +2,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAnnotationsWorkspace } from "../../src/domain/annotationsWorkspace";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { annotationsState, createAnnotationsState } from "../../src/state/workspaceState";
 
 vi.mock("../../src/composables/notifications", () => ({ toast: vi.fn() }));
 
 // The modern Annotations Playwright workflow covers rendered interactions; these pin commands and snapshot shape.
 function setup(overrides: Record<string, unknown> = {}) {
+  // The annotations fields are shared module state, so start each test from the defaults.
+  Object.assign(annotationsState, createAnnotationsState());
   const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
   const spies: Record<string, ReturnType<typeof vi.fn>> = {};

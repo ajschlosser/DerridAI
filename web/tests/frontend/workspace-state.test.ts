@@ -15,6 +15,8 @@ import {
 import {
   useCompareStore,
   useCorpusStore,
+  useAnnotationsStore,
+  useFaqStore,
   useLayoutStore,
   useSearchStore,
   useVectorStore,
@@ -189,5 +191,33 @@ describe("shell layout state", () => {
     panels.notes = true;
     expect(layout.collapsedPanels).toBe(panels);
     layoutState.sidebarCollapsed = false;
+  });
+});
+
+describe("annotations and FAQ state", () => {
+  it("keeps the runtime's defaults and shares them with their stores", async () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.annotationView).toBe("works");
+    expect(state.serverAnnotations).toEqual([]);
+    expect(state.annotationsFetchedAt).toBe(0);
+    expect(state.faqPage).toBe(1);
+    expect(state.faqExpanded).toEqual({});
+
+    const faq = useFaqStore();
+    const seen: number[] = [];
+    watch(
+      () => faq.faqPage,
+      (value) => seen.push(value),
+    );
+    state.faqPage = 3;
+    await nextTick();
+    expect(seen).toEqual([3]);
+
+    const annotations = useAnnotationsStore();
+    state.serverAnnotations = [{ id: "a" }];
+    expect(annotations.serverAnnotations).toEqual([{ id: "a" }]);
+    state.faqPage = 1;
+    state.serverAnnotations = [];
   });
 });
