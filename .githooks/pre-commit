@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Copyright 2026 Aaron John Schlosser, PhD.
+# Fast staged-file quality gate. The broader, change-aware regression plan runs pre-push and in CI.
+set -euo pipefail
+
+[ "${DERRIDAI_SKIP_PREFLIGHT:-}" = "1" ] && exit 0
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+mapfile -t FILES < <(git diff --cached --name-only --diff-filter=ACMR)
+[ "${#FILES[@]}" -eq 0 ] && exit 0
+
+format=()
+python_files=()
+frontend=()
+for path in "${FILES[@]}"; do
+  case "$path" in
+    *.md|*.json|*.yml|*.yaml|*.js|*.mjs|*.cjs|*.ts|*.tsx|*.vue|*.css|*.scss|*.html) format+=("$path") ;;
+  esac
+  case "$path" in
+    api/*.py|api/**/*.py|tests/*.py|tests/**/*.py|scripts/*.py|scripts/**/*.py) python_files+=("$path") ;;
+  esac
+  case "$path" in
+    web/src/*.ts|web/src/*.vue|web/src/*.js|web/src/**/*.ts|web/src/**/*.vue|web/src/**/*.js|web/sdk/*.ts|web/sdk/**/*.ts|web/tests/*.ts|web/tests/**/*.ts) frontend+=("${path#web/}") ;;
+  esac
+done
+
+if [ "${#format[@]}" -gt 0 ]; then
+  PRETTIER=web/node_modules/.bin/prettier
+  if [ ! -x "$PRETTIER" ]; then
+    echo "pre-commit: web/node_modules missing; run: cd web && npm ci" >&2
+    exit 1
+  fi
+  "$PRETTIER" --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown "${format[@]}"
+fi
+
+if [ "${#python_files[@]}" -gt 0 ]; then
+  if ! command -v ruff >/dev/null 2>&1; then
+    echo "pre-commit: ruff is missing (expected ruff==0.16.8)" >&2
+    exit 1
+  fi
+  ruff check "${python_files[@]}"
+fi
+
+if [ "${#frontend[@]}" -gt 0 ]; then
+  ESLINT=web/node_modules/.bin/eslint
+  if [ ! -x "$ESLINT" ]; then
+    echo "pre-commit: web/node_modules missing; run: cd web && npm ci" >&2
+    exit 1
+  fi
+  (cd web && ./node_modules/.bin/eslint --max-warnings 0 "${frontend[@]}")
+fi
