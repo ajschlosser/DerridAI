@@ -851,8 +851,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             :title="i18n.t('settings.language_title')"
             :description="i18n.t('settings.language_help')"
             :persistence="persistKind('browser')"
-            status="saved"
-            :status-label="statusLabel('saved')"
+            :status="groupStatus.appearance"
+            :status-label="statusLabel(groupStatus.appearance)"
           >
             <UiField
               :label="i18n.t('settings.interface_language')"
@@ -897,8 +897,17 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               </select>
             </UiField>
             <p class="note">{{ i18n.t("settings.a11y_note") }}</p>
-            <template v-if="isAdmin" #actions>
+            <template #actions>
               <UiButton
+                v-if="canAppearance"
+                variant="primary"
+                icon="check"
+                :label="i18n.t('settings.save_appearance')"
+                :disabled="groupStatus.appearance === 'saving'"
+                @click="saveAppearance"
+              />
+              <UiButton
+                v-if="isAdmin"
                 icon="language"
                 :label="i18n.t('language.manage')"
                 @click="go('/languages')"
