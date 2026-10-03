@@ -29,7 +29,7 @@ from .site_record_profile import (
     celf_conformance,
     normalize_site_record_profile,
 )
-from .site_runtime_cache import ensure_runtime, notice_text
+from .transformers_runtime_cache import ensure_runtime, notice_text
 from .system_store import normalize_locale_code, system_store
 
 SITE_FORMAT = "derridai-static-site-v5"
