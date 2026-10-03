@@ -20,7 +20,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, onMounted, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { LanguageInfo } from "../../api/system";
-import type { SiteExportFormat, SiteRecordProfile, SiteTransformersRuntime } from "../../api/sites";
+import type {
+  SiteExportFormat,
+  SitePublicationEmbedder,
+  SiteRecordProfile,
+  SiteTransformersRuntime,
+  SiteVectorStrategy,
+} from "../../api/sites";
 
 export interface TransformersDownloadProgress {
   file: string;
@@ -36,6 +42,7 @@ const props = defineProps<{
   initialWork?: string;
   languages: LanguageInfo[];
   transformersRuntime?: SiteTransformersRuntime;
+  publicationEmbedder?: SitePublicationEmbedder;
   downloadProgress?: TransformersDownloadProgress | null;
   busy?: boolean;
   error?: string;
@@ -53,6 +60,7 @@ const emit = defineEmits<{
       languages: string[];
       include_transformers: boolean;
       include_vectors: boolean;
+      vector_strategy: SiteVectorStrategy;
       export_format: SiteExportFormat;
       record_profile: SiteRecordProfile;
       provider_proxy_upstream: string | null;
@@ -67,7 +75,7 @@ const title = ref(props.initialWork || "");
 const description = ref("");
 const exportFormat = ref<SiteExportFormat>("two-file");
 const recordProfile = ref<SiteRecordProfile>("complete");
-const includeVectors = ref(true);
+const vectorStrategy = ref<SiteVectorStrategy>("browser-default");
 const providerProxyEnabled = ref(false);
 const providerProxyUpstream = ref("http://localhost:11434/v1");
 const selectedLanguages = ref<string[]>(props.languages.map((item) => item.code));
@@ -140,7 +148,8 @@ function submit() {
     works: [...selected.value],
     languages: [...selectedLanguages.value],
     include_transformers: true,
-    include_vectors: includeVectors.value,
+    include_vectors: vectorStrategy.value !== "browser-build",
+    vector_strategy: vectorStrategy.value,
     export_format: exportFormat.value,
     record_profile: recordProfile.value,
     provider_proxy_upstream:
@@ -312,7 +321,36 @@ onMounted(async () => {
           <legend>{{ i18n.t("site.create_vectors") }}</legend>
           <p class="site-choice-help">{{ i18n.t("site.create_vectors_help") }}</p>
           <label class="site-export-option">
-            <input v-model="includeVectors" type="radio" name="site-vector-profile" :value="true" />
+            <input
+              v-model="vectorStrategy"
+              type="radio"
+              name="site-vector-profile"
+              value="browser-default"
+            />
+            <span>
+              <strong>
+                {{ i18n.t("site.create_vectors_browser_default") }}
+                <span class="site-recommended">{{ i18n.t("site.create_recommended") }}</span>
+              </strong>
+              <small>{{ i18n.t("site.create_vectors_browser_default_help") }}</small>
+              <small v-if="props.publicationEmbedder" class="site-option-meta">
+                {{
+                  i18n.tf("site.create_vectors_browser_default_meta", {
+                    model: props.publicationEmbedder.model,
+                    dimension: props.publicationEmbedder.dimension,
+                    size: formatMegabytes(props.publicationEmbedder.download_bytes),
+                  })
+                }}
+              </small>
+            </span>
+          </label>
+          <label class="site-export-option">
+            <input
+              v-model="vectorStrategy"
+              type="radio"
+              name="site-vector-profile"
+              value="source"
+            />
             <span>
               <strong>{{ i18n.t("site.create_vectors_include") }}</strong>
               <small>{{ i18n.t("site.create_vectors_include_help") }}</small>
@@ -320,10 +358,10 @@ onMounted(async () => {
           </label>
           <label class="site-export-option">
             <input
-              v-model="includeVectors"
+              v-model="vectorStrategy"
               type="radio"
               name="site-vector-profile"
-              :value="false"
+              value="browser-build"
             />
             <span>
               <strong>{{ i18n.t("site.create_vectors_browser") }}</strong>
@@ -643,6 +681,23 @@ onMounted(async () => {
 .site-export-option small {
   color: var(--muted);
   line-height: 1.45;
+}
+
+.site-recommended {
+  display: inline-flex;
+  margin-inline-start: 0.45rem;
+  padding: 0.08rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  vertical-align: middle;
+}
+
+.site-option-meta {
+  margin-top: 0.25rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .site-export-option .site-celf-status {
