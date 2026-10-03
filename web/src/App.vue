@@ -355,7 +355,7 @@ const breadcrumbItems = computed(() => {
   } else if (route.name === "settings-section") {
     items.push({
       label: i18n.t("nav.config", "Settings"),
-      to: breadcrumbDestination("/settings/workspace"),
+      to: breadcrumbDestination("/settings/overview"),
     });
   }
 
