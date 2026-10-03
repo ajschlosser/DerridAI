@@ -62,20 +62,22 @@ function loadProfile(active: LlmLauncherProfile | null) {
 watch(
   current,
   async (request) => {
-    if (request) {
-      profileId.value = request.profileId;
-      runMode.value = request.runMode;
-      running.value = false;
-      loadProfile(request.profiles.find((item) => item.id === request.profileId) ?? null);
+    if (!request) {
+      // Close while the native dialog is still mounted so the browser restores
+      // focus to the opener before Vue removes the inactive host from the DOM.
+      const dialog = dialogRef.value;
+      if (dialog?.open) dialog.close();
+      return;
     }
+
+    profileId.value = request.profileId;
+    runMode.value = request.runMode;
+    running.value = false;
+    loadProfile(request.profiles.find((item) => item.id === request.profileId) ?? null);
+
     await nextTick();
     const dialog = dialogRef.value;
-    if (!dialog) return;
-    if (!request) {
-      if (dialog.open) dialog.close();
-    } else if (!dialog.open) {
-      dialog.showModal();
-    }
+    if (dialog && !dialog.open) dialog.showModal();
   },
   { immediate: true },
 );
@@ -121,6 +123,7 @@ function manageProviders() {
 
 <template>
   <dialog
+    v-if="current"
     ref="dialogRef"
     class="llm-tool-launcher"
     aria-labelledby="llmLauncherTitle"
