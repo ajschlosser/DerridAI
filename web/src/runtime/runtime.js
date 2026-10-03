@@ -1867,15 +1867,7 @@ function renderView() {
   if (state.view !== "home") unmountOperationsPanel();
   if (!canAccessPage(state.view)) state.view = "home";
   syncUrl({ replace: true });
-  const result = null;
-  Promise.resolve(result).finally(() =>
-    requestAnimationFrame(() => {
-      enhanceCollapsibles(main);
-      decorateDisabledControls(main);
-      translateLegacyDom(main);
-    }),
-  );
-  return result;
+  return null;
 }
 
 function searchByMetadata(field, value, { contains = false } = {}) {
@@ -3487,6 +3479,7 @@ export {
   backupContainsCredentials,
   pendingUpsertRows,
   decorateDisabledControls,
+  translateLegacyDom,
   getResearchWorkspaceSnapshot,
   updateResearchConfig,
   removeResearchEvidence,
