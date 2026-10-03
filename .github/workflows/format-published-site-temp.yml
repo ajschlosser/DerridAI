@@ -1,6 +1,7 @@
 name: Temporary published-site formatter
 
 on:
+  pull_request:
   push:
     branches:
       - feature/static-site-vue
