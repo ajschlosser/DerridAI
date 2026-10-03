@@ -30,8 +30,7 @@ flowchart LR
 
     subgraph UI["components/pipelines"]
         Definitions["Definitions + version editor"]
-        Graph["Graph + stage palette
-ports + connections"]
+        Graph["Graph + stage palette<br/>ports + connections"]
         Strategies["Strategy catalogue + config"]
         Executions["Executions + trace inspector"]
         Analysis["Latency + complexity + analysis"]
