@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
+import { navigateTo } from "../domain/sharedNavigation";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { apiRequest } from "../api/http";
 import {
@@ -491,7 +492,7 @@ async function chooseSearch(hit: SettingsSearchHit) {
   }
 }
 function go(path: string, view?: string) {
-  if (view) runtime.navigateView(view);
+  if (view) navigateTo(view);
   else window.dispatchEvent(new CustomEvent("derridai:navigate-native", { detail: { path } }));
 }
 function providerReady(profile: ProviderProfile) {

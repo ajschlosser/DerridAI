@@ -2907,14 +2907,6 @@ function triggerEdit() {
     ? openEditor()
     : toast(tr("runtime.toast.cannot_edit_records"), { tone: "warning" });
 }
-/**
- * Navigate the runtime and, when supplied, preserve an explicit native URL.
- * @param {string} view
- * @param {string} [href=""]
- */
-function navigateView(view, href = "") {
-  return navigateTo(view, { href });
-}
 function closeWorkspaceFile(fileId) {
   return closeFile(fileId);
 }
@@ -3358,7 +3350,6 @@ export {
   pathViewMap,
   bootstrapRuntime,
   renderView,
-  navigateView,
   toggleSidebar,
   activateFile,
   closeWorkspaceFile,

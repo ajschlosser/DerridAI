@@ -40,7 +40,6 @@ const runtime = vi.hoisted(() => ({
     { id: "p1", name: "Local", type: "ollama", model: "gemma", max_concurrent_requests: 1 },
   ]),
   getDefaultProviderProfileId: vi.fn(() => "p1"),
-  navigateView: vi.fn(),
   toggleSidebar: vi.fn(),
   downloadFullBackup: vi.fn(),
   restoreFullBackup: vi.fn(),
@@ -87,6 +86,7 @@ const runtime = vi.hoisted(() => ({
     upsertIgnored: {},
   },
 }));
+vi.mock("../../src/domain/sharedNavigation", () => ({ navigateTo: vi.fn() }));
 vi.mock("../../src/runtime/runtime.js", () => ({
   ...runtime,
   __v_isRef: false,

@@ -75,6 +75,7 @@ import {
 import { SETTINGS_SECTIONS, resolveSettingsSectionId } from "./domain/settings";
 import { viewConfig } from "./domain/runtimeConstants";
 import * as runtime from "./runtime/runtime.js";
+import { navigateTo } from "./domain/sharedNavigation";
 import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
 
 const router = useRouter();
@@ -419,7 +420,7 @@ function navigateNative(path: string, runtimeView?: string) {
   // Only short-circuit when the runtime agrees with the router; a drifted runtime view must be allowed to resync.
   if (current === target && (!runtimeView || runtime.state.view === runtimeView)) return;
   if (runtimeView) {
-    runtime.navigateView(runtimeView, target);
+    navigateTo(runtimeView, { href: target });
     return;
   }
   void router.push(target).catch(() => {
@@ -465,7 +466,7 @@ function searchCorpus(query: string) {
   runtime.state.globalPage = 1;
   runtime.state.storeSearchResults = [];
   runtime.state.globalSearchMode = "traditional";
-  runtime.navigateView("global");
+  navigateTo("global");
 }
 
 function submitTopSearch() {

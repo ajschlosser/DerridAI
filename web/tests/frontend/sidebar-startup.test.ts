@@ -42,6 +42,9 @@ const NAV = [
   ["config", "Settings", "System"],
 ].map(([id, label, section]) => ({ id, label, icon: "record", section }));
 
+const navigation = vi.hoisted(() => ({ navigateTo: vi.fn() }));
+vi.mock("../../src/domain/sharedNavigation", () => navigation);
+
 const runtime = vi.hoisted(() => ({
   getNavItems: vi.fn(),
   getShellSnapshot: vi.fn(),
@@ -50,7 +53,6 @@ const runtime = vi.hoisted(() => ({
   setShellRefreshHook: vi.fn(),
   setUrlSyncHook: vi.fn(),
   pauseRuntime: vi.fn(),
-  navigateView: vi.fn(),
   syncFromLocation: vi.fn(),
   repaintAfterLocationChange: vi.fn(),
   viewForPath: vi.fn(),
@@ -499,7 +501,7 @@ describe("router and runtime stay in agreement", () => {
       .find((b) => b.text() === "Home")
       ?.trigger("click");
 
-    expect(runtime.navigateView).toHaveBeenCalledWith("home", "/");
+    expect(navigation.navigateTo).toHaveBeenCalledWith("home", { href: "/" });
     wrapper.unmount();
   });
 
@@ -511,7 +513,7 @@ describe("router and runtime stay in agreement", () => {
       .find((b) => b.text() === "Home")
       ?.trigger("click");
 
-    expect(runtime.navigateView).not.toHaveBeenCalled();
+    expect(navigation.navigateTo).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });
