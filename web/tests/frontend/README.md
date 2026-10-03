@@ -32,8 +32,7 @@ flowchart TD
 
     Tests["tests/frontend/*.test.ts"]
     Setup["setup.ts"]
-    Snapshots["__snapshots__
-selected characterization"]
+    Snapshots["__snapshots__<br/>selected characterization"]
 
     Domain --> Tests
     Components --> Tests
