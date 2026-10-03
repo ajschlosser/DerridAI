@@ -20,6 +20,7 @@ import { ApiError, apiRequest } from "./http";
 import type { LanguageInfo } from "./system";
 
 export type SiteExportFormat = "two-file" | "local-single-file" | "nginx-docker";
+export type SiteVectorStrategy = "browser-default" | "source" | "browser-build";
 
 /** How much Record metadata a site carries: `reader` omits FieldAssertions to reduce file size. */
 export type SiteRecordProfile = "complete" | "reader";
@@ -35,8 +36,10 @@ export interface SiteExportRequest {
   record_profile: SiteRecordProfile;
   /** Every export includes Transformers.js. Kept so older clients still send a value. */
   include_transformers: boolean;
-  /** Copy the current collection vectors into the publication; otherwise browsers build their own index. */
+  /** Legacy compatibility flag. The explicit vector_strategy owns new exports. */
   include_vectors: boolean;
+  /** How semantic vectors are prepared for the publication. */
+  vector_strategy: SiteVectorStrategy;
   /** nginx/Docker only: same-origin /provider/ bridge target. Empty/null disables the proxy. */
   provider_proxy_upstream?: string | null;
 }
@@ -61,9 +64,18 @@ export interface SiteTransformersRuntime {
   inline_bytes: number;
 }
 
+export interface SitePublicationEmbedder {
+  model: string;
+  revision: string;
+  dimension: number;
+  cached: boolean;
+  download_bytes: number;
+}
+
 export interface SiteExportOptions {
   languages: LanguageInfo[];
   transformers_runtime: SiteTransformersRuntime;
+  publication_embedder: SitePublicationEmbedder;
 }
 
 export interface SiteExportDownload {
@@ -72,6 +84,7 @@ export interface SiteExportDownload {
   publicationId: string;
   recordCount: number;
   workCount: number;
+  vectorStrategy: SiteVectorStrategy | "";
 }
 
 function filenameFromDisposition(value: string | null): string {
@@ -147,6 +160,9 @@ export const sitesApi = {
       publicationId: response.headers.get("X-DerridAI-Publication-ID") || "",
       recordCount: Number(response.headers.get("X-DerridAI-Record-Count") || 0),
       workCount: Number(response.headers.get("X-DerridAI-Work-Count") || 0),
+      vectorStrategy: (response.headers.get("X-DerridAI-Vector-Strategy") || "") as
+        | SiteVectorStrategy
+        | "",
     };
   },
 };
