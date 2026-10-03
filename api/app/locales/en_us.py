@@ -7793,6 +7793,7 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
 
  'help.summary_label': 'Help Center contents',
  "help.kicker": "Product help & reference",
+ "help.quick_tasks": "Popular workflows",
  "help.start_here": "Start with a task",
  "help.start_here_help": "Go straight to a common workflow, or search everything below.",
  "help.coverage_label": "Help Center coverage",
