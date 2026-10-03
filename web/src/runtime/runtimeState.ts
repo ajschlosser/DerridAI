@@ -24,10 +24,8 @@ import { bindWorkspaceGroups } from "../state/workspaceState";
 
 export function createRuntimeState() {
   const state = {
-    userContext: null,
     translations: { locale: "en-US", dictionary: {}, base: {} },
     jobsPollTimer: null,
-    storageReady: false,
   };
   // Background-job and per-view workspace fields live in stores shared with Vue code; see state/jobsState.ts and
   // state/workspaceState.ts.

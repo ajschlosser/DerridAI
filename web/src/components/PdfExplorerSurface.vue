@@ -21,6 +21,7 @@ import { toast } from "../composables/notifications";
 import { openMessageDialog } from "../composables/messageDialog";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import { navigateTo } from "../domain/sharedNavigation";
 import { fullCitation } from "../domain/citations";
 import { highlight } from "../domain/recordFormatting";
 import AppIcon from "./AppIcon.vue";
@@ -324,20 +325,20 @@ function openLlmLink() {
   runtime.linkPdfPageWithLlm();
 }
 function openProviders() {
-  runtime.navigateTo("providers");
+  navigateTo("providers");
 }
 function openCorpusBuilder() {
   window.dispatchEvent(new CustomEvent("derridai:pdf-builder"));
 }
 function returnToSelectedRecord() {
   if (!selectedFile.value) return;
-  runtime.navigateTo("record", {
+  navigateTo("record", {
     fileId: selectedFile.value.id,
     index: runtime.selectedIndex(selectedFile.value),
   });
 }
 function openLinkedRecord(fileId: string, index: number) {
-  runtime.navigateTo("record", { fileId, index });
+  navigateTo("record", { fileId, index });
 }
 function unlinkRecord(fileId: string, index: number) {
   const file = state.files.find((item: Any) => item.id === fileId);

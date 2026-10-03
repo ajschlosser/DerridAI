@@ -40,8 +40,6 @@ export const bootstrapRuntime = (...args: Parameters<typeof runtime.bootstrapRun
   runtime.bootstrapRuntime(...args);
 export const pauseRuntime = (...args: Parameters<typeof runtime.pauseRuntime>) =>
   runtime.pauseRuntime(...args);
-export const navigateView = (...args: Parameters<typeof runtime.navigateView>) =>
-  runtime.navigateView(...args);
 export const syncFromLocation = (...args: Parameters<typeof runtime.syncFromLocation>) =>
   runtime.syncFromLocation(...args);
 export const repaintAfterLocationChange = (

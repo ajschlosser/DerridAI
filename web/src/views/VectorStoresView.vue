@@ -21,6 +21,7 @@ import { toast } from "../composables/notifications";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
+import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { chromaApi } from "../api/chroma";
 import { isAbortError } from "../api/graphql/client";
 import { createLatestRequest } from "../api/graphql/latestRequest";
@@ -201,7 +202,7 @@ function persistWorkspace() {
   workspace.storeWork = storeWork.value;
   workspace.storeQuery = searchQuery.value;
   workspace.storeSearchMode = searchMode.value;
-  runtime.persistPrefs();
+  persistPrefs();
   shell.sync();
 }
 

@@ -31,6 +31,7 @@ import {
   type SemanticMapSource,
 } from "../../domain/semanticMap";
 import * as runtime from "../../runtime/runtime.js";
+import { navigateTo } from "../../domain/sharedNavigation";
 import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
 import UiRelationDensityControls, {
   type RelationDensity,
@@ -148,10 +149,10 @@ const placementLabel: Record<SemanticMapPlacement, string> = {
 function choose(next: SemanticMapPlacement) {
   map.setPlacement(next);
   if (next === "page") {
-    if (route.name !== "semanticmap") runtime.navigateView("semanticmap");
+    if (route.name !== "semanticmap") navigateTo("semanticmap");
     return;
   }
-  if (route.name === "semanticmap") runtime.navigateView("record");
+  if (route.name === "semanticmap") navigateTo("record");
 }
 
 function kindLabel(kind: SemanticMapKind) {

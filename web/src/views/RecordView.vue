@@ -23,6 +23,7 @@ import { decompressUrlState } from "../domain/urlState";
 import { useAuthStore } from "../stores/auth";
 import { useRoute } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
+import { navigateTo } from "../domain/sharedNavigation";
 import { useI18nStore } from "../stores/i18n";
 import { useNewerData } from "../composables/useNewerData";
 import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
@@ -96,7 +97,7 @@ async function loadSemanticMap() {
 function openSemanticMap() {
   semanticMap.enable(semanticMap.placement);
   void loadSemanticMap();
-  if (semanticMap.placement === "page") runtime.navigateView("semanticmap");
+  if (semanticMap.placement === "page") navigateTo("semanticmap");
 }
 
 const record = computed(() => snapshot.value.record || {});

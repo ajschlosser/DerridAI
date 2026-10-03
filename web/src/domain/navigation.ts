@@ -120,6 +120,7 @@ export function createNavigation(deps: Deps) {
     renderView();
   }
   return {
+    getUrlSyncHook,
     navSnapshot,
     setUrlSyncHook,
     currentTableUrlState,

@@ -23,12 +23,12 @@ import { createUrlStateCodec } from "./urlStateCodec";
 // the same shared groups, so reading and applying a URL here and there is the same operation.
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const state = bindWorkspaceGroups({}) as Loose;
+export const state = bindWorkspaceGroups({}) as Loose;
 
-const activeFile = () => state.files.find((f: Loose) => f.id === state.activeFileId) || null;
-const selectedIndex = (f: Loose | null) =>
+export const activeFile = () => state.files.find((f: Loose) => f.id === state.activeFileId) || null;
+export const selectedIndex = (f: Loose | null) =>
   Math.max(0, Math.min((f?.records.length || 1) - 1, state.selected[f?.id] ?? 0));
-const dbSearchWhere = () =>
+export const dbSearchWhere = () =>
   Object.fromEntries(
     Object.entries(state.dbSearchWhere || {}).filter(
       ([, value]) => String(value ?? "").trim() !== "",

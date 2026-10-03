@@ -20,6 +20,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
+import { navigateTo } from "../domain/sharedNavigation";
+import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { apiRequest } from "../api/http";
 import {
   systemApi,
@@ -337,7 +339,7 @@ function mark(group: string, status: SaveStatus) {
 }
 async function persistWorkspace() {
   if (typeof runtime.flushWorkspacePrefs === "function") await runtime.flushWorkspacePrefs();
-  else runtime.persistPrefs();
+  else persistPrefs();
   shell.sync();
 }
 async function saveGroup(group: string, apply: () => void | Promise<void>) {
@@ -490,7 +492,7 @@ async function chooseSearch(hit: SettingsSearchHit) {
   }
 }
 function go(path: string, view?: string) {
-  if (view) runtime.navigateView(view);
+  if (view) navigateTo(view);
   else window.dispatchEvent(new CustomEvent("derridai:navigate-native", { detail: { path } }));
 }
 function providerReady(profile: ProviderProfile) {
@@ -522,12 +524,12 @@ async function requestNotifications() {
 }
 function resetColumns() {
   workspace.tableColumns = {};
-  runtime.persistPrefs();
+  persistPrefs();
   announce(i18n.t("settings.columns_reset"));
 }
 function expandPanels() {
   workspace.collapsedPanels = {};
-  runtime.persistPrefs();
+  persistPrefs();
   announce(i18n.t("settings.panels_expanded"));
 }
 function expandSidebar() {
@@ -536,7 +538,7 @@ function expandSidebar() {
 }
 function clearUpsertSuppressions() {
   workspace.upsertIgnored = {};
-  runtime.persistPrefs();
+  persistPrefs();
   announce(i18n.t("settings.upsert_restored"));
 }
 function openBackup() {

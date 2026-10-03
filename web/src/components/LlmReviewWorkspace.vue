@@ -22,6 +22,7 @@ import UiButton from "./ui/UiButton.vue";
 import UiDialog from "./ui/UiDialog.vue";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../runtime/runtime.js";
+import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 
 type JsonRecord = Record<string, unknown>;
 type TouchupProfile = { id: string; name?: string; model?: string; [key: string]: unknown };
@@ -172,7 +173,7 @@ async function refreshStatus() {
 function setMode(value: string) {
   mode.value = value as typeof mode.value;
   if (mode.value !== "auto") runtime.state.appConfig.default_llm_run_mode = mode.value;
-  runtime.persistPrefs();
+  persistPrefs();
 }
 function setProfile(value: string) {
   profileId.value = value;

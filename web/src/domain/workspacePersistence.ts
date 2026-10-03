@@ -17,6 +17,7 @@
  */
 
 import { toast } from "../composables/notifications";
+import { createPrefsPersistence } from "./prefsPersistence";
 
 // Workspace persistence: saving files and preferences to IndexedDB, debounced, and restoring them at start-up. Moved
 // verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -42,7 +43,6 @@ type Deps = {
   fileTimers: Map<string, ReturnType<typeof setTimeout>>;
 } & Record<Helper, Fn>;
 
-let prefsTimer: Any = null;
 export function createWorkspacePersistence(deps: Deps) {
   const {
     fileTimers,
@@ -57,6 +57,10 @@ export function createWorkspacePersistence(deps: Deps) {
     serializableFile,
     trf,
   } = deps;
+  const { workspacePrefs, persistPrefs, flushWorkspacePrefs } = createPrefsPersistence({
+    state,
+    put: (key, value) => idbPut(key, value),
+  });
   // The legacy code queries the page freely; untyped, as it was written.
   async function persistFileNow(file: Any) {
     invalidateCorpusCache();
@@ -75,114 +79,6 @@ export function createWorkspacePersistence(deps: Deps) {
       persistFileNow(file);
     }, 250);
     fileTimers.set(file.id, timer);
-  }
-  function workspacePrefs() {
-    const cloneable = (value: Any): Any => {
-      if (value === null || ["string", "number", "boolean"].includes(typeof value)) return value;
-      if (value instanceof Date) return value.toISOString();
-      if (value instanceof Set) return [...value].map(cloneable);
-      if (Array.isArray(value)) return value.map(cloneable).filter((item) => item !== undefined);
-      if (typeof value === "object") {
-        return Object.fromEntries(
-          Object.entries(value)
-            .filter(([, item]) => typeof item !== "function" && item !== undefined)
-            .map(([key, item]) => [key, cloneable(item)]),
-        );
-      }
-      return undefined;
-    };
-    const prefs = {
-      key: "workspace",
-      activeFileId: state.activeFileId,
-      view: state.view,
-      selected: state.selected,
-      searches: state.searches,
-      listFilters: state.listFilters,
-      pages: state.pages,
-      pageSize: state.pageSize,
-      sorts: state.sorts,
-      globalSearch: state.globalSearch,
-      globalFilters: state.globalFilters,
-      globalSort: state.globalSort,
-      globalPage: state.globalPage,
-      globalSearchMode: state.globalSearchMode,
-      dbSearchMethod: state.dbSearchMethod,
-      dbSearchWhere: state.dbSearchWhere,
-      dbSearchFetchK: state.dbSearchFetchK,
-      dbSearchLambda: state.dbSearchLambda,
-      globalAdvancedOpen: state.globalAdvancedOpen,
-      searchFacetFilters: state.searchFacetFilters,
-      worksSearch: state.worksSearch,
-      workOverview: state.workOverview,
-      worksSort: state.worksSort,
-      worksNeedsReview: state.worksNeedsReview,
-      worksDbStatus: state.worksDbStatus,
-      worksAuthor: state.worksAuthor,
-      worksView: state.worksView,
-      researcherRecordId: state.researcherRecordId,
-      researcherCompareA: state.researcherCompareA,
-      researcherCompareB: state.researcherCompareB,
-      dashboardMetricIndex: state.dashboardMetricIndex,
-      lastViewedRecord: state.lastViewedRecord,
-      compareA: state.compareA,
-      compareB: state.compareB,
-      compareMode: state.compareMode,
-      comparePasteA: state.comparePasteA,
-      comparePasteB: state.comparePasteB,
-      compareSourceA: state.compareSourceA,
-      compareSourceB: state.compareSourceB,
-      compareFilter: state.compareFilter,
-      activeStore: state.activeStore,
-      storePage: state.storePage,
-      storePageSize: state.storePageSize,
-      storeQuery: state.storeQuery,
-      storeSearchMode: state.storeSearchMode,
-      storeWork: state.storeWork,
-      storeSort: state.storeSort,
-      storeFilters: state.storeFilters,
-      storeBrowseMode: state.storeBrowseMode,
-      vectorTab: state.vectorTab,
-      vectorCollectionFilter: state.vectorCollectionFilter,
-      llmConfig: state.llmConfig,
-      appConfig: cloneable(state.appConfig),
-      ragConfig: cloneable(state.ragConfig),
-      faqSearch: state.faqSearch,
-      faqPage: state.faqPage,
-      faqExpanded: state.faqExpanded,
-      sidebarCollapsed: state.sidebarCollapsed,
-      collectionsCollapsed: state.collectionsCollapsed,
-      operationToastsMinimized: state.operationToastsMinimized,
-      operationStackPosition: state.operationStackPosition,
-      collapsedPanels: state.collapsedPanels,
-      tableColumns: state.tableColumns,
-      upsertState: state.upsertState,
-      upsertIgnored: state.upsertIgnored,
-      jobApplied: state.jobApplied,
-      upsertJobApplied: state.upsertJobApplied,
-      reviewSelection: [...state.reviewSelection],
-      selectedEvidence: state.selectedEvidence,
-      storeSearchSort: state.storeSearchSort,
-    };
-    // Settings saves use IndexedDB's structured-clone algorithm. Sanitize the
-    // complete payload, not just provider config, because shared Vue/runtime
-    // state can contain reactive objects or callbacks added by a workspace.
-    return cloneable(prefs);
-  }
-  function persistPrefs() {
-    if (!state.storageReady) return;
-    clearTimeout(prefsTimer);
-    prefsTimer = setTimeout(
-      () =>
-        idbPut("prefs", workspacePrefs()).catch((error: Any) =>
-          console.error("IndexedDB preference persistence failed", error),
-        ),
-      400,
-    );
-  }
-  async function flushWorkspacePrefs() {
-    if (!state.storageReady) throw new Error("Workspace storage is not ready yet.");
-    clearTimeout(prefsTimer);
-    await idbPut("prefs", workspacePrefs());
   }
   async function restoreWorkspace() {
     try {

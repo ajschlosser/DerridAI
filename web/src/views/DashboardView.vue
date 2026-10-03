@@ -20,6 +20,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { toast } from "../composables/notifications";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import { persistPrefs } from "../domain/sharedWorkspaceStorage";
+import { navigateTo } from "../domain/sharedNavigation";
 import { mlaPageSpan } from "../domain/citations";
 import { icon } from "../domain/html";
 import { commonWorkValue, workCoverUrl } from "../domain/workMetadata";
@@ -269,7 +271,7 @@ function corpusBuildPercent(job: Any) {
 }
 
 async function persistAndRefresh() {
-  runtime.persistPrefs();
+  persistPrefs();
   runtime.syncUrl({ replace: true });
   await refresh();
 }
@@ -292,12 +294,12 @@ async function goSearch() {
     }
     state.globalSearchMode = "database";
     if (!state.activeStore) {
-      runtime.persistPrefs();
+      persistPrefs();
       if (runtime.canAccessPage("vector")) {
         toast(i18n.t("search.redirect_database"), { tone: "info" });
         runtime.openDatabaseCreationFromResearch();
       } else {
-        runtime.navigateTo("global");
+        navigateTo("global");
         toast(i18n.t("research.no_database"), {
           tone: "warning",
         });
@@ -311,8 +313,8 @@ async function goSearch() {
     if (!state.globalSearch && work) state.dbSearchMethod = "filter";
     state.globalSearchAutoRun = false;
     state.storeSearchLoading = true;
-    runtime.persistPrefs();
-    runtime.navigateTo("global");
+    persistPrefs();
+    navigateTo("global");
     try {
       const mode = state.dbSearchMethod || "similarity";
       const data: Any = await runtime.api(
@@ -337,7 +339,7 @@ async function goSearch() {
       );
     } finally {
       state.storeSearchLoading = false;
-      runtime.persistPrefs();
+      persistPrefs();
     }
   } else {
     state.globalSearchMode = "traditional";
@@ -347,8 +349,8 @@ async function goSearch() {
       state.globalFilters = work
         ? [{ id: runtime.uid(), field: "work", op: "eq", value: work }]
         : [];
-    runtime.persistPrefs();
-    runtime.navigateTo("global");
+    persistPrefs();
+    navigateTo("global");
   }
 }
 
@@ -364,13 +366,13 @@ async function setSearchMode(mode: string) {
 }
 
 function goNav(view: string) {
-  runtime.navigateTo(view);
+  navigateTo(view);
 }
 
 async function openWork(work: string) {
   runtime.state.workOverview = work;
-  runtime.persistPrefs();
-  runtime.navigateTo("works");
+  persistPrefs();
+  navigateTo("works");
 }
 
 function onMetricBodyClick(event: MouseEvent) {
@@ -399,12 +401,12 @@ function scrollWorks(direction: number) {
 }
 
 function openRecentRecord(fileId: string, index: number) {
-  runtime.navigateTo("record", { fileId, index });
+  navigateTo("record", { fileId, index });
 }
 
 async function setUiTheme(value: string) {
   runtime.applyUiTheme(value);
-  runtime.persistPrefs();
+  persistPrefs();
   toast(i18n.t("dashboard.appearance_saved"), {
     tone: "success",
   });
@@ -412,11 +414,11 @@ async function setUiTheme(value: string) {
 }
 
 function openAppearanceSettings() {
-  runtime.navigateTo("config");
+  navigateTo("config");
 }
 
 function openLanguages() {
-  if (isResearcher.value) runtime.navigateTo("config");
+  if (isResearcher.value) navigateTo("config");
   else
     window.dispatchEvent(
       new CustomEvent("derridai:navigate-native", { detail: { path: "/languages" } }),
@@ -424,19 +426,19 @@ function openLanguages() {
 }
 
 function openProviders() {
-  runtime.navigateTo(isResearcher.value ? "rag" : "providers");
+  navigateTo(isResearcher.value ? "rag" : "providers");
 }
 
 function openRecordPreview() {
   const target = previewTarget.value as Any | null;
   if (!target) return;
   if (target.kind === "workspace") {
-    runtime.navigateTo("record", { fileId: target.fileId, index: target.index });
+    navigateTo("record", { fileId: target.fileId, index: target.index });
   } else {
     runtime.state.activeStore = target.store;
     runtime.state.researcherRecordId = target.id;
-    runtime.persistPrefs();
-    runtime.navigateTo("record");
+    persistPrefs();
+    navigateTo("record");
   }
 }
 
@@ -468,11 +470,11 @@ async function onMetricDotKeydown(event: KeyboardEvent) {
 }
 
 function openAnnotations() {
-  runtime.navigateTo("annotations");
+  navigateTo("annotations");
 }
 
 function openRecentAnnotation(fileId: string, index: number) {
-  runtime.navigateTo("record", { fileId, index });
+  navigateTo("record", { fileId, index });
 }
 
 function openSharedAnnotation(store: string, recordId: string) {
