@@ -25,7 +25,12 @@ const meta = {
   args: {
     links: [
       { id: "help-pages", icon: "list", label: "Product guide", count: 31 },
-      { id: "help-glossary", icon: "books", label: "Technical glossary & parameter reference", count: 94 },
+      {
+        id: "help-glossary",
+        icon: "books",
+        label: "Technical glossary & parameter reference",
+        count: 94,
+      },
       { id: "help-questions", icon: "help", label: "Common workflow questions", count: 54 },
     ],
     activeSection: "help-pages",
