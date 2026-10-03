@@ -40,18 +40,10 @@
   if (!availableLocales.includes(locale)) locale = availableLocales[0] || "en-US";
   let theme = readLocal(themeKey) === "dark" ? "dark" : "light";
   let highContrast = readLocal(contrastKey) === "high";
-  // Prefer a browser-compatible form of the model that produced the source collection. The publication keeps
-  // the original model identity even when vectors are omitted, so the browser can make the same first choice.
-  // Known runtime aliases encode vector-changing details explicitly; unknown Hugging Face IDs are tried as-is.
+  // Keep the automatic browser profile compatibility-first. A publication may have been embedded by a much
+  // larger model (for example BGE-M3), but rebuilding every Record with that model on a single browser main
+  // thread can exhaust memory or make the page unresponsive. Readers can still select those models explicitly.
   const TRANSFORMERS_SUGGESTIONS = [
-    {
-      id: "Xenova/bge-m3",
-      aliases: ["bge-m3", "bge-m3:latest", "BAAI/bge-m3", "Xenova/bge-m3"],
-      dtype: "q8",
-      pooling: "cls",
-      normalize: true,
-      note: "site.runtime.transformers_model_bge_m3",
-    },
     {
       id: "Xenova/multilingual-e5-small",
       revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
@@ -68,8 +60,16 @@
       normalize: true,
       note: "site.runtime.transformers_model_english_small",
     },
+    {
+      id: "Xenova/bge-m3",
+      aliases: ["bge-m3", "bge-m3:latest", "BAAI/bge-m3", "Xenova/bge-m3"],
+      dtype: "q8",
+      pooling: "cls",
+      normalize: true,
+      note: "site.runtime.transformers_model_bge_m3",
+    },
   ];
-  const FALLBACK_TRANSFORMERS_MODEL = "Xenova/multilingual-e5-small";
+  const DEFAULT_TRANSFORMERS_MODEL = "Xenova/multilingual-e5-small";
   const DEFAULT_TRANSFORMERS_DEVICE = "wasm";
   const MODEL_CACHE_NAME = "transformers-cache";
 
@@ -87,20 +87,6 @@
         (item.aliases || []).some((alias) => alias.toLocaleLowerCase() === normalized),
     );
   }
-
-  function publicationBrowserProfile() {
-    const published = sourceEmbeddingModel();
-    const known = suggestedProfileForModel(published);
-    if (known) return known;
-    // A namespaced model id is already in the form Transformers.js expects. Try it before falling back.
-    if (published.includes("/") && !published.includes(":")) {
-      return { id: published, pooling: "mean", normalize: true };
-    }
-    return suggestedProfileForModel(FALLBACK_TRANSFORMERS_MODEL);
-  }
-
-  const DEFAULT_TRANSFORMERS_MODEL =
-    publicationBrowserProfile()?.id || FALLBACK_TRANSFORMERS_MODEL;
 
   function settingsForModel(model) {
     const match = suggestedProfileForModel(model);
@@ -590,6 +576,23 @@
     return prefix ? input.map((text) => `${prefix}${text}`) : input;
   }
 
+  async function yieldAfterEmbeddingBatch(signal) {
+    if (signal?.aborted) throw new DOMException("Operation aborted.", "AbortError");
+    const scheduler = globalThis.scheduler;
+    if (scheduler?.yield) {
+      await scheduler.yield();
+    } else {
+      await new Promise((resolve) => {
+        if (typeof globalThis.requestAnimationFrame === "function") {
+          globalThis.requestAnimationFrame(() => setTimeout(resolve, 0));
+        } else {
+          setTimeout(resolve, 0);
+        }
+      });
+    }
+    if (signal?.aborted) throw new DOMException("Operation aborted.", "AbortError");
+  }
+
   function embeddingFailure() {
     return providerError(t("site.runtime.embedding_failed"), "embedding_failed");
   }
@@ -777,13 +780,23 @@
         const extractor = await transformersExtractor(profile);
         const texts = prefixed(profile, input, options.purpose);
         const vectors = [];
-        for (let start = 0; start < texts.length; start += 8) {
+        // Large browser models can allocate enough WASM memory to crash a tab when several long Records are
+        // inferred together. Keep BGE-M3 to one Record at a time and use small batches for lighter models.
+        const microBatchSize = /bge-m3$/i.test(model) ? 1 : 4;
+        for (let start = 0; start < texts.length; start += microBatchSize) {
           if (options.signal?.aborted) throw new DOMException("Operation aborted.", "AbortError");
-          const tensor = await extractor(texts.slice(start, start + 8), {
+          const tensor = await extractor(texts.slice(start, start + microBatchSize), {
             pooling: profile.pooling || "mean",
             normalize: profile.normalize !== false,
           });
-          vectors.push(...tensor.tolist());
+          try {
+            vectors.push(...tensor.tolist());
+          } finally {
+            tensor.dispose?.();
+          }
+          if (start + microBatchSize < texts.length) {
+            await yieldAfterEmbeddingBatch(options.signal);
+          }
         }
         if (vectors.length !== texts.length) throw embeddingFailure();
         return { vectors, provider: this.descriptor() };
@@ -2614,7 +2627,7 @@
           "div",
           { class: "brand" },
           node("strong", { text: publication.title || t("site.runtime.site_title") }),
-          node("small", { text: t("site.runtime.powered_by_sdk") }),
+          node("small", { text: t("site.runtime.powered_by") }),
         ),
         node(
           "nav",
