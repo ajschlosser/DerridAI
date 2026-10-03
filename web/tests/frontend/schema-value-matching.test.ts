@@ -31,19 +31,20 @@ function mountForm(over: Partial<SchemaField> = {}) {
     ...over,
   });
   const wrapper = mount(SchemaFieldForm, { props: { field, groupKeys: ["indexing"] } });
-  const fieldset = () => wrapper.find("fieldset.value-matching");
-  return { field, wrapper, fieldset };
+  const matching = () =>
+    wrapper.findAll("details.advanced-section").find((item) => item.text().includes("Value matching"))!;
+  return { field, wrapper, matching };
 }
 
 describe("Schema field value matching", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
   it("follows DerridAI's default until a mode is chosen, and can return to it", async () => {
-    const { field, fieldset } = mountForm({ type: "list" });
-    const select = fieldset().find("select");
+    const { field, matching } = mountForm({ type: "list" });
+    const select = matching().find("select");
     expect((select.element as HTMLSelectElement).value).toBe("");
-    expect(fieldset().text()).toContain("DerridAI's policy for this field's meaning");
-    expect(fieldset().find("input").exists()).toBe(false);
+    expect(matching().text()).toContain("DerridAI's policy for this field's meaning");
+    expect(matching().find("input").exists()).toBe(false);
 
     await select.setValue("entity_name");
     expect(field.equivalence_profile).toEqual({
@@ -51,7 +52,7 @@ describe("Schema field value matching", () => {
       collection_semantics: "set",
       identity_kind: null,
     });
-    expect(fieldset().text()).toContain("J. P. Dingus");
+    expect(matching().text()).toContain("J. P. Dingus");
 
     await select.setValue("");
     expect(field.equivalence_profile).toBeNull();
@@ -66,11 +67,11 @@ describe("Schema field value matching", () => {
         identity_kind: null,
       },
     });
-    const selects = list.fieldset().findAll("select");
+    const selects = list.matching().findAll("select");
     expect(selects).toHaveLength(2);
     await selects[1].setValue("ordered");
     expect(list.field.equivalence_profile?.collection_semantics).toBe("ordered");
-    const kind = list.fieldset().find("input");
+    const kind = list.matching().find("input");
     await kind.setValue(" motif ");
     await kind.trigger("change");
     expect(list.field.equivalence_profile?.identity_kind).toBe("motif");
@@ -78,13 +79,13 @@ describe("Schema field value matching", () => {
     await kind.trigger("change");
     expect(list.field.equivalence_profile?.identity_kind).toBeNull();
     // The note is tied to the choice for assistive technology.
-    const describedBy = list.fieldset().find("select").attributes("aria-describedby");
-    expect(list.fieldset().find(`#${describedBy}`).text()).toContain("spaCy");
+    const describedBy = list.matching().find("select").attributes("aria-describedby");
+    expect(list.matching().find(`#${describedBy}`).text()).toContain("spaCy");
 
     const scalar = mountForm({
       type: "text",
       equivalence_profile: { mode: "text", collection_semantics: "set", identity_kind: null },
     });
-    expect(scalar.fieldset().findAll("select")).toHaveLength(1);
+    expect(scalar.matching().findAll("select")).toHaveLength(1);
   });
 });
