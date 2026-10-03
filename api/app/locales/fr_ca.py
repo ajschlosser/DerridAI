@@ -8084,6 +8084,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
 
  'help.summary_label': 'Contenu du Centre d’aide',
  "help.kicker": "Aide produit et référence",
+ "help.quick_tasks": "Flux de travail courants",
  "help.start_here": "Commencer par une tâche",
  "help.start_here_help": "Accédez directement à un flux de travail courant ou recherchez dans toute l’aide ci-dessous.",
  "help.coverage_label": "Couverture du centre d’aide",
