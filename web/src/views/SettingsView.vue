@@ -20,6 +20,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
+import {
+  getProviderProfilesForUi,
+  getDefaultProviderProfileId,
+} from "../domain/sharedProviderProfiles";
 import { navigateTo } from "../domain/sharedNavigation";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { apiRequest } from "../api/http";
@@ -126,9 +130,9 @@ const busy = ref("");
 const isAdmin = computed(() => auth.isAdmin);
 const canAppearance = computed(() => auth.can("appearance.manage") || isAdmin.value);
 const chromaPath = computed(() => String(workspace.health?.chroma?.path || "/data/chroma"));
-const profiles = computed(() => (runtime.getProviderProfilesForUi?.() || []) as ProviderProfile[]);
+const profiles = computed(() => (getProviderProfilesForUi() || []) as ProviderProfile[]);
 const defaultProfileId = computed(() =>
-  String(runtime.getDefaultProviderProfileId?.() || reviewDraft.value.default_provider_profile),
+  String(getDefaultProviderProfileId() || reviewDraft.value.default_provider_profile),
 );
 const localeInfo = computed(() => i18n.languages.find((item) => item.code === i18n.locale));
 const visibleSections = computed(() =>

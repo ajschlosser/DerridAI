@@ -122,6 +122,7 @@ import { hideSourceWarnings, sourceWarningsHidden } from "../domain/sourceQualit
 import { recurringShortLines } from "../domain/textCleanup";
 import { allEvidenceBlockIds } from "../domain/metadataEvidence";
 import * as runtime from "../runtime/runtime.js";
+import { getDefaultProviderProfileId } from "../domain/sharedProviderProfiles";
 
 const i18n = useI18nStore();
 const route = useRoute();
@@ -2727,7 +2728,7 @@ defineExpose({
           :selected-provider-id="selectedProviderId"
           :selected-review-provider-id="selectedReviewProviderId"
           :provider-profiles="providerProfiles"
-          :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
+          :default-profile-id="getDefaultProviderProfileId() || ''"
           :selected-provider-label="selectedProviderLabel"
           :selected-profile-model="selectedProfileModel"
           :enrichment-mode="enrichmentMode"
@@ -3398,7 +3399,7 @@ defineExpose({
     >
       <MetadataSchemaEditor
         :provider-profiles="providerProfiles"
-        :default-provider-id="runtime.getDefaultProviderProfileId?.() || ''"
+        :default-provider-id="getDefaultProviderProfileId() || ''"
         @changed="loadSchemaChoices"
         @saved="
           (id) => {

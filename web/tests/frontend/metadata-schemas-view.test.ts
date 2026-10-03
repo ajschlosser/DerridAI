@@ -21,6 +21,10 @@ import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../src/domain/sharedProviderProfiles", () => ({
+  getProviderProfilesForUi: () => [],
+  getDefaultProviderProfileId: () => "",
+}));
 vi.mock("../../src/runtime/runtime.js", () => ({
   getProviderProfilesForUi: () => [],
   getDefaultProviderProfileId: () => "",

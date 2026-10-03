@@ -87,6 +87,10 @@ const runtime = vi.hoisted(() => ({
   },
 }));
 vi.mock("../../src/domain/sharedNavigation", () => ({ navigateTo: vi.fn() }));
+vi.mock("../../src/domain/sharedProviderProfiles", () => ({
+  getProviderProfilesForUi: runtime.getProviderProfilesForUi,
+  getDefaultProviderProfileId: runtime.getDefaultProviderProfileId,
+}));
 vi.mock("../../src/runtime/runtime.js", () => ({
   ...runtime,
   __v_isRef: false,

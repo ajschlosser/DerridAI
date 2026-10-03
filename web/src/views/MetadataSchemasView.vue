@@ -23,7 +23,10 @@ import type { ProviderProfile } from "../api/system";
 import MetadataSchemaEditor from "../components/MetadataSchemaEditor.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import { useI18nStore } from "../stores/i18n";
-import * as runtime from "../runtime/runtime.js";
+import {
+  getProviderProfilesForUi,
+  getDefaultProviderProfileId,
+} from "../domain/sharedProviderProfiles";
 
 const i18n = useI18nStore();
 const route = useRoute();
@@ -32,8 +35,8 @@ const profiles = ref<ProviderProfile[]>([]);
 const defaultId = ref("");
 
 function refreshProviders() {
-  profiles.value = (runtime.getProviderProfilesForUi?.() || []) as ProviderProfile[];
-  defaultId.value = String(runtime.getDefaultProviderProfileId?.() || "");
+  profiles.value = (getProviderProfilesForUi() || []) as ProviderProfile[];
+  defaultId.value = String(getDefaultProviderProfileId() || "");
 }
 
 const previewProfiles = computed(() => profiles.value);

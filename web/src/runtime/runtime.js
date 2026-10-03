@@ -129,7 +129,7 @@ import {
   semanticSimilarity,
   snippet,
 } from "../domain/recordFormatting";
-import { fullHttpErrorDetail } from "../domain/httpErrors";
+import { api } from "../domain/legacyApi";
 import { parsePastedRecord } from "../domain/pastedRecord";
 import { providerRequestConfig } from "../domain/providerRequest";
 import { recordHistoryVersions, upsertAuditDelta } from "../domain/recordHistory";
@@ -139,7 +139,7 @@ import { createFieldFormatting } from "../domain/fieldFormatting";
 import { createCorpusAnalytics } from "../domain/corpusAnalytics";
 import { createSearchFacets } from "../domain/searchFacets";
 import { createRecordPresenters } from "../domain/recordPresenters";
-import { createProviderProfiles } from "../domain/providerProfilesService";
+import { providerProfilesService, warmupProviderProfile } from "../domain/sharedProviderProfiles";
 import { createSearchWorkspace } from "../domain/searchWorkspace";
 import { createRecordsWorkspace } from "../domain/recordsWorkspace";
 import { createRecordWorkspace } from "../domain/recordWorkspace";
@@ -321,14 +321,7 @@ const {
   getDefaultProviderProfileId,
   getProviderStatusesForUi,
   getProviderWarmupsForUi,
-} = createProviderProfiles({
-  state,
-  api,
-  isResearcher,
-  persistPrefs: (...args) => persistPrefs(...args),
-  uid: () => uid(),
-  warmupProviderProfile: (...args) => warmupProviderProfile(...args),
-});
+} = providerProfilesService;
 const {
   localSearchBaseRows,
   searchScope,
@@ -721,36 +714,33 @@ const {
   refreshStores: (...args) => refreshStores(...args),
   researcherDbRecords: (...args) => researcherDbRecords(...args),
 });
-const { warmupProviderProfile, warmupConfiguredLlm, importFiles, closeFile, checkHealth } =
-  createAppLifecycle({
-    state,
-    // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-    api: (...args) => api(...args),
-    applyCompressedTableUrlState: (...args) => applyCompressedTableUrlState(...args),
-    clearFileDerivedState: (...args) => clearFileDerivedState(...args),
-    decompressUrlState: (...args) => decompressUrlState(...args),
-    defaultProviderProfile: (...args) => defaultProviderProfile(...args),
-    ensureProviderProfiles: (...args) => ensureProviderProfiles(...args),
-    idbDelete: (...args) => idbDelete(...args),
-    invalidateCorpusCache: (...args) => invalidateCorpusCache(...args),
-    isResearcher: (...args) => isResearcher(...args),
-    parseJsonl: (...args) => parseJsonl(...args),
-    persistFileNow: (...args) => persistFileNow(...args),
-    persistPrefs: (...args) => persistPrefs(...args),
-    providerDisplayName: (...args) => providerDisplayName(...args),
-    providerProfile: (...args) => providerProfile(...args),
-    providerRequestConfig: (...args) => providerRequestConfig(...args),
-    refreshProviderStatuses: (...args) => refreshProviderStatuses(...args),
-    refreshStoreWorks: (...args) => refreshStoreWorks(...args),
-    refreshStores: (...args) => refreshStores(...args),
-    renderView: (...args) => renderView(...args),
-    shell: (...args) => shell(...args),
-    stableJsonlFileIdentity: (...args) => stableJsonlFileIdentity(...args),
-    syncUrl: (...args) => syncUrl(...args),
-    tr: (...args) => tr(...args),
-    trf: (...args) => trf(...args),
-    updateSystemCard: (...args) => updateSystemCard(...args),
-  });
+const { warmupConfiguredLlm, importFiles, closeFile, checkHealth } = createAppLifecycle({
+  state,
+  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+  api: (...args) => api(...args),
+  applyCompressedTableUrlState: (...args) => applyCompressedTableUrlState(...args),
+  clearFileDerivedState: (...args) => clearFileDerivedState(...args),
+  decompressUrlState: (...args) => decompressUrlState(...args),
+  defaultProviderProfile: (...args) => defaultProviderProfile(...args),
+  ensureProviderProfiles: (...args) => ensureProviderProfiles(...args),
+  idbDelete: (...args) => idbDelete(...args),
+  invalidateCorpusCache: (...args) => invalidateCorpusCache(...args),
+  isResearcher: (...args) => isResearcher(...args),
+  parseJsonl: (...args) => parseJsonl(...args),
+  persistFileNow: (...args) => persistFileNow(...args),
+  persistPrefs: (...args) => persistPrefs(...args),
+  warmupProviderProfile,
+  refreshProviderStatuses: (...args) => refreshProviderStatuses(...args),
+  refreshStoreWorks: (...args) => refreshStoreWorks(...args),
+  refreshStores: (...args) => refreshStores(...args),
+  renderView: (...args) => renderView(...args),
+  shell: (...args) => shell(...args),
+  stableJsonlFileIdentity: (...args) => stableJsonlFileIdentity(...args),
+  syncUrl: (...args) => syncUrl(...args),
+  tr: (...args) => tr(...args),
+  trf: (...args) => trf(...args),
+  updateSystemCard: (...args) => updateSystemCard(...args),
+});
 const {
   pdfDisplayTitle,
   loadedPdfPagesForRecord,
@@ -2235,82 +2225,6 @@ function recordOptionForKey(key) {
   return { value: key, label: recordOptionLabel(item.file, item.record, item.index) };
 }
 
-const HTTP_ERROR_STORAGE_KEY = "derridai.httpErrors.v1";
-function storeHttpError(entry) {
-  try {
-    const current = JSON.parse(localStorage.getItem(HTTP_ERROR_STORAGE_KEY) || "[]");
-    const rows = Array.isArray(current) ? current : [];
-    rows.unshift(entry);
-    localStorage.setItem(HTTP_ERROR_STORAGE_KEY, JSON.stringify(rows.slice(0, 50)));
-    // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
-  } catch {}
-}
-async function api(path, options = {}) {
-  const method = String(options.method || "GET").toUpperCase();
-  let response;
-  try {
-    response = await fetch(path, {
-      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-      ...options,
-    });
-  } catch (error) {
-    const diagnostic = String(error?.message || error);
-    const wrapped = new Error(`Network error · ${diagnostic}`);
-    wrapped.diagnostic = diagnostic;
-    wrapped.status = 0;
-    wrapped.fullMessage = wrapped.message;
-    wrapped.requestPath = String(path);
-    storeHttpError({
-      timestamp: new Date().toISOString(),
-      method,
-      path: String(path),
-      status: 0,
-      statusText: "Network error",
-      message: wrapped.message,
-      diagnostic,
-      responseBody: "",
-    });
-    throw wrapped;
-  }
-  if (response.status === 401 && !String(path).startsWith("/api/auth/"))
-    window.dispatchEvent(new CustomEvent("derridai-auth-expired"));
-  const text = await response.text();
-  let payload = {};
-  try {
-    payload = text ? JSON.parse(text) : {};
-  } catch {
-    payload = { detail: text };
-  }
-  if (!response.ok) {
-    const detail = fullHttpErrorDetail(payload, text, response.statusText);
-    const diagnostic =
-      typeof payload?.detail === "object" && !Array.isArray(payload.detail)
-        ? String(payload.detail?.diagnostic || "")
-        : "";
-    const message = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""} · ${detail}`;
-    const error = new Error(message);
-    error.status = response.status;
-    error.statusText = response.statusText;
-    error.diagnostic = diagnostic;
-    error.payload = payload;
-    error.responseBody = text;
-    error.requestPath = String(path);
-    error.requestMethod = method;
-    error.fullMessage = message;
-    storeHttpError({
-      timestamp: new Date().toISOString(),
-      method,
-      path: String(path),
-      status: response.status,
-      statusText: response.statusText || "",
-      message,
-      diagnostic,
-      responseBody: text,
-    });
-    throw error;
-  }
-  return payload;
-}
 async function refreshStores() {
   const data = await api("/api/stores");
   state.stores = data.stores || [];

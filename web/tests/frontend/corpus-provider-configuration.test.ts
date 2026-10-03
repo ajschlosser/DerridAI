@@ -42,6 +42,10 @@ const runtime = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/runtime/runtime.js", () => runtime);
+vi.mock("../../src/domain/sharedProviderProfiles", () => ({
+  getProviderProfilesForUi: runtime.getProviderProfilesForUi,
+  getDefaultProviderProfileId: runtime.getDefaultProviderProfileId,
+}));
 
 const systemApi = vi.hoisted(() => ({
   researcherProviders: vi.fn(),

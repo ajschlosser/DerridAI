@@ -23,6 +23,10 @@ import { useRoute, useRouter } from "vue-router";
 import type { ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../runtime/runtime.js";
+import {
+  getProviderProfilesForUi,
+  getDefaultProviderProfileId,
+} from "../domain/sharedProviderProfiles";
 import ProviderProfileCard from "../components/providers/ProviderProfileCard.vue";
 import ProviderSaveBar from "../components/providers/ProviderSaveBar.vue";
 import ProviderBulkApply from "../components/providers/ProviderBulkApply.vue";
@@ -69,11 +73,11 @@ const dirty = computed(() => JSON.stringify(profiles.value) !== snapshot.value);
 function refreshStatuses() {
   statuses.value = (runtime.getProviderStatusesForUi?.() || {}) as Record<string, ProviderStatus>;
   warmups.value = (runtime.getProviderWarmupsForUi?.() || {}) as Record<string, ProviderWarmup>;
-  defaultId.value = String(runtime.getDefaultProviderProfileId?.() || "");
+  defaultId.value = String(getDefaultProviderProfileId() || "");
   warmOnStart.value = Boolean(runtime.getWarmOnStartForUi?.());
 }
 function refresh() {
-  profiles.value = (runtime.getProviderProfilesForUi?.() || []) as ProviderProfile[];
+  profiles.value = (getProviderProfilesForUi() || []) as ProviderProfile[];
   snapshot.value = JSON.stringify(profiles.value);
   refreshStatuses();
 }

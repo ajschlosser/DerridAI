@@ -32,6 +32,10 @@ const profile = () => ({
   max_concurrent_requests: 1,
 });
 
+vi.mock("../../src/domain/sharedProviderProfiles", () => ({
+  getProviderProfilesForUi: () => [profile()],
+  getDefaultProviderProfileId: () => "p1",
+}));
 vi.mock("../../src/runtime/runtime.js", () => ({
   getProviderProfilesForUi: () => [profile()],
   getProviderStatusesForUi: () => ({ p1: { available: true, models: [] } }),

@@ -21,6 +21,10 @@ import type { CorpusBuild } from "../../../api/corpus";
 import { systemApi, type ProviderProfile } from "../../../api/system";
 import type { RecordSizingPolicy } from "../../../types/corpus";
 import * as runtime from "../../../runtime/runtime.js";
+import {
+  getProviderProfilesForUi,
+  getDefaultProviderProfileId,
+} from "../../../domain/sharedProviderProfiles";
 
 const TEXT_CLEANUP_RULES = [
   "page_numbers",
@@ -224,8 +228,8 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
   });
 
   async function refreshProviders() {
-    const runtimeProfiles = (runtime.getProviderProfilesForUi?.() || []) as ProviderProfile[];
-    const defaultId = String(runtime.getDefaultProviderProfileId?.() || "");
+    const runtimeProfiles = (getProviderProfilesForUi() || []) as ProviderProfile[];
+    const defaultId = String(getDefaultProviderProfileId() || "");
     const publishProfiles = (profiles: ProviderProfile[]) => {
       providerProfiles.value = profiles;
       if (
