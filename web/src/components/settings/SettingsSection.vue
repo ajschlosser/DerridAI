@@ -34,10 +34,7 @@ withDefaults(
 );
 </script>
 <template>
-  <section
-    class="settings-section"
-    :aria-labelledby="`settings-heading-${sectionId}`"
-  >
+  <section class="settings-section" :aria-labelledby="`settings-heading-${sectionId}`">
     <header class="settings-section-head">
       <div>
         <p class="settings-kicker">{{ persistence }}</p>
