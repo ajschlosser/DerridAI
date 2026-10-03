@@ -149,7 +149,15 @@ function removeGroup() {
           :hint="t('footer_help')"
           control-id="schema-group-footer"
         >
-          <UiTextarea id="schema-group-footer" v-model="group.footer" rows="3" />
+          <template #default="{ describedby, invalid }">
+            <UiTextarea
+              id="schema-group-footer"
+              v-model="group.footer"
+              rows="3"
+              :aria-describedby="describedby"
+              :invalid="invalid"
+            />
+          </template>
         </UiField>
       </fieldset>
     </section>
