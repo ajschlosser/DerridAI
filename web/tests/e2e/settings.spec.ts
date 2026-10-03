@@ -49,11 +49,10 @@ for (const [id, story, include] of STORIES) {
   });
 }
 
-test("keyboard: Settings contents rail is operable with arrows and shows a visible focus ring", async ({
-  page,
-}) => {
+test("keyboard: Settings contents rail uses ordinary links with visible focus", async ({ page }) => {
   await page.goto("/iframe.html?id=settings-navigation--default&viewMode=story");
-  const first = page.getByRole("tab").first();
+  const links = page.getByRole("link");
+  const first = links.first();
   await first.focus();
   const outline = await first.evaluate((el) => {
     const style = getComputedStyle(el);
@@ -61,7 +60,7 @@ test("keyboard: Settings contents rail is operable with arrows and shows a visib
   });
   expect(outline.style).not.toBe("none");
   expect(outline.width).toBeGreaterThanOrEqual(2);
-  await page.keyboard.press("ArrowDown");
-  await expect(page.getByRole("tab").nth(1)).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("tab").nth(1)).toBeFocused();
+  await expect(first).toHaveAttribute("aria-current", "page");
+  await page.keyboard.press("Tab");
+  await expect(links.nth(1)).toBeFocused();
 });
