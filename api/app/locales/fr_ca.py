@@ -5621,7 +5621,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
                                        'ur.',
  'settings.color_theme': 'Thème de couleur',
  'settings.columns_reset': 'Colonnes du tableau réinitialisées',
- 'settings.contents': 'Sommaire',
+ 'settings.contents': 'Catégories de paramètres',
  'settings.contrast': 'Contraste',
  'settings.contrast_help': 'Augmente le contraste des bordures et du texte atténué dans cet espace'
                                        ' de travail.',
