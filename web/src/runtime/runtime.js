@@ -1501,7 +1501,6 @@ const {
   cloneAuditValue: (...args) => cloneAuditValue(...args),
   dbUnavailableReason: (...args) => dbUnavailableReason(...args),
   download: (...args) => download(...args),
-  fieldEditor: (...args) => fieldEditor(...args),
   fileJsonl: (...args) => fileJsonl(...args),
   fileTimers,
   formatTimestamp: (...args) => formatTimestamp(...args),
@@ -1514,7 +1513,6 @@ const {
   navigateTo: (...args) => navigateTo(...args),
   needsReviewItems: (...args) => needsReviewItems(...args),
   parseBulkFieldValue: (...args) => parseBulkFieldValue(...args),
-  parseEditor: (...args) => parseEditor(...args),
   pendingChangesForRow: (...args) => pendingChangesForRow(...args),
   pendingUpsertRows: (...args) => pendingUpsertRows(...args),
   persistFileNow: (...args) => persistFileNow(...args),
@@ -1978,26 +1976,6 @@ function cleanRows(rows) {
   toast(trf("dynamic.cleaned_records", { records: recordsChanged, changes: fieldsChanged }), {
     tone: "success",
   });
-}
-
-function fieldEditor(k, v) {
-  const t = Array.isArray(v) ? "array" : v === null ? "null" : typeof v;
-  const full = ["text", "edition", "review_reason", "full_citation", "quotation_chain"].includes(k);
-  const cls = `field ${full ? "field-full" : ""}`;
-  if (t === "boolean")
-    return `<div class="${cls}"><label>${esc(label(k))}</label><label class="boolean-control"><input data-key="${esc(k)}" data-type="boolean" type="checkbox" ${v ? "checked" : ""}><span>${v ? "Enabled" : "Disabled"}</span></label></div>`;
-  if (k === "text")
-    return `<div class="${cls}"><label>${esc(label(k))}</label><textarea class="long" data-key="${esc(k)}" data-type="string">${esc(v || "")}</textarea></div>`;
-  if (t === "array" || t === "object")
-    return `<div class="${cls}"><label>${esc(label(k))} · JSON</label><textarea data-key="${esc(k)}" data-type="json">${esc(JSON.stringify(v, null, 2))}</textarea></div>`;
-  return `<div class="${cls}"><label>${esc(label(k))}</label><input data-key="${esc(k)}" data-type="${t}" ${t === "number" ? 'type="number" step="any"' : ""} value="${esc(v ?? "")}"></div>`;
-}
-function parseEditor(el) {
-  if (el.dataset.type === "boolean") return el.checked;
-  if (el.dataset.type === "number") return el.value === "" ? null : +el.value;
-  if (el.dataset.type === "null") return el.value === "" ? null : el.value;
-  if (el.dataset.type === "json") return JSON.parse(el.value);
-  return el.value;
 }
 
 function exportMenu() {

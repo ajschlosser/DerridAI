@@ -927,6 +927,7 @@ const scenarios: Scenario[] = [
   },
   {
     name: "record-edit-sheet",
+    contains: ["Edit record"],
     nav: "Record View",
     load: true,
     target: "dialog",
