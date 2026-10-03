@@ -98,7 +98,8 @@ test("Roles retains the permission editor through atomic failure and retry", asy
       });
       socket.onMessage((raw) => {
         const message = JSON.parse(String(raw)) as { type: string; topics?: string[] };
-        if (message.type === "subscribe") (message.topics ?? []).forEach((topic) => topics.add(topic));
+        if (message.type === "subscribe")
+          (message.topics ?? []).forEach((topic) => topics.add(topic));
         if (message.type === "unsubscribe")
           (message.topics ?? []).forEach((topic) => topics.delete(topic));
         if (message.type === "subscribe" || message.type === "unsubscribe") {
