@@ -63,7 +63,7 @@ Record split/merge operations do not make a provider result authoritative. A rer
 
 ### spaCy (universal baseline)
 
-spaCy runs inside the API for every language and is what **Automatic** (the default) uses unless BookNLP is set up for an English document. It provides whole-document named-entity observations and conservative surface-form clusters. A language resolves to, in order: a configured/installed package (`SPACY_MODEL_<LANG>`; English, French and German `lg` models ship in the image), an administrator-installed spaCy language pack, then the multilingual `xx_ent_wiki_sm` entity model. The reported model name says which was used, including `(multilingual fallback)`; with none available the analysis is `unavailable`, never silently empty. It does **not** pretend to provide BookNLP-style pronominal coreference or quotation attribution.
+spaCy runs inside the API and is what **Automatic** (the default) uses unless BookNLP is set up for an English document. English and French work out of the box with the small `en_core_web_sm` and `fr_core_news_sm` pipelines bundled in the API image. Other languages are explicit managed resources rather than image dependencies: an administrator installs a spaCy language pack before analysis needs that language. A language resolves to, in order: an explicit `SPACY_MODEL_<LANG>` override, the bundled English/French default when applicable, an administrator-installed spaCy language pack, then the multilingual `xx_ent_wiki_sm` entity model when that optional pack is installed. The reported model name says which was used, including `(multilingual fallback)`; with none available the analysis is `unavailable`, never silently empty. It does **not** pretend to provide BookNLP-style pronominal coreference or quotation attribution.
 
 ### BookNLP
 
@@ -117,7 +117,7 @@ docker compose --profile document-nlp up -d --build
 
 ### Language packs
 
-Administrators install models on demand under **Settings → System → Language packs**. Each install is a cancellable background job that downloads the pack's files over HTTPS, refuses a redirect off HTTPS, stops at the declared size, and checks every SHA-256 before anything becomes active. Files are staged, then swapped in with `<models>/<lang>/active.json`; a failed or cancelled install leaves the previous pack untouched. The worker reads that manifest from its read-only mount (`/models/booknlp`), re-verifies the digests, and reloads when a different pack is installed. Explicit `BOOKNLP_*_MODEL` paths still take precedence.
+English and French small spaCy models are bundled with the API and require no setup. Administrators install additional or larger models on demand under **Settings → System → Language packs**. Each managed install is a cancellable background job that downloads the pack's files over HTTPS, refuses a redirect off HTTPS, stops at the declared size, and checks every SHA-256 before anything becomes active. Files are staged, then swapped in with `<models>/<lang>/active.json`; a failed or cancelled install leaves the previous pack untouched. The worker reads that manifest from its read-only mount (`/models/booknlp`), re-verifies the digests, and reloads when a different pack is installed. Explicit `BOOKNLP_*_MODEL` paths still take precedence.
 
 The built-in catalog (`api/app/document_nlp_packs.py`):
 
