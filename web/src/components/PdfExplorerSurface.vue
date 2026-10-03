@@ -26,6 +26,7 @@ import { selectedIndex } from "../domain/sharedUrlState";
 import { isEvidenceSelected, reviewKey } from "../domain/evidenceSelection";
 import { enhanceCollapsibles } from "../domain/collapsiblePanels";
 import { persistCurrentPdfAsset } from "../domain/pdfAssetPersistence";
+import { loadPdfMetadata } from "../domain/pdfMetadata";
 import { navigateTo, syncUrl } from "../domain/sharedNavigation";
 import { fullCitation } from "../domain/citations";
 import { highlight } from "../domain/recordFormatting";
@@ -230,7 +231,7 @@ async function onFileChange(event: Event) {
     try {
       const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
       state.pdf.doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer.slice(0)) }).promise;
-      const metadata = await runtime.loadPdfMetadata(state.pdf.doc, file.name);
+      const metadata = await loadPdfMetadata(state.pdf.doc, file.name);
       state.pdf.title = metadata.title || state.pdf.title;
       state.pdf.author = metadata.author || "";
     } catch (error: Any) {

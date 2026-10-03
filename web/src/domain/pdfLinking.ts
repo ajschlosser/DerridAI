@@ -77,25 +77,6 @@ export function createPdfLinking(deps: Deps) {
         String(a.record.record_id || "").localeCompare(String(b.record.record_id || "")),
     );
   }
-  async function loadPdfMetadata(doc: Any, fileName: Any) {
-    const fallback = String(fileName || "").replace(/\.pdf$/i, "");
-    if (!doc) return { title: fallback, author: "" };
-    try {
-      const metadata = await doc.getMetadata();
-      const info = metadata?.info || {};
-      const xmp = metadata?.metadata;
-      const title = String(
-        info.Title || xmp?.get?.("dc:title") || xmp?.get?.("pdf:title") || fallback || "",
-      ).trim();
-      const author = String(
-        info.Author || xmp?.get?.("dc:creator") || xmp?.get?.("pdf:author") || "",
-      ).trim();
-      return { title: title || fallback, author };
-    } catch (error) {
-      console.warn("Could not read PDF metadata", error);
-      return { title: fallback, author: "" };
-    }
-  }
   function openPdfExplorerWorkspace() {
     window.dispatchEvent(
       new CustomEvent("derridai:navigate-native", {
@@ -202,7 +183,6 @@ export function createPdfLinking(deps: Deps) {
     pdfDisplayTitle,
     loadedPdfPagesForRecord,
     allLinkedRowsForLoadedPdf,
-    loadPdfMetadata,
     openPdfExplorerWorkspace,
     openLoadedPdfPage,
     linkedPdfRows,
