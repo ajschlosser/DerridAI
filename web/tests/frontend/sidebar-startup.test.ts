@@ -1,4 +1,5 @@
 import { flushPromises, mount } from "@vue/test-utils";
+import { useLayoutStore } from "../../src/stores/workspace";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -159,6 +160,7 @@ const pageLabels = (wrapper: ReturnType<typeof mount>) => pageButtons(wrapper).m
 
 describe("sidebar at sign-in", () => {
   beforeEach(() => {
+    useLayoutStore().sidebarCollapsed = false;
     vi.clearAllMocks();
     localStorage.clear();
     runtime.getNavItems.mockReturnValue(NAV);
@@ -227,7 +229,7 @@ describe("sidebar at sign-in", () => {
         .every((button) => !button.element.closest(".ui-tooltip")),
     ).toBe(true);
 
-    shell.snapshot.sidebarCollapsed = true;
+    useLayoutStore().sidebarCollapsed = true;
     await flushPromises();
     expect(wrapper.findAll(".shell-navigation .ui-tooltip-anchor")).not.toHaveLength(0);
   });
