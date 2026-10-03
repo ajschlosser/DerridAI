@@ -73,6 +73,20 @@ const actions = (over: Partial<JobReviewActions> = {}): JobReviewActions => ({
 });
 
 describe("JobReviewDialog", () => {
+  it("does not leave an inactive dialog in the application DOM", async () => {
+    const wrapper = mount(JobReviewDialog, { attachTo: document.body });
+    expect(wrapper.find("dialog").exists()).toBe(false);
+
+    openJobReviewDialog(view(), actions());
+    await flushPromises();
+    expect(wrapper.find("dialog[open]").exists()).toBe(true);
+
+    closeJobReviewDialog();
+    await flushPromises();
+    expect(wrapper.find("dialog").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it("selects every field except the record text by default", async () => {
     const wrapper = mount(JobReviewDialog, { attachTo: document.body });
     const a = actions();
