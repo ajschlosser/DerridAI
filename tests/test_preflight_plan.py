@@ -97,6 +97,16 @@ def test_publication_export_browser_test_does_not_force_general_app_e2e():
     assert plan.publication
     assert not plan.e2e
 
+
+def test_related_unit_selector_change_runs_full_frontend_units_only():
+    plan = build_plan(["scripts/run_frontend_related_tests.sh"])
+
+    assert plan.backend
+    assert plan.frontend
+    assert plan.frontend_unit
+    assert plan.unit_full
+    assert not plan.e2e
+
 def test_preflight_script_change_tests_automation_without_every_frontend_gate():
     plan = build_plan(["scripts/preflight.sh"])
 
