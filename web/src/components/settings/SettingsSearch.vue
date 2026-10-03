@@ -25,6 +25,8 @@ export interface SettingsSearchHit {
   section: SettingsSectionId;
   label: string;
   group: string;
+  targetId?: string;
+  advanced?: boolean;
 }
 
 const props = defineProps<{
