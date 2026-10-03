@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ref } from "vue";
+import { onScopeDispose, ref } from "vue";
 import { annotationsService } from "../services/annotations";
 import type { AnnotationWorkspaceItem, AnnotationsWorkspaceSnapshot } from "../types/annotations";
 
@@ -26,20 +26,41 @@ export function useAnnotationsWorkspace() {
   const error = ref("");
   const removing = ref<string | null>(null);
   let queryTimer: number | undefined;
+  let request = 0;
+  let disposed = false;
+  onScopeDispose(() => {
+    disposed = true;
+    request += 1;
+    window.clearTimeout(queryTimer);
+  });
 
   async function load(force = false) {
+    if (disposed) return;
+    const current = ++request;
     loading.value = true;
     error.value = "";
     try {
-      snapshot.value = await annotationsService.loadWorkspace(force || Boolean(snapshot.value));
+      const result = await annotationsService.loadWorkspace(force || Boolean(snapshot.value));
+      if (current !== request) return;
+      snapshot.value = snapshot.value ? { ...result, view: snapshot.value.view } : result;
     } catch (exception) {
+      if (current !== request) return;
+      if (
+        exception &&
+        typeof exception === "object" &&
+        "status" in exception &&
+        [401, 403].includes(Number(exception.status))
+      )
+        snapshot.value = null;
       error.value = exception instanceof Error ? exception.message : String(exception);
     } finally {
-      loading.value = false;
+      if (current === request) loading.value = false;
     }
   }
 
   function setQuery(value: string) {
+    request += 1;
+    loading.value = false;
     annotationsService.setQuery(value);
     if (snapshot.value) snapshot.value = { ...snapshot.value, query: value };
     window.clearTimeout(queryTimer);

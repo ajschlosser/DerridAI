@@ -90,7 +90,7 @@ export function createAnnotationsWorkspace(deps: Deps) {
       store: annotation.store || "",
     }));
   }
-  async function refreshServerAnnotations(force = false) {
+  async function refreshServerAnnotations(force = false, strict = false) {
     if (isResearcher() && !hasCapability("annotations.read")) {
       state.serverAnnotations = [];
       state.serverAnnotationsStore = "";
@@ -110,6 +110,7 @@ export function createAnnotationsWorkspace(deps: Deps) {
       state.serverAnnotationsStore = storeName;
       state.annotationsFetchedAt = Date.now();
     } catch (error) {
+      if (strict) throw error;
       console.warn("Could not load shared annotations", error);
     }
     return state.serverAnnotations || [];
@@ -265,15 +266,12 @@ export function createAnnotationsWorkspace(deps: Deps) {
   }
   async function loadAnnotationsWorkspace(force = false) {
     if (isResearcher() && !state.activeStore) {
-      try {
-        await refreshStores();
-        state.activeStore = recordStores()[0]?.name || "";
-      } catch (error) {
-        console.warn("Could not select an annotations store", error);
-      }
+      await refreshStores();
+      state.activeStore = recordStores()[0]?.name || "";
     }
     await refreshServerAnnotations(
       force || (isResearcher() && state.serverAnnotationsStore !== String(state.activeStore || "")),
+      true,
     );
     return getAnnotationsWorkspaceSnapshot();
   }

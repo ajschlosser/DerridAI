@@ -31,6 +31,8 @@ Two built-in roles ship with the application:
 
 ### Annotations
 
+The Annotations toolbar remains visible while the feed loads. Refreshes retain loaded annotations with an Updating status; a failed refresh marks the retained feed out of date and offers Retry. Initial failures show Retry without claiming there are no annotations.
+
 Annotations can target selected text, an entire Record, or an entire work. Selected-text annotations retain the quoted passage; Record and work annotations retain their durable target without requiring a quotation. From an annotation form, add comma-separated Record IDs to link the same discussion to additional records. Linked and work-scoped annotations appear in each applicable Record and in the global Annotations workspace without creating duplicate annotation identities.
 
 Replies are stored as part of an annotation thread. Threads with replies start collapsed and can be expanded. Deleting a thread root preserves a visible deleted-root placeholder so the replies and discussion history remain understandable. Annotation visibility and linked-record access are enforced by the API for the selected corpus store.

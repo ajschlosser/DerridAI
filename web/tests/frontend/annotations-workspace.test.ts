@@ -173,3 +173,11 @@ describe("annotations workspace", () => {
     expect(persistFileNow).toHaveBeenCalledWith(file);
   });
 });
+
+it("reports a workspace read failure while retaining the prior shared annotations", async () => {
+  const failure = new Error("Offline");
+  const { state, workspace } = setup({ api: vi.fn().mockRejectedValue(failure) });
+  state.serverAnnotations = [{ id: "retained" }];
+  await expect(workspace.loadAnnotationsWorkspace(true)).rejects.toThrow("Offline");
+  expect(state.serverAnnotations).toEqual([{ id: "retained" }]);
+});

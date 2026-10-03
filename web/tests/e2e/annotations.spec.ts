@@ -17,6 +17,7 @@
  */
 
 import { expect, test, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { mockBackend } from "./support/mock-backend";
 
 const APP = `http://127.0.0.1:${process.env.APP_PORT || "5199"}`;
@@ -120,4 +121,56 @@ test("Annotations modern workflow opens the owning work and record", async ({ pa
   await expect(
     page.getByText("The sign and divinity have the same place and time of birth."),
   ).toBeVisible();
+});
+
+test("Annotations retains the feed through delayed refresh and local failure", async ({ page }) => {
+  await openAnnotationsWorkflow(page);
+  await expect(page.getByText("Central claim")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const feed = await page
+    .locator(".annotation-work-group")
+    .filter({ hasText: "Central claim" })
+    .elementHandle();
+  let fail = true;
+  let requests = 0;
+  await page.route("**/api/annotations**", async (route) => {
+    requests += 1;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await route.fulfill({
+      status: fail ? 503 : 200,
+      contentType: "application/json",
+      body: JSON.stringify(fail ? { detail: "Unavailable" } : { annotations: [] }),
+    });
+  });
+  await page.getByPlaceholder(/Search annotations/).fill("claim");
+  await expect(page.locator(".annotations-page .is-inline")).toBeVisible();
+  expect(await feed!.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(page.locator(".annotations-page [role=alert]")).toBeVisible();
+  expect(await feed!.evaluate((node) => node.isConnected)).toBe(true);
+  const results = await new AxeBuilder({ page })
+    .include(".annotations-page")
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+    .analyze();
+  // Existing group summaries nest their Open work overview buttons (also present on master).
+  // Pin the exact debt without disabling axe; all newly introduced feedback remains clean.
+  expect(results.violations.map((item) => item.id)).toEqual(["nested-interactive"]);
+  expect(results.violations[0].nodes).toHaveLength(2);
+  for (const node of results.violations[0].nodes) {
+    expect(node.target.join(" ")).toMatch(/annotation-work-group.* > summary$/);
+  }
+  const feedback = await new AxeBuilder({ page })
+    .include(".annotations-index-card")
+    .include(".annotations-state")
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(feedback.violations).toEqual([]);
+  fail = false;
+  await page
+    .locator(".annotations-page [role=alert]")
+    .getByRole("button", { name: "Retry" })
+    .click();
+  await expect(page.locator(".annotations-page [role=alert]")).toHaveCount(0);
+  await expect(page.locator(".annotations-page .is-inline")).toHaveCount(0);
+  expect(requests).toBe(2);
+  expect(await feed!.evaluate((node) => node.isConnected)).toBe(true);
 });
