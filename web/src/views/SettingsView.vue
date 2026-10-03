@@ -1574,6 +1574,26 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           id="settings-system-groups"
         >
           <SettingsSection
+            v-if="section === 'data'"
+            section-id="data-workspaces"
+            :title="i18n.t('settings.data_workspaces_title')"
+            :description="i18n.t('settings.data_workspaces_help')"
+            :persistence="persistKind('link')"
+          >
+            <template #actions>
+              <UiButton
+                icon="database"
+                :label="i18n.t('runtime.system_data')"
+                @click="go('/system-data')"
+              />
+              <UiButton
+                icon="database"
+                :label="i18n.t('nav.vector')"
+                @click="go('/databases', 'vector')"
+              />
+            </template>
+          </SettingsSection>
+          <SettingsSection
             v-if="section === 'services'"
             section-id="language-packs"
             :title="i18n.t('settings.nlp_packs_title')"
