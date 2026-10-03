@@ -162,11 +162,7 @@ export const HELP_SECTIONS: HelpSection[] = [
   },
   {
     id: "access",
-    questions: [
-      { id: "missing_page" },
-      { id: "browser_vs_server" },
-      { id: "automatic_updates" },
-    ],
+    questions: [{ id: "missing_page" }, { id: "browser_vs_server" }, { id: "automatic_updates" }],
   },
   {
     id: "troubleshooting",
