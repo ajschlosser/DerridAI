@@ -870,7 +870,28 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             :description="i18n.t('settings.notifications_help')"
             :persistence="persistKind('browser')"
           >
+            <UiField
+              :label="i18n.t('settings.desktop_notifications')"
+              :hint="i18n.t('settings.notifications_help')"
+            >
+              <select
+                id="settings-field-notifications"
+                class="control"
+                :value="notificationsOn ? 'on' : 'off'"
+                @change="
+                  notificationsOn = ($event.target as HTMLSelectElement).value === 'on';
+                  saveNotifications();
+                "
+              >
+                <option value="off">{{ i18n.t("settings.notifications_off") }}</option>
+                <option value="on">{{ i18n.t("settings.notifications_on") }}</option>
+              </select>
+            </UiField>
             <template #actions>
+              <UiButton
+                :label="i18n.t('settings.request_notifications')"
+                @click="requestNotifications"
+              />
             </template>
           </SettingsSection>
         </div>
@@ -1616,28 +1637,15 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             :description="i18n.t('settings.viewer_help')"
             :persistence="persistKind('browser')"
           >
-            <UiField
-              :label="i18n.t('settings.desktop_notifications')"
-              :hint="i18n.t('settings.notifications_help')"
-            >
-              <select
-                id="settings-field-notifications"
-                class="control"
-                :value="notificationsOn ? 'on' : 'off'"
-                @change="
-                  notificationsOn = ($event.target as HTMLSelectElement).value === 'on';
-                  saveNotifications();
-                "
-              >
-                <option value="off">{{ i18n.t("settings.notifications_off") }}</option>
-                <option value="on">{{ i18n.t("settings.notifications_on") }}</option>
-              </select>
-            </UiField>
+            <p class="note">
+              {{
+                i18n.t(
+                  "settings.viewer_recovery_help",
+                  "These actions reset local interface state. They do not delete corpus records or reviewed research data.",
+                )
+              }}
+            </p>
             <template #actions>
-              <UiButton
-                :label="i18n.t('settings.request_notifications')"
-                @click="requestNotifications"
-              />
               <UiButton :label="i18n.t('settings.reset_columns')" @click="resetColumns" />
               <UiButton :label="i18n.t('settings.expand_panels')" @click="expandPanels" />
               <UiButton :label="i18n.t('settings.expand_sidebar')" @click="expandSidebar" />
