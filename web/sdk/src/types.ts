@@ -61,6 +61,8 @@ export interface EmbeddingContract {
   model?: string;
   dimension?: number | null;
   revision?: string;
+  /** Vector-changing preprocessing/inference contract, for exact compatibility checks. */
+  variant?: string;
   distance_metric?: "cosine" | "dot" | "euclidean" | string;
   text_field?: string;
 }
