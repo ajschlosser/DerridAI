@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from app import corpus_builder as cb
 from app import metadata_exemplar_projection as projection
+from app import source_block_index
 from app.chroma_store import encode_metadata
 from app.field_assertions import current_assertion_by_name
 from app.metadata_exemplar_retrieval import ChromaMetadataExemplarIndex
@@ -492,6 +493,92 @@ def test_scheduling_failure_does_not_spin_or_block_review():
     assert not manager._metadata_scheduled
 
 
+def _measure_source_block_reads(repo, monkeypatch, counters):
+    """Count file-level JSONL loads, including asset-quality reads inside load_blocks."""
+    original = repo._load_block_rows
+
+    def measured(asset_id):
+        path = repo.asset_blocks_path(asset_id)
+        byte_count = path.stat().st_size if path.exists() else 0
+        started = time.perf_counter()
+        rows = original(asset_id)
+        counters["source_read_seconds"] += time.perf_counter() - started
+        counters["source_read_calls"] += 1
+        counters["source_rows_read"] += len(rows)
+        counters["source_bytes_read"] += byte_count
+        return rows
+
+    monkeypatch.setattr(repo, "_load_block_rows", measured)
+    indexed_read = source_block_index._read_indexed_block
+
+    def measured_indexed(handle, offset, length):
+        result = indexed_read(handle, offset, length)
+        if Path(handle.name) == repo.asset_blocks_path("a"):
+            counters["source_rows_read"] += 1
+            counters["source_bytes_read"] += length
+        return result
+
+    monkeypatch.setattr(source_block_index, "_read_indexed_block", measured_indexed)
+    selected = repo.load_selected_blocks
+
+    def measured_selected(asset_id, block_ids):
+        started = time.perf_counter()
+        rows = selected(asset_id, block_ids)
+        counters["source_read_seconds"] += time.perf_counter() - started
+        counters["source_read_calls"] += 1
+        return rows
+
+    monkeypatch.setattr(repo, "load_selected_blocks", measured_selected)
+
+
+@pytest.mark.parametrize("size", [10, 100])
+def test_single_record_projection_reads_only_record_blocks(tmp_path, monkeypatch, size):
+    _patch_quiet(monkeypatch)
+    monkeypatch.setattr(projection, "system_store", SQLiteSystemRepository(tmp_path / "system.sqlite"))
+    rows = [reviewed_record(f"r{i}", f"b{i + 1}") for i in range(size)]
+    repo, build = install_repo(tmp_path, rows)
+    bid = build["build_id"]
+    # Settle asset-quality initialization before measuring the warm read path.
+    repo.load_blocks("a")
+    expected = [row for row in projection.derive_build_metadata_exemplars(repo, bid) if row["record_id"] == "r0"]
+    repo.load_selected_blocks("a", ["b1"])
+    counters = dict(source_read_seconds=0.0, source_read_calls=0, source_rows_read=0, source_bytes_read=0)
+    _measure_source_block_reads(repo, monkeypatch, counters)
+
+    actual = projection.derive_record_metadata_exemplars(repo, bid, ["r0"])
+
+    assert actual == expected
+    assert actual
+    assert {row["record_id"] for row in actual} == {"r0"}
+    assert counters["source_read_calls"] == 1
+    assert counters["source_rows_read"] == 1
+    assert counters["source_bytes_read"] < repo.asset_blocks_path("a").stat().st_size
+    assert counters["source_read_seconds"] >= 0
+    assert set(counters) == {
+        "source_read_seconds", "source_read_calls", "source_rows_read", "source_bytes_read",
+    }
+
+
+def test_selected_projection_preserves_context_and_page_label_updates(tmp_path, monkeypatch):
+    _patch_quiet(monkeypatch)
+    monkeypatch.setattr(projection, "system_store", SQLiteSystemRepository(tmp_path / "system.sqlite"))
+    row = reviewed_record("r0", "b2")
+    row["source_block_ids"] = ["b1", "b2", "b3"]
+    rows = [row, reviewed_record("r1", "b2"), reviewed_record("r2", "b3")]
+    repo, build = install_repo(tmp_path, rows)
+    bid = build["build_id"]
+    asset = cb._json_read(repo.asset_meta_path("a"))
+    asset["pages"] = [{"pdf_page": 1}]
+    cb._json_write(repo.asset_meta_path("a"), asset)
+    expected = [item for item in projection.derive_build_metadata_exemplars(repo, bid) if item["record_id"] == "r0"]
+    assert projection.derive_record_metadata_exemplars(repo, bid, ["r0"]) == expected
+    assert "text 1" in expected[0]["context_text"] and "text 3" in expected[0]["context_text"]
+    repo.update_page_labels("a", {1: "iv"})
+    expected = [item for item in projection.derive_build_metadata_exemplars(repo, bid) if item["record_id"] == "r0"]
+    assert projection.derive_record_metadata_exemplars(repo, bid, ["r0"]) == expected
+    assert repo.load_selected_blocks("a", ["b2"])[0]["printed_page_label"] == "iv"
+
+
 @pytest.mark.parametrize("size", [1000, 10000])
 @pytest.mark.parametrize("build_count", [1, 2])
 def test_incremental_exemplar_repository_benchmark(tmp_path, monkeypatch, size, build_count):
@@ -507,11 +594,16 @@ def test_incremental_exemplar_repository_benchmark(tmp_path, monkeypatch, size, 
         builds.append((repo, build["build_id"]))
     store = Store()
     index = ChromaMetadataExemplarIndex(store)
+    source_index_initialization_seconds = 0.0
     for repo, bid in builds:
         projection.project_build_metadata_exemplars(repo, bid, index)
+        started_index = time.perf_counter()
+        repo.load_selected_blocks("a", ["b1"])
+        source_index_initialization_seconds += time.perf_counter() - started_index
 
     counters = {"decoded": 0, "source_load_seconds": 0.0}
     for repo, _ in builds:
+        _measure_source_block_reads(repo, monkeypatch, counters)
         decode = repo._decode_migrated
         load_blocks = repo.load_blocks
 
@@ -527,10 +619,22 @@ def test_incremental_exemplar_repository_benchmark(tmp_path, monkeypatch, size, 
 
         monkeypatch.setattr(repo, "_decode_migrated", measured_decode)
         monkeypatch.setattr(repo, "load_blocks", measured_blocks)
+        load_selected = repo.load_selected_blocks
+
+        def measured_selection(*args, original=load_selected):
+            started = time.perf_counter()
+            result = original(*args)
+            counters["source_load_seconds"] += time.perf_counter() - started
+            return result
+
+        monkeypatch.setattr(repo, "load_selected_blocks", measured_selection)
     for sample in range(3):
         for mode in ("rebuild", "incremental"):
             for pattern in ("single", "coalesced"):
-                counters.update(decoded=0, source_load_seconds=0.0)
+                counters.update(
+                    decoded=0, source_load_seconds=0.0, source_read_seconds=0.0,
+                    source_read_calls=0, source_rows_read=0, source_bytes_read=0,
+                )
                 store.embedded.clear()
                 store.collection.returned_rows = 0
                 save_seconds = 0.0
@@ -564,6 +668,13 @@ def test_incremental_exemplar_repository_benchmark(tmp_path, monkeypatch, size, 
                     assert sum(item["vector_reused"] for item in stats) == affected
                     assert store.collection.returned_rows == affected
                 source_load_seconds = counters["source_load_seconds"]
+                source_reads = {
+                    key: counters[key] for key in (
+                        "source_read_seconds", "source_read_calls", "source_rows_read", "source_bytes_read",
+                    )
+                }
+                assert source_reads["source_read_calls"] >= build_count
+                assert source_reads["source_rows_read"] == (size * build_count if mode == "rebuild" else affected)
                 # Check the complete changed set and preserve every unaffected row
                 # outside the timed/counted workload.
                 for repo, bid in builds:
@@ -585,6 +696,10 @@ def test_incremental_exemplar_repository_benchmark(tmp_path, monkeypatch, size, 
                     "mode": mode, "pattern": pattern, "elapsed_seconds": elapsed,
                     "save_seconds": save_seconds, "decoded": expected_reads + (size * build_count if mode == "rebuild" else affected),
                     "source_load_seconds": source_load_seconds,
+                    **source_reads,
+                    "benchmark_contract": "corpus-exemplar-repository-v3",
+                    "source_index_initialization_seconds": source_index_initialization_seconds,
+                    "cache_state": "warm application state; OS filesystem cache uncontrolled",
                     "embedding_documents": len(store.embedded),
                     "vector_rows_read": store.collection.returned_rows,
                     "vector_rows_written": sum(item["upserted"] for item in stats),

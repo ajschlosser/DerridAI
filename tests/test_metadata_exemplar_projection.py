@@ -68,6 +68,9 @@ class FakeRepo:
         assert asset_id == "asset-1"
         return self.blocks
 
+    def load_selected_blocks(self, asset_id, block_ids):
+        return [block for block in self.load_blocks(asset_id) if block["block_id"] in block_ids]
+
     def list_builds(self, *, offset=0, limit=1000):
         return {"items": [self.build]}
 
