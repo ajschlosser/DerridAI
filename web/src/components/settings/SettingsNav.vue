@@ -28,6 +28,21 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [SettingsSectionId];
 }>();
+
+function activate(event: MouseEvent, id: SettingsSectionId) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return;
+  }
+  event.preventDefault();
+  emit("select", id);
+}
 const activeId = computed(() =>
   props.items.some((item) => item.id === props.modelValue)
     ? props.modelValue
@@ -38,16 +53,16 @@ const activeId = computed(() =>
   <nav class="settings-nav" :aria-label="navLabel">
     <ul class="settings-nav-list">
       <li v-for="item in items" :key="item.id">
-        <RouterLink
+        <a
           :id="`settings-nav-${item.id}`"
           class="settings-nav-item"
           :class="{ active: item.id === activeId }"
-          :to="item.path || `/settings/${item.id}`"
+          :href="item.path || `/settings/${item.id}`"
           :aria-current="item.id === activeId ? 'page' : undefined"
-          @click="emit('select', item.id)"
+          @click="activate($event, item.id)"
         >
           {{ item.label }}
-        </RouterLink>
+        </a>
       </li>
     </ul>
   </nav>
