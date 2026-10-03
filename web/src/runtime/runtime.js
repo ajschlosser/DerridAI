@@ -149,6 +149,7 @@ import { createRecordsWorkspace } from "../domain/recordsWorkspace";
 import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { createWorksWorkspace } from "../domain/worksWorkspace";
 import { createJobsWorkspace } from "../domain/jobsWorkspace";
+import { canAccessView, userHasCapability } from "../domain/pageAccess";
 import { createDashboardRenderer } from "../domain/dashboardRenderer";
 import { createPdfExplorerRenderer } from "../domain/pdfExplorerRenderer";
 import { createJobDialogs } from "../domain/jobDialogs";
@@ -1330,10 +1331,7 @@ function isResearcher() {
   return Boolean(state.userContext && state.userContext.role !== "admin");
 }
 function hasCapability(capability) {
-  if (!state.userContext) return false;
-  if (state.userContext.role === "admin") return true;
-  const capabilities = new Set(state.userContext.capabilities || []);
-  return capabilities.has("*") || capabilities.has(capability);
+  return userHasCapability(state.userContext, capability);
 }
 function userCapabilities() {
   return {
@@ -1347,30 +1345,11 @@ function userCapabilities() {
     configureProviders: hasCapability("providers.manage"),
   };
 }
-const pageCapabilities = {
-  home: "page.dashboard",
-  list: "page.records",
-  record: "page.record",
-  works: "page.works",
-  global: "page.search",
-  annotations: "page.annotations",
-  semanticmap: "page.semantic_map",
-  pdf: "page.pdf",
-  compare: "page.compare",
-  vector: "page.vector",
-  rag: "page.research",
-  faq: "page.faq",
-  responsecache: "page.response_cache",
-  providers: "page.providers",
-  schemas: "page.schemas",
-  config: "page.settings",
-};
 function canUse(feature) {
   return Boolean(userCapabilities()[feature]);
 }
 function canAccessPage(view) {
-  const capability = pageCapabilities[view];
-  return !capability || hasCapability(capability);
+  return canAccessView(state.userContext, view);
 }
 function setUserContext(user) {
   const priorId = state.userContext?.id;
