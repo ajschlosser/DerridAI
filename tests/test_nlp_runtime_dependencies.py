@@ -7,9 +7,7 @@
 # License, or (at your option) any later version.
 
 """Container NLP dependencies stay minimal; additional languages are managed packs."""
-
 from pathlib import Path
-
 
 ROOT = Path(__file__).resolve().parents[1]
 NLP_REQUIREMENTS = ROOT / "api" / "requirements-nlp.txt"
