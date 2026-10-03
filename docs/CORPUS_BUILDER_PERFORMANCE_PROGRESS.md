@@ -149,6 +149,14 @@ Focused validation is recorded below by checkpoint; overlapping test counts are 
 2. Extend exact reuse to other computational stages and refine consumed-dependency scopes. Record-local source lookup, bounded in-flight sharing, and materialized family checking are implemented below; real-source/cold-load/contention validation remains outstanding.
 3. Evaluate earlier readiness, scheduling, and review assistance separately from repository queue improvements.
 
+## Resume readiness and save reuse PR preparation
+
+- The two follow-up increments below are committed at `acbbe1c1`, after integrating `origin/master` through `86deeaf3`. Their earlier uncommitted-state notes describe the implementation checkpoints, not the current branch.
+- The first full preflight passed backend lint/types/syntax, 15 REST/GraphQL contracts, frontend lint/typechecks, selected frontend suites, and the production application build. Backend regression results were 2,184 passed, 21 skipped, and 16 failed.
+- Seven hook-test failures were caused by CRLF in the temporary Linux validation checkout; restoring the tracked LF content made those hook tests pass. The remaining scheduling/read-count failure classes also reproduced against current master.
+- With user approval, the review-decision, bulk-review, and enrichment-handoff suites now opt into a shared fixture that disables asynchronous exemplar scheduling before manager construction. Operation-specific scheduling spies and assertions remain intact; production scheduling and dedicated projection-worker coverage are unchanged. The affected suites plus incremental/exemplar projection coverage passed 134 cases with four opt-in benchmarks skipped; touched-test Ruff passed.
+- Production application and Storybook builds and all ten focused Chromium cases passed during implementation. Six text-readiness cases verify save reconciliation without a redundant full-Record request. Full preflight must pass again before publishing; no live latency gain, release readiness, or whole-plan completion is claimed.
+
 ## Version-certified review-save reuse continuation (2026-10-03)
 
 - Targeted review writes return the committed normalized payload and `queue_state_version` captured inside its SQLite transaction. A later callback/write cannot relabel that older payload with a newer version. Metadata decisions that need no additional write read the payload/version in one coherent snapshot. Existing canonical encoders and publication exclusions keep the operational field out of scholarly storage and exports.

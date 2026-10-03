@@ -43,6 +43,8 @@ sys.path.insert(0, str(ROOT / "api"))
 from app import corpus_builder as cb
 from app import corpus_review_actions as review_actions
 
+pytestmark = pytest.mark.usefixtures("isolated_metadata_projection")
+
 
 def install_repo(tmp_path: Path, records: list[dict]):
     """Create a temp repository and build containing the supplied records."""
