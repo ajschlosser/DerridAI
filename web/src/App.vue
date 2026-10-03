@@ -22,6 +22,7 @@ import SeparateWorksDialog from "./components/SeparateWorksDialog.vue";
 import BulkFieldEditorDialog from "./components/BulkFieldEditorDialog.vue";
 import JobDetailsDialog from "./components/JobDetailsDialog.vue";
 import JobReviewDialog from "./components/JobReviewDialog.vue";
+import LlmTaskLauncherDialog from "./components/LlmTaskLauncherDialog.vue";
 import LlmToolResultDialog from "./components/LlmToolResultDialog.vue";
 import PdfDraftRecordDialog from "./components/PdfDraftRecordDialog.vue";
 import RecordPreviewDialog from "./components/RecordPreviewDialog.vue";
@@ -773,6 +774,7 @@ watch(
   <JobDetailsDialog />
   <JobReviewDialog />
   <LlmToolResultDialog />
+  <LlmTaskLauncherDialog />
   <PdfDraftRecordDialog />
   <WorkMetadataEditorDialog />
   <WorkMetadataLlmDialog />
