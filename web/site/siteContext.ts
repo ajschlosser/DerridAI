@@ -741,6 +741,19 @@ export function createPublishedSiteContext() {
     return providerError(t("site.runtime.embedding_failed"), "embedding_failed");
   }
 
+  function objectValue(value: unknown): Record<string, unknown> {
+    return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  }
+
+  function normalizedModelProgress(value: unknown): ModelProgress {
+    const source = objectValue(value);
+    return {
+      status: source.status == null ? undefined : String(source.status),
+      file: source.file == null ? undefined : String(source.file),
+      progress: source.progress == null ? undefined : Number(source.progress),
+    };
+  }
+
   function directEmbeddingProvider(profile: EndpointProfile, apiKey: string) {
     const model = String(profile.model || "").trim();
     if (!model) return undefined;
@@ -761,12 +774,20 @@ export function createPublishedSiteContext() {
           body: JSON.stringify({ model, input: texts }),
           signal: options.signal,
         });
-        const vectors = Array.isArray(body.data)
-          ? [...body.data]
-              .sort((left, right) => Number(left?.index ?? 0) - Number(right?.index ?? 0))
-              .map((item) => item?.embedding)
+        const entries = Array.isArray(body.data)
+          ? body.data
+              .map(objectValue)
+              .sort((left, right) => Number(left.index ?? 0) - Number(right.index ?? 0))
           : [];
-        if (vectors.length !== texts.length || !vectors.every(Array.isArray)) {
+        const vectors: number[][] = [];
+        for (const entry of entries) {
+          const embedding = entry.embedding;
+          if (!Array.isArray(embedding) || !embedding.every((value) => typeof value === "number")) {
+            throw embeddingFailure();
+          }
+          vectors.push(embedding);
+        }
+        if (vectors.length !== texts.length) {
           throw embeddingFailure();
         }
         return { vectors, provider: descriptor() };
@@ -856,7 +877,7 @@ export function createPublishedSiteContext() {
           device,
           ...(profile.revision ? { revision: profile.revision } : {}),
           ...(profile.dtype ? { dtype: profile.dtype } : {}),
-          progress_callback: (progress: unknown) => modelProgressListener?.(progress),
+          progress_callback: (progress: unknown) => modelProgressListener?.(normalizedModelProgress(progress)),
         });
       } catch (error) {
         if (device === "wasm") throw error;
@@ -865,7 +886,7 @@ export function createPublishedSiteContext() {
           device: "wasm",
           ...(profile.revision ? { revision: profile.revision } : {}),
           ...(profile.dtype ? { dtype: profile.dtype } : {}),
-          progress_callback: (progress: unknown) => modelProgressListener?.(progress),
+          progress_callback: (progress: unknown) => modelProgressListener?.(normalizedModelProgress(progress)),
         });
       }
     })();
