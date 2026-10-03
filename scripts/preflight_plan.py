@@ -96,7 +96,9 @@ def _mark_full_frontend(plan: PreflightPlan) -> None:
 def build_plan(paths: list[str]) -> PreflightPlan:
     plan = PreflightPlan()
     for raw_path in paths:
-        path = raw_path.replace("\\", "/").lstrip("./")
+        path = raw_path.replace("\\", "/")
+        while path.startswith("./"):
+            path = path[2:]
         if not path:
             continue
 
