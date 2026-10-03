@@ -64,7 +64,6 @@ test("Help Center is task-first, searchable, deep-linkable, and WCAG 2.2 AA clea
   await page.goto(APP + "/help#help-question-pipeline_trace");
   const question = page.locator("#help-question-pipeline_trace");
   await expect(question).toHaveAttribute("open", "");
-  await question.getByRole("button").count().catch(() => 0);
   await expectHelpAxeClean(page);
 
   await page.setViewportSize({ width: 390, height: 844 });
