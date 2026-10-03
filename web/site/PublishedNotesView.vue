@@ -5,11 +5,12 @@ Copyright © 2026  Aaron John Schlosser, PhD
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import type { Annotation } from "../sdk/src/types";
 import UiButton from "../src/components/ui/UiButton.vue";
 import { usePublishedSite } from "./siteContext";
 
 const site = usePublishedSite();
-const items = ref<any[]>([]);
+const items = ref<Annotation[]>([]);
 const statusById = ref<Record<string, string>>({});
 
 async function refresh() {
