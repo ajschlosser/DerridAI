@@ -23,7 +23,7 @@ import type { SettingsSearchHit } from "./SettingsSearch.vue";
 
 const hits: SettingsSearchHit[] = [
   { id: "rag-k", section: "retrieval", label: "Retrieval k", group: "Vector stores and retrieval" },
-  { id: "theme", section: "workspace", label: "Color theme", group: "Workspace and appearance" },
+  { id: "theme", section: "preferences", label: "Color theme", group: "Preferences" },
 ];
 
 const meta = {

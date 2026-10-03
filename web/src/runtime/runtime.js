@@ -149,6 +149,7 @@ import { createRecordsWorkspace } from "../domain/recordsWorkspace";
 import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { createWorksWorkspace } from "../domain/worksWorkspace";
 import { createJobsWorkspace } from "../domain/jobsWorkspace";
+import { canAccessView, userHasCapability } from "../domain/pageAccess";
 import { createDashboardRenderer } from "../domain/dashboardRenderer";
 import { createPdfExplorerRenderer } from "../domain/pdfExplorerRenderer";
 import { createJobDialogs } from "../domain/jobDialogs";
@@ -1315,18 +1316,22 @@ function hasCorpusDb() {
 }
 function dbUnavailableReason() {
   if (!hasChromaService())
-    return "ChromaDB is unavailable. Start/connect ChromaDB before using database features.";
-  if (!recordStores().length) return "Create or restore a corpus vector database first.";
+    return tr(
+      "runtime.disabled.chroma_unavailable",
+      "ChromaDB is unavailable. Start/connect ChromaDB before using database features.",
+    );
+  if (!recordStores().length)
+    return tr(
+      "runtime.disabled.create_corpus_db",
+      "Create or restore a corpus vector database first.",
+    );
   return "";
 }
 function isResearcher() {
   return Boolean(state.userContext && state.userContext.role !== "admin");
 }
 function hasCapability(capability) {
-  if (!state.userContext) return false;
-  if (state.userContext.role === "admin") return true;
-  const capabilities = new Set(state.userContext.capabilities || []);
-  return capabilities.has("*") || capabilities.has(capability);
+  return userHasCapability(state.userContext, capability);
 }
 function userCapabilities() {
   return {
@@ -1340,30 +1345,11 @@ function userCapabilities() {
     configureProviders: hasCapability("providers.manage"),
   };
 }
-const pageCapabilities = {
-  home: "page.dashboard",
-  list: "page.records",
-  record: "page.record",
-  works: "page.works",
-  global: "page.search",
-  annotations: "page.annotations",
-  semanticmap: "page.semantic_map",
-  pdf: "page.pdf",
-  compare: "page.compare",
-  vector: "page.vector",
-  rag: "page.research",
-  faq: "page.faq",
-  responsecache: "page.response_cache",
-  providers: "page.providers",
-  schemas: "page.schemas",
-  config: "page.settings",
-};
 function canUse(feature) {
   return Boolean(userCapabilities()[feature]);
 }
 function canAccessPage(view) {
-  const capability = pageCapabilities[view];
-  return !capability || hasCapability(capability);
+  return canAccessView(state.userContext, view);
 }
 function setUserContext(user) {
   const priorId = state.userContext?.id;
@@ -1399,50 +1385,97 @@ function decorateDisabledControls(root = document) {
     let reason =
       explicit ||
       existingTitle ||
-      "This action is unavailable until its required selection or data is available.";
+      tr(
+        "runtime.disabled.unavailable",
+        "This action is unavailable until its required selection or data is available.",
+      );
     if (!explicit && !existingTitle && (pageAction === "first" || pageAction === "prev"))
-      reason = "You are already on the first page.";
+      reason = tr("runtime.disabled.first_page", "You are already on the first page.");
     else if (!explicit && !existingTitle && (pageAction === "next" || pageAction === "last"))
-      reason = "You are already on the last page.";
+      reason = tr("runtime.disabled.last_page", "You are already on the last page.");
     else if (!explicit && !existingTitle && control.dataset.up !== undefined)
-      reason = "This column is already first.";
+      reason = tr("runtime.disabled.column_first", "This column is already first.");
     else if (!explicit && !existingTitle && control.dataset.down !== undefined)
-      reason = "This column is already last.";
-    else if (id === "breadcrumbback") reason = "There is no earlier navigation location.";
-    else if (id === "breadcrumbforward") reason = "There is no forward navigation location.";
-    else if (id === "loadraghistory") reason = "Choose a previous RAG question first.";
+      reason = tr("runtime.disabled.column_last", "This column is already last.");
+    else if (id === "breadcrumbback")
+      reason = tr(
+        "runtime.disabled.no_earlier_location",
+        "There is no earlier navigation location.",
+      );
+    else if (id === "breadcrumbforward")
+      reason = tr(
+        "runtime.disabled.no_forward_location",
+        "There is no forward navigation location.",
+      );
+    else if (id === "loadraghistory")
+      reason = tr("runtime.disabled.choose_rag_question", "Choose a previous RAG question first.");
     else if (id === "applyjobselected" || id === "applyselectedchanges")
-      reason = "Select at least one proposed change first.";
+      reason = tr(
+        "runtime.disabled.select_proposed_change",
+        "Select at least one proposed change first.",
+      );
     else if (id === "nukeeverything") reason = tr("config.nuke.type_to_enable_help");
-    else if (id === "linkpdf") reason = "The current PDF page is already linked to this record.";
+    else if (id === "linkpdf")
+      reason = tr(
+        "runtime.disabled.pdf_page_linked",
+        "The current PDF page is already linked to this record.",
+      );
     else if (id === "runsearch")
-      reason = "Semantic search is unavailable for precomputed-only collections.";
+      reason = tr(
+        "runtime.disabled.semantic_search_precomputed",
+        "Semantic search is unavailable for precomputed-only collections.",
+      );
     else if (["ragmodel", "toolmodel", "touchmodel"].includes(id))
-      reason = "The provider is configured to choose the model automatically.";
-    else if (id === "columnadd") reason = "Every available field is already shown.";
-    else if (id === "importactive") reason = "Load and select a JSONL tab first.";
-    else if (id === "importall") reason = "Load at least one JSONL tab first.";
+      reason = tr(
+        "runtime.disabled.model_automatic",
+        "The provider is configured to choose the model automatically.",
+      );
+    else if (id === "columnadd")
+      reason = tr("runtime.disabled.all_fields_shown", "Every available field is already shown.");
+    else if (id === "importactive")
+      reason = tr("runtime.disabled.load_select_jsonl_tab", "Load and select a JSONL tab first.");
+    else if (id === "importall")
+      reason = tr("runtime.disabled.load_jsonl_tab", "Load at least one JSONL tab first.");
     else if (["extractpage", "extractall", "pdfllmclean", "pdfllmdraft"].includes(id))
-      reason = "Load a PDF page with extractable text first.";
+      reason = tr(
+        "runtime.disabled.load_pdf_text_page",
+        "Load a PDF page with extractable text first.",
+      );
     else if (["pdfllmlink", "linkcurrentpdf"].includes(id))
-      reason = "Load JSONL records before linking a PDF page.";
+      reason = tr(
+        "runtime.disabled.load_records_before_link",
+        "Load JSONL records before linking a PDF page.",
+      );
     else if (
       ["collectionembeddingprovider", "collectionembeddingmodel", "saveembeddingsettings"].includes(
         id,
       )
     )
-      reason =
-        "Embedding settings are locked after a collection contains records; create a new empty collection to change them.";
+      reason = tr(
+        "runtime.disabled.embedding_locked",
+        "Embedding settings are locked after a collection contains records; create a new empty collection to change them.",
+      );
     else if (id === "runtouchup")
-      reason = "Configure a reachable LLM provider and model before running this operation.";
+      reason = tr(
+        "runtime.disabled.configure_llm",
+        "Configure a reachable LLM provider and model before running this operation.",
+      );
     else if (text.includes("cancelling"))
-      reason = "Cancellation has already been requested for this operation.";
+      reason = tr(
+        "runtime.disabled.cancelling",
+        "Cancellation has already been requested for this operation.",
+      );
     else if (/upsert|sync|rag/.test(id)) reason = dbUnavailableReason() || reason;
-    else if (/prev|older/.test(id)) reason = "There is no previous item or older version.";
-    else if (/next|newer/.test(id)) reason = "There is no next item or newer version.";
-    else if (/merge/.test(id)) reason = "Load at least two JSONL tabs to merge them.";
-    else if (/subset|bulk|export/.test(id)) reason = "Load JSONL records first.";
-    else if (/edit/.test(id)) reason = "Select a record first.";
+    else if (/prev|older/.test(id))
+      reason = tr("runtime.disabled.no_previous", "There is no previous item or older version.");
+    else if (/next|newer/.test(id))
+      reason = tr("runtime.disabled.no_next", "There is no next item or newer version.");
+    else if (/merge/.test(id))
+      reason = tr("runtime.disabled.merge_two_tabs", "Load at least two JSONL tabs to merge them.");
+    else if (/subset|bulk|export/.test(id))
+      reason = tr("runtime.disabled.load_records", "Load JSONL records first.");
+    else if (/edit/.test(id))
+      reason = tr("runtime.disabled.select_record", "Select a record first.");
     if (explicit) reason = explicit;
     control.title = reason;
     if (control.tagName === "BUTTON" && !control.closest(".disabled-control-tooltip")) {
@@ -1867,15 +1900,7 @@ function renderView() {
   if (state.view !== "home") unmountOperationsPanel();
   if (!canAccessPage(state.view)) state.view = "home";
   syncUrl({ replace: true });
-  const result = null;
-  Promise.resolve(result).finally(() =>
-    requestAnimationFrame(() => {
-      enhanceCollapsibles(main);
-      decorateDisabledControls(main);
-      translateLegacyDom(main);
-    }),
-  );
-  return result;
+  return null;
 }
 
 function searchByMetadata(field, value, { contains = false } = {}) {
@@ -3487,6 +3512,7 @@ export {
   backupContainsCredentials,
   pendingUpsertRows,
   decorateDisabledControls,
+  translateLegacyDom,
   getResearchWorkspaceSnapshot,
   updateResearchConfig,
   removeResearchEvidence,
