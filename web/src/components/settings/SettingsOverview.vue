@@ -24,6 +24,25 @@ defineProps<{
     attention?: boolean;
   }>;
 }>();
+
+const emit = defineEmits<{
+  select: [SettingsSectionId];
+}>();
+
+function activate(event: MouseEvent, id: SettingsSectionId) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return;
+  }
+  event.preventDefault();
+  emit("select", id);
+}
 </script>
 
 <template>
@@ -38,7 +57,11 @@ defineProps<{
     <nav :aria-label="navLabel">
       <ul class="settings-overview-grid">
         <li v-for="item in items" :key="item.id">
-          <RouterLink class="settings-overview-link" :to="item.path">
+          <a
+            class="settings-overview-link"
+            :href="item.path"
+            @click="activate($event, item.id)"
+          >
             <span class="settings-overview-copy">
               <strong>{{ item.label }}</strong>
               <small>{{ item.description }}</small>
@@ -51,7 +74,7 @@ defineProps<{
               {{ item.detail }}
             </span>
             <span class="settings-overview-arrow" aria-hidden="true">→</span>
-          </RouterLink>
+          </a>
         </li>
       </ul>
     </nav>
