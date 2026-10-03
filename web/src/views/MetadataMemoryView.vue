@@ -75,13 +75,7 @@ const canNext = computed(
   () => ready.value && offset.value + pageSize < total.value && !loading.value,
 );
 const hasFilters = computed(() =>
-  Boolean(
-    query.value.trim() ||
-      field.value ||
-      kind.value ||
-      buildId.value ||
-      language.value,
-  ),
+  Boolean(query.value.trim() || field.value || kind.value || buildId.value || language.value),
 );
 const stats = computed(() => {
   const summary = payload.value?.summary;
@@ -230,11 +224,7 @@ onBeforeUnmount(() => window.clearTimeout(searchTimer));
 
     <MetadataMemoryRelations />
 
-    <section
-      v-if="ready"
-      class="memory-summary"
-      :aria-label="i18n.t('metadata_memory.summary')"
-    >
+    <section v-if="ready" class="memory-summary" :aria-label="i18n.t('metadata_memory.summary')">
       <article v-for="stat in stats" :key="stat.key" class="card">
         <span class="stat-label">
           {{ i18n.t(`metadata_memory.${stat.key}`) }}
@@ -259,11 +249,7 @@ onBeforeUnmount(() => window.clearTimeout(searchTimer));
           })
         }}
       </p>
-      <UiButton
-        :label="i18n.t('ui.retry')"
-        :disabled="loading"
-        @click="refetch"
-      />
+      <UiButton :label="i18n.t('ui.retry')" :disabled="loading" @click="refetch" />
     </div>
 
     <section
