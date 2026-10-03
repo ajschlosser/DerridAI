@@ -38,8 +38,6 @@ export const setUrlSyncHook = (...args: Parameters<typeof runtime.setUrlSyncHook
   runtime.setUrlSyncHook(...args);
 export const bootstrapRuntime = (...args: Parameters<typeof runtime.bootstrapRuntime>) =>
   runtime.bootstrapRuntime(...args);
-export const pauseRuntime = (...args: Parameters<typeof runtime.pauseRuntime>) =>
-  runtime.pauseRuntime(...args);
 export const syncFromLocation = (...args: Parameters<typeof runtime.syncFromLocation>) =>
   runtime.syncFromLocation(...args);
 export const repaintAfterLocationChange = (

@@ -77,6 +77,7 @@ import { viewConfig } from "./domain/runtimeConstants";
 import * as runtime from "./runtime/runtime.js";
 import { navigateTo } from "./domain/sharedNavigation";
 import { triggerImport } from "./domain/sharedFileLifecycle";
+import { pauseRuntime } from "./domain/jobsPause";
 import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
 
 const router = useRouter();
@@ -496,7 +497,7 @@ async function startRuntime() {
 }
 
 async function logout() {
-  runtime.pauseRuntime();
+  pauseRuntime();
   runtimeStarted.value = false;
   await auth.logout();
   await router.replace("/");
@@ -506,7 +507,7 @@ async function handleAuthExpired() {
   if (handlingAuthExpiry.value || !auth.user) return;
   handlingAuthExpiry.value = true;
   try {
-    runtime.pauseRuntime();
+    pauseRuntime();
     runtimeStarted.value = false;
     auth.expireSession(i18n.t("auth.session_expired"));
     if (router.currentRoute.value.path !== "/") await router.replace("/");
@@ -564,7 +565,7 @@ watch(
   () => auth.user?.id,
   (id) => {
     if (!id) {
-      runtime.pauseRuntime();
+      pauseRuntime();
       runtimeStarted.value = false;
       shell.resetNav();
       return;
