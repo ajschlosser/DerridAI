@@ -42,6 +42,15 @@ type Helper =
   | "trf";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
+/** Key of one workspace record in the review selection (`reviewSelection`). */
+export function reviewKey(file: Any, index: Any) {
+  return `${file.id}::${index}`;
+}
+/** Whether `key` is currently selected as Research evidence in the given state. */
+export function isEvidenceSelected(state: Loose, key: Any) {
+  return Boolean(state.selectedEvidence?.[key]);
+}
+
 export function createEvidenceSelection(deps: Deps) {
   const {
     state,
@@ -57,9 +66,6 @@ export function createEvidenceSelection(deps: Deps) {
     tr,
     trf,
   } = deps;
-  function reviewKey(file: Any, index: Any) {
-    return `${file.id}::${index}`;
-  }
   function reviewItemFromKey(key: Any) {
     const split = String(key).lastIndexOf("::");
     if (split < 0) return null;
@@ -108,7 +114,7 @@ export function createEvidenceSelection(deps: Deps) {
     return Object.values(state.selectedEvidence || {}).filter(Boolean);
   }
   function evidenceIsSelected(key: Any) {
-    return Boolean(state.selectedEvidence?.[key]);
+    return isEvidenceSelected(state, key);
   }
   function setEvidence(key: Any, item: Any, selected = true) {
     if (!state.selectedEvidence || typeof state.selectedEvidence !== "object")

@@ -21,6 +21,7 @@ import { toast } from "../composables/notifications";
 import { openMessageDialog } from "../composables/messageDialog";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import { isEvidenceSelected, reviewKey } from "../domain/evidenceSelection";
 import { navigateTo } from "../domain/sharedNavigation";
 import { fullCitation } from "../domain/citations";
 import { highlight } from "../domain/recordFormatting";
@@ -42,6 +43,7 @@ const copy = computed(() =>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 const state = runtime.state as unknown as Any;
+const selectedAsEvidence = (key: string) => isEvidenceSelected(state, key);
 
 const mainEl = ref<HTMLElement>();
 const fileInputEl = ref<HTMLInputElement>();
@@ -746,7 +748,7 @@ onBeforeUnmount(() => {
                   >
                 </button>
                 <div class="tools">
-                  <button class="btn small" :data-copy-row-key="runtime.reviewKey(file, index)">
+                  <button class="btn small" :data-copy-row-key="reviewKey(file, index)">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -761,32 +763,30 @@ onBeforeUnmount(() => {
                   </button>
                   <button
                     class="btn small"
-                    :data-cite-row-key="runtime.reviewKey(file, index)"
+                    :data-cite-row-key="reviewKey(file, index)"
                     data-cite-kind="inline"
                     :title="i18n.t('ui.copy_inline')"
                     v-text="copy.inline"
                   ></button>
                   <button
                     class="btn small"
-                    :data-cite-row-key="runtime.reviewKey(file, index)"
+                    :data-cite-row-key="reviewKey(file, index)"
                     data-cite-kind="full"
                     :title="i18n.t('ui.copy_full')"
                     v-text="copy.full"
                   ></button>
                   <button
                     class="btn small"
-                    :class="{ soft: runtime.evidenceIsSelected(evidenceKey(file.id, index)) }"
-                    :data-toggle-workspace-evidence="runtime.reviewKey(file, index)"
+                    :class="{ soft: selectedAsEvidence(evidenceKey(file.id, index)) }"
+                    :data-toggle-workspace-evidence="reviewKey(file, index)"
                     :title="
-                      runtime.evidenceIsSelected(evidenceKey(file.id, index))
+                      selectedAsEvidence(evidenceKey(file.id, index))
                         ? i18n.t('ui.remove_evidence')
                         : i18n.t('ui.add_evidence')
                     "
                   >
                     <AppIcon
-                      :name="
-                        runtime.evidenceIsSelected(evidenceKey(file.id, index)) ? 'check' : 'plus'
-                      "
+                      :name="selectedAsEvidence(evidenceKey(file.id, index)) ? 'check' : 'plus'"
                     />{{ copy.evidence }}
                   </button>
                   <button
@@ -857,7 +857,7 @@ onBeforeUnmount(() => {
                 <div class="pdf-related-pages">
                   <button
                     class="copy-record-mini"
-                    :data-copy-row-key="runtime.reviewKey(file, index)"
+                    :data-copy-row-key="reviewKey(file, index)"
                     :title="copy.copyEntire"
                   >
                     <svg
@@ -873,28 +873,28 @@ onBeforeUnmount(() => {
                   </button>
                   <button
                     class="copy-record-mini"
-                    :data-cite-row-key="runtime.reviewKey(file, index)"
+                    :data-cite-row-key="reviewKey(file, index)"
                     data-cite-kind="inline"
                     :title="i18n.t('ui.copy_inline')"
                     v-text="'I'"
                   ></button>
                   <button
                     class="copy-record-mini"
-                    :data-cite-row-key="runtime.reviewKey(file, index)"
+                    :data-cite-row-key="reviewKey(file, index)"
                     data-cite-kind="full"
                     :title="i18n.t('ui.copy_full')"
                     v-text="'F'"
                   ></button>
                   <button
                     class="copy-record-mini"
-                    :class="{ selected: runtime.evidenceIsSelected(evidenceKey(file.id, index)) }"
-                    :data-toggle-workspace-evidence="runtime.reviewKey(file, index)"
+                    :class="{ selected: selectedAsEvidence(evidenceKey(file.id, index)) }"
+                    :data-toggle-workspace-evidence="reviewKey(file, index)"
                     :title="
-                      runtime.evidenceIsSelected(evidenceKey(file.id, index))
+                      selectedAsEvidence(evidenceKey(file.id, index))
                         ? i18n.t('ui.remove_evidence')
                         : i18n.t('ui.add_evidence')
                     "
-                    v-text="runtime.evidenceIsSelected(evidenceKey(file.id, index)) ? '✓' : '+'"
+                    v-text="selectedAsEvidence(evidenceKey(file.id, index)) ? '✓' : '+'"
                   ></button>
                   <button
                     v-for="page in recordPages"
