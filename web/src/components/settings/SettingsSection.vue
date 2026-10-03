@@ -17,7 +17,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import UiCard from "../ui/UiCard.vue";
 import SettingsSaveState from "./SettingsSaveState.vue";
 import type { SaveStatus } from "../../domain/settings";
 
@@ -35,12 +34,7 @@ withDefaults(
 );
 </script>
 <template>
-  <UiCard
-    :as="'section'"
-    class="settings-section"
-    :padded="false"
-    :heading-id="`settings-heading-${sectionId}`"
-  >
+  <section class="settings-section" :aria-labelledby="`settings-heading-${sectionId}`">
     <header class="settings-section-head">
       <div>
         <p class="settings-kicker">{{ persistence }}</p>
@@ -49,7 +43,11 @@ withDefaults(
         }}</component>
         <p class="settings-section-copy">{{ description }}</p>
       </div>
-      <SettingsSaveState v-if="statusLabel" :status="status" :label="statusLabel" />
+      <SettingsSaveState
+        v-if="statusLabel && status !== 'saved' && status !== 'readonly'"
+        :status="status"
+        :label="statusLabel"
+      />
     </header>
     <div class="settings-section-body">
       <slot />
@@ -57,13 +55,17 @@ withDefaults(
     <footer v-if="$slots.actions" class="settings-section-actions">
       <slot name="actions" />
     </footer>
-  </UiCard>
+  </section>
 </template>
 <style scoped>
 .settings-section {
   display: grid;
   gap: 16px;
-  padding: 20px;
+  padding: 4px 0 24px;
+  border-bottom: 1px solid var(--line);
+}
+.settings-section + .settings-section {
+  padding-top: 8px;
 }
 .settings-section-head {
   display: flex;
@@ -74,11 +76,9 @@ withDefaults(
 }
 .settings-kicker {
   margin: 0 0 4px;
-  font-size: 0.8125rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
 }
 .settings-section-head :is(h2, h3) {
   margin: 0;
@@ -107,7 +107,7 @@ withDefaults(
 }
 @media (max-width: 640px) {
   .settings-section {
-    padding: 16px;
+    padding-bottom: 20px;
   }
   .settings-section-head :is(h2, h3) {
     font-size: 1.125rem;

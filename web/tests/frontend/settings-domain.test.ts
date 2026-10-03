@@ -22,6 +22,8 @@ import {
   normalizeRag,
   resolveColorScheme,
   resolveContrast,
+  resolveSettingsSectionId,
+  SETTINGS_SECTIONS,
   sameSettings,
   validateRag,
   RAG_DEFAULTS,
@@ -64,6 +66,16 @@ describe("settings domain", () => {
     const draft = normalizeRag({ locales: [], search_types: [] });
     expect(draft.locales).toEqual([]);
     expect(draft.search_types).toEqual([]);
+  });
+
+  it("maps legacy settings routes onto task-oriented categories", () => {
+    expect(resolveSettingsSectionId("workspace")).toBe("preferences");
+    expect(resolveSettingsSectionId("review")).toBe("research");
+    expect(resolveSettingsSectionId("providers")).toBe("services");
+    expect(resolveSettingsSectionId("system")).toBe("data");
+    expect(resolveSettingsSectionId("overview")).toBe("overview");
+    expect(resolveSettingsSectionId("unknown")).toBeNull();
+    expect(SETTINGS_SECTIONS[0]?.id).toBe("overview");
   });
 
   it("filters searchable fields with translated labels", () => {

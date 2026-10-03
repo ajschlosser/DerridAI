@@ -78,7 +78,7 @@ import {
   UTILITY_NAV_IDS,
   navIdForRoute,
 } from "./domain/appNavigation";
-import { SETTINGS_SECTIONS, isSettingsSectionId } from "./domain/settings";
+import { SETTINGS_SECTIONS, resolveSettingsSectionId } from "./domain/settings";
 import { viewConfig } from "./domain/runtimeConstants";
 import * as runtime from "./runtime/runtime.js";
 import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
@@ -326,8 +326,8 @@ const mobileNavGroups = computed<SidebarNavGroup[]>(() => [
 function translatedRouteTitle() {
   if (route.name === "record" && s.value.context.title) return s.value.context.title;
   if (route.name === "settings-section") {
-    const requested = String(route.params.section || "workspace");
-    const id = isSettingsSectionId(requested) ? requested : "workspace";
+    const requested = String(route.params.section || "overview");
+    const id = resolveSettingsSectionId(requested) || "overview";
     const section = SETTINGS_SECTIONS.find((item) => item.id === id);
     return section
       ? i18n.t(section.labelKey, section.labelFallback)
@@ -357,7 +357,7 @@ const breadcrumbItems = computed(() => {
   } else if (route.name === "settings-section") {
     items.push({
       label: i18n.t("nav.config", "Settings"),
-      to: breadcrumbDestination("/settings/workspace"),
+      to: breadcrumbDestination("/settings/overview"),
     });
   }
 

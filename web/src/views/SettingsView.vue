@@ -35,11 +35,12 @@ import LanguageFlag from "../components/LanguageFlag.vue";
 import UiButton from "../components/ui/UiButton.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
 import UiField from "../components/ui/UiField.vue";
-import UiHealthChip from "../components/ui/UiHealthChip.vue";
-import DataRetentionSettings from "../components/settings/DataRetentionSettings.vue";
-import DocumentNlpLanguagePacks from "../components/settings/DocumentNlpLanguagePacks.vue";
+import SettingsAccessPanel from "../components/settings/SettingsAccessPanel.vue";
+import SettingsDataPanel from "../components/settings/SettingsDataPanel.vue";
 import SettingsNav from "../components/settings/SettingsNav.vue";
-import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
+import SettingsOverview from "../components/settings/SettingsOverview.vue";
+import SettingsServicesPanel from "../components/settings/SettingsServicesPanel.vue";
+import SettingsTroubleshootingPanel from "../components/settings/SettingsTroubleshootingPanel.vue";
 import SettingsSearch, { type SettingsSearchHit } from "../components/settings/SettingsSearch.vue";
 import SettingsSection from "../components/settings/SettingsSection.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
@@ -50,7 +51,7 @@ import {
   SETTINGS_SECTIONS,
   cloneJson,
   filterSettingsFields,
-  isSettingsSectionId,
+  resolveSettingsSectionId,
   normalizeAppearance,
   normalizeEmbedding,
   normalizeRag,
@@ -117,7 +118,6 @@ const confirm = ref<{
   message: string;
 } | null>(null);
 const restoreFile = ref<File | null>(null);
-const restoreInput = ref<HTMLInputElement | null>(null);
 const routeGuardResolve = ref<((allow: boolean) => void) | null>(null);
 const busy = ref("");
 
@@ -129,27 +129,70 @@ const defaultProfileId = computed(() =>
   String(runtime.getDefaultProviderProfileId?.() || reviewDraft.value.default_provider_profile),
 );
 const localeInfo = computed(() => i18n.languages.find((item) => item.code === i18n.locale));
-const visibleSections = computed(() => {
-  const ids: SettingsSectionId[] = ["workspace", "language"];
-  if (isAdmin.value) ids.push("research", "review", "providers", "retrieval", "security", "system");
-  else ids.push("research");
-  return SETTINGS_SECTIONS.filter((section) => ids.includes(section.id)).map((section) => ({
-    id: section.id,
-    label: i18n.t(section.labelKey, section.labelFallback),
-    description: i18n.t(section.descriptionKey, section.descriptionFallback),
-  }));
-});
+const visibleSections = computed(() =>
+  SETTINGS_SECTIONS.filter((item) => !item.adminOnly || isAdmin.value).map((item) => ({
+    id: item.id,
+    label: i18n.t(item.labelKey, item.labelFallback),
+    description: i18n.t(item.descriptionKey, item.descriptionFallback),
+    path: `/settings/${item.id}`,
+  })),
+);
 const section = computed<SettingsSectionId>({
   get() {
-    const raw = String(route.params.section || "workspace");
-    const requested = isSettingsSectionId(raw) ? raw : "workspace";
-    return visibleSections.value.some((item) => item.id === requested)
-      ? requested
-      : visibleSections.value[0]?.id || "workspace";
+    const raw = String(route.params.section || "overview");
+    const requested = resolveSettingsSectionId(raw) || "overview";
+    return visibleSections.value.some((item) => item.id === requested) ? requested : "overview";
   },
   set(id) {
     void router.push({ name: "settings-section", params: { section: id }, query: route.query });
   },
+});
+const overviewItems = computed(() => {
+  const reviewProfile = profiles.value.find(
+    (profile) => profile.id === reviewDraft.value.default_provider_profile,
+  );
+  const reviewPreset =
+    reviewDraft.value.default_review_preset === "attribution"
+      ? i18n.t("settings.preset_attribution")
+      : reviewDraft.value.default_review_preset === "semantic"
+        ? i18n.t("settings.preset_semantic")
+        : i18n.t("settings.preset_text");
+  const readyProviders = profiles.value.filter((profile) => providerReady(profile)).length;
+
+  return visibleSections.value
+    .filter((item) => item.id !== "overview")
+    .map((item) => {
+      if (item.id === "research") {
+        return {
+          ...item,
+          path: `/settings/${item.id}`,
+          detail: `${reviewProfile?.name || i18n.t("settings.not_configured")} · ${reviewPreset}`,
+        };
+      }
+      if (item.id === "retrieval") {
+        return {
+          ...item,
+          path: `/settings/${item.id}`,
+          detail: [
+            String(embeddingDraft.value.embedding_provider || ""),
+            String(embeddingDraft.value.embedding_model || ""),
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        };
+      }
+      if (item.id === "services") {
+        return {
+          ...item,
+          path: `/settings/${item.id}`,
+          detail: profiles.value.length
+            ? `${readyProviders}/${profiles.value.length} ${i18n.t("settings.provider_ready")}`
+            : i18n.t("settings.no_providers"),
+          attention: profiles.value.length === 0 || readyProviders < profiles.value.length,
+        };
+      }
+      return { ...item, path: `/settings/${item.id}` };
+    });
 });
 const appearanceDirty = computed(() => !sameSettings(appearanceDraft.value, appearanceSaved.value));
 const reviewDirty = computed(() => !sameSettings(reviewDraft.value, reviewSaved.value));
@@ -204,6 +247,20 @@ async function testAudio() {
   }
 }
 onMounted(loadAudio);
+watch(
+  () => String(route.params.section || "overview"),
+  (raw) => {
+    const resolved = resolveSettingsSectionId(raw);
+    if (resolved && resolved !== raw) {
+      void router.replace({
+        name: "settings-section",
+        params: { section: resolved },
+        query: route.query,
+      });
+    }
+  },
+  { immediate: true },
+);
 const embeddingProbe = ref<SystemEmbeddingStatus | null>(null);
 const embeddingProbing = ref(false);
 async function testEmbedding() {
@@ -233,28 +290,23 @@ const ragDirty = computed(() => !sameSettings(ragDraft.value, ragSaved.value));
 const dirty = computed(
   () => appearanceDirty.value || reviewDirty.value || embeddingDirty.value || ragDirty.value,
 );
-const pageStatus = computed<SaveStatus>(() => {
-  const values = Object.values(groupStatus.value);
-  if (values.includes("failed")) return "failed";
-  if (values.includes("saving")) return "saving";
-  if (values.includes("success")) return "success";
-  if (dirty.value) return "dirty";
-  return "saved";
-});
+
 const searchHits = computed<SettingsSearchHit[]>(() => {
   const fields = filterSettingsFields(query.value, (key, fallback) => i18n.t(key, fallback));
   const allowed = new Set(visibleSections.value.map((item) => item.id));
   return fields
     .filter((field) => allowed.has(field.section))
-    .map((field) => ({
-      id: field.id,
-      section: field.section,
-      label: i18n.t(field.labelKey, field.labelFallback),
-      group: i18n.t(
-        SETTINGS_SECTIONS.find((item) => item.id === field.section)?.labelKey || "",
-        field.section,
-      ),
-    }));
+    .map((field) => {
+      const group = SETTINGS_SECTIONS.find((item) => item.id === field.section);
+      return {
+        id: field.id,
+        section: field.section,
+        label: i18n.t(field.labelKey, field.labelFallback),
+        group: group ? i18n.t(group.labelKey, group.labelFallback) : field.section,
+        targetId: field.targetId,
+        advanced: field.advanced,
+      };
+    });
 });
 const backupCounts = computed(() => ({
   files: Number(workspace.files?.length || 0),
@@ -419,16 +471,23 @@ function goSection(id: SettingsSectionId) {
     document.getElementById(`settings-section-${id}`)?.scrollIntoView({ block: "start" }),
   );
 }
-function chooseSearch(hit: SettingsSearchHit) {
-  goSection(hit.section);
+async function chooseSearch(hit: SettingsSearchHit) {
+  if (hit.advanced) advancedOpen.value = true;
   query.value = "";
-  void nextTick(
-    () =>
-      document.getElementById(`settings-field-${hit.id}`)?.focus?.() ||
-      document
-        .getElementById(`settings-section-${hit.section}`)
-        ?.scrollIntoView({ block: "start" }),
-  );
+  contentsOpen.value = false;
+  await router.push({
+    name: "settings-section",
+    params: { section: hit.section },
+    query: route.query,
+  });
+  await nextTick();
+  const target =
+    document.getElementById(hit.targetId || `settings-field-${hit.id}`) ||
+    document.getElementById(`settings-section-${hit.section}`);
+  target?.scrollIntoView({ block: "center" });
+  if (target instanceof HTMLElement && target.matches("input, select, textarea, button, a[href]")) {
+    target.focus();
+  }
 }
 function go(path: string, view?: string) {
   if (view) runtime.navigateView(view);
@@ -437,12 +496,6 @@ function go(path: string, view?: string) {
 function providerReady(profile: ProviderProfile) {
   const status = workspace.providerStatuses?.[profile.id];
   return Boolean(status?.available);
-}
-function providerChecked(profile: ProviderProfile) {
-  const stamp = workspace.providerStatuses?.[profile.id]?.checked_at;
-  if (!stamp) return i18n.t("settings.not_checked");
-  const date = new Date(stamp);
-  return Number.isNaN(date.getTime()) ? stamp : date.toLocaleString(i18n.locale);
 }
 async function saveNotifications() {
   workspace.appConfig.desktop_notifications = notificationsOn.value;
@@ -495,14 +548,7 @@ function openBackup() {
       : i18n.t("settings.backup_confirm_message"),
   };
 }
-function openRestore() {
-  restoreInput.value?.click();
-}
-function onRestoreFile(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0] || null;
-  input.value = "";
-  if (!file) return;
+function onRestoreFile(file: File) {
   restoreFile.value = file;
   confirm.value = {
     kind: "restore",
@@ -660,11 +706,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       :title="i18n.t('context.config.title')"
       title-id="settings-page-title"
       :description="i18n.t('settings.page_help')"
-    >
-      <template #actions>
-        <SettingsSaveState :status="pageStatus" :label="statusLabel(pageStatus)" />
-      </template>
-    </UiPageHeader>
+    />
     <p v-if="pageError" class="info error" role="alert">{{ pageError }}</p>
     <div class="settings-toolbar">
       <SettingsSearch
@@ -694,19 +736,35 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
     <div class="settings-layout">
       <aside class="settings-rail" :class="{ open: contentsOpen }">
         <SettingsNav
-          v-model="section"
+          :model-value="section"
           :items="visibleSections"
-          :tablist-label="i18n.t('settings.contents')"
+          :nav-label="i18n.t('settings.contents')"
           @select="goSection"
         />
       </aside>
       <div class="settings-pane">
-        <div
-          v-show="section === 'workspace'"
-          id="settings-section-workspace"
-          role="tabpanel"
-          aria-labelledby="settings-nav-workspace"
+        <SettingsOverview
+          v-if="section === 'overview'"
+          :title="i18n.t('settings.nav.overview', 'Settings overview')"
+          :description="
+            i18n.t(
+              'settings.nav.overview_help',
+              'Find settings by task, review important defaults, and jump to related workspaces.',
+            )
+          "
+          :nav-label="i18n.t('settings.contents')"
+          :items="overviewItems"
+          @select="goSection"
         >
+          <template #footer>
+            <div class="settings-about">
+              <h3>{{ i18n.t("about.title") }}</h3>
+              <AppBuildInfo :show-commit="isAdmin" />
+            </div>
+          </template>
+        </SettingsOverview>
+
+        <div v-show="section === 'preferences'" id="settings-section-workspace">
           <SettingsSection
             section-id="workspace"
             :title="i18n.t('settings.appearance')"
@@ -761,19 +819,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   <option value="dark">{{ i18n.t("settings.scheme_dark") }}</option>
                 </select>
               </UiField>
-              <UiField
-                :label="i18n.t('settings.contrast')"
-                :hint="i18n.t('settings.contrast_help')"
-              >
-                <select
-                  id="settings-field-contrast"
-                  class="control"
-                  v-model="appearanceDraft.ui_contrast"
-                >
-                  <option value="system">{{ i18n.t("settings.contrast_system") }}</option>
-                  <option value="more">{{ i18n.t("settings.contrast_more") }}</option>
-                </select>
-              </UiField>
             </div>
             <template #actions>
               <UiButton
@@ -790,31 +835,16 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               />
             </template>
           </SettingsSection>
-          <SettingsSection
-            section-id="about"
-            :title="i18n.t('about.title')"
-            :description="i18n.t('about.help')"
-            :persistence="persistKind('readonly')"
-            status="readonly"
-            :status-label="statusLabel('readonly')"
-          >
-            <AppBuildInfo :show-commit="isAdmin" />
-          </SettingsSection>
         </div>
 
-        <div
-          v-show="section === 'language'"
-          id="settings-section-language"
-          role="tabpanel"
-          aria-labelledby="settings-nav-language"
-        >
+        <div v-show="section === 'preferences'" id="settings-section-language">
           <SettingsSection
             section-id="language"
             :title="i18n.t('settings.language_title')"
             :description="i18n.t('settings.language_help')"
             :persistence="persistKind('browser')"
-            status="saved"
-            :status-label="statusLabel('saved')"
+            :status="groupStatus.appearance"
+            :status-label="statusLabel(groupStatus.appearance)"
           >
             <UiField
               :label="i18n.t('settings.interface_language')"
@@ -845,23 +875,68 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 </select>
               </div>
             </UiField>
+            <UiField :label="i18n.t('settings.contrast')" :hint="i18n.t('settings.contrast_help')">
+              <select
+                id="settings-field-contrast"
+                class="control"
+                v-model="appearanceDraft.ui_contrast"
+              >
+                <option value="system">{{ i18n.t("settings.contrast_system") }}</option>
+                <option value="more">{{ i18n.t("settings.contrast_more") }}</option>
+              </select>
+            </UiField>
             <p class="note">{{ i18n.t("settings.a11y_note") }}</p>
-            <template v-if="isAdmin" #actions>
+            <template #actions>
               <UiButton
+                v-if="canAppearance"
+                variant="primary"
+                icon="check"
+                :label="i18n.t('settings.save_appearance')"
+                :disabled="groupStatus.appearance === 'saving'"
+                @click="saveAppearance"
+              />
+              <UiButton
+                v-if="isAdmin"
                 icon="language"
                 :label="i18n.t('language.manage')"
                 @click="go('/languages')"
               />
             </template>
           </SettingsSection>
+          <SettingsSection
+            v-if="isAdmin"
+            section-id="notifications"
+            :title="i18n.t('settings.desktop_notifications')"
+            :description="i18n.t('settings.notifications_help')"
+            :persistence="persistKind('browser')"
+          >
+            <UiField
+              :label="i18n.t('settings.desktop_notifications')"
+              :hint="i18n.t('settings.notifications_help')"
+            >
+              <select
+                id="settings-field-notifications"
+                class="control"
+                :value="notificationsOn ? 'on' : 'off'"
+                @change="
+                  notificationsOn = ($event.target as HTMLSelectElement).value === 'on';
+                  saveNotifications();
+                "
+              >
+                <option value="off">{{ i18n.t("settings.notifications_off") }}</option>
+                <option value="on">{{ i18n.t("settings.notifications_on") }}</option>
+              </select>
+            </UiField>
+            <template #actions>
+              <UiButton
+                :label="i18n.t('settings.request_notifications')"
+                @click="requestNotifications"
+              />
+            </template>
+          </SettingsSection>
         </div>
 
-        <div
-          v-show="section === 'research'"
-          id="settings-section-research"
-          role="tabpanel"
-          aria-labelledby="settings-nav-research"
-        >
+        <div v-show="section === 'research'" id="settings-section-research">
           <SettingsSection
             v-if="isAdmin"
             section-id="research"
@@ -942,13 +1017,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           </SettingsSection>
         </div>
 
-        <div
-          v-if="isAdmin"
-          v-show="section === 'review'"
-          id="settings-section-review"
-          role="tabpanel"
-          aria-labelledby="settings-nav-review"
-        >
+        <div v-if="isAdmin" v-show="section === 'research'" id="settings-section-review">
           <SettingsSection
             section-id="review"
             :title="i18n.t('settings.review_title')"
@@ -958,6 +1027,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             :status-label="statusLabel(groupStatus.review)"
           >
             <div class="config-grid">
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.review_execution_title") }}</h3>
+                <p>{{ i18n.t("settings.review_execution_help") }}</p>
+              </div>
               <UiField
                 :label="i18n.t('settings.default_provider')"
                 :hint="i18n.t('settings.default_provider_help')"
@@ -1002,6 +1075,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   <option value="background">{{ i18n.t("settings.run_background") }}</option>
                 </select>
               </UiField>
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.evaluation_defaults_title") }}</h3>
+                <p>{{ i18n.t("settings.evaluation_defaults_help") }}</p>
+              </div>
               <label class="check-item field-full"
                 ><input
                   id="settings-field-rag-auto-grade"
@@ -1027,148 +1104,24 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           </SettingsSection>
         </div>
 
-        <div
-          v-if="isAdmin"
-          v-show="section === 'providers'"
-          id="settings-section-providers"
-          role="tabpanel"
-          aria-labelledby="settings-nav-providers"
-        >
-          <SettingsSection
-            section-id="providers"
-            :title="i18n.t('settings.providers_title')"
-            :description="i18n.t('settings.providers_help')"
-            :persistence="persistKind('link')"
-            status="readonly"
-            :status-label="statusLabel('readonly')"
-          >
-            <ul v-if="profiles.length" class="providers-summary">
-              <li v-for="profile in profiles" :key="profile.id">
-                <UiHealthChip
-                  :available="providerReady(profile)"
-                  :label="String(profile.name || profile.id)"
-                  :detail="
-                    providerReady(profile)
-                      ? i18n.t('settings.provider_ready')
-                      : i18n.t('settings.provider_not_ready')
-                  "
-                />
-                <span
-                  >{{
-                    profile.type === "ollama"
-                      ? i18n.t("settings.provider_ollama")
-                      : i18n.t("settings.openai_compatible")
-                  }}
-                  ·
-                  {{
-                    i18n.tf("settings.max_concurrent", {
-                      count: Number(profile.max_concurrent_requests ?? 1),
-                    })
-                  }}
-                  · {{ profile.model || i18n.t("language.model_not_set") }}</span
-                >
-                <small>{{
-                  i18n.tf("settings.last_checked", { time: providerChecked(profile) })
-                }}</small>
-                <b v-if="profile.id === defaultProfileId">{{ i18n.t("ui.default") }}</b>
-              </li>
-            </ul>
-            <p v-else class="note">{{ i18n.t("settings.no_providers") }}</p>
-            <template #actions>
-              <UiButton
-                variant="primary"
-                icon="spark"
-                :label="i18n.t('settings.open_providers')"
-                @click="go('/providers', 'providers')"
-              />
-            </template>
-          </SettingsSection>
-          <SettingsSection
-            v-if="isAdmin"
-            section-id="audio"
-            :title="i18n.t('settings.audio_title')"
-            :description="i18n.t('settings.audio_help')"
-            :persistence="persistKind('backend')"
-          >
-            <div class="config-grid">
-              <UiField :label="i18n.t('settings.audio_base_url')">
-                <input
-                  id="settings-field-audio-base-url"
-                  class="control"
-                  type="url"
-                  v-model="audioDraft.base_url"
-                />
-              </UiField>
-              <UiField :label="i18n.t('settings.audio_model')">
-                <input id="settings-field-audio-model" class="control" v-model="audioDraft.model" />
-              </UiField>
-              <UiField
-                wide
-                :label="i18n.t('settings.audio_key')"
-                :hint="
-                  audio?.has_key
-                    ? i18n.t(
-                        audio.key_source === 'settings'
-                          ? 'settings.audio_key_stored'
-                          : 'settings.audio_key_from_environment',
-                      )
-                    : i18n.t('settings.audio_key_missing')
-                "
-              >
-                <input
-                  id="settings-field-audio-key"
-                  class="control"
-                  type="password"
-                  autocomplete="off"
-                  v-model="audioDraft.api_key"
-                  :placeholder="i18n.t('settings.audio_key_placeholder')"
-                />
-              </UiField>
-            </div>
-            <p
-              v-if="audioStatus"
-              class="embedding-probe"
-              :data-state="audioStatus.reachable ? 'ok' : 'failed'"
-              role="status"
-            >
-              <strong>{{
-                i18n.t(
-                  audioStatus.reachable ? "settings.audio_reachable" : "settings.audio_unreachable",
-                )
-              }}</strong>
-              <span v-if="audioStatus.error">{{ audioStatus.error }}</span>
-              <span v-if="audioStatus.hint">{{ audioStatus.hint }}</span>
-            </p>
-            <p v-if="audioMessage" class="note" role="status">{{ audioMessage }}</p>
-            <template #actions>
-              <UiButton
-                :disabled="audioBusy !== ''"
-                :label="i18n.t('settings.audio_test')"
-                @click="testAudio"
-              />
-              <UiButton
-                v-if="audio?.key_source === 'settings'"
-                :disabled="audioBusy !== ''"
-                :label="i18n.t('settings.audio_clear_key')"
-                @click="saveAudio(true)"
-              />
-              <UiButton
-                variant="primary"
-                :disabled="audioBusy !== ''"
-                :label="i18n.t('settings.audio_save')"
-                @click="saveAudio(false)"
-              />
-            </template>
-          </SettingsSection>
-        </div>
+        <SettingsServicesPanel
+          v-if="isAdmin && section === 'services'"
+          :profiles="profiles"
+          :default-profile-id="defaultProfileId"
+          :provider-statuses="workspace.providerStatuses || {}"
+          :audio="audio"
+          :audio-draft="audioDraft"
+          :audio-status="audioStatus"
+          :audio-busy="audioBusy"
+          :audio-message="audioMessage"
+          @update-audio-draft="audioDraft = $event"
+          @test-audio="testAudio"
+          @save-audio="saveAudio(false)"
+          @clear-audio-key="saveAudio(true)"
+          @navigate="go"
+        />
 
-        <div
-          v-if="isAdmin"
-          v-show="section === 'retrieval'"
-          id="settings-section-retrieval"
-          role="tabpanel"
-          aria-labelledby="settings-nav-retrieval"
-        >
+        <div v-if="isAdmin" v-show="section === 'retrieval'" id="settings-section-retrieval">
           <SettingsSection
             section-id="retrieval"
             :title="i18n.t('settings.vector_title')"
@@ -1285,6 +1238,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               {{ i18n.t("settings.validation_summary") }}
             </p>
             <div class="config-grid">
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.retrieval_strategy_title") }}</h3>
+                <p>{{ i18n.t("settings.retrieval_strategy_help") }}</p>
+              </div>
               <UiField
                 :label="i18n.t('settings.rag_k')"
                 :tooltip="i18n.t('help.glossary.top_k.definition')"
@@ -1347,6 +1304,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   <option value="none">{{ i18n.t("settings.reranker_none") }}</option>
                 </select>
               </UiField>
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.evidence_budget_title") }}</h3>
+                <p>{{ i18n.t("settings.evidence_budget_help") }}</p>
+              </div>
               <UiField
                 :label="i18n.t('settings.rag_record_chars')"
                 :tooltip="i18n.t('help.glossary.max_chars_evidence.definition')"
@@ -1373,7 +1334,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   :aria-invalid="Boolean(ragErrors.evidence_total_char_limit)"
                 />
               </UiField>
-              <fieldset class="field field-full">
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.retrieval_scope_title") }}</h3>
+                <p>{{ i18n.t("settings.retrieval_scope_help") }}</p>
+              </div>
+              <fieldset id="settings-field-rag-locales" class="field field-full">
                 <legend>{{ i18n.t("settings.rag_locales") }}</legend>
                 <div class="language-checks">
                   <label
@@ -1407,7 +1372,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   {{ ragErrors.locales }}
                 </p>
               </fieldset>
-              <fieldset class="field field-full">
+              <fieldset id="settings-field-rag-routes" class="field field-full">
                 <legend>{{ i18n.t("settings.rag_routes") }}</legend>
                 <div class="language-checks">
                   <label
@@ -1462,6 +1427,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   :error="ragErrors.fetch_k"
                 >
                   <input
+                    id="settings-field-rag-fetch-k"
                     class="control"
                     type="number"
                     min="1"
@@ -1475,6 +1441,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   :tooltip="i18n.t('help.glossary.mmr_lambda.definition')"
                 >
                   <input
+                    id="settings-field-rag-lambda"
                     class="control"
                     type="number"
                     min="0"
@@ -1487,19 +1454,30 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   :label="i18n.t('settings.rag_rrf_k')"
                   :tooltip="i18n.t('help.glossary.rrf_k.definition')"
                 >
-                  <input class="control" type="number" min="1" v-model.number="ragDraft.rrf_k" />
+                  <input
+                    id="settings-field-rag-rrf"
+                    class="control"
+                    type="number"
+                    min="1"
+                    v-model.number="ragDraft.rrf_k"
+                  />
                 </UiField>
                 <UiField
                   :label="i18n.t('settings.rag_cross_encoder')"
                   :tooltip="i18n.t('help.glossary.cross_encoder.definition')"
                 >
-                  <input class="control" v-model="ragDraft.cross_encoder_model" />
+                  <input
+                    id="settings-field-rag-cross-encoder"
+                    class="control"
+                    v-model="ragDraft.cross_encoder_model"
+                  />
                 </UiField>
                 <UiField
                   :label="i18n.t('settings.rag_decompose')"
                   :tooltip="i18n.t('help.glossary.query_decomposition.definition')"
                 >
                   <input
+                    id="settings-field-rag-decompose"
                     class="control"
                     type="number"
                     min="64"
@@ -1516,164 +1494,27 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           </SettingsSection>
         </div>
 
-        <div
-          v-if="isAdmin"
-          v-show="section === 'security'"
-          id="settings-section-security"
-          role="tabpanel"
-          aria-labelledby="settings-nav-security"
-        >
-          <SettingsSection
-            section-id="security"
-            :title="i18n.t('settings.security_title')"
-            :description="i18n.t('settings.security_help')"
-            :persistence="persistKind('link')"
-            status="readonly"
-            :status-label="statusLabel('readonly')"
-          >
-            <p class="note">{{ i18n.t("roles.users_link_help") }}</p>
-            <template #actions>
-              <UiButton icon="users" :label="i18n.t('nav.users')" @click="go('/users')" />
-              <UiButton icon="roles" :label="i18n.t('nav.roles')" @click="go('/roles')" />
-            </template>
-          </SettingsSection>
-        </div>
+        <SettingsAccessPanel v-if="isAdmin && section === 'access'" @navigate="go" />
 
-        <div
-          v-if="isAdmin"
-          v-show="section === 'system'"
-          id="settings-section-system"
-          role="tabpanel"
-          aria-labelledby="settings-nav-system"
-        >
-          <SettingsSection
-            section-id="language-packs"
-            :title="i18n.t('settings.nlp_packs_title')"
-            :description="i18n.t('settings.nlp_packs_help')"
-            :persistence="persistKind('backend')"
-          >
-            <DocumentNlpLanguagePacks />
-          </SettingsSection>
-          <SettingsSection
-            section-id="data-retention"
-            :title="i18n.t('settings.retention_title')"
-            :description="i18n.t('settings.retention_help')"
-            :persistence="persistKind('backend')"
-          >
-            <DataRetentionSettings />
-          </SettingsSection>
-          <SettingsSection
-            section-id="backup"
-            :title="i18n.t('settings.backup')"
-            :description="i18n.t('settings.backup_help')"
-            :persistence="persistKind('browser')"
-          >
-            <p class="info warn">{{ i18n.t("settings.backup_keys_warning") }}</p>
-            <p class="backup-summary">
-              <span
-                ><b>{{ backupCounts.files.toLocaleString(i18n.locale) }}</b>
-                {{ i18n.t("settings.jsonl_tabs") }}</span
-              >
-              <span
-                ><b>{{ backupCounts.jobs.toLocaleString(i18n.locale) }}</b>
-                {{ i18n.t("settings.active_jobs") }}</span
-              >
-            </p>
-            <input
-              ref="restoreInput"
-              type="file"
-              accept=".zip,application/zip"
-              hidden
-              @change="onRestoreFile"
-            />
-            <template #actions>
-              <UiButton
-                variant="primary"
-                icon="download"
-                :label="i18n.t('settings.download_backup')"
-                @click="openBackup"
-              />
-              <UiButton
-                icon="upload"
-                :label="i18n.t('settings.restore_backup')"
-                @click="openRestore"
-              />
-            </template>
-          </SettingsSection>
-          <SettingsSection
-            section-id="viewer"
-            :title="i18n.t('settings.viewer_title')"
-            :description="i18n.t('settings.viewer_help')"
-            :persistence="persistKind('browser')"
-          >
-            <UiField
-              :label="i18n.t('settings.desktop_notifications')"
-              :hint="i18n.t('settings.notifications_help')"
-            >
-              <select
-                id="settings-field-notifications"
-                class="control"
-                :value="notificationsOn ? 'on' : 'off'"
-                @change="
-                  notificationsOn = ($event.target as HTMLSelectElement).value === 'on';
-                  saveNotifications();
-                "
-              >
-                <option value="off">{{ i18n.t("settings.notifications_off") }}</option>
-                <option value="on">{{ i18n.t("settings.notifications_on") }}</option>
-              </select>
-            </UiField>
-            <template #actions>
-              <UiButton
-                :label="i18n.t('settings.request_notifications')"
-                @click="requestNotifications"
-              />
-              <UiButton :label="i18n.t('settings.reset_columns')" @click="resetColumns" />
-              <UiButton :label="i18n.t('settings.expand_panels')" @click="expandPanels" />
-              <UiButton :label="i18n.t('settings.expand_sidebar')" @click="expandSidebar" />
-              <UiButton
-                :label="i18n.t('settings.restore_upsert')"
-                @click="clearUpsertSuppressions"
-              />
-              <UiButton
-                variant="danger"
-                icon="history"
-                :label="i18n.t('settings.clear_updates')"
-                @click="openUpdates"
-              />
-              <UiButton icon="dashboard" :label="i18n.t('nav.home')" @click="go('/', 'home')" />
-            </template>
-          </SettingsSection>
-          <SettingsSection
-            section-id="nuke"
-            :title="i18n.t('config.nuke.title')"
-            :description="i18n.t('config.nuke.help')"
-            :persistence="persistKind('backend')"
-            status="readonly"
-          >
-            <p class="info error">{{ i18n.t("config.nuke.irreversible") }}</p>
-            <UiField
-              :label="i18n.t('config.nuke.type_to_enable')"
-              :hint="i18n.t('config.nuke.type_to_enable_help')"
-            >
-              <input
-                id="settings-field-nuke"
-                class="control"
-                v-model="nukePhrase"
-                autocomplete="off"
-              />
-            </UiField>
-            <template #actions>
-              <UiButton
-                variant="danger"
-                :label="i18n.t('config.nuke.button')"
-                :disabled="nukePhrase !== 'NUKE'"
-                :disabled-reason="i18n.t('config.nuke.type_to_enable_help')"
-                @click="openNuke"
-              />
-            </template>
-          </SettingsSection>
-        </div>
+        <SettingsDataPanel
+          v-if="isAdmin && section === 'data'"
+          :backup-counts="backupCounts"
+          @backup="openBackup"
+          @restore-file="onRestoreFile"
+          @navigate="go"
+        />
+
+        <SettingsTroubleshootingPanel
+          v-if="isAdmin && section === 'troubleshooting'"
+          v-model="nukePhrase"
+          @reset-columns="resetColumns"
+          @expand-panels="expandPanels"
+          @expand-sidebar="expandSidebar"
+          @restore-upsert="clearUpsertSuppressions"
+          @clear-updates="openUpdates"
+          @open-nuke="openNuke"
+          @navigate="go"
+        />
       </div>
     </div>
 
@@ -1734,8 +1575,18 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 }
 .settings-pane {
   display: grid;
-  gap: 16px;
+  gap: 18px;
+  width: 100%;
+  max-width: 1040px;
   min-width: 0;
+}
+.settings-about {
+  display: grid;
+  gap: 6px;
+}
+.settings-about h3 {
+  margin: 0;
+  font-size: 0.875rem;
 }
 .settings-locale-row {
   display: flex;
@@ -1826,15 +1677,31 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 .settings-advanced .config-grid {
   margin-top: 10px;
 }
-.backup-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 0;
-  color: var(--muted);
-}
 .field-full {
   grid-column: 1/-1;
+}
+.settings-group-label {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+}
+.settings-group-label:not(:first-child) {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.settings-group-label h3,
+.settings-group-label p {
+  margin: 0;
+}
+.settings-group-label h3 {
+  font-size: 0.9375rem;
+}
+.settings-group-label p {
+  max-width: 68ch;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 .ui-field-error {
   color: var(--danger);

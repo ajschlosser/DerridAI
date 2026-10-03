@@ -396,7 +396,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/settings",
     redirect: (to) => {
-      const section = String(to.query.section || "workspace");
+      const section = String(to.query.section || "overview");
       const query = { ...to.query };
       delete query.section;
       return { name: "settings-section", params: { section }, query };
