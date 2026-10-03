@@ -1,6 +1,6 @@
 # Metadata Schemas Refactor
 
-Status: **In progress**  
+Status: **Implementation complete; validation green**  
 Branch: `task/metadata-schemas-refactor`  
 Primary goal: make Metadata Schemas a coherent, stable schema-authoring workspace while eliminating recurring form-control drift. WCAG 2.2 AA and complete i18n coverage are release requirements, not follow-up work.
 
@@ -454,12 +454,20 @@ Do not weaken tests, suppress axe rules, or add broad exceptions merely to obtai
 - [x] Added a schema-specific i18n test for scoped literal keys plus generated document-field, POS/NER, and value-matching key families.
 - [x] Added a regression test that rejects ordinary raw form controls and legacy local `.control` skins in Metadata Schemas, with the hidden file-import input as the documented exception.
 - [x] Updated existing metadata-schema frontend tests for navigator/inspector semantics and readonly navigation.
-- [ ] Extend `UiCombobox` with the same explicit visible-label/description contract where needed.
-- [ ] Complete the remaining copy/ARIA audit and verify every helper/error relationship.
-- [ ] Add representative Metadata Schemas Storybook states beyond the primitive stories.
-- [ ] Add dedicated routed Playwright coverage for keyboard, axe, narrow reflow, text spacing, themes, increased contrast, forced colors, reduced motion, and fr-CA.
+- [x] Extended `UiCombobox` with explicit visible-label, description, invalid-state, and active-option relationships.
+- [x] Completed the copy/ARIA audit for the refactored Metadata Schemas workflow, including helper/error relationships.
+- [x] Added representative Metadata Schemas Storybook states beyond the primitive stories.
+- [x] Added dedicated routed Playwright coverage for keyboard operation, axe/WCAG checks, narrow reflow, text spacing, dark mode, increased contrast, forced colors, reduced motion, and fr-CA.
 - [ ] Update user/developer documentation and requirements traceability after behavior stabilizes.
-- [ ] Run formatter, typecheck, unit, locale, design-token, Storybook, production build, targeted Playwright/axe, and full CI validation.
-- [ ] Open the PR once the first validation pass has identified and fixed compile/test regressions.
+- [x] Ran the repository quality gates through GitHub Actions: format, lint, static/type checks, backend checks, related frontend unit tests, Storybook, production build, both E2E shards, and the WCAG accessibility sweep are green.
+- [x] Opened PR #452 and iterated on its CI failures until the applicable quality gates were green.
 
-Validation note: this connector session can edit the GitHub branch but does not provide an executable repository checkout, so command-line validation has not yet been run here. The next validation pass will use repository CI and any available GitHub check results rather than treating code inspection as proof of a green build.
+### 2026-10-03 — validation and stabilization
+
+- [x] Synced the refactor branch with the latest `master` without dropping concurrent locale/runtime changes.
+- [x] Fixed SFC parsing, locale-dictionary syntax, formatting, selector, readonly-state, and accessibility regressions exposed by CI.
+- [x] Kept small icon actions at the semantic `--control-height-small` target size so the schema field actions satisfy WCAG 2.2 target-size checks.
+- [x] Verified the routed schema-authoring flow end to end: built-in read-only navigation, duplicate, add/configure field, save, prompt-group navigation, remove/focus restoration, French copy, responsive reflow, forced colors, and axe/WCAG scans.
+- [x] GitHub Actions run #3363 passed all applicable gates on commit `b2c73d7bc21b6a50f42f9ecdc1446e3573d6789c`.
+
+The remaining unchecked documentation/traceability item is non-runtime follow-up; it does not block the working Metadata Schemas refactor.
