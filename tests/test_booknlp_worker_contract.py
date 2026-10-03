@@ -37,71 +37,35 @@ def test_booknlp_offsets_use_character_positions_before_utf8_fallback():
     assert text[start:end] == "Élise"
 
 
-def test_book_character_data_matches_booknlp_book_schema(tmp_path):
+def test_book_character_data_normalizes_supported_booknlp_fixture(tmp_path):
+    """Normalize the provider shape DerridAI consumes; do not re-test BookNLP semantics."""
     worker = _worker_module()
-    text = "Elizabeth walked home."
-    rows = [
-        {
-            "token_ID_within_document": "0",
-            "word": "Elizabeth",
-            "lemma": "Elizabeth",
-            "byte_onset": "0",
-            "byte_offset": "9",
-            "event": "O",
-        },
-        {
-            "token_ID_within_document": "1",
-            "word": "walked",
-            "lemma": "walk",
-            "byte_onset": "10",
-            "byte_offset": "16",
-            "event": "EVENT",
-        },
-        {
-            "token_ID_within_document": "2",
-            "word": "home",
-            "lemma": "home",
-            "byte_onset": "17",
-            "byte_offset": "21",
-            "event": "O",
-        },
-    ]
-    book = {
-        "characters": [
-            {
-                "id": 7,
-                "count": 4,
-                "mentions": {
-                    "proper": [{"c": 2, "n": "Elizabeth"}],
-                    "common": [{"c": 1, "n": "the woman"}],
-                    "pronoun": [{"c": 1, "n": "she"}],
-                },
-                "agent": [{"w": "walked", "i": 1}],
-                "patient": [],
-                "poss": [{"w": "home", "i": 2}],
-                "mod": [],
-                "g": {"she/her": 0.99},
-            }
-        ]
-    }
+    fixture_path = (
+        Path(__file__).resolve().parent
+        / "fixtures"
+        / "booknlp"
+        / "1.0.8"
+        / "character-normalization.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    text = fixture["text"]
+    rows = fixture["tokens"]
     path = tmp_path / "document.book"
-    path.write_text(json.dumps(book), encoding="utf-8")
+    path.write_text(json.dumps(fixture["book"]), encoding="utf-8")
     boundaries, lookup = worker._utf8_map(text)
 
     characters = worker._book_character_data(path, rows, text, boundaries, lookup)
 
     assert len(characters) == 1
     character = characters[0]
-    assert character["cluster_id"] == "7"
-    assert character["aliases"] == ["Elizabeth", "the woman", "she"]
-    assert character["mention_count"] == 4
-    assert character["mentions"]["proper"] == [{"text": "Elizabeth", "count": 2}]
-    assert character["actions_as_agent"][0]["lemma"] == "walk"
-    assert character["actions_as_agent"][0]["start_char"] == 10
-    assert character["possessions"][0]["text"] == "home"
-    # Referential gender is intentionally not normalized into a character fact.
-    assert "g" not in character
-
+    expected = fixture["expected"]
+    assert character["cluster_id"] == expected["cluster_id"]
+    assert character["aliases"] == expected["aliases"]
+    assert character["actions_as_agent"][0]["lemma"] == expected["agent_lemma"]
+    assert character["actions_as_agent"][0]["start_char"] == expected["agent_start_char"]
+    assert character["possessions"][0]["text"] == expected["possession_text"]
+    for key in expected["excludes"]:
+        assert key not in character
 
 def test_event_pipeline_does_not_require_a_separate_event_model(monkeypatch, tmp_path):
     worker = _worker_module()

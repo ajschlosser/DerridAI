@@ -20,7 +20,7 @@
     "lint": "eslint src sdk tests .storybook playwright*.config.ts vite.config.ts vite.sdk.config.ts vite.sdk.package.config.ts scripts --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "build:ci": "npm run build:sdk:check && npm run check:sdk:package && vite build",
+    "build:ci": "npm run build:sdk:ci && npm run build:app:ci",
     "test:e2e:legacy": "playwright test -c playwright.legacy.config.ts",
     "test:e2e:a11y": "playwright test -c playwright.a11y.config.ts",
     "typecheck:tests": "vue-tsc --noEmit -p tsconfig.tests.json",
@@ -37,7 +37,9 @@
     "check:sdk:consumer": "node scripts/check-sdk-consumer.mjs",
     "build:sdk:check": "npm run build:sdk && git diff --exit-code -- ../api/app/site_assets/derridai-sdk.js",
     "pack:sdk": "npm run build:sdk:package && npm pack ./sdk",
-    "check:legacy-snapshots": "node scripts/check-legacy-snapshots.mjs"
+    "check:legacy-snapshots": "node scripts/check-legacy-snapshots.mjs",
+    "build:app:ci": "vite build",
+    "build:sdk:ci": "npm run build:sdk:check && npm run check:sdk:package"
   },
   "dependencies": {
     "@tanstack/vue-query": "^5.104.0",

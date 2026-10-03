@@ -5,4 +5,4 @@ set -eu
 cd "$(git rev-parse --show-toplevel)"
 chmod +x .githooks/* scripts/preflight.sh
 git config core.hooksPath .githooks
-echo "Git hooks enabled: pre-push now runs scripts/preflight.sh"
+echo "Git hooks enabled: pre-commit checks staged files; pre-push runs scripts/preflight.sh"
