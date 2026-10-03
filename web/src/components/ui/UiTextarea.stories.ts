@@ -22,10 +22,13 @@ import UiTextarea from "./UiTextarea.vue";
 const meta = {
   title: "Foundations/Forms/Textarea",
   component: UiTextarea,
+  render: (args) => ({
+    components: { UiTextarea },
+    setup: () => ({ args }),
+    template: '<UiTextarea v-bind="args" aria-label="Extraction instruction" rows="4" />',
+  }),
   args: {
     modelValue: "Identify the position holder and preserve uncertainty when the passage is ambiguous.",
-    "aria-label": "Extraction instruction",
-    rows: 4,
   },
 } satisfies Meta<typeof UiTextarea>;
 export default meta;
@@ -33,4 +36,10 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 export const Invalid: Story = { args: { invalid: true } };
-export const Disabled: Story = { args: { disabled: true } };
+export const Disabled: Story = {
+  render: (args) => ({
+    components: { UiTextarea },
+    setup: () => ({ args }),
+    template: '<UiTextarea v-bind="args" aria-label="Extraction instruction" rows="4" disabled />',
+  }),
+};
