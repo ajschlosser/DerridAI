@@ -586,25 +586,25 @@ def build_research_trace(
     finished = parse_trace_datetime(finished_at)
     started = parse_trace_datetime(started_at)
     total_elapsed = result.get("elapsed_seconds")
-    return PipelineRunTrace(
-        run_id=str(run_id),
-        feature="research",
-        pipeline_id=pipeline_id,
-        pipeline_version=pipeline_version,
-        resolved_pipeline=sanitize_trace_value(resolved_pipeline),
-        resolved_hash=resolved_hash,
-        owner=owner,
-        status=status,
-        started_at=started,
-        finished_at=finished,
-        total_elapsed_ms=(
+    return PipelineRunTrace.model_validate({
+        "run_id": str(run_id),
+        "feature": "research",
+        "pipeline_id": pipeline_id,
+        "pipeline_version": pipeline_version,
+        "resolved_pipeline": sanitize_trace_value(resolved_pipeline),
+        "resolved_hash": resolved_hash,
+        "owner": owner,
+        "status": status,
+        "started_at": started,
+        "finished_at": finished,
+        "total_elapsed_ms": (
             max(0, int(float(total_elapsed) * 1000))
             if total_elapsed is not None
             else max(0, int((finished - started).total_seconds() * 1000))
         ),
-        warnings=[
+        "warnings": [
             str(item)[:MAX_TRACE_STRING]
             for item in result.get("warnings") or []
         ],
-        stages=trace_stages,
-    )
+        "stages": trace_stages,
+    })

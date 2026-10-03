@@ -41,13 +41,28 @@ for path in "${FILES[@]}"; do
   esac
 done
 
+run_batched() {
+  local -a command=()
+  while [ "$1" != "--" ]; do
+    command+=("$1")
+    shift
+  done
+  shift
+  local -a files=("$@")
+  local offset
+  # MSYS path expansion can exceed Windows' command-line limit even below ARG_MAX.
+  for ((offset=0; offset<${#files[@]}; offset+=32)); do
+    "${command[@]}" "${files[@]:offset:32}"
+  done
+}
+
 if [ "${#format[@]}" -gt 0 ]; then
   PRETTIER=web/node_modules/.bin/prettier
   if [ ! -x "$PRETTIER" ]; then
     echo "pre-commit: web/node_modules missing; run: cd web && npm ci" >&2
     exit 1
   fi
-  "$PRETTIER" --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown "${format[@]}"
+  run_batched "$PRETTIER" --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown -- "${format[@]}"
 fi
 
 if [ "${#python_files[@]}" -gt 0 ]; then
@@ -55,7 +70,7 @@ if [ "${#python_files[@]}" -gt 0 ]; then
     echo "pre-commit: ruff is missing (expected ruff==0.16.8)" >&2
     exit 1
   fi
-  ruff check "${python_files[@]}"
+  run_batched ruff check -- "${python_files[@]}"
 fi
 
 if [ "${#frontend[@]}" -gt 0 ]; then
@@ -64,5 +79,5 @@ if [ "${#frontend[@]}" -gt 0 ]; then
     echo "pre-commit: web/node_modules missing; run: cd web && npm ci" >&2
     exit 1
   fi
-  (cd web && ./node_modules/.bin/eslint --max-warnings 0 "${frontend[@]}")
+  (cd web && run_batched ./node_modules/.bin/eslint --max-warnings 0 --no-warn-ignored -- "${frontend[@]}")
 fi

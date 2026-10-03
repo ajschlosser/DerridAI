@@ -218,7 +218,7 @@ class ReviewActionsMixin:
             # non-structural review operations are available immediately. Bulk
             # review actions do not target one record object, so record=None must
             # not accidentally turn them into structural operations.
-            if stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun", "review"}:
+            if stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun", "finalizing_review", "review"}:
                 return build
             raise ValueError("Records are not editable until segmentation is complete.")
         return build

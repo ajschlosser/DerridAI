@@ -43,8 +43,8 @@ and look at the screens (axe cannot judge text over a gradient).
 from __future__ import annotations
 
 import argparse
-import colorsys
 import collections
+import colorsys
 import re
 from pathlib import Path
 

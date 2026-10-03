@@ -482,10 +482,12 @@ def input_ports(spec: StrategySpec) -> list[PortSpec]:
 
     if spec.inputs:
         return list(spec.inputs)
-    return [PortSpec(name="input", data_type=spec.input_type, required=spec.input_type != "any")]
+    return [PortSpec.model_validate({
+        "name": "input", "data_type": spec.input_type, "required": spec.input_type != "any",
+    })]
 
 
 def output_ports(spec: StrategySpec) -> list[PortSpec]:
     if spec.outputs:
         return list(spec.outputs)
-    return [PortSpec(name="output", data_type=spec.output_type)]
+    return [PortSpec.model_validate({"name": "output", "data_type": spec.output_type})]
