@@ -20,13 +20,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ![DerridAI-Logo](https://repository-images.githubusercontent.com/1336867942/1ef2d928-ee57-480e-addb-5caf6acc1754)
 
-[English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [العربية](README.ar.md)
+[English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [বাংলা](README.bn.md) · [العربية](README.ar.md) · [简体中文](README.zh-CN.md)
 
 DerridAI ist eine lokal ausgerichtete, provenanzerhaltende Forschungsumgebung zum Erstellen, Prüfen, Durchsuchen und Abfragen wissenschaftlicher Korpora. Die Docker-Anwendung verbindet Quellenaufnahme, Human-in-the-loop-Korpusaufbau, evidenzgebundene Metadatenanreicherung, abgeleitete Vektor-/Suchindizes und evidenzbasierte Retrieval-Augmented Generation (RAG).
 
 DerridAI ist außerdem die ursprüngliche Referenzimplementierung von **cELF 1.0 — Capta-Enriched Lexical Format**, einer provenanzerhaltenden Informationsarchitektur für KI-gestützte Dokumentforschung. Quellenidentität, Record-Identität und Revision, Metadaten-Assertions, Evidenz, generierte Claims und Support-Bindungen bleiben getrennt prüfbar, statt in einem undurchsichtigen Vektorspeicher zusammenzufallen.
 
-Aktuelle Version: **0.81.0 — Fall River** ([Release Notes](docs/notes/0.81.0.md)). Dieses README beschreibt die aktuelle `master`-Architektur einschließlich bereits zusammengeführter Arbeiten nach Exeter.
+Aktuelle Version: **0.81.0 — Fall River** ([Release Notes](docs/notes/0.81.0.md)). Die Anwendungsversion wurde seit Fall River nicht erhöht; dieses README beschreibt den aktuellen Stand von `master`, einschließlich der Arbeit nach 0.81.0, die nicht Teil des getaggten Releases ist.
+
+## Aktueller Stand von `master`
+
+Der aktuelle Branch hat sich seit dem Tag 0.81.0 erheblich weiterentwickelt, behält aber die Anwendungsversion 0.81.0. Die folgende Übersicht beschreibt das heutige Produkt und keine neuen Release Notes.
+
+- **Corpus Builder ist jetzt ein progressiver Ablauf Einrichtung → Build → Review → Veröffentlichung.** Unterstützt werden begrenzte parallele Anreicherung, explizite Entscheidungen zu Korpus-Topologie und Record-Größe, fortsetzbares revisionsbewusstes Review, persistente Record-lokale Review-Warteschlangen, fokussierte Sitzungen zur Behebung von Publikationsblockern, wiederholbare Metadatengruppen, Audio-Sprecherzuordnungen und sicheres Text-Review während verifizierter Vorbereitung.
+- **Metadaten- und Evidenzverarbeitung benötigt weniger Modellarbeit und bewahrt stärkere Semantik.** Deterministisches/kandidatenorientiertes Routing, semantische Identität und Wertäquivalenz, support-validierte Evidenzkaskade v2, Reparatur/Klassifikation strukturierter Ausgaben und inkrementelle Metadata-Memory-Abgleiche senken die Latenz, ohne Retrieval-Relevanz oder fehlerhafte Ausgaben zu Evidenz zu erheben.
+- **Pipeline Studio modelliert ausführbare Berechnung explizit.** Serverseitig definierte Zwecke, Strategiefamilien, wissenschaftliche Effekte, typisierte Ports, aufgelöste Verdrahtung, Stage-Traces, Umfangs-/Komplexitätsmetriken, einstellbare Retrieval-Parameter und nicht persistente Vergleiche decken mehr Pfade für Search, Research, Reviewer-Evidenz, Recovery, Segmentierung und Anreicherung ab.
+- **Works kann portable Forschungswebsites veröffentlichen.** Statische Exporte kombinieren das DerridAI SDK mit einer eigenen Vue-Laufzeit für Navigation, Annotationen, semantische Browser-Indizierung, vom Leser konfigurierte Provider und evidenzgebundenes Research mit verlinkten Zitaten, ohne den Export zum kanonischen Korpuszustand zu machen.
+- **Realtime-Invalidierung und progressives Laden ersetzen mehr Polling und leere Vollseiten-Reloads.** Works, Record, Search, Research, Response Library, Languages, Relationships, Accounts/Roles, Metadata Memory und weitere Oberflächen behalten nutzbare Inhalte, kapseln Fehler, bieten lokale Wiederholungen und verwerfen veraltete Antworten.
+- **Das Frontend baut den Legacy-Runtime weiter zurück.** Router-gesteuerte Navigation, Vue-Dialogs/Benachrichtigungen, gemeinsame Domain-/State-Module, Pinia-Slices und extrahierte Helfer reduzieren Kopplung; verbleibender Kompatibilitätscode bleibt isoliert.
+- **cELF und die Entwicklungsinfrastruktur wurden geschärft.** Die Spezifikation ist produktneutral und profil-/provenienzorientiert mit verallgemeinerter `EvidenceRef`-Locator-Semantik; Architekturpläne dokumentieren kritische Grenzen; CI-/Pre-Push-Auswahl, Repository-Hygiene und Copyright-Durchsetzung wurden verstärkt.
 
 ## Was DerridAI bietet
 

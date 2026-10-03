@@ -20,13 +20,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ![DerridAI लोगो](https://repository-images.githubusercontent.com/1336867942/1ef2d928-ee57-480e-addb-5caf6acc1754)
 
-[English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [العربية](README.ar.md)
+[English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [বাংলা](README.bn.md) · [العربية](README.ar.md) · [简体中文](README.zh-CN.md)
 
 DerridAI एक local-first, provenance-preserving शोध वातावरण है, जिसका उपयोग विद्वतापूर्ण corpora बनाने, समीक्षा करने, खोजने और उन पर प्रश्न चलाने के लिए किया जाता है। यह एक ही Docker अनुप्रयोग में source ingestion, human-in-the-loop corpus निर्माण, evidence-bound metadata enrichment, derived vector/search indexes और evidence-grounded retrieval-augmented generation (RAG) को एक साथ लाता है।
 
 DerridAI **cELF 1.0 — Capta-Enriched Lexical Format** का मूल reference implementation भी है। cELF AI-सहायित documentary research के लिए provenance-preserving information architecture परिभाषित करता है। DerridAI source identity, record identity और revision, metadata assertions, evidence, generated claims और support bindings को अलग-अलग audit करने योग्य रूप में रखता है, न कि उन्हें एक opaque vector store में मिला देता है।
 
-वर्तमान संस्करण: **0.81.0 — Fall River** ([release notes](docs/notes/0.81.0.md)). यह README वर्तमान `master` architecture का वर्णन करता है, जिसमें Exeter के बाद repository में merge हो चुका कार्य भी शामिल है।
+वर्तमान संस्करण: **0.81.0 — Fall River** ([release notes](docs/notes/0.81.0.md)). Fall River के बाद application version नहीं बढ़ाया गया है; यह README वर्तमान `master` branch का वर्णन करता है, जिसमें 0.81.0 के बाद का वह काम भी शामिल है जो tagged release का हिस्सा नहीं है।
+
+## वर्तमान `master`
+
+मौजूदा branch 0.81.0 tag के बाद काफ़ी आगे बढ़ चुका है, जबकि application version अभी भी 0.81.0 है। नीचे का सार वर्तमान product को बताता है, नई release notes को नहीं।
+
+- **Corpus Builder अब progressive Setup → Build → Review → Publish workflow है।** इसमें bounded concurrent enrichment, स्पष्ट corpus topology और Record-size विकल्प, resumable/revision-aware review, persistent Record-local review queues, publication blockers के लिए focused remediation sessions, repeatable metadata groups, audio speaker assignments और verified preparation के दौरान safe text review शामिल हैं।
+- **Metadata और evidence processing कम model work के साथ अधिक मजबूत semantics सुरक्षित रखता है।** Deterministic/candidate-first routing, semantic identity और value equivalence, support-validated evidence cascade v2, structured-output repair/retry classification और incremental Metadata Memory reconciliation latency घटाते हैं, बिना retrieval relevance या malformed output को evidence मानने के।
+- **Pipeline Studio executable computation को स्पष्ट रूप से model करता है।** Server-owned purposes, strategy families, scholarly effects, typed ports, resolved wiring, stage traces, scope/complexity metrics, tunable retrieval parameters और non-persistent comparison अब Search, Research, reviewer evidence, recovery, segmentation और enrichment के अधिक paths पर लागू हैं।
+- **Works portable research sites publish कर सकता है।** Static exports DerridAI SDK और dedicated Vue runtime को browsing, annotations, browser semantic indexing, reader-configured providers और evidence-linked citations वाले Research के लिए जोड़ते हैं, लेकिन export को canonical corpus state नहीं बनाते।
+- **Realtime invalidation और progressive loading अधिक polling और blank-page refreshes की जगह लेते हैं।** Works, Record, Search, Research, Response Library, Languages, Relationships, Accounts/Roles, Metadata Memory और संबंधित surfaces उपयोगी content बनाए रखते हैं, failures को local रखते हैं, retry देते हैं और stale responses को अस्वीकार करते हैं।
+- **Frontend legacy runtime को लगातार retire कर रहा है।** Router-owned navigation, Vue-hosted dialogs/notifications, shared domain/state modules, Pinia slices और extracted helpers coupling कम करते हैं; शेष compatibility code जानबूझकर isolated है।
+- **cELF और developer infrastructure को कड़ा किया गया है।** Specification product-neutral और profile/provenance-oriented है, generalized `EvidenceRef` locator semantics के साथ; critical code boundaries के architecture maps जोड़े गए हैं; CI/pre-push selection, repository hygiene और copyright enforcement मजबूत किए गए हैं।
 
 ## DerridAI क्या करता है
 
