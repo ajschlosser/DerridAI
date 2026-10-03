@@ -44,6 +44,7 @@ import {
   type SiteExportFormat,
   type SiteExportOptions,
   type SiteRecordProfile,
+  type SiteVectorStrategy,
 } from "../api/sites";
 
 const auth = useAuthStore();
@@ -60,6 +61,7 @@ const createSiteBusy = ref(false);
 const createSiteError = ref("");
 const createSiteLanguages = ref<SiteExportOptions["languages"]>([]);
 const createSiteTransformers = ref<SiteExportOptions["transformers_runtime"] | undefined>();
+const createSiteEmbedder = ref<SiteExportOptions["publication_embedder"] | undefined>();
 const createSiteProgress = ref<{ file: string; received: number; total: number } | null>(null);
 
 async function openCreateSite() {
@@ -68,8 +70,10 @@ async function openCreateSite() {
     const options = await sitesApi.exportOptions();
     createSiteLanguages.value = options.languages;
     createSiteTransformers.value = options.transformers_runtime;
+    createSiteEmbedder.value = options.publication_embedder;
   } catch (cause) {
     createSiteLanguages.value = [...i18n.languages];
+    createSiteEmbedder.value = undefined;
     createSiteError.value = cause instanceof Error ? cause.message : String(cause);
   }
   createSiteOpen.value = true;
@@ -143,6 +147,7 @@ async function createSite(payload: {
   languages: string[];
   include_transformers: boolean;
   include_vectors: boolean;
+  vector_strategy: SiteVectorStrategy;
   provider_proxy_upstream: string | null;
 }) {
   if (!snapshot.value?.activeStore || createSiteBusy.value) return;
@@ -161,6 +166,7 @@ async function createSite(payload: {
       languages: payload.languages,
       include_transformers: payload.include_transformers,
       include_vectors: payload.include_vectors,
+      vector_strategy: payload.vector_strategy,
       export_format: payload.export_format,
       record_profile: payload.record_profile,
       provider_proxy_upstream: payload.provider_proxy_upstream,
@@ -632,6 +638,7 @@ onBeforeUnmount(() => {
       :initial-work="snapshot.selectedWork"
       :languages="createSiteLanguages"
       :transformers-runtime="createSiteTransformers"
+      :publication-embedder="createSiteEmbedder"
       :download-progress="createSiteProgress"
       :busy="createSiteBusy"
       :error="createSiteError"
