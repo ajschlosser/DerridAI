@@ -302,7 +302,7 @@ describe("the schema editor", () => {
 
   it("keeps every built-in profile read-only", async () => {
     const w = await mountEditor();
-    const fiction = w.findAll("button.schema-name").find((item) => item.text() === "Fiction")!;
+    const fiction = w.findAll("button.schema-name").find((item) => item.text().includes("Fiction"))!;
     await fiction.trigger("click");
     await flushPromises();
     expect(button(w, "Save schema").attributes("disabled")).toBeDefined();
