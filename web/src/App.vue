@@ -18,18 +18,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import {
-  NavigationFailureType,
-  RouterLink,
-  RouterView,
-  isNavigationFailure,
-  useRoute,
-  useRouter,
-} from "vue-router";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import RouteNavigationFeedback from "./components/shell/RouteNavigationFeedback.vue";
 import { createRouteLoading } from "./router/routeLoading";
 import { sharedUrlStateCodec } from "./domain/sharedUrlState";
 import { createRuntimeLocationSync } from "./router/runtimeLocationSync";
+import { createRuntimeUrlSyncHook } from "./router/runtimeUrlSync";
 import { createNavigationHistory, type HistoryEntryTitle } from "./router/navigationHistory";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
 import { useLayoutStore } from "./stores/workspace";
@@ -484,26 +478,7 @@ async function startRuntime() {
   runtime.setUserContext(auth.user);
   runtime.setShellRefreshHook(() => shell.sync());
   shell.syncNav();
-  runtime.setUrlSyncHook((href: string, options: { replace?: boolean }) => {
-    const target = router.resolve(href).fullPath;
-    if (router.currentRoute.value.fullPath === target) return;
-    const navigation = options?.replace ? router.replace(target) : router.push(target);
-    // A navigation the router refuses (guard, cancellation) is reported as a value, not an exception. Roll the runtime
-    // back to wherever the router actually is instead of leaving the two disagreeing.
-    void navigation
-      .then((failure) => {
-        // `duplicated` is a no-op, and `cancelled` means a newer navigation superseded this one and will settle the
-        // location itself; resyncing from the not-yet-updated URL would roll the runtime back mid-transition.
-        if (isNavigationFailure(failure, NavigationFailureType.aborted)) {
-          console.warn("DerridAI navigation was not applied; resyncing from the router", failure);
-          runtime.syncFromLocation();
-        }
-      })
-      .catch((error) => {
-        console.warn("DerridAI navigation failed; resyncing from the router", error);
-        runtime.syncFromLocation();
-      });
-  });
+  runtime.setUrlSyncHook(createRuntimeUrlSyncHook(router, () => runtime.syncFromLocation()));
   try {
     const requiredCapability = String(route.meta.capability || "");
     if (requiredCapability && !auth.can(requiredCapability)) await router.replace("/");

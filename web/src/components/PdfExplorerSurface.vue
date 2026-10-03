@@ -186,6 +186,7 @@ async function refresh() {
   // it after every refresh makes the affordance reliably present whenever a card is actually tall enough for it.
   runtime.enhanceCollapsibles(mainEl.value);
   runtime.decorateDisabledControls(mainEl.value);
+  runtime.translateLegacyDom(mainEl.value);
   if (canRender.value) void renderCanvas();
 }
 
