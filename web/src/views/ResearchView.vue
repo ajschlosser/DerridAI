@@ -487,7 +487,8 @@ async function refreshLiveJobs() {
       }
     }
   } catch (error) {
-    console.warn("Research refresh failed", error);
+    if (!disposed && request === answerRequest)
+      runsError.value = error instanceof Error ? error.message : String(error);
   }
   schedulePoll();
 }
@@ -570,6 +571,17 @@ async function loadPipelines() {
     const options = await pipelinesApi.researchOptions();
     if (disposed || request !== pipelinesRequest || !workspace.value || !isNativeResearch.value)
       return;
+    const configuredId = String(config.value?.pipeline_id || "").trim();
+    const configuredVersion = Number(config.value?.pipeline_version || 0);
+    if (
+      configuredId &&
+      !options.pipelines.some(
+        (pipeline) =>
+          pipeline.pipeline_id === configuredId && pipeline.version === configuredVersion,
+      )
+    ) {
+      updateConfig({ pipeline_id: "", pipeline_version: null });
+    }
     workspace.value = {
       ...workspace.value,
       pipeline_assignment: options.assignment,

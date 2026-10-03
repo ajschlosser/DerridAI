@@ -21,6 +21,7 @@ import { defineComponent, reactive, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   snapshot: vi.fn(),
+  update: vi.fn(),
   runs: vi.fn(),
   pipelines: vi.fn(),
   job: vi.fn(),
@@ -38,8 +39,9 @@ vi.mock("../../src/stores/i18n", () => ({
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({
   getResearchWorkspaceSnapshot: mocks.snapshot,
+  getResearchJob: mocks.job,
   refreshResearchJobs: mocks.runs,
-  updateResearchConfig: vi.fn(),
+  updateResearchConfig: mocks.update,
   __v_isRef: false,
   __v_isReadonly: false,
   __v_isShallow: false,
@@ -123,6 +125,7 @@ beforeEach(() => {
   reactive(mocks.route).name = "rag";
   reactive(mocks.route).query = {};
   mocks.snapshot.mockResolvedValue(snapshot());
+  mocks.update.mockImplementation((patch) => ({ ...snapshot().config, ...patch }));
   mocks.runs.mockResolvedValue([]);
   mocks.pipelines.mockResolvedValue({
     assignment: null,
@@ -133,6 +136,21 @@ beforeEach(() => {
 });
 afterEach(() => mounted.splice(0).forEach((w) => w.unmount()));
 describe("Research progressive reads", () => {
+  it("only clears an unavailable pipeline override after visibility succeeds", async () => {
+    mocks.snapshot.mockResolvedValue({
+      ...snapshot(),
+      config: { ...snapshot().config, pipeline_id: "retired", pipeline_version: 1 },
+    });
+    const pending = deferred<any>();
+    mocks.pipelines.mockReturnValue(pending.promise);
+    const w = render();
+    await flushPromises();
+    expect(mocks.update).not.toHaveBeenCalled();
+    pending.resolve({ assignment: null, pipelines: [], strategies: [], override_allowed: false });
+    await flushPromises();
+    expect(mocks.update).toHaveBeenCalledWith({ pipeline_id: "", pipeline_version: null });
+    expect(w.find(".research-pipelines-status").exists()).toBe(false);
+  });
   it("keeps optional run and pipeline reads independent of the composer", async () => {
     const runs = deferred<any[]>(),
       pipelines = deferred<any>();
