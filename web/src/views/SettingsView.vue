@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
+import { applyAppearance } from "../domain/sharedAppearance";
 import {
   getProviderProfilesForUi,
   getDefaultProviderProfileId,
@@ -379,7 +380,7 @@ async function saveGroup(group: string, apply: () => void | Promise<void>) {
 function saveAppearance() {
   void saveGroup("appearance", () => {
     appearanceDraft.value = normalizeAppearance(appearanceDraft.value);
-    runtime.applyAppearance(appearanceDraft.value);
+    applyAppearance(appearanceDraft.value);
     Object.assign(workspace.appConfig, appearanceDraft.value);
     appearanceSaved.value = cloneJson(appearanceDraft.value);
   });
@@ -632,7 +633,7 @@ onBeforeRouteLeave(() => {
     };
   });
 });
-watch(appearanceDraft, (value) => runtime.applyAppearance(normalizeAppearance(value)), {
+watch(appearanceDraft, (value) => applyAppearance(normalizeAppearance(value)), {
   deep: true,
 });
 watch([appearanceDirty, reviewDirty, embeddingDirty, ragDirty], () => {
@@ -699,7 +700,7 @@ onMounted(async () => {
   ragSaved.value = normalizeRag(workspace.ragConfig as unknown as RagSettingsDraft);
   ragDraft.value = cloneJson(ragSaved.value);
   notificationsOn.value = Boolean(workspace.appConfig.desktop_notifications);
-  runtime.applyAppearance(appearanceDraft.value);
+  applyAppearance(appearanceDraft.value);
 });
 onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload));
 </script>

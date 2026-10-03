@@ -35,13 +35,7 @@ import {
 } from "../domain/operationsDock";
 import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelHost";
 import { formatDuration } from "../domain/operationsPanel";
-import {
-  cloneAuditValue,
-  compareValues,
-  computeRecordFingerprint,
-  sameValue,
-  sortRows,
-} from "../domain/recordValues";
+import { cloneAuditValue, compareValues, sameValue, sortRows } from "../domain/recordValues";
 import { compressUrlState, decompressUrlState } from "../domain/urlState";
 import { formatTimestamp, localRecordKey, toggleSort } from "../domain/recordTableHelpers";
 import {
@@ -68,7 +62,6 @@ import {
 } from "../domain/citations";
 import { describeRecordsFile, serializableRecordsFile } from "../domain/recordsFiles";
 import {
-  applyAppearance as applyAppearanceCompat,
   applyUiTheme as applyUiThemeCompat,
   setTranslationDictionary as setTranslationDictionaryCompat,
   syncColorScheme as syncColorSchemeCompat,
@@ -164,7 +157,7 @@ import {
   navigateTo,
   renderView,
 } from "../domain/sharedNavigation";
-import { sharedUrlStateCodec } from "../domain/sharedUrlState";
+import { selectedIndex, sharedUrlStateCodec } from "../domain/sharedUrlState";
 import { pathViewMap, viewFromPath, viewPathMap } from "../domain/navigation";
 import { createWorkspacePersistence } from "../domain/workspacePersistence";
 import { cancelPendingPrefs } from "../domain/prefsPersistence";
@@ -189,12 +182,19 @@ import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
 import { slimSemanticSource } from "../domain/semanticMap";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
-import { touchCorpus } from "../state/workspaceState";
+import {
+  allRows,
+  corpusCache,
+  invalidateCorpusCache,
+  memoCorpus,
+  recordFingerprint,
+} from "../domain/corpusCache";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 import { refreshStores } from "../domain/sharedStores";
 import { canAccessPage, hasCapability, isResearcher } from "../domain/sharedSession";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
+import { applyAppearance } from "../domain/sharedAppearance";
 import { relativeTimeLabel } from "../domain/relativeTimeLabel";
 import { createRecordSubsets } from "../domain/recordSubsets";
 
@@ -207,9 +207,6 @@ function syncColorScheme() {
 }
 function applyUiTheme(theme) {
   return applyUiThemeCompat(state, theme);
-}
-function applyAppearance(patch = {}) {
-  return applyAppearanceCompat(state, patch);
 }
 
 function setTranslationDictionary(locale, dictionary = {}, base = {}, info = {}) {
@@ -1174,8 +1171,6 @@ async function stableJsonlFileIdentity(text) {
   return { id: `jsonl-${hex.slice(0, 24)}`, content_hash: hex };
 }
 const activeFile = () => state.files.find((f) => f.id === state.activeFileId) || null;
-const selectedIndex = (f) =>
-  Math.max(0, Math.min((f?.records.length || 1) - 1, state.selected[f?.id] ?? 0));
 const selectedRecord = () => {
   const f = activeFile();
   return f?.records[selectedIndex(f)] || null;
@@ -1185,7 +1180,6 @@ const selectedRecord = () => {
 // index and memoized derived values instead of rebuilding thousands of row
 // wrapper objects on every render/chart/filter pass. Any persisted corpus edit
 // invalidates the cache synchronously.
-const corpusCache = { rows: null, fields: null, memo: new Map(), version: 0 };
 const {
   recordDbStatus,
   workDbStatus,
@@ -1204,7 +1198,7 @@ const {
   allRows: (...args) => allRows(...args),
   api: (...args) => api(...args),
   candidateChromaIds: (...args) => candidateChromaIds(...args),
-  corpusCache: (...args) => corpusCache(...args),
+  corpusCache,
   corpusStoreExists: (...args) => corpusStoreExists(...args),
   dbUnavailableReason: (...args) => dbUnavailableReason(...args),
   formatTimestamp: (...args) => formatTimestamp(...args),
@@ -1267,34 +1261,6 @@ const {
   workIndex: (...args) => workIndex(...args),
   workMetadataControlSpec: (...args) => workMetadataControlSpec(...args),
 });
-let recordFingerprintCache = new WeakMap();
-function invalidateCorpusCache() {
-  touchCorpus();
-  corpusCache.rows = null;
-  corpusCache.fields = null;
-  corpusCache.memo.clear();
-  corpusCache.version++;
-  // Fingerprints are cached by record object identity, but records are edited in
-  // place. Drop the cache whenever corpus-derived state changes so sync/status
-  // checks never reuse a pre-edit hash.
-  recordFingerprintCache = new WeakMap();
-}
-function allRows() {
-  if (corpusCache.rows) return corpusCache.rows;
-  const rows = [];
-  for (const file of state.files) {
-    for (let index = 0; index < file.records.length; index++)
-      rows.push({ file, record: file.records[index], index });
-  }
-  corpusCache.rows = rows;
-  return rows;
-}
-function memoCorpus(key, builder) {
-  if (corpusCache.memo.has(key)) return corpusCache.memo.get(key);
-  const value = builder();
-  corpusCache.memo.set(key, value);
-  return value;
-}
 function hasChromaService() {
   return state.health?.chroma?.available === true;
 }
@@ -1641,13 +1607,6 @@ function pageInfo(total, page) {
   };
 }
 
-function recordFingerprint(record) {
-  if (record && typeof record === "object" && recordFingerprintCache.has(record))
-    return recordFingerprintCache.get(record);
-  const value = computeRecordFingerprint(record);
-  if (record && typeof record === "object") recordFingerprintCache.set(record, value);
-  return value;
-}
 function storeReceipt(store, file, index) {
   return state.upsertState?.[store]?.[localRecordKey(file, index)] || null;
 }
