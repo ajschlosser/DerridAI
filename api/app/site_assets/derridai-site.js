@@ -1204,41 +1204,57 @@
     const snippet = snippetText(String(record.text || ""), searchedQuery);
     return node(
       "article",
-      { class: "result card" },
+      { class: "result search-result" },
       node(
         "div",
         { class: "result-head" },
         node(
           "div",
-          {},
+          { class: "result-identity" },
           node("strong", { text: record.work || record.record_id }),
           node("div", { class: "meta", text: client.citations.format(record).plain }),
         ),
-        node("span", { class: "score", text: Number(item.score || 0).toFixed(3) }),
+        node("span", {
+          class: "score",
+          text: t("site.runtime.result_score", {
+            score: Number(item.score || 0).toFixed(3),
+          }),
+        }),
       ),
       node("div", { class: "snippet" }, ...highlighted(snippet, searchedQuery)),
-      node("button", {
-        type: "button",
-        text: t("site.runtime.view_record"),
-        on: { click: () => openRecord(record, searchedQuery) },
-      }),
+      node(
+        "div",
+        { class: "result-actions" },
+        node("button", {
+          class: "result-open",
+          type: "button",
+          text: t("site.runtime.view_record"),
+          on: { click: () => openRecord(record, searchedQuery) },
+        }),
+      ),
     );
   }
 
   function searchView() {
     const panel = node("section", {
-      class: "panel",
+      class: "search-workspace",
       "aria-labelledby": "search-heading",
     });
-    const heading = node("h2", { id: "search-heading", text: t("site.runtime.search") });
+    const heading = node(
+      "header",
+      { class: "search-heading" },
+      node("h2", { id: "search-heading", text: t("site.runtime.search") }),
+      node("p", { text: t("site.runtime.search_intro") }),
+    );
     const query = node("input", {
-      class: "control",
+      class: "control search-input",
       type: "search",
       placeholder: t("site.runtime.search_placeholder"),
       "aria-label": t("site.runtime.search"),
+      autocomplete: "off",
     });
     const submit = node("button", {
-      class: "primary",
+      class: "primary search-submit",
       type: "button",
       text: t("site.runtime.search"),
     });
@@ -1295,12 +1311,24 @@
       placeholder: t("site.runtime.filter_value"),
       "aria-label": t("site.runtime.filter_value"),
     });
-    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
-    const results = node("div", { class: "stack", "aria-live": "polite" });
+    const filters = node(
+      "details",
+      { class: "search-filters", "data-tour": "filters" },
+      node("summary", { text: t("site.runtime.filters") }),
+      node(
+        "div",
+        { class: "filters" },
+        node("label", { class: "field" }, node("span", { text: t("site.runtime.work_filter") }), work),
+        node("label", { class: "field" }, node("span", { text: t("site.runtime.field_filter") }), field),
+        node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_value") }), value),
+      ),
+    );
+    const status = node("div", { class: "status search-status", role: "status", "aria-live": "polite" });
+    const results = node("div", { class: "results-list", "aria-live": "polite" });
 
     async function run() {
       submit.disabled = true;
-      status.className = "status";
+      status.className = "status search-status";
       status.textContent =
         mode.value === "keyword"
           ? t("site.runtime.activity_text_search")
@@ -1311,16 +1339,14 @@
       const stopProgress = progressListener(status);
       try {
         const searchedQuery = query.value;
-        // Highlighting is a lexical affordance. Semantic and hybrid ranking may return relevant Records that
-        // do not contain the query terms, so only explicit Keyword mode receives a highlight query.
         const highlightQuery = mode.value === "keyword" ? searchedQuery : "";
-        const filters = {};
-        if (work.value) filters.work = work.value;
-        if (field.value && value.value) filters[field.value] = value.value;
+        const searchFilters = {};
+        if (work.value) searchFilters.work = work.value;
+        if (field.value && value.value) searchFilters[field.value] = value.value;
         const response = await client.search({
           query: query.value,
           mode: mode.value,
-          filters,
+          filters: searchFilters,
           limit: 50,
         });
         methods.update({
@@ -1329,7 +1355,7 @@
           llm: false,
         });
         const warning = warningText(response.warnings);
-        status.className = warning ? "status warning" : "status";
+        status.className = warning ? "status search-status warning" : "status search-status";
         status.textContent = warning
           ? t("site.runtime.results_with_warning", {
               count: response.results.length,
@@ -1342,7 +1368,7 @@
           results.append(...response.results.map((item) => resultCard(item, highlightQuery)));
         }
       } catch (error) {
-        status.className = "status error";
+        status.className = "status search-status error";
         status.textContent = t("site.runtime.search_failed", {
           error: error instanceof Error ? error.message : String(error),
         });
@@ -1357,22 +1383,26 @@
       if (event.key === "Enter") run();
     });
 
+    const readiness = browserSemanticIndexSection();
     panel.append(
       heading,
-      methods,
       node("div", { class: "search-row", "data-tour": "search" }, query, submit),
       node(
         "div",
-        { class: "filters", "data-tour": "filters" },
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.search_mode") }), mode),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.work_filter") }), work),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.field_filter") }), field),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.filter_value") }), value),
+        { class: "search-toolbar" },
+        node(
+          "label",
+          { class: "field search-mode" },
+          node("span", { text: t("site.runtime.search_mode") }),
+          mode,
+        ),
+        filters,
       ),
       status,
-      browserSemanticIndexSection(),
+      methods,
+      readiness ? node("div", { class: "search-readiness" }, readiness) : null,
     );
-    return node("div", { class: "stack" }, panel, results);
+    return node("div", { class: "search-page" }, panel, results);
   }
 
   function worksView() {
