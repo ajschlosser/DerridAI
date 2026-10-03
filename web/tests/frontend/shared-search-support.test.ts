@@ -24,6 +24,14 @@ import { dbSearchWhere, display, pages, recordFields } from "../../src/domain/sh
 import { annotationsWorkspace } from "../../src/domain/sharedAnnotations";
 import { recordPresenters } from "../../src/domain/sharedRecordPresenters";
 import { applyRecordChanges } from "../../src/domain/sharedRecordEditing";
+import { recordDialogs } from "../../src/domain/sharedRecordDialogs";
+import {
+  activeFile,
+  bulkEditRowsForScope,
+  fileJsonl,
+  needsReviewItems,
+} from "../../src/domain/sharedRecordScopes";
+import { decorateDisabledControls } from "../../src/domain/disabledControls";
 import { canUse } from "../../src/domain/sharedSession";
 import { state } from "../../src/domain/sharedUrlState";
 
@@ -61,5 +69,22 @@ describe("shared annotations, record editing and presenters", () => {
   it("reports capabilities as false without a signed-in user", () => {
     expect(canUse("manageCorpus")).toBe(false);
     expect(canUse("unknown")).toBe(false);
+  });
+});
+
+describe("shared record dialogs and scopes", () => {
+  it("build over the shared state without the runtime", () => {
+    expect(typeof recordDialogs.openBulkFieldEditor).toBe("function");
+    expect(typeof recordDialogs.openStoreRecordEditor).toBe("function");
+    expect(activeFile()).toBeNull();
+    expect(needsReviewItems()).toEqual([]);
+    expect(bulkEditRowsForScope("selected")).toEqual([]);
+    expect(fileJsonl({ records: [{ a: 1 }, { b: 2 }] })).toBe('{"a":1}\n{"b":2}\n');
+  });
+  it("explains a disabled control with its explicit reason", () => {
+    const root = document.createElement("div");
+    root.innerHTML = '<button disabled data-disabled-reason="Because">Go</button>';
+    decorateDisabledControls(root);
+    expect(root.querySelector("button")?.title).toBe("Because");
   });
 });
