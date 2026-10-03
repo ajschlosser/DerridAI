@@ -452,7 +452,7 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     helpKey: "settings.security_help",
     helpFallback: "Open the dedicated Users and Roles workspaces to manage access.",
     keywords: ["users", "roles", "permissions", "capabilities", "access"],
-    targetId: "settings-section-security",
+    targetId: "settings-heading-security",
   },
   {
     id: "interface-reset",
