@@ -33,4 +33,4 @@ Response Library validation: ten focused cases pass (six initially failed agains
 3. Keep Corpus Builder/source-preview changes deferred while its performance work is active; document any necessary boundary before implementing.
 4. Finish remaining P2 route inventory and cross-route accessibility/localization/layout audit (light/dark, zoom, dense long labels and narrow widths). Do not declare completion until the plan's acceptance checks are evidenced.
 
-This checkout has local pinned frontend dependencies. Browser checks use ports 5298/6298. Bundled Python ran locale tests; full change-aware preflight is still to be recorded.
+This checkout has local pinned frontend dependencies. Browser checks use ports 5298/6298. Bundled Python ran locale tests; change-aware preflight passed frontend lint/types/selected tests/build and Python syntax, but backend lint/types/regressions could not run because Ruff, mypy and pytest-xdist are absent. The documented preflight override is used for that tooling limitation.
