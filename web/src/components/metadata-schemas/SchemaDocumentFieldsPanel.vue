@@ -25,6 +25,7 @@ import {
   type DocumentRequirement,
   type MetadataSchema,
 } from "../../api/metadataSchemas";
+import UiCheckbox from "../ui/UiCheckbox.vue";
 
 // Policy for the bibliographic fields DerridAI owns: what a missing value blocks. Each holds one value for the
 // whole corpus; values are detected on source load, and a person is asked only for required ones detection missed. The fields themselves cannot be added or renamed.
@@ -68,12 +69,12 @@ function toggleRequirement(
               {{ t(`document_field.${policy.name}`, policy.name) }} <code>{{ policy.name }}</code>
             </th>
             <td v-for="r in requirements" :key="r">
-              <input
-                type="checkbox"
-                :checked="policy.required_for.includes(r)"
+              <UiCheckbox
+                :model-value="policy.required_for.includes(r)"
                 :disabled="readonly"
-                :aria-label="`${t(`document_field.${policy.name}`, policy.name)}: ${t(`required_for_${r}`)}`"
-                @change="toggleRequirement(policy, r, ($event.target as HTMLInputElement).checked)"
+                :label="`${t(`document_field.${policy.name}`, policy.name)}: ${t(`required_for_${r}`)}`"
+                hide-label
+                @update:model-value="toggleRequirement(policy, r, $event)"
               />
             </td>
           </tr>

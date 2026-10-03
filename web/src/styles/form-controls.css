@@ -1,0 +1,129 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/*
+ * Canonical skin for ordinary native form controls.
+ *
+ * Feature components own layout; these classes own the interaction contract:
+ * sizing, padding, border, type, focus, disabled/read-only and invalid states.
+ */
+.ui-control {
+  inline-size: 100%;
+  min-block-size: var(--control-height);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  outline: none;
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.ui-control:hover:not(:disabled):not([readonly]) {
+  border-color: var(--border-interactive);
+}
+
+.ui-control:focus-visible {
+  border-color: var(--border-interactive);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.ui-control[aria-invalid="true"] {
+  border-color: var(--tone-danger-border);
+}
+
+.ui-control:disabled {
+  cursor: not-allowed;
+  border-color: var(--border-subtle);
+  background: var(--surface-disabled);
+  color: var(--text-tertiary);
+}
+
+.ui-control[readonly] {
+  background: var(--surface-inset);
+}
+
+textarea.ui-control {
+  min-block-size: calc(var(--control-height) * 2.5);
+  resize: vertical;
+}
+
+.ui-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-block-size: var(--control-height);
+  padding-block: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  cursor: pointer;
+}
+
+.ui-checkbox[data-disabled="true"] {
+  cursor: not-allowed;
+  color: var(--text-tertiary);
+}
+
+.ui-checkbox-control {
+  flex: 0 0 auto;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  margin-block-start: 0.08rem;
+  accent-color: var(--ui-accent);
+}
+
+.ui-checkbox-control:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.ui-checkbox-control[aria-invalid="true"] {
+  outline: 2px solid var(--tone-danger-border);
+  outline-offset: 2px;
+}
+
+.ui-checkbox-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.ui-checkbox-label {
+  font-weight: var(--fw-semibold);
+}
+
+.ui-checkbox-description {
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+
+@media (forced-colors: active) {
+  .ui-control,
+  .ui-checkbox-control {
+    forced-color-adjust: auto;
+  }
+}

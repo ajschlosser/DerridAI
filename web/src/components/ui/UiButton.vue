@@ -215,6 +215,8 @@ const tooltipLabel = computed(() =>
 }
 .ui-button.size-small.icon-only {
   width: var(--control-height-small);
+  min-width: var(--control-height-small);
+  min-height: var(--control-height-small);
 }
 .ui-button :deep(svg) {
   width: 16px;

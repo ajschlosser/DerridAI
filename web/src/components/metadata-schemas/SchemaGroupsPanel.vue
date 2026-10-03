@@ -22,6 +22,10 @@ import { computed, ref, watch } from "vue";
 import { useSchemaCopy } from "../../composables/useSchemaCopy";
 import { CORE_GROUP, type MetadataSchema, type SchemaGroup } from "../../api/metadataSchemas";
 import UiButton from "../ui/UiButton.vue";
+import UiField from "../ui/UiField.vue";
+import UiInput from "../ui/UiInput.vue";
+import UiSelect from "../ui/UiSelect.vue";
+import UiTextarea from "../ui/UiTextarea.vue";
 
 // The prompt each group sends: one group is one model call per record. Edited one group at a time so the
 // page stays short however many groups a schema has.
@@ -52,7 +56,7 @@ function addGroup() {
   const n = props.draft.groups.length + 1;
   props.draft.groups.push({
     key: `group_${n}`,
-    label: `Group ${n}`,
+    label: tf("new_group_name", { number: n }),
     intro: "Infer ONLY the following metadata for one immutable DerridAI record.",
     fields_heading: "",
     notes: [],
@@ -74,12 +78,11 @@ function removeGroup() {
   <!-- eslint-disable vue/no-mutating-props -->
   <div class="groups-panel">
     <div class="panel-toolbar">
-      <label class="group-pick">
-        <span>{{ t("preview_group", "Group") }}</span>
-        <select v-model="selectedKey" class="control">
+      <UiField :label="t('preview_group', 'Group')" control-id="schema-group-picker">
+        <UiSelect id="schema-group-picker" v-model="selectedKey">
           <option v-for="g in draft.groups" :key="g.key" :value="g.key">{{ g.label }}</option>
-        </select>
-      </label>
+        </UiSelect>
+      </UiField>
       <p class="hint">{{ t("group_help", "Each group is one model call per record.") }}</p>
       <span class="spacer"></span>
       <UiButton
@@ -109,36 +112,50 @@ function removeGroup() {
         />
         <small v-else class="hint">{{ t("holds_core", "holds the locked core") }}</small>
       </div>
-      <label class="schema-field"
-        ><span>{{ t("group_label", "Group name") }}</span
-        ><input v-model="group.label" class="control" maxlength="80"
-      /></label>
-      <label class="schema-field"
-        ><span>{{ t("fields_heading", "Heading above the field list") }}</span
-        ><input v-model="group.fields_heading" class="control"
-      /></label>
-      <label class="schema-field wide"
-        ><span>{{ t("intro", "Opening instructions") }}</span
-        ><textarea v-model="group.intro" class="control" rows="4"></textarea>
-      </label>
-      <label class="schema-field wide"
-        ><span>{{ t("notes", "Notes after the field list (one per line)") }}</span
-        ><textarea
-          :value="notesText(group)"
-          class="control"
-          rows="3"
-          @input="setNotes(group, ($event.target as HTMLTextAreaElement).value)"
-        ></textarea>
-      </label>
-      <label class="schema-field"
-        ><span>{{ t("trailer", "Closing remarks") }}</span
-        ><textarea v-model="group.trailer" class="control" rows="3"></textarea>
-      </label>
-      <label class="schema-field"
-        ><span>{{ t("footer", "Evidence and confidence instructions") }}</span
-        ><textarea v-model="group.footer" class="control" rows="3"></textarea
-        ><small class="hint">{{ t("footer_help") }}</small></label
-      >
+      <fieldset class="group-fields" :disabled="readonly">
+        <UiField :label="t('group_label', 'Group name')" control-id="schema-group-name">
+          <UiInput id="schema-group-name" v-model="group.label" maxlength="80" />
+        </UiField>
+        <UiField
+          :label="t('fields_heading', 'Heading above the field list')"
+          control-id="schema-group-fields-heading"
+        >
+          <UiInput id="schema-group-fields-heading" v-model="group.fields_heading" />
+        </UiField>
+        <UiField :label="t('intro', 'Opening instructions')" control-id="schema-group-intro" wide>
+          <UiTextarea id="schema-group-intro" v-model="group.intro" rows="4" />
+        </UiField>
+        <UiField
+          :label="t('notes', 'Notes after the field list (one per line)')"
+          control-id="schema-group-notes"
+          wide
+        >
+          <UiTextarea
+            id="schema-group-notes"
+            :model-value="notesText(group)"
+            rows="3"
+            @update:model-value="setNotes(group, String($event ?? ''))"
+          />
+        </UiField>
+        <UiField :label="t('trailer', 'Closing remarks')" control-id="schema-group-trailer">
+          <UiTextarea id="schema-group-trailer" v-model="group.trailer" rows="3" />
+        </UiField>
+        <UiField
+          :label="t('footer', 'Evidence and confidence instructions')"
+          :hint="t('footer_help')"
+          control-id="schema-group-footer"
+        >
+          <template #default="{ describedby, invalid }">
+            <UiTextarea
+              id="schema-group-footer"
+              v-model="group.footer"
+              rows="3"
+              :aria-describedby="describedby"
+              :invalid="invalid"
+            />
+          </template>
+        </UiField>
+      </fieldset>
     </section>
   </div>
 </template>
@@ -153,12 +170,6 @@ function removeGroup() {
   flex-wrap: wrap;
   gap: 8px 14px;
   align-items: end;
-}
-.group-pick {
-  display: grid;
-  gap: 4px;
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
 }
 .spacer {
   flex: 1;
@@ -192,31 +203,19 @@ function removeGroup() {
 .hint {
   margin: 0;
 }
-.schema-field {
-  display: grid;
-  gap: 4px;
-  min-inline-size: 0;
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
-}
-.schema-field.wide {
+.group-fields {
   grid-column: 1 / -1;
-}
-.checkbox-field {
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  align-self: end;
-  min-block-size: 40px;
-}
-.schema-field :is(input, select, textarea) {
-  inline-size: 100%;
-  font-weight: 500;
-}
-.control {
-  min-block-size: 40px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
 }
 @media (max-width: 820px) {
-  .group-form {
+  .group-form,
+  .group-fields {
     grid-template-columns: minmax(0, 1fr);
   }
 }

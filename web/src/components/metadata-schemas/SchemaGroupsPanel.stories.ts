@@ -18,74 +18,58 @@
 
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { blankField, type MetadataSchema } from "../../api/metadataSchemas";
-import SchemaFieldsTable from "./SchemaFieldsTable.vue";
+import SchemaGroupsPanel from "./SchemaGroupsPanel.vue";
 
-const group = {
-  key: "discourse",
-  label: "Discourse",
-  intro: "",
-  fields_heading: "",
-  notes: [],
-  trailer: "",
-  footer: "",
-};
 const draft = (): MetadataSchema => ({
-  format_version: 1,
+  format_version: 2,
   id: "notes",
   name: "Reading notes",
   description: "",
-  groups: [group],
-  fields: [
+  groups: [
     {
-      ...blankField("discourse"),
-      name: "mood",
-      label: "Mood",
-      type: "choice",
-      evidence: true,
-      review: true,
+      key: "discourse",
+      label: "Discourse and attribution",
+      intro: "Infer only the discourse metadata supported by the record.",
+      fields_heading: "Discourse fields",
+      notes: ["Preserve uncertainty rather than guessing."],
+      trailer: "",
+      footer: "Return one assessment for every assessed field.",
     },
-    { ...blankField("discourse"), name: "themes", label: "Themes", type: "list", assess: true },
+    {
+      key: "ideas",
+      label: "Concepts and themes",
+      intro: "Identify concepts and themes supported by the record.",
+      fields_heading: "Conceptual fields",
+      notes: [],
+      trailer: "",
+      footer: "Return one assessment for every assessed field.",
+    },
+  ],
+  fields: [
+    { ...blankField("discourse"), name: "speaker", label: "Speaker" },
+    { ...blankField("ideas"), name: "concepts", label: "Concepts", type: "list" },
   ],
 });
+
 const meta = {
-  title: "System/Metadata Schemas/Fields",
-  component: SchemaFieldsTable,
+  title: "System/Metadata Schemas/Prompt groups",
+  component: SchemaGroupsPanel,
   args: { draft: draft(), readonly: false },
-} satisfies Meta<typeof SchemaFieldsTable>;
+} satisfies Meta<typeof SchemaGroupsPanel>;
 export default meta;
 type Story = StoryObj<typeof meta>;
+
 export const Editable: Story = {};
 export const ReadOnly: Story = { args: { readonly: true } };
-
-export const Empty: Story = {
-  args: {
-    draft: {
-      ...draft(),
-      fields: [],
-    },
-  },
-};
-
 export const FrenchLengthStress: Story = {
   args: {
     draft: {
       ...draft(),
-      name: "Schéma de métadonnées pour l’analyse des attributions et des positions discursives",
-      fields: [
+      groups: [
         {
-          ...blankField("discourse"),
-          name: "position_discursive_detaillee",
-          label: "Position discursive détaillée et attribution au détenteur de la position",
-          type: "choice",
-          evidence: true,
-          assess: true,
-          review: true,
-        },
-        {
-          ...blankField("discourse"),
-          name: "expressions_conceptuelles",
-          label: "Expressions conceptuelles et formulations apparentées",
-          type: "list",
+          ...draft().groups[0],
+          label: "Discours, attribution et position du détenteur de l’énoncé",
+          fields_heading: "Champs relatifs au discours et à l’attribution",
         },
       ],
     },

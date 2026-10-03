@@ -278,9 +278,9 @@ describe("retrieval policy editor", () => {
       },
     });
     const genre = wrapper
-      .findAll("label.check")
-      .find((label) => label.text() === "Genre")!
-      .get("input");
+      .findAll("label.ui-checkbox")
+      .find((label) => label.text().includes("Genre"))!
+      .get('input[type="checkbox"]');
     await genre.setValue(true);
     expect(field.retrieval_profile.match_field_ids).toEqual(["field-genre"]);
     await genre.setValue(false);

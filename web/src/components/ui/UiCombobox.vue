@@ -35,6 +35,11 @@ const props = withDefaults(
     /** Values the model proposed: listed first and marked, in words as well as colour. */
     recommended?: string[];
     recommendedLabel?: string;
+    /** Native control id for association with an external visible label. */
+    inputId?: string;
+    /** Additional help/error description ids supplied by a field wrapper. */
+    describedby?: string;
+    invalid?: boolean;
   }>(),
   {
     options: () => [],
@@ -47,10 +52,14 @@ const props = withDefaults(
     selectedLabel: "Selected",
     recommended: () => [],
     recommendedLabel: "Suggested",
+    inputId: "",
+    describedby: "",
+    invalid: false,
   },
 );
 const emit = defineEmits<{ "update:modelValue": [value: string]; change: [value: string] }>();
 const comboId = useId();
+const resolvedInputId = computed(() => props.inputId || `${comboId}-input`);
 const open = ref(false);
 const active = ref(-1);
 const input = ref<HTMLInputElement | HTMLTextAreaElement | null>(null);
@@ -84,6 +93,17 @@ const pendingQuery = computed(() => {
 const valueIsRecommended = computed(
   () =>
     !props.multiple && Boolean(pendingQuery.value) && recommendedSet.value.has(pendingQuery.value),
+);
+const describedby = computed(() => {
+  const ids = [props.describedby, valueIsRecommended.value ? `${comboId}-recommended` : ""].filter(
+    Boolean,
+  );
+  return ids.length ? ids.join(" ") : undefined;
+});
+const activeDescendant = computed(() =>
+  open.value && active.value >= 0 && filtered.value[active.value]
+    ? `${comboId}-option-${active.value}`
+    : undefined,
 );
 const isSelected = (value: string) =>
   props.multiple && currentValues.value.has(value.toLocaleLowerCase());
@@ -229,6 +249,7 @@ onBeforeUnmount(() => {
   <div class="ui-combobox">
     <textarea
       v-if="multiline"
+      :id="resolvedInputId"
       ref="input"
       class="control combo-textarea"
       rows="1"
@@ -237,7 +258,9 @@ onBeforeUnmount(() => {
       aria-autocomplete="list"
       :aria-expanded="open && filtered.length > 0"
       :aria-controls="`${comboId}-listbox`"
-      :aria-describedby="valueIsRecommended ? `${comboId}-recommended` : undefined"
+      :aria-activedescendant="activeDescendant"
+      :aria-describedby="describedby"
+      :aria-invalid="invalid ? 'true' : undefined"
       :value="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
@@ -251,6 +274,7 @@ onBeforeUnmount(() => {
     ></textarea>
     <input
       v-else
+      :id="resolvedInputId"
       ref="input"
       class="control"
       :type="type"
@@ -259,7 +283,9 @@ onBeforeUnmount(() => {
       aria-autocomplete="list"
       :aria-expanded="open && filtered.length > 0"
       :aria-controls="`${comboId}-listbox`"
-      :aria-describedby="valueIsRecommended ? `${comboId}-recommended` : undefined"
+      :aria-activedescendant="activeDescendant"
+      :aria-describedby="describedby"
+      :aria-invalid="invalid ? 'true' : undefined"
       :value="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
@@ -297,6 +323,7 @@ onBeforeUnmount(() => {
       >
         <li
           v-for="(option, index) in filtered"
+          :id="`${comboId}-option-${index}`"
           :key="option"
           role="option"
           :aria-selected="multiple ? isSelected(option) : option === modelValue"

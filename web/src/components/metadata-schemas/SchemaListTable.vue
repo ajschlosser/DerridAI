@@ -21,8 +21,8 @@ import { useSchemaCopy } from "../../composables/useSchemaCopy";
 import type { SchemaSummary } from "../../api/metadataSchemas";
 import UiStatusBadge from "../ui/UiStatusBadge.vue";
 
-// The saved schemas as a compact table, in the same dense-table idiom as Records. An unsaved
-// draft (a new schema or a copy) appears as a pending first row so it is never mistaken for a saved one.
+// Schema selection is navigation, not tabular analysis. Keep the library compact and make
+// the selected schema explicit without attaching click behavior to non-interactive rows.
 defineProps<{
   items: SchemaSummary[];
   selectedId: string;
@@ -30,129 +30,120 @@ defineProps<{
   unsavedName: string;
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
-const { t, tf } = useSchemaCopy();
+const { t } = useSchemaCopy();
 </script>
 
 <template>
-  <div class="schema-list ui-table-scroll">
-    <table class="schema-table ui-table" :aria-label="t('saved_schemas', 'Saved schemas')">
-      <thead>
-        <tr>
-          <th scope="col">{{ t("col_name", "Schema") }}</th>
-          <th scope="col" class="num">{{ t("col_version", "Version") }}</th>
-          <th scope="col" class="num">{{ t("col_groups", "Groups") }}</th>
-          <th scope="col" class="num">{{ t("col_fields", "Fields") }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-if="unsavedName" class="schema-row is-new selected" aria-current="true">
-          <td>
-            <b>{{ unsavedName }}</b>
-            <UiStatusBadge tone="warning" :label="t('unsaved', 'Not saved yet')" />
-          </td>
-          <td class="num">—</td>
-          <td class="num">—</td>
-          <td class="num">—</td>
-        </tr>
-        <tr
-          v-for="item in items"
-          :key="item.id"
-          class="schema-row"
-          :class="{ selected: item.id === selectedId && !unsavedName }"
+  <nav class="schema-list" :aria-label="t('saved_schemas', 'Saved schemas')">
+    <ul>
+      <li v-if="unsavedName" class="schema-item is-new selected" aria-current="page">
+        <div class="schema-item-main">
+          <strong>{{ unsavedName }}</strong>
+          <UiStatusBadge tone="warning" :label="t('unsaved', 'Not saved yet')" />
+        </div>
+      </li>
+
+      <li
+        v-for="item in items"
+        :key="item.id"
+        class="schema-item"
+        :class="{ selected: item.id === selectedId && !unsavedName }"
+      >
+        <button
+          type="button"
+          class="schema-name"
+          :aria-current="item.id === selectedId && !unsavedName ? 'page' : undefined"
           @click="emit('select', item.id)"
         >
-          <td>
-            <button
-              type="button"
-              class="schema-name"
-              :aria-current="item.id === selectedId && !unsavedName ? 'true' : undefined"
-              @click.stop="emit('select', item.id)"
-            >
-              {{ item.name }}
-            </button>
+          <span class="schema-item-main">
+            <strong>{{ item.name }}</strong>
             <UiStatusBadge
               v-if="item.builtin"
               tone="info"
               :show-dot="false"
               :label="t('builtin', 'Built in')"
             />
-            <small v-if="item.description" class="schema-description">{{ item.description }}</small>
-          </td>
-          <td class="num">v{{ item.schema_version || "1.0.0" }}</td>
-          <td class="num">{{ item.groups.length || "—" }}</td>
-          <td class="num" :title="tf('field_count', { count: item.field_count })">
-            {{ item.field_count }}
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+          </span>
+          <span v-if="item.description" class="schema-description">{{ item.description }}</span>
+          <span class="schema-meta">
+            <span>v{{ item.schema_version || "1.0.0" }}</span>
+            <span>{{ t("col_groups", "Groups") }}: {{ item.groups.length }}</span>
+            <span>{{ t("col_fields", "Fields") }}: {{ item.field_count }}</span>
+          </span>
+        </button>
+      </li>
+    </ul>
+  </nav>
 </template>
 
 <style scoped>
 .schema-list {
-  max-block-size: 15rem;
+  overflow: auto;
+  max-block-size: min(32rem, 62vh);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-overlay);
+  border-radius: var(--radius-card);
   background: var(--surface-card);
 }
-.schema-table {
-  inline-size: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 0.8125rem;
+.schema-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.schema-table th,
-.schema-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  text-align: start;
-  vertical-align: middle;
+.schema-item + .schema-item {
+  border-block-start: 1px solid var(--border-subtle);
 }
-.schema-table thead th {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 1;
-}
-.schema-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-.schema-table .num {
-  inline-size: 1%;
-  white-space: nowrap;
-  text-align: end;
-  font-variant-numeric: tabular-nums;
-}
-.schema-row {
-  cursor: pointer;
-}
-.schema-row.selected td:first-child {
+.schema-item.selected {
   box-shadow: inset 3px 0 0 var(--accent-fg);
+  background: var(--surface-selected);
 }
 .schema-name {
-  margin-inline-end: 8px;
-  padding: 2px 4px;
+  display: grid;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: var(--control-height);
+  padding: var(--space-3);
   border: 0;
-  border-radius: var(--radius-control);
-  background: none;
+  background: transparent;
   color: var(--text-primary);
   font: inherit;
-  font-weight: var(--fw-semibold);
   text-align: start;
   cursor: pointer;
 }
+.schema-name:hover {
+  background: var(--surface-hover);
+}
 .schema-name:focus-visible {
+  position: relative;
+  z-index: 1;
   outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
+  outline-offset: calc(var(--focus-ring-offset) * -1);
+}
+.schema-item-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.schema-item-main strong {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-bold);
 }
 .schema-description {
-  display: block;
-  padding-inline: 4px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+.schema-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
   color: var(--text-tertiary);
   font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
 }
-.is-new b {
-  margin-inline-end: 8px;
-  padding-inline: 4px;
+.is-new {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
 }
 </style>

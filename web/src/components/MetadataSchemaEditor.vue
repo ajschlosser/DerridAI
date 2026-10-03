@@ -21,6 +21,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useSchemaCopy } from "../composables/useSchemaCopy";
 import type { ProviderProfile } from "../api/system";
 import UiButton from "./ui/UiButton.vue";
+import UiField from "./ui/UiField.vue";
+import UiInput from "./ui/UiInput.vue";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
 import UiTabs from "./ui/UiTabs.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
@@ -61,7 +63,7 @@ const emit = defineEmits<{
   selection: [id: string];
   tab: [id: string];
 }>();
-const { t } = useSchemaCopy();
+const { t, tf } = useSchemaCopy();
 
 const VALID_TABS = new Set(["fields", "document", "groups", "preview"]);
 const summaries = ref<SchemaSummary[]>([]);
@@ -83,8 +85,8 @@ const readonly = computed(() => builtin.value || busy.value);
 const tabs = computed(() => [
   { id: "fields", label: t("tab_fields", "Fields") },
   { id: "document", label: t("tab_document_fields", "Document fields") },
-  { id: "groups", label: t("tab_prompts", "Prompts") },
-  { id: "preview", label: t("tab_preview", "Try it") },
+  { id: "groups", label: t("tab_prompts", "Prompt groups") },
+  { id: "preview", label: t("tab_preview", "Test schema") },
 ]);
 
 function load(schema: MetadataSchema, fresh = false) {
@@ -157,7 +159,11 @@ async function newSchema() {
 function duplicate() {
   if (!draft.value) return;
   load(
-    { ...JSON.parse(JSON.stringify(draft.value)), id: "", name: `${draft.value.name} (copy)` },
+    {
+      ...JSON.parse(JSON.stringify(draft.value)),
+      id: "",
+      name: tf("copy_name", { name: draft.value.name }),
+    },
     true,
   );
   savedHash.value = ""; // a copy is unsaved
@@ -173,8 +179,8 @@ async function save() {
       : metadataSchemasApi.update(selectedId.value, schema),
   );
   if (!saved) return;
-  notice.value = t("saved", "Schema saved.");
   await refresh(saved.id);
+  notice.value = t("saved", "Schema saved.");
   emit("saved", saved.id);
   emit("changed");
 }
@@ -218,8 +224,8 @@ async function importFile(event: Event) {
   }
   const imported = await guarded(() => metadataSchemasApi.importFile(payload));
   if (imported) {
-    notice.value = t("imported", "Schema imported.");
     await refresh(imported.id);
+    notice.value = t("imported", "Schema imported.");
     emit("changed");
   }
 }
@@ -300,6 +306,10 @@ defineExpose({ select, draft });
       </p>
 
       <header class="schema-bar">
+        <div class="schema-context">
+          <span>{{ t("editing_schema", "Editing schema") }}</span>
+          <strong>{{ draft.name }}</strong>
+        </div>
         <div class="schema-status">
           <UiStatusBadge v-if="builtin" tone="info" :label="t('builtin', 'Built in')" />
           <UiStatusBadge v-else-if="isNew" tone="warning" :label="t('unsaved', 'Not saved yet')" />
@@ -344,14 +354,12 @@ defineExpose({ select, draft });
       </header>
 
       <fieldset :disabled="readonly" class="schema-identity">
-        <label class="schema-field"
-          ><span>{{ t("name", "Name") }}</span
-          ><input v-model="draft.name" class="control" maxlength="80"
-        /></label>
-        <label class="schema-field"
-          ><span>{{ t("description", "Description") }}</span
-          ><input v-model="draft.description" class="control" maxlength="600"
-        /></label>
+        <UiField :label="t('name', 'Name')" control-id="schema-name">
+          <UiInput id="schema-name" v-model="draft.name" maxlength="80" />
+        </UiField>
+        <UiField :label="t('description', 'Description')" control-id="schema-description">
+          <UiInput id="schema-description" v-model="draft.description" maxlength="600" />
+        </UiField>
       </fieldset>
 
       <UiTabs
@@ -366,15 +374,13 @@ defineExpose({ select, draft });
         :aria-labelledby="`schema-tab-${tab}`"
         class="schema-panel"
       >
-        <fieldset v-if="tab === 'fields'" :disabled="readonly" class="schema-fieldset">
-          <SchemaFieldsTable :draft="draft" :readonly="readonly" />
-        </fieldset>
-        <fieldset v-else-if="tab === 'document'" :disabled="readonly" class="schema-fieldset">
-          <SchemaDocumentFieldsPanel :draft="draft" :readonly="readonly" />
-        </fieldset>
-        <fieldset v-else-if="tab === 'groups'" :disabled="readonly" class="schema-fieldset">
-          <SchemaGroupsPanel :draft="draft" :readonly="readonly" />
-        </fieldset>
+        <SchemaFieldsTable v-if="tab === 'fields'" :draft="draft" :readonly="readonly" />
+        <SchemaDocumentFieldsPanel
+          v-else-if="tab === 'document'"
+          :draft="draft"
+          :readonly="readonly"
+        />
+        <SchemaGroupsPanel v-else-if="tab === 'groups'" :draft="draft" :readonly="readonly" />
         <SchemaPreviewPanel
           v-else
           :draft="draft"
@@ -392,22 +398,28 @@ defineExpose({ select, draft });
 <style scoped>
 .schema-editor {
   display: grid;
-  gap: 16px;
+  grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
+  gap: var(--space-5);
   align-content: start;
+  align-items: start;
 }
 .schema-library {
+  position: sticky;
+  inset-block-start: var(--space-3);
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
+  min-inline-size: 0;
 }
 .library-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 .library-bar h2 {
+  flex-basis: 100%;
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--fs-md);
 }
 .spacer {
   flex: 1;
@@ -418,7 +430,7 @@ defineExpose({ select, draft });
 }
 .schema-form {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   min-inline-size: 0;
 }
 .schema-bar {
@@ -435,6 +447,25 @@ defineExpose({ select, draft });
   border-radius: var(--radius-overlay);
   background: var(--surface-raised);
 }
+.schema-context {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: min(22rem, 100%);
+}
+.schema-context span {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.schema-context strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .schema-status {
   display: flex;
   flex-wrap: wrap;
@@ -450,8 +481,7 @@ defineExpose({ select, draft });
   flex-wrap: wrap;
   gap: 8px;
 }
-.schema-identity,
-.schema-fieldset {
+.schema-identity {
   margin: 0;
   padding: 0;
   border: 0;
@@ -461,24 +491,6 @@ defineExpose({ select, draft });
   display: grid;
   grid-template-columns: minmax(12rem, 1fr) minmax(0, 2fr);
   gap: 10px 12px;
-}
-.schema-fieldset:disabled,
-.schema-identity:disabled {
-  opacity: 0.85;
-}
-.schema-field {
-  display: grid;
-  gap: 4px;
-  min-inline-size: 0;
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
-}
-.schema-field input {
-  inline-size: 100%;
-  font-weight: 500;
-}
-.control {
-  min-block-size: 40px;
 }
 .schema-panel {
   min-inline-size: 0;
@@ -500,6 +512,14 @@ defineExpose({ select, draft });
   background: var(--tone-info-bg);
   color: var(--tone-info-fg);
   font-size: 0.875rem;
+}
+@media (max-width: 1100px) {
+  .schema-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .schema-library {
+    position: static;
+  }
 }
 @media (max-width: 820px) {
   .schema-identity {

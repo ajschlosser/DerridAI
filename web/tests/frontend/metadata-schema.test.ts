@@ -301,19 +301,32 @@ describe("the schema editor", () => {
   });
 
   it("keeps every built-in profile read-only", async () => {
-    const w = await mountEditor();
-    const fiction = w.findAll("button.schema-name").find((item) => item.text() === "Fiction")!;
-    await fiction.trigger("click");
+    const w = mount(MetadataSchemaEditor, {
+      props: { initialSchemaId: "derridai-fiction" },
+      attachTo: document.body,
+    });
     await flushPromises();
+    expect(metadataSchemasApi.get).toHaveBeenCalledWith("derridai-fiction");
     expect(button(w, "Save schema").attributes("disabled")).toBeDefined();
     expect(button(w, "Delete").attributes("disabled")).toBeDefined();
     expect(w.get("fieldset").attributes("disabled")).toBeDefined();
     w.unmount();
   });
 
-  it("shows only implemented reviewed-precedent controls, including minimum similarity", async () => {
+  it("keeps built-in fields navigable while their inspector controls remain disabled", async () => {
     const w = await mountEditor();
-    await w.get("tr.field-row").trigger("click");
+    const fieldButtons = w.findAll("button.field-select");
+    expect(fieldButtons.length).toBeGreaterThan(1);
+    await fieldButtons[1].trigger("click");
+    expect(fieldButtons[1].attributes("aria-current")).toBe("true");
+    expect(w.get(".field-inspector fieldset").attributes("disabled")).toBeDefined();
+    w.unmount();
+  });
+
+  it("shows only implemented reviewed-precedent controls in the selected field inspector", async () => {
+    const w = await mountEditor();
+    const selected = w.get("button.field-select[aria-current='true']");
+    expect(selected.text()).toContain("Mood");
     expect(w.text()).toContain("Memory & retrieval");
     expect(w.text()).toContain("Most examples to show");
     expect(w.text()).toContain("How alike an example must be");
@@ -347,7 +360,7 @@ describe("the schema editor", () => {
     w.unmount();
   });
 
-  it("keeps focus and the expanded row while typing a new field's name", async () => {
+  it("keeps focus in the field inspector while typing a new field's name", async () => {
     const w = await mountEditor();
     await button(w, "Duplicate").trigger("click");
     await button(w, "Add a field").trigger("click");

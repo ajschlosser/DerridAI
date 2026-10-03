@@ -23,6 +23,9 @@ import type { ProviderProfile } from "../../api/system";
 import { CORE_GROUP, type MetadataSchema, type SchemaPreview } from "../../api/metadataSchemas";
 import ProviderProfileSelect from "../ProviderProfileSelect.vue";
 import UiButton from "../ui/UiButton.vue";
+import UiField from "../ui/UiField.vue";
+import UiSelect from "../ui/UiSelect.vue";
+import UiTextarea from "../ui/UiTextarea.vue";
 
 // Try a group against a passage: show the exact prompt it produces, or run it with a model. The parent owns
 // the request (and its error banner); this owns only what the reviewer typed and the last result.
@@ -37,9 +40,7 @@ const emit = defineEmits<{ manage: [] }>();
 const { t, tf } = useSchemaCopy();
 
 const group = ref(CORE_GROUP);
-const text = ref(
-  "In this passage the document author distinguishes an institutional practice from simple memory while qualifying the claim: the practice is not merely a storehouse, and its authority depends on the institution that preserves and interprets it. The paragraph asks whether a supposedly universal concept can remain neutral when its exclusions and historical conditions are ignored.",
-);
+const text = ref(t("preview_sample_text"));
 const profile = ref(props.defaultProviderId ? "" : (props.providerProfiles[0]?.id ?? ""));
 const result = ref<SchemaPreview | null>(null);
 // Profiles load after mount: drop a choice that no longer exists and fall back to the first when no default is set.
@@ -88,12 +89,11 @@ async function go(execute: boolean) {
       {{ t("preview_help") }}
     </p>
     <div class="preview-controls">
-      <label class="schema-field"
-        ><span>{{ t("preview_group", "Group") }}</span
-        ><select v-model="group" class="control">
+      <UiField :label="t('preview_group', 'Group')" control-id="schema-preview-group">
+        <UiSelect id="schema-preview-group" v-model="group">
           <option v-for="g in draft.groups" :key="g.key" :value="g.key">{{ g.label }}</option>
-        </select></label
-      >
+        </UiSelect>
+      </UiField>
       <ProviderProfileSelect
         v-if="providerProfiles.length"
         v-model="profile"
@@ -105,10 +105,9 @@ async function go(execute: boolean) {
         @manage="emit('manage')"
       />
     </div>
-    <label class="schema-field"
-      ><span>{{ t("preview_text", "Passage") }}</span
-      ><textarea v-model="text" class="control" rows="5"></textarea>
-    </label>
+    <UiField :label="t('preview_text', 'Passage')" control-id="schema-preview-text">
+      <UiTextarea id="schema-preview-text" v-model="text" rows="5" />
+    </UiField>
     <div class="preview-actions">
       <UiButton
         :label="t('show_prompt', 'Show the prompt')"
@@ -160,19 +159,6 @@ async function go(execute: boolean) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-.schema-field {
-  display: grid;
-  gap: 4px;
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
-}
-.schema-field :is(select, textarea) {
-  inline-size: 100%;
-  font-weight: 500;
-}
-.control {
-  min-block-size: 40px;
 }
 .preview-results {
   display: grid;
