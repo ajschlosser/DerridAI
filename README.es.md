@@ -20,13 +20,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ![Logo de DerridAI](https://repository-images.githubusercontent.com/1336867942/1ef2d928-ee57-480e-addb-5caf6acc1754)
 
-[English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [العربية](README.ar.md)
+[English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [বাংলা](README.bn.md) · [العربية](README.ar.md) · [简体中文](README.zh-CN.md)
 
 DerridAI es un entorno de investigación local-first que preserva la procedencia para construir, revisar, buscar y consultar corpus académicos. Integra ingestión de fuentes, construcción de corpus con revisión humana, enriquecimiento de metadatos vinculado a evidencia, índices vectoriales/de búsqueda derivados y generación aumentada por recuperación (RAG) basada en evidencia dentro de una sola aplicación Docker.
 
 DerridAI también es la implementación de referencia original de **cELF 1.0 — Capta-Enriched Lexical Format**, una arquitectura de información que preserva la procedencia para investigación documental asistida por IA. La implementación mantiene separadas e inspeccionables la identidad de la fuente, la identidad y revisión del registro, las afirmaciones de metadatos, la evidencia, las afirmaciones generadas y sus vínculos de soporte, en vez de aplanarlas dentro de una base vectorial opaca.
 
-Versión actual: **0.81.0 — Fall River** ([notas de versión](docs/notes/0.81.0.md)). Este README describe la arquitectura actual de `master`, incluido el trabajo posterior a Exeter ya fusionado en el repositorio.
+Versión actual: **0.81.0 — Fall River** ([notas de versión](docs/notes/0.81.0.md)). La versión de la aplicación no se ha incrementado desde Fall River; este README describe la rama `master` actual, incluido el trabajo posterior a 0.81.0 que no forma parte de la versión etiquetada.
+
+## Estado actual de `master`
+
+La rama actual ha avanzado de forma sustancial desde la etiqueta 0.81.0 aunque conserva el número de versión 0.81.0. Este resumen describe el producto actual, no unas nuevas notas de versión.
+
+- **Corpus Builder es ahora un flujo progresivo Configuración → Construcción → Revisión → Publicación.** Admite enriquecimiento concurrente acotado, elecciones explícitas de topología del corpus y tamaño de Records, reanudación y revisión sensibles a revisiones, colas persistentes y locales al Record, sesiones enfocadas de corrección de bloqueos de publicación, grupos de metadatos repetibles, asignación de hablantes de audio y revisión segura de texto durante una preparación verificada.
+- **El procesamiento de metadatos y evidencia hace menos trabajo de modelo y conserva semánticas más fuertes.** El enrutamiento determinista y centrado en candidatos, la identidad semántica y equivalencia de valores, la cascada de evidencia v2 validada por soporte, la reparación/clasificación de salidas estructuradas y la reconciliación incremental de Metadata Memory reducen la latencia sin permitir que la relevancia de recuperación o una salida malformada se conviertan en evidencia.
+- **Pipeline Studio modela explícitamente la computación ejecutable.** Propósitos controlados por el servidor, familias de estrategias, efectos académicos, puertos tipados, cableado resuelto, trazas por etapa, métricas de alcance/complejidad, parámetros de recuperación ajustables y comparaciones no persistentes abarcan más rutas de Search, Research, evidencia de revisión, recuperación, segmentación y enriquecimiento.
+- **Works puede publicar sitios de investigación portátiles.** Las exportaciones estáticas combinan el SDK de DerridAI con un runtime Vue dedicado para navegación, anotaciones, indexación semántica en el navegador, proveedores configurados por el lector y Research con citas enlazadas a la evidencia, sin convertir la exportación en estado canónico del corpus.
+- **La invalidación en tiempo real y la carga progresiva sustituyen más polling y recargas de página en blanco.** Works, Record, Search, Research, Response Library, Languages, Relationships, Accounts/Roles, Metadata Memory y otras superficies conservan contenido útil, aíslan fallos, permiten reintentos locales y descartan respuestas obsoletas.
+- **El frontend sigue retirando el runtime heredado.** Navegación controlada por el router, diálogos y notificaciones Vue, módulos compartidos de dominio/estado, slices de Pinia y helpers extraídos reducen el acoplamiento mientras el código de compatibilidad restante queda aislado.
+- **cELF y la infraestructura de desarrollo se han reforzado.** La especificación es neutral respecto del producto y orientada a perfiles/procedencia, con semántica generalizada de localizadores `EvidenceRef`; los mapas de arquitectura documentan límites críticos; y se reforzaron la selección de CI/pre-push, la higiene del repositorio y el control de copyright.
 
 ## Qué hace DerridAI
 
