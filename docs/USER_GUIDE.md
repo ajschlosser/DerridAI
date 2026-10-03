@@ -858,6 +858,8 @@ After an API restart, unfinished execution is marked **Interrupted**; it is neve
 
 Reviewer-triggered metadata retries/reruns, Research, and tool requests take priority over queued automatic corpus work at shared provider and Ollama capacity gates. Running requests are not interrupted. Background work receives a turn after at most three foreground admissions while it waits, and configured concurrency limits still apply.
 
+Assessment-state tokens such as `no_supported_value` are not scholarly metadata values. If a model copies them into an open field, validation rejects those candidates and marks the field uncertain for review; other valid list candidates remain visible. Previously saved values are not silently deleted: review them or explicitly rerun the affected metadata.
+
 Saved raw metadata-family responses are reused only when their source identity, text, revision, locators, exact prompt, response schema, provider configuration, and assigned pipeline still match, and the response passes validation again. Changed or untracked dependencies cause that raw family response to be recomputed; older raw checkpoints without dependency fingerprints are not assumed compatible. Reuse and invalidation are recorded in the family's execution ledger. This does not automatically rerun already materialized completed families or override human decisions; use an explicit family rerun when recomputation of settled metadata is needed.
 
 Validated Records become readable before optional source indexing, metadata-memory prefill, and Document Intelligence finish. During preparation the review controls remain locked; readable topology is not a claim that metadata enrichment or publication validation has finished.

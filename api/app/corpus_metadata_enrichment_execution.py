@@ -131,7 +131,7 @@ def _metadata_task_fingerprint(
         }
     identity = session.identity()
     dependencies = {
-        "contract": "metadata-family-checkpoint-v2",
+        "contract": "metadata-family-checkpoint-v3",
         "validator_version": APP_VERSION,
         "family": task_name,
         "prompt": prompt,
