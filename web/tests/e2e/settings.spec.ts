@@ -24,6 +24,7 @@ const STORIES = [
   ["settings-save-state", "unsaved", ".settings-save-state"],
   ["settings-save-state", "failed", ".settings-save-state"],
   ["settings-navigation", "default", ".settings-nav"],
+  ["settings-overview", "default", ".settings-overview"],
   ["settings-search", "matches", ".settings-search"],
   ["settings-section", "unsaved", ".settings-section"],
   ["foundations-forms-field", "invalid", ".ui-field"],
