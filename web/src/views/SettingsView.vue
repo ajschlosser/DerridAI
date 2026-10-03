@@ -824,19 +824,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   <option value="dark">{{ i18n.t("settings.scheme_dark") }}</option>
                 </select>
               </UiField>
-              <UiField
-                :label="i18n.t('settings.contrast')"
-                :hint="i18n.t('settings.contrast_help')"
-              >
-                <select
-                  id="settings-field-contrast"
-                  class="control"
-                  v-model="appearanceDraft.ui_contrast"
-                >
-                  <option value="system">{{ i18n.t("settings.contrast_system") }}</option>
-                  <option value="more">{{ i18n.t("settings.contrast_more") }}</option>
-                </select>
-              </UiField>
             </div>
             <template #actions>
               <UiButton
@@ -895,6 +882,19 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   </option>
                 </select>
               </div>
+            </UiField>
+            <UiField
+              :label="i18n.t('settings.contrast')"
+              :hint="i18n.t('settings.contrast_help')"
+            >
+              <select
+                id="settings-field-contrast"
+                class="control"
+                v-model="appearanceDraft.ui_contrast"
+              >
+                <option value="system">{{ i18n.t("settings.contrast_system") }}</option>
+                <option value="more">{{ i18n.t("settings.contrast_more") }}</option>
+              </select>
             </UiField>
             <p class="note">{{ i18n.t("settings.a11y_note") }}</p>
             <template v-if="isAdmin" #actions>
