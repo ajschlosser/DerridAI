@@ -1,0 +1,88 @@
+{
+  "text": "Elizabeth walked home.",
+  "tokens": [
+    {
+      "token_ID_within_document": "0",
+      "word": "Elizabeth",
+      "lemma": "Elizabeth",
+      "byte_onset": "0",
+      "byte_offset": "9",
+      "event": "O"
+    },
+    {
+      "token_ID_within_document": "1",
+      "word": "walked",
+      "lemma": "walk",
+      "byte_onset": "10",
+      "byte_offset": "16",
+      "event": "EVENT"
+    },
+    {
+      "token_ID_within_document": "2",
+      "word": "home",
+      "lemma": "home",
+      "byte_onset": "17",
+      "byte_offset": "21",
+      "event": "O"
+    }
+  ],
+  "book": {
+    "characters": [
+      {
+        "id": 7,
+        "count": 4,
+        "mentions": {
+          "proper": [
+            {
+              "c": 2,
+              "n": "Elizabeth"
+            }
+          ],
+          "common": [
+            {
+              "c": 1,
+              "n": "the woman"
+            }
+          ],
+          "pronoun": [
+            {
+              "c": 1,
+              "n": "she"
+            }
+          ]
+        },
+        "agent": [
+          {
+            "w": "walked",
+            "i": 1
+          }
+        ],
+        "patient": [],
+        "poss": [
+          {
+            "w": "home",
+            "i": 2
+          }
+        ],
+        "mod": [],
+        "g": {
+          "she/her": 0.99
+        }
+      }
+    ]
+  },
+  "expected": {
+    "cluster_id": "7",
+    "aliases": [
+      "Elizabeth",
+      "the woman",
+      "she"
+    ],
+    "agent_lemma": "walk",
+    "agent_start_char": 10,
+    "possession_text": "home",
+    "excludes": [
+      "g"
+    ]
+  }
+}
