@@ -351,7 +351,7 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` complete.
 
 ### Phase 9 — Decomposition and cleanup
 
-- [~] Decompose `SettingsView.vue`; Overview, navigation, search, section framing, retention, and NLP resources are components, but category-level extraction remains.
+- [~] Decompose `SettingsView.vue`; Overview, navigation/search/section framing, Access, Data & storage, Troubleshooting, and AI & language services are now extracted components. Preferences, Research & review, and Retrieval & indexing still remain in the route view.
 - [ ] Remove remaining duplicated field/search metadata by converging on one registry contract.
 - [~] Keep domain/persistence logic separate from presentation; registry/domain work is separated, but category state/actions still live in `SettingsView.vue`.
 - [x] Point Help coverage/canonical Settings route at Overview.
@@ -379,4 +379,4 @@ Record material deviations from this plan here rather than silently changing dir
 - 2026-10-02: Settings category and Overview destinations use native link semantics with in-app interception for ordinary clicks. This preserves copy-link/open-in-new-tab behavior and keeps the standalone Storybook stories independent of a router plugin.
 - 2026-10-02: Desktop notifications remain administrator-visible, matching the pre-refactor behavior; only their information-architecture location changed.
 - 2026-10-02: The permanent/canonical retention boundary is now visible without opening a disclosure so destructive operational-retention controls cannot visually flatten canonical research state into disposable system history.
-- 2026-10-02: No local test suite has been executed from the GitHub connector environment. Phase 10 remains explicitly unverified until CI or a runnable checkout is available.
+- 2026-10-02: AI & language services now render through `SettingsServicesPanel.vue`, removing duplicated provider/audio/NLP presentation from `SettingsView.vue` and reducing the route view from roughly 1,900 to roughly 1,775 lines. Category-level extraction remains ongoing.\n- 2026-10-02: No local test suite has been executed from the GitHub connector environment. Phase 10 remains explicitly unverified until CI or a runnable checkout is available.
