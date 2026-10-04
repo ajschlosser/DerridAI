@@ -163,7 +163,7 @@ async function start() {
   error.value = "";
   try {
     const created = await corpusCaptureApi.createCapture(
-      author.value.identity_id,
+      author.value.identity_id || (author.value.wikidata_qid ? `wikidata:${author.value.wikidata_qid}` : ""),
       optionsFromIncludes(providers.value, includes.value, languages.value),
       (i18n.locale || "en").split("-")[0].toLowerCase(),
     );
