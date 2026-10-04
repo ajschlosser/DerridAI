@@ -63,7 +63,7 @@ class CaptureCreate(BaseModel):
     ui_language: str = Field(default="en", pattern=r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
 
     @model_validator(mode="after")
-    def _identity(self) -> "CaptureCreate":
+    def _identity(self) -> CaptureCreate:
         if self.identity_id is None and self.wikidata_qid:
             self.identity_id = f"wikidata:{self.wikidata_qid}"
         if not self.identity_id:
