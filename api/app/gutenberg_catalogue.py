@@ -1008,7 +1008,14 @@ class GutenbergOfflineService:
         """Discard only disposable transport when Gutenberg replaces the weekly archive."""
         self.archive_path.unlink(missing_ok=True)
         self._chunk_path().unlink(missing_ok=True)
-        length = int(response.headers.get("content-length") or 0)
+        content_range = self._parse_content_range(
+            str(response.headers.get("content-range") or "")
+        )
+        length = (
+            content_range[2]
+            if content_range is not None
+            else int(response.headers.get("content-length") or 0)
+        )
         etag = str(response.headers.get("etag") or "").strip() or None
         last_modified = str(response.headers.get("last-modified") or "").strip() or None
         with sqlite3.connect(self.db_path) as db:
@@ -1052,8 +1059,15 @@ class GutenbergOfflineService:
             total = int(head.headers.get("content-length") or 0)
         if total and offset == total:
             with sqlite3.connect(self.db_path) as db:
-                db.execute("UPDATE gutenberg_archive SET status='downloaded',bytes_done=?,total_bytes=?,error=NULL,updated_at=? WHERE id=1",
-                           (offset, total, _now()))
+                db.execute(
+                    """
+                    UPDATE gutenberg_archive
+                    SET status='downloaded',bytes_done=?,total_bytes=?,error=NULL,
+                        retry_count=0,next_retry_at=NULL,updated_at=?
+                    WHERE id=1
+                    """,
+                    (offset, total, _now()),
+                )
             self._changed()
             return self.status()
         if total and offset > total:
