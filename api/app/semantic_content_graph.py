@@ -55,6 +55,39 @@ def document_entity_node_id(cluster_id: str, label: str) -> str:
     return f"document_entity:{_slug(str(cluster_id or '') + ':' + str(label or ''))}"
 
 
+_NON_SEMANTIC_ENTITY_TYPES = frozenset({
+    "CARDINAL",
+    "DATE",
+    "MONEY",
+    "ORDINAL",
+    "PERCENT",
+    "QUANTITY",
+    "TIME",
+})
+
+
+def document_entity_kind(entity_type: str, *, profile: str = "scholarly") -> str:
+    """Map provider NER labels to semantic-map node kinds.
+
+    Numeric/date measurements remain available in Document Intelligence, but they
+    are annotations rather than durable semantic actors. Keeping them out of the
+    navigation graph avoids treating page numbers, years, prices, percentages,
+    and quantities as peer entities beside people, organizations, and places.
+    """
+    normalized = str(entity_type or "").upper()
+    if normalized in _NON_SEMANTIC_ENTITY_TYPES:
+        return ""
+    if profile == "fiction" and normalized in {"PER", "PERSON"}:
+        return "character"
+    if normalized in {"PER", "PERSON"}:
+        return "person"
+    if normalized == "ORG":
+        return "organization"
+    if normalized in {"LOC", "GPE", "FAC"}:
+        return "place"
+    return "entity"
+
+
 def _values(value: Any) -> list[str]:
     if value in (None, "", []):
         return []
@@ -395,17 +428,9 @@ def build_semantic_content_graph(
         label = str(cluster.get("canonical") or "")
         if not label:
             continue
-        kind = (
-            "character"
-            if profile == "fiction" and entity_type in {"PER", "PERSON"}
-            else "person"
-            if entity_type in {"PER", "PERSON"}
-            else "organization"
-            if entity_type == "ORG"
-            else "place"
-            if entity_type in {"LOC", "GPE", "FAC"}
-            else "entity"
-        )
+        kind = document_entity_kind(entity_type, profile=profile)
+        if not kind:
+            continue
         eq = _PERSON_PROFILE if kind in {"person", "character"} else EquivalenceProfile(mode="text", identity_kind=kind)
         cluster_id = str(cluster.get("cluster_id") or "")
         aliases = [str(value) for value in (cluster.get("aliases") or []) if str(value).strip()]

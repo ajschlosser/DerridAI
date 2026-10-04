@@ -17,16 +17,22 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
+import { useId } from "vue";
 import type { MissingDocumentField } from "../../domain/documentFields";
 import { useI18nStore } from "../../stores/i18n";
+import UiField from "../ui/UiField.vue";
+import UiInput from "../ui/UiInput.vue";
+import UiSelect from "../ui/UiSelect.vue";
 
 // Shown only when detection on source load could not fill a document field the schema requires. The values apply
 // to every record of the corpus; leaving one empty does not block the build, the gap stays visible in review.
 const props = defineProps<{ fields: MissingDocumentField[]; disabled?: boolean }>();
 const values = defineModel<Record<string, string>>({ required: true });
 const i18n = useI18nStore();
+const controlIdPrefix = useId();
 
 const label = (name: string) => i18n.t(`schemas.document_field.${name}`, name);
+const controlId = (name: string) => `${controlIdPrefix}-${name.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 const requirement = (field: MissingDocumentField) =>
   field.requiredFor.map((r) => i18n.t(`schemas.required_for_${r}`)).join(" · ");
 function update(name: string, value: string) {
@@ -45,29 +51,34 @@ function update(name: string, value: string) {
     </h3>
     <p class="help">{{ i18n.t("pdf_corpus.missing_document_fields_help") }}</p>
     <div class="fields">
-      <label v-for="field in props.fields" :key="field.name" class="field">
-        <span class="field-label">{{ label(field.name) }}</span>
-        <select
+      <UiField
+        v-for="field in props.fields"
+        :key="field.name"
+        class="field"
+        :label="label(field.name)"
+        :hint="requirement(field)"
+        :control-id="controlId(field.name)"
+      >
+        <UiSelect
           v-if="field.name === 'document_is_translation'"
-          class="control"
-          :value="values[field.name] ?? ''"
+          :id="controlId(field.name)"
+          :model-value="values[field.name] ?? ''"
           :disabled="props.disabled"
-          @change="update(field.name, ($event.target as HTMLSelectElement).value)"
+          @update:model-value="update(field.name, String($event))"
         >
           <option value="">{{ i18n.t("pdf_corpus.missing_document_field_unknown") }}</option>
           <option value="true">{{ i18n.t("common.yes") }}</option>
           <option value="false">{{ i18n.t("common.no") }}</option>
-        </select>
-        <input
+        </UiSelect>
+        <UiInput
           v-else
-          class="control"
-          :value="values[field.name] ?? ''"
+          :id="controlId(field.name)"
+          :model-value="values[field.name] ?? ''"
           :disabled="props.disabled"
           :inputmode="field.name === 'publication_year' ? 'numeric' : undefined"
-          @input="update(field.name, ($event.target as HTMLInputElement).value)"
+          @update:model-value="update(field.name, String($event ?? ''))"
         />
-        <small class="requirement">{{ requirement(field) }}</small>
-      </label>
+      </UiField>
     </div>
   </section>
 </template>
@@ -96,15 +107,6 @@ h3 {
   gap: 10px 14px;
 }
 .field {
-  display: grid;
-  gap: 4px;
-}
-.field-label {
-  font-weight: 600;
-  font-size: var(--fs-sm);
-}
-.requirement {
-  color: var(--text-tertiary);
-  font-size: var(--fs-xs);
+  min-width: 0;
 }
 </style>
