@@ -693,11 +693,13 @@ transcripts, and missing/invalid timestamps stop ingestion. Diarization failure
 preserves the transcript with a visible warning and no invented speaker.
 The model, provider endpoint, duration, and diarization status are retained.
 Distinct diarized voices are labelled `SPEAKER_1`, `SPEAKER_2`, and so on in
-order of first appearance. Before starting a build, or while reviewing a running
-build, assign a person's name to any voice. DerridAI retains the original
-`SPEAKER_n` identifier on immutable source spans and projects the reviewed name
-into the record's `speaker` field. Renaming a voice updates records already
-constructed from that source as well as records constructed later.
+order of first appearance. In Corpus Builder **Setup → Metadata**, each detected
+voice can be assigned a person's name before enrichment begins; the transcription
+review can also expose the same assignment when audio is being reviewed. DerridAI
+retains the original `SPEAKER_n` identifier on immutable source spans and projects
+the reviewed name into the record's authoritative `speaker` assertion. Automatic
+enrichment cannot overwrite that reviewed identity. Renaming a voice updates
+records already constructed from that source as well as records constructed later.
 
 **Search digital libraries** finds a text in Project Gutenberg or Wikisource
 without leaving the dialog. Results follow what you type (Enter searches at
