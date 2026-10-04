@@ -1661,11 +1661,14 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
 
             def generate() -> dict[str, Any]:
                 # Circuit admission happens outside complete_structured_json, so a
-                # deferred call does not consume a model-attempt budget.
-                metadata_provider_health.before_call(
-                    health_key,
-                    foreground=foreground,
-                )
+                # deferred call does not consume a model-attempt budget. Direct
+                # unit/benchmark calls without a durable build are intentionally
+                # excluded from process health state.
+                if build_id:
+                    metadata_provider_health.before_call(
+                        health_key,
+                        foreground=foreground,
+                    )
                 try:
                     answer = self._chat_json(
                         active_request, prompt, response_model=response_model,
@@ -1673,15 +1676,18 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                         attempts=attempts, roles=(role,), escalated=escalated,
                     )
                 except InterruptedError:
-                    metadata_provider_health.note_cancelled(health_key)
+                    if build_id:
+                        metadata_provider_health.note_cancelled(health_key)
                     raise
                 except Exception as exc:
-                    metadata_provider_health.note_failure(
-                        health_key,
-                        failure_disposition(exc),
-                    )
+                    if build_id:
+                        metadata_provider_health.note_failure(
+                            health_key,
+                            failure_disposition(exc),
+                        )
                     raise
-                metadata_provider_health.note_success(health_key)
+                if build_id:
+                    metadata_provider_health.note_success(health_key)
                 return answer
 
             fingerprint = active_request.get("_metadata_dependency_fingerprint")
