@@ -20,7 +20,7 @@ import { apiRequest } from "./http";
 import type { JobSummary } from "./jobs";
 
 export interface LanguagePackFile {
-  role: "entity" | "coref" | "quote";
+  role: "entity" | "coref" | "quote" | "wheel";
   filename: string;
   url: string;
   sha256: string;
