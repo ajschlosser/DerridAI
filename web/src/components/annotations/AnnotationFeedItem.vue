@@ -36,6 +36,7 @@ function dateLabel(value: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat(i18n.locale, {
+      timeZone: i18n.timeZone,
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
