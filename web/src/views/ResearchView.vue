@@ -41,7 +41,7 @@ import * as researchActions from "../domain/researchActions";
 import { annotationsWorkspace } from "../domain/sharedAnnotations";
 import { pipelinesApi } from "../api/pipelines";
 import { normalizedResearchConfig } from "../domain/researchPayloads";
-import { overridesForPipeline } from "../domain/pipelineOverrides";
+import { overridesForPipeline, setStageOverride } from "../domain/pipelineOverrides";
 import { getResearchJob } from "../domain/sharedResearchJobs";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { followResource } from "../realtime/follow";
@@ -372,6 +372,27 @@ function updateConfig(patch: Partial<ResearchConfig>) {
   // Controls on Research are a one-run draft. Settings owns persisted defaults.
   config.value = { ...config.value, ...patch };
 }
+function applyPresetStageOverrides(values: {
+  fetchK: number;
+  lambdaMult: number;
+  rrfK: number;
+  rerankTopN: number;
+}) {
+  const pipeline = effectivePipeline.value;
+  if (!pipeline) return;
+  let overrides = runPipelineOverrides.value;
+  for (const stage of pipeline.stages) {
+    if (stage.strategy === "retrieve.chroma_similarity" || stage.strategy === "retrieve.lexical_bm25")
+      overrides = setStageOverride(pipeline, overrides, stage.id, "fetch_k", values.fetchK);
+    else if (stage.strategy === "select.mmr")
+      overrides = setStageOverride(pipeline, overrides, stage.id, "lambda_mult", values.lambdaMult);
+    else if (stage.strategy === "fusion.rrf")
+      overrides = setStageOverride(pipeline, overrides, stage.id, "rrf_k", values.rrfK);
+    else if (stage.strategy === "rerank.cross_encoder")
+      overrides = setStageOverride(pipeline, overrides, stage.id, "top_k", values.rerankTopN);
+  }
+  runPipelineOverrides.value = overrides;
+}
 function applyPreset(value: string) {
   preset.value = value;
   if (!config.value) return;
@@ -387,32 +408,22 @@ function applyPreset(value: string) {
     preset.value = "balanced";
     return;
   }
-  // Hybrid = the balanced search plus the researcher's own evidence, which the API pins in the packet.
+  // Hybrid = balanced retrieval plus the researcher's pinned evidence. Presets
+  // now express stage tuning as one-run overrides rather than mutating Settings.
   const common = {
     skip_retrieval: false,
-    reranker: "cross_encoder",
     search_types: ["similarity", "lexical", "mmr"],
   };
-  if (value === "balanced" || value === "hybrid")
-    updateConfig({ ...common, k: 64, fetch_k: 500, lambda_mult: 0.7, rrf_k: 60, rerank_top_n: 24 });
-  else if (value === "precision")
-    updateConfig({
-      ...common,
-      k: 40,
-      fetch_k: 320,
-      lambda_mult: 0.82,
-      rrf_k: 60,
-      rerank_top_n: 16,
-    });
-  else if (value === "recall")
-    updateConfig({
-      ...common,
-      k: 96,
-      fetch_k: 1000,
-      lambda_mult: 0.58,
-      rrf_k: 60,
-      rerank_top_n: 32,
-    });
+  if (value === "balanced" || value === "hybrid") {
+    updateConfig({ ...common, k: 64 });
+    applyPresetStageOverrides({ fetchK: 500, lambdaMult: 0.7, rrfK: 60, rerankTopN: 24 });
+  } else if (value === "precision") {
+    updateConfig({ ...common, k: 40 });
+    applyPresetStageOverrides({ fetchK: 320, lambdaMult: 0.82, rrfK: 60, rerankTopN: 16 });
+  } else if (value === "recall") {
+    updateConfig({ ...common, k: 96 });
+    applyPresetStageOverrides({ fetchK: 1000, lambdaMult: 0.58, rrfK: 60, rerankTopN: 32 });
+  }
 }
 function changeProfile(id: string) {
   updateConfig({ provider_profile_id: id });
