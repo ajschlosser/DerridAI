@@ -74,26 +74,28 @@ const progressText = computed(() => {
   return parts.filter(Boolean).join(" · ");
 });
 const timingText = computed(() => {
-  const v = props.view;
+  const operation = props.view;
   if (active.value) {
-    return v.status === "queued"
-      ? ""
-      : i18n.tf("operations.panel.elapsed", {
-          time: time(elapsedSeconds(v, props.now)),
-        });
+    if (operation.status === "queued") return "";
+    return i18n.tf("operations.panel.elapsed", {
+      time: time(elapsedSeconds(operation, props.now)),
+    });
   }
-  const parts: string[] = [];
-  if (v.startedAt && v.finishedAt)
-    parts.push(i18n.tf("operations.panel.took", { time: time(elapsedSeconds(v, props.now)) }));
-  return parts.join(" · ");
+
+  if (operation.startedAt && operation.finishedAt) {
+    return i18n.tf("operations.panel.took", {
+      time: time(elapsedSeconds(operation, props.now)),
+    });
+  }
+  return "";
 });
-const whenIso = computed(() =>
-  props.view.status === "queued"
-    ? props.view.createdAt
-    : active.value
-      ? props.view.startedAt || props.view.createdAt
-      : props.view.finishedAt || props.view.startedAt,
-);
+
+const whenIso = computed(() => {
+  const operation = props.view;
+  if (operation.status === "queued") return operation.createdAt;
+  if (active.value) return operation.startedAt || operation.createdAt;
+  return operation.finishedAt || operation.startedAt;
+});
 const whenText = computed(() => {
   const when = relativeTime(whenIso.value, props.now, locale.value);
   if (!when) return "";
