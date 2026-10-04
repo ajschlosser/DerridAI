@@ -203,6 +203,14 @@ jobs:
             '*.ts' '*.tsx' '*.vue' '*.css' '*.scss' '*.html' \
             | xargs -0 --no-run-if-empty ./web/node_modules/.bin/prettier \
               --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
+      - name: Show speaker timeline formatting diff
+        if: failure()
+        working-directory: .
+        run: |
+          ./web/node_modules/.bin/prettier --write --config web/.prettierrc \
+            web/src/components/corpus-builder/AudioSpeakerTimeline.vue
+          git diff -- web/src/components/corpus-builder/AudioSpeakerTimeline.vue
+          exit 1
 
   backend-lint:
     needs: changes
