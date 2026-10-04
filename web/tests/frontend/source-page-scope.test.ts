@@ -24,6 +24,7 @@ describe("source page scope", () => {
 
   it("rejects malformed, reversed, and out-of-range selections", () => {
     expect(parseSourcePageSelection("1-x", 20).error).toBeTruthy();
+    expect(parseSourcePageSelection("1,,3", 20).error).toBeTruthy();
     expect(parseSourcePageSelection("9-4", 20).error).toBeTruthy();
     expect(parseSourcePageSelection("21", 20).error).toBeTruthy();
   });
