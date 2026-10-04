@@ -225,7 +225,10 @@ export interface SearchRequest extends OperationOptions {
   query: string;
   mode?: SearchMode;
   filters?: SearchFilters;
+  /** Final ranked results returned by Search. */
   limit?: number;
+  /** Maximum lexical/semantic candidates considered before final ranking. */
+  fetchLimit?: number;
 }
 
 export interface SearchWarning {
@@ -289,7 +292,11 @@ export interface ResearchRequest extends OperationOptions {
   question: string;
   retrieval?: {
     mode?: SearchMode;
+    /** Ranked retrieval results retained before evidence selection (k). */
     limit?: number;
+    /** Candidate pool considered by each retrieval route before fusion/ranking (fetch_k). */
+    fetchLimit?: number;
+    /** Final evidence records supplied to generation after diversification (top_n). */
     evidenceLimit?: number;
     mmrLambda?: number;
     filters?: SearchFilters;
@@ -357,7 +364,8 @@ export type ClientEvent =
   | { type: "embedding-start"; runId: string }
   | { type: "index-progress"; runId: string; indexed: number; total: number }
   | { type: "retrieval-complete"; runId: string; resultCount: number }
-  | { type: "generation-start"; runId: string }
+  | { type: "evidence-selected"; runId: string; evidenceCount: number }
+  | { type: "generation-start"; runId: string; evidenceCount?: number }
   | { type: "generation-complete"; runId: string }
   | { type: "operation-cancelled"; runId: string };
 

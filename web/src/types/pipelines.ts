@@ -219,6 +219,15 @@ export type PipelineDefinition = {
   runtime_support?: PipelineRuntimeSupport;
 };
 
+export type PipelineStageConfigOverrides = Record<string, Record<string, unknown>>;
+
+/** One override layer, bound to the immutable pipeline version it was authored against. */
+export type PipelineConfigOverrideSet = {
+  pipeline_id: string;
+  pipeline_version: number;
+  stages: PipelineStageConfigOverrides;
+};
+
 export type PipelineAssignment = {
   feature: string;
   pipeline_id: string;

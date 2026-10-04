@@ -36,6 +36,7 @@ import {
 import { navigateTo } from "../domain/sharedNavigation";
 import { flushWorkspacePrefs, persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { apiRequest } from "../api/http";
+import { pipelinesApi } from "../api/pipelines";
 import {
   systemApi,
   type ProviderProfile,
@@ -58,6 +59,7 @@ import SettingsServicesPanel from "../components/settings/SettingsServicesPanel.
 import SettingsTroubleshootingPanel from "../components/settings/SettingsTroubleshootingPanel.vue";
 import SettingsSearch, { type SettingsSearchHit } from "../components/settings/SettingsSearch.vue";
 import SettingsSection from "../components/settings/SettingsSection.vue";
+import PipelineConfigOverridesEditor from "../components/pipelines/PipelineConfigOverridesEditor.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import AppBuildInfo from "../components/AppBuildInfo.vue";
 import {
@@ -80,6 +82,8 @@ import {
   type SaveStatus,
   type SettingsSectionId,
 } from "../domain/settings";
+import { overridesForPipeline, withOverridesForPipeline } from "../domain/pipelineOverrides";
+import type { ResearchPipelineOptions } from "../types/pipelines";
 
 type RuntimeSettings = {
   storageReady?: boolean;
@@ -113,6 +117,9 @@ const embeddingSaved = ref(
 const embeddingDraft = ref(cloneJson(embeddingSaved.value));
 const ragSaved = ref(normalizeRag(workspace.ragConfig as unknown as RagSettingsDraft));
 const ragDraft = ref(cloneJson(ragSaved.value));
+const researchPipelineOptions = ref<ResearchPipelineOptions | null>(null);
+const researchPipelineError = ref("");
+const settingsOverridePipelineKey = ref("");
 const notificationsOn = ref(Boolean(workspace.appConfig.desktop_notifications));
 const nukePhrase = ref("");
 const query = ref("");
@@ -301,6 +308,67 @@ async function testEmbedding() {
   }
 }
 const embeddingDirty = computed(() => !sameSettings(embeddingDraft.value, embeddingSaved.value));
+const settingsOverridePipeline = computed(() => {
+  const options = researchPipelineOptions.value?.pipelines || [];
+  if (settingsOverridePipelineKey.value) {
+    const split = settingsOverridePipelineKey.value.lastIndexOf("@");
+    const pipelineId =
+      split > 0
+        ? settingsOverridePipelineKey.value.slice(0, split)
+        : settingsOverridePipelineKey.value;
+    const version = split > 0 ? Number(settingsOverridePipelineKey.value.slice(split + 1)) : 0;
+    const selected = options.find(
+      (pipeline) => pipeline.pipeline_id === pipelineId && pipeline.version === version,
+    );
+    if (selected) return selected;
+  }
+  const assignment = researchPipelineOptions.value?.assignment;
+  return (
+    options.find(
+      (pipeline) =>
+        pipeline.pipeline_id === assignment?.pipeline_id &&
+        pipeline.version === assignment?.pipeline_version,
+    ) ||
+    options[0] ||
+    null
+  );
+});
+const settingsPipelineOverrideDraft = computed({
+  get() {
+    return overridesForPipeline(
+      ragDraft.value.pipeline_config_overrides,
+      settingsOverridePipeline.value,
+    );
+  },
+  set(value) {
+    const pipeline = settingsOverridePipeline.value;
+    if (!pipeline) return;
+    ragDraft.value.pipeline_config_overrides = withOverridesForPipeline(
+      ragDraft.value.pipeline_config_overrides,
+      pipeline,
+      value,
+    );
+  },
+});
+const settingsAssignedPipeline = computed(() => {
+  const assignment = researchPipelineOptions.value?.assignment;
+  return (researchPipelineOptions.value?.pipelines || []).find(
+    (pipeline) =>
+      pipeline.pipeline_id === assignment?.pipeline_id &&
+      pipeline.version === assignment?.pipeline_version,
+  );
+});
+async function loadResearchPipelineOptions() {
+  if (!isAdmin.value) return;
+  researchPipelineError.value = "";
+  try {
+    researchPipelineOptions.value = await pipelinesApi.researchOptions();
+  } catch (error) {
+    researchPipelineError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+onMounted(loadResearchPipelineOptions);
+
 const ragDirty = computed(() => !sameSettings(ragDraft.value, ragSaved.value));
 const dirty = computed(
   () => appearanceDirty.value || reviewDirty.value || embeddingDirty.value || ragDirty.value,
@@ -1251,10 +1319,106 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             <p v-if="Object.keys(ragErrors).length" class="info error" role="alert">
               {{ i18n.t("settings.validation_summary") }}
             </p>
-            <div class="config-grid">
+
+            <div
+              id="settings-field-pipeline-overrides"
+              class="settings-pipeline-overrides"
+              aria-labelledby="settings-pipeline-overrides-title"
+            >
+              <div class="settings-group-label">
+                <h3 id="settings-pipeline-overrides-title">
+                  {{ i18n.t("settings.pipeline_overrides_title", "Global pipeline overrides") }}
+                </h3>
+                <p>
+                  {{
+                    i18n.t(
+                      "settings.pipeline_overrides_help",
+                      "Pipeline Studio defines the baseline configuration. Values enabled here override the named stage setting for this exact pipeline version. Research run overrides take precedence over these Settings values.",
+                    )
+                  }}
+                </p>
+              </div>
+
+              <div v-if="researchPipelineError" class="info error" role="alert">
+                {{ researchPipelineError }}
+              </div>
+              <template v-else-if="researchPipelineOptions">
+                <UiField
+                  :label="i18n.t('settings.pipeline_to_override', 'Pipeline to override')"
+                  :hint="
+                    i18n.t(
+                      'settings.pipeline_to_override_help',
+                      'Choose which immutable Research pipeline version these global overrides belong to. This does not change the Pipeline Studio assignment.',
+                    )
+                  "
+                  wide
+                >
+                  <select
+                    id="settings-field-pipeline-override-target"
+                    v-model="settingsOverridePipelineKey"
+                    class="control"
+                  >
+                    <option value="">
+                      {{
+                        settingsAssignedPipeline
+                          ? `${i18n.t("settings.pipeline_system_assignment", "System assignment")} · ${settingsAssignedPipeline.name} v${settingsAssignedPipeline.version}`
+                          : i18n.t("settings.pipeline_system_assignment", "System assignment")
+                      }}
+                    </option>
+                    <option
+                      v-for="pipeline in researchPipelineOptions.pipelines"
+                      :key="`${pipeline.pipeline_id}@${pipeline.version}`"
+                      :value="`${pipeline.pipeline_id}@${pipeline.version}`"
+                    >
+                      {{ pipeline.name }} · v{{ pipeline.version }}
+                    </option>
+                  </select>
+                </UiField>
+
+                <p v-if="settingsOverridePipeline" class="pipeline-override-identity">
+                  <span>{{
+                    i18n.t("settings.pipeline_baseline", "Pipeline Studio baseline")
+                  }}</span>
+                  <code>
+                    {{ settingsOverridePipeline.pipeline_id }}@{{
+                      settingsOverridePipeline.version
+                    }}
+                  </code>
+                </p>
+
+                <PipelineConfigOverridesEditor
+                  v-model="settingsPipelineOverrideDraft"
+                  :pipeline="settingsOverridePipeline"
+                  :strategies="researchPipelineOptions.strategies"
+                  layer="settings"
+                />
+
+                <UiButton
+                  icon="compare"
+                  :label="i18n.t('settings.open_pipeline_studio', 'Open Pipeline Studio')"
+                  @click="go('/pipelines', 'pipelines')"
+                />
+              </template>
+              <p v-else class="note" role="status">
+                {{ i18n.t("settings.pipeline_overrides_loading", "Loading Research pipelines…") }}
+              </p>
+            </div>
+
+            <div class="config-grid settings-request-defaults">
               <div class="settings-group-label field-full">
-                <h3>{{ i18n.t("settings.retrieval_strategy_title") }}</h3>
-                <p>{{ i18n.t("settings.retrieval_strategy_help") }}</p>
+                <h3>
+                  {{
+                    i18n.t("settings.research_request_defaults_title", "Research request defaults")
+                  }}
+                </h3>
+                <p>
+                  {{
+                    i18n.t(
+                      "settings.research_request_defaults_help",
+                      "These are run inputs rather than Pipeline Studio stage configuration. They become the starting values for Research and may be changed for one run without altering Settings.",
+                    )
+                  }}
+                </p>
               </div>
               <UiField
                 :label="i18n.t('settings.rag_k')"
@@ -1263,11 +1427,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               >
                 <input
                   id="settings-field-rag-k"
+                  v-model.number="ragDraft.k"
                   class="control"
                   type="number"
                   min="1"
                   max="500"
-                  v-model.number="ragDraft.k"
                   :aria-invalid="Boolean(ragErrors.k)"
                 />
               </UiField>
@@ -1276,7 +1440,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 :hint="
                   i18n.t(
                     'settings.rag_automatic_sizing_help',
-                    'Adapt retrieval depth to median Record size and restore bounded same-document context without raising the reranker or evidence-budget caps.',
+                    'Adapt retrieval depth to Record size without changing Pipeline Studio stage configuration.',
                   )
                 "
               >
@@ -1294,69 +1458,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   }}</span>
                 </label>
               </UiField>
-              <UiField
-                :label="i18n.t('settings.rag_top_n')"
-                :tooltip="i18n.t('help.glossary.rerank_top_n.definition')"
-              >
-                <input
-                  id="settings-field-rag-top-n"
-                  class="control"
-                  type="number"
-                  min="1"
-                  max="500"
-                  v-model.number="ragDraft.rerank_top_n"
-                />
-              </UiField>
-              <UiField :label="i18n.t('settings.rag_reranker')">
-                <select
-                  id="settings-field-rag-reranker"
-                  class="control"
-                  v-model="ragDraft.reranker"
-                >
-                  <option value="cross_encoder">{{ i18n.t("settings.reranker_ce") }}</option>
-                  <option value="lexical">{{ i18n.t("settings.reranker_lexical") }}</option>
-                  <option value="none">{{ i18n.t("settings.reranker_none") }}</option>
-                </select>
-              </UiField>
-              <div class="settings-group-label field-full">
-                <h3>{{ i18n.t("settings.evidence_budget_title") }}</h3>
-                <p>{{ i18n.t("settings.evidence_budget_help") }}</p>
-              </div>
-              <UiField
-                :label="i18n.t('settings.rag_record_chars')"
-                :tooltip="i18n.t('help.glossary.max_chars_evidence.definition')"
-              >
-                <input
-                  id="settings-field-rag-record-chars"
-                  class="control"
-                  type="number"
-                  min="500"
-                  v-model.number="ragDraft.evidence_record_char_limit"
-                />
-              </UiField>
-              <UiField
-                :label="i18n.t('settings.rag_total_chars')"
-                :tooltip="i18n.t('help.glossary.evidence_budget.definition')"
-                :error="ragErrors.evidence_total_char_limit"
-              >
-                <input
-                  id="settings-field-rag-total-chars"
-                  class="control"
-                  type="number"
-                  min="5000"
-                  v-model.number="ragDraft.evidence_total_char_limit"
-                  :aria-invalid="Boolean(ragErrors.evidence_total_char_limit)"
-                />
-              </UiField>
-              <div class="settings-group-label field-full">
-                <h3>{{ i18n.t("settings.retrieval_scope_title") }}</h3>
-                <p>{{ i18n.t("settings.retrieval_scope_help") }}</p>
-              </div>
               <fieldset id="settings-field-rag-locales" class="field field-full">
                 <legend>{{ i18n.t("settings.rag_locales") }}</legend>
                 <div class="language-checks">
-                  <label
-                    ><input
+                  <label>
+                    <input
                       id="settings-field-rag-locale-en"
                       type="checkbox"
                       value="en"
@@ -1366,10 +1472,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                           ? [...new Set([...ragDraft.locales, 'en'])]
                           : ragDraft.locales.filter((code) => code !== 'en')
                       "
-                    /><span>{{ i18n.t("settings.lang_en") }}</span></label
-                  >
-                  <label
-                    ><input
+                    />
+                    <span>{{ i18n.t("settings.lang_en") }}</span>
+                  </label>
+                  <label>
+                    <input
                       id="settings-field-rag-locale-fr"
                       type="checkbox"
                       value="fr"
@@ -1379,8 +1486,9 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                           ? [...new Set([...ragDraft.locales, 'fr'])]
                           : ragDraft.locales.filter((code) => code !== 'fr')
                       "
-                    /><span>{{ i18n.t("settings.lang_fr") }}</span></label
-                  >
+                    />
+                    <span>{{ i18n.t("settings.lang_fr") }}</span>
+                  </label>
                 </div>
                 <p v-if="ragErrors.locales" class="ui-field-error" role="alert">
                   {{ ragErrors.locales }}
@@ -1389,8 +1497,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               <fieldset id="settings-field-rag-routes" class="field field-full">
                 <legend>{{ i18n.t("settings.rag_routes") }}</legend>
                 <div class="language-checks">
-                  <label
-                    ><input
+                  <label>
+                    <input
                       type="checkbox"
                       :checked="ragDraft.search_types.includes('similarity')"
                       @change="
@@ -1398,10 +1506,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                           ? [...new Set([...ragDraft.search_types, 'similarity' as const])]
                           : ragDraft.search_types.filter((item) => item !== 'similarity')
                       "
-                    /><span>{{ i18n.t("research.similarity") }}</span></label
-                  >
-                  <label
-                    ><input
+                    />
+                    <span>{{ i18n.t("research.similarity") }}</span>
+                  </label>
+                  <label>
+                    <input
                       type="checkbox"
                       :checked="ragDraft.search_types.includes('lexical')"
                       @change="
@@ -1409,10 +1518,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                           ? [...new Set([...ragDraft.search_types, 'lexical' as const])]
                           : ragDraft.search_types.filter((item) => item !== 'lexical')
                       "
-                    /><span>{{ i18n.t("settings.route_lexical") }}</span></label
-                  >
-                  <label
-                    ><input
+                    />
+                    <span>{{ i18n.t("settings.route_lexical") }}</span>
+                  </label>
+                  <label>
+                    <input
                       type="checkbox"
                       :checked="ragDraft.search_types.includes('mmr')"
                       @change="
@@ -1420,86 +1530,16 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                           ? [...new Set([...ragDraft.search_types, 'mmr' as const])]
                           : ragDraft.search_types.filter((item) => item !== 'mmr')
                       "
-                    /><span>{{ i18n.t("settings.route_mmr") }}</span></label
-                  >
+                    />
+                    <span>{{ i18n.t("settings.route_mmr") }}</span>
+                  </label>
                 </div>
                 <p v-if="ragErrors.search_types" class="ui-field-error" role="alert">
                   {{ ragErrors.search_types }}
                 </p>
               </fieldset>
             </div>
-            <details
-              class="settings-advanced"
-              :open="advancedOpen"
-              @toggle="advancedOpen = ($event.target as HTMLDetailsElement).open"
-            >
-              <summary>{{ i18n.t("settings.advanced_retrieval") }}</summary>
-              <div class="config-grid">
-                <UiField
-                  :label="i18n.t('settings.rag_fetch_k')"
-                  :tooltip="i18n.t('help.glossary.fetch_k.definition')"
-                  :error="ragErrors.fetch_k"
-                >
-                  <input
-                    id="settings-field-rag-fetch-k"
-                    class="control"
-                    type="number"
-                    min="1"
-                    max="5000"
-                    v-model.number="ragDraft.fetch_k"
-                    :aria-invalid="Boolean(ragErrors.fetch_k)"
-                  />
-                </UiField>
-                <UiField
-                  :label="i18n.t('settings.rag_lambda')"
-                  :tooltip="i18n.t('help.glossary.mmr_lambda.definition')"
-                >
-                  <input
-                    id="settings-field-rag-lambda"
-                    class="control"
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    v-model.number="ragDraft.lambda_mult"
-                  />
-                </UiField>
-                <UiField
-                  :label="i18n.t('settings.rag_rrf_k')"
-                  :tooltip="i18n.t('help.glossary.rrf_k.definition')"
-                >
-                  <input
-                    id="settings-field-rag-rrf"
-                    class="control"
-                    type="number"
-                    min="1"
-                    v-model.number="ragDraft.rrf_k"
-                  />
-                </UiField>
-                <UiField
-                  :label="i18n.t('settings.rag_cross_encoder')"
-                  :tooltip="i18n.t('help.glossary.cross_encoder.definition')"
-                >
-                  <input
-                    id="settings-field-rag-cross-encoder"
-                    class="control"
-                    v-model="ragDraft.cross_encoder_model"
-                  />
-                </UiField>
-                <UiField
-                  :label="i18n.t('settings.rag_decompose')"
-                  :tooltip="i18n.t('help.glossary.query_decomposition.definition')"
-                >
-                  <input
-                    id="settings-field-rag-decompose"
-                    class="control"
-                    type="number"
-                    min="64"
-                    v-model.number="ragDraft.query_decomposition_num_predict"
-                  />
-                </UiField>
-              </div>
-            </details>
+
             <template #actions>
               <UiButton variant="primary" :label="i18n.t('settings.save_rag')" @click="saveRag" />
               <UiButton :label="i18n.t('settings.reset_rag')" @click="resetRag" />
@@ -1674,6 +1714,31 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 .providers-summary small {
   color: var(--muted);
   font-size: 0.8125rem;
+}
+.settings-pipeline-overrides {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel-2);
+}
+.pipeline-override-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.pipeline-override-identity code {
+  color: var(--text-primary);
+}
+.settings-request-defaults {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
 }
 .settings-advanced {
   border: 1px solid var(--line);

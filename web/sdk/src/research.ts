@@ -185,6 +185,7 @@ export class ResearchEngine {
         mode: retrievalMode,
         filters,
         limit: retrievalLimit,
+        fetchLimit: request.retrieval?.fetchLimit,
         signal: request.signal,
       },
       runId,
@@ -212,6 +213,7 @@ export class ResearchEngine {
               mode: retrievalMode,
               filters: { ...(filters ?? {}), work: works },
               limit: Math.min(4, retrievalLimit),
+              fetchLimit: request.retrieval?.fetchLimit,
               signal: request.signal,
             },
             `${runId}-scope-${index + 1}`,
@@ -248,6 +250,11 @@ export class ResearchEngine {
       publicationId: this.manifest.publication_id,
       evidence: selected.map((item, index) => evidenceRef(this.manifest, item.record, index)),
     };
+    this.events.emit({
+      type: "evidence-selected",
+      runId,
+      evidenceCount: evidencePacket.evidence.length,
+    });
 
     const warnings: ResearchWarning[] = [];
     if (retrieval.warnings.length) {
@@ -288,7 +295,11 @@ export class ResearchEngine {
       };
     }
 
-    this.events.emit({ type: "generation-start", runId });
+    this.events.emit({
+      type: "generation-start",
+      runId,
+      evidenceCount: evidencePacket.evidence.length,
+    });
     try {
       const generated = await this.generation.generate(
         {

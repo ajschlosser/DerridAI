@@ -73,6 +73,9 @@ def test_researcher_rag_uses_approved_model_and_not_browser_overrides():
             pipeline_id="research.current",
             version=1,
         ),
+        "resolve_pipeline_config": lambda pipeline, **kwargs: SimpleNamespace(
+            effective=pipeline,
+        ),
     }
     exec(
         compile(

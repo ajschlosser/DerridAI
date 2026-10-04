@@ -32,6 +32,7 @@ from .cross_encoder import predict_scores
 from .models import OllamaTouchupOptions, RAGPromptMetadataPolicy, RAGRunRequest
 from .pipelines.manager import pipeline_manager
 from .pipelines.models import PipelineDefinition
+from .pipelines.overrides import resolve_pipeline_config
 from .pipelines.research import (
     classify_cross_encoder_failure,
     compile_research_pipeline,
@@ -1145,6 +1146,12 @@ def run_rag_pipeline(
     else:
         resolved = pipeline_manager.resolve("research")
         pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
+    config_resolution = resolve_pipeline_config(
+        pipeline,
+        settings_overrides=request.settings_pipeline_overrides,
+        run_overrides=request.run_pipeline_overrides,
+    )
+    pipeline = config_resolution.effective
     pipeline_plan = compile_research_pipeline(pipeline)
     runtime_settings = resolve_research_runtime_settings(
         pipeline_plan,
@@ -1153,10 +1160,15 @@ def run_rag_pipeline(
     pipeline_summary = {
         "pipeline_id": pipeline.pipeline_id,
         "pipeline_version": pipeline.version,
-        "pipeline_hash": pipeline_plan.pipeline_hash,
+        # The effective hash binds the trace to the configuration that actually
+        # executed; the immutable Pipeline Studio baseline remains separately
+        # identified for audit/reproduction.
+        "pipeline_hash": config_resolution.effective_hash,
+        "baseline_pipeline_hash": config_resolution.baseline_hash,
         "name": pipeline.name,
         "purpose": pipeline.purpose,
         "resolved_pipeline": pipeline.model_dump(mode="json"),
+        "config_resolution": config_resolution.summary(),
     }
 
     def update(stage: str, current: int, total: int, detail: str = "") -> None:
@@ -1222,9 +1234,9 @@ def run_rag_pipeline(
             or request.instructions
             or ""
         ).strip(),
-        # Retrieval/reranking limits are explicit pipeline controls, not LLM
-        # decisions. Keeping them authoritative prevents decomposition defaults
-        # from silently capping user-selected values (historically at 64/24).
+        # Retrieval/reranking limits are deterministic controls, not LLM
+        # decisions. Pipeline Studio supplies the baseline; Settings and run
+        # override layers have already been resolved into the effective pipeline.
         "limit_retrieval": int(request.k),
         "limit_reranking": int(request.rerank_top_n),
         "response_language": (

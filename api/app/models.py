@@ -30,6 +30,7 @@ from pydantic import (
 
 from .enrichment_cycles import MAX_PASSES
 from .metadata_schema import MetadataSchema
+from .pipelines.models import PipelineConfigOverrideSet
 
 LanguageCode = Literal["en", "fr"]
 CollectionRole = Literal["primary", "language", "general"]
@@ -451,6 +452,11 @@ class RAGRunRequest(BaseModel):
     # executable version. Persisting it on the request makes each run auditable.
     pipeline_id: str | None = Field(default=None, min_length=1, max_length=160)
     pipeline_version: int | None = Field(default=None, ge=1)
+    # Pipeline Studio is the baseline. Settings may override registered stage
+    # configuration for this exact immutable version, and one Research run may
+    # override Settings again. Neither layer can rewrite pipeline topology.
+    settings_pipeline_overrides: PipelineConfigOverrideSet | None = None
+    run_pipeline_overrides: PipelineConfigOverrideSet | None = None
     # Empty is valid only for selected-evidence-only runs. The pipeline enforces
     # a collection when vector retrieval is enabled.
     source_collection: str = ""

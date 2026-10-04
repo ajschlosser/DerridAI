@@ -63,7 +63,7 @@ test("single-file export works directly from file://", async ({ page }) => {
   await page.getByRole("button", { name: "Annotations" }).click();
   await expect(page.getByText("Acceptance annotation")).toBeVisible();
 
-  await page.getByRole("button", { name: "Research" }).click();
+  await page.getByRole("button", { name: "Research", exact: true }).click();
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");
   await page.getByRole("button", { name: "Ask" }).click();
   await expect(
@@ -115,7 +115,7 @@ test("same-origin provider paths resolve against the served publication origin",
   await page.goto("https://site.example.test/");
   await page.getByRole("button", { name: "Skip tutorial" }).click();
 
-  await page.getByRole("button", { name: "Models", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   const form = page.getByRole("form", { name: "Add an endpoint" });
   await form.getByLabel("Name", { exact: true }).fill("Same-origin proxy");
   await form.getByLabel("Endpoint URL").fill("/provider");
@@ -124,7 +124,7 @@ test("same-origin provider paths resolve against the served publication origin",
   await form.getByLabel("Use for Research answers").check();
   await form.getByRole("button", { name: "Save endpoint" }).click();
 
-  await page.getByRole("button", { name: "Research" }).click();
+  await page.getByRole("button", { name: "Research", exact: true }).click();
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");
   await page.getByRole("button", { name: "Ask" }).click();
 
@@ -155,7 +155,7 @@ test("single-file export preserves evidence when reader-configured providers are
     model: string,
     roles: Array<"embeddings" | "answers">,
   ) => {
-    await page.getByRole("button", { name: "Models", exact: true }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
     const form = page.getByRole("form", { name: "Add an endpoint" });
     await form.getByLabel("Name", { exact: true }).fill(name);
     await form.getByLabel("Endpoint URL").fill("https://models.example.test/v1");
@@ -170,7 +170,7 @@ test("single-file export preserves evidence when reader-configured providers are
   await addEndpoint("Acceptance embedder", "bge-m3:latest", ["embeddings"]);
   await addEndpoint("Acceptance writer", "gpt-oss:20b", ["answers"]);
 
-  await page.getByRole("button", { name: "Research" }).click();
+  await page.getByRole("button", { name: "Research", exact: true }).click();
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");
   await page.getByRole("button", { name: "Ask" }).click();
 

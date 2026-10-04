@@ -84,7 +84,7 @@ function strings() {
     "site.runtime.tutorial_methods_body": "About know what the site is using.",
     "site.runtime.tutorial_research_title": "Ask Research questions",
     "site.runtime.tutorial_research_body": "About ask research questions.",
-    "site.runtime.tutorial_provider_title": "Models in this browser",
+    "site.runtime.tutorial_provider_title": "Settings for Research and models",
     "site.runtime.tutorial_provider_body": "About optional language-model provider.",
     "site.runtime.tutorial_evidence_title": "Evidence and citations",
     "site.runtime.tutorial_evidence_body": "About evidence and citations.",
@@ -133,7 +133,8 @@ function strings() {
       "Research: text + vector retrieval before LLM synthesis.",
     "site.runtime.activity_research_text": "Research: text retrieval before LLM synthesis.",
     "site.runtime.activity_vector_embedding": "Vector search: creating a query embedding.",
-    "site.runtime.activity_llm_generation": "LLM: generating an answer.",
+    "site.runtime.activity_llm_generation":
+      "LLM: generating an answer from {count} selected evidence Records.",
     "site.runtime.complete": "Research complete.",
     "site.runtime.complete_with_warning": "Research complete with warning: {warning}",
     "site.runtime.no_evidence": "No evidence found.",
@@ -286,7 +287,7 @@ test("published tutorial is keyboard operable, skippable, and itself WCAG 2.2 AA
   page,
 }) => {
   await mountStaticSite(page);
-  const dialog = page.locator("dialog");
+  const dialog = page.locator("dialog.tour");
   await scan(page);
   await page.getByRole("button", { name: "Next" }).focus();
   await page.keyboard.press("Enter");
@@ -296,7 +297,7 @@ test("published tutorial is keyboard operable, skippable, and itself WCAG 2.2 AA
   expect(await dialog.evaluate((node) => node.contains(document.activeElement))).toBe(true);
 
   await page.getByRole("button", { name: "Skip tutorial" }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(dialog).not.toBeVisible();
   await expect(page.getByRole("button", { name: "Tutorial" })).toBeVisible();
   await page.getByRole("button", { name: "Tutorial" }).click();
   await expect(page.getByRole("dialog", { name: "Welcome" })).toBeVisible();
@@ -362,7 +363,7 @@ test("guided tour spotlights each real element, switches views, and restores the
   await page.keyboard.press("ArrowRight");
 
   for (const name of [
-    "Models in this browser",
+    "Settings for Research and models",
     "Evidence and citations",
     "Your annotations",
     "Language and accessibility",
@@ -375,7 +376,7 @@ test("guided tour spotlights each real element, switches views, and restores the
   await scan(page);
 
   await page.getByRole("button", { name: "Finish" }).click();
-  await expect(page.locator("dialog.tour")).toHaveCount(0);
+  await expect(page.locator("dialog.tour")).not.toBeVisible();
   // The tour wandered through Works, Research, and Annotations; the reader is back on Search.
   await expect(page.getByRole("button", { name: "Search", exact: true }).first()).toHaveAttribute(
     "aria-current",
@@ -403,7 +404,7 @@ test("guided tour is dismissed with Escape, remembered, and fits a phone screen"
   expect(ring!.y + ring!.height <= box!.y + 1 || box!.y + box!.height <= ring!.y + 1).toBe(true);
 
   await page.keyboard.press("Escape");
-  await expect(page.locator("dialog.tour")).toHaveCount(0);
+  await expect(page.locator("dialog.tour")).not.toBeVisible();
 
   // Reopened from the button, the tour returns focus to that button when it closes.
   await page.getByRole("button", { name: "Tutorial" }).click();
@@ -567,6 +568,7 @@ async function mountProviderSite(page: Page, extraFeatures: Record<string, unkno
       return;
     }
     if (request.url().endsWith("/chat/completions")) {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 600));
       await route.fulfill({
         status: 200,
         headers,
@@ -611,7 +613,7 @@ async function addEndpoint(
   page: Page,
   options: { name: string; role: "embedding" | "generation"; model: string },
 ) {
-  await page.getByRole("button", { name: "Models", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   const form = page.getByRole("form", { name: "Add an endpoint" });
   await form.getByLabel("Name", { exact: true }).fill(options.name);
   await form.getByLabel("Endpoint URL").fill("https://models.example.test/v1");
@@ -631,12 +633,45 @@ async function addEndpoint(
   await form.getByRole("button", { name: "Save endpoint" }).click();
 }
 
+test("Settings persists Research defaults while Research keeps per-run overrides local", async ({
+  page,
+}) => {
+  await mountProviderSite(page);
+
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  const defaults = page.getByRole("heading", { name: "Research defaults" }).locator("..");
+  await defaults.getByLabel("Retrieved records (k)").fill("12");
+  await defaults.getByLabel("Candidate pool (fetch_k)").fill("80");
+  await defaults.getByLabel("Evidence records (top_n)").fill("4");
+  await defaults.getByLabel("MMR diversity (lambda)").fill("0.6");
+  await defaults.getByRole("checkbox", { name: "Glas" }).check();
+  await defaults.getByRole("button", { name: "Save Research defaults" }).click();
+  await expect(
+    defaults.getByRole("status").filter({ hasText: "Research defaults saved in this browser." }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Research", exact: true }).click();
+  await page.getByText("Run settings", { exact: true }).click();
+  const runSettings = page.locator(".research-run-settings");
+  await expect(runSettings.getByLabel("Retrieved records (k)")).toHaveValue("12");
+  await expect(runSettings.getByLabel("Candidate pool (fetch_k)")).toHaveValue("80");
+  await expect(runSettings.getByLabel("Evidence records (top_n)")).toHaveValue("4");
+  await expect(runSettings.getByRole("checkbox", { name: "Glas" })).toBeChecked();
+
+  // Per-run edits do not mutate the saved browser defaults.
+  await runSettings.getByLabel("Retrieved records (k)").fill("6");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(defaults.getByLabel("Retrieved records (k)")).toHaveValue("12");
+  await scan(page);
+});
+
 test("a provider the reader configures powers vector + LLM Research with method disclosure", async ({
   page,
 }) => {
   await mountProviderSite(page);
   // Nothing was exported, so nothing is configured until the reader sets it up.
-  await page.getByRole("button", { name: "Models", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByLabel("Embedding provider")).toHaveValue("");
   await expect(page.getByLabel("Generation provider")).toHaveValue("");
 
@@ -646,9 +681,17 @@ test("a provider the reader configures powers vector + LLM Research with method 
   await expect(page.locator('[data-index="ready"]')).toContainText("published vectors are used");
   await addEndpoint(page, { name: "Writer", role: "generation", model: "gpt-oss:20b" });
 
-  await page.getByRole("button", { name: "Research" }).click();
+  await page.getByRole("button", { name: "Research", exact: true }).click();
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");
   await page.getByRole("button", { name: "Ask" }).click();
+
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "LLM: generating an answer from 2 selected evidence Records." }),
+  ).toBeVisible();
+  await expect(page.locator(".research-run-progress")).toContainText("Stage 3 of 3");
+  await expect(page.locator(".research-run-progress progress")).toBeVisible();
 
   const answer = page.locator(".answer");
   await expect(answer).toContainText(
@@ -663,15 +706,15 @@ test("a provider the reader configures powers vector + LLM Research with method 
   await expect(evidenceItem).toContainText("[E1] Glas");
   const evidencePane = page.locator(".research-evidence-pane");
   const evidencePanel = page.locator(".research-evidence-panel");
-  expect(
-    await evidencePane.evaluate((element) => getComputedStyle(element).alignSelf),
-  ).toBe("start");
-  expect(
-    await evidencePane.evaluate((element) => getComputedStyle(element).position),
-  ).toBe("sticky");
-  expect(
-    await evidencePanel.evaluate((element) => getComputedStyle(element).alignContent),
-  ).toBe("start");
+  expect(await evidencePane.evaluate((element) => getComputedStyle(element).alignSelf)).toBe(
+    "start",
+  );
+  expect(await evidencePane.evaluate((element) => getComputedStyle(element).position)).toBe(
+    "sticky",
+  );
+  expect(await evidencePanel.evaluate((element) => getComputedStyle(element).alignContent)).toBe(
+    "start",
+  );
 
   await inlineCitation.click();
   await expect(page).toHaveURL(/#research-evidence-E1$/);
@@ -691,7 +734,7 @@ test("the built-in browser model builds a semantic index in one compatibility-fi
   await installFakeTransformersRuntime(page);
   await mountProviderSite(page, { transformers_runtime: "files" });
 
-  await page.getByRole("button", { name: "Models", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByLabel("Embedding model")).toHaveValue("Xenova/multilingual-e5-small");
   await expect(page.getByLabel("Where to run the model")).toHaveValue("wasm");
   await expect(page.locator('[data-index="ready"]')).toContainText(
@@ -797,7 +840,7 @@ test("a different embedding model builds a local IndexedDB index before semantic
 
 test("embeddings run in the browser with WebGPU or WebAssembly", async ({ page }) => {
   await mountProviderSite(page);
-  await page.getByRole("button", { name: "Models", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   const device = page.getByLabel("Where to run the model");
   await expect(device).toContainText("WebGPU");
   await expect(device).toContainText("WebAssembly");

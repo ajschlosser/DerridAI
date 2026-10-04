@@ -574,6 +574,23 @@ def build_research_trace(
                 )
             )
 
+    config_resolution = (
+        pipeline_info.get("config_resolution")
+        if isinstance(pipeline_info.get("config_resolution"), dict)
+        else {}
+    )
+    config_values = (
+        config_resolution.get("values")
+        if isinstance(config_resolution.get("values"), dict)
+        else {}
+    )
+    # Preserve the Pipeline Studio → Settings → run precedence alongside each
+    # stage's effective parameters without copying prompts or source text.
+    for stage in trace_stages:
+        provenance = config_values.get(stage.stage_id)
+        if isinstance(provenance, dict) and provenance:
+            stage.parameters["config_resolution"] = sanitize_trace_value(provenance)
+
     defined_stage_ids = set(resolved_stage_rows)
     traced_stage_ids = {stage.stage_id for stage in trace_stages}
     if not traced_stage_ids <= defined_stage_ids:

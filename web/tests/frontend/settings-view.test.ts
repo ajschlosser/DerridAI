@@ -29,8 +29,62 @@ const systemApi = vi.hoisted(() => ({
   })),
   setEmbeddingDefaults: vi.fn(async (payload) => ({ ...payload, persisted: true })),
 }));
+const pipelinesApi = vi.hoisted(() => ({
+  researchOptions: vi.fn(async () => ({
+    assignment: {
+      feature: "research",
+      pipeline_id: "research.current",
+      pipeline_version: 1,
+      scope: "system",
+      override_allowed: true,
+      source: "built_in",
+    },
+    override_allowed: true,
+    pipelines: [
+      {
+        pipeline_id: "research.current",
+        version: 1,
+        name: "Research current",
+        purpose: "research",
+        status: "active",
+        entry_stage_ids: ["rerank"],
+        stages: [
+          {
+            id: "rerank",
+            strategy: "rerank.cross_encoder",
+            enabled: true,
+            config: { top_k: 24 },
+            next: [],
+          },
+        ],
+      },
+    ],
+    strategies: [
+      {
+        strategy_id: "rerank.cross_encoder",
+        version: 1,
+        family: "rerank",
+        scholarly_effect: "none",
+        phase: "rerank",
+        effect_note: "",
+        label: "Cross-encoder reranking",
+        description: "Ranks candidates.",
+        input_type: "candidate_set",
+        output_type: "candidate_set",
+        deterministic: true,
+        invokes_llm: false,
+        capabilities: [],
+        config_schema: {
+          type: "object",
+          properties: { top_k: { type: "integer", minimum: 1, maximum: 500, default: 24 } },
+        },
+      },
+    ],
+  })),
+}));
 
 vi.mock("../../src/api/system", () => ({ systemApi }));
+vi.mock("../../src/api/pipelines", () => ({ pipelinesApi }));
 vi.mock("../../src/domain/sharedBackup", () => ({
   downloadFullBackup: vi.fn(),
   restoreFullBackup: vi.fn(),
@@ -63,6 +117,7 @@ const runtime = vi.hoisted(() => ({
       desktop_notifications: false,
     },
     ragConfig: {
+      pipeline_config_overrides: {},
       k: 64,
       fetch_k: 500,
       lambda_mult: 0.7,
@@ -167,6 +222,7 @@ describe("SettingsView", () => {
       persisted: true,
     });
     systemApi.setEmbeddingDefaults.mockClear();
+    pipelinesApi.researchOptions.mockClear();
     systemApi.setEmbeddingDefaults.mockImplementation(async (payload) => ({
       ...payload,
       persisted: true,
@@ -176,6 +232,7 @@ describe("SettingsView", () => {
     runtime.state.appConfig.ui_contrast = "system";
     runtime.state.appConfig.embedding_provider = "ollama";
     runtime.state.appConfig.embedding_model = "bge-m3:latest";
+    runtime.state.ragConfig.pipeline_config_overrides = {};
     runtime.state.ragConfig.k = 64;
     runtime.state.ragConfig.fetch_k = 500;
     runtime.state.ragConfig.locales = ["en", "fr"];
@@ -210,7 +267,7 @@ describe("SettingsView", () => {
     expect(wrapper.text()).not.toContain("Retrieval & indexing");
     expect(wrapper.text()).not.toContain("Data & storage");
     expect(wrapper.text()).not.toContain("NUKE DerridAI workspace");
-    expect(wrapper.text()).not.toContain("Save RAG defaults");
+    expect(wrapper.text()).not.toContain("Save Research configuration");
   });
 
   it("shows copyright and version on Overview without a git commit for researchers", async () => {
@@ -231,6 +288,40 @@ describe("SettingsView", () => {
     expect(wrapper.get("#settings-nav-retrieval").attributes("aria-current")).toBe("page");
   });
 
+  it("shows exact Pipeline Studio targets for global Research overrides", async () => {
+    const { wrapper } = await mountView("admin", { section: "retrieval" });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Global pipeline overrides");
+    expect(wrapper.text()).toContain("research.current@1");
+    expect(wrapper.text()).toContain("rerank.top_k");
+    expect(wrapper.text()).toContain("24");
+
+    const override = wrapper.get("#override-settings-rerank-top_k");
+    await override.setValue(true);
+    const row = override.element.closest(".pipeline-override-row");
+    const number = row?.querySelector<HTMLInputElement>('input[type="number"]');
+    expect(number).not.toBeNull();
+    if (!number) throw new Error("Expected stage override number input");
+    number.value = "32";
+    number.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushPromises();
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Save Research configuration"))
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(runtime.state.ragConfig.pipeline_config_overrides).toMatchObject({
+      "research.current@1": {
+        pipeline_id: "research.current",
+        pipeline_version: 1,
+        stages: { rerank: { top_k: 32 } },
+      },
+    });
+  });
+
   it("preserves retrieval input after a validation failure", async () => {
     const { wrapper } = await mountView("admin", { section: "retrieval" });
     await wrapper.get("#settings-field-rag-k").setValue(12);
@@ -238,7 +329,7 @@ describe("SettingsView", () => {
     await wrapper.get("#settings-field-rag-locale-fr").setValue(false);
     await wrapper
       .findAll("button")
-      .find((button) => button.text().includes("Save RAG defaults"))
+      .find((button) => button.text().includes("Save Research configuration"))
       ?.trigger("click");
     await flushPromises();
     expect((wrapper.get("#settings-field-rag-k").element as HTMLInputElement).value).toBe("12");
