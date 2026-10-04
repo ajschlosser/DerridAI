@@ -1057,9 +1057,15 @@ def test_initial_scheduler_recovers_only_due_failed_family(prepared, monkeypatch
         assert current["metadata_stage_status"]["indexing"] == "complete"
         updated = copy.deepcopy(current)
         updated["metadata_stage_status"]["quotation"] = "complete"
+        recovery_entry = updated["metadata_execution_ledger"]["quotation"]
+        recovery_attempt = int(
+            recovery_entry.get("automatic_recovery_inflight_attempt") or 0
+        )
         updated["metadata_execution_ledger"]["quotation"] = {
-            **updated["metadata_execution_ledger"]["quotation"],
+            **recovery_entry,
             "state": "complete",
+            "automatic_recovery_attempts": recovery_attempt,
+            "automatic_recovery_inflight_attempt": None,
             "recovered_after_retry": True,
         }
         return updated
