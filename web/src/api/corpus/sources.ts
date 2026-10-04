@@ -79,6 +79,7 @@ export const corpusSourcesApi = {
     ocrMode = "auto",
     sourceIllegibility = 0,
     pages: PageDetectionRequest = { mode: "auto" },
+    audioDiarization = true,
   ) {
     const body = new FormData();
     body.append("file", file);
@@ -86,6 +87,7 @@ export const corpusSourcesApi = {
     body.append("ocr_languages", "eng+fra+deu");
     body.append("source_illegibility", String(sourceIllegibility));
     body.append("page_number_detection", pages.mode);
+    body.append("audio_diarization", String(audioDiarization));
     if (pages.providerProfileId) body.append("provider_profile_id", pages.providerProfileId);
     for (const [key, value] of Object.entries(pages.connection || {}))
       if (value) body.append(key, String(value));
