@@ -110,14 +110,20 @@ function lifespan(person: AuthorCandidate) {
         v-for="person in results"
         :key="identity(person)"
         class="ar-person"
-        :class="{ 'is-chosen': props.modelValue ? identity(props.modelValue) === identity(person) : false }"
+        :class="{
+          'is-chosen': props.modelValue
+            ? identity(props.modelValue) === identity(person)
+            : false,
+        }"
         :data-identity="identity(person)"
       >
         <input
           type="radio"
           :name="`${id}-person`"
           :value="identity(person)"
-          :checked="props.modelValue ? identity(props.modelValue) === identity(person) : false"
+          :checked="
+            props.modelValue ? identity(props.modelValue) === identity(person) : false
+          "
           @change="emit('update:modelValue', person)"
         />
         <span class="ar-copy">
