@@ -49,6 +49,24 @@ def _now() -> str:
 _ROLE_MAP = {"translator": "translator", "editor": "editor", "compiler": "editor"}
 _DATES = re.compile(r",\s*(?:(\d{1,4})\??\s*(BCE)?)?\s*-\s*(?:(\d{1,4})\??\s*(BCE)?)?\s*$")
 CONTRIBUTOR_PARSER_VERSION = 1
+_ARCHIVE_TEXT_MEMBER = re.compile(
+    r"(?:^|/)(\d+)/pg\1(?:\.txt(?:\.utf-?8)?)$",
+    re.I,
+)
+_LEGACY_ARCHIVE_TEXT_MEMBER = re.compile(r"(?:^|/)(\d+)\.txt$", re.I)
+
+
+def _archive_etext_id(name: str) -> int | None:
+    """Return the eText id for a Gutenberg bulk-text archive member.
+
+    The current feed mirrors cache/epub/<id>/pg<id>.txt. The flat <id>.txt
+    form remains accepted for older local/test archives.
+    """
+    match = _ARCHIVE_TEXT_MEMBER.search(str(name or ""))
+    if match:
+        return int(match.group(1))
+    legacy = _LEGACY_ARCHIVE_TEXT_MEMBER.search(str(name or ""))
+    return int(legacy.group(1)) if legacy else None
 
 
 def parse_gutenberg_contributors(raw: str) -> list[dict[str, Any]]:
@@ -552,15 +570,14 @@ class GutenbergOfflineService:
                     fileobj=tar_stream, mode="r|*"
                 ) as archive, sqlite3.connect(self.staging_library_db_path) as library:
                     for info in archive:
-                        match = re.search(r"(?:^|/)(\d+)\.txt$", info.name, re.I)
-                        if not match or not info.isfile():
+                        etext_id = _archive_etext_id(info.name)
+                        if etext_id is None or not info.isfile():
                             continue
                         extracted = archive.extractfile(info)
                         if extracted is None:
                             continue
                         payload = extracted.read()
                         text = payload.decode("utf-8", errors="replace")
-                        etext_id = int(match.group(1))
                         library.execute(
                             "INSERT OR REPLACE INTO gutenberg_texts VALUES(?,?,?,?,?,?)",
                             (
