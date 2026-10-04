@@ -1342,11 +1342,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   settingsOverridePipeline
                     ? i18n.tf(
                         'settings.pipeline_overrides_target',
+                        'Overrides target {pipeline}@{version}. They are never remapped to another version.',
                         {
                           pipeline: settingsOverridePipeline.pipeline_id,
                           version: settingsOverridePipeline.version,
                         },
-                        'Overrides target {pipeline}@{version}. They are never remapped to another version.',
                       )
                     : i18n.t(
                         'settings.pipeline_overrides_select_help',
