@@ -64,4 +64,17 @@ Prefer `composables/` for Vue lifecycle/reactivity orchestration, `api/` for net
 
 When adding a large new domain, consider a focused subdirectory rather than extending the flat namespace indefinitely. Preserve existing public imports when refactoring and add focused Vitest coverage.
 
+## Naming and documentation
+
+Domain code is read frequently during debugging because it sits between raw API/state shapes and visible behavior. Optimize it for inspection:
+
+- Prefer names that expose the transformation (`normalizedFieldText`, `recordsByWork`, `previousValue`) over one-letter temporaries outside conventional index/math loops.
+- Use JSDoc on exported algorithms when the type signature does not explain semantics such as determinism, scoring, ordering, rollback, or authority.
+- Comment the reason for compatibility branches, heuristics, stable ordering, and defensive fallbacks. Do not comment obvious mapping/filtering syntax.
+- Prefer guard clauses and named predicates over nested ternaries. If the same non-obvious state reconstruction appears twice, extract a small typed helper rather than duplicating the loop.
+- New modules should define narrow local interfaces instead of defaulting to `type Loose = Record<string, any>`. Existing `Loose` boundaries are migration debt; keep them contained rather than spreading them into new APIs.
+- Remove migration-history comments such as “moved verbatim” once the implementation is materially rewritten. Git preserves that history; source comments should explain the current contract.
+
+For tests, place pure-domain coverage in `web/tests/frontend/` near the concept being exercised. Use Playwright only when browser composition, accessibility, routing, or integration behavior is essential to the assertion.
+
 For readability, use names that expose the rule being computed (`normalizedRuleValue`, `recordsByWork`, `candidateCount`) rather than carrying short names from the legacy runtime. Comments should explain compatibility behavior, reconstruction logic, ranking semantics, or stale-state rules rather than restating an expression.
