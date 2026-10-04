@@ -604,10 +604,7 @@ const missingDocumentMetadata = computed<Record<string, string>>({
 const missingMetadataPromptComplete = computed(
   () =>
     Object.keys(
-      suppliedDocumentMetadata(
-        missingMetadataPromptFields.value,
-        missingDocumentMetadata.value,
-      ),
+      suppliedDocumentMetadata(missingMetadataPromptFields.value, missingDocumentMetadata.value),
     ).length === missingMetadataPromptFields.value.length,
 );
 
