@@ -24,6 +24,36 @@ import { createRuntimeState } from "../../src/runtime/runtimeState";
 describe("URL state codec", () => {
   afterEach(() => history.replaceState(null, "", "/"));
 
+  it("never carries credentials or transient editor state into a shareable URL", () => {
+    const state = createRuntimeState() as unknown as Record<string, any>;
+    state.view = "global";
+    state.appConfig = { ...(state.appConfig || {}), openai_api_key: "sk-private" };
+    state.ragConfig = { ...(state.ragConfig || {}), prompt: "private research prompt" };
+    state.comparePasteA = "private pasted corpus text";
+    history.replaceState(
+      null,
+      "",
+      "/search?api_key=raw-secret&prompt=private-prompt&draft=unsaved&workspace_hint=keep",
+    );
+
+    const codec = createUrlStateCodec({
+      state,
+      activeFile: () => null,
+      dbSearchWhere: () => ({}),
+      selectedIndex: () => -1,
+    });
+    const href = codec.urlFromState();
+    const url = new URL(href, "https://derridai.local");
+
+    expect(url.searchParams.get("api_key")).toBeNull();
+    expect(url.searchParams.get("prompt")).toBeNull();
+    expect(url.searchParams.get("draft")).toBeNull();
+    expect(url.searchParams.get("workspace_hint")).toBe("keep");
+    expect(href).not.toContain("sk-private");
+    expect(href).not.toContain("private research prompt");
+    expect(href).not.toContain("private pasted corpus text");
+  });
+
   it("round-trips the view, file and record through a URL with only read helpers", () => {
     const state = createRuntimeState() as unknown as Record<string, any>;
     state.files = [{ id: "f1" }];
