@@ -1087,7 +1087,12 @@ class GutenbergOfflineService:
 
         offset = self._bytes_done()
         requested = min(max(1, int(chunk_size)), CHUNK_SIZE)
-        headers = {"Range": f"bytes={offset}-{offset + requested - 1}"}
+        headers = {
+            "Range": f"bytes={offset}-{offset + requested - 1}",
+            # Range offsets are archive bytes. Never let transparent content
+            # encoding turn them into offsets in a decoded representation.
+            "Accept-Encoding": "identity",
+        }
         if_range = self._if_range_validator(state)
         if offset and if_range:
             headers["If-Range"] = if_range
