@@ -72,6 +72,7 @@ export interface EmbeddingSettingsDraft {
 }
 
 export interface RagSettingsDraft {
+  source_collection: string;
   k: number;
   fetch_k: number;
   automatic_sizing: boolean;
@@ -273,6 +274,15 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     section: "retrieval",
     labelKey: "settings.chroma_path",
     labelFallback: "Current Chroma path",
+  },
+  {
+    id: "rag-database",
+    section: "retrieval",
+    labelKey: "settings.rag_database",
+    labelFallback: "Default corpus database",
+    helpKey: "settings.rag_database_help",
+    helpFallback: "Choose which corpus database supplies the default Research work scope.",
+    keywords: ["database", "collection", "corpus", "research scope"],
   },
   {
     id: "rag-k",
@@ -482,6 +492,7 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
 ];
 
 export const RAG_DEFAULTS: RagSettingsDraft = {
+  source_collection: "",
   k: 64,
   fetch_k: 500,
   automatic_sizing: false,
@@ -596,6 +607,7 @@ export function normalizeRag(
       ].slice(0, 500)
     : [];
   return {
+    source_collection: String(source?.source_collection || "").trim(),
     k: Math.max(1, Math.min(500, finiteNumber(source?.k, RAG_DEFAULTS.k))),
     fetch_k: Math.max(1, Math.min(5000, finiteNumber(source?.fetch_k, RAG_DEFAULTS.fetch_k))),
     automatic_sizing: Boolean(source?.automatic_sizing),
