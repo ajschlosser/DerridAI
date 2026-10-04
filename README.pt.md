@@ -311,9 +311,11 @@ Quality gates locais rápidos:
 ```bash
 ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 mypy
-pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py --ignore=tests/test_frontend_graphql_contract.py
-pytest -q -m contract tests/test_frontend_api_contract.py
-pytest -q -m contract tests/test_frontend_graphql_contract.py
+python -m compileall -q api/app
+pytest -q -n auto --dist=worksteal \
+  --ignore=tests/test_frontend_api_contract.py \
+  --ignore=tests/test_frontend_graphql_contract.py
+pytest -q -m contract tests/test_frontend_api_contract.py tests/test_frontend_graphql_contract.py
 
 cd web
 npm run format:repo:check
@@ -321,7 +323,7 @@ npm run lint
 npm run typecheck
 npm run typecheck:tests
 npm run test:unit
-npm run build
+npm run build:ci
 ```
 
 Use `npm run format:repo` a partir de `web/` para formatar todos os ficheiros de código, configuração e documentação suportados pelo Prettier. HTML gerado de snapshots DOM legacy é excluído intencionalmente.
