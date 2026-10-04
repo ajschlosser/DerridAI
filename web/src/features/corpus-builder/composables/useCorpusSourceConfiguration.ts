@@ -235,10 +235,7 @@ export function useCorpusSourceConfiguration(
     }
   }
 
-  async function upload(
-    file?: File | null,
-    options: { audioDiarization?: boolean } = {},
-  ) {
+  async function upload(file?: File | null, options: { audioDiarization?: boolean } = {}) {
     if (!file) return;
     busy.value = "upload";
     setMessage("");
