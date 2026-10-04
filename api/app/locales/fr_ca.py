@@ -5820,9 +5820,9 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'settings.rag_fetch_k': 'fetch_k MMR',
  'settings.rag_fetch_k_help': 'Taille du bassin de candidats avant le classement par diversité. Do'
                                        'it être au moins égal au k de repérage.',
- 'settings.rag_help': 'Valeurs par défaut de repérage, fusion, reclassement et budget de preuves. '
-                                       'Ces valeurs sont conservées avec chaque exécution pour en '
-                                       'permettre l’audit.',
+ 'settings.rag_help': ('Configurez les remplacements globaux des étapes des pipelines de Recherche immuables, ainsi que les '
+                       'valeurs par défaut des entrées de requête héritées par les nouvelles exécutions. Chaque exécution enregistre '
+                       'la configuration effective pour l’audit.'),
  'settings.rag_k': 'k de repérage',
  'settings.rag_k_help': 'Nombre de passages à conserver après le classement. Les exécutions savant'
                                        'es typiques utilisent 24–64.',
@@ -5841,7 +5841,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'settings.rag_rrf_k': 'k RRF',
  'settings.rag_rrf_k_help': 'Constante de lissage pour la fusion par rang réciproque. 60 est une v'
                                        'aleur courante.',
- 'settings.rag_title': 'Valeurs par défaut du pipeline RAG',
+ 'settings.rag_title': 'Repérage de Recherche et remplacements du pipeline',
  'settings.pipeline_overrides_title': 'Remplacements globaux du pipeline',
  'settings.pipeline_overrides_help': ('L’Atelier de pipelines définit la configuration de référence. Les remplacements enregistrés ici '
                                       'remplacent les paramètres des étapes nommées pour cette version exacte du pipeline. Les remplacements '
@@ -5878,7 +5878,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
                                        'es sources.',
  'settings.reset_appearance': 'Réinitialiser l’apparence',
  'settings.reset_columns': 'Réinitialiser les colonnes du tableau',
- 'settings.reset_rag': 'Réinitialiser le repérage',
+ 'settings.reset_rag': 'Réinitialiser la configuration de Recherche',
  'settings.restore_backup': 'Charger depuis une sauvegarde',
  'settings.restore_confirm_message': 'Ceci remplace l’espace de travail du navigateur et chaque co'
                                        'llection de la base Chroma active.',
@@ -5901,7 +5901,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
                                        '’annule depuis Opérations.',
  'settings.save_appearance': 'Enregistrer l’apparence',
  'settings.save_embedding': 'Enregistrer l’intégration',
- 'settings.save_rag': 'Enregistrer les valeurs RAG',
+ 'settings.save_rag': 'Enregistrer la configuration de Recherche',
  'settings.save_research': 'Enregistrer la recherche',
  'settings.save_review': 'Enregistrer le comportement de révision',
  'settings.scheme_dark': 'Sombre',
