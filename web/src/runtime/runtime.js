@@ -101,11 +101,9 @@ import {
 import { compactNumber } from "../domain/numberFormatting";
 import { normalizeResearcherToken } from "../domain/researcherContentFilter";
 import { filterOpsForField } from "../domain/searchFilterSchema";
-import { stripLigaturesAndArtifacts } from "../domain/textCleanup";
 import {
   compactRecordHistory,
   isResponseCacheStore,
-  normalizePdfLinkChanges,
   pdfLinks,
   ragEvidenceRecordPayload,
   recordPayload,
@@ -187,6 +185,8 @@ import {
   recordFields,
   dbSearchWhere,
 } from "../domain/sharedRecordHelpers";
+import { sharedPdfLinking } from "../domain/sharedPdfLinking";
+import { sharedRecordWorkspace } from "../domain/sharedRecordWorkspace";
 import { recordPresenters as sharedRecordPresenters } from "../domain/sharedRecordPresenters";
 import { providerProfilesService, warmupProviderProfile } from "../domain/sharedProviderProfiles";
 import { searchWorkspace } from "../domain/sharedSearchWorkspace";
@@ -194,7 +194,6 @@ import { getTableColumns, tableAvailableFields } from "../domain/tableColumns";
 import { recordsWorkspace as sharedRecordsWorkspace } from "../domain/sharedRecordsWorkspace";
 import { activateFile, searchByMetadata } from "../domain/workspaceActions";
 import { pageInfo, setActiveStore, setListFilterValue } from "../domain/listPaging";
-import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { createWorksWorkspace } from "../domain/worksWorkspace";
 import { createJobsWorkspace } from "../domain/jobsWorkspace";
 import {
@@ -244,7 +243,6 @@ import {
 } from "../domain/sharedWorkspaceStorage";
 import * as sharedRecordEditing from "../domain/sharedRecordEditing";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
-import { createPdfLinking } from "../domain/pdfLinking";
 import { clearFileDerivedState as clearFileDerivedStateOf } from "../domain/fileDerivedState";
 import { closeFile, importFiles } from "../domain/sharedFileLifecycle";
 import {
@@ -440,51 +438,7 @@ const {
   currentRecordPrimaryAction,
   searchCurrentRecordMetadata,
   navigateRecordWorkspace,
-} = createRecordWorkspace({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  activeFile: (...args) => activeFile(...args),
-  api: (...args) => api(...args),
-  applyRecordChanges: (...args) => applyRecordChanges(...args),
-  canAccessPage: (...args) => canAccessPage(...args),
-  canUse: (...args) => canUse(...args),
-  cleanRecord: (...args) => cleanRecord(...args),
-  copyJsonToClipboard: (...args) => copyJsonToClipboard(...args),
-  dbEvidenceKey: (...args) => dbEvidenceKey(...args),
-  evidenceIsSelected: (...args) => evidenceIsSelected(...args),
-  hasCapability: (...args) => hasCapability(...args),
-  hasCorpusDb: (...args) => hasCorpusDb(...args),
-  isResearcher: (...args) => isResearcher(...args),
-  linkPdfPage: (...args) => linkPdfPage(...args),
-  loadStorePage: (...args) => loadStorePage(...args),
-  loadedPdfPagesForRecord: (...args) => loadedPdfPagesForRecord(...args),
-  navigateTo: (...args) => navigateTo(...args),
-  normalizedRecordAnnotation: (...args) => normalizedRecordAnnotation(...args),
-  openLoadedPdfPage: (...args) => openLoadedPdfPage(...args),
-  openPdfExplorerWorkspace: (...args) => openPdfExplorerWorkspace(...args),
-  openRecordHistoryBrowser: (...args) => openRecordHistoryBrowser(...args),
-  openTouchup,
-  pdfDisplayTitle: (...args) => pdfDisplayTitle(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  refreshServerAnnotations: (...args) => refreshServerAnnotations(...args),
-  refreshStores: (...args) => refreshStores(...args),
-  researcherDbRecords: (...args) => researcherDbRecords(...args),
-  reviewKey: (...args) => reviewKey(...args),
-  searchByMetadata: (...args) => searchByMetadata(...args),
-  selectedIndex: (...args) => selectedIndex(...args),
-  selectedRecord: (...args) => selectedRecord(...args),
-  setReviewSelected: (...args) => setReviewSelected(...args),
-  shell: (...args) => shell(...args),
-  syncUrl: (...args) => syncUrl(...args),
-  toggleDbEvidence: (...args) => toggleDbEvidence(...args),
-  toggleWorkspaceEvidence: (...args) => toggleWorkspaceEvidence(...args),
-  tr: (...args) => tr(...args),
-  uid: (...args) => uid(...args),
-  unlinkAllPdfLinks: (...args) => unlinkAllPdfLinks(...args),
-  unlinkPdfLink: (...args) => unlinkPdfLink(...args),
-  upsertRows: (...args) => upsertRows(...args),
-  workspaceEvidenceKey: (...args) => workspaceEvidenceKey(...args),
-});
+} = sharedRecordWorkspace;
 const {
   describeAdminWork,
   worksSnapshotBase,
@@ -645,18 +599,7 @@ const {
   linkPdfPage,
   unlinkPdfLink,
   unlinkAllPdfLinks,
-} = createPdfLinking({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  allRows: (...args) => allRows(...args),
-  applyRecordChanges: (...args) => applyRecordChanges(...args),
-  normalizePdfLinkChanges: (...args) => normalizePdfLinkChanges(...args),
-  pdfLinks: (...args) => pdfLinks(...args),
-  renderView: (...args) => renderView(...args),
-  shell: (...args) => shell(...args),
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-});
+} = sharedPdfLinking;
 const {
   notifyOperationsChanged,
   operationsBridge,
@@ -1106,25 +1049,6 @@ function relativeTime(value) {
 // selection, URL serialization, and the existing LLM review workflows.
 
 /** @param {{field?: string, op?: string, value?: string}} [options] */
-
-function cleanRecord(f, i) {
-  const c = stripLigaturesAndArtifacts(f.records[i].text);
-  if (!c.changed) return toast(tr("runtime.toast.no_ligatures"), { tone: "warning" });
-  const changed = applyRecordChanges(f, i, { text: c.text }, { source: "ocr_cleanup" });
-  shell();
-  renderView();
-  toast(
-    trf(
-      changed === 1
-        ? "runtime.toast.tracked_changes_applied_one"
-        : "runtime.toast.tracked_changes_applied_many",
-      {
-        count: changed,
-      },
-    ),
-    { tone: "success" },
-  );
-}
 
 async function currentPdfPageText() {
   const result = await extractPdfPageSmart(state.pdf.page);

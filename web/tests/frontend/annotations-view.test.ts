@@ -55,14 +55,17 @@ const snapshot = {
   ],
 };
 
-vi.mock("../../src/runtime/runtime.js", () => ({
-  loadAnnotationsWorkspace: vi.fn(async () => snapshot),
-  setAnnotationsWorkspaceQuery: vi.fn(),
-  setAnnotationsWorkspaceView: vi.fn(),
-  openAnnotationsWorkspaceRecord: vi.fn(),
-  openAnnotationsWorkspaceWork: vi.fn(),
-  removeAnnotationsWorkspaceItem: vi.fn(async () => snapshot),
-  notifyToast: vi.fn(),
+vi.mock("../../src/domain/sharedRecordWorkspace", () => ({ sharedRecordWorkspace: {} }));
+vi.mock("../../src/runtime/runtime.js", () => ({}));
+vi.mock("../../src/domain/sharedAnnotations", () => ({
+  annotationsWorkspace: {
+    loadAnnotationsWorkspace: vi.fn(async () => snapshot),
+    setAnnotationsWorkspaceQuery: vi.fn(),
+    setAnnotationsWorkspaceView: vi.fn(),
+    openAnnotationsWorkspaceRecord: vi.fn(),
+    openAnnotationsWorkspaceWork: vi.fn(),
+    removeAnnotationsWorkspaceItem: vi.fn(async () => snapshot),
+  },
 }));
 
 describe("AnnotationsView", () => {
