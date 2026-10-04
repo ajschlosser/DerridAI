@@ -1596,7 +1596,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "recovery_calls": recovery_calls,
                     "recovery_max_output_tokens": recovery_max_tokens,
                     "model_invocations": model_invocations,
-                    "dependency_fingerprint": dependency_fingerprint,
+                    "recovery_dependency_fingerprint": dependency_fingerprint,
                     "automatic_recovery_attempts": recovery_decision.completed_attempts,
                     "automatic_recovery_inflight_attempt": None,
                     "next_automatic_recovery_attempt": recovery_decision.next_attempt,
