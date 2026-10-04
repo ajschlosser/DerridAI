@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.models import RAGRunRequest
 from app.pipelines.defaults import built_in_pipeline
 from app.pipelines.models import PipelineConfigOverrideSet
 from app.pipelines.overrides import resolve_pipeline_config
@@ -25,6 +26,29 @@ def _override(stages: dict[str, dict[str, object]]) -> PipelineConfigOverrideSet
         pipeline_version=1,
         stages=stages,
     )
+
+
+def test_rag_request_accepts_distinct_settings_and_run_override_layers() -> None:
+    request = RAGRunRequest.model_validate(
+        {
+            "prompt": "What is différance?",
+            "settings_pipeline_overrides": {
+                "pipeline_id": "research.current",
+                "pipeline_version": 1,
+                "stages": {"rerank": {"top_k": 31}},
+            },
+            "run_pipeline_overrides": {
+                "pipeline_id": "research.current",
+                "pipeline_version": 1,
+                "stages": {"rerank": {"top_k": 48}},
+            },
+        }
+    )
+
+    assert request.settings_pipeline_overrides is not None
+    assert request.run_pipeline_overrides is not None
+    assert request.settings_pipeline_overrides.stages["rerank"]["top_k"] == 31
+    assert request.run_pipeline_overrides.stages["rerank"]["top_k"] == 48
 
 
 def test_settings_overrides_pipeline_stage_configuration() -> None:
