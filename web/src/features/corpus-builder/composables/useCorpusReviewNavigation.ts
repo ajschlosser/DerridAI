@@ -17,6 +17,7 @@
  */
 
 import { nextTick, type ComputedRef, type Ref } from "vue";
+import { activeValueEditor } from "../../../domain/focus";
 import type { CorpusBuild, CorpusRecord } from "../../../api/corpus";
 import type { ReviewQueue } from "../../../types/corpus";
 import type { CorpusQueueRow } from "../api/reviewReads";
@@ -194,7 +195,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     await nextTick();
     await options.refreshRecords(true, preferredId);
     await nextTick();
-    options.recordListEl.value?.focus({ preventScroll: true });
+    if (!activeValueEditor()) options.recordListEl.value?.focus({ preventScroll: true });
   }
 
   async function reviewMetadataRecord(recordId: string) {
