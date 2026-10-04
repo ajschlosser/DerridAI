@@ -23,9 +23,7 @@ RUN npm install
 
 COPY . .
 ARG GIT_COMMIT=
-RUN --mount=type=bind,from=gitmeta,target=/tmp/git \
-    apk add --no-cache git \
-    && export GIT_COMMIT="${GIT_COMMIT:-$(git --git-dir=/tmp/git rev-parse --short HEAD 2>/dev/null || true)}" \
+RUN export GIT_COMMIT="${GIT_COMMIT}" \
     && npm run build
 
 FROM nginx:1.27-alpine
