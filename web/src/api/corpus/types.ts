@@ -165,8 +165,18 @@ export interface PdfAsset {
       extraction_methods?: Record<string, number>;
     }>;
   };
-  /** Audio sources only: probed at ingest; absent on assets stored before it was recorded. */
-  audio_provenance?: { duration_seconds?: number };
+  /** Audio sources only: transcription/diarization provenance recorded at ingest. */
+  audio_provenance?: {
+    duration_seconds?: number;
+    model?: string;
+    provider?: string;
+    httpx_version?: string;
+    ffprobe_version?: string;
+    whisperx_version?: string;
+    diarization_requested?: boolean;
+    diarization_status?: "disabled" | "failed" | "complete" | "no_speakers" | string;
+    voice_labels?: Record<string, string>;
+  };
   extraction_noise?: {
     page_count?: number;
     unusable_page_count?: number;
