@@ -44,8 +44,8 @@ const catalogueRefreshing = computed(() =>
 );
 const bytesOnDisk = computed(() => Number(props.status?.archive.bytes_done || 0));
 const importedTexts = computed(() => Number(props.status?.archive.imported_texts || 0));
-const retryingDownload = computed(
-  () => archiveStatus.value === "downloading" && Number(props.status?.archive.retry_count || 0) > 0,
+const recoveringDownload = computed(
+  () => archiveStatus.value === "downloading" && Boolean(props.status?.archive.error),
 );
 
 function formatNumber(value: number) {
@@ -152,7 +152,7 @@ function archiveActionLabel() {
     <small v-if="status?.catalogue.error" class="ls-error-text">{{ status.catalogue.error }}</small>
     <small
       v-if="status?.archive.error"
-      :class="retryingDownload ? 'ls-retry-text' : 'ls-error-text'"
+      :class="recoveringDownload ? 'ls-retry-text' : 'ls-error-text'"
       aria-live="polite"
     >
       {{ status.archive.error }}
