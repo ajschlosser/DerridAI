@@ -22,6 +22,8 @@ The `api/` tree is DerridAI's FastAPI backend. It owns server-side authorization
 
 Use the root [README](../README.md) for installation and first-run setup. Use [CONTRIBUTING](../CONTRIBUTING.md) for the supported Python/Node versions and quality gates. This file is the backend code map.
 
+For naming, docstrings, nested control flow, and behavior-preserving refactors, also follow [the code readability guide](../docs/CODE_READABILITY.md).
+
 ## Application composition
 
 The local backend map is summarized below; [`app/README.md`](app/README.md) documents the module-level boundaries in more detail.
@@ -127,11 +129,12 @@ Backend tests do not require Docker, Ollama, a GPU, or a real Chroma service; te
 From the repository root:
 
 ```bash
-ruff check api/app tests scripts/check_frontend_api_contract.py
+ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 mypy
 python -m compileall -q api/app
-pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
+pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py --ignore=tests/test_frontend_graphql_contract.py
 pytest -q -m contract tests/test_frontend_api_contract.py
+pytest -q -m contract tests/test_frontend_graphql_contract.py
 ```
 
 Focused test taxonomy and fixture guidance are in [tests/README.md](../tests/README.md).
