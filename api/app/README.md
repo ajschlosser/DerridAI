@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 `api/app/` is the implementation root for DerridAI's FastAPI process. It contains transport adapters, domain services, corpus orchestration, scholarly state handling, provider integration, pipeline execution, persistence, and derived search projections.
 
-Use [`api/README.md`](../README.md) for backend setup and validation, [the project architecture](../../docs/ARCHITECTURE.md) for the cross-process view, and [`AGENTS.md`](../../AGENTS.md) for repository-wide invariants.
+Use [`api/README.md`](../README.md) for backend setup and validation, [the project architecture](../../docs/ARCHITECTURE.md) for the cross-process view, [`docs/CODE_READABILITY.md`](../../docs/CODE_READABILITY.md) for naming/docstring/refactor conventions, and [`AGENTS.md`](../../AGENTS.md) for repository-wide invariants.
 
 ## Ownership and dependency direction
 
@@ -125,3 +125,10 @@ Prefer this sequence:
 6. Add topical tests under `tests/`.
 
 Do not grow `main.py`, `jobs.py`, or `corpus_builder.py` merely because an existing compatibility import points there.
+
+### Backend readability traps
+
+- Prefer explicit domain names (`record_revision`, `candidate_seam`, `source_document`) over generic `data`, `item`, `obj`, or one-letter names once a value survives more than a few obvious lines.
+- Complex orchestration should expose phases with helpers/comments: snapshot, validate/compute, reconcile/commit, then notify/project. The order matters around locks and provenance.
+- Keep comments about invariants and authority. Do not delete a "why this is ordered this way" comment merely because the code was reformatted.
+- A large module is not automatically wrong, but a new unrelated responsibility belongs in a focused module with regression coverage rather than in the nearest monolith.
