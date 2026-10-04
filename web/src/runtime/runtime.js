@@ -19,7 +19,6 @@
 // Compatibility composition root for workflows that have not yet moved fully into Vue/domain modules.
 // Prefer adding new behavior to the focused imports below and expose only the narrow bridge needed here;
 // moving logic back into this file makes the remaining runtime migration harder to reason about and test.
-import { toast } from "../composables/notifications";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?worker";
 import "diff";
@@ -35,7 +34,6 @@ import { fullCitation } from "../domain/citations";
 import "../domain/recordsFiles";
 import { tr as trCompat, trf as trfCompat } from "./legacyCompat.js";
 import "../domain/runtimeConstants";
-import { esc, icon } from "../domain/html";
 import { jsonPretty, reviewDiffSides } from "../domain/reviewPresentation";
 import "../domain/workMetadata";
 import "../domain/numberFormatting";
@@ -47,12 +45,11 @@ import "../domain/recordFormatting";
 import { api } from "../domain/legacyApi";
 import "../domain/pastedRecord";
 import { providerRequestConfig } from "../domain/providerRequest";
-import { decorateDisabledControls, showAppModal } from "../domain/disabledControls";
+import { showAppModal } from "../domain/disabledControls";
 import "../domain/sharedRecordScopes";
 import "../domain/recordHistory";
 import "../domain/dashboardCharts";
-import { workIndex } from "../domain/sharedCorpusAnalytics";
-import { updateDbStatusElements, upsertRows } from "../domain/sharedDbPresence";
+import { updateDbStatusElements } from "../domain/sharedDbPresence";
 import { hasCorpusDb, recordStores } from "../domain/storeAvailability";
 import { registerOperationHooks } from "../domain/operationHooks";
 import { registerOperationProgress } from "../domain/operationProgressHooks";
@@ -85,6 +82,11 @@ import {
   syncJobProgressToasts,
 } from "../domain/jobsActions";
 import { registerResearchActions } from "../domain/researchActions";
+import {
+  notifyVectorStoresChanged,
+  openCollectionCreationWizard,
+  triggerUpsertQueue,
+} from "../domain/sharedVectorCollections";
 import { registerVectorStoreActions } from "../domain/vectorStoreActions";
 import { registerTouchupActions } from "../domain/touchupActions";
 import {
@@ -102,7 +104,6 @@ import { applyPdfLinkMatch, registerPdfLlmTaskHooks } from "../domain/pdfPageLlm
 import { ragGradeHtml } from "../domain/ragGradeHtml";
 import { createJobDialogs } from "../domain/jobDialogs";
 import "../domain/workDialogs";
-import { recordDialogs } from "../domain/sharedRecordDialogs";
 import { createOperationDock } from "../domain/operationDock";
 import "../domain/clipboardCopy";
 import {
@@ -136,9 +137,8 @@ import "../domain/sharedAnnotations";
 import "../state/jobsState";
 import { recordFingerprint } from "../domain/corpusCache";
 import { createRuntimeState } from "./runtimeState";
-import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 import { refreshStores } from "../domain/sharedStores";
-import { canAccessPage, canUse, hasCapability, isResearcher } from "../domain/sharedSession";
+import { canAccessPage, hasCapability, isResearcher } from "../domain/sharedSession";
 import "../domain/databaseCreationRequest";
 import { applyAppearance } from "../domain/sharedAppearance";
 import "../domain/relativeTimeLabel";
@@ -393,8 +393,6 @@ function setUserContext(user) {
   void refreshResearcherContentPolicy();
 }
 
-const { openUpsertQueue } = recordDialogs;
-
 // Names of the facts shown for an operation (panel rows and the details dialog), translated at render time.
 
 // ---- Operations panel bridge -------------------------------------------------------------
@@ -405,34 +403,6 @@ const { openUpsertQueue } = recordDialogs;
 // 0.36.10 native Search bridge. SearchView owns presentation while the runtime
 // continues to own browser-local corpus state, Chroma transport, evidence
 // selection, URL serialization, and the existing LLM review workflows.
-
-const vectorCollectionBridge = createVectorCollectionBridge({
-  state,
-  workIndex,
-  recordStores,
-  tr,
-  trf,
-  esc,
-  icon,
-  api,
-  refreshStores,
-  persistPrefs,
-  upsertRows,
-  decorateDisabledControls,
-  showAppModal,
-});
-function notifyVectorStoresChanged() {
-  return vectorCollectionBridge.notifyVectorStoresChanged();
-}
-function openCollectionCreationWizard(options = {}) {
-  return vectorCollectionBridge.openCollectionCreationWizard(options);
-}
-
-function triggerUpsertQueue() {
-  return canUse("manageCorpus")
-    ? openUpsertQueue()
-    : toast(tr("runtime.toast.cannot_manage_dbs"), { tone: "warning" });
-}
 
 /**
  * Re-derive runtime view state from the browser location (the router owns the URL) and repaint.
