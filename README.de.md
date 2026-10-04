@@ -262,9 +262,11 @@ Schnelle lokale Qualitätsprüfungen:
 ```bash
 ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 mypy
-pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py --ignore=tests/test_frontend_graphql_contract.py
-pytest -q -m contract tests/test_frontend_api_contract.py
-pytest -q -m contract tests/test_frontend_graphql_contract.py
+python -m compileall -q api/app
+pytest -q -n auto --dist=worksteal \
+  --ignore=tests/test_frontend_api_contract.py \
+  --ignore=tests/test_frontend_graphql_contract.py
+pytest -q -m contract tests/test_frontend_api_contract.py tests/test_frontend_graphql_contract.py
 
 cd web
 npm run format:repo:check
@@ -272,7 +274,7 @@ npm run lint
 npm run typecheck
 npm run typecheck:tests
 npm run test:unit
-npm run build
+npm run build:ci
 ```
 
 `npm run format:repo` aus `web/` formatiert alle von Prettier unterstützten Repository-Dateien. Generierte Legacy-DOM-Snapshot-HTML-Dateien sind absichtlich ausgeschlossen.
