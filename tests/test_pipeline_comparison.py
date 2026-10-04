@@ -135,10 +135,11 @@ class _LexicalOnlyStore:
             }
         ]
 
-    def lexical_search(self, name, query, limit):
+    def lexical_search(self, name, query, limit, where=None):
         assert name == "corpus"
         assert query == "What is the trace?"
         assert limit >= 1
+        assert where == {"work": "Of Grammatology"}
         return [
             {
                 "id": "row-1",
@@ -166,6 +167,7 @@ def test_research_dry_run_stops_before_generation(monkeypatch) -> None:
         pipeline_id="research.current",
         pipeline_version=1,
         source_collection="corpus",
+        work_filter=["Of Grammatology"],
         locales=["en"],
         search_types=["lexical"],
         k=1,
