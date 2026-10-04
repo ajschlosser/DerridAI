@@ -36,6 +36,12 @@ const profiles = [
   { id: "b", name: "B", type: "openai", model: "m2" },
 ] as never;
 
+function primaryButton() {
+  const button = document.body.querySelector<HTMLButtonElement>("button.ui-button.variant-primary");
+  expect(button).not.toBeNull();
+  return button!;
+}
+
 function open(overrides = {}) {
   const start = vi.fn().mockResolvedValue(undefined);
   const manageProviders = vi.fn().mockResolvedValue(true);
@@ -57,7 +63,7 @@ describe("WorkMetadataLlmDialog", () => {
     const wrapper = mount(WorkMetadataLlmDialog, { attachTo: document.body });
     const { start } = open();
     await flushPromises();
-    await wrapper.find("button.ui-button.variant-primary").trigger("click");
+    primaryButton().click();
     await flushPromises();
     expect(start).toHaveBeenCalledWith("b");
     expect(useWorkMetadataLlmDialog().current.value).toBeNull();
@@ -68,10 +74,10 @@ describe("WorkMetadataLlmDialog", () => {
     const wrapper = mount(WorkMetadataLlmDialog, { attachTo: document.body });
     open({ start: vi.fn().mockRejectedValue(new Error("boom")) });
     await flushPromises();
-    await wrapper.find("button.ui-button.variant-primary").trigger("click");
+    primaryButton().click();
     await flushPromises();
     expect(useWorkMetadataLlmDialog().current.value).not.toBeNull();
-    expect(wrapper.find("button.ui-button.variant-primary").attributes("disabled")).toBeUndefined();
+    expect(primaryButton().disabled).toBe(false);
     wrapper.unmount();
   });
 
@@ -79,7 +85,7 @@ describe("WorkMetadataLlmDialog", () => {
     const wrapper = mount(WorkMetadataLlmDialog, { attachTo: document.body });
     open({ profiles: [], defaultProfileId: "" });
     await flushPromises();
-    expect(wrapper.find("button.ui-button.variant-primary").attributes("disabled")).toBeDefined();
+    expect(primaryButton().disabled).toBe(true);
     wrapper.unmount();
   });
 
