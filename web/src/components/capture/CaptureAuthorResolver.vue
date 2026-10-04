@@ -116,6 +116,7 @@ function lifespan(person: AuthorCandidate) {
         class="ar-person"
         :class="{ 'is-chosen': isChosen(person) }"
         :data-identity="identity(person)"
+        :data-qid="person.wikidata_qid || undefined"
       >
         <input
           type="radio"
