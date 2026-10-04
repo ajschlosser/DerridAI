@@ -178,9 +178,9 @@ def transcript_words(transcript: dict[str, Any]) -> list[dict[str, Any]]:
     """Return all valid timed words supplied by the provider or WhisperX alignment."""
     top_level = transcript.get("words")
     if isinstance(top_level, list):
-        words = [dict(word) for word in top_level if _valid_timed_word(word)]
-        if words:
-            return words
+        provider_words = [dict(word) for word in top_level if _valid_timed_word(word)]
+        if provider_words:
+            return provider_words
 
     words: list[dict[str, Any]] = []
     segments = transcript.get("segments")
