@@ -21,7 +21,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import RouteNavigationFeedback from "./components/shell/RouteNavigationFeedback.vue";
 import { createRouteLoading } from "./router/routeLoading";
-import { sharedUrlStateCodec } from "./domain/sharedUrlState";
+import { sharedUrlStateCodec, state as sharedState } from "./domain/sharedUrlState";
 import { createRuntimeLocationSync } from "./router/runtimeLocationSync";
 import { createRuntimeUrlSyncHook } from "./router/runtimeUrlSync";
 import { createNavigationHistory, type HistoryEntryTitle } from "./router/navigationHistory";
@@ -75,7 +75,8 @@ import {
 import { SETTINGS_SECTIONS, resolveSettingsSectionId } from "./domain/settings";
 import { viewConfig } from "./domain/runtimeConstants";
 import * as runtime from "./runtime/runtime.js";
-import { navigateTo } from "./domain/sharedNavigation";
+import { navigateTo, repaintAfterLocationChange } from "./domain/sharedNavigation";
+import { viewFromPath } from "./domain/viewPaths";
 import { triggerImport } from "./domain/sharedFileLifecycle";
 import { pauseRuntime } from "./domain/jobsPause";
 import { toggleSidebar } from "./domain/sidebarToggle";
@@ -421,7 +422,7 @@ function navigateNative(path: string, runtimeView?: string) {
   const current = router.currentRoute.value.fullPath;
   const target = router.resolve(path).fullPath;
   // Only short-circuit when the runtime agrees with the router; a drifted runtime view must be allowed to resync.
-  if (current === target && (!runtimeView || runtime.state.view === runtimeView)) return;
+  if (current === target && (!runtimeView || sharedState.view === runtimeView)) return;
   if (runtimeView) {
     navigateTo(runtimeView, { href: target });
     return;
@@ -464,11 +465,11 @@ function searchCorpus(query: string) {
   const value = query.trim();
   if (!value) return;
   topSearch.value = value;
-  runtime.state.globalSearch = value;
-  runtime.state.storeQuery = value;
-  runtime.state.globalPage = 1;
-  runtime.state.storeSearchResults = [];
-  runtime.state.globalSearchMode = "traditional";
+  sharedState.globalSearch = value;
+  sharedState.storeQuery = value;
+  sharedState.globalPage = 1;
+  sharedState.storeSearchResults = [];
+  sharedState.globalSearchMode = "traditional";
   navigateTo("global");
 }
 
@@ -554,11 +555,11 @@ onBeforeUnmount(() => {
 // of letting the two drift.
 const runtimeLocationSync = createRuntimeLocationSync(router, {
   isStarted: () => runtimeStarted.value,
-  viewForPath: (path) => runtime.viewForPath(path),
-  currentView: () => runtime.state.view,
+  viewForPath: (path) => viewFromPath(path),
+  currentView: () => sharedState.view,
   sync: () => {
     sharedUrlStateCodec.applyUrlState();
-    runtime.repaintAfterLocationChange();
+    repaintAfterLocationChange();
   },
 });
 

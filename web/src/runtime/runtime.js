@@ -241,9 +241,10 @@ import {
   applyUrlState,
   navigateTo,
   renderView,
+  repaintAfterLocationChange,
 } from "../domain/sharedNavigation";
 import { selectedIndex, sharedUrlStateCodec } from "../domain/sharedUrlState";
-import { pathViewMap, viewFromPath, viewPathMap } from "../domain/navigation";
+import { pathViewMap, viewPathMap } from "../domain/navigation";
 import {
   workspaceDb,
   workspacePrefs,
@@ -1529,16 +1530,6 @@ function syncFromLocation() {
   applyUrlState();
   repaintAfterLocationChange();
 }
-/** Persist and repaint after the shared URL state has been applied (by the runtime or by the router). */
-function repaintAfterLocationChange() {
-  persistPrefs();
-  shell();
-  renderView();
-}
-/** The runtime view a path belongs to, or undefined for paths with no legacy view. */
-function viewForPath(path) {
-  return viewFromPath(path);
-}
 
 let metadataSearchDelegationWired = false;
 function wireMetadataSearchDelegation() {
@@ -1723,8 +1714,6 @@ export {
   setShellRefreshHook,
   setUrlSyncHook,
   syncFromLocation,
-  repaintAfterLocationChange,
-  viewForPath,
   refreshJobs,
   unmountOperationsPanel,
   viewPathMap,

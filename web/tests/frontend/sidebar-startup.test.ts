@@ -42,7 +42,7 @@ const NAV = [
   ["config", "Settings", "System"],
 ].map(([id, label, section]) => ({ id, label, icon: "record", section }));
 
-const navigation = vi.hoisted(() => ({ navigateTo: vi.fn() }));
+const navigation = vi.hoisted(() => ({ navigateTo: vi.fn(), repaintAfterLocationChange: vi.fn() }));
 vi.mock("../../src/domain/sharedNavigation", () => navigation);
 vi.mock("../../src/domain/jobsPause", () => ({ pauseRuntime: vi.fn() }));
 vi.mock("../../src/domain/semanticMapSources", () => ({
@@ -58,8 +58,6 @@ const runtime = vi.hoisted(() => ({
   setShellRefreshHook: vi.fn(),
   setUrlSyncHook: vi.fn(),
   syncFromLocation: vi.fn(),
-  repaintAfterLocationChange: vi.fn(),
-  viewForPath: vi.fn(),
   toggleSidebar: vi.fn(),
   state: {} as Record<string, unknown>,
 }));
@@ -73,6 +71,7 @@ vi.mock("../../src/runtime/runtime.js", () => ({
 }));
 
 import App from "../../src/App.vue";
+import { state as sharedState } from "../../src/domain/sharedUrlState";
 import { useAuthStore } from "../../src/stores/auth";
 import { useI18nStore } from "../../src/stores/i18n";
 import { useShellStore } from "../../src/stores/shell";
@@ -448,8 +447,7 @@ describe("router and runtime stay in agreement", () => {
     runtime.getNavItems.mockReturnValue(NAV);
     runtime.getShellSnapshot.mockReturnValue({});
     runtime.bootstrapRuntime.mockReturnValue(new Promise(() => {}));
-    runtime.viewForPath.mockReturnValue(undefined);
-    delete runtime.state.view; // mutate in place: the App module holds the same object
+    delete sharedState.view;
   });
 
   type UrlSyncHook = (href: string, options: { replace?: boolean }) => void;
@@ -483,23 +481,20 @@ describe("router and runtime stay in agreement", () => {
 
   it("follows the router when a route change lands on a different runtime view", async () => {
     const { wrapper, router } = await signIn();
-    runtime.state.view = "home";
-    runtime.viewForPath.mockImplementation((path: string) =>
-      path === "/search" ? "global" : "home",
-    );
+    sharedState.view = "home";
 
     await router.push("/search");
-    expect(runtime.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
+    expect(navigation.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
 
-    runtime.state.view = "global";
+    sharedState.view = "global";
     await router.push("/search?q=again");
-    expect(runtime.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
+    expect(navigation.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 
   it("lets a sidebar click resync a runtime view that has drifted from the URL", async () => {
     const { wrapper } = await signIn();
-    runtime.state.view = "global"; // runtime drifted; the URL is still "/"
+    sharedState.view = "global"; // runtime drifted; the URL is still "/"
 
     await pageButtons(wrapper)
       .find((b) => b.text() === "Home")
@@ -511,7 +506,7 @@ describe("router and runtime stay in agreement", () => {
 
   it("ignores a click on the destination the runtime and router already agree on", async () => {
     const { wrapper } = await signIn();
-    runtime.state.view = "home";
+    sharedState.view = "home";
 
     await pageButtons(wrapper)
       .find((b) => b.text() === "Home")

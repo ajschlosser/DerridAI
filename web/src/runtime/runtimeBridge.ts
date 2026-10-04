@@ -28,8 +28,6 @@ export const getShellSnapshot = (...args: Parameters<typeof runtime.getShellSnap
 export const setTranslationDictionary = (
   ...args: Parameters<typeof runtime.setTranslationDictionary>
 ) => runtime.setTranslationDictionary(...args);
-export const renderView = (...args: Parameters<typeof runtime.renderView>) =>
-  runtime.renderView(...args);
 export const setUserContext = (...args: Parameters<typeof runtime.setUserContext>) =>
   runtime.setUserContext(...args);
 export const setShellRefreshHook = (...args: Parameters<typeof runtime.setShellRefreshHook>) =>
@@ -40,11 +38,6 @@ export const bootstrapRuntime = (...args: Parameters<typeof runtime.bootstrapRun
   runtime.bootstrapRuntime(...args);
 export const syncFromLocation = (...args: Parameters<typeof runtime.syncFromLocation>) =>
   runtime.syncFromLocation(...args);
-export const repaintAfterLocationChange = (
-  ...args: Parameters<typeof runtime.repaintAfterLocationChange>
-) => runtime.repaintAfterLocationChange(...args);
-export const viewForPath = (...args: Parameters<typeof runtime.viewForPath>) =>
-  runtime.viewForPath(...args);
 export const responseCacheStore = (...args: Parameters<typeof runtime.responseCacheStore>) =>
   runtime.responseCacheStore(...args);
 export default runtime;

@@ -20,7 +20,8 @@ import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { systemApi, type LanguageInfo } from "../api/system";
 import { englishDefault, COMMON_KEY_ALIASES } from "../i18n/englishDefault";
-import * as runtime from "../runtime/runtimeBridge";
+import { setTranslationDictionary } from "../domain/sharedTranslate";
+import { renderView } from "../domain/sharedNavigation";
 import {
   AUTO_TIME_ZONE,
   LOCALE_STORAGE_KEY,
@@ -114,11 +115,11 @@ export const useI18nStore = defineStore("i18n", () => {
       }
       document.documentElement.lang = data.code;
       document.documentElement.dir = directionForLocale(data.code);
-      runtime.setTranslationDictionary(data.code, dictionary.value, baseDictionary.value, {
+      setTranslationDictionary(data.code, dictionary.value, baseDictionary.value, {
         name: data.name,
         flag: data.flag,
       });
-      if (document.querySelector("#main")) runtime.renderView();
+      if (document.querySelector("#main")) renderView();
     } finally {
       loading.value = false;
     }
@@ -188,7 +189,7 @@ export const useI18nStore = defineStore("i18n", () => {
       baseDictionary.value = {};
       document.documentElement.lang = available;
       document.documentElement.dir = directionForLocale(available);
-      runtime.setTranslationDictionary(available, {}, {});
+      setTranslationDictionary(available, {}, {});
     }
   }
 
