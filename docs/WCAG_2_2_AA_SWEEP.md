@@ -30,7 +30,7 @@ This is an engineering compliance sweep, not a third-party accessibility certifi
 - [x] **WCAG 2.5.7 — dragging movements:** the movable Record popout can now be repositioned with Arrow keys from its header instead of requiring dragging.
 - [x] **WCAG 2.4.3 / modal keyboard behavior:** the movable Record popout contains Tab focus and restores focus to the invoking control when it closes.
 - [x] **WCAG 2.4.3 / modal keyboard behavior:** the bulk metadata editor contains Tab focus and restores focus to the invoking control when it closes.
-- [x] **WCAG 2.5.8 — target size:** legacy `.btn.tiny` controls now have a minimum 24px target height, including operation-dock tiny actions.
+- [x] **WCAG 2.5.8 — target size:** legacy `.btn.tiny` controls now have a minimum 24×24 CSS-pixel target, including operation-dock tiny actions.
 - [x] **WCAG 2.5.8 — target size:** Run Guidance removable cue buttons are now 24×24 CSS pixels.
 - [x] Added regression coverage for keyboard Search column resizing, bulk-editor focus containment, and Run Guidance target size.
 
