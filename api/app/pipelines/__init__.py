@@ -18,6 +18,7 @@
 
 from .models import (
     PipelineAssignment,
+    PipelineConfigOverrideSet,
     PipelineDefinition,
     PipelineRunTrace,
     PipelineStageDefinition,
@@ -31,6 +32,7 @@ from .service import PipelineService, pipeline_hash, pipeline_service
 
 __all__ = [
     "PipelineAssignment",
+    "PipelineConfigOverrideSet",
     "PipelineDefinition",
     "PipelineRunTrace",
     "PipelineService",
