@@ -79,7 +79,7 @@ const snapshot = () => ({
 });
 const Composer = defineComponent({
   inheritAttrs: false,
-  props: ["prompt", "canRun"],
+  props: ["prompt", "canRun", "pipelineOverride"],
   emits: [
     "update:prompt",
     "run",
@@ -131,7 +131,7 @@ beforeEach(() => {
 });
 afterEach(() => mounted.splice(0).forEach((w) => w.unmount()));
 describe("Research progressive reads", () => {
-  it("only clears an unavailable pipeline override after visibility succeeds", async () => {
+  it("clears an unavailable pipeline override locally after visibility succeeds", async () => {
     mocks.snapshot.mockResolvedValue({
       ...snapshot(),
       config: { ...snapshot().config, pipeline_id: "retired", pipeline_version: 1 },
@@ -143,7 +143,12 @@ describe("Research progressive reads", () => {
     expect(mocks.update).not.toHaveBeenCalled();
     pending.resolve({ assignment: null, pipelines: [], strategies: [], override_allowed: false });
     await flushPromises();
-    expect(mocks.update).toHaveBeenCalledWith({ pipeline_id: "", pipeline_version: null });
+    // Research controls are now a one-run draft: clearing a stale pipeline selection
+    // must not mutate the Settings defaults persisted through updateResearchConfig.
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(
+      w.findComponent({ name: "ResearchComposer" }).props("pipelineOverride"),
+    ).toBe(false);
     expect(w.find(".research-pipelines-status").exists()).toBe(false);
   });
   it("keeps optional run and pipeline reads independent of the composer", async () => {

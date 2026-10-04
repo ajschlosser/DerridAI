@@ -287,7 +287,7 @@ test("published tutorial is keyboard operable, skippable, and itself WCAG 2.2 AA
   page,
 }) => {
   await mountStaticSite(page);
-  const dialog = page.locator("dialog");
+  const dialog = page.locator("dialog.tour");
   await scan(page);
   await page.getByRole("button", { name: "Next" }).focus();
   await page.keyboard.press("Enter");
@@ -297,7 +297,7 @@ test("published tutorial is keyboard operable, skippable, and itself WCAG 2.2 AA
   expect(await dialog.evaluate((node) => node.contains(document.activeElement))).toBe(true);
 
   await page.getByRole("button", { name: "Skip tutorial" }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(dialog).not.toBeVisible();
   await expect(page.getByRole("button", { name: "Tutorial" })).toBeVisible();
   await page.getByRole("button", { name: "Tutorial" }).click();
   await expect(page.getByRole("dialog", { name: "Welcome" })).toBeVisible();
@@ -376,7 +376,7 @@ test("guided tour spotlights each real element, switches views, and restores the
   await scan(page);
 
   await page.getByRole("button", { name: "Finish" }).click();
-  await expect(page.locator("dialog.tour")).toHaveCount(0);
+  await expect(page.locator("dialog.tour")).not.toBeVisible();
   // The tour wandered through Works, Research, and Annotations; the reader is back on Search.
   await expect(page.getByRole("button", { name: "Search", exact: true }).first()).toHaveAttribute(
     "aria-current",
@@ -404,7 +404,7 @@ test("guided tour is dismissed with Escape, remembered, and fits a phone screen"
   expect(ring!.y + ring!.height <= box!.y + 1 || box!.y + box!.height <= ring!.y + 1).toBe(true);
 
   await page.keyboard.press("Escape");
-  await expect(page.locator("dialog.tour")).toHaveCount(0);
+  await expect(page.locator("dialog.tour")).not.toBeVisible();
 
   // Reopened from the button, the tour returns focus to that button when it closes.
   await page.getByRole("button", { name: "Tutorial" }).click();
@@ -651,7 +651,7 @@ test("Settings persists Research defaults while Research keeps per-run overrides
     defaults.getByRole("status").filter({ hasText: "Research defaults saved in this browser." }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Research" }).click();
+  await page.getByRole("button", { name: "Research", exact: true }).click();
   await page.getByText("Run settings", { exact: true }).click();
   const runSettings = page.locator(".research-run-settings");
   await expect(runSettings.getByLabel("Retrieved records (k)")).toHaveValue("12");
@@ -681,7 +681,7 @@ test("a provider the reader configures powers vector + LLM Research with method 
   await expect(page.locator('[data-index="ready"]')).toContainText("published vectors are used");
   await addEndpoint(page, { name: "Writer", role: "generation", model: "gpt-oss:20b" });
 
-  await page.getByRole("button", { name: "Research" }).click();
+  await page.getByRole("button", { name: "Research", exact: true }).click();
   await page.getByLabel("Question").fill("What does the passage say about hospitality?");
   await page.getByRole("button", { name: "Ask" }).click();
 

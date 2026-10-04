@@ -617,6 +617,19 @@ export function validateRag(draft: RagSettingsDraft): FieldError[] {
       messageKey: "settings.error.rag_routes",
       messageFallback: "Select at least one retrieval route.",
     });
+  if (draft.fetch_k < draft.k)
+    errors.push({
+      field: "fetch_k",
+      messageKey: "settings.error.rag_fetch_k",
+      messageFallback: "MMR fetch_k must be at least as large as retrieval k.",
+    });
+  if (draft.evidence_total_char_limit < draft.evidence_record_char_limit) {
+    errors.push({
+      field: "evidence_total_char_limit",
+      messageKey: "settings.error.rag_total_chars",
+      messageFallback: "Total evidence characters must be at least the per-record limit.",
+    });
+  }
   return errors;
 }
 

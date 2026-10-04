@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.models import RAGRunRequest
 from app.pipelines.defaults import built_in_pipeline
 from app.pipelines.models import PipelineConfigOverrideSet
