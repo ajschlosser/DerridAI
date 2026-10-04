@@ -25,7 +25,10 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+import threading
+from collections import deque
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from .corpus_metadata import MANIFEST_INHERITED_FIELDS
 from .corpus_record_quality import iso_now
@@ -307,3 +310,236 @@ def _prepend_metadata_priority(build: dict[str, Any], record_id: str) -> None:
         if str(value) != record_id
     ]
     build["metadata_priority_record_ids"] = [record_id, *priority][-100:]
+
+
+def _remove_metadata_priority(build: dict[str, Any], record_id: str) -> None:
+    """Remove one Record from the foreground-priority set after its queued visit settles."""
+    build["metadata_priority_record_ids"] = [
+        str(value)
+        for value in build.get("metadata_priority_record_ids") or []
+        if str(value) != record_id
+    ]
+
+
+_REQUEUE_COUNTERS = {
+    "queued": "metadata_requeue_tasks_queued",
+    "running": "metadata_requeue_tasks_running",
+    "completed": "metadata_requeue_tasks_completed",
+    "failed": "metadata_requeue_tasks_failed",
+}
+_AGGREGATE_REQUEUE_COUNTERS = {
+    "queued": "metadata_tasks_queued",
+    "running": "metadata_tasks_running",
+    "completed": "metadata_tasks_completed",
+    "failed": "metadata_tasks_failed",
+}
+
+
+def _queue_metadata_requeue_task(
+    build: dict[str, Any],
+    record_id: str,
+    task_id: str,
+) -> None:
+    """Add one reviewer-requested Record visit to the live task counters.
+
+    Initial enrichment counts metadata-family work. A reviewer requeue is a single
+    additional Record-level task, regardless of how many internal families it
+    executes, so the visible denominator advances by exactly one.
+    """
+    build["metadata_requeue_tasks_total"] = int(build.get("metadata_requeue_tasks_total") or 0) + 1
+    build["metadata_requeue_tasks_queued"] = int(build.get("metadata_requeue_tasks_queued") or 0) + 1
+    build["metadata_tasks_total"] = int(build.get("metadata_tasks_total") or 0) + 1
+    build["metadata_tasks_queued"] = int(build.get("metadata_tasks_queued") or 0) + 1
+    history = [
+        item
+        for item in build.get("metadata_requeue_tasks") or []
+        if isinstance(item, dict) and str(item.get("task_id") or "") != task_id
+    ]
+    history.append(
+        {
+            "task_id": task_id,
+            "record_id": record_id,
+            "state": "queued",
+            "requested_at": iso_now(),
+            "started_at": None,
+            "finished_at": None,
+        }
+    )
+    build["metadata_requeue_tasks"] = history[-100:]
+
+
+def _transition_metadata_requeue_task(
+    build: dict[str, Any],
+    task_id: str,
+    state: Literal["running", "completed", "failed"],
+) -> bool:
+    """Move one reviewer requeue between durable and aggregate counter buckets."""
+    tasks = [
+        dict(item)
+        for item in build.get("metadata_requeue_tasks") or []
+        if isinstance(item, dict)
+    ]
+    task = next((item for item in tasks if str(item.get("task_id") or "") == task_id), None)
+    if task is None:
+        return False
+    prior = str(task.get("state") or "")
+    if prior == state:
+        return False
+    prior_counter = _REQUEUE_COUNTERS.get(prior)
+    prior_aggregate = _AGGREGATE_REQUEUE_COUNTERS.get(prior)
+    next_counter = _REQUEUE_COUNTERS[state]
+    next_aggregate = _AGGREGATE_REQUEUE_COUNTERS[state]
+    if prior_counter:
+        build[prior_counter] = max(0, int(build.get(prior_counter) or 0) - 1)
+    if prior_aggregate:
+        build[prior_aggregate] = max(0, int(build.get(prior_aggregate) or 0) - 1)
+    build[next_counter] = int(build.get(next_counter) or 0) + 1
+    build[next_aggregate] = int(build.get(next_aggregate) or 0) + 1
+    task["state"] = state
+    if state == "running":
+        task["started_at"] = iso_now()
+    else:
+        task["finished_at"] = iso_now()
+    build["metadata_requeue_tasks"] = tasks[-100:]
+    return True
+
+
+def _metadata_task_counts_with_requeues(
+    build: dict[str, Any],
+    *,
+    total: int,
+    completed: int,
+    failed: int,
+    skipped: int,
+    running: int,
+    queued: int,
+) -> dict[str, int]:
+    """Combine base family-task counters with reviewer-requested Record tasks."""
+    return {
+        "metadata_tasks_total": total + int(build.get("metadata_requeue_tasks_total") or 0),
+        "metadata_tasks_completed": completed
+        + int(build.get("metadata_requeue_tasks_completed") or 0),
+        "metadata_tasks_failed": failed + int(build.get("metadata_requeue_tasks_failed") or 0),
+        "metadata_tasks_skipped": skipped,
+        "metadata_tasks_running": running + int(build.get("metadata_requeue_tasks_running") or 0),
+        "metadata_tasks_queued": queued + int(build.get("metadata_requeue_tasks_queued") or 0),
+    }
+
+
+@dataclass(frozen=True)
+class MetadataWorkItem:
+    """One bounded Record visit, optionally created by an explicit reviewer requeue."""
+
+    index: int
+    record_id: str
+    requeue_task_id: str = ""
+    priority_requested: bool = False
+
+    @property
+    def is_requeue(self) -> bool:
+        return bool(self.requeue_task_id)
+
+
+class MetadataWorkQueue:
+    """A bounded scheduler source that accepts reviewer priority work while running.
+
+    The bounded completion iterator repeatedly asks this object for the next item
+    when a worker slot opens. Reviewer requests therefore enter the next available
+    slot instead of waiting for the original fixed list to drain.
+    """
+
+    def __init__(
+        self,
+        records: list[dict[str, Any]],
+        indices: list[int],
+        *,
+        priority_record_ids: list[str] | None = None,
+    ) -> None:
+        self._lock = threading.RLock()
+        self._index_by_record = {
+            str(record.get("record_id") or ""): index
+            for index, record in enumerate(records)
+            if str(record.get("record_id") or "")
+        }
+        priority = [str(value) for value in (priority_record_ids or []) if str(value)]
+        priority_rank = {record_id: rank for rank, record_id in enumerate(priority)}
+        ordered = sorted(
+            indices,
+            key=lambda index: (
+                priority_rank.get(str(records[index].get("record_id") or ""), len(priority_rank)),
+                index,
+            ),
+        )
+        self._ordinary = deque(
+            MetadataWorkItem(
+                index=index,
+                record_id=str(records[index].get("record_id") or ""),
+                priority_requested=str(records[index].get("record_id") or "") in priority_rank,
+            )
+            for index in ordered
+        )
+        self._priority: deque[MetadataWorkItem] = deque()
+        self._in_flight: set[str] = set()
+        self._logical_total = len(indices)
+
+    @property
+    def logical_total(self) -> int:
+        with self._lock:
+            return self._logical_total
+
+    def inject(self, record_id: str, task_id: str) -> Literal["missing", "prioritized", "requeued"]:
+        """Move unstarted work to the front, or add one new visit for settled/running work."""
+        record_id = str(record_id or "")
+        with self._lock:
+            index = self._index_by_record.get(record_id)
+            if index is None:
+                return "missing"
+            ordinary = list(self._ordinary)
+            for position, item in enumerate(ordinary):
+                if item.record_id != record_id:
+                    continue
+                ordinary.pop(position)
+                self._ordinary = deque(ordinary)
+                self._priority.appendleft(
+                    MetadataWorkItem(
+                        index=item.index,
+                        record_id=item.record_id,
+                        priority_requested=True,
+                    )
+                )
+                return "prioritized"
+            self._priority.appendleft(
+                MetadataWorkItem(
+                    index=index,
+                    record_id=record_id,
+                    requeue_task_id=task_id,
+                    priority_requested=True,
+                )
+            )
+            self._logical_total += 1
+            return "requeued"
+
+    def __iter__(self) -> "MetadataWorkQueue":
+        return self
+
+    def _pop_available(self, values: deque[MetadataWorkItem]) -> MetadataWorkItem | None:
+        for _ in range(len(values)):
+            item = values.popleft()
+            if item.record_id not in self._in_flight:
+                self._in_flight.add(item.record_id)
+                return item
+            values.append(item)
+        return None
+
+    def __next__(self) -> MetadataWorkItem:
+        with self._lock:
+            item = self._pop_available(self._priority) or self._pop_available(self._ordinary)
+            if item is None:
+                # This iterator is intentionally resumable: the bounded scheduler
+                # may ask again after a reviewer injects work while futures run.
+                raise StopIteration
+            return item
+
+    def complete(self, item: MetadataWorkItem) -> None:
+        with self._lock:
+            self._in_flight.discard(item.record_id)
