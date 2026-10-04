@@ -128,7 +128,9 @@ class GraphExecutor:
     def _topological_order(self) -> list[PipelineStageDefinition]:
         """Break ties in definition order, including fallback dependencies."""
         pending = {stage.id: stage for stage in self.pipeline.stages}
-        parents = {stage.id: set() for stage in self.pipeline.stages}
+        parents: dict[str, set[str]] = {
+            stage.id: set() for stage in self.pipeline.stages
+        }
         for stage in self.pipeline.stages:
             for target in stage.edge_targets():
                 parents[target].add(stage.id)
@@ -183,7 +185,7 @@ class GraphExecutor:
             inputs = {}
             missing = False
             for port in self.wiring["stages"][stage.id]["inputs"]:
-                values = []
+                values: list[Any] = []
                 for source in port["sources"]:
                     kind, producer = source["kind"], source["stage"]
                     if kind == "constant":
@@ -248,11 +250,12 @@ class GraphExecutor:
                     if isinstance(exc, TimeoutError) or getattr(exc, "timed_out", False)
                     else "on_error"
                 )
-                trace.status = {
-                    "on_unavailable": "unavailable",
-                    "on_timeout": "timed_out",
-                    "on_error": "failed",
-                }[edge]
+                if edge == "on_unavailable":
+                    trace.status = "unavailable"
+                elif edge == "on_timeout":
+                    trace.status = "timed_out"
+                else:
+                    trace.status = "failed"
                 trace.fallback_reason = edge
                 target = getattr(stage, edge)
                 if target is None:
