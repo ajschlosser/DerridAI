@@ -19,7 +19,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-
 from app.corpus_llm_helpers import StructuredOutputError
 from app.llm_failures import (
     FailureDisposition,
