@@ -26,7 +26,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 PipelineStatus = Literal["draft", "active", "disabled"]
 StageFamily = Literal[
@@ -254,6 +254,50 @@ class PipelineDefinition(BaseModel):
                 "Pipeline edge target(s) do not exist: " + ", ".join(missing_targets)
             )
         return self
+
+
+class PipelineConfigOverrideSet(BaseModel):
+    """One layer of stage-configuration overrides bound to an immutable pipeline version.
+
+    Overrides may change only registered stage configuration keys. They cannot
+    change graph topology, strategy identity, stage enablement, wiring, or
+    scholarly/provenance gates.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    pipeline_id: str = Field(min_length=1, max_length=160)
+    pipeline_version: int = Field(ge=1)
+    stages: dict[str, dict[str, Any]] = Field(default_factory=dict, max_length=64)
+
+    @field_validator("stages")
+    @classmethod
+    def validate_stage_overrides(
+        cls,
+        value: dict[str, dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
+        normalized: dict[str, dict[str, Any]] = {}
+        for raw_stage_id, raw_config in value.items():
+            stage_id = str(raw_stage_id or "").strip()
+            if not stage_id or len(stage_id) > 120:
+                raise ValueError("Override stage IDs must contain 1–120 characters.")
+            if not isinstance(raw_config, dict):
+                raise ValueError(f"Overrides for stage {stage_id!r} must be an object.")
+            if len(raw_config) > 64:
+                raise ValueError(f"Stage {stage_id!r} has too many override settings.")
+            config: dict[str, Any] = {}
+            for raw_key, setting in raw_config.items():
+                key = str(raw_key or "").strip()
+                if not key or len(key) > 120:
+                    raise ValueError("Override setting names must contain 1–120 characters.")
+                config[key] = setting
+            if config:
+                normalized[stage_id] = config
+        return normalized
+
+    @property
+    def empty(self) -> bool:
+        return not any(self.stages.values())
 
 
 class PipelineAssignment(BaseModel):
