@@ -218,6 +218,8 @@ export function createConfigState() {
       pipeline_id: "",
       pipeline_version: null,
       source_collection: "",
+      // Empty means Research may retrieve from every work in the selected collection.
+      work_filter: [] as string[],
       locales: ["en", "fr"],
       search_types: ["similarity", "lexical", "mmr"],
       k: 64,
