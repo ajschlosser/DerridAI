@@ -69,6 +69,41 @@ def test_built_in_pipeline_catalog_is_graph_valid() -> None:
     assert "evidence_without_provenance_gate" in legacy_codes
 
 
+def test_pipeline_validator_rejects_pinned_strategy_version_mismatch() -> None:
+    service = PipelineService()
+    source = next(item for item in BUILT_IN_PIPELINES if item.pipeline_id == "research.current")
+    first = source.stages[0]
+    incompatible = source.model_copy(
+        deep=True,
+        update={
+            "pipeline_id": "research.imported-old-strategy",
+            "built_in": False,
+            "stages": [
+                first.model_copy(update={"strategy_version": 999}),
+                *source.stages[1:],
+            ],
+        },
+    )
+
+    result = service.validate(incompatible)
+
+    assert result.valid is False
+    issue = next(item for item in result.issues if item.code == "strategy_version_mismatch")
+    assert issue.stage_id == first.id
+    assert str(first.strategy) in issue.message
+    assert "version 999" in issue.message
+    assert "Migrate the stage" in issue.message
+
+
+def test_pipeline_without_strategy_version_pin_keeps_legacy_hash_shape() -> None:
+    source = next(item for item in BUILT_IN_PIPELINES if item.pipeline_id == "research.current")
+    payload = source.model_dump(mode="json")
+
+    assert all("strategy_version" not in stage for stage in payload["stages"])
+    reconstructed = PipelineDefinition.model_validate(payload)
+    assert pipeline_hash(reconstructed) == pipeline_hash(source)
+
+
 def test_pipeline_validator_rejects_unknown_strategy_and_cycles() -> None:
     service = PipelineService()
     pipeline = PipelineDefinition.model_validate(
