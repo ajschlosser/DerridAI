@@ -175,13 +175,17 @@ export class SearchEngine {
     const modeRequested: SearchMode = request.mode ?? "hybrid";
     const filters = request.filters ?? {};
     const limit = Math.max(1, Math.min(500, request.limit ?? 30));
-    const fetchLimit = Math.max(limit, Math.min(5000, request.fetchLimit ?? Number.MAX_SAFE_INTEGER));
+    const requestedFetchLimit = request.fetchLimit;
     const signal = request.signal;
     this.events.emit({ type: "search-start", runId, query });
 
     const candidateSet = await this.repository.candidates(filters, this.locale, runId, signal);
     const deduped = dedupeRecords(candidateSet.records);
     const candidates = deduped.records;
+    const fetchLimit =
+      requestedFetchLimit == null
+        ? candidates.length
+        : Math.max(limit, Math.min(5000, requestedFetchLimit));
     const lexical = lexicalScores(query, candidates, this.locale);
     const publishedAvailable = Boolean(
       this.manifest.features?.semantic_search && this.manifest.vector_index?.dimension,
