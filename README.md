@@ -26,7 +26,7 @@ DerridAI is a local-first, provenance-preserving research environment for buildi
 
 DerridAI is also the originating reference implementation of **cELF 1.0 — the Capta-Enriched Lexical Format**, a provenance-preserving information architecture for AI-assisted documentary research. The implementation keeps source identity, record identity and revision, metadata assertions, evidence, generated claims, and support bindings separately inspectable instead of flattening them into one opaque vector store.
 
-Current version: **0.81.0 — Fall River** ([release notes](docs/notes/0.81.0.md)). The application version has not been bumped since Fall River; this README describes the current `master` branch, including post-0.81.0 work that is not part of the tagged release.
+Current version: **0.82.0 — Gloucester** ([release notes](docs/notes/0.82.0.md)). This README describes the Gloucester release.
 
 ## What DerridAI does
 
@@ -48,7 +48,7 @@ Current version: **0.81.0 — Fall River** ([release notes](docs/notes/0.81.0.md
 
 ## Current `master`
 
-The current branch has advanced materially beyond the 0.81.0 tag while retaining the 0.81.0 application version. The summary below describes the present product rather than a new release note.
+The summary below describes the Gloucester release.
 
 - **Corpus Builder is now a progressive Setup → Build → Review → Publish workflow.** It supports bounded concurrent enrichment, explicit corpus topology and Record-sizing choices, resumable/revision-aware review, persistent record-local review queues, focused publication-remediation sessions, repeatable metadata groups, audio speaker assignments, and safe text review while verified preparation is still in progress.
 - **Metadata and evidence processing does less model work while preserving stronger semantics.** Deterministic/candidate-first routing, semantic identity and value equivalence, support-validated evidence cascade v2, structured-completion repair/retry classification, and incremental Metadata Memory/exemplar reconciliation reduce latency without allowing retrieval relevance or malformed output to become evidence.

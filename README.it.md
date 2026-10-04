@@ -26,11 +26,11 @@ DerridAI è un ambiente di ricerca local-first che preserva la provenienza per c
 
 DerridAI è inoltre l'implementazione di riferimento originaria di **cELF 1.0 — Capta-Enriched Lexical Format**, un'architettura informativa che preserva la provenienza per la ricerca documentaria assistita dall'IA. L'implementazione mantiene separatamente ispezionabili identità della fonte, identità e revisione del record, asserzioni di metadati, evidenze, claim generati e legami di supporto, invece di appiattirli in un unico archivio vettoriale opaco.
 
-Versione corrente: **0.81.0 — Fall River** ([note di rilascio](docs/notes/0.81.0.md)). La versione dell’applicazione non è stata incrementata dopo Fall River; questo README descrive il ramo `master` corrente, incluso il lavoro successivo a 0.81.0 che non fa parte della release con tag.
+Versione corrente: **0.82.0 — Gloucester** ([note di rilascio](docs/notes/0.82.0.md)). Questo README descrive la release Gloucester.
 
 ## Stato corrente di `master`
 
-Il ramo corrente è avanzato in modo sostanziale rispetto al tag 0.81.0 pur mantenendo la versione applicativa 0.81.0. Il riepilogo seguente descrive il prodotto attuale, non nuove note di rilascio.
+Il riepilogo seguente descrive la release Gloucester.
 
 - **Corpus Builder è ora un flusso progressivo Configurazione → Build → Revisione → Pubblicazione.** Supporta enrichment concorrente e limitato, scelte esplicite di topologia del corpus e dimensione dei Record, revisione riprendibile e consapevole delle revisioni, code persistenti locali al Record, sessioni mirate per risolvere i blocchi di pubblicazione, gruppi di metadati ripetibili, assegnazioni dei parlanti audio e revisione sicura del testo durante una preparazione verificata.
 - **L’elaborazione di metadati ed evidenze richiede meno lavoro del modello e conserva semantiche più forti.** Routing deterministico e candidate-first, identità semantica ed equivalenza dei valori, evidence cascade v2 validata dal supporto, riparazione/classificazione dell’output strutturato e riconciliazione incrementale della Metadata Memory riducono la latenza senza trasformare la rilevanza del retrieval o un output malformato in evidenza.

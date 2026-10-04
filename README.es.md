@@ -26,11 +26,11 @@ DerridAI es un entorno de investigación local-first que preserva la procedencia
 
 DerridAI también es la implementación de referencia original de **cELF 1.0 — Capta-Enriched Lexical Format**, una arquitectura de información que preserva la procedencia para investigación documental asistida por IA. La implementación mantiene separadas e inspeccionables la identidad de la fuente, la identidad y revisión del registro, las afirmaciones de metadatos, la evidencia, las afirmaciones generadas y sus vínculos de soporte, en vez de aplanarlas dentro de una base vectorial opaca.
 
-Versión actual: **0.81.0 — Fall River** ([notas de versión](docs/notes/0.81.0.md)). La versión de la aplicación no se ha incrementado desde Fall River; este README describe la rama `master` actual, incluido el trabajo posterior a 0.81.0 que no forma parte de la versión etiquetada.
+Versión actual: **0.82.0 — Gloucester** ([notas de versión](docs/notes/0.82.0.md)). Este README describe la versión Gloucester.
 
 ## Estado actual de `master`
 
-La rama actual ha avanzado de forma sustancial desde la etiqueta 0.81.0 aunque conserva el número de versión 0.81.0. Este resumen describe el producto actual, no unas nuevas notas de versión.
+El resumen siguiente describe la versión Gloucester.
 
 - **Corpus Builder es ahora un flujo progresivo Configuración → Construcción → Revisión → Publicación.** Admite enriquecimiento concurrente acotado, elecciones explícitas de topología del corpus y tamaño de Records, reanudación y revisión sensibles a revisiones, colas persistentes y locales al Record, sesiones enfocadas de corrección de bloqueos de publicación, grupos de metadatos repetibles, asignación de hablantes de audio y revisión segura de texto durante una preparación verificada.
 - **El procesamiento de metadatos y evidencia hace menos trabajo de modelo y conserva semánticas más fuertes.** El enrutamiento determinista y centrado en candidatos, la identidad semántica y equivalencia de valores, la cascada de evidencia v2 validada por soporte, la reparación/clasificación de salidas estructuradas y la reconciliación incremental de Metadata Memory reducen la latencia sin permitir que la relevancia de recuperación o una salida malformada se conviertan en evidencia.
