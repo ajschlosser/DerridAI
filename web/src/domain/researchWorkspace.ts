@@ -210,6 +210,9 @@ export function createResearchWorkspace(deps: Deps) {
         embedding_model: store.embedding_model || store.metadata?.embedding_model || "",
         filter_fields: Array.isArray(store.filter_fields) ? store.filter_fields.map(String) : [],
         schema_id: String(store.schema_id || store.metadata?.schema_id || ""),
+        source_works: Array.isArray(store.source_works)
+          ? store.source_works.map(String).filter(Boolean)
+          : [],
       })),
       profiles: profiles.map(researchProfileForUi).filter(Boolean),
       selected_evidence: evidence,
@@ -243,6 +246,7 @@ export function createResearchWorkspace(deps: Deps) {
       "pipeline_id",
       "pipeline_version",
       "source_collection",
+      "work_filter",
       "locales",
       "search_types",
       "k",
@@ -344,22 +348,11 @@ export function createResearchWorkspace(deps: Deps) {
   }
   async function startResearchRun(input: Loose = {}) {
     if (!hasCapability("rag.run")) throw new Error(tr("permissions.rag_denied"));
-    const cfg: Loose = normalizedResearchConfig(updateResearchConfig(input.config || {}) as Loose);
-    updateResearchConfig({
-      pipeline_id: cfg.pipeline_id,
-      pipeline_version: cfg.pipeline_version,
-      k: cfg.k,
-      fetch_k: cfg.fetch_k,
-      automatic_sizing: cfg.automatic_sizing,
-      lambda_mult: cfg.lambda_mult,
-      rrf_k: cfg.rrf_k,
-      rerank_top_n: cfg.rerank_top_n,
-      query_decomposition_num_predict: cfg.query_decomposition_num_predict,
-      evidence_record_char_limit: cfg.evidence_record_char_limit,
-      evidence_total_char_limit: cfg.evidence_total_char_limit,
-      locales: cfg.locales,
-      search_types: cfg.search_types,
-      prompt_metadata: cfg.prompt_metadata,
+    // Research page controls are per-run overrides. Settings owns the
+    // persistent defaults, so starting a run must not rewrite ragConfig.
+    const cfg: Loose = normalizedResearchConfig({
+      ...researchConfigForUi(),
+      ...(input.config || {}),
     });
     const prompt = String(input.prompt ?? cfg.prompt ?? "").trim();
     const instructions = String(input.instructions ?? cfg.instructions ?? "").trim();
@@ -430,10 +423,10 @@ export function createResearchWorkspace(deps: Deps) {
     const gradeConfig = gradeProfile
       ? providerRequestConfig(gradeProfile, { textReview: true })
       : null;
+    // Draft text remains convenient browser state; execution choices stay
+    // local to this run and are captured on the request below.
     state.ragConfig.prompt = prompt;
     state.ragConfig.instructions = instructions;
-    state.ragConfig.provider_profile_id = profile.id;
-    state.ragConfig.skip_retrieval = skipRetrieval;
     rememberRagPrompt(prompt, instructions, {
       source_collection: cfg.source_collection,
       provider,
@@ -449,6 +442,7 @@ export function createResearchWorkspace(deps: Deps) {
         pipeline_id: cfg.pipeline_id || null,
         pipeline_version: cfg.pipeline_version || null,
         source_collection: cfg.source_collection || "",
+        work_filter: cfg.work_filter,
         selected_evidence: selectedPayload,
         skip_retrieval: skipRetrieval,
         use_prior_response_memory: Boolean(cfg.use_prior_response_memory),
@@ -543,6 +537,7 @@ export function createResearchWorkspace(deps: Deps) {
       "pipeline_id",
       "pipeline_version",
       "source_collection",
+      "work_filter",
       "locales",
       "search_types",
       "k",
@@ -574,7 +569,10 @@ export function createResearchWorkspace(deps: Deps) {
     );
     patch.prompt = request.prompt || job?.prompt || "";
     patch.instructions = request.instructions || "";
-    return updateResearchConfig(patch);
+    return normalizedResearchConfig({
+      ...researchConfigForUi(),
+      ...patch,
+    });
   }
   const { getResponseFaqPage, gradeResponseFaqRecord, rerunResponseFaqRecord } = createResponseFaq({
     api,
@@ -624,6 +622,8 @@ export function createResearchWorkspace(deps: Deps) {
     const cfg = state.ragConfig;
     const source = request.source_collection;
     if (source) cfg.source_collection = source;
+    if (Array.isArray(request.work_filter))
+      cfg.work_filter = cloneAuditValue(request.work_filter);
     if (Array.isArray(request.locales) && request.locales.length)
       cfg.locales = [...request.locales];
     if (Array.isArray(request.search_types) && request.search_types.length)
