@@ -23,7 +23,6 @@ from app.metadata_provider_health import (
     MetadataProviderHealthCoordinator,
 )
 
-
 TRANSIENT = FailureDisposition(
     "provider_upstream_failure",
     "transient_provider",
