@@ -175,6 +175,7 @@ export class SearchEngine {
     const modeRequested: SearchMode = request.mode ?? "hybrid";
     const filters = request.filters ?? {};
     const limit = Math.max(1, Math.min(500, request.limit ?? 30));
+    const fetchLimit = Math.max(limit, Math.min(5000, request.fetchLimit ?? Number.MAX_SAFE_INTEGER));
     const signal = request.signal;
     this.events.emit({ type: "search-start", runId, query });
 
@@ -355,7 +356,7 @@ export class SearchEngine {
 
     if (modeRequested === "semantic") {
       return this.finish(
-        semantic.slice(0, limit),
+        semantic.slice(0, fetchLimit).slice(0, limit),
         modeRequested,
         "semantic",
         [],
@@ -367,15 +368,24 @@ export class SearchEngine {
       );
     }
 
-    const lexicalMax = Math.max(...lexical.map((item) => item.score), 1);
+    const fetchedLexical = lexical.slice(0, fetchLimit);
+    const fetchedSemantic = semantic.slice(0, fetchLimit);
+    const fetchedIds = new Set([
+      ...fetchedLexical.map((item) => String(item.record.record_id)),
+      ...fetchedSemantic.map((item) => String(item.record.record_id)),
+    ]);
+    const fetchedCandidates = candidates.filter((record) =>
+      fetchedIds.has(String(record.record_id)),
+    );
+    const lexicalMax = Math.max(...fetchedLexical.map((item) => item.score), 1);
     const semanticById = new Map(
-      semantic.map((item) => [String(item.record.record_id), item.semanticScore]),
+      fetchedSemantic.map((item) => [String(item.record.record_id), item.semanticScore]),
     );
     const lexicalById = new Map(
-      lexical.map((item) => [String(item.record.record_id), item.lexicalScore ?? 0]),
+      fetchedLexical.map((item) => [String(item.record.record_id), item.lexicalScore ?? 0]),
     );
 
-    const merged: ScoredRecord[] = candidates.map((record) => {
+    const merged: ScoredRecord[] = fetchedCandidates.map((record) => {
       const id = String(record.record_id);
       const lexicalScore = lexicalById.get(id) ?? 0;
       const semanticScore = semanticById.get(id);
