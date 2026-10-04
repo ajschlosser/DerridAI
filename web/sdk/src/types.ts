@@ -32,6 +32,7 @@ export interface PublicationRecord {
   text: string;
   source_spans: SourceSpan[];
   work?: string;
+  document_author?: string;
   citation?: string;
   full_citation?: string;
   printed_page?: string | number;
@@ -40,10 +41,13 @@ export interface PublicationRecord {
   page?: string | number;
   speaker?: string;
   quoted_speaker?: string;
+  quoted_author?: string;
+  quoted_work?: string;
   position_holder?: string;
   stance?: string;
   target?: string;
   discourse_role?: string;
+  proposition_status?: string;
   record_revision?: string;
   [key: string]: unknown;
 }
@@ -264,12 +268,16 @@ export interface EvidenceRef {
   work?: string;
   citation: string;
   text: string;
+  documentAuthor?: string;
   speaker?: string;
   quotedSpeaker?: string;
+  quotedAuthor?: string;
+  quotedWork?: string;
   positionHolder?: string;
   stance?: string;
   target?: string;
   discourseRole?: string;
+  propositionStatus?: string;
 }
 
 export interface EvidencePacket {

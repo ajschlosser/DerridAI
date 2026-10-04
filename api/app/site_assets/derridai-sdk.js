@@ -724,38 +724,106 @@ var DerridAI = (function(exports) {
       };
     }
   }
+  function optionalText(value) {
+    return value == null || value === "" ? void 0 : String(value);
+  }
   function evidenceRef(manifest, record, index) {
     return {
       evidenceId: `E${index + 1}`,
       recordId: String(record.record_id),
-      recordRevision: record.record_revision == null ? void 0 : String(record.record_revision),
+      recordRevision: optionalText(record.record_revision),
       publicationId: manifest.publication_id,
-      work: record.work == null ? void 0 : String(record.work),
+      work: optionalText(record.work),
       citation: formatCitation(record).plain,
       text: String(record.text ?? ""),
-      speaker: record.speaker == null ? void 0 : String(record.speaker),
-      quotedSpeaker: record.quoted_speaker == null ? void 0 : String(record.quoted_speaker),
-      positionHolder: record.position_holder == null ? void 0 : String(record.position_holder),
-      stance: record.stance == null ? void 0 : String(record.stance),
-      target: record.target == null ? void 0 : String(record.target),
-      discourseRole: record.discourse_role == null ? void 0 : String(record.discourse_role)
+      documentAuthor: optionalText(record.document_author),
+      speaker: optionalText(record.speaker),
+      quotedSpeaker: optionalText(record.quoted_speaker),
+      quotedAuthor: optionalText(record.quoted_author),
+      quotedWork: optionalText(record.quoted_work),
+      positionHolder: optionalText(record.position_holder),
+      stance: optionalText(record.stance),
+      target: optionalText(record.target),
+      discourseRole: optionalText(record.discourse_role),
+      propositionStatus: optionalText(record.proposition_status)
     };
   }
-  function prompt(question, packet) {
+  function normalizedScopeText(value) {
+    return String(value ?? "").normalize("NFKD").replace(new RegExp("\\p{M}", "gu"), "").toLocaleLowerCase("en-US").replace(/[’']s\b/gu, "").replace(/[’']/gu, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  }
+  function mentionsAuthor(question, author) {
+    const query = normalizedScopeText(question);
+    const normalizedAuthor = normalizedScopeText(author);
+    if (!query || !normalizedAuthor) return false;
+    if (query.includes(normalizedAuthor)) return true;
+    const authorParts = normalizedAuthor.split(/\s+/).filter(Boolean);
+    const surname = authorParts[authorParts.length - 1];
+    return Boolean(surname && surname.length >= 4 && new Set(query.split(/\s+/)).has(surname));
+  }
+  function mentionedWorkGroups(manifest, question) {
+    const query = normalizedScopeText(question);
+    if (!query) return [];
+    const groups = [];
+    const authorWorks = /* @__PURE__ */ new Map();
+    for (const summary of manifest.works ?? []) {
+      const work = String(summary.work ?? "").trim();
+      if (!work) continue;
+      const normalizedWork = normalizedScopeText(work);
+      if (normalizedWork && query.includes(normalizedWork)) groups.push([work]);
+      for (const rawAuthor of summary.authors ?? []) {
+        const author = String(rawAuthor ?? "").trim();
+        if (!author || !mentionsAuthor(question, author)) continue;
+        const key = normalizedScopeText(author);
+        const works = authorWorks.get(key) ?? /* @__PURE__ */ new Set();
+        works.add(work);
+        authorWorks.set(key, works);
+      }
+    }
+    for (const works of authorWorks.values()) groups.push([...works]);
+    const distinct = [];
+    for (const works of groups.map((group) => [...new Set(group)].sort())) {
+      if (!works.length) continue;
+      if (distinct.some((existing) => existing.some((work) => works.includes(work)))) continue;
+      distinct.push(works);
+      if (distinct.length === 4) break;
+    }
+    return distinct;
+  }
+  function publicationScope(manifest) {
+    const works = manifest.works ?? [];
+    const visible = works.slice(0, 40).map((summary) => {
+      const authors = (summary.authors ?? []).map(String).filter(Boolean);
+      return `- ${summary.work}${authors.length ? ` — ${authors.join(", ")}` : ""}`;
+    });
+    if (works.length > visible.length) {
+      visible.push(`- … ${works.length - visible.length} additional works`);
+    }
+    return visible.join("\n");
+  }
+  function prompt(question, packet, manifest) {
     const evidence = packet.evidence.map(
       (item) => `[${item.evidenceId}] ${item.citation}
 Record ID: ${item.recordId}
 Record revision: ${item.recordRevision ?? ""}
+Document author: ${item.documentAuthor ?? ""}
 Speaker: ${item.speaker ?? ""}
 Quoted speaker: ${item.quotedSpeaker ?? ""}
+Quoted author: ${item.quotedAuthor ?? ""}
+Quoted work: ${item.quotedWork ?? ""}
 Position holder: ${item.positionHolder ?? ""}
 Stance: ${item.stance ?? ""}
 Target: ${item.target ?? ""}
 Discourse role: ${item.discourseRole ?? ""}
+Proposition status: ${item.propositionStatus ?? ""}
 TEXT:
 ${item.text}`
     ).join("\n\n");
-    return `Answer the research question using only the supplied evidence. Preserve attribution: distinguish the passage speaker, quoted speaker, position holder, stance, target, and discourse role. Do not attribute a quoted or analyzed position to Derrida unless the evidence supports that attribution. Cite evidence IDs such as [E1]. If the evidence is insufficient, say so rather than inventing support.
+    return `Answer the research question using only the supplied evidence for substantive claims. Preserve attribution: distinguish document author, passage speaker, quoted speaker/author/work, position holder, stance, target, discourse role, and proposition status. Do not equate document authorship with proposition ownership, and do not assign a quoted, reconstructed, analyzed, endorsed, questioned, or criticized position to the source author unless the evidence supports that attribution. Cite evidence IDs such as [E1]. If the evidence is insufficient, say so rather than inventing support.
+
+The publication inventory below is authoritative only for which works/authors are present in this published corpus. It is not substantive evidence and must not be cited. Do not claim that an author or work is absent from the publication merely because it is absent from the retrieved evidence packet.
+
+Publication inventory:
+${publicationScope(manifest)}
 
 Question: ${question}
 
@@ -776,21 +844,65 @@ ${evidence}`;
     async run(request2, runId2) {
       const question = String(request2.question ?? "").trim();
       if (!question) throw new Error("Research question is required.");
+      const retrievalLimit = request2.retrieval?.limit ?? 24;
+      const evidenceLimit = request2.retrieval?.evidenceLimit ?? 10;
+      const retrievalMode = request2.retrieval?.mode ?? "hybrid";
+      const filters = request2.retrieval?.filters;
       const retrieval = await this.searchEngine.search(
         {
           query: question,
-          mode: request2.retrieval?.mode ?? "hybrid",
-          filters: request2.retrieval?.filters,
-          limit: request2.retrieval?.limit ?? 24,
+          mode: retrievalMode,
+          filters,
+          limit: retrievalLimit,
           signal: request2.signal
         },
         runId2
       );
-      const selected = this.searchEngine.diversify(
-        retrieval.results,
-        request2.retrieval?.evidenceLimit ?? 10,
-        request2.retrieval?.mmrLambda ?? 0.72
+      const hasExplicitWorkFilter = Boolean(
+        filters?.work && (!Array.isArray(filters.work) || filters.work.length)
       );
+      const scopeSeeds = [];
+      if (!hasExplicitWorkFilter) {
+        const seededIds = /* @__PURE__ */ new Set();
+        for (const [index, works] of mentionedWorkGroups(this.manifest, question).entries()) {
+          let seed = retrieval.results.find(
+            (item) => works.includes(String(item.record.work ?? "")) && !seededIds.has(String(item.record.record_id))
+          );
+          if (!seed) {
+            const scoped = await this.searchEngine.search(
+              {
+                query: question,
+                mode: retrievalMode,
+                filters: { ...filters ?? {}, work: works },
+                limit: Math.min(4, retrievalLimit),
+                signal: request2.signal
+              },
+              `${runId2}-scope-${index + 1}`
+            );
+            seed = scoped.results.find((item) => !seededIds.has(String(item.record.record_id)));
+          }
+          if (!seed) continue;
+          scopeSeeds.push(seed);
+          seededIds.add(String(seed.record.record_id));
+        }
+      }
+      if (scopeSeeds.length) {
+        const seedIds = new Set(scopeSeeds.map((item) => String(item.record.record_id)));
+        retrieval.results = [
+          ...scopeSeeds,
+          ...retrieval.results.filter((item) => !seedIds.has(String(item.record.record_id)))
+        ].slice(0, retrievalLimit).map((item, index) => ({ ...item, rank: index + 1 }));
+      }
+      const reserved = scopeSeeds.slice(0, evidenceLimit);
+      const reservedIds = new Set(reserved.map((item) => String(item.record.record_id)));
+      const selected = [
+        ...reserved,
+        ...this.searchEngine.diversify(
+          retrieval.results.filter((item) => !reservedIds.has(String(item.record.record_id))),
+          Math.max(0, evidenceLimit - reserved.length),
+          request2.retrieval?.mmrLambda ?? 0.72
+        )
+      ].map((item, index) => ({ ...item, rank: index + 1 }));
       const evidencePacket = {
         publicationId: this.manifest.publication_id,
         evidence: selected.map((item, index) => evidenceRef(this.manifest, item.record, index))
@@ -834,7 +946,7 @@ ${evidence}`;
       try {
         const generated = await this.generation.generate(
           {
-            prompt: prompt(question, evidencePacket),
+            prompt: prompt(question, evidencePacket, this.manifest),
             question,
             evidencePacket
           },
@@ -899,7 +1011,14 @@ ${evidence}`;
     return { records: unique, duplicatesRemoved };
   }
   function tokens(value, locale) {
-    return String(value ?? "").toLocaleLowerCase(locale).match(/[\p{L}\p{N}’'_-]+/gu) ?? [];
+    const normalized2 = String(value ?? "").toLocaleLowerCase(locale);
+    const raw = normalized2.match(/[\p{L}\p{N}’'_-]+/gu) ?? [];
+    const normalizedTokens = [];
+    for (const token of raw) {
+      const withoutPossessive = token.replace(/[’']s$/u, "").replace(/[’']$/u, "");
+      if (withoutPossessive) normalizedTokens.push(withoutPossessive);
+    }
+    return normalizedTokens;
   }
   function searchable(record) {
     return Object.entries(record).filter(([key]) => !["source_spans", "field_assertions", "updates"].includes(key)).map(([, value]) => {
