@@ -915,7 +915,7 @@ class PdfCorpusRepository:
         self, data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu",
         source_illegibility: float = 0, content_type: str = "", catalog_metadata: dict[str, Any] | None = None,
         source_url: str | None = None, detect_page_numbers: bool = True,
-        page_llm: Any = None,
+        page_llm: Any = None, audio_diarization: bool = True,
     ) -> dict[str, Any]:
         if not data:
             raise ValueError("The uploaded source was empty.")
@@ -945,6 +945,10 @@ class PdfCorpusRepository:
             identity = hashlib.sha256(f"{digest}|{kind}|source-extraction-v2|{ocr_mode}|{illegibility:.2f}".encode()).hexdigest()
         if catalog_metadata and catalog_metadata.get("gutenberg_id"):
             identity = hashlib.sha256(f"{identity}|gutenberg|{catalog_metadata['gutenberg_id']}".encode()).hexdigest()
+        if kind == "audio":
+            identity = hashlib.sha256(
+                f"{identity}|audio-diarization-{'on' if audio_diarization else 'off'}".encode()
+            ).hexdigest()
         if page_llm is not None and kind not in {"pdf", "audio", "image"}:
             identity = hashlib.sha256(f"{identity}|page-detection-llm".encode()).hexdigest()
         if not detect_page_numbers and kind not in {"pdf", "audio", "image"}:
@@ -967,6 +971,7 @@ class PdfCorpusRepository:
                 data, filename=filename, kind=kind, ocr_mode=ocr_mode, ocr_languages=ocr_languages,
                 source_illegibility=illegibility, catalog_metadata=catalog_metadata,
                 detect_page_numbers=detect_page_numbers, page_llm=page_llm,
+                audio_diarization=audio_diarization,
             )
             if catalog_metadata and catalog_metadata.get("gutenberg_id"):
                 extracted["media_kind"] = "gutenberg"
@@ -1140,6 +1145,7 @@ class PdfCorpusRepository:
         source_illegibility: float, catalog_metadata: dict[str, Any] | None,
         detect_page_numbers: bool = True,
         page_llm: Any = None,
+        audio_diarization: bool = True,
     ) -> dict[str, Any]:
         from .source_media import (
             extract_non_pdf,
@@ -1178,6 +1184,7 @@ class PdfCorpusRepository:
         return extract_non_pdf(
             data, filename=filename, kind=kind, catalog=catalog_metadata,
             detect_page_numbers=detect_page_numbers, page_llm=page_llm,
+            audio_diarization=audio_diarization,
         )
 
     def get_asset(self, asset_id: str) -> dict[str, Any]:
