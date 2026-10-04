@@ -15,6 +15,7 @@ const props = withDefaults(defineProps<{
   disabled?: boolean;
 }>(), { pageDetection: undefined, disabled: false });
 const pages = defineModel<number[]>({ default: () => [] });
+const emit = defineEmits<{ validity: [valid: boolean] }>();
 const i18n = useI18nStore();
 const draft = ref(formatSourcePageSelection(pages.value));
 let locallyApplied = "";
@@ -42,6 +43,11 @@ watch(
 );
 
 const parsed = computed(() => parseSourcePageSelection(draft.value, props.pageCount));
+watch(
+  () => parsed.value.error,
+  (value) => emit("validity", !value),
+  { immediate: true },
+);
 const error = computed(() => parsed.value.error
   ? i18n.t("pdf_corpus.source_scope_invalid", parsed.value.error)
   : "");
