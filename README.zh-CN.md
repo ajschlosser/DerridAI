@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 DerridAI 是一个本地优先、保留来源链的研究环境，用于构建、审阅、搜索和查询学术语料库。它在一个 Docker 应用中整合了来源摄取、有人参与的语料库构建、证据感知的元数据富化、派生向量/搜索索引，以及以证据为基础的检索增强生成（RAG）。
 
-DerridAI 也是 **cELF 1.0 — Capta-Enriched Lexical Format** 的原始参考实现。cELF 是面向 AI 辅助文献研究、保留来源与可追溯性的资讯架构。DerridAI 将来源身份、Record 身份与修订、元数据断言、证据、生成的主张和支持绑定分别保留并可独立审计，而不是把它们压平到不透明的向量库中。
+DerridAI 也是 **cELF 1.0 — Capta-Enriched Locatable Factum** 的原始参考实现。cELF 是面向 AI 辅助文献研究、保留来源与可追溯性的资讯架构。DerridAI 将来源身份、Record 身份与修订、元数据断言、证据、生成的主张和支持绑定分别保留并可独立审计，而不是把它们压平到不透明的向量库中。
 
 当前版本：**0.82.0 — Gloucester**（[发布说明](docs/notes/0.82.0.md)）。本 README 描述 Gloucester 发布版。
 
