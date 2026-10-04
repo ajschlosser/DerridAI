@@ -38,7 +38,7 @@ from pydantic import BaseModel, ValidationError
 from . import experiment, operation_events
 from .autofill import decide as decide_autofill
 from .autofill import in_audit_sample
-from .concurrency import provider_limit
+from .concurrency import provider_capacity_key, provider_limit
 from .config import APP_VERSION, settings
 from .corpus_llm_helpers import (
     StructuredOutputError,
@@ -91,12 +91,14 @@ from .field_assertions import (
 )
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_failure_recovery import plan_metadata_recovery
+from .llm_failures import failure_disposition
 from .metadata_candidates import (
     apply_indexing_nlp_candidates,
     is_direct_nlp_indexing_candidate,
 )
 from .metadata_precedents_cache import CACHE_KEY as PRECEDENTS_CACHE_KEY
 from .metadata_precedents_cache import build_precedents_cache
+from .metadata_provider_health import metadata_provider_health
 from .metadata_request_coalescer import MetadataRequestCoalescer
 from .metadata_schema import (
     CORE_FIELDS,
@@ -1639,21 +1641,52 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         def invoke(role: str, attempts: int, escalated: bool) -> dict[str, Any]:
             if role not in _provider_roles(active_request):
                 raise LookupError("No review provider is configured for this build.")
+            configuration = (
+                active_request.get("_review_provider")
+                if role == "review"
+                else active_request
+            )
+            if not isinstance(configuration, dict):
+                raise LookupError("No review provider is configured for this build.")
+            provider, model, endpoint, secret, generation = _llm_config(configuration)
+            health_key = provider_capacity_key(
+                provider_profile_id=(
+                    str(configuration.get("provider_profile_id") or "") or None
+                ),
+                provider=provider,
+                base_url=endpoint,
+                model=model,
+            )
+            foreground = active_request.get("_capacity_priority") == "foreground"
+
             def generate() -> dict[str, Any]:
-                return self._chat_json(
-                    active_request, prompt, response_model=response_model,
-                    max_tokens=max_tokens, schema_name=schema_name, build_id=build_id,
-                    attempts=attempts, roles=(role,), escalated=escalated,
+                # Circuit admission happens outside complete_structured_json, so a
+                # deferred call does not consume a model-attempt budget.
+                metadata_provider_health.before_call(
+                    health_key,
+                    foreground=foreground,
                 )
+                try:
+                    answer = self._chat_json(
+                        active_request, prompt, response_model=response_model,
+                        max_tokens=max_tokens, schema_name=schema_name, build_id=build_id,
+                        attempts=attempts, roles=(role,), escalated=escalated,
+                    )
+                except InterruptedError:
+                    raise
+                except Exception as exc:
+                    metadata_provider_health.note_failure(
+                        health_key,
+                        failure_disposition(exc),
+                    )
+                    raise
+                metadata_provider_health.note_success(health_key)
+                return answer
 
             fingerprint = active_request.get("_metadata_dependency_fingerprint")
             if not build_id or not fingerprint:
                 return generate()
-            configuration = active_request.get("_review_provider") if role == "review" else active_request
-            if not isinstance(configuration, dict):
-                raise LookupError("No review provider is configured for this build.")
             # Credentials scope sharing but this key never leaves process memory.
-            provider, model, endpoint, secret, generation = _llm_config(configuration)
             key = hashlib.sha256(json.dumps({
                 "build": build_id, "dependencies": fingerprint, "role": role,
                 "provider": provider, "model": model, "endpoint": endpoint,
