@@ -117,6 +117,20 @@ class PipelineService:
                 )
                 continue
             strategy_specs[stage.id] = spec
+            if stage.strategy_version is not None and stage.strategy_version != spec.version:
+                issues.append(
+                    PipelineValidationIssue(
+                        level="error",
+                        code="strategy_version_mismatch",
+                        stage_id=stage.id,
+                        message=(
+                            f"Stage {stage.id!r} expects strategy {stage.strategy!r} "
+                            f"version {stage.strategy_version}, but this DerridAI build "
+                            f"provides version {spec.version}. Migrate the stage before "
+                            "saving, assigning, or executing this pipeline."
+                        ),
+                    )
+                )
             issues.extend(self._validate_config(stage.id, stage.config, spec.config_schema))
 
         issues.extend(
