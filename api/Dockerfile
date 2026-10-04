@@ -23,7 +23,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-deu ffmpeg git \
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-deu ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt requirements-nlp.txt ./
@@ -32,11 +32,8 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-nlp.txt
 COPY app ./app
 
 ARG GIT_COMMIT=
-RUN --mount=type=bind,from=gitmeta,target=/tmp/git \
-    printf '%s' "${GIT_COMMIT:-$(git --git-dir=/tmp/git rev-parse --short HEAD 2>/dev/null || true)}" > /app/git-commit \
-    && chmod 644 /app/git-commit \
-    && apt-get purge -y git \
-    && apt-get autoremove -y
+RUN printf '%s' "${GIT_COMMIT}" > /app/git-commit \
+    && chmod 644 /app/git-commit
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
