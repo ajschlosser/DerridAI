@@ -38,6 +38,17 @@ export const Audio: Story = {
     filename: "interview.wav",
     pageCount: undefined,
     blockCount: 36,
+    audioProvenance: {
+      duration_seconds: 1842,
+      model: "whisper-1",
+      diarization_requested: true,
+      diarization_status: "complete",
+    },
+    speakers: ["SPEAKER_1", "SPEAKER_2"],
+    voiceAssignments: {
+      SPEAKER_1: "Jacques Derrida",
+      SPEAKER_2: "Interviewer",
+    },
   },
 };
 
