@@ -874,7 +874,7 @@ onBeforeUnmount(() => {
                   ><small>{{
                     current.last_synced_at
                       ? i18n.tf("vector.synced_at", {
-                          time: new Date(current.last_synced_at).toLocaleString(i18n.locale),
+                          time: new Date(current.last_synced_at).toLocaleString(i18n.locale, { timeZone: i18n.timeZone }),
                         })
                       : i18n.t("vector.never_synced")
                   }}</small>
