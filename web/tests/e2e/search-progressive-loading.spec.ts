@@ -113,6 +113,48 @@ test("a pending query neither keeps the previous results nor reports zero matche
   await expect(page.locator(".search-results-identity")).toHaveCount(0);
 });
 
+test("database result columns can be resized without a pointing device", async ({ page }, info) => {
+  test.skip(info.project.name !== "chromium-desktop", "Runs once.");
+  await openDatabaseSearch(page);
+
+  await page.route("**/api/stores/*/search", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        results: [
+          {
+            id: "db-keyboard-resize",
+            distance: 0.1,
+            record: {
+              record_id: "db-keyboard-resize",
+              work: "Of Grammatology",
+              text: "Keyboard-resizable result column.",
+            },
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.locator(".search-command-input input").fill("sign");
+  await page.locator(".search-run-button").click();
+  await expect(page.locator(".search-results-panel")).toContainText("Of Grammatology");
+
+  const resizer = page.locator(".search-column-resizer").first();
+  await resizer.focus();
+  const before = await resizer.evaluate(
+    (node) => node.closest("th")?.getBoundingClientRect().width ?? 0,
+  );
+  await page.keyboard.press("ArrowRight");
+  const after = await resizer.evaluate(
+    (node) => node.closest("th")?.getBoundingClientRect().width ?? 0,
+  );
+
+  expect(after).toBeGreaterThan(before);
+  await expect(resizer).toHaveAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight");
+});
+
 test("a failed query is reported as a failure, not as an empty corpus", async ({ page }, info) => {
   test.skip(info.project.name !== "chromium-desktop", "Runs once.");
   await openDatabaseSearch(page);
