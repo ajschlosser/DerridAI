@@ -53,7 +53,9 @@ watch(
   { immediate: true },
 );
 const error = computed(() =>
-  parsed.value.error ? i18n.t("pdf_corpus.source_scope_invalid", parsed.value.error) : "",
+  parsed.value.error
+    ? i18n.tf("pdf_corpus.source_scope_invalid", { error: parsed.value.error })
+    : "",
 );
 const selectedCount = computed(() => pages.value.length || Math.max(0, props.pageCount));
 const summary = computed(() =>
