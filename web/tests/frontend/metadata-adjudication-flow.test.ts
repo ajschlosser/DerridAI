@@ -160,15 +160,13 @@ describe("adjudicating a record's metadata", () => {
   it("includes model-suggested absences when accepting all LLM suggestions", async () => {
     const wrapper = mountPanel({
       record: record({
-        stance: null,
+        stance: "no value",
         metadata_review_fields: ["stance", "speaker"],
         metadata_field_status: {
           stance: {
             status: "unresolved",
             method: "llm",
             derivation_method: "model",
-            evaluation_status: "no_supported_value",
-            suggested_absence: true,
           },
           speaker: pending,
         },
