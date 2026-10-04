@@ -242,6 +242,7 @@ export function createResearchWorkspace(deps: Deps) {
     const allowed = new Set([
       "pipeline_id",
       "pipeline_version",
+      "pipeline_config_overrides",
       "source_collection",
       "locales",
       "search_types",
@@ -344,22 +345,12 @@ export function createResearchWorkspace(deps: Deps) {
   }
   async function startResearchRun(input: Loose = {}) {
     if (!hasCapability("rag.run")) throw new Error(tr("permissions.rag_denied"));
-    const cfg: Loose = normalizedResearchConfig(updateResearchConfig(input.config || {}) as Loose);
-    updateResearchConfig({
-      pipeline_id: cfg.pipeline_id,
-      pipeline_version: cfg.pipeline_version,
-      k: cfg.k,
-      fetch_k: cfg.fetch_k,
-      automatic_sizing: cfg.automatic_sizing,
-      lambda_mult: cfg.lambda_mult,
-      rrf_k: cfg.rrf_k,
-      rerank_top_n: cfg.rerank_top_n,
-      query_decomposition_num_predict: cfg.query_decomposition_num_predict,
-      evidence_record_char_limit: cfg.evidence_record_char_limit,
-      evidence_total_char_limit: cfg.evidence_total_char_limit,
-      locales: cfg.locales,
-      search_types: cfg.search_types,
-      prompt_metadata: cfg.prompt_metadata,
+    // Research composes a one-run draft over the saved Settings configuration.
+    // Do not write the draft back into ragConfig: the Research modal is the
+    // highest-precedence layer for this run only.
+    const cfg: Loose = normalizedResearchConfig({
+      ...researchConfigForUi(),
+      ...(input.config || {}),
     });
     const prompt = String(input.prompt ?? cfg.prompt ?? "").trim();
     const instructions = String(input.instructions ?? cfg.instructions ?? "").trim();
@@ -448,6 +439,10 @@ export function createResearchWorkspace(deps: Deps) {
         instructions: instructions || null,
         pipeline_id: cfg.pipeline_id || null,
         pipeline_version: cfg.pipeline_version || null,
+        settings_pipeline_overrides:
+          input.settings_pipeline_overrides ?? cfg.settings_pipeline_overrides ?? null,
+        run_pipeline_overrides:
+          input.run_pipeline_overrides ?? cfg.run_pipeline_overrides ?? null,
         source_collection: cfg.source_collection || "",
         selected_evidence: selectedPayload,
         skip_retrieval: skipRetrieval,
@@ -542,6 +537,8 @@ export function createResearchWorkspace(deps: Deps) {
     const keys = [
       "pipeline_id",
       "pipeline_version",
+      "settings_pipeline_overrides",
+      "run_pipeline_overrides",
       "source_collection",
       "locales",
       "search_types",
@@ -574,7 +571,9 @@ export function createResearchWorkspace(deps: Deps) {
     );
     patch.prompt = request.prompt || job?.prompt || "";
     patch.instructions = request.instructions || "";
-    return updateResearchConfig(patch);
+    // Loading a historical run prepares an ephemeral draft. It must not rewrite
+    // the user's current Settings overrides or other saved Research defaults.
+    return normalizedResearchConfig({ ...researchConfigForUi(), ...patch });
   }
   const { getResponseFaqPage, gradeResponseFaqRecord, rerunResponseFaqRecord } = createResponseFaq({
     api,
