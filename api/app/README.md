@@ -126,6 +126,20 @@ Prefer this sequence:
 
 Do not grow `main.py`, `jobs.py`, or `corpus_builder.py` merely because an existing compatibility import points there.
 
+## Working in large or compatibility modules
+
+Several older orchestration surfaces remain large because their public imports and lifecycle state are still being decomposed. Before adding logic to one of them, search for an existing focused sibling module and trace the call site that owns the invariant. A good extraction keeps the compatibility surface as a delegator and gives the new behavior a topical test.
+
+When an algorithm is necessarily dense—segmentation topology, evidence reconciliation, queue state, revision replay, pipeline wiring—use descriptive intermediate names and comments for the non-obvious invariant or ordering rule. Do not add comments that merely translate the next line into English. Private helpers should have docstrings when a caller cannot infer their safety/failure contract from the signature.
+
+Common traps:
+
+- `corpus_builder.py` coordinates many `corpus_*` modules; new segmentation, enrichment, review, publication, or schema rules normally belong in those focused modules.
+- `jobs.py` is a compatibility export layer; durable behavior belongs in `job_state.py` or the topical `job_*` implementation.
+- `site_assets/derridai-sdk.js` and `site_assets/derridai-site.js` are generated frontend artifacts. Change `web/sdk/` or `web/site/` and regenerate them.
+- Realtime delivery code must not become a second persistence path. Emit bounded events through `operation_events.py`, then let clients refetch canonical state.
+- Chroma is a projection boundary. Code that needs authoritative Record, revision, FieldAssertion, review, or evidence state must read the canonical owner instead.
+
 ### Backend readability traps
 
 - Prefer explicit domain names (`record_revision`, `candidate_seam`, `source_document`) over generic `data`, `item`, `obj`, or one-letter names once a value survives more than a few obvious lines.
