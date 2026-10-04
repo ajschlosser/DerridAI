@@ -785,7 +785,10 @@ export function createPublishedSiteContext() {
         const vectors: number[][] = [];
         for (const entry of entries) {
           const embedding = entry.embedding;
-          if (!Array.isArray(embedding) || !embedding.every((value) => typeof value === "number")) {
+          if (
+            !Array.isArray(embedding) ||
+            !embedding.every((value) => typeof value === "number")
+          ) {
             throw embeddingFailure();
           }
           vectors.push(embedding);
@@ -880,7 +883,8 @@ export function createPublishedSiteContext() {
           device,
           ...(profile.revision ? { revision: profile.revision } : {}),
           ...(profile.dtype ? { dtype: profile.dtype } : {}),
-          progress_callback: (progress: unknown) => modelProgressListener?.(normalizedModelProgress(progress)),
+          progress_callback: (progress: unknown) =>
+            modelProgressListener?.(normalizedModelProgress(progress)),
         });
       } catch (error) {
         if (device === "wasm") throw error;
@@ -889,7 +893,8 @@ export function createPublishedSiteContext() {
           device: "wasm",
           ...(profile.revision ? { revision: profile.revision } : {}),
           ...(profile.dtype ? { dtype: profile.dtype } : {}),
-          progress_callback: (progress: unknown) => modelProgressListener?.(normalizedModelProgress(progress)),
+          progress_callback: (progress: unknown) =>
+            modelProgressListener?.(normalizedModelProgress(progress)),
         });
       }
     })();
