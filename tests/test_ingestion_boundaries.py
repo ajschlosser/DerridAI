@@ -731,3 +731,26 @@ def test_png_script_metadata_is_inert_text():
     Image.new("RGB", (2, 2)).save(output, format="PNG", pnginfo=metadata)
     safety.validate_image(output.getvalue())
     assert png_text_metadata(output.getvalue())["title"] == "<script>alert('inert')</script>"
+
+
+
+def test_audio_diarization_can_be_disabled(monkeypatch, tmp_path):
+    """Audio controls may skip WhisperX while preserving the complete timed transcript."""
+    monkeypatch.setattr(audio, "probe_audio", lambda path: 4)
+    monkeypatch.setattr(audio, "transcribe_entire_file", lambda path: TRANSCRIPT)
+
+    def unexpected_diarization(path):
+        raise AssertionError("diarization should not run when disabled")
+
+    monkeypatch.setattr(audio, "diarize_with_whisperx", unexpected_diarization)
+    repo = PdfCorpusRepository(tmp_path)
+    asset = repo.save_asset(
+        b"audio",
+        filename="clip.wav",
+        audio_diarization=False,
+    )
+
+    assert asset["audio_provenance"]["diarization_requested"] is False
+    assert asset["audio_provenance"]["diarization_status"] == "disabled"
+    assert asset["warnings"] == []
+    assert asset["source_transcription"] == TRANSCRIPT

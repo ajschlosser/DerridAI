@@ -19,12 +19,35 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
+import AudioSpeakerAssignments from "./corpus-builder/AudioSpeakerAssignments.vue";
 
-const props = defineProps<{
-  mediaKind?: string;
-  filename: string;
-  pageCount?: number;
-  blockCount?: number;
+const props = withDefaults(
+  defineProps<{
+    mediaKind?: string;
+    filename: string;
+    pageCount?: number;
+    blockCount?: number;
+    audioProvenance?: {
+      duration_seconds?: number;
+      model?: string;
+      provider?: string;
+      diarization_requested?: boolean;
+      diarization_status?: string;
+    };
+    speakers?: string[];
+    voiceAssignments?: Record<string, string>;
+    disabled?: boolean;
+    voiceAssignmentsBusy?: boolean;
+  }>(),
+  {
+    speakers: () => [],
+    voiceAssignments: () => ({}),
+    disabled: false,
+    voiceAssignmentsBusy: false,
+  },
+);
+const emit = defineEmits<{
+  saveVoiceAssignments: [assignments: Record<string, string>];
 }>();
 const i18n = useI18nStore();
 const copy = computed(() => {
@@ -40,6 +63,23 @@ const copy = computed(() => {
         detail: i18n.t(
           "pdf_corpus.audio_structure_detail",
           "Records retain time ranges and speaker labels. Page-number controls are intentionally unavailable.",
+        ),
+      };
+    case "docx":
+    case "rtf":
+      return {
+        title: i18n.t(
+          "pdf_corpus.structured_text_structure_title",
+          "Document structure & pagination",
+        ),
+        help: i18n.t(
+          "pdf_corpus.structured_text_structure_help",
+          "Structured documents can expose detected, native, or estimated page boundaries. Review the page scope below before record construction.",
+        ),
+        label: i18n.t("pdf_corpus.structured_text_structure_label", "Structured document"),
+        detail: i18n.t(
+          "pdf_corpus.structured_text_structure_detail",
+          "Page selection applies to this build only; the complete extracted source remains preserved.",
         ),
       };
     case "text":
@@ -108,6 +148,47 @@ const copy = computed(() => {
       <span v-if="blockCount">{{ blockCount }} {{ i18n.t("pdf_corpus.blocks", "blocks") }}</span>
     </div>
     <p class="media-detail">{{ copy.detail }}</p>
+
+    <template v-if="mediaKind === 'audio'">
+      <dl class="audio-status">
+        <div>
+          <dt>{{ i18n.t("pdf_corpus.audio_transcript_status", "Transcript") }}</dt>
+          <dd>
+            {{
+              blockCount
+                ? i18n.t("pdf_corpus.audio_transcript_ready", "Ready")
+                : i18n.t("pdf_corpus.audio_transcript_missing", "Unavailable")
+            }}
+          </dd>
+        </div>
+        <div v-if="audioProvenance?.duration_seconds">
+          <dt>{{ i18n.t("pdf_corpus.audio_duration", "Duration") }}</dt>
+          <dd>{{ Math.round(audioProvenance.duration_seconds) }}s</dd>
+        </div>
+        <div>
+          <dt>{{ i18n.t("pdf_corpus.audio_diarization_status", "Speaker detection") }}</dt>
+          <dd>
+            {{
+              audioProvenance?.diarization_status ||
+              i18n.t("pdf_corpus.audio_diarization_unknown", "Unknown")
+            }}
+          </dd>
+        </div>
+        <div v-if="audioProvenance?.model">
+          <dt>{{ i18n.t("pdf_corpus.audio_transcription_model", "Transcription model") }}</dt>
+          <dd>{{ audioProvenance.model }}</dd>
+        </div>
+      </dl>
+      <a class="audio-settings-link" href="/settings/services#settings-heading-audio">
+        {{ i18n.t("pdf_corpus.audio_settings_link", "Audio transcription service settings") }}
+      </a>
+      <AudioSpeakerAssignments
+        :speakers="speakers"
+        :assignments="voiceAssignments"
+        :disabled="disabled || voiceAssignmentsBusy"
+        @save="emit('saveVoiceAssignments', $event)"
+      />
+    </template>
   </section>
 </template>
 
@@ -162,6 +243,36 @@ p {
 }
 .media-detail {
   font-size: 0.875rem;
+}
+.audio-status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.audio-status div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--soft);
+}
+.audio-status dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.audio-status dd {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.audio-settings-link {
+  justify-self: start;
+  color: var(--accent-fg);
+  font-size: 0.8125rem;
+  font-weight: 700;
 }
 @media (max-width: 700px) {
   .media-structure header {

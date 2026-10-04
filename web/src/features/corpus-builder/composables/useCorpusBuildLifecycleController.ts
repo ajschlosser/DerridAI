@@ -55,6 +55,7 @@ interface CorpusBuildLifecycleControllerOptions {
   /** Reviewer-supplied document fields that detection on source load missed. */
   documentMetadataPayload?: () => Record<string, unknown>;
   topologyPolicyPayload?: () => Record<string, unknown>;
+  sourceScopePayload?: () => Record<string, unknown>;
   applyBuildRequest: (request: Record<string, unknown>) => void;
   setMessage: (message: string, tone?: MessageTone) => void;
   resetReviewForBuildStart: () => void;
@@ -307,8 +308,10 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     try {
       const documentMetadata = options.documentMetadataPayload?.() ?? {};
       const topologyPolicy = options.topologyPolicyPayload?.() ?? {};
+      const sourceScope = options.sourceScopePayload?.() ?? {};
       const payload = {
         asset_id: options.selectedAssetId.value,
+        ...(Object.keys(sourceScope).length ? { source_scope: sourceScope } : {}),
         ...(Object.keys(topologyPolicy).length ? { topology_policy: topologyPolicy } : {}),
         auto_enrich_work_metadata: true,
         schema_id: options.schemaId.value,

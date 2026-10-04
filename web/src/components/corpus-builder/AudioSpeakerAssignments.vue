@@ -81,7 +81,15 @@ function saveSpeaker(speaker: string) {
         <p>{{ i18n.t("pdf_corpus.voice_assignments_help") }}</p>
       </div>
     </header>
-    <div class="speaker-grid">
+    <p v-if="!speakers.length" class="speaker-empty" role="status">
+      {{
+        i18n.t(
+          "pdf_corpus.voice_assignments_empty",
+          "No diarized speaker labels were detected. The transcript remains available as timed evidence.",
+        )
+      }}
+    </p>
+    <div v-else class="speaker-grid">
       <UiField
         v-for="speaker in speakers"
         :key="speaker"
@@ -132,6 +140,16 @@ function saveSpeaker(speaker: string) {
   color: var(--muted);
   font-size: 0.8125rem;
   line-height: 1.5;
+}
+
+.speaker-empty {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  background: var(--surface-inset);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
 }
 
 .speaker-grid {

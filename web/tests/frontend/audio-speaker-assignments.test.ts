@@ -1,37 +1,15 @@
 /*
  * This file is part of DerridAI, a cELF-compliant research workspace
- * Copyright © 2026  Aaron John Schlosser, PhD
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * Copyright © 2026 Aaron John Schlosser, PhD
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import MediaStructureConfigurator from "../../src/components/MediaStructureConfigurator.vue";
 import AudioSpeakerAssignments from "../../src/components/corpus-builder/AudioSpeakerAssignments.vue";
-import CorpusMetadataConfiguration from "../../src/components/corpus-builder/CorpusMetadataConfiguration.vue";
-
-const schema = {
-  id: "default",
-  name: "Default",
-  description: "",
-  builtin: true,
-  field_count: 0,
-  groups: [],
-  hash: "default",
-};
 
 describe("audio speaker assignments", () => {
   beforeEach(() => {
@@ -62,35 +40,38 @@ describe("audio speaker assignments", () => {
     });
   });
 
-  it("surfaces the speaker editor in Metadata only for diarized audio", () => {
+  it("surfaces speaker controls in Structure and keeps the no-speaker state visible", () => {
     const pinia = createPinia();
     setActivePinia(pinia);
-    const audio = mount(CorpusMetadataConfiguration, {
+    const audio = mount(MediaStructureConfigurator, {
       props: {
-        schemaId: "default",
-        runGuidance: {},
-        schemaChoices: [schema],
-        chosenSchema: schema,
-        runGuidanceFields: [],
         mediaKind: "audio",
+        filename: "seminar.wav",
+        blockCount: 12,
+        audioProvenance: { duration_seconds: 90, diarization_status: "complete" },
         speakers: ["SPEAKER_1", "SPEAKER_2"],
         voiceAssignments: {},
       },
       global: { plugins: [pinia] },
     });
     expect(audio.findComponent(AudioSpeakerAssignments).exists()).toBe(true);
+    expect(audio.findAll("input")).toHaveLength(2);
 
-    const text = mount(CorpusMetadataConfiguration, {
+    const noSpeakers = mount(MediaStructureConfigurator, {
       props: {
-        schemaId: "default",
-        runGuidance: {},
-        schemaChoices: [schema],
-        chosenSchema: schema,
-        runGuidanceFields: [],
-        mediaKind: "text",
-        speakers: ["SPEAKER_1"],
-        voiceAssignments: {},
+        mediaKind: "audio",
+        filename: "lecture.wav",
+        blockCount: 4,
+        audioProvenance: { diarization_status: "no_speakers" },
+        speakers: [],
       },
+      global: { plugins: [pinia] },
+    });
+    expect(noSpeakers.findComponent(AudioSpeakerAssignments).exists()).toBe(true);
+    expect(noSpeakers.get(".speaker-empty").text()).toContain("timed evidence");
+
+    const text = mount(MediaStructureConfigurator, {
+      props: { mediaKind: "text", filename: "notes.txt", blockCount: 3 },
       global: { plugins: [pinia] },
     });
     expect(text.findComponent(AudioSpeakerAssignments).exists()).toBe(false);

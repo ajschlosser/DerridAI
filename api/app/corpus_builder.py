@@ -198,7 +198,7 @@ from .corpus_models import (
     SegmentationResponseModel as SegmentationResponseModel,
 )
 from .corpus_operations import OperationsMixin
-from .corpus_pipeline import BuildScope
+from .corpus_pipeline import BuildScope, select_source_pages
 from .corpus_publication import (
     build_text_touchup_prompt,
     mark_unreviewed_publication,
@@ -273,6 +273,7 @@ from .corpus_segmentation import (
 from .corpus_segmentation_execution import BuildSegmentationExecutionMixin
 from .derridai_ledger import write_jsonl_zst
 from .document_intelligence import (
+    DOCUMENT_INTELLIGENCE_VERSION,
     analyze_document,
     document_text_for_records,
     project_annotations_to_records,
@@ -914,7 +915,7 @@ class PdfCorpusRepository:
         self, data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu",
         source_illegibility: float = 0, content_type: str = "", catalog_metadata: dict[str, Any] | None = None,
         source_url: str | None = None, detect_page_numbers: bool = True,
-        page_llm: Any = None,
+        page_llm: Any = None, audio_diarization: bool = True,
     ) -> dict[str, Any]:
         if not data:
             raise ValueError("The uploaded source was empty.")
@@ -944,6 +945,10 @@ class PdfCorpusRepository:
             identity = hashlib.sha256(f"{digest}|{kind}|source-extraction-v2|{ocr_mode}|{illegibility:.2f}".encode()).hexdigest()
         if catalog_metadata and catalog_metadata.get("gutenberg_id"):
             identity = hashlib.sha256(f"{identity}|gutenberg|{catalog_metadata['gutenberg_id']}".encode()).hexdigest()
+        if kind == "audio" and not audio_diarization:
+            # Preserve the historical/default audio identity when diarization is on;
+            # only the explicit no-diarization variant needs a distinct source id.
+            identity = hashlib.sha256(f"{identity}|audio-diarization-off".encode()).hexdigest()
         if page_llm is not None and kind not in {"pdf", "audio", "image"}:
             identity = hashlib.sha256(f"{identity}|page-detection-llm".encode()).hexdigest()
         if not detect_page_numbers and kind not in {"pdf", "audio", "image"}:
@@ -966,6 +971,7 @@ class PdfCorpusRepository:
                 data, filename=filename, kind=kind, ocr_mode=ocr_mode, ocr_languages=ocr_languages,
                 source_illegibility=illegibility, catalog_metadata=catalog_metadata,
                 detect_page_numbers=detect_page_numbers, page_llm=page_llm,
+                audio_diarization=audio_diarization,
             )
             if catalog_metadata and catalog_metadata.get("gutenberg_id"):
                 extracted["media_kind"] = "gutenberg"
@@ -1139,6 +1145,7 @@ class PdfCorpusRepository:
         source_illegibility: float, catalog_metadata: dict[str, Any] | None,
         detect_page_numbers: bool = True,
         page_llm: Any = None,
+        audio_diarization: bool = True,
     ) -> dict[str, Any]:
         from .source_media import (
             extract_non_pdf,
@@ -1177,6 +1184,7 @@ class PdfCorpusRepository:
         return extract_non_pdf(
             data, filename=filename, kind=kind, catalog=catalog_metadata,
             detect_page_numbers=detect_page_numbers, page_llm=page_llm,
+            audio_diarization=audio_diarization,
         )
 
     def get_asset(self, asset_id: str) -> dict[str, Any]:
@@ -2816,6 +2824,36 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     break
         return self.repo.load_records(build_id)
 
+    def _reusable_document_intelligence(
+        self,
+        build_id: str,
+        records: list[dict[str, Any]],
+        manifest: dict[str, Any],
+        request: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Return a current persisted analysis when resume has no DI dependency changes."""
+        existing = self._document_intelligence_for_records(build_id, records)
+        if (
+            not existing
+            or existing.get("stale")
+            or existing.get("status") not in {"ok", "skipped"}
+            or int(existing.get("version") or 0) != DOCUMENT_INTELLIGENCE_VERSION
+        ):
+            return None
+
+        expected_configuration = {
+            "include_events": bool(request.get("document_nlp_include_events")),
+            "language": str(manifest.get("language") or ""),
+        }
+        if (
+            str(existing.get("profile") or "") != str(request.get("document_intelligence_profile") or "scholarly")
+            or str(existing.get("selected_provider") or "") != str(request.get("document_nlp_provider") or "auto")
+            or existing.get("configuration") != expected_configuration
+        ):
+            return None
+        return existing
+
+
     def _run_document_intelligence(
         self,
         build_id: str,
@@ -4301,8 +4339,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 blocks,
                 [str(item.get("id")) for item in raw_regions if isinstance(item, dict) and item.get("id")],
             )
+
         if not blocks:
-            raise ValueError("No SourceUnits were extracted from the PDF. Check OCR support and extraction warnings.")
+            raise ValueError("No SourceUnits were extracted from this source.")
 
         manifest = self.repo.load_checkpoint(build_id, "manifest") if resume else None
         if not isinstance(manifest, dict):
@@ -4321,13 +4360,33 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         current_manifest_revision = int(self.repo.get_build(build_id).get("manifest_revision") or 1)
         self._update(build_id, stage="document_review", progress=max(float(build.get("progress") or 0), 0.12), manifest=manifest, manifest_revision=current_manifest_revision)
 
+        # The document manifest describes the complete source. Page scope is a build-level
+        # record-construction choice, so apply it only after bibliographic/document analysis
+        # has had access to title pages and other work-level evidence.
+        source_scope = request.get("source_scope") if isinstance(request.get("source_scope"), dict) else None
+        scoped_blocks, selected_source_pages = select_source_pages(blocks, asset, source_scope)
+        scoped_pages = [
+            page
+            for page in (asset.get("pages") or [])
+            if not selected_source_pages or int(page.get("pdf_page") or 0) in set(selected_source_pages)
+        ]
+        if selected_source_pages:
+            self._update(
+                build_id,
+                source_scope={
+                    "pages": selected_source_pages,
+                    "page_count": len(selected_source_pages),
+                    "block_count": len(scoped_blocks),
+                },
+            )
+
         manifest_build = self.repo.get_build(build_id)
         prior_main_text_block_count = int(manifest_build.get("main_text_block_count") or 0)
         # The reviewed manifest defines the semantic-analysis region. Source
         # blocks outside it remain in the persisted source asset for audit.
         manifest_bounds_confirmed = bool(manifest_build.get("manifest_confirmed_at"))
         source_blocks = _manifest_main_text_blocks(
-            blocks, manifest, bounds_confirmed=manifest_bounds_confirmed
+            scoped_blocks, manifest, bounds_confirmed=manifest_bounds_confirmed
         )
         # 0.56.0 hotfix: earlier automatic builds could accept an LLM-suggested
         # main-text range before human confirmation.  Dense final pages could
@@ -4336,6 +4395,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # and rebuild segmentation/records from the full conserved source.
         source_scope_repair = bool(
             resume
+            and not selected_source_pages
             and not manifest_bounds_confirmed
             and prior_main_text_block_count > 0
             and prior_main_text_block_count < len(source_blocks)
@@ -4348,7 +4408,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 build_id,
                 "Recovered a previously truncated automatic main-text scope; segmentation is being rebuilt from the full extracted PDF source."
             )
-        source_quality = page_source_quality_report(source_blocks, asset.get("pages") or [])
+        source_quality = page_source_quality_report(source_blocks, scoped_pages)
         self._update(build_id, source_quality=source_quality)
         semantic_blocks = _semantic_atoms(source_blocks)
         if len(semantic_blocks) < 2:
@@ -4357,7 +4417,16 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             build_id, stage="segmenting", progress=max(float(build.get("progress") or 0), 0.12),
             semantic_atom_count=len(semantic_blocks), main_text_block_count=len(source_blocks),
         )
-        return BuildScope(build, asset, manifest, source_blocks, semantic_blocks, source_quality, source_scope_repair)
+        return BuildScope(
+            build=build,
+            asset=asset,
+            manifest=manifest,
+            source_blocks=source_blocks,
+            semantic_blocks=semantic_blocks,
+            source_quality=source_quality,
+            source_scope_repair=source_scope_repair,
+            source_pages=scoped_pages,
+        )
 
     def _construct_build_topology(
         self, build_id: str, request: dict[str, Any], resume: bool, scope: BuildScope,
@@ -4366,6 +4435,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         asset, manifest = scope.asset, scope.manifest
         source_blocks, semantic_blocks = scope.source_blocks, scope.semantic_blocks
         source_quality, source_scope_repair = scope.source_quality, scope.source_scope_repair
+        source_pages = scope.source_pages
+        source_scope = request.get("source_scope") if isinstance(request.get("source_scope"), dict) else {}
+        scoped_source = bool(source_scope.get("pages"))
         previous_build = self.repo.get_build(build_id)
         # A segmentation-blocked build intentionally has no authoritative final
         # boundary checkpoint. Resume retries unresolved semantic regions using
@@ -4549,8 +4621,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             try:
                 provider, model = source_projection.store.default_embedding_spec()
                 source_embedding_projection = source_projection.sync(
-                    str(asset.get("asset_id") or build_id), source_blocks,
-                    provider=provider, model=model, prune=True,
+                    str(asset.get("asset_id") or build_id),
+                    source_blocks,
+                    provider=provider,
+                    model=model,
+                    # A build-specific page subset must not delete embeddings for
+                    # source units outside that build's documentary scope.
+                    prune=not scoped_source,
                 )
             except Exception as exc:
                 source_embedding_projection = {
@@ -4628,11 +4705,22 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             record_count=len(records),
             progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.40),
         )
-        self._run_document_intelligence(build_id, records, manifest, request)
+        reusable_intelligence = (
+            self._reusable_document_intelligence(build_id, records, manifest, request)
+            if resume
+            else None
+        )
+        if reusable_intelligence is None:
+            self._run_document_intelligence(build_id, records, manifest, request)
+            self._update(build_id, document_intelligence_resume_reused=False)
+        else:
+            # Resume should return to unfinished enrichment, not redo a whole-document
+            # NLP pass whose source text, topology and DI configuration are unchanged.
+            self._update(build_id, document_intelligence_resume_reused=True)
 
         records = self._persist_preparation_records(build_id, preparation_base, records)
         trash_quality = self._apply_source_illegibility(
-            build_id, records, request, source_quality, asset.get("pages") or [],
+            build_id, records, request, source_quality, source_pages,
         )
         self._update(
             build_id, stage="enriching",

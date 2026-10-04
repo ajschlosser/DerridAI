@@ -29,6 +29,7 @@ import {
 import { useI18nStore } from "../stores/i18n";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
+import SourcePageScopeControl from "./SourcePageScopeControl.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
@@ -279,8 +280,18 @@ const topologyPolicy = ref<CorpusTopologyPolicy>({
   source_units_per_record: 1,
   records_per_page: null,
 });
+const sourcePageScope = ref<number[]>([]);
+const sourcePageScopeValid = ref(true);
 function applyCorpusBuildRequest(request: Record<string, unknown>) {
   applyBuildRequest(request);
+  const savedScope =
+    request.source_scope && typeof request.source_scope === "object"
+      ? (request.source_scope as { pages?: unknown })
+      : {};
+  sourcePageScope.value = Array.isArray(savedScope.pages)
+    ? savedScope.pages.map(Number).filter((page) => Number.isInteger(page) && page > 0)
+    : [];
+  sourcePageScopeValid.value = true;
   const saved =
     request.topology_policy && typeof request.topology_policy === "object"
       ? (request.topology_policy as Partial<CorpusTopologyPolicy>)
@@ -535,15 +546,21 @@ const showReviewWorkspace = computed(
     workspaceMode.value === "review" && hasRecordTopology.value && !awaitingManifestReview.value,
 );
 const documentMetadata = ref<Record<string, unknown>>({});
-watch(selectedAssetId, () => {
-  documentMetadata.value = {};
-  missingMetadataPromptFields.value = [];
-  topologyPolicy.value = {
-    mode: "semantic",
-    source_units_per_record: 1,
-    records_per_page: null,
-  };
-});
+watch(
+  selectedAssetId,
+  () => {
+    documentMetadata.value = {};
+    missingMetadataPromptFields.value = [];
+    sourcePageScope.value = [];
+    sourcePageScopeValid.value = true;
+    topologyPolicy.value = {
+      mode: "semantic",
+      source_units_per_record: 1,
+      records_per_page: null,
+    };
+  },
+  { flush: "sync" },
+);
 const effectiveSetupDocumentMetadata = computed<Record<string, unknown>>(() => ({
   ...((selectedAsset.value?.initial_metadata || {}) as Record<string, unknown>),
   ...documentMetadata.value,
@@ -643,6 +660,8 @@ const {
   runGuidancePayload,
   documentMetadataPayload,
   topologyPolicyPayload: () => ({ ...topologyPolicy.value }),
+  sourceScopePayload: () =>
+    sourcePageScope.value.length ? { pages: [...sourcePageScope.value] } : {},
   applyBuildRequest: applyCorpusBuildRequest,
   setMessage,
   resetReviewForBuildStart: () => {
@@ -658,6 +677,17 @@ const {
   tf: (key, values) => i18n.tf(key, values),
 });
 async function startBuild(fromMetadataPrompt = false) {
+  if (!sourcePageScopeValid.value) {
+    setMessage(
+      i18n.t(
+        "pdf_corpus.source_scope_fix_before_build",
+        "Fix the page selection in Document Structure & Pagination before starting the build.",
+      ),
+      "error",
+    );
+    openSetupSection("structure");
+    return;
+  }
   if (!fromMetadataPrompt && missingDocumentFields.value.length) {
     // Snapshot the unresolved fields before opening the checkpoint. If this used
     // the live computed list, each keystroke would make a newly supplied field
@@ -1625,10 +1655,39 @@ const selectedRecordActivitySummary = computed(() => {
     ? ` · ${i18n.tf("pdf_corpus.record_activity_summary", { human, llm, passes })}`
     : "";
 });
+const selectedAudioSpeakers = computed<string[]>(() => {
+  const metadata = selectedAsset.value?.initial_metadata;
+  if (Array.isArray(metadata?.speakers)) return metadata.speakers.map(String);
+  return metadata?.speaker ? [String(metadata.speaker)] : [];
+});
+const selectedVoiceAssignments = computed<Record<string, string>>(() =>
+  Object.fromEntries(
+    Object.entries(selectedAsset.value?.voice_assignments || {}).map(([voice, assignment]) => [
+      voice,
+      assignment.display_name,
+    ]),
+  ),
+);
+const sourceScopeSummary = computed(() => {
+  const asset = selectedAsset.value;
+  if (!asset || asset.media_kind === "audio" || Number(asset.page_count || 0) < 2) return "";
+  const scoped = sourcePageScope.value.length > 0;
+  const label = scoped
+    ? i18n.t("pdf_corpus.source_scope_selected_label", "Pages selected")
+    : i18n.t("pdf_corpus.source_scope_all_label", "All pages");
+  const count = scoped ? sourcePageScope.value.length : asset.page_count;
+  return `${label}: ${count}`;
+});
 const selectedStructureSummary = computed(() => {
   const plan = selectedAsset.value?.document_layout;
-  if (!plan) return i18n.t("pdf_corpus.readiness.structure_unset");
   const parts: string[] = [];
+  if (sourceScopeSummary.value) parts.push(sourceScopeSummary.value);
+  if (!plan) {
+    return (
+      parts.join(" · ") ||
+      i18n.t("pdf_corpus.readiness.structure_source_interpretation", "Source interpretation")
+    );
+  }
   parts.push(
     plan.page_layout === "two_up"
       ? i18n.t("pdf_corpus.two_up_layout")
@@ -2753,8 +2812,28 @@ defineExpose({
             :filename="selectedAsset.filename"
             :page-count="selectedAsset.page_count"
             :block-count="selectedAsset.block_count"
+            :audio-provenance="selectedAsset.audio_provenance"
+            :speakers="selectedAudioSpeakers"
+            :voice-assignments="selectedVoiceAssignments"
+            :voice-assignments-busy="busy === 'voice-assignments'"
+            :disabled="busy !== ''"
+            @save-voice-assignments="saveVoiceAssignments"
           />
         </template>
+        <SourcePageScopeControl
+          v-if="
+            selectedAsset &&
+            selectedAsset.media_kind !== 'audio' &&
+            Number(selectedAsset.page_count || 0) > 1
+          "
+          v-model="sourcePageScope"
+          :page-count="selectedAsset.page_count"
+          :page-detection="selectedAsset.page_number_detection"
+          :disabled="
+            busy !== '' || Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)
+          "
+          @validity="sourcePageScopeValid = $event"
+        />
         <CorpusTopologyPolicyControl
           v-if="selectedAsset && selectedAsset.media_kind !== 'audio'"
           v-model="topologyPolicy"
@@ -2816,24 +2895,7 @@ defineExpose({
           :schema-choices="schemaChoices"
           :chosen-schema="chosenSchema"
           :run-guidance-fields="runGuidanceFields"
-          :media-kind="selectedAsset?.media_kind"
-          :speakers="
-            selectedAsset?.initial_metadata?.speakers ||
-            (selectedAsset?.initial_metadata?.speaker
-              ? [selectedAsset.initial_metadata.speaker]
-              : [])
-          "
-          :voice-assignments="
-            Object.fromEntries(
-              Object.entries(selectedAsset?.voice_assignments || {}).map(([voice, assignment]) => [
-                voice,
-                assignment.display_name,
-              ]),
-            )
-          "
-          :voice-assignments-busy="busy === 'voice-assignments'"
           :disabled="busy !== ''"
-          @save-voice-assignments="saveVoiceAssignments"
           @manage-schemas="schemaEditorOpen = true"
         />
         <div class="setup-continue">
