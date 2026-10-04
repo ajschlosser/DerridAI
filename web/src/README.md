@@ -101,6 +101,14 @@ Do not use frontend state as scholarly authority. Canonical corpus, review, asse
 
 Compatibility imports are not ownership signals. Trace the call to the focused module before deciding where new behavior belongs.
 
+## Readability traps
+
+- Avoid nested ternaries for workflow state. Named computed values and early returns are easier to inspect and produce better error diffs.
+- Name temporal/state-reconstruction variables by their role (`previousValue`, `cutoffTime`, `selectedVersion`) rather than `v`, `d`, or `x`.
+- Explain deterministic ordering, stale-response rejection, optimistic reconciliation, and non-reactive compatibility state with comments because those invariants are not visible from the syntax.
+- Do not add new `Loose`/`any` boundaries when a stable local interface can describe the data. Existing compatibility modules may remain broad until their callers migrate.
+- User-facing copy must go through i18n, and a reusable visual state should normally be represented in Storybook as well as tested at the appropriate domain/component layer.
+
 ## Critical local maps
 
 - [Domain helpers](domain/README.md)
