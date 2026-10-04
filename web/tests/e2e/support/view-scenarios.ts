@@ -83,8 +83,8 @@ export const scenarios: Scenario[] = [
   // Languages
   {
     id: "languages-default",
-    path: "/languages",
-    ready: (p) => p.getByRole("heading", { name: /Languages & internationalization/ }),
+    path: "/locale",
+    ready: (p) => p.getByRole("heading", { name: /Locale/ }),
   },
   {
     id: "languages-policy-needed",
