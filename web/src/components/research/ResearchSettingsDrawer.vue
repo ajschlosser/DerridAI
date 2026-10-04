@@ -44,7 +44,7 @@ const props = withDefaults(
     model: string;
     models: string[];
     metadataFields: string[];
-    works: string[];
+    works?: string[];
     researcher: boolean;
     pipelineOptions?: PipelineDefinition[];
     pipelineStrategies?: PipelineStrategy[];
@@ -52,6 +52,7 @@ const props = withDefaults(
     pipelineOverrideAllowed?: boolean;
   }>(),
   {
+    works: () => [],
     pipelineOptions: () => [],
     pipelineStrategies: () => [],
     pipelineAssignment: null,
