@@ -249,11 +249,11 @@ function confirmPendingFile() {
   if (!file) return;
   const kind = pendingMediaKind.value;
   pendingFile.value = null;
-  emit(
-    "file",
-    file,
-    kind === "audio" ? { audioDiarization: audioDiarization.value } : undefined,
-  );
+  if (kind === "audio") {
+    emit("file", file, { audioDiarization: audioDiarization.value });
+    return;
+  }
+  emit("file", file);
 }
 
 function chooseDifferentFile() {
