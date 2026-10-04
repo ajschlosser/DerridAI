@@ -372,6 +372,10 @@ def analyze_document(
         "status": "skipped" if profile == "none" else "queued",
         "profile": profile,
         "selected_provider": selected_provider,
+        "configuration": {
+            "include_events": include_events,
+            "language": str(language or ""),
+        },
         "source_document_id": source_document_id,
         "text_sha256": _sha256(text),
         "text_length": len(text),
