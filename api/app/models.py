@@ -454,6 +454,9 @@ class RAGRunRequest(BaseModel):
     # Empty is valid only for selected-evidence-only runs. The pipeline enforces
     # a collection when vector retrieval is enabled.
     source_collection: str = ""
+    # Empty means all works in the selected collection. Work titles are exact
+    # scholarly scope values and are persisted with the run for reproducibility.
+    work_filter: list[str] = Field(default_factory=list, max_length=500)
     locales: list[LanguageCode] = Field(default_factory=_default_locales)
     search_types: list[SearchType] = Field(default_factory=_default_search_types)
     k: int = Field(default=64, ge=1, le=500)
@@ -498,6 +501,26 @@ class RAGRunRequest(BaseModel):
     auto_grade_api_key: str | None = None
     auto_grade_provider_profile_id: str | None = None
     auto_grade_generation: OllamaTouchupOptions | None = None
+
+    @field_validator("work_filter", mode="before")
+    @classmethod
+    def clean_work_filter(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("Research work_filter must be a list.")
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            work = str(raw or "").strip()
+            if not work:
+                continue
+            if len(work) > 500:
+                raise ValueError("Research work titles must be 500 characters or fewer.")
+            if work not in seen:
+                cleaned.append(work)
+                seen.add(work)
+        return cleaned
 
 
 class PdfLlmRequest(BaseModel):
