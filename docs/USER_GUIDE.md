@@ -723,9 +723,16 @@ streams its text members into a staging `gutenberg.sqlite3.next` database, verif
 the installed row count, and atomically replaces the active
 `/data/gutenberg/gutenberg.sqlite3`. The transport ZIP is deleted after a
 successful install, so readiness depends on the verified database rather than a
-large archive remaining on disk. A paused or failed download resumes from the
-bytes already present. During a replacement install, the previous verified
-database remains usable until the new one is ready.
+large archive remaining on disk. The multi-gigabyte archive is fetched in
+bounded HTTP byte ranges in a background worker. Connection resets, timeouts,
+rate limits, and temporary server failures retry automatically with capped
+backoff, preserving every verified range already on disk. Manual pause/resume
+also continues from the durable byte offset. ETag or Last-Modified validators
+guard resumed ranges; if Gutenberg replaces the weekly archive while it is being
+downloaded, DerridAI discards only the disposable partial ZIP and restarts that
+transport without replacing the previously verified local database. During a
+replacement install, the previous verified database remains usable until the new
+one is ready.
 
 Wikisource search covers one language edition at a time (English, French,
 German, and others; French is preselected in the French interface). A work's
