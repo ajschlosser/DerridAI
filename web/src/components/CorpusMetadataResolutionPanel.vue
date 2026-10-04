@@ -440,6 +440,14 @@ const llmSuggestionBatch = computed(() => {
 });
 const llmSuggestions = computed(() => llmSuggestionBatch.value.changes);
 const llmSuggestionCount = computed(() => Object.keys(llmSuggestions.value).length);
+function resolveAllSuggestions() {
+  emit(
+    "resolveMany",
+    llmSuggestionBatch.value.changes,
+    llmSuggestionBatch.value.confirmedAbsentFields,
+  );
+  decided("");
+}
 type MemoryHint = { value: unknown; similarity: number; support: number; absence?: boolean };
 /** Less certain values earlier reviews attached to matching source spans (never pre-filled). */
 /** How many reviewed examples the model's prompt carried for this field (0 = the model worked alone). */
@@ -700,14 +708,7 @@ function displayValue(field: string) {
           type="button"
           class="btn small primary"
           :disabled="busy || batchSaving"
-          @click="
-            emit(
-              'resolveMany',
-              llmSuggestionBatch.changes,
-              llmSuggestionBatch.confirmedAbsentFields,
-            );
-            decided('');
-          "
+          @click="resolveAllSuggestions"
         >
           {{ i18n.t("pdf_corpus.accept_all_suggestions") }}
         </button>
