@@ -249,6 +249,49 @@ def test_human_requeue_places_record_at_front_of_active_enrichment_queue(tmp_pat
     assert updated["metadata_review_feedback"][-1]["source"] == "human_requeue"
 
 
+def test_text_edit_during_active_enrichment_forces_fresh_llm_pass(tmp_path: Path):
+    """A queued Record edited after scheduling is reprocessed from its reviewed text."""
+    repo, build = install_review_build(
+        tmp_path,
+        {
+            "text": "Original queued text.",
+            "metadata_enrichment_state": "queued",
+            "metadata_stage_status": {
+                "discourse": "queued",
+                "quotation": "queued",
+                "indexing": "queued",
+            },
+        },
+    )
+    active = repo.get_build(build["build_id"])
+    active.update(
+        {
+            "status": "running",
+            "stage": "enriching",
+            "metadata_priority_record_ids": [],
+        }
+    )
+    repo.save_build(active)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+
+    updated = manager.patch_record_text(
+        build["build_id"],
+        "r1",
+        "Reviewed text that the model must see.",
+        expected_revision=1,
+    )
+
+    assert updated["text"] == "Reviewed text that the model must see."
+    assert updated["metadata_requeue_requested"] is True
+    assert updated["metadata_enrichment_state"] == "stale"
+    assert updated["metadata_stage_status"] == {
+        "discourse": "queued",
+        "quotation": "queued",
+        "indexing": "queued",
+    }
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"][0] == "r1"
+
+
 def test_dismissing_touchup_proposal_preserves_source_and_reviewed_text(tmp_path: Path):
     repo, build = install_review_build(
         tmp_path,
