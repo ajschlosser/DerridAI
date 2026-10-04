@@ -94,13 +94,40 @@ def source_providers() -> dict[str, Any]:
 
 @router.get("/api/corpus/authors/search")
 def search_authors(q: str = Query(min_length=1, max_length=200), language: str = Query(default="en", pattern=r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"), limit: int = Query(default=10, ge=1, le=20)) -> dict[str, Any]:
+    from ..gutenberg_catalogue import gutenberg_offline
     from ..source_wikidata import search_authors as wikidata_search
 
+    status = gutenberg_offline.status()
+    local = gutenberg_offline.search_authors(q, limit) if status.get("search_ready") else []
+
+    # A completed local installation is a deliberately offline author resolver:
+    # do not make a Wikidata request merely to replace an identity we can resolve
+    # deterministically from the installed catalogue.
+    if status.get("ready") and local:
+        return {"items": local, "source": "local_gutenberg"}
+
     try:
-        people = wikidata_search(ProviderHttp("wikimedia"), q, language=language, limit=limit)
+        remote = [person.to_dict() for person in wikidata_search(
+            ProviderHttp("wikimedia"), q, language=language, limit=limit
+        )]
     except CaptureError as exc:
+        if local:
+            return {"items": local, "source": "local_gutenberg"}
         raise _capture_error(exc) from exc
-    return {"items": [person.to_dict() for person in people]}
+
+    seen = {
+        (str(item.get("label") or "").casefold(), item.get("birth_year"), item.get("death_year"))
+        for item in remote
+    }
+    merged = list(remote)
+    for item in local:
+        key = (str(item.get("label") or "").casefold(), item.get("birth_year"), item.get("death_year"))
+        if key not in seen:
+            merged.append(item)
+            seen.add(key)
+        if len(merged) >= limit:
+            break
+    return {"items": merged[:limit], "source": "wikidata_and_local" if local else "wikidata"}
 
 
 # --- Captures ---------------------------------------------------------------------------------
@@ -119,11 +146,20 @@ def _get_capture(capture_id: str) -> dict[str, Any]:
 
 @router.post("/api/corpus/captures")
 def create_capture(body: CaptureCreate, request: Request) -> dict[str, Any]:
+    from ..gutenberg_catalogue import gutenberg_offline
     from ..source_wikidata import resolve_author
 
     try:
-        # The person is resolved server-side from the chosen QID; the browser never supplies identity data.
-        author = resolve_author(ProviderHttp("wikimedia"), body.wikidata_qid, language=body.ui_language)
+        # Both identity forms are resolved server-side. A local Gutenberg token
+        # contains comparison keys only; resolve_author verifies that exact
+        # contributor identity exists in the installed catalogue.
+        if body.wikidata_qid.startswith("gutenberg:"):
+            try:
+                author = gutenberg_offline.resolve_author(body.wikidata_qid)
+            except ValueError as exc:
+                raise CaptureError(CaptureErrorCode.AUTHOR_NOT_FOUND, str(exc)) from exc
+        else:
+            author = resolve_author(ProviderHttp("wikimedia"), body.wikidata_qid, language=body.ui_language)
         options = CaptureOptions.from_dict(body.options.model_dump())
         options.validate_for_author(author)
         capture = capture_service.create(author, options)
