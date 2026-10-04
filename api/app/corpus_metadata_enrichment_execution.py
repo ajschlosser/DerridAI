@@ -789,14 +789,21 @@ class MetadataEnrichmentExecutionMixin:
 
         migrate_record_assertions(record, schema)
         cached_prefills: dict[str, Any] = {}
-        for field in schema.fields:
-            cached = adjudication_suggestions(
-                record_id=str(record.get("record_id") or ""),
-                text=source_text,
-                field=field.name,
-                cardinality="list" if field.type == "list" else "single",
-                schema_version=str(schema.schema_version or ""),
+        lookup_count = 0
+        lookup_keys: set[tuple[str, str, str]] = set()
+
+        def lookup_adjudication(field: Any, version: str) -> dict[str, Any] | None:
+            nonlocal lookup_count
+            cardinality = "list" if field.type == "list" else "single"
+            lookup_count += 1
+            lookup_keys.add((field.name, cardinality, version))
+            return adjudication_suggestions(
+                record_id=str(record.get("record_id") or ""), text=source_text,
+                field=field.name, cardinality=cardinality, schema_version=version,
             )
+
+        for field in schema.fields:
+            cached = lookup_adjudication(field, str(schema.schema_version or ""))
             if isinstance(cached, dict) and cached.get("latest_value") not in (None, "", []):
                 compatible, conflict = normalize_legacy_cardinality(field, cached["latest_value"])
                 if not conflict:
@@ -930,13 +937,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 prompt = prompt + "\n\n" + guidance_prompt
             remembered: dict[str, Any] = {}
             for field in model_fields:
-                cached = adjudication_suggestions(
-                    record_id=str(record.get("record_id") or ""),
-                    text=source_text,
-                    field=field.name,
-                    cardinality="list" if field.type == "list" else "single",
-                    schema_version=str(request.get("schema_version") or ""),
-                )
+                cached = lookup_adjudication(field, str(request.get("schema_version") or ""))
                 values = cached.get("prior_values") if isinstance(cached, dict) else None
                 if isinstance(values, list) and values:
                     compatible_values: list[Any] = []
@@ -1017,6 +1018,11 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 }
                 if stage_callback:
                     stage_callback(record, skipped_family, "skipped", reason)
+        record["metadata_candidate_workload"] = {
+            "adjudication_lookups": lookup_count,
+            "distinct_adjudication_keys": len(lookup_keys),
+            "duplicate_adjudication_lookups": lookup_count - len(lookup_keys),
+        }
         return tasks, source_ids, obvious_apparatus
 
 
@@ -1505,6 +1511,9 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     recovery_max_output_tokens=recovery_max_tokens,
                     residual_contradiction_fields=residual_contradictions,
                     model_invocations=model_invocations,
+                    provider_input_chars=int(model_call_counter.get("provider_input_chars") or 0),
+                    provider_output_chars=int(model_call_counter.get("provider_output_chars") or 0),
+                    provider_responses=int(model_call_counter.get("provider_responses") or 0),
                     **experiment.context(
                         request,
                         model=str(active_request.get("model") or ""),
@@ -1560,6 +1569,9 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     recovery_max_output_tokens=recovery_max_tokens,
                     residual_contradiction_fields=residual_contradictions,
                     model_invocations=model_invocations,
+                    provider_input_chars=int(model_call_counter.get("provider_input_chars") or 0),
+                    provider_output_chars=int(model_call_counter.get("provider_output_chars") or 0),
+                    provider_responses=int(model_call_counter.get("provider_responses") or 0),
                     **experiment.context(
                         request,
                         model=str(active_request.get("model") or ""),

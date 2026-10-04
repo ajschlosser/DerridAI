@@ -3660,6 +3660,10 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     structured_counter["attempts"] = (
                         int(structured_counter.get("attempts") or 0) + 1
                     )
+                    structured_counter["provider_input_chars"] = (
+                        int(structured_counter.get("provider_input_chars") or 0)
+                        + len(context.prompt)
+                    )
                 if build_id and self._cancelled(build_id):
                     raise InterruptedError("Corpus build cancelled")
                 if build_id:
@@ -3781,6 +3785,15 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 return parsed.model_dump(mode="json")
 
             def attempt_finished(outcome: StructuredAttemptOutcome[dict[str, Any]]) -> None:
+                structured_counter = request.get("_structured_call_counter")
+                if isinstance(structured_counter, dict) and outcome.raw_response is not None:
+                    structured_counter["provider_output_chars"] = (
+                        int(structured_counter.get("provider_output_chars") or 0)
+                        + len(outcome.raw_response)
+                    )
+                    structured_counter["provider_responses"] = (
+                        int(structured_counter.get("provider_responses") or 0) + 1
+                    )
                 if not build_id:
                     return
                 _, call_id = attempt_state.pop(outcome.context.attempt, (None, ""))

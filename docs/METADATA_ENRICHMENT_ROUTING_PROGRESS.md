@@ -31,7 +31,7 @@ This is the authoritative resume point for the revised Pipeline Studio candidate
 | Consumer terminal guarantees                            | Complete | Compile-time type/trait checks; run-time terminal-output enforcement; `any` cannot satisfy a concrete final contract      |
 | Historical enrichment migration to generic executor     | Complete | `9381c191`; generic scheduling with historical provider/ledger/ownership/concurrency parity                               |
 | Safe parallel scheduling                                | Complete | `394745cf`; bounded server opt-in, stable fan-in/traces, shared capacity and cancellation coverage                        |
-| Baseline benchmark and instrumentation                  | Pending  | Original baseline: `94ca23d9`; no real-provider benchmark run                                                             |
+| Baseline benchmark and instrumentation                  | Partial  | Isolated runner and character/lookup counters implemented; real-provider case/model selection remains pending             |
 | Candidate packet, collection, aggregation, invalidation | Complete | `fcf4ab99`; server-only collection foundation; production registration and routing remain disabled                        |
 | Current-record support and observe-only router          | Pending  | Must precede activation of RESOLVE/VERIFY                                                                                 |
 | RESOLVE, VERIFY, scoped INFER and proposal fan-in       | Pending  | No new routing behavior enabled                                                                                           |
@@ -108,3 +108,27 @@ These remain unresolved and outside this checkpoint. Fix them separately before 
 - No real-provider benchmark, latency improvement, calibrated resolution, current-Record support, reviewer-quality improvement or merge-readiness claim is made.
 
 - Merged current master `1eb7a14b` at `8248afec` before this checkpoint. Prettier checked every changed supported file; the initial Windows line-ending notices were normalized without semantic changes. The PR is a draft because the broader regression gate remains red.
+
+## Paused checkpoint: baseline runner and instrumentation (`33beed23`)
+
+User requested a pause at this checkpoint to continue in a new session. At that pause, candidate packet/collection work had not begun; the later foundation checkpoint above now supplies server-only collection contracts and handlers. The baseline phase remains partial: no real-provider timing or reviewer-quality result has been collected. The pending question is which local benchmark corpus and provider/model to use.
+
+- Before edits: 59 baseline tests passed. After edits: 208 focused tests passed with 6 existing skips; targeted mypy passed for all three changed backend modules. Full backend mypy passed for 266 files. Full backend regression finished with 2352 passed, 28 skipped and 5 failures. Four match the previously documented baseline failures; the fifth is `test_review_queue_projection.py::test_selected_reads_with_concurrent_canonical_writes[wal-2]`, not investigated in this paused checkpoint. Frontend lint, application/test typechecks and production build passed; dependency-selected frontend unit tests selected no files. Full preflight remains red. Remote checkpoint pushes use the documented preflight bypass; they do not indicate merge readiness.
+- Provider attempt counters now measure actual prompt characters and raw response characters, including repair prompts, retries and malformed output. Counts are added to existing family CALL ledger events. Raw text and credentials are not added to counters; actual provider token usage stays unavailable.
+- `metadata_candidate_workload` records exact lookup count, distinct keys and duplicate count. No lookup behavior changed. Regression coverage confirms preparation performs two same-key lookups per schema field even for families subsequently skipped. The collection checkpoint must replace those repeated reads with one run-local snapshot per exact key.
+- Added `api/app/metadata_enrichment_benchmark.py` and `scripts/benchmark_metadata_enrichment.py`. The CLI isolates system/auth/Chroma stores before importing application configuration and uses a temporary corpus repository. It invokes the historical `corpus.metadata_enrichment.current@2` through the existing enrichment/reconciliation path, starts each repeat with a fresh record copy, persists local JSON and emits only hashed input identity and measurements.
+- This first benchmark profile disables cross-build/reviewer/rejection memory. It measures direct enrichment plus local JSON persistence, excluding job admission, memory retrieval and reviewer quality. It reports failed family calls explicitly. It cannot support a production end-to-end latency or 33% improvement claim.
+- Real-provider execution has not run. The scripted-provider smoke test exercises the runner but is not a latency baseline. Original reference commit remains `94ca23d9`; the immediate pre-instrumentation checkpoint is `a7d6d553`.
+
+### Resume command and private input
+
+Prepare a private UTF-8 case JSON with `case_id`, optional `version`, exact `schema` snapshot, `build` (manifest/source digest), `records` (IDs/revisions/text/source bindings), and `request` (provider/model/generation/families/concurrency settings). Use researcher-approved source text and an existing provider profile; credentials may be supplied privately in the case but are excluded from the report. Do not commit the private case or normalized temporary records.
+
+```powershell
+../venv/Scripts/python.exe scripts/benchmark_metadata_enrichment.py --case ../metadata-benchmark-case.json --output ../metadata-baseline-report.json --baseline-commit a7d6d553 --repeats 3
+```
+
+Record the chosen corpus/configuration and the report summary here. For A/B runs, preserve the fixture input fingerprint, memory profile, provider configuration and environment. Then implement candidate sources, semantic identity aggregation, corrections/absence, fingerprint invalidation and named-port collection handlers. Preserve human ownership and historical prompt behavior while consolidating exact lookups. Do not enable adaptive routing in that checkpoint.
+
+Concurrent integration: preserved `33beed23` and `4ba99d92` baseline-runner/instrumentation commits. The existing production path still performs its historical exact-memory lookups; the new collector snapshots each requested exact key once, but production lookup consolidation is a follow-up integration step. Real-provider case/model selection remains pending alongside current-Record support and the observe-only router. No private benchmark case was selected or run in this chat.
+`nPost-integration validation: 178 focused tests passed, including the concurrent benchmark-runner tests; full backend Ruff and full mypy passed for 267 source files. The earlier full regression and its baseline reproduction preceded this integration; no green full-regression claim is made for the merged head.
