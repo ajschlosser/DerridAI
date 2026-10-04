@@ -82,3 +82,9 @@ When adding a strategy, define its typed inputs/outputs, complexity, concurrency
 For readability, name stages, ports, bindings, and resolved strategies by their role rather than by position in a list. Wiring and fallback algorithms should expose their phases—validation, resolution, execution, trace projection—with short comments where ordering matters. Avoid a generic “pipeline data” dictionary when an existing contract type can state the port semantics.
 
 Common traps are changing a registry entry without its version/definition implications, adding a graph port that the purpose adapter never consumes, logging source text or secrets into a trace, and treating comparison/benchmark output as persisted scholarly state. A compatibility pipeline that cannot satisfy current provenance/support gates may remain inspectable without being executable.
+
+### Generic graph execution foundation
+
+`graph_execution.py` runs server-owned handlers through `resolve_wiring` without imposing a strategy-name sequence. It supports named outputs, repeated strategy instances, deterministic fan-in ordering, selected fallback edges, and skipping empty required branches. Artifacts remain run-local; operational telemetry contains configuration hashes and counts. Handlers retain responsibility for payload validation and evidence semantics.
+
+This module is a migration foundation. Existing feature adapters and production assignments remain in use. Scheduling is serial; semantic artifact traits, concurrency declarations, and purpose-terminal guarantee checks must be added before activating the adaptive metadata graph. See `docs/PIPELINE_MIGRATION_HANDOFF.md` for the current checkpoint and remaining work.

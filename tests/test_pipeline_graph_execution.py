@@ -1,0 +1,397 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""Behavioral boundaries for the generic graph runtime before adapter migration."""
+
+from __future__ import annotations
+
+import pytest
+from app.pipelines.graph_execution import (
+    GraphExecutionError,
+    GraphExecutor,
+    StageResult,
+)
+from app.pipelines.models import PipelineDefinition, PortSpec, StrategySpec
+from app.pipelines.purposes import PipelinePurposeSpec, RunInputSpec
+from app.pipelines.registry import StrategyRegistry
+
+
+def _strategy(name, *, outputs=("items",), multiple=False):
+    return StrategySpec(
+        strategy_id=name,
+        family="selection",
+        scholarly_effect="advisory",
+        label=name,
+        description=name,
+        input_type="candidate_set",
+        output_type="candidate_set",
+        inputs=[PortSpec(name="items", data_type="candidate_set", multiple=multiple)],
+        outputs=[
+            PortSpec(name=output, data_type="candidate_set") for output in outputs
+        ],
+        config_schema={
+            "type": "object",
+            "properties": {"offset": {"type": "integer"}},
+            "additionalProperties": False,
+        },
+    )
+
+
+PURPOSE = PipelinePurposeSpec(
+    purpose_id="test_graph",
+    category="metadata",
+    label="Test",
+    description="Test",
+    consuming_feature="test",
+    consumer="test",
+    input_semantics="test",
+    output_semantics="test",
+    authority_semantics="Advisory",
+    output_type="candidate_set",
+    run_inputs=[RunInputSpec(name="items", data_type="candidate_set")],
+)
+
+
+def _executor(stages, handlers, *, specs=None, entries=("start",)):
+    pipeline = PipelineDefinition(
+        pipeline_id="test.graph",
+        name="Test graph",
+        purpose="test_graph",
+        entry_stage_ids=list(entries),
+        stages=stages,
+    )
+    registry = StrategyRegistry(specs or [_strategy("transform")])
+    return GraphExecutor(
+        pipeline, registry=registry, purpose=PURPOSE, handlers=handlers
+    )
+
+
+def test_repeated_strategy_uses_each_config_and_resolved_explicit_output():
+    calls = []
+
+    def transform(stage, inputs):
+        calls.append(stage.id)
+        return StageResult(
+            {
+                "items": [
+                    item + stage.config.get("offset", 0) for item in inputs["items"]
+                ]
+            }
+        )
+
+    executor = _executor(
+        [
+            {
+                "id": "last",
+                "strategy": "transform",
+                "config": {"offset": 10},
+                "inputs": {
+                    "items": [{"source": "stage", "stage": "start", "output": "items"}]
+                },
+            },
+            {
+                "id": "middle",
+                "strategy": "transform",
+                "config": {"offset": 100},
+                "next": ["last"],
+            },
+            {
+                "id": "start",
+                "strategy": "transform",
+                "config": {"offset": 1},
+                "next": ["middle"],
+            },
+        ],
+        {"transform": transform},
+    )
+    result = executor.run({"items": [1]})
+    assert calls == ["start", "middle", "last"]
+    assert result.outputs["last"]["items"] == [
+        12
+    ]  # Binding skips middle's transformed payload.
+    assert [trace.stage_id for trace in result.stages] == ["last", "middle", "start"]
+    assert len({trace.parameters["config_hash"] for trace in result.stages}) == 3
+
+
+def test_named_branches_skip_empty_model_work_and_fan_in_survivors():
+    calls = []
+
+    def route(stage, inputs):
+        return StageResult({"resolved": inputs["items"], "verify": [], "infer": []})
+
+    def model(stage, inputs):
+        pytest.fail("Empty verification/inference branches must not call a provider")
+
+    def merge(stage, inputs):
+        calls.append(inputs["items"])
+        return StageResult(
+            {"items": [item for branch in inputs["items"] for item in branch]}
+        )
+
+    stages = [
+        {"id": "start", "strategy": "route", "next": ["verify", "infer", "merge"]}
+    ]
+    for branch in ("verify", "infer"):
+        stages.append(
+            {
+                "id": branch,
+                "strategy": "model",
+                "next": ["merge"],
+                "inputs": {
+                    "items": [{"source": "stage", "stage": "start", "output": branch}]
+                },
+            }
+        )
+    stages.append(
+        {
+            "id": "merge",
+            "strategy": "merge",
+            "inputs": {
+                "items": [
+                    {"source": "stage", "stage": "start", "output": "resolved"},
+                    {"source": "stage", "stage": "verify", "output": "items"},
+                    {"source": "stage", "stage": "infer", "output": "items"},
+                ]
+            },
+        }
+    )
+    executor = _executor(
+        stages,
+        {"route": route, "model": model, "merge": merge},
+        specs=[
+            _strategy("route", outputs=("resolved", "verify", "infer")),
+            _strategy("model"),
+            _strategy("merge", multiple=True),
+        ],
+    )
+    result = executor.run({"items": ["evidence-bound proposal"]})
+    assert calls == [[["evidence-bound proposal"]]]
+    assert result.outputs["merge"]["items"] == ["evidence-bound proposal"]
+    assert [trace.status for trace in result.stages] == [
+        "completed",
+        "skipped",
+        "skipped",
+        "completed",
+    ]
+
+
+@pytest.mark.parametrize(
+    "edge,failure,status",
+    [
+        ("on_unavailable", LookupError("SECRET SOURCE"), "unavailable"),
+        ("on_timeout", TimeoutError("SECRET SOURCE"), "timed_out"),
+        ("on_error", ValueError("SECRET SOURCE"), "failed"),
+        ("on_empty", None, "completed"),
+    ],
+)
+def test_selected_fallback_receives_original_input_and_other_paths_stay_idle(
+    edge, failure, status
+):
+    calls = []
+
+    def handler(stage, inputs):
+        calls.append((stage.id, inputs["items"]))
+        if stage.id == "start":
+            if failure is not None:
+                raise failure
+            return StageResult({"items": []})
+        return StageResult({"items": inputs["items"]})
+
+    stages = [
+        {"id": "start", "strategy": "transform", "next": ["normal"], edge: "fallback"},
+        {"id": "normal", "strategy": "transform"},
+        {"id": "fallback", "strategy": "transform"},
+    ]
+    result = _executor(stages, {"transform": handler}).run(
+        {"items": ["CURRENT RECORD"]}
+    )
+    assert calls == [("start", ["CURRENT RECORD"]), ("fallback", ["CURRENT RECORD"])]
+    assert result.stages[0].status == status
+    assert result.stages[0].fallback_reason == edge
+    assert result.stages[1].status == "skipped"
+    assert "SECRET SOURCE" not in repr([trace.model_dump() for trace in result.stages])
+
+
+def test_fallback_target_also_on_next_forwards_input_when_fallback_selected():
+    def handler(stage, inputs):
+        if stage.id == "start":
+            raise TimeoutError()
+        return StageResult({"items": inputs["items"]})
+
+    result = _executor(
+        [
+            {
+                "id": "start",
+                "strategy": "transform",
+                "next": ["retry"],
+                "on_timeout": "retry",
+            },
+            {"id": "retry", "strategy": "transform"},
+        ],
+        {"transform": handler},
+    ).run({"items": [7]})
+    assert result.outputs["retry"]["items"] == [7]
+
+
+def test_failure_without_edge_retains_safe_partial_trace_and_does_not_run_next():
+    def fail(stage, inputs):
+        raise ValueError("private model response")
+
+    executor = _executor(
+        [
+            {"id": "start", "strategy": "transform", "next": ["next"]},
+            {"id": "next", "strategy": "transform"},
+        ],
+        {"transform": fail},
+    )
+    with pytest.raises(GraphExecutionError) as caught:
+        executor.run({"items": [1]})
+    assert caught.value.reason == "on_error"
+    assert caught.value.result.stages[0].status == "failed"
+    assert "private model response" not in str(caught.value)
+
+
+def test_cancellation_propagates_without_provider_fallback():
+    def cancel(stage, inputs):
+        raise InterruptedError("cancelled")
+
+    executor = _executor(
+        [
+            {"id": "start", "strategy": "transform", "on_error": "fallback"},
+            {"id": "fallback", "strategy": "transform"},
+        ],
+        {"transform": cancel},
+    )
+    with pytest.raises(InterruptedError):
+        executor.run({"items": [1]})
+
+
+def test_missing_named_output_is_a_visible_handler_contract_failure():
+    executor = _executor(
+        [
+            {"id": "start", "strategy": "route"},
+        ],
+        {"route": lambda stage, inputs: StageResult({"resolved": [1]})},
+        specs=[
+            _strategy("route", outputs=("resolved", "verify", "infer")),
+        ],
+    )
+    with pytest.raises(GraphExecutionError, match="on_error"):
+        executor.run({"items": [1]})
+
+
+@pytest.mark.parametrize("value", [0, False])
+def test_zero_and_false_are_valid_artifacts(value):
+    executor = _executor(
+        [
+            {"id": "start", "strategy": "transform", "next": ["last"]},
+            {"id": "last", "strategy": "transform"},
+        ],
+        {"transform": lambda stage, inputs: StageResult({"items": inputs["items"]})},
+    )
+    assert executor.run({"items": value}).outputs["last"]["items"] == value
+
+
+def test_compilation_snapshots_definition_and_rejects_missing_handlers_and_bad_config():
+    executor = _executor(
+        [{"id": "start", "strategy": "transform", "config": {"offset": 2}}],
+        {
+            "transform": lambda stage, inputs: StageResult(
+                {"items": [stage.config["offset"]]}
+            )
+        },
+    )
+    assert executor.run({"items": [1]}).outputs["start"]["items"] == [2]
+    with pytest.raises(ValueError, match="No server handler"):
+        _executor([{"id": "start", "strategy": "transform"}], {})
+    with pytest.raises(ValueError):
+        _executor(
+            [{"id": "start", "strategy": "transform", "config": {"offset": "bad"}}],
+            {"transform": lambda stage, inputs: StageResult({"items": []})},
+        )
+
+
+def test_cycle_and_missing_run_input_are_rejected():
+    handler = {
+        "transform": lambda stage, inputs: StageResult({"items": inputs["items"]})
+    }
+    with pytest.raises(ValueError, match="cycle"):
+        _executor(
+            [
+                {"id": "start", "strategy": "transform", "next": ["last"]},
+                {"id": "last", "strategy": "transform", "next": ["start"]},
+            ],
+            handler,
+        )
+    executor = _executor([{"id": "start", "strategy": "transform"}], handler)
+    with pytest.raises(GraphExecutionError, match="missing_run_input"):
+        executor.run({})
+
+
+@pytest.mark.parametrize("version,attempts", [(1, 2), (2, 1)])
+@pytest.mark.parametrize("primary_fails", [False, True])
+def test_historical_metadata_builtins_keep_attempt_budgets_and_provider_fallback(
+    version, attempts, primary_fails
+):
+    from app.pipelines.defaults import built_in_pipeline
+    from app.pipelines.purposes import purpose_registry
+    from app.pipelines.registry import strategy_registry
+
+    calls = []
+
+    def invoke(stage, inputs):
+        calls.append(
+            (stage.config["provider_role"], stage.config["attempts"], inputs["context"])
+        )
+        if primary_fails and stage.config["provider_role"] == "primary":
+            raise TimeoutError()
+        return StageResult(
+            {"answer": {"label": "proposal"}},
+            provider="fake",
+            model=stage.config["provider_role"],
+        )
+
+    executor = GraphExecutor(
+        built_in_pipeline("corpus.metadata_enrichment.current", version),
+        registry=strategy_registry,
+        purpose=purpose_registry.get("corpus_metadata_enrichment"),
+        handlers={"llm.structured_metadata": invoke},
+    )
+    result = executor.run(
+        {"context": {"record_id": "R1", "task": "schema-derived task"}}
+    )
+    assert len(calls) == (2 if primary_fails else 1)
+    assert calls[0][:2] == ("primary", attempts)
+    assert calls[-1][2] == calls[0][2]
+    assert sum(trace.output_count or 0 for trace in result.stages) == 1
+    assert result.stages[-1].status == ("completed" if primary_fails else "skipped")
+
+
+def test_multiple_fallback_port_does_not_add_an_extra_payload_layer():
+    def handler(stage, inputs):
+        if stage.id == "start":
+            raise TimeoutError()
+        return StageResult({"items": inputs["items"]})
+
+    result = _executor(
+        [
+            {"id": "start", "strategy": "transform", "on_timeout": "fallback"},
+            {"id": "fallback", "strategy": "transform"},
+        ],
+        {"transform": handler},
+        specs=[_strategy("transform", multiple=True)],
+    ).run({"items": [1, 2]})
+    assert result.outputs["fallback"]["items"] == [[1, 2]]
