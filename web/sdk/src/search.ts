@@ -60,14 +60,14 @@ function dedupeRecords(records: PublicationRecord[]): {
 }
 
 function tokens(value: unknown, locale: string): string[] {
-  const raw = (
-    String(value ?? "")
-      .toLocaleLowerCase(locale)
-      .match(/[\p{L}\p{N}’'_-]+/gu) ?? []
-  );
-  return raw
-    .map((token) => token.replace(/[’']s$/u, "").replace(/[’']$/u, ""))
-    .filter(Boolean);
+  const normalized = String(value ?? "").toLocaleLowerCase(locale);
+  const raw = normalized.match(/[\p{L}\p{N}’'_-]+/gu) ?? [];
+  const normalizedTokens: string[] = [];
+  for (const token of raw) {
+    const withoutPossessive = token.replace(/[’']s$/u, "").replace(/[’']$/u, "");
+    if (withoutPossessive) normalizedTokens.push(withoutPossessive);
+  }
+  return normalizedTokens;
 }
 
 function searchable(record: PublicationRecord): string {
