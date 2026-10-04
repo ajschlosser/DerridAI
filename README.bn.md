@@ -26,11 +26,11 @@ DerridAI একটি local-first, provenance-preserving গবেষণা প�
 
 DerridAI একই সঙ্গে **cELF 1.0 — Capta-Enriched Lexical Format**-এর মূল reference implementation। cELF হলো AI-assisted documentary research-এর জন্য provenance-preserving information architecture। DerridAI source identity, Record identity ও revision, metadata assertion, evidence, generated claim এবং support binding আলাদা ও auditযোগ্য রাখে; এগুলোকে একটি opaque vector store-এ সমতল করে না।
 
-বর্তমান সংস্করণ: **0.81.0 — Fall River** ([release notes](docs/notes/0.81.0.md))। Fall River-এর পর application version বাড়ানো হয়নি; এই README বর্তমান `master` branch-এর অবস্থা বর্ণনা করে, যার মধ্যে 0.81.0 tagged release-এর পরের কাজও রয়েছে।
+বর্তমান সংস্করণ: **0.82.0 — Gloucester** ([release notes](docs/notes/0.82.0.md))। এই README Gloucester release-এর বিবরণ দেয়।
 
 ## বর্তমান `master`
 
-বর্তমান branch 0.81.0 tag-এর পর উল্লেখযোগ্যভাবে এগিয়েছে, যদিও application version এখনও 0.81.0। নিচের সারাংশটি বর্তমান product-এর অবস্থা বর্ণনা করে; এটি নতুন release note নয়।
+নিচের সারাংশ Gloucester release-এর বিবরণ দেয়।
 
 - **Corpus Builder এখন progressive Setup → Build → Review → Publish workflow।** এতে bounded concurrent enrichment, explicit corpus topology ও Record-size নির্বাচন, resumable/revision-aware review, persistent Record-local review queue, publication blocker-এর focused remediation session, repeatable metadata group, audio speaker assignment এবং verified preparation চলাকালে safe text review রয়েছে।
 - **Metadata ও evidence processing কম model work করে কিন্তু শক্তিশালী semantics বজায় রাখে।** Deterministic/candidate-first routing, semantic identity ও value equivalence, support-validated evidence cascade v2, structured-completion repair/retry classification এবং incremental Metadata Memory reconciliation latency কমায়—retrieval relevance বা malformed output-কে evidence হিসেবে প্রতিষ্ঠা না করেই।

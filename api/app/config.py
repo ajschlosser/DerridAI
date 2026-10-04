@@ -21,8 +21,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-APP_VERSION = "0.81.0"
-APP_CODENAME = "Fall River"
+APP_VERSION = "0.82.0"
+APP_CODENAME = "Gloucester"
 
 
 _GIT_COMMIT_FILE = Path("/app/git-commit")
@@ -63,7 +63,7 @@ def app_version_label(
     commit: str = APP_GIT_COMMIT,
     codename: str = APP_CODENAME,
 ) -> str:
-    """UI/API release identity: ``0.81.0 - Fall River (abc1234)``."""
+    """UI/API release identity: ``0.82.0 - Gloucester (abc1234)``."""
     version = str(version or "").strip() or APP_VERSION
     codename = str(codename or "").strip()
     commit = str(commit or "").strip()
