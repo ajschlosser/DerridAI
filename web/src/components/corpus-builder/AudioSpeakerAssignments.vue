@@ -69,9 +69,7 @@ function saveSpeaker(speaker: string) {
   draft[speaker] = String(draft[speaker] || "").trim();
   emit(
     "save",
-    Object.fromEntries(
-      props.speakers.map((voice) => [voice, String(draft[voice] || "").trim()]),
-    ),
+    Object.fromEntries(props.speakers.map((voice) => [voice, String(draft[voice] || "").trim()])),
   );
 }
 </script>
