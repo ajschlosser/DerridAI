@@ -22,7 +22,7 @@ import { useRoute } from "vue-router";
 import { useI18nStore } from "../../stores/i18n";
 import { useSemanticMapStore } from "../../stores/semanticMap";
 import type { SemanticMapSource } from "../../domain/semanticMap";
-import * as runtime from "../../runtime/runtime.js";
+import { listSemanticMapSources } from "../../domain/semanticMapSources";
 import SemanticMapFrame from "./SemanticMapFrame.vue";
 
 const i18n = useI18nStore();
@@ -40,7 +40,7 @@ const showModal = computed(() => map.enabled && map.placement === "modal");
 
 function load() {
   try {
-    const data = runtime.listSemanticMapSources();
+    const data = listSemanticMapSources();
     sources.value = data?.records || [];
     focusId.value = data?.focusId || "";
   } catch {

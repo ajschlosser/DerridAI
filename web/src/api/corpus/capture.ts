@@ -56,11 +56,11 @@ export const corpusCaptureApi = {
     apiRequest<{ items: AuthorCandidate[] }>(
       `/api/corpus/authors/search${query({ q, language, limit })}`,
     ),
-  createCapture: (wikidataQid: string, options: CaptureOptions, uiLanguage = "en") =>
+  createCapture: (identityId: string, options: CaptureOptions, uiLanguage = "en") =>
     apiRequest<CorpusCapture>(CAPTURES, {
       method: "POST",
       body: JSON.stringify({
-        wikidata_qid: wikidataQid,
+        identity_id: identityId,
         options,
         start_discovery: true,
         ui_language: uiLanguage,

@@ -17,7 +17,7 @@
  */
 
 import type { SemanticMapSource } from "../domain/semanticMap";
-import * as runtime from "../runtime/runtime.js";
+import { listSemanticMapSources } from "../domain/semanticMapSources";
 
 export interface SemanticMapSourceSnapshot {
   records: SemanticMapSource[];
@@ -36,7 +36,7 @@ export interface SemanticMapService {
  */
 export const semanticMapService: SemanticMapService = {
   listSources() {
-    const result = runtime.listSemanticMapSources?.();
+    const result = listSemanticMapSources();
     return {
       records: Array.isArray(result?.records) ? result.records : [],
       focusId: String(result?.focusId || ""),

@@ -23,9 +23,8 @@ import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 
 /**
- * Find the person a capture is about. Results are people only (the API filters by Wikidata
- * "instance of human"), each with dates, description, QID and aliases, and the user always chooses:
- * a single result is never selected automatically.
+ * Find the person a capture is about. The API prefers the installed Gutenberg
+ * catalogue and falls back to Wikidata; the user always chooses a result.
  */
 const props = defineProps<{ modelValue: AuthorCandidate | null }>();
 const emit = defineEmits<{ "update:modelValue": [AuthorCandidate | null] }>();
@@ -53,6 +52,14 @@ async function search() {
   } finally {
     busy.value = false;
   }
+}
+
+function identity(person: AuthorCandidate) {
+  return person.identity_id || (person.wikidata_qid ? `wikidata:${person.wikidata_qid}` : "");
+}
+
+function isChosen(person: AuthorCandidate) {
+  return Boolean(props.modelValue && identity(props.modelValue) === identity(person));
 }
 
 function lifespan(person: AuthorCandidate) {
@@ -105,16 +112,17 @@ function lifespan(person: AuthorCandidate) {
       </p>
       <label
         v-for="person in results"
-        :key="person.wikidata_qid"
+        :key="identity(person)"
         class="ar-person"
-        :class="{ 'is-chosen': props.modelValue?.wikidata_qid === person.wikidata_qid }"
-        :data-qid="person.wikidata_qid"
+        :class="{ 'is-chosen': isChosen(person) }"
+        :data-identity="identity(person)"
+        :data-qid="person.wikidata_qid || undefined"
       >
         <input
           type="radio"
           :name="`${id}-person`"
-          :value="person.wikidata_qid"
-          :checked="props.modelValue?.wikidata_qid === person.wikidata_qid"
+          :value="identity(person)"
+          :checked="isChosen(person)"
           @change="emit('update:modelValue', person)"
         />
         <span class="ar-copy">
@@ -124,7 +132,10 @@ function lifespan(person: AuthorCandidate) {
           >
           <span v-if="person.description" class="ar-desc">{{ person.description }}</span>
           <small class="ar-meta">
-            <span>{{ i18n.tf("capture.author.qid", { qid: person.wikidata_qid }) }}</span>
+            <span v-if="person.wikidata_qid">{{
+              i18n.tf("capture.author.qid", { qid: person.wikidata_qid })
+            }}</span>
+            <span v-else>{{ i18n.t("capture.provider.gutenberg") }}</span>
             <span v-if="Object.keys(person.wikisource_sitelinks).length">
               ·
               {{

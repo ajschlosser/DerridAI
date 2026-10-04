@@ -18,6 +18,10 @@
 
 import { getCurrentScope, onScopeDispose, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import { recordsWorkspace } from "../domain/sharedRecordsWorkspace";
+import { closeFile as closeWorkspaceFile } from "../domain/sharedFileLifecycle";
+import { state } from "../domain/sharedUrlState";
+import { activateFile, searchByMetadata } from "../domain/workspaceActions";
 import { corpusState } from "../state/workspaceState";
 import type { RecordsCell, RecordsListSnapshot, RecordsRow } from "../types/records";
 import type { SubsetField, SubsetRequest, SubsetSource } from "../domain/recordSubsets";
@@ -42,7 +46,7 @@ export function useRecordsWorkspace() {
     });
 
   function load() {
-    const next = runtime.getRecordsListSnapshot?.() as RecordsListSnapshot | undefined;
+    const next = recordsWorkspace.getRecordsListSnapshot() as RecordsListSnapshot | undefined;
     if (next) snapshot.value = next;
   }
   // The loaded corpus also changes outside this view: a file imported or closed, or a record edited elsewhere. Read the
@@ -58,7 +62,7 @@ export function useRecordsWorkspace() {
 
   function activate(): Promise<void> {
     if (activation) return activation;
-    runtime.state.view = "list";
+    state.view = "list";
     loading.value = true;
     error.value = "";
     load();
@@ -78,79 +82,79 @@ export function useRecordsWorkspace() {
     return activation;
   }
   function setQuery(value: string) {
-    runtime.setRecordsListQuery?.(value);
+    recordsWorkspace.setRecordsListQuery(value);
     load();
   }
   function setColumns(keys: string[]) {
-    runtime.setRecordsListColumns?.(keys);
+    recordsWorkspace.setRecordsListColumns(keys);
     load();
   }
   function resetColumns() {
-    runtime.resetRecordsListColumns?.();
+    recordsWorkspace.resetRecordsListColumns();
     load();
   }
   function openRecord(row: RecordsRow) {
-    runtime.openRecordsListRecord?.(row.index);
+    recordsWorkspace.openRecordsListRecord(row.index);
   }
   function setRowSelected(row: RecordsRow, selected: boolean) {
-    runtime.setRecordsListRowSelected?.(row.index, selected);
+    recordsWorkspace.setRecordsListRowSelected(row.index, selected);
     load();
   }
   function setPageSelected(selected: boolean) {
-    runtime.setRecordsListPageSelected?.(selected);
+    recordsWorkspace.setRecordsListPageSelected(selected);
     load();
   }
   function sort(key: string) {
-    runtime.setRecordsListSort?.(key);
+    recordsWorkspace.setRecordsListSort(key);
     load();
   }
   function setFilter(key: string, value: string) {
-    runtime.setRecordsListFilter?.(key, value);
+    recordsWorkspace.setRecordsListFilter(key, value);
     load();
   }
   function setStore(name: string) {
-    runtime.setRecordsListStore?.(name);
+    recordsWorkspace.setRecordsListStore(name);
     load();
   }
   function setPage(page: number) {
-    runtime.setRecordsListPage?.(page);
+    recordsWorkspace.setRecordsListPage(page);
     load();
   }
   function setPageSize(size: number) {
-    runtime.setRecordsListPageSize?.(size);
+    recordsWorkspace.setRecordsListPageSize(size);
     load();
   }
   function toggleEvidence(row: RecordsRow) {
-    runtime.toggleRecordsListEvidence?.(row.index);
+    recordsWorkspace.toggleRecordsListEvidence(row.index);
     load();
   }
   function copyCitation(row: RecordsRow, kind: "inline" | "full") {
-    runtime.copyRecordsListCitation?.(row.index, kind);
+    recordsWorkspace.copyRecordsListCitation(row.index, kind);
   }
   function searchMetadata(cell: RecordsCell) {
-    runtime.recordsListMetadataSearch?.(cell.key, cell.meta_value, cell.meta_contains);
+    searchByMetadata(cell.key, cell.meta_value, { contains: Boolean(cell.meta_contains) });
   }
   function selectMatches() {
-    runtime.selectRecordsListMatches?.();
+    recordsWorkspace.selectRecordsListMatches();
     load();
   }
   function clearFilters() {
-    runtime.clearRecordsListFilters?.();
+    recordsWorkspace.clearRecordsListFilters();
     load();
   }
   function clearSelection() {
-    runtime.clearRecordsListSelection?.();
+    recordsWorkspace.clearRecordsListSelection();
     load();
   }
   function shareHref() {
-    return runtime.getRecordsListShareHref?.() || location.href;
+    return recordsWorkspace.getRecordsListShareHref() || location.href;
   }
   function selectFile(id: string) {
-    runtime.activateFile?.(id);
+    activateFile(id);
     load();
   }
   async function closeFile(id: string) {
-    await runtime.closeWorkspaceFile?.(id);
+    await closeWorkspaceFile(id);
     load();
   }
   function subsetSources(): SubsetSource[] {
@@ -173,7 +177,7 @@ export function useRecordsWorkspace() {
   async function run(command: string) {
     if (command === "merge") await runtime.triggerMerge?.();
     else if (command === "export") await runtime.triggerExport?.();
-    else await runtime.recordsListCommand?.(command);
+    else await recordsWorkspace.recordsListCommand(command);
     load();
   }
 

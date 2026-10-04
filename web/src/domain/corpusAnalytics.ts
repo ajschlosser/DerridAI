@@ -18,8 +18,8 @@
 
 import { flattenValueList } from "./recordQuery";
 
-// Derived, memoized statistics over the loaded corpus for the dashboard and Works view.
-// Corpus rows and the memo cache are injected so these calculations remain framework-light.
+// Derived, memoized statistics over the loaded corpus for the dashboard and Works view. Moved verbatim from the
+// legacy runtime; the corpus rows and the memo cache are passed in.
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -28,69 +28,37 @@ interface Deps {
   memoCorpus: <T>(key: string, builder: () => T) => T;
 }
 
-interface ReviewStateEvent {
-  time: number;
-  previousValue: boolean;
-}
-
-interface ReviewStateHistory {
-  currentValue: boolean;
-  eventsNewestFirst: ReviewStateEvent[];
-}
-
-/**
- * Reconstruct review state at a past cutoff by rolling today's state backward
- * through every later audit event.
- */
-function reviewStateAt(history: ReviewStateHistory, cutoffTime: number): boolean {
-  let value = history.currentValue;
-  for (const event of history.eventsNewestFirst) {
-    if (event.time <= cutoffTime) break;
-    value = event.previousValue;
-  }
-  return value;
-}
-
 export function createCorpusAnalytics(deps: Deps) {
   const { allRows, memoCorpus } = deps;
   function workIndex() {
     return memoCorpus("work-index", () => {
-      // The same logical Record can appear in several loaded files (for example,
-      // a collection and one of its Works). Count it once per Work and prefer
-      // the copy carrying unsaved edits so local changes remain visible.
-      const rowsByWork = new Map<string, Loose[]>();
-      const recordIndexByWork = new Map<string, Map<string, number>>();
-
+      // The same logical record can sit in several loaded files (a collection and one of its works, or a
+      // reload). Count it once per work; prefer the copy carrying unsaved edits so they stay visible.
+      const chosen = new Map<string, Loose[]>();
+      const byId = new Map<string, Map<string, number>>();
       for (const row of allRows()) {
-        const workTitle = String(row.record.work || "(Untitled work)");
-        const workRows = rowsByWork.get(workTitle) || [];
-        const recordIndex = recordIndexByWork.get(workTitle) || new Map<string, number>();
-        rowsByWork.set(workTitle, workRows);
-        recordIndexByWork.set(workTitle, recordIndex);
-
-        const recordId = row.record.record_id;
-        const hasUnsavedEdits = Boolean(row.file.dirty?.has?.(row.index));
-        if (recordId != null && String(recordId) !== "") {
-          const existingIndex = recordIndex.get(String(recordId));
-          if (existingIndex !== undefined) {
-            const existingRow = workRows[existingIndex];
-            const existingRowIsEdited = Boolean(
-              existingRow.file.dirty?.has?.(existingRow.index),
-            );
-            if (hasUnsavedEdits && !existingRowIsEdited) {
-              workRows[existingIndex] = row;
-            }
+        const key = String(row.record.work || "(Untitled work)");
+        const rows = chosen.get(key) || [];
+        const ids = byId.get(key) || new Map<string, number>();
+        chosen.set(key, rows);
+        byId.set(key, ids);
+        const id = row.record.record_id;
+        const edited = Boolean(row.file.dirty?.has?.(row.index));
+        if (id != null && String(id) !== "") {
+          const seen = ids.get(String(id));
+          if (seen !== undefined) {
+            const prior = rows[seen];
+            if (edited && !prior.file.dirty?.has?.(prior.index)) rows[seen] = row;
             continue;
           }
-          recordIndex.set(String(recordId), workRows.length);
+          ids.set(String(id), rows.length);
         }
-        workRows.push(row);
+        rows.push(row);
       }
-
-      const workSummaries = new Map();
-      for (const [workTitle, workRows] of rowsByWork) {
-        const summary = {
-          work: workTitle,
+      const map = new Map();
+      for (const [key, rows] of chosen) {
+        const item = {
+          work: key,
           count: 0,
           review: 0,
           files: new Set(),
@@ -98,27 +66,27 @@ export function createCorpusAnalytics(deps: Deps) {
           years: new Set(),
           rows: [] as Loose[],
         };
-        for (const { file, record, index } of workRows) {
-          summary.count += 1;
-          if (record.needs_review) summary.review += 1;
-          summary.files.add(file.name);
-          if (record.document_author) summary.authors.add(record.document_author);
-          if (record.year != null) summary.years.add(record.year);
-          summary.rows.push({ file, record, index });
+        for (const { file, record: r, index } of rows) {
+          item.count++;
+          if (r.needs_review) item.review++;
+          item.files.add(file.name);
+          if (r.document_author) item.authors.add(r.document_author);
+          if (r.year != null) item.years.add(r.year);
+          item.rows.push({ file, record: r, index });
         }
-        workSummaries.set(workTitle, summary);
+        map.set(key, item);
       }
-      return workSummaries;
+      return map;
     });
   }
   function dateKeys(days = 30) {
     const today = new Date();
     const keys = [];
-    for (let offset = days - 1; offset >= 0; offset -= 1) {
-      const date = new Date(today);
-      date.setHours(0, 0, 0, 0);
-      date.setDate(date.getDate() - offset);
-      keys.push(date.toISOString().slice(0, 10));
+    for (let offset = days - 1; offset >= 0; offset--) {
+      const d = new Date(today);
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - offset);
+      keys.push(d.toISOString().slice(0, 10));
     }
     return keys;
   }
@@ -137,27 +105,23 @@ export function createCorpusAnalytics(deps: Deps) {
         .map(([work]) => work);
       if (!top.length) return { rows: [], series: [] };
 
-      const recordsByWork: Map<string, ReviewStateHistory[]> = new Map(
-        top.map(
-          (work: string) => [work, []] as [string, ReviewStateHistory[]],
-        ),
+      const recordsByWork: Map<string, Loose[]> = new Map(
+        top.map((work: string) => [work, []] as [string, Loose[]]),
       );
       for (const { record } of allRows()) {
         const work = String(record.work || "(Untitled work)");
         if (!recordsByWork.has(work)) continue;
-        const eventsNewestFirst = (
-          (Array.isArray(record.updates) ? record.updates : []) as Loose[]
-        )
+        const events = ((Array.isArray(record.updates) ? record.updates : []) as Loose[])
           .filter((update) => update.field_name === "needs_review" && update.timestamp)
           .map((update) => ({
             time: new Date(update.timestamp).getTime(),
-            previousValue: Boolean(update.old_value),
+            old: Boolean(update.old_value),
           }))
           .filter((event) => Number.isFinite(event.time))
-          .sort((left, right) => right.time - left.time);
+          .sort((a, b) => b.time - a.time);
         recordsByWork.get(work)!.push({
-          currentValue: Boolean(record.needs_review),
-          eventsNewestFirst,
+          current: Boolean(record.needs_review),
+          events,
         });
       }
 
@@ -173,7 +137,12 @@ export function createCorpusAnalytics(deps: Deps) {
         top.forEach((work, index) => {
           let count = 0;
           for (const history of recordsByWork.get(work) || []) {
-            if (reviewStateAt(history, end)) count += 1;
+            let value = history.current;
+            for (const event of history.events) {
+              if (event.time <= end) break;
+              value = event.old;
+            }
+            if (value) count++;
           }
           row[`work_${index}`] = count;
         });
@@ -194,28 +163,29 @@ export function createCorpusAnalytics(deps: Deps) {
         dates.push(d);
       }
 
-      const recordHistories: ReviewStateHistory[] = allRows().map(({ record }) => {
-        const eventsNewestFirst = (
-          (Array.isArray(record.updates) ? record.updates : []) as Loose[]
-        )
+      const recordHistories = allRows().map(({ record }) => {
+        const events = ((Array.isArray(record.updates) ? record.updates : []) as Loose[])
           .filter((update) => update.field_name === "needs_review" && update.timestamp)
           .map((update) => ({
             time: new Date(update.timestamp).getTime(),
-            previousValue: Boolean(update.old_value),
+            old: Boolean(update.old_value),
+            next: Boolean(update.new_value),
           }))
           .filter((event) => Number.isFinite(event.time))
-          .sort((left, right) => right.time - left.time);
-        return {
-          currentValue: Boolean(record.needs_review),
-          eventsNewestFirst,
-        };
+          .sort((a, b) => b.time - a.time);
+        return { current: Boolean(record.needs_review), events };
       });
 
       return dates.map((date) => {
         const end = date.getTime();
         let count = 0;
         for (const history of recordHistories) {
-          if (reviewStateAt(history, end)) count += 1;
+          let value = history.current;
+          for (const event of history.events) {
+            if (event.time <= end) break;
+            value = event.old;
+          }
+          if (value) count++;
         }
         return { key: date.toISOString().slice(0, 10), value: count };
       });

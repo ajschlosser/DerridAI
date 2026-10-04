@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { toast } from "../composables/notifications";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as runtime from "../runtime/runtime.js";
+import { searchByMetadata } from "../domain/workspaceActions";
 import { compactNumber } from "../domain/numberFormatting";
 import { defaultProviderProfile, providerDisplayName } from "../domain/sharedProviderProfiles";
 import { relativeTime } from "../domain/sharedRelativeTime";
@@ -399,7 +400,7 @@ function onMetricBodyClick(event: MouseEvent) {
   const fieldButton = target?.closest<HTMLElement>("[data-dashboard-search-field]");
   if (fieldButton) {
     const field = fieldButton.dataset.dashboardSearchField || "";
-    runtime.searchByMetadata(field, fieldButton.dataset.dashboardSearchValue, {
+    searchByMetadata(field, fieldButton.dataset.dashboardSearchValue, {
       contains: ["persons", "concepts", "topics"].includes(field),
     });
   }

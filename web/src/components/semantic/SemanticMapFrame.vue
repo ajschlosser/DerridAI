@@ -30,7 +30,7 @@ import {
   type SemanticMapPlacement,
   type SemanticMapSource,
 } from "../../domain/semanticMap";
-import * as runtime from "../../runtime/runtime.js";
+import { openSemanticRecord } from "../../domain/semanticMapSources";
 import { navigateTo } from "../../domain/sharedNavigation";
 import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
 import UiRelationDensityControls, {
@@ -201,7 +201,7 @@ function selectAndCenter(node: SemanticMapNode) {
 function openSelectedRecord() {
   if (selectedNode.value?.kind !== "record") return;
   const recordId = selectedNode.value.id.slice("record:".length);
-  if (recordId) runtime.openSemanticRecord?.(recordId);
+  if (recordId) openSemanticRecord(recordId);
 }
 
 function clearSearch() {

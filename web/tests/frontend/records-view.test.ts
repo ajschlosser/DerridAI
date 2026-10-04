@@ -152,6 +152,13 @@ const runtime = vi.hoisted(() => ({
   sync: vi.fn(),
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
+vi.mock("../../src/domain/sharedRecordsWorkspace", () => ({ recordsWorkspace: runtime }));
+vi.mock("../../src/domain/sharedFileLifecycle", () => ({ closeFile: runtime.closeWorkspaceFile }));
+vi.mock("../../src/domain/workspaceActions", () => ({
+  activateFile: runtime.activateFile,
+  searchByMetadata: (field: string, value: unknown, options: { contains?: boolean }) =>
+    runtime.recordsListMetadataSearch(field, value, options.contains),
+}));
 
 import RecordsView from "../../src/views/RecordsView.vue";
 import { useI18nStore } from "../../src/stores/i18n";

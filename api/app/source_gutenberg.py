@@ -132,6 +132,9 @@ def load_gutenberg_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
             local = gutenberg_offline.text(etext_id)
             if local is not None:
                 return local
+            raise ValueError(
+                f"The installed Gutenberg collection does not contain eText {etext_id}."
+            )
     except Exception:
         logger.warning("Local Gutenberg text unavailable; using remote edition", exc_info=True)
     # Use one bounded catalog/download path for imports. Optional clients cannot

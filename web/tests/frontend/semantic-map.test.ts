@@ -28,10 +28,9 @@ import {
   type SemanticMapSource,
 } from "../../src/domain/semanticMap";
 import { useSemanticMapStore } from "../../src/stores/semanticMap";
-import * as runtime from "../../src/runtime/runtime.js";
+import * as runtime from "../../src/domain/semanticMapSources";
 
-vi.mock("../../src/domain/sharedNavigation", () => ({ navigateTo: vi.fn() }));
-vi.mock("../../src/runtime/runtime.js", () => ({
+vi.mock("../../src/domain/semanticMapSources", () => ({
   openSemanticRecord: vi.fn(),
   listSemanticMapSources: vi.fn(() => ({ records: [], focusId: "" })),
 }));

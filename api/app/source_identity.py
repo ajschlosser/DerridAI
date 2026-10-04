@@ -180,9 +180,16 @@ class AuthorCandidate:
     # as an original-language default.
     original_languages: list[str] = field(default_factory=list)
     languages: list[str] = field(default_factory=list)
+    # Provider-neutral identity used by Corpus Capture creation. Older callers can
+    # continue supplying only wikidata_qid; to_dict derives the stable identity.
+    identity_id: str = ""
+    identity_source: str = "wikidata"
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        if not data["identity_id"] and self.wikidata_qid:
+            data["identity_id"] = f"wikidata:{self.wikidata_qid}"
+        return data
 
 
 @dataclass

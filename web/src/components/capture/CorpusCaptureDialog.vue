@@ -113,6 +113,14 @@ const title = computed(() =>
 const STEPS: CaptureStep[] = ["author", "options", "discovering", "review", "acquiring", "done"];
 const stepIndex = computed(() => STEPS.indexOf(step.value));
 
+// A Gutenberg catalogue identity is deliberately local-only. Selecting one
+// removes Wikisource so discovery/acquisition never gains a hidden network dependency.
+watch(author, (person) => {
+  if (person?.identity_source === "gutenberg" && !person.wikidata_qid) {
+    providers.value = ["gutenberg"];
+  }
+});
+
 function fail(cause: unknown) {
   error.value = cause instanceof Error ? cause.message : String(cause);
 }
@@ -155,7 +163,8 @@ async function start() {
   error.value = "";
   try {
     const created = await corpusCaptureApi.createCapture(
-      author.value.wikidata_qid,
+      author.value.identity_id ||
+        (author.value.wikidata_qid ? `wikidata:${author.value.wikidata_qid}` : ""),
       optionsFromIncludes(providers.value, includes.value, languages.value),
       (i18n.locale || "en").split("-")[0].toLowerCase(),
     );

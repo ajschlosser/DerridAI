@@ -45,6 +45,10 @@ const NAV = [
 const navigation = vi.hoisted(() => ({ navigateTo: vi.fn() }));
 vi.mock("../../src/domain/sharedNavigation", () => navigation);
 vi.mock("../../src/domain/jobsPause", () => ({ pauseRuntime: vi.fn() }));
+vi.mock("../../src/domain/semanticMapSources", () => ({
+  listSemanticMapSources: vi.fn(),
+  openSemanticRecord: vi.fn(),
+}));
 
 const runtime = vi.hoisted(() => ({
   getNavItems: vi.fn(),
