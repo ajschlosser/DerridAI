@@ -20,10 +20,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import PipelineStageList from "../pipelines/PipelineStageList.vue";
+import PipelineConfigOverridesEditor from "../pipelines/PipelineConfigOverridesEditor.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 import { useI18nStore } from "../../stores/i18n";
+import { clonePipelineConfigOverrides, overridesForPipeline } from "../../domain/pipelineOverrides";
 import type {
   PipelineAssignment,
+  PipelineConfigOverrideSet,
   PipelineDefinition,
   PipelineStrategy,
 } from "../../types/pipelines";
@@ -48,12 +51,14 @@ const props = withDefaults(
     pipelineStrategies?: PipelineStrategy[];
     pipelineAssignment?: PipelineAssignment | null;
     pipelineOverrideAllowed?: boolean;
+    runPipelineOverrides?: PipelineConfigOverrideSet | null;
   }>(),
   {
     pipelineOptions: () => [],
     pipelineStrategies: () => [],
     pipelineAssignment: null,
     pipelineOverrideAllowed: false,
+    runPipelineOverrides: null,
   },
 );
 const emit = defineEmits<{
@@ -62,6 +67,7 @@ const emit = defineEmits<{
       config: Partial<ResearchConfig>;
       generation: Record<string, unknown>;
       model: string;
+      runPipelineOverrides: PipelineConfigOverrideSet | null;
     },
   ];
   discover: [];
@@ -73,6 +79,7 @@ const activeSection = ref<SettingsSection>("retrieval");
 const draft = ref<Partial<ResearchConfig>>({});
 const generationDraft = ref<Record<string, unknown>>({});
 const modelDraft = ref("");
+const runOverrideDraft = ref<PipelineConfigOverrideSet | null>(null);
 const extraOptions = ref("{}");
 const settingsError = ref("");
 const selectedProfile = computed(
@@ -104,6 +111,9 @@ const selectedPipeline = computed(() => {
     ) || assignedPipeline.value
   );
 });
+const settingsOverridesForSelectedPipeline = computed(() =>
+  overridesForPipeline(props.config.pipeline_config_overrides, selectedPipeline.value),
+);
 const pipelineSelection = computed({
   get: () => {
     const id = String(draft.value.pipeline_id || "").trim();
@@ -115,11 +125,13 @@ const pipelineSelection = computed({
     if (!raw) {
       draft.value.pipeline_id = "";
       draft.value.pipeline_version = null;
+      runOverrideDraft.value = null;
       return;
     }
     const split = raw.lastIndexOf("@");
     draft.value.pipeline_id = split > 0 ? raw.slice(0, split) : raw;
     draft.value.pipeline_version = split > 0 ? Number(raw.slice(split + 1)) || null : null;
+    runOverrideDraft.value = null;
   },
 });
 const activeSectionTitle = computed(
@@ -164,6 +176,7 @@ function sync() {
     use_prior_claim_memory: props.config.use_prior_claim_memory,
     memory_profile_id: props.config.memory_profile_id,
   };
+  runOverrideDraft.value = clonePipelineConfigOverrides(props.runPipelineOverrides);
   generationDraft.value = { ...props.generation };
   modelDraft.value = props.model || "";
   const raw = props.generation.extra_options;
@@ -218,11 +231,13 @@ function togglePromptMetadata(
 
 function resetSection(section: SettingsSection) {
   const source = props.config;
-  if (section === "pipeline")
+  if (section === "pipeline") {
     Object.assign(draft.value, {
       pipeline_id: source.pipeline_id || "",
       pipeline_version: source.pipeline_version || null,
     });
+    runOverrideDraft.value = clonePipelineConfigOverrides(props.runPipelineOverrides);
+  }
   else if (section === "retrieval")
     Object.assign(draft.value, {
       locales: [...(source.locales || [])],
@@ -277,6 +292,7 @@ function apply() {
     config: draft.value,
     generation: generationDraft.value,
     model: modelDraft.value.trim(),
+    runPipelineOverrides: runOverrideDraft.value,
   });
   close();
 }
@@ -481,6 +497,25 @@ defineExpose({ open, close });
               </div>
               <PipelineStageList :pipeline="selectedPipeline" :strategies="pipelineStrategies" />
             </div>
+
+            <fieldset v-if="selectedPipeline" class="research-settings-card pipeline-run-overrides-card">
+              <legend>{{ i18n.t("research.run_pipeline_overrides", "Run overrides") }}</legend>
+              <p>
+                {{
+                  i18n.t(
+                    "research.run_pipeline_overrides_help",
+                    "These settings apply only to this run. They override both Pipeline Studio configuration and any Settings overrides for this exact pipeline version.",
+                  )
+                }}
+              </p>
+              <PipelineConfigOverridesEditor
+                v-model="runOverrideDraft"
+                :pipeline="selectedPipeline"
+                :strategies="pipelineStrategies"
+                :inherited-overrides="settingsOverridesForSelectedPipeline"
+                layer="run"
+              />
+            </fieldset>
 
             <aside v-if="!researcher" class="research-settings-note">
               <AppIcon name="gear" />
