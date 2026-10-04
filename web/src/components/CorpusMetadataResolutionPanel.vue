@@ -411,8 +411,7 @@ const constraints = computed(() =>
 );
 function modelDerived(info: Record<string, unknown>) {
   return (
-    String(info.method || "").includes("llm") ||
-    String(info.derivation_method || "") === "model"
+    String(info.method || "").includes("llm") || String(info.derivation_method || "") === "model"
   );
 }
 function modelSuggestedAbsence(info: Record<string, unknown>, value: unknown) {
