@@ -136,12 +136,12 @@ describe("adjudicating a record's metadata", () => {
     const wrapper: ReturnType<typeof mountPanel> = mountPanel({
       onResolve: (field: string) => void wrapper.setProps({ savingField: field }),
     });
-    const [first, second, third] = cards(wrapper);
-    if (!first || !second || !third) throw new Error("Three pending fields are required.");
+    const [first, second] = cards(wrapper);
+    if (!first || !second) throw new Error("At least two pending fields are required.");
 
     await wrapper.get(`[data-field="${first}"] [data-primary-action]`).trigger("click");
     await nextTick();
-    const editor = wrapper.get(`[data-field="${third}"] textarea`);
+    const editor = wrapper.get('[data-field="speaker"] textarea');
     (editor.element as HTMLTextAreaElement).focus();
     await editor.setValue("Reviewer is typing here");
     expect(document.activeElement).toBe(editor.element);
