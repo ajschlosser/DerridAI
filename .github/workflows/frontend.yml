@@ -595,6 +595,114 @@ jobs:
           DERRIDAI_SITE_CONTAINER: derridai-publication-acceptance-${{ github.run_id }}
         run: sh scripts/check_publication_artifacts.sh .tmp/publication-acceptance
 
+  format-pr-branch:
+    if: github.event_name == 'pull_request' && github.head_ref == 'task/published-site-research-settings'
+    name: format-pr-branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Format changed frontend sources
+        run: |
+          cd web
+          npm ci --no-audit --no-fund
+          cd ..
+          git diff --name-only --diff-filter=ACMRTUXB origin/master...HEAD -- web \
+            | grep -E '\.(md|json|yml|yaml|js|mjs|cjs|ts|tsx|vue|css|scss|html)
+    name: frontend
+    if: always()
+    needs:
+      - changes
+      - format-check
+      - api-contract
+      - frontend-lint
+      - frontend-static
+      - frontend-unit
+      - frontend-build
+      - frontend-sdk
+      - frontend-storybook
+      - frontend-legacy
+      - frontend-e2e
+      - frontend-a11y
+      - publication-artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify frontend gates
+        env:
+          FRONTEND_CHANGED: ${{ needs.changes.outputs.frontend }}
+          UNIT_CHANGED: ${{ needs.changes.outputs.frontend_unit }}
+          BUILD_CHANGED: ${{ needs.changes.outputs.frontend_build }}
+          SDK_CHANGED: ${{ needs.changes.outputs.sdk }}
+          STORYBOOK_CHANGED: ${{ needs.changes.outputs.storybook }}
+          LEGACY_CHANGED: ${{ needs.changes.outputs.legacy }}
+          E2E_CHANGED: ${{ needs.changes.outputs.e2e }}
+          A11Y_CHANGED: ${{ needs.changes.outputs.a11y }}
+          FORMAT_CHANGED: ${{ needs.changes.outputs.format }}
+          FORMAT_RESULT: ${{ needs.format-check.result }}
+          CONTRACT_CHANGED: ${{ needs.changes.outputs.contract }}
+          CONTRACT_RESULT: ${{ needs.api-contract.result }}
+          LINT_RESULT: ${{ needs.frontend-lint.result }}
+          STATIC_RESULT: ${{ needs.frontend-static.result }}
+          UNIT_RESULT: ${{ needs.frontend-unit.result }}
+          BUILD_RESULT: ${{ needs.frontend-build.result }}
+          SDK_RESULT: ${{ needs.frontend-sdk.result }}
+          STORYBOOK_RESULT: ${{ needs.frontend-storybook.result }}
+          LEGACY_RESULT: ${{ needs.frontend-legacy.result }}
+          E2E_RESULT: ${{ needs.frontend-e2e.result }}
+          A11Y_RESULT: ${{ needs.frontend-a11y.result }}
+          PUBLICATION_CHANGED: ${{ needs.changes.outputs.publication }}
+          PUBLICATION_RESULT: ${{ needs.publication-artifacts.result }}
+        run: |
+          require_gate() {
+            flag=$1
+            result=$2
+            label=$3
+            if [ "$flag" = "true" ] && [ "$result" != "success" ]; then
+              echo "$label did not succeed: $result"
+              exit 1
+            fi
+          }
+
+          require_gate "$FORMAT_CHANGED" "$FORMAT_RESULT" "repository formatting gate"
+          require_gate "$CONTRACT_CHANGED" "$CONTRACT_RESULT" "frontend/backend API contract gate"
+          require_gate "$PUBLICATION_CHANGED" "$PUBLICATION_RESULT" "publication artifact acceptance gate"
+
+          if [ "$FRONTEND_CHANGED" != "true" ]; then
+            echo "No frontend-relevant changes; browser/frontend gates were skipped."
+            exit 0
+          fi
+
+          require_gate true "$LINT_RESULT" "frontend lint"
+          require_gate true "$STATIC_RESULT" "frontend static checks"
+          require_gate "$UNIT_CHANGED" "$UNIT_RESULT" "frontend unit tests"
+          require_gate "$BUILD_CHANGED" "$BUILD_RESULT" "production app build"
+          require_gate "$SDK_CHANGED" "$SDK_RESULT" "SDK distribution/package checks"
+          require_gate "$STORYBOOK_CHANGED" "$STORYBOOK_RESULT" "Storybook build"
+          require_gate "$LEGACY_CHANGED" "$LEGACY_RESULT" "legacy browser characterization"
+          require_gate "$E2E_CHANGED" "$E2E_RESULT" "composed browser workflows"
+          require_gate "$A11Y_CHANGED" "$A11Y_RESULT" "accessibility browser sweep"
+ \
+            | xargs --no-run-if-empty ./web/node_modules/.bin/prettier \
+                --write --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
+          if git diff --quiet -- web; then
+            echo "Changed frontend files are already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web
+          git commit -m "style: format PR frontend changes"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
   # Preserve the historical required-check name while allowing unrelated
   # surfaces to skip expensive compute without weakening the checks that own them.
   frontend:
