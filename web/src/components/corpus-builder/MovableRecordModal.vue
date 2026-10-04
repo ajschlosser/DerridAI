@@ -27,7 +27,17 @@ const dialog = ref<HTMLElement | null>(null);
 const position = ref({ x: 0, y: 0 });
 const dragging = ref(false);
 let pointerId: number | null = null;
+let priorActive: HTMLElement | null = null;
 let origin = { x: 0, y: 0, left: 0, top: 0 };
+
+function focusables() {
+  if (!dialog.value) return [] as HTMLElement[];
+  return Array.from(
+    dialog.value.querySelectorAll<HTMLElement>(
+      'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((node) => node.offsetParent !== null);
+}
 
 function beginDrag(event: PointerEvent) {
   if (event.button !== 0 || (event.target as HTMLElement | null)?.closest("button")) return;
@@ -54,16 +64,53 @@ function endDrag(event: PointerEvent) {
   dragging.value = false;
   pointerId = null;
 }
+function moveFromKeyboard(event: KeyboardEvent) {
+  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+  event.preventDefault();
+  const step = event.shiftKey ? 48 : 16;
+  let x = position.value.x;
+  let y = position.value.y;
+  if (event.key === "ArrowLeft") x -= step;
+  if (event.key === "ArrowRight") x += step;
+  if (event.key === "ArrowUp") y -= step;
+  if (event.key === "ArrowDown") y += step;
+  position.value = { x, y };
+}
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape") emit("close");
+  if (event.key === "Escape") {
+    event.preventDefault();
+    emit("close");
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const nodes = focusables();
+  if (!nodes.length) {
+    event.preventDefault();
+    dialog.value?.focus();
+    return;
+  }
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  if (
+    event.shiftKey &&
+    (document.activeElement === first || document.activeElement === dialog.value)
+  ) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 onMounted(() => {
+  priorActive = document.activeElement as HTMLElement | null;
   void nextTick(() => dialog.value?.focus());
 });
 onBeforeUnmount(() => {
   dragging.value = false;
   pointerId = null;
+  priorActive?.focus?.({ preventScroll: true });
 });
 </script>
 
@@ -82,6 +129,10 @@ onBeforeUnmount(() => {
       <header
         class="record-popout-head"
         :class="{ dragging }"
+        tabindex="0"
+        :aria-label="`${i18n.t('pdf_corpus.reviewed_record_text')} ${props.recordId}`"
+        aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown"
+        @keydown="moveFromKeyboard"
         @pointerdown="beginDrag"
         @pointermove="moveDrag"
         @pointerup="endDrag"

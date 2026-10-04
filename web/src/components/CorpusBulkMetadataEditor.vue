@@ -56,7 +56,9 @@ const applyToAll = ref(false);
 const values = reactive<Record<string, string>>({});
 const cleared = reactive<Record<string, boolean>>({});
 const query = ref("");
+const dialog = ref<HTMLElement | null>(null);
 const titleEl = ref<HTMLElement | null>(null);
+let priorActive: HTMLElement | null = null;
 // Document details (title, author, publisher…) are set once for the whole document in Edit document metadata and
 // inherited by every record. They stay here for the rarer case of overriding them on chosen records.
 type BulkGroup = {
@@ -227,20 +229,56 @@ function reset() {
   for (const key of Object.keys(cleared)) delete cleared[key];
   applyToAll.value = false;
 }
+function focusables() {
+  if (!dialog.value) return [] as HTMLElement[];
+  return Array.from(
+    dialog.value.querySelectorAll<HTMLElement>(
+      'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((node) => node.offsetParent !== null);
+}
 function keydown(event: KeyboardEvent) {
-  if (event.key === "Escape") emit("close");
+  if (event.key === "Escape") {
+    event.preventDefault();
+    emit("close");
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const nodes = focusables();
+  if (!nodes.length) {
+    event.preventDefault();
+    titleEl.value?.focus({ preventScroll: true });
+    return;
+  }
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  if (
+    event.shiftKey &&
+    (document.activeElement === first || document.activeElement === titleEl.value)
+  ) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 onMounted(() => {
+  priorActive = document.activeElement as HTMLElement | null;
   window.addEventListener("keydown", keydown);
   titleEl.value?.focus({ preventScroll: true });
 });
-onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", keydown);
+  priorActive?.focus?.({ preventScroll: true });
+});
 </script>
 
 <template>
   <Teleport to="body"
     ><div class="bulk-backdrop" @mousedown.self="emit('close')">
       <form
+        ref="dialog"
         class="bulk-dialog"
         role="dialog"
         aria-modal="true"
