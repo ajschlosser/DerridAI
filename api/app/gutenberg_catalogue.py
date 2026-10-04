@@ -21,11 +21,12 @@ import csv
 import hashlib
 import io
 import re
+import shutil
 import sqlite3
 import tarfile
 import threading
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +38,11 @@ from .source_identity import PersonName, fold, normalize_languages
 
 CATALOGUE_URL = "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv"
 ARCHIVE_URL = "https://www.gutenberg.org/cache/epub/feeds/txt-files.tar.zip"
-CHUNK_SIZE = 64 * 1024 * 1024
+# Bound each network request so a reset loses at most one modest chunk rather
+# than forcing a multi-gigabyte connection to remain healthy for hours.
+CHUNK_SIZE = 32 * 1024 * 1024
+_MAX_RETRY_DELAY_SECONDS = 60
+_CONTENT_RANGE_RE = re.compile(r"^bytes\s+(\d+)-(\d+)/(\d+|\*)$", re.I)
 
 
 def _now() -> str:
@@ -139,7 +144,20 @@ class GutenbergOfflineService:
             db.execute("""CREATE TABLE IF NOT EXISTS gutenberg_archive (
                 id INTEGER PRIMARY KEY CHECK (id=1), url TEXT NOT NULL, path TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'not_started', bytes_done INTEGER NOT NULL DEFAULT 0,
-                total_bytes INTEGER, updated_at TEXT NOT NULL, error TEXT)""")
+                total_bytes INTEGER, updated_at TEXT NOT NULL, error TEXT,
+                etag TEXT, last_modified TEXT, retry_count INTEGER NOT NULL DEFAULT 0,
+                next_retry_at TEXT)""")
+            archive_columns = {
+                row[1] for row in db.execute("PRAGMA table_info(gutenberg_archive)")
+            }
+            for column, ddl in (
+                ("etag", "TEXT"),
+                ("last_modified", "TEXT"),
+                ("retry_count", "INTEGER NOT NULL DEFAULT 0"),
+                ("next_retry_at", "TEXT"),
+            ):
+                if column not in archive_columns:
+                    db.execute(f"ALTER TABLE gutenberg_archive ADD COLUMN {column} {ddl}")
             db.execute("""CREATE TABLE IF NOT EXISTS gutenberg_books (
                 etext_id INTEGER PRIMARY KEY, title TEXT NOT NULL DEFAULT '',
                 author TEXT NOT NULL DEFAULT '', language TEXT NOT NULL DEFAULT '',
@@ -483,6 +501,7 @@ class GutenbergOfflineService:
             self._stop.set()
         if action == "refetch":
             self.archive_path.unlink(missing_ok=True)
+            self._chunk_path().unlink(missing_ok=True)
             self.staging_library_db_path.unlink(missing_ok=True)
             # Keep the last verified local database available while a replacement downloads.
             # Legacy extracted files are no longer part of the active collection.
@@ -491,13 +510,39 @@ class GutenbergOfflineService:
                     path.unlink(missing_ok=True)
         with sqlite3.connect(self.db_path) as db:
             if action == "refetch":
-                db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=0,total_bytes=NULL,error=NULL,updated_at=? WHERE id=1",
-                           (allowed[action], _now()))
+                db.execute(
+                    """
+                    UPDATE gutenberg_archive
+                    SET status=?,bytes_done=0,total_bytes=NULL,error=NULL,etag=NULL,
+                        last_modified=NULL,retry_count=0,next_retry_at=NULL,updated_at=?
+                    WHERE id=1
+                    """,
+                    (allowed[action], _now()),
+                )
             else:
-                # Keep the known total: forgetting it made a finished download look unfinished, so the next
-                # chunk asked for bytes past the end of the file and the server answered 416.
-                db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=?,error=NULL,updated_at=? WHERE id=1",
-                           (allowed[action], self._bytes_done(), _now()))
+                # Keep the known total and remote validators while a partial file exists.
+                # A zero-byte start cannot safely reuse identity from a previous transport.
+                offset = self._bytes_done()
+                if action in {"start", "resume"} and offset == 0:
+                    db.execute(
+                        """
+                        UPDATE gutenberg_archive
+                        SET status=?,bytes_done=0,total_bytes=NULL,error=NULL,etag=NULL,
+                            last_modified=NULL,retry_count=0,next_retry_at=NULL,updated_at=?
+                        WHERE id=1
+                        """,
+                        (allowed[action], _now()),
+                    )
+                else:
+                    db.execute(
+                        """
+                        UPDATE gutenberg_archive
+                        SET status=?,bytes_done=?,error=NULL,retry_count=0,
+                            next_retry_at=NULL,updated_at=?
+                        WHERE id=1
+                        """,
+                        (allowed[action], offset, _now()),
+                    )
         self._changed()
         if action in {"start", "resume"} and self._start_worker_enabled:
             self._start_worker()
@@ -519,38 +564,59 @@ class GutenbergOfflineService:
         self._worker.start()
 
     def _run_worker(self) -> None:
+        """Run the durable archive state machine outside the request lifecycle.
+
+        Each network operation is a bounded byte range. Transient transport and
+        upstream failures keep durable state in downloading and retry automatically
+        with capped exponential backoff. Validation and local I/O failures remain
+        terminal and require explicit user action.
+        """
         try:
             while not self._stop.is_set():
-                status = str(self.status()["archive"]["status"])
+                archive = self.status()["archive"]
+                status = str(archive["status"])
                 if status == "downloading":
-                    self.download_archive()
+                    if self._wait_for_saved_retry(archive):
+                        break
+                    try:
+                        self.download_chunk()
+                    except Exception as exc:
+                        if not self._archive_error_retryable(exc):
+                            self._mark_archive_error(exc)
+                            break
+                        if self._schedule_archive_retry(exc):
+                            break
                     continue
                 if status in {"downloaded", "unpacking", "complete"}:
                     with sqlite3.connect(self.db_path) as db:
                         db.execute(
-                            "UPDATE gutenberg_archive SET status='unpacking',updated_at=? WHERE id=1",
+                            """
+                            UPDATE gutenberg_archive
+                            SET status='unpacking',retry_count=0,next_retry_at=NULL,updated_at=?
+                            WHERE id=1
+                            """,
                             (_now(),),
                         )
                     self._changed()
                     self.extract_catalogue()
                     with sqlite3.connect(self.db_path) as db:
                         db.execute(
-                            "UPDATE gutenberg_archive SET status='ready',error=NULL,updated_at=? WHERE id=1",
+                            """
+                            UPDATE gutenberg_archive
+                            SET status='ready',error=NULL,retry_count=0,next_retry_at=NULL,updated_at=?
+                            WHERE id=1
+                            """,
                             (_now(),),
                         )
                     # The archive is only installation transport. The verified SQLite collection
                     # is authoritative and survives independently of this file.
                     self.archive_path.unlink(missing_ok=True)
+                    self._chunk_path().unlink(missing_ok=True)
                     self._changed()
                     break
                 break
         except Exception as exc:
-            with sqlite3.connect(self.db_path) as db:
-                db.execute(
-                    "UPDATE gutenberg_archive SET status='error',error=?,updated_at=? WHERE id=1",
-                    (str(exc), _now()),
-                )
-            self._changed()
+            self._mark_archive_error(exc)
 
     def extract_catalogue(self) -> int:
         """Stream the archive into a staging SQLite database, then atomically install it."""
@@ -859,68 +925,116 @@ class GutenbergOfflineService:
     def _bytes_done(self) -> int:
         return self.archive_path.stat().st_size if self.archive_path.is_file() else 0
 
-    def download_archive(self) -> dict[str, Any]:
-        """Download the archive in one streaming request, resuming from the current byte offset."""
+    def _chunk_path(self) -> Path:
+        """Return the disposable path used while receiving one verified range."""
+        return self.archive_path.with_name(f"{self.archive_path.name}.chunk")
 
-        state = self.status()["archive"]
-        if state["status"] != "downloading":
-            raise ValueError("Archive is not running; start or resume it first.")
-        offset = self._bytes_done()
-        headers = {"Range": f"bytes={offset}-"} if offset else {}
+    @staticmethod
+    def _if_range_validator(state: dict[str, Any]) -> str:
+        """Prefer a strong ETag, then Last-Modified, for safe range resumption."""
+        etag = str(state.get("etag") or "").strip()
+        if etag and not etag.startswith("W/"):
+            return etag
+        return str(state.get("last_modified") or "").strip()
+
+    @staticmethod
+    def _parse_content_range(value: str) -> tuple[int, int, int] | None:
+        match = _CONTENT_RANGE_RE.fullmatch(str(value or "").strip())
+        if not match or match.group(3) == "*":
+            return None
+        return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+    @staticmethod
+    def _archive_error_retryable(exc: Exception) -> bool:
+        if isinstance(exc, httpx.TransportError):
+            return True
+        if isinstance(exc, httpx.HTTPStatusError):
+            status = int(exc.response.status_code)
+            return status in {408, 425, 429} or status >= 500
+        return False
+
+    @staticmethod
+    def _retry_delay_seconds(retry_count: int) -> int:
+        return min(_MAX_RETRY_DELAY_SECONDS, 2 ** min(max(0, retry_count - 1), 6))
+
+    def _wait_for_saved_retry(self, archive: dict[str, Any]) -> bool:
+        raw = str(archive.get("next_retry_at") or "").strip()
+        if not raw:
+            return False
         try:
-            with httpx.stream(
-                "GET",
-                ARCHIVE_URL,
-                headers=headers,
-                timeout=httpx.Timeout(120.0, connect=20.0),
-                follow_redirects=True,
-            ) as response:
-                if response.status_code == 416 and offset:
-                    return self._finish_or_explain_unsatisfiable_range(response, offset)
-                response.raise_for_status()
-                if offset and response.status_code != 206:
-                    raise ValueError("Gutenberg server did not honor the resume range request.")
-                content_range = str(response.headers.get("content-range") or "")
-                range_total = content_range.rsplit("/", 1)[-1] if "/" in content_range else ""
-                total = int(range_total) if range_total.isdigit() else 0
-                if not total:
-                    length = int(response.headers.get("content-length") or 0)
-                    total = offset + length if length else 0
-                self.archive_path.parent.mkdir(parents=True, exist_ok=True)
-                mode = "ab" if offset else "wb"
-                with self.archive_path.open(mode) as handle:
-                    for chunk in response.iter_bytes(chunk_size=CHUNK_SIZE):
-                        if self._stop.is_set() or self.status()["archive"]["status"] != "downloading":
-                            return self.status()
-                        handle.write(chunk)
-                        handle.flush()
-                        done = self._bytes_done()
-                        with sqlite3.connect(self.db_path) as db:
-                            db.execute(
-                                "UPDATE gutenberg_archive SET bytes_done=?,total_bytes=?,error=NULL,updated_at=? WHERE id=1",
-                                (done, total or None, _now()),
-                            )
-                        self._changed()
-            done = self._bytes_done()
-            if total and done != total:
-                raise ValueError(
-                    f"Gutenberg archive ended at {done:,} bytes; expected {total:,}. Resume the download."
-                )
-            with sqlite3.connect(self.db_path) as db:
-                db.execute(
-                    "UPDATE gutenberg_archive SET status='downloaded',bytes_done=?,total_bytes=?,error=NULL,updated_at=? WHERE id=1",
-                    (done, total or done, _now()),
-                )
-            self._changed()
-            return self.status()
-        except (httpx.HTTPError, OSError, ValueError) as exc:
-            with sqlite3.connect(self.db_path) as db:
-                db.execute(
-                    "UPDATE gutenberg_archive SET status='error',error=?,bytes_done=?,updated_at=? WHERE id=1",
-                    (str(exc) or exc.__class__.__name__, self._bytes_done(), _now()),
-                )
-            self._changed()
-            raise
+            deadline = datetime.fromisoformat(raw)
+            delay = max(0.0, (deadline - datetime.now(UTC)).total_seconds())
+        except ValueError:
+            delay = 0.0
+        return bool(delay and self._stop.wait(delay))
+
+    def _schedule_archive_retry(self, exc: Exception) -> bool:
+        """Persist a transient failure and wait without turning it into a failed install."""
+        archive = self.status()["archive"]
+        retry_count = int(archive.get("retry_count") or 0) + 1
+        delay = self._retry_delay_seconds(retry_count)
+        next_retry = datetime.now(UTC) + timedelta(seconds=delay)
+        message = (
+            f"Connection interrupted; retrying automatically in {delay}s "
+            f"(attempt {retry_count}): {str(exc) or exc.__class__.__name__}"
+        )
+        with sqlite3.connect(self.db_path) as db:
+            db.execute(
+                """
+                UPDATE gutenberg_archive
+                SET status='downloading',error=?,bytes_done=?,retry_count=?,
+                    next_retry_at=?,updated_at=?
+                WHERE id=1
+                """,
+                (message, self._bytes_done(), retry_count, next_retry.isoformat(), _now()),
+            )
+        self._changed()
+        return self._stop.wait(delay)
+
+    def _mark_archive_error(self, exc: Exception) -> None:
+        with sqlite3.connect(self.db_path) as db:
+            db.execute(
+                """
+                UPDATE gutenberg_archive
+                SET status='error',error=?,bytes_done=?,retry_count=0,
+                    next_retry_at=NULL,updated_at=?
+                WHERE id=1
+                """,
+                (str(exc) or exc.__class__.__name__, self._bytes_done(), _now()),
+            )
+        self._changed()
+
+    def _restart_for_changed_archive(self, response: Any) -> dict[str, Any]:
+        """Discard only disposable transport when Gutenberg replaces the weekly archive."""
+        self.archive_path.unlink(missing_ok=True)
+        self._chunk_path().unlink(missing_ok=True)
+        length = int(response.headers.get("content-length") or 0)
+        etag = str(response.headers.get("etag") or "").strip() or None
+        last_modified = str(response.headers.get("last-modified") or "").strip() or None
+        with sqlite3.connect(self.db_path) as db:
+            db.execute(
+                """
+                UPDATE gutenberg_archive
+                SET status='downloading',bytes_done=0,total_bytes=?,etag=?,
+                    last_modified=?,retry_count=0,next_retry_at=NULL,
+                    error='The Gutenberg archive changed during download; restarting the disposable archive from byte 0.',
+                    updated_at=?
+                WHERE id=1
+                """,
+                (length or None, etag, last_modified, _now()),
+            )
+        self._changed()
+        return self.status()
+
+    def download_archive(self) -> dict[str, Any]:
+        """Download the archive as bounded resumable ranges.
+
+        This whole-download entry point intentionally opens a fresh HTTP request
+        for each chunk rather than holding one multi-gigabyte connection open.
+        """
+        while self.status()["archive"]["status"] == "downloading":
+            self.download_chunk()
+        return self.status()
 
     def _finish_or_explain_unsatisfiable_range(self, response: Any, offset: int) -> dict[str, Any]:
         """A 416 after some bytes: the file on disk may already be the whole archive.
@@ -952,53 +1066,146 @@ class GutenbergOfflineService:
         )
 
     def download_chunk(self, chunk_size: int = CHUNK_SIZE) -> dict[str, Any]:
+        """Stream one bounded byte range into durable transport storage."""
         state = self.status()["archive"]
         if state["status"] != "downloading":
             raise ValueError("Archive is not running; start or resume it first.")
+
         offset = self._bytes_done()
-        requested = min(chunk_size, CHUNK_SIZE)
-        # Always request a bounded byte range, including the first chunk. An
-        # un-ranged initial GET can otherwise stream the entire multi-gigabyte
-        # archive into the API process before the size guard gets a chance to run.
+        requested = min(max(1, int(chunk_size)), CHUNK_SIZE)
         headers = {"Range": f"bytes={offset}-{offset + requested - 1}"}
+        if_range = self._if_range_validator(state)
+        if offset and if_range:
+            headers["If-Range"] = if_range
+
+        chunk_path = self._chunk_path()
+        chunk_path.unlink(missing_ok=True)
         try:
-            response = httpx.get(
+            with httpx.stream(
+                "GET",
                 ARCHIVE_URL,
                 headers=headers,
-                timeout=60.0,
+                timeout=httpx.Timeout(120.0, connect=20.0),
                 follow_redirects=True,
-            )
-            if response.status_code == 416 and offset:
-                return self._finish_or_explain_unsatisfiable_range(response, offset)
-            response.raise_for_status()
-            if response.status_code != 206:
-                raise ValueError("Gutenberg server did not honor the bounded range request.")
-            if len(response.content) > requested:
-                raise ValueError("Gutenberg archive response exceeded the bounded chunk size.")
-            # Pause/refetch may have been requested while the HTTP call was in flight.
-            # Do not let a stale chunk resurrect "downloading" or recreate a refetched file.
-            if self._stop.is_set() or self.status()["archive"]["status"] != "downloading":
+            ) as response:
+                if response.status_code == 416 and offset:
+                    return self._finish_or_explain_unsatisfiable_range(response, offset)
+
+                # If-Range intentionally converts a changed object into a 200.
+                # Do not consume that multi-gigabyte body; restart from byte zero.
+                if offset and if_range and response.status_code == 200:
+                    return self._restart_for_changed_archive(response)
+
+                response.raise_for_status()
+                if response.status_code != 206:
+                    raise ValueError(
+                        "Gutenberg server did not honor the bounded range request."
+                    )
+
+                parsed = self._parse_content_range(
+                    str(response.headers.get("content-range") or "")
+                )
+                if parsed is None:
+                    raise ValueError(
+                        "Gutenberg range response omitted a usable Content-Range."
+                    )
+                range_start, range_end, total = parsed
+                if range_start != offset:
+                    raise ValueError(
+                        f"Gutenberg returned byte {range_start:,} while {offset:,} was requested."
+                    )
+                expected = range_end - range_start + 1
+                if expected <= 0 or expected > requested:
+                    raise ValueError("Gutenberg returned an invalid byte range.")
+
+                known_total = int(state.get("total_bytes") or 0)
+                if offset and known_total and total != known_total:
+                    return self._restart_for_changed_archive(response)
+
+                response_etag = str(response.headers.get("etag") or "").strip()
+                response_modified = str(
+                    response.headers.get("last-modified") or ""
+                ).strip()
+                known_etag = str(state.get("etag") or "").strip()
+                known_modified = str(state.get("last_modified") or "").strip()
+                if offset and known_etag and response_etag and response_etag != known_etag:
+                    return self._restart_for_changed_archive(response)
+                if (
+                    offset
+                    and not known_etag
+                    and known_modified
+                    and response_modified
+                    and response_modified != known_modified
+                ):
+                    return self._restart_for_changed_archive(response)
+
+                received = 0
+                with chunk_path.open("wb") as chunk_file:
+                    for payload in response.iter_bytes(chunk_size=1024 * 1024):
+                        if (
+                            self._stop.is_set()
+                            or self.status()["archive"]["status"] != "downloading"
+                        ):
+                            chunk_path.unlink(missing_ok=True)
+                            return self.status()
+                        received += len(payload)
+                        if received > expected:
+                            raise ValueError(
+                                "Gutenberg archive response exceeded the requested byte range."
+                            )
+                        chunk_file.write(payload)
+                    chunk_file.flush()
+
+                if received != expected:
+                    raise ValueError(
+                        f"Gutenberg archive range ended at {received:,} bytes; expected {expected:,}."
+                    )
+
+            # Re-check durable state after the network request. A pause/refetch
+            # while the request was in flight must not append stale bytes.
+            if (
+                self._stop.is_set()
+                or self.status()["archive"]["status"] != "downloading"
+            ):
+                chunk_path.unlink(missing_ok=True)
                 return self.status()
+
             self.archive_path.parent.mkdir(parents=True, exist_ok=True)
-            with self.archive_path.open("ab" if offset else "wb") as handle:
-                handle.write(response.content)
-            content_range = response.headers.get("content-range", "")
-            total_text = content_range.rsplit("/", 1)[-1] if "/" in content_range else response.headers.get("content-length", "0")
-            total = int(total_text or 0)
+            with self.archive_path.open("ab" if offset else "wb") as destination:
+                with chunk_path.open("rb") as source:
+                    shutil.copyfileobj(source, destination, length=1024 * 1024)
+                destination.flush()
+            chunk_path.unlink(missing_ok=True)
+
             done = self._bytes_done()
-            status = "downloaded" if total and done >= total else "downloading"
-            with sqlite3.connect(self.db_path) as db:
-                db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=?,total_bytes=?,error=NULL,updated_at=? WHERE id=1", (status,done,total or None,_now()))
-            self._changed()
-            return self.status()
-        except (httpx.HTTPError, OSError, ValueError) as exc:
+            if done != offset + received:
+                raise OSError(
+                    f"Gutenberg archive size changed unexpectedly: {done:,} bytes on disk."
+                )
+            status = "downloaded" if done >= total else "downloading"
             with sqlite3.connect(self.db_path) as db:
                 db.execute(
-                    "UPDATE gutenberg_archive SET status='error',error=?,bytes_done=?,updated_at=? WHERE id=1",
-                    (str(exc) or exc.__class__.__name__, self._bytes_done(), _now()),
+                    """
+                    UPDATE gutenberg_archive
+                    SET status=?,bytes_done=?,total_bytes=?,etag=?,last_modified=?,
+                        error=NULL,retry_count=0,next_retry_at=NULL,updated_at=?
+                    WHERE id=1
+                    """,
+                    (
+                        status,
+                        done,
+                        total,
+                        response_etag or state.get("etag"),
+                        response_modified or state.get("last_modified"),
+                        _now(),
+                    ),
                 )
             self._changed()
+            return self.status()
+        except Exception:
+            chunk_path.unlink(missing_ok=True)
             raise
+
 
 
 gutenberg_offline = GutenbergOfflineService()
