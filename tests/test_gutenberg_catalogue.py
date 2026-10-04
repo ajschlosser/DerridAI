@@ -45,7 +45,7 @@ def _make_archive(path: Path) -> None:
     )
     tar_buffer = io.BytesIO()
     with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
-        info = tarfile.TarInfo("1342.txt")
+        info = tarfile.TarInfo("cache/1342-0.txt")
         info.size = len(text)
         tar.addfile(info, io.BytesIO(text))
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -79,9 +79,18 @@ def test_streamed_archive_extraction_persists_text_and_metadata(tmp_path: Path):
         row = db.execute(
             "SELECT path,content FROM gutenberg_books WHERE etext_id=1342"
         ).fetchone()
+        db.execute("UPDATE gutenberg_archive SET status='ready' WHERE id=1")
     assert row is not None
-    assert Path(row[0]).is_file()
-    assert row[1] == ""
+    assert row[0] == ""
+    assert "available offline" in row[1]
+
+    # The ZIP is transport staging, not the installed library. Once text is in
+    # SQLite, deleting the 11 GB archive must not make the collection disappear.
+    archive_path.unlink()
+    state = service.status()
+    assert state["ready"] is True
+    assert state["archive"]["local_text_count"] == 1
+    assert state["archive"]["items_done"] == 1
 
 
 def test_catalogue_refresh_indexes_local_search_before_archive_download(tmp_path: Path):
