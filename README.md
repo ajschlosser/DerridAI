@@ -137,14 +137,14 @@ For developers working inside a subsystem, the local maps are more specific than
 - [Frontend test architecture](web/tests/README.md)
 ### Contributing by area
 
-| If you want to change… | Start here |
-| --- | --- |
-| Backend/domain behavior | [`api/README.md`](api/README.md) → [`api/app/README.md`](api/app/README.md) |
-| Frontend route/workspace behavior | [`web/README.md`](web/README.md) → [`web/src/README.md`](web/src/README.md) |
-| Reusable UI or Storybook components | [`web/src/components/README.md`](web/src/components/README.md) |
-| Corpus Builder | [`web/src/features/corpus-builder/README.md`](web/src/features/corpus-builder/README.md) and [`web/src/components/corpus-builder/README.md`](web/src/components/corpus-builder/README.md) |
-| Pipeline Studio | [`api/app/pipelines/README.md`](api/app/pipelines/README.md) and [`web/src/components/pipelines/README.md`](web/src/components/pipelines/README.md) |
-| Tests / CI ownership | [`tests/README.md`](tests/README.md) and [`web/tests/README.md`](web/tests/README.md) |
+| If you want to change…              | Start here                                                                                                                                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend/domain behavior             | [`api/README.md`](api/README.md) → [`api/app/README.md`](api/app/README.md)                                                                                                               |
+| Frontend route/workspace behavior   | [`web/README.md`](web/README.md) → [`web/src/README.md`](web/src/README.md)                                                                                                               |
+| Reusable UI or Storybook components | [`web/src/components/README.md`](web/src/components/README.md)                                                                                                                            |
+| Corpus Builder                      | [`web/src/features/corpus-builder/README.md`](web/src/features/corpus-builder/README.md) and [`web/src/components/corpus-builder/README.md`](web/src/components/corpus-builder/README.md) |
+| Pipeline Studio                     | [`api/app/pipelines/README.md`](api/app/pipelines/README.md) and [`web/src/components/pipelines/README.md`](web/src/components/pipelines/README.md)                                       |
+| Tests / CI ownership                | [`tests/README.md`](tests/README.md) and [`web/tests/README.md`](web/tests/README.md)                                                                                                     |
 
 Read [`docs/CODE_READABILITY.md`](docs/CODE_READABILITY.md) before a refactor. It records naming, documentation, nesting, and provenance-preservation conventions, plus the main traps in legacy/derived-state code.
 
