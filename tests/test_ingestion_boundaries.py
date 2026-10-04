@@ -23,8 +23,10 @@ import io
 import json
 import subprocess
 import sys
+import threading
 import types
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -49,6 +51,258 @@ from app.rag import _citation_strings
 from app.source_media import detect_media_kind, extract_non_pdf
 from app.source_text import docx_to_text, rtf_to_text
 from test_human_overrides_and_reruns import install_review_build
+
+
+def test_slow_source_extraction_does_not_block_other_repository_work(tmp_path, monkeypatch):
+    repo, build = install_review_build(tmp_path, {"text": "Reviewed source."})
+    record = repo.load_records(build["build_id"])[0]
+    extracting = threading.Event()
+    release = threading.Event()
+    original = repo._extract_for_ingest
+
+    def extract(data, **kwargs):
+        if data == b"Slow source.":
+            extracting.set()
+            assert release.wait(10)
+        return original(data, **kwargs)
+
+    monkeypatch.setattr(repo, "_extract_for_ingest", extract)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        slow = pool.submit(repo.save_asset, b"Slow source.", filename="slow.txt")
+        try:
+            assert extracting.wait(5)
+            updated = {**record, "text": "Corrected source.", "record_revision": 2}
+            write = pool.submit(repo.update_record, build["build_id"], updated)
+            committed = write.result(timeout=5)
+            assert committed["text"] == "Corrected source."
+            restarted = PdfCorpusRepository(repo.root)
+            assert restarted.load_records(build["build_id"])[0]["text"] == "Corrected source."
+        finally:
+            release.set()
+        assert slow.result(timeout=5)["asset_id"]
+
+
+def test_identical_source_imports_share_extraction(tmp_path, monkeypatch):
+    repo = PdfCorpusRepository(tmp_path / "corpus")
+    extracting = threading.Event()
+    release = threading.Event()
+    original = repo._extract_for_ingest
+    calls = []
+
+    def extract(data, **kwargs):
+        calls.append(data)
+        extracting.set()
+        assert release.wait(10)
+        return original(data, **kwargs)
+
+    monkeypatch.setattr(repo, "_extract_for_ingest", extract)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        first = pool.submit(repo.save_asset, b"Same source.", filename="same.txt")
+        try:
+            assert extracting.wait(5)
+            followers = [
+                pool.submit(repo.save_asset, b"Same source.", filename="same.txt")
+                for _ in range(3)
+            ]
+        finally:
+            release.set()
+        assets = [first.result(timeout=5), *(future.result(timeout=5) for future in followers)]
+    assert len(calls) == 1
+    assert all(asset == assets[0] for asset in assets)
+    asset_id = assets[0]["asset_id"]
+    assert repo.asset_content_path(asset_id, ".txt").read_bytes() == b"Same source."
+    assert "".join(block["text"] for block in repo.load_blocks(asset_id)) == "Same source."
+
+
+def test_failed_source_extraction_releases_admission_without_publishing(tmp_path, monkeypatch):
+    repo = PdfCorpusRepository(tmp_path / "corpus")
+    original = repo._extract_for_ingest
+
+    def fail(*args, **kwargs):
+        raise ValueError("Extraction failed")
+
+    monkeypatch.setattr(repo, "_extract_for_ingest", fail)
+    with pytest.raises(ValueError, match="Extraction failed"):
+        repo.save_asset(b"Retry source.", filename="retry.txt")
+    assert not list((repo.root / "assets").iterdir())
+    monkeypatch.setattr(repo, "_extract_for_ingest", original)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        asset = pool.submit(repo.save_asset, b"Retry source.", filename="retry.txt").result(timeout=5)
+    loaded = repo.get_asset(asset["asset_id"])
+    assert all(loaded[key] == value for key, value in asset.items())
+
+
+def test_source_publication_rechecks_an_asset_created_during_extraction(tmp_path, monkeypatch):
+    repo = PdfCorpusRepository(tmp_path / "corpus")
+    other = PdfCorpusRepository(repo.root)
+    original = repo._extract_for_ingest
+    winner = {}
+
+    def extract(data, **kwargs):
+        winner.update(other.save_asset(data, filename="winner.txt"))
+        return original(data, **kwargs)
+
+    monkeypatch.setattr(repo, "_extract_for_ingest", extract)
+    asset = repo.save_asset(b"Shared source.", filename="later.txt")
+    assert asset == winner
+    assert asset["filename"] == "winner.txt"
+    assert repo.asset_content_path(asset["asset_id"], ".txt").read_bytes() == b"Shared source."
+
+
+def test_staged_source_io_does_not_reserve_canonical_writer(tmp_path, monkeypatch):
+    repo, build = install_review_build(tmp_path, {"text": "Reviewed source."})
+    staging = threading.Event()
+    release = threading.Event()
+    original = repo._stage_asset
+
+    def stage(*args):
+        staging.set()
+        assert release.wait(10)
+        return original(*args)
+
+    monkeypatch.setattr(repo, "_stage_asset", stage)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        source = pool.submit(repo.save_asset, b"Staged source.", filename="staged.txt")
+        try:
+            assert staging.wait(5)
+            record = repo.get_record(build["build_id"], "r1")
+            record["text"] = "Canonical correction."
+            committed = pool.submit(repo.update_record, build["build_id"], record).result(timeout=5)
+            assert committed["text"] == "Canonical correction."
+        finally:
+            release.set()
+        asset = source.result(timeout=5)
+    restarted = PdfCorpusRepository(repo.root)
+    assert restarted.get_asset(asset["asset_id"])["extraction_provenance"] == asset["extraction_provenance"]
+    assert restarted.asset_content_path(asset["asset_id"], ".txt").read_bytes() == b"Staged source."
+    assert not list((repo.root / "assets").glob(".ingest-*"))
+
+
+@pytest.mark.parametrize("failure", ["staging", "blocks", "meta"])
+def test_source_staging_or_publication_failure_is_retryable(tmp_path, monkeypatch, failure):
+    repo = PdfCorpusRepository(tmp_path / "corpus")
+    original_stage = repo._stage_asset
+    original_replace = cb.os.replace
+
+    def stage(staged, *args):
+        original_stage(staged, *args)
+        if failure == "staging":
+            raise OSError("injected source failure")
+
+    def replace(source, target):
+        source = Path(source)
+        if source.parent.name.startswith(".ingest-") and source.name == failure:
+            raise OSError("injected source failure")
+        return original_replace(source, target)
+
+    monkeypatch.setattr(repo, "_stage_asset", stage)
+    monkeypatch.setattr(cb.os, "replace", replace)
+    with pytest.raises(OSError, match="injected source failure"):
+        repo.save_asset(b"Durable source.", filename="durable.txt")
+    assert not list((repo.root / "assets").iterdir())
+    monkeypatch.setattr(cb.os, "replace", original_replace)
+    restarted = PdfCorpusRepository(repo.root)
+    asset = restarted.save_asset(b"Durable source.", filename="durable.txt")
+    assert restarted.load_blocks(asset["asset_id"])[0]["text"] == "Durable source."
+
+
+def test_staging_rechecks_winner_and_discards_private_artifacts(tmp_path, monkeypatch):
+    repo = PdfCorpusRepository(tmp_path / "corpus")
+    other = PdfCorpusRepository(repo.root)
+    original = repo._stage_asset
+    winner = {}
+
+    def stage(*args):
+        original(*args)
+        winner.update(other.save_asset(b"Winner source.", filename="winner.txt"))
+
+    monkeypatch.setattr(repo, "_stage_asset", stage)
+    assert repo.save_asset(b"Winner source.", filename="loser.txt") == winner
+    assert not list((repo.root / "assets").glob(".ingest-*"))
+    assert other.get_asset(winner["asset_id"])["filename"] == "winner.txt"
+
+
+def test_checkpoint_io_is_build_scoped_and_deletion_cannot_resurrect(tmp_path, monkeypatch):
+    repo, build = install_review_build(tmp_path, {"text": "Reviewed source."})
+    second = repo.create_build({"asset_id": build["asset_id"]})
+    writing = threading.Event()
+    release = threading.Event()
+    original = cb._json_write
+
+    def write(path, payload):
+        if path == repo.build_checkpoint_path(build["build_id"], "slow"):
+            writing.set()
+            assert release.wait(10)
+        return original(path, payload)
+
+    monkeypatch.setattr(cb, "_json_write", write)
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        checkpoint = pool.submit(repo.save_checkpoint, build["build_id"], "slow", {"version": 1})
+        try:
+            assert writing.wait(5)
+            pool.submit(repo.save_checkpoint, second["build_id"], "fast", {"version": 2}).result(timeout=5)
+            record = repo.get_record(build["build_id"], "r1")
+            record["text"] = "New authoritative text."
+            committed = pool.submit(repo.update_record, build["build_id"], record).result(timeout=5)
+            assert committed["text"] == "New authoritative text."
+            deletion = pool.submit(repo.delete_build_files, build["build_id"])
+            assert not deletion.done()
+        finally:
+            release.set()
+        checkpoint.result(timeout=5)
+        deletion.result(timeout=5)
+    assert not repo.build_path(build["build_id"]).parent.exists()
+    with pytest.raises(KeyError):
+        repo.save_checkpoint(build["build_id"], "slow", {"version": 3})
+    assert PdfCorpusRepository(repo.root).load_checkpoint(second["build_id"], "fast") == {"version": 2}
+
+
+def test_checkpoint_failure_releases_build_admission(tmp_path, monkeypatch):
+    repo, build = install_review_build(tmp_path, {"text": "Reviewed source."})
+    bid = build["build_id"]
+    repo.save_checkpoint(bid, "resume", {"version": 1})
+    original = cb._json_write
+
+    def fail(path, payload):
+        if path == repo.build_checkpoint_path(bid, "resume"):
+            raise OSError("checkpoint failure")
+        return original(path, payload)
+
+    monkeypatch.setattr(cb, "_json_write", fail)
+    with pytest.raises(OSError, match="checkpoint failure"):
+        repo.save_checkpoint(bid, "resume", {"version": 2})
+    assert repo.load_checkpoint(bid, "resume") == {"version": 1}
+    monkeypatch.setattr(cb, "_json_write", original)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pool.submit(repo.save_checkpoint, bid, "resume", {"version": 3}).result(timeout=5)
+    assert PdfCorpusRepository(repo.root).load_checkpoint(bid, "resume") == {"version": 3}
+
+
+def test_restart_ignores_unpublished_source_artifacts_and_retries(tmp_path, monkeypatch):
+    repo = PdfCorpusRepository(tmp_path / "corpus")
+    original = repo._stage_asset
+    captured = {}
+
+    def stage(staged, data, blocks, meta):
+        original(staged, data, blocks, meta)
+        captured.update(meta)
+        raise OSError("interrupted")
+
+    monkeypatch.setattr(repo, "_stage_asset", stage)
+    with pytest.raises(OSError, match="interrupted"):
+        repo.save_asset(b"Recovery source.", filename="recovery.txt")
+    # Simulate process death after content rename but before the metadata marker.
+    repo.asset_content_path(captured["asset_id"], ".txt").write_bytes(b"Recovery source.")
+    orphan = repo.root / "assets" / ".ingest-interrupted"
+    orphan.mkdir()
+    (orphan / "meta").write_text(json.dumps(captured), encoding="utf-8")
+    restarted = PdfCorpusRepository(repo.root)
+    assert restarted.list_assets() == []
+    with pytest.raises(KeyError):
+        restarted.get_asset(captured["asset_id"])
+    asset = restarted.save_asset(b"Recovery source.", filename="recovery.txt")
+    assert restarted.load_blocks(asset["asset_id"])[0]["text"] == "Recovery source."
+    assert restarted.get_asset(asset["asset_id"])["sha256"] == captured["sha256"]
 
 
 def minimal_docx(title: str, author: str, paragraphs: list[str]) -> bytes:

@@ -895,6 +895,7 @@ def _instrument_benchmark_writes(repo, monkeypatch):
         "lookup", "schema", "bootstrap", "projection_marker", "sqlite_scope",
         "projection_ensure", "queue_update", "semantic_invalidation", "notification",
         "repository_lock_wait", "sqlite_begin", "sqlite_statements", "sqlite_commit",
+        "source_stage", "checkpoint",
     )
 
     @contextmanager
@@ -925,6 +926,8 @@ def _instrument_benchmark_writes(repo, monkeypatch):
         ("_set_records_projection_state", "projection_marker"),
         ("_ensure_review_projection", "projection_ensure"),
         ("_notify_metadata_projection", "notification"),
+        ("_stage_asset", "source_stage"),
+        ("save_checkpoint", "checkpoint"),
     ):
         wrap(repo, name, phase)
     wrap(cb.corpus_queue_projection, "update_rows", "queue_update")
@@ -972,6 +975,128 @@ def _instrument_benchmark_writes(repo, monkeypatch):
 
     monkeypatch.setattr(repo, "_lock", MeasuredLock())
     return state, phases
+
+
+@pytest.mark.parametrize("scope", ["source_stage", "checkpoint"])
+def test_scoped_coordination_work_counts(tmp_path, monkeypatch, scope):
+    monkeypatch.setenv("CORPUS_READ_BENCHMARK", str(tmp_path / "scoped.jsonl"))
+    _scoped_coordination_benchmark(tmp_path, monkeypatch, scope, 3)
+    rows = [json.loads(line) for line in (tmp_path / "scoped.jsonl").read_text().splitlines()]
+    assert [row["mode"] for row in rows] == ["coarse_comparison", "scoped"]
+    for row in rows:
+        assert row["canonical_writes"] == row["samples"] == 3
+        assert row["payloads_decoded"] == 3
+        assert len(row["write_phase_samples_ms"]) == 3
+        assert len(row["blocking_operation_times_ms"]) == 3
+        assert len(row["blocking_phase_samples_ms"]) == 3
+        assert row["blocking_work_count"] == 3
+
+
+@pytest.mark.skipif(not os.environ.get("CORPUS_READ_BENCHMARK"), reason="opt-in coordination measurements")
+@pytest.mark.parametrize("scope", ["source_stage", "checkpoint"])
+def test_scoped_coordination_benchmark(tmp_path, monkeypatch, scope):
+    _scoped_coordination_benchmark(tmp_path, monkeypatch, scope, 10)
+
+
+def _scoped_coordination_benchmark(tmp_path, monkeypatch, scope, samples):
+    """Controlled I/O delay comparison, not a historical deployment replay."""
+    repo, build = install_repo(tmp_path, [ready_record("r0", "b0")])
+    bid = build["build_id"]
+    other = repo.create_build({"asset_id": build["asset_id"]})
+    timing_state, phases = _instrument_benchmark_writes(repo, monkeypatch)
+    decoded = 0
+    original_decode = repo._decode_migrated
+
+    def decode(*args):
+        nonlocal decoded
+        decoded += 1
+        return original_decode(*args)
+
+    monkeypatch.setattr(repo, "_decode_migrated", decode)
+    original_stage = repo._stage_asset
+    original_json = cb._json_write
+    admitted = threading.Event()
+
+    def delay():
+        admitted.set()
+        time.sleep(0.04)
+
+    def stage(*args):
+        delay()
+        return original_stage(*args)
+
+    def write(path, payload):
+        if path == repo.build_checkpoint_path(other["build_id"], "measurement"):
+            delay()
+        return original_json(path, payload)
+
+    monkeypatch.setattr(repo, "_stage_asset", stage)
+    monkeypatch.setattr(cb, "_json_write", write)
+    for mode in ("coarse_comparison", "scoped"):
+        durations = []
+        phase_samples = []
+        blocking_times = []
+        blocking_phases = []
+        decoded_before = decoded
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            for index in range(samples):
+                admitted.clear()
+
+                def blocker():
+                    def operation():
+                        if scope == "source_stage":
+                            return repo.save_asset(f"{mode}-{index}".encode(), filename="measurement.txt")
+                        return repo.save_checkpoint(other["build_id"], "measurement", {"index": index})
+                    timing_state.sample = dict.fromkeys(phases, 0.0)
+                    started = time.perf_counter()
+                    try:
+                        if mode == "coarse_comparison":
+                            with repo._lock:
+                                operation()
+                        else:
+                            operation()
+                        return (time.perf_counter() - started) * 1000, timing_state.sample
+                    finally:
+                        timing_state.sample = None
+
+                blocked = pool.submit(blocker)
+                assert admitted.wait(10)
+                timing_state.sample = dict.fromkeys(phases, 0.0)
+                started = time.perf_counter()
+                try:
+                    record = repo.get_record(bid, "r0")
+                    record["metadata_enrichment_state"] = "running" if index % 2 == 0 else "complete"
+                    committed = repo.update_record(bid, record)
+                    assert committed["record_revision"] == record["record_revision"]
+                    assert committed["queue_state_version"] > 0
+                    durations.append((time.perf_counter() - started) * 1000)
+                    phase_samples.append(timing_state.sample)
+                finally:
+                    timing_state.sample = None
+                duration, sample = blocked.result(timeout=10)
+                blocking_times.append(duration)
+                blocking_phases.append(sample)
+        ranked = sorted(durations)
+        assert decoded - decoded_before == samples
+        restarted = cb.PdfCorpusRepository(repo.root)
+        assert restarted.get_record(bid, "r0")["metadata_enrichment_state"] == record["metadata_enrichment_state"]
+        row = {
+            "contract": "corpus-scoped-coordination-v1", "scope": scope, "mode": mode,
+            "samples": samples, "canonical_writes": samples, "blocking_work_count": samples,
+            "payloads_decoded": decoded - decoded_before, "write_times_ms": durations,
+            "write_phase_samples_ms": phase_samples,
+            "blocking_operation_times_ms": blocking_times,
+            "blocking_phase_samples_ms": blocking_phases,
+            "injected_io_delay_ms": 40,
+            "write_p50_ms": ranked[(samples - 1) // 2],
+            "write_p95_ms": ranked[(samples * 95 + 99) // 100 - 1],
+            "python": platform.python_version(), "platform": platform.platform(),
+            "basis": "one shared repository; two synthetic builds; injected 40-ms I/O delay",
+            "comparison": "current code with explicit outer repository reservation, not prior deployment",
+            "excludes": "HTTP, browser, live providers, real source extraction, crash/filesystem acceptance",
+        }
+        with Path(os.environ["CORPUS_READ_BENCHMARK"]).open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row) + "\n")
 
 
 @pytest.mark.parametrize("journal_mode", ["off", "memory", "unknown"])
