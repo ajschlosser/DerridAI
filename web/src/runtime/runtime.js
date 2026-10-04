@@ -273,7 +273,6 @@ import { canAccessPage, canUse, hasCapability, isResearcher } from "../domain/sh
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { applyAppearance } from "../domain/sharedAppearance";
 import { relativeTimeLabel } from "../domain/relativeTimeLabel";
-import { createRecordSubsets } from "../domain/recordSubsets";
 
 pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 
@@ -1063,17 +1062,6 @@ function viewDisabledReason(view) {
   return "";
 }
 
-// Subset files for the Vue Records view: the sources, fields and file creation, over the loaded files.
-const { subsetSources, subsetSourceRecords, subsetFields, defaultSubsetName, createSubsetFile } =
-  createRecordSubsets({
-    state,
-    cloneAuditValue,
-    downloadBlob: (...args) => downloadBlob(...args),
-    label: (...args) => label(...args),
-    navigateTo: (...args) => navigateTo(...args),
-    persistFileNow: (...args) => persistFileNow(...args),
-    uid,
-  });
 const {
   openMergeDialog,
   openBulkFieldEditor,
@@ -1130,44 +1118,6 @@ function cleanRecord(f, i) {
     ),
     { tone: "success" },
   );
-}
-
-function exportMenu() {
-  const dialog = document.createElement("dialog");
-  dialog.innerHTML = `<div class="dh"><h2 style="margin:0;font-size:16px">${esc(tr("export.title"))}</h2><button class="btn" data-close>${esc(tr("ui.close"))}</button></div><div class="db"><div class="tools"><button class="btn" data-export="current">${esc(tr("export.current"))}</button><button class="btn" data-export="changed">${esc(tr("export.changed"))}</button><button class="btn" data-export="all">${esc(tr("export.all"))}</button><button class="btn" data-export="aggregate">${esc(tr("export.aggregate"))}</button><button class="btn" data-export="both">${esc(tr("export.changed_aggregate"))}</button></div></div>`;
-  document.body.appendChild(dialog);
-  showAppModal(dialog);
-  dialog.querySelector("[data-close]").onclick = () => {
-    dialog.close();
-    dialog.remove();
-  };
-  dialog.querySelectorAll("[data-export]").forEach(
-    (button) =>
-      (button.onclick = () => {
-        doExport(button.dataset.export);
-        dialog.close();
-        dialog.remove();
-      }),
-  );
-}
-function doExport(kind) {
-  const current = activeFile(),
-    changed = state.files.filter((f) => f.dirty.size);
-  if (kind === "current" && current) download(current.name, fileJsonl(current));
-  if (kind === "changed")
-    changed.forEach((f, i) => setTimeout(() => download(f.name, fileJsonl(f)), i * 160));
-  if (kind === "all")
-    state.files.forEach((f, i) => setTimeout(() => download(f.name, fileJsonl(f)), i * 160));
-  if (kind === "aggregate" || kind === "both")
-    download(
-      "derridai-aggregate.jsonl",
-      state.files
-        .flatMap((f) => f.records)
-        .map((r) => JSON.stringify(r))
-        .join("\n") + "\n",
-    );
-  if (kind === "both")
-    changed.forEach((f, i) => setTimeout(() => download(f.name, fileJsonl(f)), 250 + i * 160));
 }
 
 async function currentPdfPageText() {
@@ -1771,11 +1721,6 @@ function toggleSidebar() {
   persistPrefs();
   shell();
 }
-function triggerMerge() {
-  return canUse("manageCorpus")
-    ? openMergeDialog()
-    : toast(tr("runtime.toast.cannot_merge_files"), { tone: "warning" });
-}
 function triggerBulkEdit() {
   return canUse("editLocalRecords")
     ? openBulkFieldEditor()
@@ -1800,11 +1745,6 @@ function triggerUpsertQueue() {
   return canUse("manageCorpus")
     ? openUpsertQueue()
     : toast(tr("runtime.toast.cannot_manage_dbs"), { tone: "warning" });
-}
-function triggerExport() {
-  return canUse("manageCorpus")
-    ? exportMenu()
-    : toast(tr("runtime.toast.cannot_export"), { tone: "warning" });
 }
 function triggerEdit() {
   return canUse("editLocalRecords")
@@ -2252,12 +2192,6 @@ export {
   renderView,
   toggleSidebar,
   activateFile,
-  triggerMerge,
-  subsetSources,
-  subsetSourceRecords,
-  subsetFields,
-  defaultSubsetName,
-  createSubsetFile,
   triggerBulkEdit,
   triggerOcrClean,
   triggerReviewFlagged,
@@ -2270,7 +2204,6 @@ export {
   touchupSubmitBackground,
   touchupApplyResults,
   triggerUpsertQueue,
-  triggerExport,
   triggerEdit,
   getProviderProfilesForUi,
   getProviderRequestConfigForUi,

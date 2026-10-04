@@ -154,6 +154,7 @@ const runtime = vi.hoisted(() => ({
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
 vi.mock("../../src/domain/sharedRecordsWorkspace", () => ({ recordsWorkspace: runtime }));
 vi.mock("../../src/domain/sharedFileLifecycle", () => ({ closeFile: runtime.closeWorkspaceFile }));
+vi.mock("../../src/domain/sharedRecordFileCommands", () => ({ ...runtime }));
 vi.mock("../../src/domain/workspaceActions", () => ({
   activateFile: runtime.activateFile,
   searchByMetadata: (field: string, value: unknown, options: { contains?: boolean }) =>
