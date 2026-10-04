@@ -102,7 +102,7 @@ import "./sharedAnnotations";
 import "../state/jobsState";
 import "./corpusCache";
 import "./sharedUrlState";
-import "../runtime/jobsUiComposition.js";
+import "../runtime/jobsUiComposition";
 import "./sharedStores";
 import "./sharedSession";
 import "./databaseCreationRequest";
