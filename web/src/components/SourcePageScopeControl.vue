@@ -46,9 +46,11 @@ const error = computed(() => parsed.value.error
   ? i18n.t("pdf_corpus.source_scope_invalid", parsed.value.error)
   : "");
 const selectedCount = computed(() => pages.value.length || Math.max(0, props.pageCount));
-const summary = computed(() => pages.value.length
-  ? i18n.tf("pdf_corpus.source_scope_selected", { count: selectedCount.value })
-  : i18n.tf("pdf_corpus.source_scope_all", { count: selectedCount.value }));
+const summary = computed(() =>
+  pages.value.length
+    ? `${i18n.t("pdf_corpus.source_scope_selected_label", "Pages selected")}: ${selectedCount.value}`
+    : `${i18n.t("pdf_corpus.source_scope_all_label", "All pages")}: ${selectedCount.value}`,
+);
 const provenance = computed(() => {
   const detection = props.pageDetection;
   if (!detection) return i18n.t("pdf_corpus.source_scope_physical_help", "Selections use the source's extracted page order.");
