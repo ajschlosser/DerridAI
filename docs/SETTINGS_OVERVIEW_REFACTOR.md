@@ -98,7 +98,7 @@ Overview should use compact category navigation surfaces with limited live conte
 | Workspace → About DerridAI                      | Overview footer/product information             |
 | Language & accessibility → Interface language   | Preferences → Language & accessibility          |
 | Contrast                                        | Preferences → Accessibility                     |
-| Manage Languages                                | Contextual link to Languages workspace          |
+| Locale                                          | Contextual link to Locale workspace             |
 | Research defaults → Response language           | Research & review → Research output defaults    |
 | Review & AI behavior → provider/preset/run mode | Research & review → Review execution            |
 | Auto-grade cached answers                       | Research & review → Evaluation defaults         |
