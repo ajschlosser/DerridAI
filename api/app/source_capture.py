@@ -99,7 +99,7 @@ def default_identity_enricher(candidates: list[SourceCandidate], author: Resolve
     # A locally resolved Gutenberg author plus Gutenberg-only candidates has a
     # complete acquisition path without Wikimedia. Work/edition reconciliation
     # remains optional enrichment rather than a hidden network prerequisite.
-    if not author.wikidata_qid and candidates and all(c.provider == "gutenberg" for c in candidates):
+    if not author.wikidata_qid and all(c.provider == "gutenberg" for c in candidates):
         return warnings
     http = ProviderHttp("wikimedia", cancelled=cancelled)
     try:
