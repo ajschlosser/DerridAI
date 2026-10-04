@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Contributing
 
-This is the human-developer entry point for working on DerridAI. Read [AGENTS.md](AGENTS.md) when using coding agents, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing subsystem boundaries, and [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) before changing provenance, metadata, evidence, or scholarly semantics.
+This is the human-developer entry point for working on DerridAI. Read [AGENTS.md](AGENTS.md) when using coding agents, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing subsystem boundaries, [docs/CODE_READABILITY.md](docs/CODE_READABILITY.md) for naming/comment/refactoring conventions, and [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) before changing provenance, metadata, evidence, or scholarly semantics.
 
 Read [docs/CODE_READABILITY.md](docs/CODE_READABILITY.md) before structural refactors. It defines the repository's naming/commenting conventions and the rule that readability changes must preserve provenance, authority, cancellation, conflict, and stale-state safeguards.
 
