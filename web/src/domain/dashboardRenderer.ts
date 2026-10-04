@@ -566,7 +566,7 @@ export function createDashboardRenderer(deps: Deps) {
       if (isResearcher()) navigateTo("config");
       else
         window.dispatchEvent(
-          new CustomEvent("derridai:navigate-native", { detail: { path: "/languages" } }),
+          new CustomEvent("derridai:navigate-native", { detail: { path: "/locale" } }),
         );
     });
     main
