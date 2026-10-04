@@ -105,8 +105,11 @@ export function createResearchWorkspace(deps: Deps) {
       fallback || englishDefault(key) || key,
     ),
   );
-  function researchConfigForUi() {
-    return cloneAuditValue(state.ragConfig || {});
+  function researchConfigForUi(): Loose {
+    const cloned = cloneAuditValue(state.ragConfig || {});
+    return cloned && typeof cloned === "object" && !Array.isArray(cloned)
+      ? (cloned as Loose)
+      : {};
   }
   async function getResearchWorkspaceSnapshot({
     refresh = false,
