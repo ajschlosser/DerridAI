@@ -43,7 +43,7 @@ Every ingestion path must:
 | RTF               | Validate header/group structure and nesting; reject embedded objects/active fields and pathological depth/size; extract text without executing control content.                                                                                                                                                 |
 | Plain text        | Enforce byte/encoding limits and preserve source text; do not invent page semantics.                                                                                                                                                                                                                            |
 | Images            | Decode only supported inert formats; enforce byte and pixel/dimension limits before OCR; reject unsupported active/vector formats where the safe path does not support them; image metadata is data, not executable content.                                                                                    |
-| Audio             | Keep speech dependencies optional/isolated; validate codec/container through bounded probing; enforce byte/duration/time limits; handle missing dependencies/credentials explicitly; preserve transcript timing/speaker provenance and allow human transcript revisions without overwriting extraction history. |
+| Audio             | Validate codec/container through bounded probing; enforce byte/duration/time limits; request word and segment timestamps; align words when the provider supplies only segments; diarize independently; bind speakers to aligned words before reconstructing timed speaker turns; preserve provider transcript, diarization labels, timing, uncertainty, and reviewed speaker identity as distinct provenance; allow human transcript/speaker revisions without overwriting extraction history. |
 | URL               | Fetch only through the supported bounded ingestion path; preserve requested/final source identity and extraction provenance; do not treat remote page scripts as executable application content.                                                                                                                |
 | Project Gutenberg | Resolve edition identity explicitly; preserve selected edition/source URL/digest/metadata; enforce network/encoding/size limits; identical text from different editions must not collapse scholarly source identity.                                                                                            |
 
@@ -67,7 +67,7 @@ The ingestion boundary suite should cover at least:
 - missing optional audio/tool dependencies;
 - probe/extraction/transcription/download timeouts;
 - image pixel limits;
-- audio duration limits and invalid/empty transcripts;
+- audio duration limits, invalid/empty transcripts, word-alignment fallbacks, speaker changes inside transcription segments, and ambiguous speaker overlaps;
 - Project Gutenberg lookup/edition/identity/digest behavior;
 - extractor provenance persistence;
 - source-text conservation and human revision behavior;
