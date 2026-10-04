@@ -78,3 +78,7 @@ flowchart LR
 ## Change checklist
 
 When adding a strategy, define its typed inputs/outputs, complexity, concurrency semantics, validation, and registry entry together. When adding or migrating a purpose, keep domain policy outside the computational graph unless it is genuinely a tuning choice, add the purpose contract and adapter, and cover graph validation plus runtime semantics in `tests/test_pipeline_*.py`.
+
+For readability, name stages, ports, bindings, and resolved strategies by their role rather than by position in a list. Wiring and fallback algorithms should expose their phases—validation, resolution, execution, trace projection—with short comments where ordering matters. Avoid a generic “pipeline data” dictionary when an existing contract type can state the port semantics.
+
+Common traps are changing a registry entry without its version/definition implications, adding a graph port that the purpose adapter never consumes, logging source text or secrets into a trace, and treating comparison/benchmark output as persisted scholarly state. A compatibility pipeline that cannot satisfy current provenance/support gates may remain inspectable without being executable.

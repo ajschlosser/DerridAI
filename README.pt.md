@@ -94,6 +94,7 @@ flowchart LR
         REST["REST commands + mutations"]
         GQL["façade GraphQL de leitura"]
         WS["notificações WebSocket"]
+        Reads["serviços de leitura cELF"]
         Domains["Corpus · Research · Pipelines · Jobs"]
     end
 
@@ -107,11 +108,15 @@ flowchart LR
     Browser --> GQL
     Browser <-->|bounded events| WS
     REST --> Domains
-    GQL --> Domains
+    REST --> Reads
+    GQL --> Reads
+    Reads --> Canonical
+    Reads -. query derived projections .-> Chroma
     Domains --> Canonical
     Domains --> System
     Domains -. index / retrieve .-> Chroma
     Domains --> Providers
+    Domains -. change notifications .-> WS
     Domains -. bounded reviewed text .-> NLP
     NLP -. derived annotations .-> Domains
 ```
@@ -309,10 +314,13 @@ cd ..
 Quality gates locais rápidos:
 
 ```bash
-ruff check api/app tests scripts/check_frontend_api_contract.py
+ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 mypy
-pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
-pytest -q -m contract tests/test_frontend_api_contract.py
+python -m compileall -q api/app
+pytest -q -n auto --dist=worksteal \
+  --ignore=tests/test_frontend_api_contract.py \
+  --ignore=tests/test_frontend_graphql_contract.py
+pytest -q -m contract tests/test_frontend_api_contract.py tests/test_frontend_graphql_contract.py
 
 cd web
 npm run format:repo:check
@@ -320,7 +328,7 @@ npm run lint
 npm run typecheck
 npm run typecheck:tests
 npm run test:unit
-npm run build
+npm run build:ci
 ```
 
 Use `npm run format:repo` a partir de `web/` para formatar todos os ficheiros de código, configuração e documentação suportados pelo Prettier. HTML gerado de snapshots DOM legacy é excluído intencionalmente.

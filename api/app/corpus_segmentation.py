@@ -17,9 +17,10 @@
 """Pure segmentation logic: windowing, boundary detection, topology, and record construction.
 
 Deterministic candidate detection, seam-quality scoring, topology normalization/sanity
-checks, and record construction from confirmed boundaries. Moved verbatim out of
-PdfCorpusBuildManager (extracted during the 0.70 decomposition); the LLM-orchestrating methods that call these
-(prompt building, _segment, boundary adjudication via the model) stay on the manager.
+checks, and record construction from confirmed boundaries. These functions are kept
+separate from PdfCorpusBuildManager so the segmentation invariants can be read and
+tested without the manager's orchestration state. LLM orchestration (prompt building,
+_segment, boundary adjudication) remains on the manager.
 """
 
 from __future__ import annotations
@@ -128,7 +129,7 @@ def _segmentation_windows(blocks: list[dict[str, Any]], token_budget: int) -> li
         current_chars += block_chars
         index += 1
     if current:
-        if windows and current == windows[-1][-len(current):]:
+        if windows and current == windows[-1][-len(current) :]:
             return windows
         windows.append(current)
     return windows
@@ -419,6 +420,7 @@ def _seam_quality(
     return score, False, signals
 
 
+
 def _best_record_sizing_boundary(
     span: list[dict[str, Any]],
     policy: dict[str, int],
@@ -432,59 +434,161 @@ def _best_record_sizing_boundary(
     """
     if len(span) < 2:
         return None, {"reason": "single_atom", "forced": False}
-    preferred = policy["preferred_record_chars"]
-    tolerance = policy["record_length_tolerance"]
-    long_limit = policy["long_record_chars"]
-    absolute = policy["absolute_record_chars"]
-    cumulative = 0
-    seams: list[dict[str, Any]] = []
-    for left, right in zip(span, span[1:]):
-        cumulative += len(str(left.get("text") or "")) + 2
-        # No rule below cuts past the absolute ceiling (except at the very first seam), so seams beyond it are never
-        # chosen; scoring them made every split rescan the rest of the document.
-        if seams and cumulative > absolute:
+
+    preferred_chars = policy["preferred_record_chars"]
+    tolerance_chars = policy["record_length_tolerance"]
+    long_record_limit = policy["long_record_chars"]
+    absolute_limit = policy["absolute_record_chars"]
+
+    candidate_seams: list[dict[str, Any]] = []
+    chars_before_seam = 0
+    for left_block, right_block in zip(span, span[1:]):
+        chars_before_seam += len(str(left_block.get("text") or "")) + 2
+
+        # Rules below never choose an ordinary seam past the absolute ceiling.
+        # Stop scoring once later seams cannot possibly be selected. This keeps
+        # repeated topology normalization linear in the number of source atoms.
+        if candidate_seams and chars_before_seam > absolute_limit:
             break
-        quality, protected, signals = _seam_quality(left, right, language)
-        seams.append({
-            "left": left, "right": right, "chars": cumulative,
-            "quality": quality, "protected": protected, "signals": signals,
-        })
-    target_low, target_high = preferred - tolerance, preferred + tolerance
-    # Do not strand a tiny tail: a seam leaving less than a quarter of the target behind
-    # produces the 82-char records reviewers reported, unless it is the only choice.
-    whole = sum(len(str(b.get("text") or "")) + 2 for b in span)
-    min_tail = preferred // 4
-    roomy = [x for x in seams if whole - x["chars"] >= min_tail]
-    if roomy:
-        seams = roomy
-    target = [x for x in seams if target_low <= x["chars"] <= target_high and not x["protected"]]
-    if target:
-        best=max(target,key=lambda x:(x["quality"],-abs(x["chars"]-preferred)))
-        if best["quality"] >= 0.10:
-            return best["left"], {"reason":"preferred_band","forced":False,"chars":best["chars"],"quality":best["quality"],"signals":best["signals"]}
-    # No clean target seam: allow the thought to run longer if a stronger seam appears.
-    extended=[x for x in seams if target_low <= x["chars"] <= long_limit and not x["protected"]]
-    if extended:
-        best=max(extended,key=lambda x:(x["quality"]-(abs(x["chars"]-preferred)/max(preferred,1))*0.18,x["quality"]))
-        if best["quality"] >= 0.30:
-            return best["left"], {"reason":"coherent_exception","forced":False,"chars":best["chars"],"quality":best["quality"],"signals":best["signals"]}
-    # Above the long limit, prefer any safe seam before the absolute ceiling.
-    total=sum(len(str(b.get("text") or ""))+2 for b in span)
-    before_absolute=[x for x in seams if x["chars"] <= absolute and not x["protected"]]
-    if before_absolute and total > long_limit:
-        best=max(before_absolute,key=lambda x:(x["quality"]-(abs(x["chars"]-preferred)/max(preferred,1))*0.08,x["quality"]))
-        return best["left"], {"reason":"long_record_repair","forced":False,"chars":best["chars"],"quality":best["quality"],"signals":best["signals"]}
-    # Only when the absolute ceiling is exceeded may a protected seam be forced.
-    if total > absolute and seams:
-        best=max((x for x in seams if x["chars"] <= absolute),key=lambda x:(-x["protected"],x["quality"],-abs(x["chars"]-preferred)),default=None)
-        oversize_unit=best is None
-        if oversize_unit:
-            # The group's first source unit is itself over the ceiling, so no seam lies within it. A source unit is
-            # never cut, so it stands alone: split right after it. Returning nothing here left the rest of the
-            # document in this one group, and a whole book became a single record.
-            best=seams[0]
-        return best["left"], {"reason":"absolute_safety","forced":bool(best["protected"]),"chars":best["chars"],"quality":best["quality"],"signals":best["signals"],"oversize_unit":oversize_unit}
-    return None, {"reason":"coherent_exception","forced":False}
+
+        quality, protected, signals = _seam_quality(left_block, right_block, language)
+        candidate_seams.append(
+            {
+                "left": left_block,
+                "right": right_block,
+                "chars": chars_before_seam,
+                "quality": quality,
+                "protected": protected,
+                "signals": signals,
+            }
+        )
+
+    target_min = preferred_chars - tolerance_chars
+    target_max = preferred_chars + tolerance_chars
+    span_chars = sum(len(str(block.get("text") or "")) + 2 for block in span)
+
+    # Avoid creating a tiny trailing Record merely to hit the preferred size.
+    # Keep all seams only when there is no roomier alternative.
+    minimum_tail_chars = preferred_chars // 4
+    seams_with_roomy_tail = [
+        seam
+        for seam in candidate_seams
+        if span_chars - seam["chars"] >= minimum_tail_chars
+    ]
+    if seams_with_roomy_tail:
+        candidate_seams = seams_with_roomy_tail
+
+    preferred_band_seams = [
+        seam
+        for seam in candidate_seams
+        if target_min <= seam["chars"] <= target_max and not seam["protected"]
+    ]
+    if preferred_band_seams:
+        best_seam = max(
+            preferred_band_seams,
+            key=lambda seam: (
+                seam["quality"],
+                -abs(seam["chars"] - preferred_chars),
+            ),
+        )
+        if best_seam["quality"] >= 0.10:
+            return best_seam["left"], {
+                "reason": "preferred_band",
+                "forced": False,
+                "chars": best_seam["chars"],
+                "quality": best_seam["quality"],
+                "signals": best_seam["signals"],
+            }
+
+    # No clean target seam: let a coherent thought run longer when a stronger
+    # seam appears before the configured long-record limit.
+    extended_seams = [
+        seam
+        for seam in candidate_seams
+        if target_min <= seam["chars"] <= long_record_limit and not seam["protected"]
+    ]
+    if extended_seams:
+        best_seam = max(
+            extended_seams,
+            key=lambda seam: (
+                seam["quality"]
+                - (
+                    abs(seam["chars"] - preferred_chars)
+                    / max(preferred_chars, 1)
+                )
+                * 0.18,
+                seam["quality"],
+            ),
+        )
+        if best_seam["quality"] >= 0.30:
+            return best_seam["left"], {
+                "reason": "coherent_exception",
+                "forced": False,
+                "chars": best_seam["chars"],
+                "quality": best_seam["quality"],
+                "signals": best_seam["signals"],
+            }
+
+    # Once a Record exceeds the soft long-record limit, choose the strongest
+    # unprotected seam that still respects the absolute safety ceiling.
+    seams_before_absolute_limit = [
+        seam
+        for seam in candidate_seams
+        if seam["chars"] <= absolute_limit and not seam["protected"]
+    ]
+    if seams_before_absolute_limit and span_chars > long_record_limit:
+        best_seam = max(
+            seams_before_absolute_limit,
+            key=lambda seam: (
+                seam["quality"]
+                - (
+                    abs(seam["chars"] - preferred_chars)
+                    / max(preferred_chars, 1)
+                )
+                * 0.08,
+                seam["quality"],
+            ),
+        )
+        return best_seam["left"], {
+            "reason": "long_record_repair",
+            "forced": False,
+            "chars": best_seam["chars"],
+            "quality": best_seam["quality"],
+            "signals": best_seam["signals"],
+        }
+
+    # A protected transition may be crossed only to enforce the absolute
+    # ceiling. Prefer an unprotected seam if one exists within the ceiling.
+    if span_chars > absolute_limit and candidate_seams:
+        best_seam = max(
+            (
+                seam
+                for seam in candidate_seams
+                if seam["chars"] <= absolute_limit
+            ),
+            key=lambda seam: (
+                -seam["protected"],
+                seam["quality"],
+                -abs(seam["chars"] - preferred_chars),
+            ),
+            default=None,
+        )
+        oversized_source_unit = best_seam is None
+        if oversized_source_unit:
+            # The first source unit itself exceeds the ceiling. Source units
+            # are indivisible, so isolate that unit instead of swallowing the
+            # rest of the document into the same oversized Record.
+            best_seam = candidate_seams[0]
+        return best_seam["left"], {
+            "reason": "absolute_safety",
+            "forced": bool(best_seam["protected"]),
+            "chars": best_seam["chars"],
+            "quality": best_seam["quality"],
+            "signals": best_seam["signals"],
+            "oversize_unit": oversized_source_unit,
+        }
+
+    return None, {"reason": "coherent_exception", "forced": False}
 
 
 def _normalize_topology(
@@ -493,133 +597,336 @@ def _normalize_topology(
     policy: dict[str, int],
     language: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
-    """Deterministically optimize semantic topology for retrieval-sized records."""
-    block_index={str(b.get("block_id") or ""):i for i,b in enumerate(blocks)}
-    boundary_map={}
+    """Add retrieval-size boundaries without removing semantic boundaries.
+
+    The work list contains only groups that can still need splitting. After a
+    split, only its two children are reconsidered, which avoids rescanning the
+    whole document after every new boundary.
+    """
+    block_index_by_id = {
+        str(block.get("block_id") or ""): index
+        for index, block in enumerate(blocks)
+    }
+    boundary_by_block_id: dict[str, dict[str, Any]] = {}
     for boundary in boundaries:
-        item=dict(boundary)
-        item.setdefault("semantic_boundary", True)
-        item.setdefault("boundary_kind", "semantic")
-        boundary_map[str(item.get("after_block_id") or "")]=item
-    reviews: list[dict[str, Any]]=[]
-    metrics={"size_optimized_splits":0,"long_exception_records":0,"absolute_safety_splits":0}
+        normalized_boundary = dict(boundary)
+        normalized_boundary.setdefault("semantic_boundary", True)
+        normalized_boundary.setdefault("boundary_kind", "semantic")
+        boundary_by_block_id[
+            str(normalized_boundary.get("after_block_id") or "")
+        ] = normalized_boundary
+
+    review_findings: list[dict[str, Any]] = []
+    metrics = {
+        "size_optimized_splits": 0,
+        "long_exception_records": 0,
+        "absolute_safety_splits": 0,
+    }
     language_profile = profile_metadata(
         language,
         "\n".join(str(block.get("text") or "") for block in blocks[:8]),
     )
 
-    def groups() -> list[list[dict[str, Any]]]:
-        out=[]; current=[]
+    def current_groups() -> list[list[dict[str, Any]]]:
+        """Materialize Records implied by the current boundary map."""
+        groups: list[list[dict[str, Any]]] = []
+        current_group: list[dict[str, Any]] = []
         for block in blocks:
-            current.append(block)
-            if str(block.get("block_id") or "") in boundary_map:
-                out.append(current); current=[]
-        if current: out.append(current)
-        return out
+            current_group.append(block)
+            if str(block.get("block_id") or "") in boundary_by_block_id:
+                groups.append(current_group)
+                current_group = []
+        if current_group:
+            groups.append(current_group)
+        return groups
 
-    # Each oversized group is split on its own: a split never changes any other group, so both halves go back on the
-    # work list and nothing else is rescanned. (Restarting from the first group after every split was quadratic.)
-    # Existing semantic boundaries are never removed.
-    pending=list(reversed(groups()))
-    guard=max(10,len(blocks)*2)
-    while pending and guard>0:
-        span=pending.pop()
-        size=sum(len(str(b.get("text") or "")) for b in span)+max(0,len(span)-1)*2
-        if size <= policy["preferred_record_chars"] + policy["record_length_tolerance"]:
-            continue
-        choice,info=_best_record_sizing_boundary(span,policy,language)
-        if choice is None:
-            continue
-        bid=str(choice.get("block_id") or "")
-        if not bid or bid in boundary_map or bid==str(span[-1].get("block_id") or ""):
-            continue
-        guard-=1
-        kind="retrieval_size_optimized"
-        if info.get("reason")=="absolute_safety":
-            kind="absolute_size_safety"; metrics["absolute_safety_splits"]+=1
-        else:
-            metrics["size_optimized_splits"]+=1
-        boundary_map[bid]={
-            "after_block_id":bid,"decision":"split","confidence":1.0,
-            "changes":[],"source":"deterministic_topology_normalizer",
-            "boundary_kind":kind,"semantic_boundary":False,
-            "size_policy":dict(policy),"size_decision":info,
-            "language_profile":language_profile,
-        }
-        if info.get("forced"):
-            idx=block_index.get(bid,-1)
-            reviews.append({
-                "after_block_id":bid,
-                "next_block_id":str(blocks[idx+1].get("block_id") or "") if 0<=idx<len(blocks)-1 else "",
-                "kind":"forced_protected_absolute_split",
-                "reason":"The absolute record-size safety ceiling required a split through an attribution/syntax-protected transition.",
-            })
-        cut=next(k for k,b in enumerate(span) if str(b.get("block_id") or "")==bid)
-        pending.append(span[cut+1:])
-        pending.append(span[:cut+1])
-    # Counted once, over the final records (it used to be incremented on every pass, for the same records again).
-    metrics["long_exception_records"]=sum(
-        1 for span in groups()
-        if sum(len(str(b.get("text") or "")) for b in span)+max(0,len(span)-1)*2 > policy["long_record_chars"]
+    # A split cannot affect a different group. Requeue only the two children,
+    # rather than restarting at the first group (the former quadratic path).
+    pending_groups = list(reversed(current_groups()))
+    remaining_split_budget = max(10, len(blocks) * 2)
+    preferred_max = (
+        policy["preferred_record_chars"] + policy["record_length_tolerance"]
     )
-    ordered=sorted(boundary_map.values(),key=lambda item:block_index.get(str(item.get("after_block_id") or ""),10**9))
-    return ordered,reviews,metrics
+
+    while pending_groups and remaining_split_budget > 0:
+        span = pending_groups.pop()
+        span_chars = (
+            sum(len(str(block.get("text") or "")) for block in span)
+            + max(0, len(span) - 1) * 2
+        )
+        if span_chars <= preferred_max:
+            continue
+
+        boundary_block, decision = _best_record_sizing_boundary(
+            span,
+            policy,
+            language,
+        )
+        if boundary_block is None:
+            continue
+
+        boundary_block_id = str(boundary_block.get("block_id") or "")
+        if (
+            not boundary_block_id
+            or boundary_block_id in boundary_by_block_id
+            or boundary_block_id == str(span[-1].get("block_id") or "")
+        ):
+            continue
+
+        remaining_split_budget -= 1
+        boundary_kind = "retrieval_size_optimized"
+        if decision.get("reason") == "absolute_safety":
+            boundary_kind = "absolute_size_safety"
+            metrics["absolute_safety_splits"] += 1
+        else:
+            metrics["size_optimized_splits"] += 1
+
+        boundary_by_block_id[boundary_block_id] = {
+            "after_block_id": boundary_block_id,
+            "decision": "split",
+            "confidence": 1.0,
+            "changes": [],
+            "source": "deterministic_topology_normalizer",
+            "boundary_kind": boundary_kind,
+            "semantic_boundary": False,
+            "size_policy": dict(policy),
+            "size_decision": decision,
+            "language_profile": language_profile,
+        }
+
+        if decision.get("forced"):
+            block_index = block_index_by_id.get(boundary_block_id, -1)
+            next_block_id = (
+                str(blocks[block_index + 1].get("block_id") or "")
+                if 0 <= block_index < len(blocks) - 1
+                else ""
+            )
+            review_findings.append(
+                {
+                    "after_block_id": boundary_block_id,
+                    "next_block_id": next_block_id,
+                    "kind": "forced_protected_absolute_split",
+                    "reason": (
+                        "The absolute record-size safety ceiling required a split "
+                        "through an attribution/syntax-protected transition."
+                    ),
+                }
+            )
+
+        split_index = next(
+            index
+            for index, block in enumerate(span)
+            if str(block.get("block_id") or "") == boundary_block_id
+        )
+        pending_groups.append(span[split_index + 1 :])
+        pending_groups.append(span[: split_index + 1])
+
+    # Count final long exceptions once. Counting inside the work loop would
+    # count the same surviving group again each time a sibling is split.
+    metrics["long_exception_records"] = sum(
+        1
+        for span in current_groups()
+        if (
+            sum(len(str(block.get("text") or "")) for block in span)
+            + max(0, len(span) - 1) * 2
+        )
+        > policy["long_record_chars"]
+    )
+
+    ordered_boundaries = sorted(
+        boundary_by_block_id.values(),
+        key=lambda boundary: block_index_by_id.get(
+            str(boundary.get("after_block_id") or ""),
+            10**9,
+        ),
+    )
+    return ordered_boundaries, review_findings, metrics
 
 
 def _percentile(values: list[int], percentile: float) -> int:
-    if not values: return 0
-    ordered=sorted(values)
-    position=(len(ordered)-1)*max(0.0,min(1.0,percentile))
-    lo=int(position); hi=min(len(ordered)-1,lo+1)
-    if lo==hi: return ordered[lo]
-    fraction=position-lo
-    return int(round(ordered[lo]*(1-fraction)+ordered[hi]*fraction))
+    """Return a linearly interpolated integer percentile for Record sizes."""
+    if not values:
+        return 0
+
+    ordered_values = sorted(values)
+    clamped_percentile = max(0.0, min(1.0, percentile))
+    position = (len(ordered_values) - 1) * clamped_percentile
+    lower_index = int(position)
+    upper_index = min(len(ordered_values) - 1, lower_index + 1)
+
+    if lower_index == upper_index:
+        return ordered_values[lower_index]
+
+    upper_fraction = position - lower_index
+    lower_fraction = 1 - upper_fraction
+    return int(
+        round(
+            ordered_values[lower_index] * lower_fraction
+            + ordered_values[upper_index] * upper_fraction
+        )
+    )
 
 
-def _topology_sanity(records: list[dict[str, Any]], policy: dict[str, int], source_blocks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    sizes=[int(r.get("text_length") or len(str(r.get("text") or ""))) for r in records]
-    findings=[]
-    def add(code:str,severity:str,*,record_id:str|None=None,auto_repairable:bool=False,**params:Any)->None:
-        findings.append({"code":code,"severity":severity,"record_id":record_id,"auto_repairable":auto_repairable,"params":params})
-    if not records: add("topology.no_records","error")
-    for record,size in zip(records,sizes):
-        rid=str(record.get("record_id") or "")
-        if size<=0: add("topology.empty_record","error",record_id=rid)
-        if size>policy["absolute_record_chars"]: add("topology.over_absolute_limit","warning",record_id=rid,chars=size,limit=policy["absolute_record_chars"])
-        elif size>policy["long_record_chars"]: add("topology.long_exception","warning",record_id=rid,chars=size,limit=policy["long_record_chars"])
-        elif size>policy["preferred_record_chars"]+policy["record_length_tolerance"]: add("topology.over_preferred_range","info",record_id=rid,chars=size,preferred=policy["preferred_record_chars"])
-        if 0<size<180: add("topology.micro_record","warning",record_id=rid,chars=size,auto_repairable=True)
-    source_ids=[str(b.get("block_id") or "") for b in (source_blocks or [])]
-    used_ids=[str(x) for r in records for x in (r.get("source_block_ids") or [])]
-    if source_ids:
-        missing=[x for x in source_ids if x not in set(used_ids)]
-        duplicates=[x for x,count in Counter(used_ids).items() if count>1]
-        if missing: add("topology.source_gap","error",count=len(missing),block_ids=missing[:50])
-        if duplicates: add("topology.source_overlap","error",count=len(duplicates),block_ids=duplicates[:50])
-        ordered_used=[x for x in used_ids if x in set(source_ids)]
-        expected=[x for x in source_ids if x in set(used_ids)]
-        if ordered_used!=expected: add("topology.source_order","error")
-    blocking=[f for f in findings if f["severity"]=="error"]
+def _topology_sanity(
+    records: list[dict[str, Any]],
+    policy: dict[str, int],
+    source_blocks: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Validate Record sizing and source-block conservation invariants."""
+    record_sizes = [
+        int(record.get("text_length") or len(str(record.get("text") or "")))
+        for record in records
+    ]
+    findings: list[dict[str, Any]] = []
+
+    def add_finding(
+        code: str,
+        severity: str,
+        *,
+        record_id: str | None = None,
+        auto_repairable: bool = False,
+        **params: Any,
+    ) -> None:
+        findings.append(
+            {
+                "code": code,
+                "severity": severity,
+                "record_id": record_id,
+                "auto_repairable": auto_repairable,
+                "params": params,
+            }
+        )
+
+    if not records:
+        add_finding("topology.no_records", "error")
+
+    preferred_max = (
+        policy["preferred_record_chars"] + policy["record_length_tolerance"]
+    )
+    for record, size in zip(records, record_sizes):
+        record_id = str(record.get("record_id") or "")
+        if size <= 0:
+            add_finding("topology.empty_record", "error", record_id=record_id)
+
+        if size > policy["absolute_record_chars"]:
+            add_finding(
+                "topology.over_absolute_limit",
+                "warning",
+                record_id=record_id,
+                chars=size,
+                limit=policy["absolute_record_chars"],
+            )
+        elif size > policy["long_record_chars"]:
+            add_finding(
+                "topology.long_exception",
+                "warning",
+                record_id=record_id,
+                chars=size,
+                limit=policy["long_record_chars"],
+            )
+        elif size > preferred_max:
+            add_finding(
+                "topology.over_preferred_range",
+                "info",
+                record_id=record_id,
+                chars=size,
+                preferred=policy["preferred_record_chars"],
+            )
+
+        if 0 < size < 180:
+            add_finding(
+                "topology.micro_record",
+                "warning",
+                record_id=record_id,
+                chars=size,
+                auto_repairable=True,
+            )
+
+    # Source-block IDs are the deterministic conservation check: every source
+    # atom in scope must appear once, and in the same order, across Records.
+    source_block_ids = [
+        str(block.get("block_id") or "")
+        for block in (source_blocks or [])
+    ]
+    used_block_ids = [
+        str(block_id)
+        for record in records
+        for block_id in (record.get("source_block_ids") or [])
+    ]
+    if source_block_ids:
+        source_id_set = set(source_block_ids)
+        used_id_set = set(used_block_ids)
+
+        missing_block_ids = [
+            block_id for block_id in source_block_ids if block_id not in used_id_set
+        ]
+        duplicate_block_ids = [
+            block_id
+            for block_id, count in Counter(used_block_ids).items()
+            if count > 1
+        ]
+        if missing_block_ids:
+            add_finding(
+                "topology.source_gap",
+                "error",
+                count=len(missing_block_ids),
+                block_ids=missing_block_ids[:50],
+            )
+        if duplicate_block_ids:
+            add_finding(
+                "topology.source_overlap",
+                "error",
+                count=len(duplicate_block_ids),
+                block_ids=duplicate_block_ids[:50],
+            )
+
+        used_ids_in_source = [
+            block_id for block_id in used_block_ids if block_id in source_id_set
+        ]
+        expected_used_order = [
+            block_id for block_id in source_block_ids if block_id in used_id_set
+        ]
+        if used_ids_in_source != expected_used_order:
+            add_finding("topology.source_order", "error")
+
+    blocking_findings = [
+        finding for finding in findings if finding["severity"] == "error"
+    ]
+    preferred_min = (
+        policy["preferred_record_chars"] - policy["record_length_tolerance"]
+    )
+
     return {
-        "valid":not blocking,
-        "issues":[f["code"] for f in blocking],
-        "findings":findings,
-        "record_count":len(records),
-        "max_record_chars":max(sizes,default=0),
-        "min_record_chars":min(sizes,default=0),
-        "median_record_chars":_percentile(sizes,0.5),
-        "p10_record_chars":_percentile(sizes,0.1),
-        "p90_record_chars":_percentile(sizes,0.9),
-        "preferred_record_chars":policy["preferred_record_chars"],
-        "record_length_tolerance":policy["record_length_tolerance"],
-        "long_record_chars":policy["long_record_chars"],
-        "absolute_record_chars":policy["absolute_record_chars"],
-        "records_in_preferred_range":sum(1 for x in sizes if policy["preferred_record_chars"]-policy["record_length_tolerance"] <= x <= policy["preferred_record_chars"]+policy["record_length_tolerance"]),
-        "records_over_preferred_range":sum(1 for x in sizes if x>policy["preferred_record_chars"]+policy["record_length_tolerance"]),
-        "records_over_long_limit":sum(1 for x in sizes if x>policy["long_record_chars"]),
-        "micro_record_count":sum(1 for x in sizes if 0<x<180),
+        "valid": not blocking_findings,
+        "issues": [finding["code"] for finding in blocking_findings],
+        "findings": findings,
+        "record_count": len(records),
+        "max_record_chars": max(record_sizes, default=0),
+        "min_record_chars": min(record_sizes, default=0),
+        "median_record_chars": _percentile(record_sizes, 0.5),
+        "p10_record_chars": _percentile(record_sizes, 0.1),
+        "p90_record_chars": _percentile(record_sizes, 0.9),
+        "preferred_record_chars": policy["preferred_record_chars"],
+        "record_length_tolerance": policy["record_length_tolerance"],
+        "long_record_chars": policy["long_record_chars"],
+        "absolute_record_chars": policy["absolute_record_chars"],
+        "records_in_preferred_range": sum(
+            1
+            for size in record_sizes
+            if preferred_min <= size <= preferred_max
+        ),
+        "records_over_preferred_range": sum(
+            1 for size in record_sizes if size > preferred_max
+        ),
+        "records_over_long_limit": sum(
+            1
+            for size in record_sizes
+            if size > policy["long_record_chars"]
+        ),
+        "micro_record_count": sum(
+            1 for size in record_sizes if 0 < size < 180
+        ),
     }
-
 
 def _topology_quality_report(records:list[dict[str,Any]], source_blocks:list[dict[str,Any]], policy:dict[str,int], validation:dict[str,Any]) -> dict[str,Any]:
     source_ids=[str(b.get("block_id") or "") for b in source_blocks]

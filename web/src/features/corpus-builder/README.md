@@ -80,3 +80,15 @@ The researcher-facing flow is **Setup → Build & review → Publish**. Internal
 Frontend workflow state is a projection, not corpus authority. Reviewer-confirmed structure and accepted review decisions come from the backend. Optimistic interactions must reconcile with persisted revisions and must not overwrite intervening human-owned state.
 
 Source controls must be media-aware. Do not expose PDF/page concepts for audio or other media where they are meaningless. Keep source coordinates appropriate to the medium and preserve uncertainty rather than manufacturing review readiness.
+
+## Where a Corpus Builder change belongs
+
+- **Workflow/lifecycle coordination:** an owning composable. Keep cancellation, optimistic reconciliation, refresh sequencing, and stale-response protection close to the lifecycle that owns them.
+- **Deterministic presentation or state transitions:** `domain/`. Prefer pure helpers that can be exercised without mounting the builder.
+- **Focused server reads:** `api/` or `graphql/`. GraphQL remains read-only; mutations stay in REST through the existing owner.
+- **Visual composition:** `components/corpus-builder/`. Components should receive state/actions rather than reimplement lifecycle rules.
+- **Top-level mutation compatibility:** `PdfCorpusBuilder.vue` only when an existing contract still requires that owner. New behavior should normally be extracted behind a focused typed interface.
+
+## Gotchas
+
+Build and Review intentionally overlap after topology exists, so “build complete” is not a safe proxy for “review may begin.” Review queues are revision-sensitive; an optimistic decision must reconcile with the persisted Record revision rather than overwrite intervening human work. Progressive reads may be partial or stale while a newer request is in flight, so preserve last-known-good UI where the feature already does so. Source terminology must remain media-aware, and publication readiness comes from backend validation rather than a frontend checklist invented locally.

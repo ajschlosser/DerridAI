@@ -69,3 +69,12 @@ Send only the fields required by an operation. Keep request/response schemas nar
 Do not infer authority from a transport response shape. Review status, FieldAssertion authority, source identity, and evidence provenance are backend domain contracts.
 
 When a read is shared between REST and GraphQL, backend ownership belongs in `api/app/celf_queries/`; do not recreate competing read semantics in the frontend.
+
+## Contributing safely
+
+- For a REST request change, keep the method/path/payload typed here and run `tests/test_frontend_api_contract.py` from the repository root.
+- For a GraphQL operation change, edit the operation/schema source, run `npm run codegen`, and run `tests/test_frontend_graphql_contract.py`. Never hand-edit `graphql/generated.ts`.
+- Treat `http.ts` as shared infrastructure: changes to authentication, error parsing, cancellation, or retry behavior can affect every workspace and deserve focused regression coverage.
+- Keep operation-specific response shaping close to the owning client or feature. Do not make `http.ts` understand corpus, Research, Pipeline Studio, or metadata semantics.
+- Use names that expose the transport/domain role (`reviewRecord`, `pipelineDefinition`, `requestSignal`) rather than generic `data` or `result` when several payloads coexist.
+- WebSocket events belong in `../realtime/`; receiving an event must not bypass the canonical REST/GraphQL read that reconciles state.

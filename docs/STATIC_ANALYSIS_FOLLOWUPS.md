@@ -24,7 +24,7 @@ When adding a suppression, give it a narrow reason and either attach it to an ex
 
 ## Backend
 
-- **SA-01 — legacy compact Python statements.** Expand E701/E702-style compact statements module-by-module with behavior-preserving diffs rather than mixing repository-wide formatting into feature work.
+- **SA-01 — legacy compact Python statements.** Expand E701/E702-style compact statements module-by-module with behavior-preserving diffs rather than mixing repository-wide formatting into feature work. The `corpus_segmentation.py` tranche is complete and its Ruff exemption has been removed; remaining exempt modules are listed directly in `ruff.toml`.
 - **SA-02 — strict optional typing.** `mypy.ini` still has `strict_optional = False`; enable it only after nullable dictionary/payload boundaries are explicitly typed.
 - **SA-07 — enrichment/checkpoint contracts.** Continue replacing broad dictionary payloads in enrichment/checkpoint orchestration with precise typed models where doing so clarifies real boundaries.
 - **SA-18 — strict zip checks.** Enable Ruff `B905` only where equal-length invariants have been established; do not mechanically add `strict=True` to code whose truncation semantics are intentional.

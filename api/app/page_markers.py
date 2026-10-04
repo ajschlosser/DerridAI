@@ -219,115 +219,273 @@ def _running_header_candidates(lines: list[str]) -> list[Candidate]:
     return [Candidate(0, i, n, "header", False, True, 0.8) for i, n, title in rows if title in common]
 
 
-def _best_chain(cands: list[Candidate], max_gap: int = 12) -> list[Candidate]:
-    """Longest increasing chain by value with bounded jumps, ordered by position."""
-    ordered = sorted(cands, key=lambda c: (c.line, c.value))
-    n = len(ordered)
-    if not n:
+
+def _best_chain(
+    candidates: list[Candidate],
+    max_gap: int = 12,
+) -> list[Candidate]:
+    """Return the longest position-ordered, increasing page-number chain.
+
+    Dynamic programming tracks the best chain ending at each candidate. Page
+    values may skip by at most max_gap so missing scans do not destroy a real
+    sequence, while chapter/list numbers with large jumps remain unlikely to
+    qualify.
+    """
+    ordered_candidates = sorted(
+        candidates,
+        key=lambda candidate: (candidate.line, candidate.value),
+    )
+    candidate_count = len(ordered_candidates)
+    if not candidate_count:
         return []
-    best = [1] * n
-    prev = [-1] * n
-    for i in range(n):
-        for j in range(i):
-            step = ordered[i].value - ordered[j].value
-            if 1 <= step <= max_gap and best[j] + 1 > best[i]:
-                best[i], prev[i] = best[j] + 1, j
-    end = max(range(n), key=lambda k: (best[k], -ordered[k].line))
+
+    chain_length_at = [1] * candidate_count
+    previous_index = [-1] * candidate_count
+
+    for current_index in range(candidate_count):
+        for earlier_index in range(current_index):
+            page_step = (
+                ordered_candidates[current_index].value
+                - ordered_candidates[earlier_index].value
+            )
+            proposed_length = chain_length_at[earlier_index] + 1
+            if (
+                1 <= page_step <= max_gap
+                and proposed_length > chain_length_at[current_index]
+            ):
+                chain_length_at[current_index] = proposed_length
+                previous_index[current_index] = earlier_index
+
+    chain_end_index = max(
+        range(candidate_count),
+        key=lambda index: (
+            chain_length_at[index],
+            -ordered_candidates[index].line,
+        ),
+    )
     chain: list[Candidate] = []
-    while end != -1:
-        chain.append(ordered[end])
-        end = prev[end]
+    while chain_end_index != -1:
+        chain.append(ordered_candidates[chain_end_index])
+        chain_end_index = previous_index[chain_end_index]
     return list(reversed(chain))
 
 
-def _between(lines: list[str], a: Candidate, b: Candidate) -> int:
-    """Characters of text between two markers (inline markers share a line with prose)."""
-    if b.line == a.line:
+def _between(
+    lines: list[str],
+    first_marker: Candidate,
+    second_marker: Candidate,
+) -> int:
+    """Count prose characters between two page-marker candidates."""
+    if second_marker.line == first_marker.line:
         return 0
-    return sum(len(x) for x in lines[a.line:b.line + 1]) - (len(lines[a.line]) if a.standalone else 0) - (len(lines[b.line]) if b.standalone else 0)
+
+    covered_lines = lines[first_marker.line : second_marker.line + 1]
+    character_count = sum(len(line) for line in covered_lines)
+    if first_marker.standalone:
+        character_count -= len(lines[first_marker.line])
+    if second_marker.standalone:
+        character_count -= len(lines[second_marker.line])
+    return character_count
 
 
-def _accept(chain: list[Candidate], lines: list[str], total_candidates: int) -> tuple[bool, float, str]:
+def _accept(
+    chain: list[Candidate],
+    lines: list[str],
+    total_candidates: int,
+) -> tuple[bool, float, str]:
+    """Decide whether a candidate chain behaves like printed pagination."""
     if len(chain) < 2:
         return False, 0.0, "too few candidates"
-    strong = sum(1 for c in chain if c.style in {"bracket", "keyword", "dash", "words", "inline", "header", "llm"})
-    consecutive = sum(1 for a, b in zip(chain, chain[1:]) if b.value - a.value == 1)
-    ratio = consecutive / (len(chain) - 1)
-    # Text volume between markers: pages hold text; numbered lists and chapter numbers do not.
-    gaps = [_between(lines, a, b) for a, b in zip(chain, chain[1:])]
-    median_gap = statistics.median(gaps) if gaps else 0
-    bare_only = strong == 0
-    if bare_only:
-        if len(chain) < 4 or ratio < 0.7 or median_gap < 250:
+
+    strong_styles = {
+        "bracket",
+        "keyword",
+        "dash",
+        "words",
+        "inline",
+        "header",
+        "llm",
+    }
+    strong_marker_count = sum(
+        1 for candidate in chain if candidate.style in strong_styles
+    )
+    consecutive_pair_count = sum(
+        1
+        for first_marker, second_marker in zip(chain, chain[1:])
+        if second_marker.value - first_marker.value == 1
+    )
+    consecutive_ratio = consecutive_pair_count / (len(chain) - 1)
+
+    # Real pages normally contain substantial text between folios. This is the
+    # main guard against accepting numbered lists or chapter headings as pages.
+    text_gaps = [
+        _between(lines, first_marker, second_marker)
+        for first_marker, second_marker in zip(chain, chain[1:])
+    ]
+    median_text_gap = statistics.median(text_gaps) if text_gaps else 0
+    bare_numbers_only = strong_marker_count == 0
+
+    if bare_numbers_only:
+        if (
+            len(chain) < 4
+            or consecutive_ratio < 0.7
+            or median_text_gap < 250
+        ):
             return False, 0.0, "bare numbers do not look like page numbers"
     else:
-        if len(chain) < 3 and strong < 2:
+        if len(chain) < 3 and strong_marker_count < 2:
             return False, 0.0, "too few marked candidates"
-        if median_gap < 60 and len(chain) < 6:
+        if median_text_gap < 60 and len(chain) < 6:
             return False, 0.0, "markers too close together to be pages"
-    coverage = len(chain) / max(1, total_candidates)
-    confidence = min(0.99, 0.45 + 0.25 * ratio + 0.15 * min(1.0, len(chain) / 8) + 0.14 * (strong / len(chain)) + 0.05 * coverage)
+
+    candidate_coverage = len(chain) / max(1, total_candidates)
+    confidence = min(
+        0.99,
+        0.45
+        + 0.25 * consecutive_ratio
+        + 0.15 * min(1.0, len(chain) / 8)
+        + 0.14 * (strong_marker_count / len(chain))
+        + 0.05 * candidate_coverage,
+    )
     return True, confidence, ""
 
 
 def detect(text: str) -> Detection:
-    """Detect page markers in ``text``. Never raises; returns status ``not_found`` if unsure."""
+    """Detect printed page markers without invoking a model.
+
+    Detection never raises for uncertain input; an unresolved sequence is
+    returned as status "not_found" with a reason suitable for diagnostics.
+    """
     if not text.strip():
         return Detection(reason="empty text")
+
     candidates, lines = find_candidates(text)
     candidates += _running_header_candidates(lines)
     if not candidates:
         return Detection(reason="no page-number patterns")
-    # Arabic and Roman sequences are separate: front matter is numbered in Roman numerals.
-    arabic = [c for c in candidates if not c.roman]
-    roman = [c for c in candidates if c.roman]
-    best: Detection | None = None
-    for group in (arabic, roman):
-        chain = _best_chain(group)
-        ok, confidence, reason = _accept(chain, lines, len(group))
-        if not ok:
-            if best is None:
-                best = Detection(reason=reason)
+
+    # Roman front matter and Arabic body pagination are separate sequences.
+    # Evaluate them independently instead of letting the transition between
+    # numbering systems break an otherwise valid chain.
+    arabic_candidates = [
+        candidate for candidate in candidates if not candidate.roman
+    ]
+    roman_candidates = [
+        candidate for candidate in candidates if candidate.roman
+    ]
+
+    best_detection: Detection | None = None
+    for numbering_candidates in (arabic_candidates, roman_candidates):
+        chain = _best_chain(numbering_candidates)
+        accepted, confidence, reason = _accept(
+            chain,
+            lines,
+            len(numbering_candidates),
+        )
+        if not accepted:
+            if best_detection is None:
+                best_detection = Detection(reason=reason)
             continue
-        styles = sorted({c.style for c in chain}, key=lambda s: -sum(1 for c in chain if c.style == s))
-        detection = Detection("detected", chain, "start", confidence, styles[0])
-        if best is None or best.status != "detected" or len(detection.markers) > len(best.markers):
-            best = detection
-    detection = best or Detection(reason="no plausible sequence")
+
+        styles = sorted(
+            {candidate.style for candidate in chain},
+            key=lambda style: -sum(
+                1 for candidate in chain if candidate.style == style
+            ),
+        )
+        detection = Detection(
+            "detected",
+            chain,
+            "start",
+            confidence,
+            styles[0],
+        )
+        if (
+            best_detection is None
+            or best_detection.status != "detected"
+            or len(detection.markers) > len(best_detection.markers)
+        ):
+            best_detection = detection
+
+    detection = best_detection or Detection(reason="no plausible sequence")
     if detection.status == "detected":
         detection.convention = _convention(detection, lines)
-        # A Roman front-matter sequence and an Arabic body sequence can both exist; the longer wins here
-        # and the shorter is intentionally ignored rather than guessed at.
+        # Both Roman front matter and Arabic body pagination can be valid. The
+        # longer accepted chain wins; the shorter is ignored rather than merged
+        # across two incompatible numbering systems.
     return detection
-
 
 MAX_LLM_CANDIDATES = 120
 _LLM_LINE = re.compile(r"(?:\d|\b(?:page|pg|p)\b|^[ivxlcdm]{1,8}[.)]?$)", re.I)
 
 
-def llm_candidates(text: str, limit: int = MAX_LLM_CANDIDATES) -> list[dict[str, Any]]:
-    """Short lines that *might* be page furniture, with a little context, for a model to classify.
 
-    The model only chooses among these lines; it never supplies a number or a position. Sampling keeps the
-    first and last lines and spreads the rest, so a long text costs a bounded prompt.
+def llm_candidates(
+    text: str,
+    limit: int = MAX_LLM_CANDIDATES,
+) -> list[dict[str, Any]]:
+    """Return bounded page-furniture candidates for model classification.
+
+    The model may classify only these existing lines; it cannot invent a page
+    number or source position. When a document has too many candidates, keep
+    both ends and sample the middle so prompt cost remains bounded.
     """
     lines = _lines(text)
-    picked = [
-        i for i, raw in enumerate(lines)
-        if 0 < len(raw.strip()) <= 48 and _LLM_LINE.search(raw.strip())
+    candidate_line_indexes = [
+        line_index
+        for line_index, raw_line in enumerate(lines)
+        if 0 < len(raw_line.strip()) <= 48
+        and _LLM_LINE.search(raw_line.strip())
     ]
-    if len(picked) > limit:
-        head, tail = picked[: limit // 4], picked[-(limit // 4):]
-        middle = picked[limit // 4: -(limit // 4)]
-        step = max(1, len(middle) // (limit - len(head) - len(tail)))
-        picked = head + middle[::step][: limit - len(head) - len(tail)] + tail
-    out = []
-    for n, i in enumerate(picked):
-        before = next((lines[j].strip() for j in range(i - 1, max(-1, i - 4), -1) if lines[j].strip()), "")
-        after = next((lines[j].strip() for j in range(i + 1, min(len(lines), i + 4)) if lines[j].strip()), "")
-        out.append({"id": n, "line": i, "text": lines[i].strip(), "before": before[:60], "after": after[:60]})
-    return out
 
+    if len(candidate_line_indexes) > limit:
+        edge_count = limit // 4
+        head_indexes = candidate_line_indexes[:edge_count]
+        tail_indexes = candidate_line_indexes[-edge_count:]
+        middle_indexes = candidate_line_indexes[edge_count:-edge_count]
+        middle_budget = limit - len(head_indexes) - len(tail_indexes)
+        sampling_step = max(1, len(middle_indexes) // middle_budget)
+        candidate_line_indexes = (
+            head_indexes
+            + middle_indexes[::sampling_step][:middle_budget]
+            + tail_indexes
+        )
+
+    candidates: list[dict[str, Any]] = []
+    for candidate_id, line_index in enumerate(candidate_line_indexes):
+        preceding_text = next(
+            (
+                lines[context_index].strip()
+                for context_index in range(
+                    line_index - 1,
+                    max(-1, line_index - 4),
+                    -1,
+                )
+                if lines[context_index].strip()
+            ),
+            "",
+        )
+        following_text = next(
+            (
+                lines[context_index].strip()
+                for context_index in range(
+                    line_index + 1,
+                    min(len(lines), line_index + 4),
+                )
+                if lines[context_index].strip()
+            ),
+            "",
+        )
+        candidates.append(
+            {
+                "id": candidate_id,
+                "line": line_index,
+                "text": lines[line_index].strip(),
+                "before": preceding_text[:60],
+                "after": following_text[:60],
+            }
+        )
+    return candidates
 
 def _value_in(line: str) -> tuple[int, bool] | None:
     for token in re.findall(r"[0-9]{1,5}|[ivxlcdm]{1,8}", line, re.I):
@@ -342,41 +500,90 @@ def _value_in(line: str) -> tuple[int, bool] | None:
     return None
 
 
-def detect_with_llm(text: str, ask: Any) -> Detection:
-    """Let a model pick the page-number lines, then hold its answer to the same sequence rules.
 
-    ``ask(candidates)`` returns the ids of lines that are printed page numbers. A model's say-so is not
-    enough: the chosen lines must still form an increasing, mostly consecutive sequence with real text
-    between them, so a hallucinated answer cannot invent page numbers.
+def detect_with_llm(text: str, ask: Any) -> Detection:
+    """Classify page-number candidates with a model, then validate deterministically.
+
+    ask(candidates) returns IDs of lines classified as printed page numbers.
+    Model selection is only advisory: selected lines must still form a
+    plausible increasing sequence with enough text between markers.
     """
     candidates = llm_candidates(text)
     if len(candidates) < 3:
         return Detection(reason="too few candidate lines for a model to judge")
-    chosen = set(ask(candidates))
+
+    selected_candidate_ids = set(ask(candidates))
     lines = _lines(text)
-    picked: list[Candidate] = []
-    for item in candidates:
-        if item["id"] not in chosen:
+    selected_markers: list[Candidate] = []
+    for candidate in candidates:
+        if candidate["id"] not in selected_candidate_ids:
             continue
-        parsed = _value_in(item["text"])
-        if parsed:
-            picked.append(Candidate(0, item["line"], parsed[0], "llm", parsed[1], True, 0.7))
-    arabic = _best_chain([c for c in picked if not c.roman])
-    ok, confidence, reason = _accept(arabic, lines, len(picked))
-    if not ok:
-        return Detection(reason=f"the model's page numbers were rejected: {reason}")
-    detection = Detection("detected", arabic, "start", min(confidence, 0.8), "llm")
+        parsed_page_number = _value_in(candidate["text"])
+        if parsed_page_number:
+            value, is_roman = parsed_page_number
+            selected_markers.append(
+                Candidate(
+                    0,
+                    candidate["line"],
+                    value,
+                    "llm",
+                    is_roman,
+                    True,
+                    0.7,
+                )
+            )
+
+    arabic_chain = _best_chain(
+        [marker for marker in selected_markers if not marker.roman]
+    )
+    accepted, confidence, reason = _accept(
+        arabic_chain,
+        lines,
+        len(selected_markers),
+    )
+    if not accepted:
+        return Detection(
+            reason=f"the model's page numbers were rejected: {reason}"
+        )
+
+    detection = Detection(
+        "detected",
+        arabic_chain,
+        "start",
+        min(confidence, 0.8),
+        "llm",
+    )
     detection.convention = _convention(detection, lines)
     return detection
 
-
 def _convention(detection: Detection, lines: list[str]) -> str:
-    """Does a marker open its page (bracket/keyword styles) or close it (a bare footer folio)?"""
+    """Return whether markers open pages ("start") or close them ("end")."""
     markers = detection.markers
-    if all(m.style in {"bracket", "keyword", "inline", "words", "header"} for m in markers):
+    start_marker_styles = {
+        "bracket",
+        "keyword",
+        "inline",
+        "words",
+        "header",
+    }
+    if all(marker.style in start_marker_styles for marker in markers):
         return "start"
-    gaps = [_between(lines, a, b) for a, b in zip(markers, markers[1:])]
-    median_gap = statistics.median(gaps) if gaps else 0
-    head = sum(len(x) for x in lines[: markers[0].line])
-    # If the text before the first folio is a full page, folios are footers.
-    return "end" if median_gap and head >= 0.6 * median_gap else "start"
+
+    text_gaps = [
+        _between(lines, first_marker, second_marker)
+        for first_marker, second_marker in zip(markers, markers[1:])
+    ]
+    median_text_gap = statistics.median(text_gaps) if text_gaps else 0
+    characters_before_first_marker = sum(
+        len(line) for line in lines[: markers[0].line]
+    )
+
+    # If roughly a full page of text precedes the first marker, a bare folio
+    # almost certainly closes that page rather than opening the next one.
+    if (
+        median_text_gap
+        and characters_before_first_marker >= 0.6 * median_text_gap
+    ):
+        return "end"
+    return "start"
+

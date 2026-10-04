@@ -18,10 +18,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Backend test suite
 
-Run from the repository root after installing `api/requirements-dev.txt` as described in [CONTRIBUTING.md](../CONTRIBUTING.md):
+Run from the repository root after installing `api/requirements-dev.txt` as described in [CONTRIBUTING.md](../CONTRIBUTING.md). The normal backend regression run excludes the two frontend/backend contract files because CI owns them as focused gates:
 
 ```bash
-pytest -q -n auto --dist=worksteal
+python -m compileall -q api/app
+pytest -q -n auto --dist=worksteal \
+  --ignore=tests/test_frontend_api_contract.py \
+  --ignore=tests/test_frontend_graphql_contract.py
+
+pytest -q -m contract tests/test_frontend_api_contract.py tests/test_frontend_graphql_contract.py
 ```
 
 The tests need no Docker, Ollama, GPU, or real ChromaDB. Files that import `app.corpus_builder`, `app.chroma_store`, or `app.rag` install a stub `chromadb` (or `app.rag`) module first. Under pytest-xdist, each worker receives its own temporary storage root so SQLite, filesystem corpus state, and embedded-vector paths cannot collide.
@@ -91,4 +96,6 @@ File names describe the behavior under test (for example `test_review_queues.py`
 - Test behavior, not source text. A few older tests still check that a hook exists in a source file; their docstrings say so.
 - Do not hard-code the release version in tests; `test_release_consistency.py` is the one place that checks version agreement. Tests that pin the corpus _profile_ or _prompt_ version ids (for example `test_profile_and_prompt_ids_are_pinned`) do so deliberately, and must be updated when those ids are bumped.
 - Prefer temporary directories (`tmp_path`) and monkeypatching over real services.
+- Keep fixture/helper names descriptive. A test should make the scenario, stimulus, and expected invariant legible without reverse-engineering generic variables such as `x`, `data`, or `result`.
+- Comment non-obvious fixture construction (revision lineage, provenance/evidence graphs, async ordering), not routine Arrange/Act/Assert steps.
 - `tests/fixtures/` holds JSON inputs (for example `corpus_builder/topology_cases.json`). Add a case there to extend coverage without new test code.

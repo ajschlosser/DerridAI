@@ -76,3 +76,18 @@ Storybook stories sit beside reusable components. New visual behavior should nor
 Keep API calls and lifecycle orchestration in the feature/composable layer rather than duplicating them across components. Keep deterministic presentation/state logic in feature or shared domain modules. Components may coordinate interaction, but they should not decide scholarly authority, fabricate confidence/evidence, or bypass backend review invariants.
 
 Use medium-neutral names and controls unless a component is genuinely specific to one source kind.
+
+## Contributing to the visual workflow
+
+Start from the workspace that owns the user task (`Setup`, `Build`, `Review`, or `Publish`) and then locate the smallest component that renders the state. If a change needs new async state, move that coordination to the feature/composable layer instead of teaching the visual component how to fetch and reconcile data.
+
+Particularly easy mistakes are:
+
+- hiding partial Build/Review state behind one global loading flag even though those workspaces progress independently;
+- adding PDF page language to media-neutral controls;
+- duplicating a review/evidence rule in Vue rather than presenting the backend decision;
+- putting dense computed expressions or nested ternaries in the template instead of naming the state in `<script setup>`;
+- adding a reusable interaction without a Storybook state, keyboard behavior, long-string coverage, or focused Vitest regression;
+- treating the top-level `PdfCorpusBuilder.vue` owner as the natural destination for every new control.
+
+When a component needs to explain a subtle workflow state to the next maintainer, comment the invariant (for example why a stale response is ignored or why an action stays enabled during enrichment), not the markup.

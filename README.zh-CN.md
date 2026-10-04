@@ -309,10 +309,13 @@ cd ..
 常用本地质量 gate：
 
 ```bash
-ruff check api/app tests scripts/check_frontend_api_contract.py
+ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 mypy
-pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
-pytest -q -m contract tests/test_frontend_api_contract.py
+python -m compileall -q api/app
+pytest -q -n auto --dist=worksteal \
+  --ignore=tests/test_frontend_api_contract.py \
+  --ignore=tests/test_frontend_graphql_contract.py
+pytest -q -m contract tests/test_frontend_api_contract.py tests/test_frontend_graphql_contract.py
 
 cd web
 npm run format:repo:check
@@ -320,7 +323,7 @@ npm run lint
 npm run typecheck
 npm run typecheck:tests
 npm run test:unit
-npm run build
+npm run build:ci
 ```
 
 从 `web/` 运行 `npm run format:repo` 可格式化仓库中所有由 Prettier 支持的源码、配置与文档。生成的 legacy DOM snapshot HTML 会被有意排除。

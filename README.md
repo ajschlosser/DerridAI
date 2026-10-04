@@ -94,6 +94,7 @@ flowchart LR
         REST["REST commands + mutations"]
         GQL["GraphQL read façade"]
         WS["WebSocket notifications"]
+        Reads["cELF read services"]
         Domains["Corpus · Research · Pipelines · Jobs"]
     end
 
@@ -107,11 +108,15 @@ flowchart LR
     Browser --> GQL
     Browser <-->|bounded events| WS
     REST --> Domains
-    GQL --> Domains
+    REST --> Reads
+    GQL --> Reads
+    Reads --> Canonical
+    Reads -. query derived projections .-> Chroma
     Domains --> Canonical
     Domains --> System
     Domains -. index / retrieve .-> Chroma
     Domains --> Providers
+    Domains -. change notifications .-> WS
     Domains -. bounded reviewed text .-> NLP
     NLP -. derived annotations .-> Domains
 ```
@@ -119,6 +124,7 @@ flowchart LR
 For developers working inside a subsystem, the local maps are more specific than this overview:
 
 - [Backend application map](api/app/README.md)
+- [Backend test architecture](tests/README.md)
 - [Computational pipelines](api/app/pipelines/README.md)
 - [Frontend workspace](web/README.md)
 - [Frontend application map](web/src/README.md)
@@ -129,6 +135,19 @@ For developers working inside a subsystem, the local maps are more specific than
 - [Corpus Builder components](web/src/components/corpus-builder/README.md)
 - [Pipeline Studio components](web/src/components/pipelines/README.md)
 - [Frontend test architecture](web/tests/README.md)
+
+### Contributing by area
+
+| If you want to change…              | Start here                                                                                                                                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend/domain behavior             | [`api/README.md`](api/README.md) → [`api/app/README.md`](api/app/README.md)                                                                                                               |
+| Frontend route/workspace behavior   | [`web/README.md`](web/README.md) → [`web/src/README.md`](web/src/README.md)                                                                                                               |
+| Reusable UI or Storybook components | [`web/src/components/README.md`](web/src/components/README.md)                                                                                                                            |
+| Corpus Builder                      | [`web/src/features/corpus-builder/README.md`](web/src/features/corpus-builder/README.md) and [`web/src/components/corpus-builder/README.md`](web/src/components/corpus-builder/README.md) |
+| Pipeline Studio                     | [`api/app/pipelines/README.md`](api/app/pipelines/README.md) and [`web/src/components/pipelines/README.md`](web/src/components/pipelines/README.md)                                       |
+| Tests / CI ownership                | [`tests/README.md`](tests/README.md) and [`web/tests/README.md`](web/tests/README.md)                                                                                                     |
+
+Read [`docs/CODE_READABILITY.md`](docs/CODE_READABILITY.md) before a refactor. It records naming, documentation, nesting, and provenance-preservation conventions, plus the main traps in legacy/derived-state code.
 
 ### Runtime services
 
@@ -309,10 +328,13 @@ cd ..
 Fast local quality gates:
 
 ```bash
-ruff check api/app tests scripts/check_frontend_api_contract.py
+ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 mypy
-pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
-pytest -q -m contract tests/test_frontend_api_contract.py
+python -m compileall -q api/app
+pytest -q -n auto --dist=worksteal \
+  --ignore=tests/test_frontend_api_contract.py \
+  --ignore=tests/test_frontend_graphql_contract.py
+pytest -q -m contract tests/test_frontend_api_contract.py tests/test_frontend_graphql_contract.py
 
 cd web
 npm run format:repo:check
@@ -320,12 +342,30 @@ npm run lint
 npm run typecheck
 npm run typecheck:tests
 npm run test:unit
-npm run build
+npm run build:ci
 ```
 
 Use `npm run format:repo` from `web/` to format every Prettier-supported source, configuration, and documentation file in the repository. Generated legacy DOM snapshot HTML is intentionally excluded.
 
+For a change-aware local gate, run `scripts/preflight.sh` from the repository root after installing both environments. It selects checks from the diff and verifies that the branch is not behind `origin/master`; browser suites remain CI-owned.
+
 For browser coverage, Storybook, CI parity, and contribution rules, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Choose a contribution area
+
+Start with the narrowest architectural map for the part you intend to change. This avoids learning the whole repository before making a focused contribution.
+
+| Change area                        | Start here                                                                                                                                                             | Important boundary / common trap                                                                                                              |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source ingestion and extraction    | [Backend map](api/app/README.md), [ingestion safety](docs/INGESTION_VALIDATION.md)                                                                                     | Treat every source as inert untrusted data; preserve medium-specific locators and extractor provenance.                                       |
+| Corpus Builder and review          | [Backend application map](api/app/README.md), [frontend feature](web/src/features/corpus-builder/README.md), [components](web/src/components/corpus-builder/README.md) | `corpus_builder.py` and `PdfCorpusBuilder.vue` are orchestration/compatibility owners, not default homes for new domain logic.                |
+| Metadata, assertions, and evidence | [Metadata schemas](docs/METADATA_SCHEMAS.md), [Metadata Memory](docs/METADATA_MEMORY.md), [project context](docs/PROJECT_CONTEXT.md)                                   | Keep derivation, evaluation, authority, value state, revision, and evidence distinct; do not flatten them into one value or flag.             |
+| Research, retrieval, and pipelines | [Pipeline backend](api/app/pipelines/README.md), [Pipeline UI](web/src/components/pipelines/README.md), [architecture](docs/ARCHITECTURE.md)                           | Retrieval scores and indexes are derived state. Exact evidence/support binding is deterministic scholarly state.                              |
+| REST, GraphQL, or realtime         | [Backend map](api/README.md), [frontend API clients](web/src/api/README.md), [GraphQL](docs/GRAPHQL.md), [realtime](docs/REALTIME.md)                                  | REST owns mutations; GraphQL is read-only; WebSocket messages signal change and must be followed by canonical reads.                          |
+| Frontend UI or state               | [Frontend workspace](web/README.md), [application map](web/src/README.md), [domain layer](web/src/domain/README.md)                                                    | Keep user-facing strings in i18n, preserve WCAG behavior, and avoid new dependencies on the remaining compatibility runtime.                  |
+| Static research sites / SDK        | [Frontend workspace](web/README.md), `web/site/`, `web/sdk/`, `api/app/site_publication.py`                                                                            | Generated `api/app/site_assets/derridai-*.js` files are build outputs; change their TypeScript/Vue sources and regenerate.                    |
+| Tests and CI                       | [Backend tests](tests/README.md), [frontend tests](web/tests/README.md), [contributing](CONTRIBUTING.md)                                                               | Contract tests are intentionally separate from the broad backend run; characterization snapshots change only for understood behavior changes. |
+| cELF/specification or requirements | [SPECIFICATION.md](SPECIFICATION.md), [requirements](docs/requirements/README.md)                                                                                      | Preserve normative requirement identifiers and traceability; implementation detail must not silently redefine cELF semantics.                 |
 
 ## Repository map
 
@@ -355,6 +395,7 @@ Start with the documents describing current behavior:
 - [Metadata schemas](docs/METADATA_SCHEMAS.md) — configurable field contracts and model guidance
 - [Metadata memory](docs/METADATA_MEMORY.md) — reviewed precedents and authority boundaries
 - [FieldAssertion migration](docs/FIELD_ASSERTION_MIGRATION.md) — canonical assertion model and compatibility work
+- [Code readability](docs/CODE_READABILITY.md) — naming, documentation, complex-logic, and refactoring conventions
 - [Contributing](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) — development rules and quality gates
 
 Release history is in [CHANGELOG.md](CHANGELOG.md) and `docs/notes/<version>.md`. Version-specific release notes are historical records, not current architecture or backlog documents.

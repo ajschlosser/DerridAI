@@ -22,6 +22,8 @@ The `api/` tree is DerridAI's FastAPI backend. It owns server-side authorization
 
 Use the root [README](../README.md) for installation and first-run setup. Use [CONTRIBUTING](../CONTRIBUTING.md) for the supported Python/Node versions and quality gates. This file is the backend code map.
 
+For naming, docstrings, nested control flow, and behavior-preserving refactors, also follow [the code readability guide](../docs/CODE_READABILITY.md).
+
 ## Application composition
 
 The local backend map is summarized below; [`app/README.md`](app/README.md) documents the module-level boundaries in more detail.
@@ -35,6 +37,7 @@ flowchart TD
     Realtime["app/realtime/ · WebSocket"]
     Reads["app/celf_queries/"]
     Domains["Corpus / Research / Pipelines / Jobs / Providers"]
+    Events["app/operation_events.py"]
     Stores["Canonical + system stores"]
     Chroma["Derived Chroma projections"]
 
@@ -46,9 +49,11 @@ flowchart TD
     Routers --> Reads
     GraphQL --> Reads
     Reads --> Stores
-    Reads --> Chroma
+    Reads -. query .-> Chroma
     Domains --> Stores
     Domains -. derived indexing / retrieval .-> Chroma
+    Domains -. bounded change notifications .-> Events
+    Events --> Realtime
 ```
 
 The backend is intentionally split by responsibility:
@@ -120,6 +125,8 @@ docker compose up -d --build
 curl -fsS http://127.0.0.1:8000/api/live
 ```
 
+The default host-provider URLs use `host.docker.internal`. Compose maps that name through Docker's host gateway, so the same Ollama/OpenAI-compatible configuration works on Docker Desktop and native Linux Docker Engine.
+
 Backend tests do not require Docker, Ollama, a GPU, or a real Chroma service; test configuration redirects storage to isolated temporary paths.
 
 ## Validation
@@ -127,16 +134,19 @@ Backend tests do not require Docker, Ollama, a GPU, or a real Chroma service; te
 From the repository root:
 
 ```bash
-ruff check api/app tests scripts/check_frontend_api_contract.py
+ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 mypy
 python -m compileall -q api/app
-pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
+pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py --ignore=tests/test_frontend_graphql_contract.py
 pytest -q -m contract tests/test_frontend_api_contract.py
+pytest -q -m contract tests/test_frontend_graphql_contract.py
 ```
 
 Focused test taxonomy and fixture guidance are in [tests/README.md](../tests/README.md).
 
 ## Backend change rules
+
+Follow the naming/docstring guidance in [CONTRIBUTING.md](../CONTRIBUTING.md): use domain-specific names, document non-obvious private algorithms and invariants, and prefer guard clauses or named helpers over deeply nested control flow. Compatibility dictionaries are not a reason to introduce new untyped payloads at a stable boundary.
 
 - Enforce authorization and role boundaries in the API even when the frontend also hides a capability.
 - Treat LLM output as untrusted proposals until deterministic schema, provenance, evidence, and vocabulary checks accept it.

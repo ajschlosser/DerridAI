@@ -59,14 +59,22 @@ Tests should be placed by the boundary they exercise, not by release number. Pre
 
 ## Commands
 
-From `web/`:
+From `web/`, unit tests can run immediately after `npm ci`:
 
 ```bash
 npm run test:unit
+```
+
+Browser suites intentionally target built artifacts rather than whatever development server happens to be running. Build the app/Storybook first, then run the relevant browser gate:
+
+```bash
+npm run build
+npm run build-storybook
+
 npm run test:characterization
 npm run test:workflow
 npm run test:accessibility
 npm run test:e2e
 ```
 
-CI may select a narrower ownership-aware subset on pull requests and a broader suite on master or test-infrastructure changes.
+If the configured app or Storybook test port is already in use, set `APP_PORT` or `STORYBOOK_PORT` instead of reusing an unrelated running server. CI may select a narrower ownership-aware subset on pull requests and a broader suite on master or test-infrastructure changes.

@@ -79,3 +79,11 @@ Pipeline latency and complexity are operational measurements/estimates and must 
 A graph editor may expose only capabilities the backend can validate and execute. Do not present arbitrary bindings as executable when the relevant purpose adapter does not honour them. Invalid or inspect-only wiring should remain visibly distinct from executable versions.
 
 Trace views must treat traces as bounded operational provenance. They must not imply that a trace score establishes scholarly truth or reviewer confirmation.
+
+## Contributing to Pipeline Studio
+
+Keep graph semantics in the shared `domain/pipeline*.ts` helpers and transport in `api/pipelines.ts`; components should present/edit the server contract rather than create a second validation model. When a visual editor branch is difficult to read, name the resolved stage/port/binding state in script code instead of encoding it as a nested template expression.
+
+Before adding a control, verify that the backend purpose/strategy contract actually supports the operation. Add a representative Storybook state for reusable graph/editor/trace UI and focused Vitest coverage for domain transformations. Use Playwright for drag/keyboard/focus/layout behavior or a composed Studio workflow.
+
+Common traps are assuming every syntactically connectable port is executable, treating missing latency/complexity as zero, losing pipeline version/hash identity while editing, and displaying trace data as though it were scholarly evidence or reviewer authority.
