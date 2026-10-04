@@ -252,7 +252,10 @@ function keydown(event: KeyboardEvent) {
   }
   const first = nodes[0];
   const last = nodes[nodes.length - 1];
-  if (event.shiftKey && (document.activeElement === first || document.activeElement === titleEl.value)) {
+  if (
+    event.shiftKey &&
+    (document.activeElement === first || document.activeElement === titleEl.value)
+  ) {
     event.preventDefault();
     last.focus();
   } else if (!event.shiftKey && document.activeElement === last) {
