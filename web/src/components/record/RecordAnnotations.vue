@@ -44,9 +44,11 @@ function dateLabel(value?: string | null) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? String(value)
-    : new Intl.DateTimeFormat(i18n.locale, { dateStyle: "medium", timeStyle: "short" }).format(
-        date,
-      );
+    : new Intl.DateTimeFormat(i18n.locale, {
+        timeZone: i18n.timeZone,
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(date);
 }
 </script>
 <template>

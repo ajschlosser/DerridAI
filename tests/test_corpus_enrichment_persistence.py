@@ -56,11 +56,21 @@ def build_factory(tmp_path, monkeypatch):
     managers = []
 
     def make(count=3, pending=None):
-        records = [
-            {"text": f"Source {index}: " + "documentary evidence " * 100,
-             "metadata_complete": pending is not None and index >= pending}
-            for index in range(count)
-        ]
+        records = []
+        for index in range(count):
+            already_enriched = pending is not None and index >= pending
+            record = {
+                "text": f"Source {index}: " + "documentary evidence " * 100,
+                "metadata_complete": already_enriched,
+            }
+            if already_enriched:
+                record["metadata_enrichment_state"] = "complete"
+                record["metadata_stage_status"] = {
+                    "discourse": "complete",
+                    "quotation": "complete",
+                    "indexing": "complete",
+                }
+            records.append(record)
         repo, build = install(tmp_path, records)
         monkeypatch.setattr(cb.PdfCorpusBuildManager, "_schedule_metadata_exemplar_projection", lambda *args: None)
         manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
@@ -300,8 +310,11 @@ def test_retired_initial_checkpoint_does_not_write_or_advance_counters(build_fac
 def test_queue_setup_batches_dirty_projection_state_instead_of_per_record_writes(
     build_factory, monkeypatch, count,
 ):
-    repo, build_id, manager = build_factory(count=count, pending=0)
+    repo, build_id, manager = build_factory(count=count)
     records = repo.load_records(build_id)
+    for record in records:
+        record["metadata_enrichment_state"] = "running"
+    repo.save_records(build_id, records)
     dirty_updates = []
     direct_updates = []
     mark_dirty, update = repo._set_records_projection_state, repo.update_record
@@ -317,8 +330,8 @@ def test_queue_setup_batches_dirty_projection_state_instead_of_per_record_writes
 
     monkeypatch.setattr(repo, "_set_records_projection_state", counted_dirty)
     monkeypatch.setattr(repo, "update_record", counted_update)
-    result = manager._schedule_build_enrichment(build_id, {}, {}, records)
-    assert all(row["metadata_enrichment_state"] == "complete" for row in result)
+    result = manager._initialize_build_enrichment(build_id, {})
+    assert all(row["metadata_enrichment_state"] == "queued" for row in result)
     assert dirty_updates == [build_id]
     assert not direct_updates
 
@@ -442,7 +455,7 @@ def test_queue_setup_preserves_settle_request_received_during_computation(build_
 
 
 def test_queue_setup_repeated_conflicts_fail_without_committing_candidates(build_factory, monkeypatch):
-    repo, build_id, manager = build_factory(count=1, pending=0)
+    repo, build_id, manager = build_factory(count=1)
     external = cb.PdfCorpusRepository(repo.root)
     before = repo.get_build(build_id)
     family_states = cb._metadata_family_states
@@ -472,7 +485,11 @@ def test_queue_setup_repeated_conflicts_fail_without_committing_candidates(build
 
 
 def test_queue_setup_projection_failure_rolls_back_the_entire_batch(build_factory, monkeypatch):
-    repo, build_id, manager = build_factory(count=2, pending=0)
+    repo, build_id, manager = build_factory(count=2)
+    records = repo.load_records(build_id)
+    for record in records:
+        record["metadata_enrichment_state"] = "running"
+    repo.save_records(build_id, records)
     before = repo.get_records(build_id, ["r1", "r2"], include_queue_version=True)
     before_build = repo.get_build(build_id)
     notifications = []
@@ -518,11 +535,14 @@ def test_queue_setup_schedules_current_topology_instead_of_obsolete_input(build_
 
 
 def test_queue_setup_summary_failure_keeps_committed_records_observable(build_factory, monkeypatch):
-    repo, build_id, manager = build_factory(count=1, pending=0)
+    repo, build_id, manager = build_factory(count=1)
+    record = repo.get_record(build_id, "r1")
+    record["metadata_enrichment_state"] = "running"
+    repo.update_record(build_id, record)
     notifications = []
 
     def committed(bid):
-        assert cb.PdfCorpusRepository(repo.root).get_record(bid, "r1")["metadata_enrichment_state"] == "complete"
+        assert cb.PdfCorpusRepository(repo.root).get_record(bid, "r1")["metadata_enrichment_state"] == "queued"
         notifications.append(bid)
 
     def fail_summary(*args):

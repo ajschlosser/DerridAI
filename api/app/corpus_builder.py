@@ -890,6 +890,12 @@ class PdfCorpusRepository:
         self._migration_fixed_points: set[tuple[bytes, bytes]] = set()
         self._metadata_projection_callback: Callable[[str], None] | None = None
         self._initialized_record_databases: dict[str, tuple[int, int, int]] = {}
+        # A cold JSONL -> SQLite bootstrap creates the database file before its
+        # canonical rows are committed. Track that narrow window separately from
+        # the repository lock so ordinary initialized reads remain lock-free while
+        # concurrent cold readers wait for the bootstrap leader to finish.
+        self._record_bootstrap_guard = threading.Lock()
+        self._record_bootstrapping: set[str] = set()
 
     def asset_meta_path(self, asset_id: str) -> Path:
         return self.root / "assets" / f"{asset_id}.json"
@@ -1827,7 +1833,10 @@ class PdfCorpusRepository:
     @contextmanager
     def _review_read_db(self, build_id: str) -> Iterator[tuple[sqlite3.Connection, MetadataSchema | None, bytes]]:
         self._read_build_snapshot(build_id)
-        if not self.build_records_db_path(build_id).exists():
+        path = self.build_records_db_path(build_id)
+        with self._record_bootstrap_guard:
+            bootstrap_in_progress = build_id in self._record_bootstrapping
+        if not path.exists() or bootstrap_in_progress:
             with self._lock:
                 self._bootstrap_records_db(build_id)
         for _attempt in range(3):
@@ -1858,32 +1867,38 @@ class PdfCorpusRepository:
         raise RuntimeError("Review projection changed repeatedly during read preparation.")
 
     def _bootstrap_records_db(self, build_id: str) -> None:
-        if self.build_records_db_path(build_id).exists():
-            return
-        records_path = self.build_records_path(build_id)
-        records: list[dict[str, Any]] = []
-        if records_path.exists():
-            with records_path.open("r", encoding="utf-8") as handle:
-                records = [
-                    _migrate_status_vocabulary(json.loads(line))
-                    for line in handle
-                    if line.strip()
-                ]
-        with self._records_db(build_id) as connection:
-            connection.executemany(
-                "INSERT OR REPLACE INTO corpus_records(record_id, ordinal, payload) VALUES (?, ?, ?)",
-                [
-                    (
-                        str(record.get("record_id") or ""),
-                        ordinal,
-                        json.dumps(record, ensure_ascii=False),
-                    )
-                    for ordinal, record in enumerate(records)
-                    if record.get("record_id")
-                ],
-            )
-            self._ensure_review_projection(connection, build_id, rebuild=True)
-            connection.commit()
+        with self._record_bootstrap_guard:
+            self._record_bootstrapping.add(build_id)
+        try:
+            if self.build_records_db_path(build_id).exists():
+                return
+            records_path = self.build_records_path(build_id)
+            records: list[dict[str, Any]] = []
+            if records_path.exists():
+                with records_path.open("r", encoding="utf-8") as handle:
+                    records = [
+                        _migrate_status_vocabulary(json.loads(line))
+                        for line in handle
+                        if line.strip()
+                    ]
+            with self._records_db(build_id) as connection:
+                connection.executemany(
+                    "INSERT OR REPLACE INTO corpus_records(record_id, ordinal, payload) VALUES (?, ?, ?)",
+                    [
+                        (
+                            str(record.get("record_id") or ""),
+                            ordinal,
+                            json.dumps(record, ensure_ascii=False),
+                        )
+                        for ordinal, record in enumerate(records)
+                        if record.get("record_id")
+                    ],
+                )
+                self._ensure_review_projection(connection, build_id, rebuild=True)
+                connection.commit()
+        finally:
+            with self._record_bootstrap_guard:
+                self._record_bootstrapping.discard(build_id)
 
     def build_checkpoint_path(self, build_id: str, name: str) -> Path:
         safe = re.sub(r"[^A-Za-z0-9._-]+", "_", str(name or "checkpoint"))
@@ -2375,7 +2390,14 @@ class PdfCorpusRepository:
     def _record_store_read_db(self, build_id: str) -> Iterator[sqlite3.Connection]:
         """Read raw canonical/journal rows without repairing derived projections."""
         self._read_build_snapshot(build_id)
-        if not self.build_records_db_path(build_id).exists():
+        path = self.build_records_db_path(build_id)
+        with self._record_bootstrap_guard:
+            bootstrap_in_progress = build_id in self._record_bootstrapping
+        if not path.exists() or bootstrap_in_progress:
+            # The file becomes visible as soon as sqlite3.connect opens it, before
+            # the JSONL rows are inserted. A reader arriving in that interval must
+            # join the repository bootstrap critical section instead of observing
+            # an empty-but-valid database.
             with self._lock:
                 self._bootstrap_records_db(build_id)
         with self._records_db(build_id) as connection:
@@ -2942,62 +2964,117 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         """Stable reviewer key for blind-review-safe derived projections."""
         return str(current_reviewer.get() or "")
 
-    def _materialize_semantic_projections(self, build_id: str) -> tuple[int, dict[str, Any]]:
-        """Materialize graph/Record/node/Work views once for the current generation.
+    def _materialize_semantic_projections(
+        self,
+        build_id: str,
+        *,
+        scope_type: str = "graph",
+        scope_id: str = "",
+    ) -> tuple[int, dict[str, Any]]:
+        """Materialize only the semantic projections needed by the current read.
 
-        The hot read path checks only System Data state and projection rows. Whole-
-        build loading, identity resolution, term folding and relationship indexing
-        happen here only after an explicit invalidation.
+        The graph overview is the common entry point and Document Intelligence has
+        already done the expensive document-level annotation. Building every
+        Record/node/Work view before the overview can render needlessly constructs
+        the reverse Record-term index for the whole corpus. Persist the current
+        graph first; expand the secondary projections only when one of them is
+        requested.
+
+        Audience separation remains part of the cache key so blind second-opinion
+        values cannot leak through a projection built for another reviewer.
         """
         lock = self._semantic_projection_lock(build_id)
         audience = self._semantic_projection_audience()
         with lock:
             state = system_store.semantic_map_state(build_id)
             generation = int(state["generation"])
-            existing = system_store.get_semantic_map_projection(
+            graph_row = system_store.get_semantic_map_projection(
                 "graph", build_id, build_id, audience=audience
+            )
+            graph_is_current = (
+                not state.get("dirty")
+                and graph_row is not None
+                and int(graph_row.get("generation") or 0) == generation
+            )
+
+            records: list[dict[str, Any]] | None = None
+            analysis: dict[str, Any] | None = None
+            if graph_is_current:
+                graph = graph_row["payload"]
+            else:
+                records = [
+                    json.loads(json.dumps(row))
+                    for row in self.repo.load_records(build_id)
+                ]
+                for row in records:
+                    _present_for_reviewer(row)
+                analysis = self._document_intelligence_for_records(build_id, records)
+                schema = self._schema_for(build_id)
+                graph = build_semantic_content_graph(
+                    records,
+                    analysis,
+                    schema=schema,
+                    registry=build_registry(
+                        self.repo,
+                        build_id,
+                        schema=schema,
+                        records=records,
+                    ),
+                )
+                system_store.put_semantic_map_projection(
+                    "graph",
+                    build_id,
+                    build_id,
+                    generation,
+                    graph,
+                    audience=audience,
+                )
+                with self._cache_lock:
+                    self._semantic_graph_cache[(build_id, audience)] = (
+                        generation,
+                        graph,
+                    )
+
+            if scope_type == "graph":
+                if not graph_is_current:
+                    system_store.mark_semantic_map_clean(build_id, generation)
+                return generation, graph
+
+            requested = system_store.get_semantic_map_projection(
+                scope_type,
+                scope_id,
+                build_id,
+                audience=audience,
             )
             if (
                 not state.get("dirty")
-                and existing is not None
-                and int(existing.get("generation") or 0) == generation
+                and requested is not None
+                and int(requested.get("generation") or 0) == generation
             ):
-                graph = existing["payload"]
-                with self._cache_lock:
-                    self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
                 return generation, graph
 
-            records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
-            for row in records:
-                _present_for_reviewer(row)
-            analysis = self._document_intelligence_for_records(build_id, records)
-            schema = self._schema_for(build_id)
-            graph = build_semantic_content_graph(
-                records,
-                analysis,
-                schema=schema,
-                registry=build_registry(self.repo, build_id, schema=schema, records=records),
-            )
+            if records is None:
+                records = [
+                    json.loads(json.dumps(row))
+                    for row in self.repo.load_records(build_id)
+                ]
+                for row in records:
+                    _present_for_reviewer(row)
+            if analysis is None:
+                analysis = self._document_intelligence_for_records(build_id, records)
+
             record_maps, node_maps, work_maps = build_semantic_map_projections(
                 graph,
                 records,
                 analysis=analysis,
             )
-
             work_by_record = {
                 str(row.get("record_id") or ""): str(
                     row.get("work") or row.get("document_title") or ""
                 ).strip()
                 for row in records
             }
-            projection_rows: list[dict[str, Any]] = [{
-                "scope_type": "graph",
-                "scope_id": build_id,
-                "build_id": build_id,
-                "generation": generation,
-                "audience": audience,
-                "payload": graph,
-            }]
+            projection_rows: list[dict[str, Any]] = []
             projection_rows.extend(
                 {
                     "scope_type": "record",
@@ -3035,9 +3112,8 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             )
             system_store.put_semantic_map_projections(projection_rows)
 
-            with self._cache_lock:
-                self._semantic_graph_cache[(build_id, audience)] = (generation, graph)
-            system_store.mark_semantic_map_clean(build_id, generation)
+            if not graph_is_current:
+                system_store.mark_semantic_map_clean(build_id, generation)
             return generation, graph
 
     def _semantic_projection(
@@ -3047,38 +3123,42 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         scope_id: str,
     ) -> dict[str, Any]:
         audience = self._semantic_projection_audience()
-        state = system_store.semantic_map_state(build_id)
-        generation = int(state["generation"])
-        row = system_store.get_semantic_map_projection(
-            scope_type, scope_id, build_id, audience=audience
-        )
-        if (
-            not state.get("dirty")
-            and row is not None
-            and int(row.get("generation") or 0) == generation
-        ):
-            return row["payload"]
+        for _attempt in range(2):
+            state = system_store.semantic_map_state(build_id)
+            generation = int(state["generation"])
+            row = system_store.get_semantic_map_projection(
+                scope_type,
+                scope_id,
+                build_id,
+                audience=audience,
+            )
+            if (
+                not state.get("dirty")
+                and row is not None
+                and int(row.get("generation") or 0) == generation
+            ):
+                return row["payload"]
 
-        self._materialize_semantic_projections(build_id)
-        state = system_store.semantic_map_state(build_id)
-        row = system_store.get_semantic_map_projection(
-            scope_type, scope_id, build_id, audience=audience
-        )
-        if (
-            row is not None
-            and int(row.get("generation") or 0) == int(state["generation"])
-        ):
-            return row["payload"]
-        # A concurrent write may have invalidated the just-built generation.
-        # Rebuild once against the new generation rather than returning "not available".
-        self._materialize_semantic_projections(build_id)
-        state = system_store.semantic_map_state(build_id)
-        row = system_store.get_semantic_map_projection(
-            scope_type, scope_id, build_id, audience=audience
-        )
-        if row is None or int(row.get("generation") or 0) != int(state["generation"]):
-            raise KeyError(scope_id)
-        return row["payload"]
+            self._materialize_semantic_projections(
+                build_id,
+                scope_type=scope_type,
+                scope_id=scope_id,
+            )
+            state = system_store.semantic_map_state(build_id)
+            row = system_store.get_semantic_map_projection(
+                scope_type,
+                scope_id,
+                build_id,
+                audience=audience,
+            )
+            if (
+                not state.get("dirty")
+                and row is not None
+                and int(row.get("generation") or 0) == int(state["generation"])
+            ):
+                return row["payload"]
+
+        raise KeyError(scope_id)
 
     def _current_semantic_graph(
         self, build_id: str
@@ -4611,9 +4691,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     if isinstance(live_record.get("metadata_stage_status"), dict)
                     else {}
                 )
+                enrichment_state = str(live_record.get("metadata_enrichment_state") or "").strip().casefold()
                 prior_state = str(
                     row_status.get(task_name)
-                    or ("complete" if live_record.get("metadata_complete") else "queued")
+                    or ("complete" if enrichment_state == "complete" else "queued")
                 )
                 # A sibling may have advanced since this worker's snapshot.
                 # Merge only the callback's own status and ledger entry.
@@ -4693,10 +4774,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             nonlocal updates
             check_cancelled()
             for record in rows:
-                if record.get("metadata_complete") or record.get("metadata_enrichment_state") == "complete":
+                enrichment_state = str(record.get("metadata_enrichment_state") or "").strip().casefold()
+                if enrichment_state == "complete":
                     record["metadata_enrichment_state"] = "complete"
                 else:
-                    # Restarted workers do not survive; their family checkpoints do.
+                    # Scholarly metadata completeness is not execution completion.
+                    # Deterministic/inherited values can satisfy the schema before
+                    # this Record's scheduled LLM enrichment pass has run.
                     record["metadata_enrichment_state"] = "queued"
                     record.setdefault("metadata_stage_status", {})
             states = _metadata_family_states(rows)

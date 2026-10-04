@@ -94,7 +94,10 @@ const recorded = (value: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
-    : date.toLocaleDateString(i18n.locale || undefined, { dateStyle: "medium" });
+    : date.toLocaleDateString(i18n.locale || undefined, {
+        dateStyle: "medium",
+        timeZone: i18n.timeZone,
+      });
 };
 
 async function load() {

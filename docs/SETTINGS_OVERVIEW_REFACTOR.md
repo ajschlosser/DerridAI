@@ -1,3 +1,21 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 # Settings Overview Refactor
 
 Status: In progress  
@@ -98,7 +116,7 @@ Overview should use compact category navigation surfaces with limited live conte
 | Workspace → About DerridAI                      | Overview footer/product information             |
 | Language & accessibility → Interface language   | Preferences → Language & accessibility          |
 | Contrast                                        | Preferences → Accessibility                     |
-| Manage Languages                                | Contextual link to Languages workspace          |
+| Locale                                          | Contextual link to Locale workspace             |
 | Research defaults → Response language           | Research & review → Research output defaults    |
 | Review & AI behavior → provider/preset/run mode | Research & review → Review execution            |
 | Auto-grade cached answers                       | Research & review → Evaluation defaults         |

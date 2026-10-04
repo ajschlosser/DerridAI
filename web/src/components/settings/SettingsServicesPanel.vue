@@ -6,6 +6,14 @@ This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
@@ -51,7 +59,9 @@ function providerChecked(profile: ProviderProfile) {
   const stamp = props.providerStatuses?.[profile.id]?.checked_at;
   if (!stamp) return i18n.t("settings.not_checked");
   const date = new Date(stamp);
-  return Number.isNaN(date.getTime()) ? stamp : date.toLocaleString(i18n.locale);
+  return Number.isNaN(date.getTime())
+    ? stamp
+    : date.toLocaleString(i18n.locale, { timeZone: i18n.timeZone });
 }
 function updateAudio(patch: Partial<{ base_url: string; model: string; api_key: string }>) {
   emit("update-audio-draft", { ...props.audioDraft, ...patch });

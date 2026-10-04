@@ -90,18 +90,27 @@ def models_dir(tmp_path, monkeypatch):
     return tmp_path / "booknlp"
 
 
-def test_builtin_catalog_pins_every_downloadable_file_and_lists_reference_sources():
+def test_builtin_catalog_contains_only_runnable_sources_and_lists_bundled_latin(monkeypatch):
+    real_find_spec = __import__("importlib.util", fromlist=["find_spec"]).find_spec
+
+    def find_spec(name):
+        if name == "la_core_web_sm":
+            return object()
+        return real_find_spec(name)
+
+    monkeypatch.setattr("importlib.util.find_spec", find_spec)
     listing = {item["pack_id"]: item for item in packs.list_packs()}
-    assert {"booknlp-en-big", "booknlp-en-small", "propp-fr", "llpro-de"} <= set(listing)
+    assert {"booknlp-en-big", "booknlp-en-small", "spacy-la-latincy-sm"} <= set(listing)
+    assert {"propp-fr", "llpro-de"}.isdisjoint(listing)
     for item in listing.values():
         for file in item["files"]:
             assert file["url"].startswith("https://") and len(file["sha256"]) == 64 and file["size"] > 0
     assert listing["booknlp-en-small"]["installable"] is True
-    # Engines without a bundled worker are listed for reference, never installed.
-    assert listing["propp-fr"]["installable"] is False
-    assert listing["llpro-de"]["installable"] is False
-    with pytest.raises(ValueError, match="reference"):
-        packs.install_pack("propp-fr", opener=_opener())
+    assert listing["spacy-la-latincy-sm"]["bundled"] is True
+    assert listing["spacy-la-latincy-sm"]["installed"] is True
+    assert listing["spacy-la-latincy-sm"]["installable"] is False
+    with pytest.raises(ValueError, match="bundled"):
+        packs.install_pack("spacy-la-latincy-sm", opener=_opener())
 
 
 def test_install_verifies_then_activates_and_routes_the_language_to_the_worker(models_dir, monkeypatch):
@@ -173,7 +182,7 @@ def test_uninstall_removes_files_and_the_route(models_dir, monkeypatch):
     assert di.booknlp_url_for("xx") == ""
 
 
-def test_install_job_reports_progress_and_refuses_reference_packs(monkeypatch):
+def test_install_job_reports_progress(monkeypatch):
     from app import job_document_nlp
 
     packs.add_custom_pack(_entry())
@@ -186,8 +195,6 @@ def test_install_job_reports_progress_and_refuses_reference_packs(monkeypatch):
     assert job["status"] == "completed"
     assert job["completed"] == job["total"] == sum(map(len, PAYLOADS.values()))
     assert job["result"] == {"pack_id": "booknlp-xx-test", "language": "xx"}
-    with pytest.raises(ValueError, match="reference"):
-        manager.start("propp-fr")
 
 
 def test_researchers_cannot_list_or_install_language_packs(monkeypatch):
@@ -263,7 +270,12 @@ def test_spacy_catalog_covers_many_languages_with_pinned_wheels_and_a_multilingu
     languages = {item["language"] for item in spacy_packs}
     assert {"en", "fr", "de", "it", "es", "pt", "ru", "zh", "ja", "xx"} <= languages
     assert len(languages) >= 20
+    assert "la" in languages
     for item in spacy_packs:
+        if item.get("bundled"):
+            assert item["pack_id"] == "spacy-la-latincy-sm"
+            assert item["files"] == []
+            continue
         (wheel,) = item["files"]
         assert wheel["role"] == "wheel" and wheel["url"].startswith("https://github.com/explosion/spacy-models/")
         assert len(wheel["sha256"]) == 64 and wheel["size"] > 0
@@ -320,6 +332,7 @@ def test_spacy_pack_with_missing_python_requirements_is_not_installable(tmp_path
 def test_any_iso_language_code_is_accepted_for_annotation():
     from app import nlp_annotations
 
+    assert nlp_annotations.DEFAULT_MODELS["la"] == "la_core_web_sm"
     assert nlp_annotations.language_code("Italian") == "it"
     assert nlp_annotations.language_code("pt-BR") == "pt"
     assert nlp_annotations.language_code("la") == "la"

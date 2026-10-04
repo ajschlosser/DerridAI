@@ -20,7 +20,7 @@ import { apiRequest } from "./http";
 import type { JobSummary } from "./jobs";
 
 export interface LanguagePackFile {
-  role: "entity" | "coref" | "quote";
+  role: "entity" | "coref" | "quote" | "wheel";
   filename: string;
   url: string;
   sha256: string;
@@ -40,6 +40,8 @@ export interface LanguagePack {
   requires?: string[];
   missing_requirements?: string[];
   origin: "builtin" | "custom";
+  /** True when the model is part of the API image rather than installed at runtime. */
+  bundled?: boolean;
   files: LanguagePackFile[];
   installable: boolean;
   installed: boolean;

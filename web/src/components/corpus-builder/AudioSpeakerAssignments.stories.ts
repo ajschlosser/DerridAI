@@ -16,29 +16,38 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { storedTimeZone } from "./localePreferences";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import AudioSpeakerAssignments from "./AudioSpeakerAssignments.vue";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Any = any;
+const meta = {
+  title: "Corpus Builder/Setup/Audio Speaker Assignments",
+  component: AudioSpeakerAssignments,
+  args: {
+    speakers: ["SPEAKER_1", "SPEAKER_2"],
+    assignments: {
+      SPEAKER_1: "Jacques Derrida",
+      SPEAKER_2: "",
+    },
+    disabled: false,
+  },
+} satisfies Meta<typeof AudioSpeakerAssignments>;
 
-export function formatTimestamp(value: Any): string {
-  if (!value) return "";
-  const date = new Date(value);
-  const locale =
-    typeof document !== "undefined" ? document.documentElement.lang || undefined : undefined;
-  return Number.isNaN(date.getTime())
-    ? String(value)
-    : date.toLocaleString(locale, { timeZone: storedTimeZone() });
-}
+export default meta;
+type Story = StoryObj<typeof meta>;
 
-export function toggleSort(sort: Any, key: Any): void {
-  if (sort.key === key) sort.dir *= -1;
-  else {
-    sort.key = key;
-    sort.dir = 1;
-  }
-}
+export const DetectedSpeakers: Story = {};
 
-export function localRecordKey(file: Any, index: Any): string {
-  return `${file.id}::${index}`;
-}
+export const NamedSpeakers: Story = {
+  args: {
+    assignments: {
+      SPEAKER_1: "Jacques Derrida",
+      SPEAKER_2: "Interviewer",
+    },
+  },
+};
+
+export const Saving: Story = {
+  args: {
+    disabled: true,
+  },
+};

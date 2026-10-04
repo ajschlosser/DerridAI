@@ -226,7 +226,7 @@ describe("sidebar at sign-in", () => {
         "Metadata memory",
         "System Data",
         "Users & roles",
-        "Manage languages",
+        "Locale",
         "Operations",
         "Help center",
         "Settings",

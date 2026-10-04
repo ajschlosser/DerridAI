@@ -120,6 +120,31 @@ def test_publication_readiness_requires_document_identity_and_semantic_integrity
     assert any(item['code'] == 'required_document_metadata' for item in readiness['blockers'])
 
 
+def test_running_enrichment_stage_is_not_marked_complete_by_zero_issue_summary():
+    """An empty scholarly issue summary cannot certify in-flight automation as finished."""
+    for stage in ("document_intelligence", "enriching", "metadata_retry", "metadata_enrichment_rerun"):
+        build = {
+            "profile_id": cb.PROFILE_VERSION,
+            "record_count": 2,
+            "accepted_count": 0,
+            "rejected_count": 0,
+            "needs_review_count": 0,
+            "boundary_review_count": 0,
+            "source_problem_count": 0,
+            "metadata_total": 2,
+            "metadata_completed": 2,
+            "metadata_issue_summary": {"fields_unresolved": 0, "records_incomplete": 0},
+            "manifest": {},
+            "validation": {"valid": True, "source_valid": True, "metadata_valid": True},
+            "status": "running",
+            "stage": stage,
+        }
+
+        cb.PdfCorpusBuildManager._refresh_workflow_fields(build)
+
+        assert build["pipeline_state"]["stages"]["enrichment"]["state"] == "active"
+
+
 def test_adaptive_fast_mode_can_skip_repeatedly_low_yield_family_but_not_deep_or_explicit_rerun():
     """Fast mode skips a family that keeps proposing almost nothing; other modes never do.
 

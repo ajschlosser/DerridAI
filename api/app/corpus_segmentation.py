@@ -34,6 +34,7 @@ from typing import Any
 from .corpus_metadata import STRONG_STRUCTURAL_METHODS
 from .field_assertions import (
     create_deterministic_assertion,
+    create_human_assertion,
     create_inherited_assertion,
     current_assertion_by_name,
     migrate_record_assertions,
@@ -227,6 +228,14 @@ def _deterministic_boundary_candidates(
         ):
             signals.append("language_context_change")
             score += 0.40
+        left_speaker = str(left.get("speaker") or "").strip()
+        right_speaker = str(right.get("speaker") or "").strip()
+        if left_speaker and right_speaker and left_speaker != right_speaker:
+            # Diarization is documentary structure for timed media. Splitting at
+            # an explicit voice transition keeps a Record's speaker assertion
+            # unambiguous instead of asking enrichment to untangle two voices.
+            signals.append("speaker_change")
+            score += 1.0
         if right_type in heading_types:
             normalized_heading = _normalize_text(right_text).casefold()
             if normalized_heading and heading_counts.get(normalized_heading, 0) >= 3:
@@ -284,7 +293,7 @@ def _layout_region_change(left: dict[str, Any], right: dict[str, Any]) -> bool:
 
 def _candidate_route(candidate: dict[str, Any], profile: dict[str, Any]) -> str:
     signals = set(candidate.get("signals") or [])
-    if "layout_region_change" in signals:
+    if {"layout_region_change", "speaker_change"} & signals:
         return "split"
     if bool(candidate.get("protected")):
         return "keep"
@@ -1070,6 +1079,7 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
         uniform_voice = speakers[0] if speakers and len(set(speakers)) == 1 and (not audio or len(speakers) == len(group)) else None
         assigned = voice_assignments.get(uniform_voice) if uniform_voice else None
         assigned_name = str(assigned.get("display_name") or "").strip() if isinstance(assigned, dict) else ""
+        assigned_reviewer = str(assigned.get("reviewer") or "").strip() if isinstance(assigned, dict) else ""
         uniform_speaker = assigned_name or uniform_voice
         source_spans = []
         for block in group:
@@ -1128,18 +1138,29 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
                 confidence=0.99,
             )
         if uniform_speaker:
-            create_deterministic_assertion(
-                record,
-                "speaker",
-                uniform_speaker,
-                method="human_voice_assignment" if assigned_name else "source_span_speaker",
-                reason=(
-                    f"Reviewer assigned {uniform_voice} to this person."
-                    if assigned_name
-                    else "Speaker label assigned when the source was loaded."
-                ),
-                confidence=1.0 if assigned_name else 0.95,
-            )
+            if assigned_name:
+                # A reviewer naming a diarized voice is an authority event, not a
+                # deterministic inference. Preserve the machine voice ID on the
+                # SourceSpan while making the reviewed identity authoritative for
+                # record-level metadata and later enrichment.
+                create_human_assertion(
+                    record,
+                    "speaker",
+                    uniform_speaker,
+                    override=True,
+                    actor=assigned_reviewer or None,
+                    method="human_voice_assignment",
+                    reason=f"Reviewer assigned the diarized voice {uniform_voice}.",
+                )
+            else:
+                create_deterministic_assertion(
+                    record,
+                    "speaker",
+                    uniform_speaker,
+                    method="source_span_speaker",
+                    reason="Speaker label assigned when the source was loaded.",
+                    confidence=0.95,
+                )
         project_record_assertions(record)
         records.append(record)
     return records

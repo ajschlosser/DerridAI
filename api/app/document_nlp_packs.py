@@ -25,10 +25,9 @@ downloads each artifact over HTTPS, bounds its size, verifies its SHA-256, and w
 it below the shared model directory. The analyzer worker then loads those files from
 its read-only mount and never downloads anything itself.
 
-Catalog entries are data. The built-in list names the packs and sources DerridAI
-knows about; entries whose engine has no bundled worker are listed for reference and
-cannot be installed. Administrators may add their own entries (for example a
-BookNLP-compatible model set for another language) without a code change.
+Catalog entries are data. The built-in list contains only models DerridAI can
+actually run: administrator-installable packs plus model packages bundled with the
+API image. Administrators may add their own compatible entries without a code change.
 """
 from __future__ import annotations
 
@@ -73,19 +72,20 @@ def _booknlp_file(role: str, filename: str, size: int, sha256: str) -> dict[str,
     return {"role": role, "filename": filename, "url": _BOOKNLP_MODELS + filename, "size": size, "sha256": sha256}
 
 
-def _hf_file(repo: str, revision: str, filename: str, size: int, sha256: str, role: str) -> dict[str, Any]:
-    return {
-        "role": role,
-        "filename": filename,
-        "url": f"https://huggingface.co/{repo}/resolve/{revision}/{filename}",
-        "size": size,
-        "sha256": sha256,
-    }
-
-
-# Digests were computed from the published artifacts (BookNLP) or taken from the
-# Hugging Face LFS metadata of a pinned revision (Propp). Sizes are exact.
+# BookNLP digests were computed from the published artifacts. Sizes are exact.
 BUILTIN_CATALOG: tuple[dict[str, Any], ...] = (
+    {
+        "pack_id": "spacy-la-latincy-sm",
+        "language": "la",
+        "engine": "spacy",
+        "label": "LatinCy la_core_web_sm 3.9.8",
+        "source_url": "https://huggingface.co/latincy/la_core_web_sm",
+        "license": "MIT",
+        "tier": "sm",
+        "bundled_package": "la_core_web_sm",
+        "note": "Bundled Latin pipeline for classical, medieval, and scholarly Latin text.",
+        "files": [],
+    },
     {
         "pack_id": "booknlp-en-big",
         "language": "en",
@@ -118,33 +118,7 @@ BUILTIN_CATALOG: tuple[dict[str, Any], ...] = (
                           "1f530622219b8d6d90881f0d2eaeeec08ff6b73287d9eac66a1505ee0e6887e5"),
         ],
     },
-    {
-        "pack_id": "propp-fr",
-        "language": "fr",
-        "engine": "propp-fr",
-        "label": "Propp (French literary NER and coreference)",
-        "source_url": "https://github.com/lattice-8094/propp",
-        "license": "MIT (library), Apache-2.0 (models)",
-        "note": "Propp is a separate pipeline (pip package propp_fr), not BookNLP; it needs its own worker.",
-        "files": [
-            _hf_file("AntoineBourgois/propp-fr_NER_camembert-large_FAC_GPE_LOC_PER_TIME_VEH",
-                     "8aafbcb8b25599d804e0b4650387971379b980cb", "final_model.pkl", 121833213,
-                     "691e872907db568b00db9438508bf05653be1e8521087cae07afaa169e8b3056", "entity"),
-            _hf_file("AntoineBourgois/propp-fr_coreference-resolution_camembert-large_PER",
-                     "f1ff9e853c288f2e3a10dded3bd41e29b409b6b5", "final_model", 45373487,
-                     "9fbb4f18dc0105c4681c91c2acd25282c69636112b21352acdc0eb614707034f", "coref"),
-        ],
-    },
-    {
-        "pack_id": "llpro-de",
-        "language": "de",
-        "engine": "llpro",
-        "label": "LLpro (German literary texts)",
-        "source_url": "https://github.com/cophi-wue/LLpro",
-        "license": "GPL-3.0",
-        "note": "LLpro ships its own pipeline and models; it needs its own worker.",
-        "files": [],
-    },
+
 )
 
 
@@ -348,12 +322,29 @@ def _installed_files_present(entry: dict[str, Any], manifest: dict[str, Any]) ->
 
 
 def pack_status(entry: dict[str, Any]) -> dict[str, Any]:
+    bundled_package = str(entry.get("bundled_package") or "").strip()
+    if bundled_package:
+        import importlib.util
+
+        installed = importlib.util.find_spec(bundled_package) is not None
+        return {
+            **entry,
+            "bundled": True,
+            "installable": False,
+            "missing_requirements": [] if installed else [bundled_package],
+            "installed": installed,
+            "installed_at": None,
+            "download_bytes": 0,
+            "worker_bundled": True,
+        }
+
     manifest = active_manifest(entry["language"], entry["engine"]) or {}
     installed = manifest.get("pack_id") == entry["pack_id"] and _installed_files_present(entry, manifest)
     missing = missing_requirements(entry)
     has_runtime = entry.get("engine") in BUNDLED_ENGINES or entry.get("origin") == "custom"
     return {
         **entry,
+        "bundled": False,
         "installable": bool(entry.get("files")) and has_runtime and not missing,
         "missing_requirements": missing,
         "installed": installed,
@@ -419,10 +410,12 @@ def install_pack(
 ) -> dict[str, Any]:
     """Download, verify and activate a pack. The previous active pack stays until this one verifies."""
     entry = pack_status(get_pack(pack_id))
+    if entry.get("bundled"):
+        raise ValueError("This language pack is bundled with the DerridAI API image.")
     if entry["missing_requirements"]:
         raise ValueError("This pack needs Python packages the API does not have: " + ", ".join(entry["missing_requirements"]))
     if not entry["installable"]:
-        raise ValueError("This pack is listed for reference; no worker for its engine is bundled.")
+        raise ValueError("This language pack cannot be installed by the configured DerridAI runtime.")
     language_dir = engine_root(entry["engine"]) / entry["language"]
     pack_dir = language_dir / entry["pack_id"]
     staging = language_dir / f".{entry['pack_id']}.staging"
@@ -480,6 +473,8 @@ def install_pack(
 
 def uninstall_pack(pack_id: str) -> None:
     entry = get_pack(pack_id)
+    if entry.get("bundled_package"):
+        raise ValueError("Bundled language packs are part of the DerridAI API image.")
     language_dir = engine_root(entry["engine"]) / entry["language"]
     with _lock:
         manifest = active_manifest(entry["language"], entry["engine"]) or {}

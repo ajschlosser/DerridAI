@@ -104,7 +104,11 @@ const syncLabel = computed(() =>
         >
         <span v-if="collection.last_synced_at"
           >{{ i18n.t("vector.last_synced") }}:
-          <b>{{ new Date(collection.last_synced_at).toLocaleString(i18n.locale) }}</b></span
+          <b>{{
+            new Date(collection.last_synced_at).toLocaleString(i18n.locale, {
+              timeZone: i18n.timeZone,
+            })
+          }}</b></span
         >
         <span v-else>{{ i18n.t("vector.never_synced") }}</span>
         <span v-if="collection.build_id" :title="collection.build_id"
