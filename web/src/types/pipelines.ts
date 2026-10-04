@@ -79,18 +79,25 @@ export type PipelineDataType =
   | "model_output"
   | "evaluation"
   | "number"
-  | "any";
+  | "any"
+  | "embedding"
+  | "metadata_candidate_set"
+  | "metadata_hypothesis_set"
+  | "metadata_inference_request_set"
+  | "metadata_proposal_set";
 
 export type PipelinePort = {
   name: string;
   data_type: PipelineDataType;
   required: boolean;
+  required_traits?: string[];
   /** A tuning port: it may be fixed to a number instead of wired. */
   accepts_constant?: boolean;
   minimum?: number | null;
   maximum?: number | null;
   /** Merges several upstream sources (a union of candidate sets). */
   multiple: boolean;
+  produced_traits?: string[];
 };
 
 export type PipelineCostDriver =
@@ -113,7 +120,11 @@ export type PipelineComplexity = {
 };
 
 /** A value the workflow supplies to every run, which a stage input may bind to. */
-export type PipelineRunInput = { name: string; data_type: PipelineDataType };
+export type PipelineRunInput = {
+  name: string;
+  data_type: PipelineDataType;
+  produced_traits?: string[];
+};
 
 /** Server-owned contract for what a whole pipeline is for. */
 export type PipelinePurpose = {
@@ -130,6 +141,7 @@ export type PipelinePurpose = {
   assignment_scope: string;
   override_allowed: boolean;
   required_guarantees: string[];
+  required_output_traits?: string[];
   run_inputs?: PipelineRunInput[];
   label_key: string;
   description_key: string;
@@ -608,6 +620,7 @@ export type PipelineWiringSource = {
   via: string;
   explicit: boolean;
   producer_enabled: boolean;
+  traits?: string[];
 };
 
 export type PipelineWiringOption = {
@@ -626,6 +639,7 @@ export type PipelineWiringInput = {
   port: string;
   data_type: PipelineDataType;
   required: boolean;
+  required_traits?: string[];
   multiple: boolean;
   accepts_constant?: boolean;
   minimum?: number | null;
@@ -640,6 +654,7 @@ export type PipelineWiringOutput = {
   name: string;
   data_type: PipelineDataType;
   consumers: Array<{ stage: string; port: string }>;
+  produced_traits?: string[];
 };
 
 export type PipelineStageWiring = {

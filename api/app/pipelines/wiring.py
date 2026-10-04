@@ -55,7 +55,10 @@ def types_compatible(source: str, target: str) -> bool:
 
 
 def _issue(
-    level: Literal["error", "warning"], code: str, message: str, stage_id: str | None = None
+    level: Literal["error", "warning"],
+    code: str,
+    message: str,
+    stage_id: str | None = None,
 ) -> PipelineValidationIssue:
     return PipelineValidationIssue(level=level, code=code, message=message, stage_id=stage_id)
 
@@ -98,9 +101,17 @@ def ordering_only_edges(
             if not ports or port_name == ports[0].name:
                 continue
             for binding in bindings:
-                producer = stages.get(binding.stage or "") if binding.source == "stage" else None
+                producer = (
+                    stages.get(binding.stage or "")
+                    if binding.source == "stage"
+                    else None
+                )
                 producer_spec = registry.get(producer.strategy) if producer else None
-                if producer is None or producer_spec is None or target.id not in producer.next:
+                if (
+                    producer is None
+                    or producer_spec is None
+                    or target.id not in producer.next
+                ):
                     continue
                 if not types_compatible(output_ports(producer_spec)[0].data_type, ports[0].data_type):
                     pairs.add((producer.id, target.id))
@@ -148,8 +159,37 @@ def resolve_wiring(
             specs[stage.id] = spec
     run_inputs = [(item.name, item.data_type) for item in (purpose.run_inputs if purpose else [])]
     run_input_types = dict(run_inputs)
+    run_input_traits = {
+        item.name: set(item.produced_traits)
+        for item in (purpose.run_inputs if purpose else [])
+    }
     descendants = _descendants(pipeline)
     entries = set(pipeline.entry_stage_ids)
+
+    def source_traits(source: dict[str, Any], consumer_id: str) -> set[str]:
+        if source["kind"] == "run_input":
+            return run_input_traits.get(source["name"], set())
+        producer = specs.get(source["stage"])
+        if producer is None:
+            return set()
+        if source["kind"] == "stage_input":
+            # A fallback forwards an input, not the failed producer's guarantees.
+            return set(input_ports(producer)[0].required_traits)
+        output = next(
+            (port for port in output_ports(producer) if port.name == source["output"]),
+            None,
+        )
+        traits = set(output.produced_traits) if output else set()
+        definition = stages.get(source["stage"])
+        if (
+            definition
+            and not source["explicit"]
+            and any(getattr(definition, edge) == consumer_id for edge in FALLBACK_EDGES)
+        ):
+            # When next and fallback share a target, both deliveries must satisfy
+            # it. A failed operation cannot lend its output guarantees to input.
+            traits &= set(input_ports(producer)[0].required_traits)
+        return traits
 
     # Edge-derived deliveries into each stage's primary input port.
     ordering_only = ordering_only_edges(pipeline, registry)
@@ -189,8 +229,10 @@ def resolve_wiring(
                 )
 
     def run_input_for(port: PortSpec, *, by_type: bool) -> dict[str, Any] | None:
-        if port.name in run_input_types and types_compatible(
-            run_input_types[port.name], port.data_type
+        if (
+            port.name in run_input_types
+            and types_compatible(run_input_types[port.name], port.data_type)
+            and set(port.required_traits) <= run_input_traits.get(port.name, set())
         ):
             return _source_row(
                 kind="run_input",
@@ -200,9 +242,14 @@ def resolve_wiring(
             )
         if by_type and port.data_type != "any":
             for name, data_type in run_inputs:
-                if types_compatible(data_type, port.data_type):
+                if types_compatible(data_type, port.data_type) and set(
+                    port.required_traits
+                ) <= run_input_traits.get(name, set()):
                     return _source_row(
-                        kind="run_input", name=name, data_type=data_type, via="run_input"
+                        kind="run_input",
+                        name=name,
+                        data_type=data_type,
+                        via="run_input",
                     )
         return None
 
@@ -214,6 +261,8 @@ def resolve_wiring(
                 continue
             for output in output_ports(other_spec):
                 if not types_compatible(output.data_type, port.data_type):
+                    continue
+                if not set(port.required_traits) <= set(output.produced_traits):
                     continue
                 rows.append(
                     {
@@ -229,7 +278,9 @@ def resolve_wiring(
                     }
                 )
         for name, data_type in run_inputs:
-            if types_compatible(data_type, port.data_type):
+            if types_compatible(data_type, port.data_type) and set(
+                port.required_traits
+            ) <= run_input_traits.get(name, set()):
                 rows.append(
                     {
                         "kind": "run_input",
@@ -269,7 +320,14 @@ def resolve_wiring(
                 for binding in explicit:
                     sources.extend(
                         _explicit_source(
-                            binding, stage, port, stages, specs, descendants, run_input_types, issues
+                            binding,
+                            stage,
+                            port,
+                            stages,
+                            specs,
+                            descendants,
+                            run_input_types,
+                            issues,
                         )
                     )
             elif index == 0:
@@ -282,7 +340,30 @@ def resolve_wiring(
                 implicit = run_input_for(port, by_type=False)
                 sources = [implicit] if implicit is not None else []
 
-            status = "bound"
+            for source in sources:
+                traits = source_traits(source, stage.id)
+                if traits:
+                    source["traits"] = sorted(traits)
+                missing_traits = set(port.required_traits) - traits
+                if stage.enabled and missing_traits:
+                    issues.append(
+                        _issue(
+                            "error",
+                            "input_traits_mismatch",
+                            f"Input {port.name!r} of {stage.id!r} requires traits missing from "
+                            f"{source.get('stage') or source.get('name') or source['kind']!r}: "
+                            + ", ".join(sorted(missing_traits)),
+                            stage.id,
+                        )
+                    )
+            status = (
+                "mismatch"
+                if any(
+                    set(port.required_traits) - source_traits(source, stage.id)
+                    for source in sources
+                )
+                else "bound"
+            )
             if not sources:
                 status = "unbound" if port.required else "optional_unbound"
             if sources and any(not types_compatible(s["data_type"], port.data_type) for s in sources):
@@ -325,7 +406,11 @@ def resolve_wiring(
                         stage.id,
                     )
                 )
-            if stage.enabled and sources and all(not s["producer_enabled"] for s in sources):
+            if (
+                stage.enabled
+                and sources
+                and all(not s["producer_enabled"] for s in sources)
+            ):
                 issues.append(
                     _issue(
                         "warning",
@@ -356,6 +441,8 @@ def resolve_wiring(
                     "options": options_for(stage, port),
                 }
             )
+            if port.required_traits:
+                input_rows[-1]["required_traits"] = list(port.required_traits)
         stage_rows[stage.id] = {"inputs": input_rows, "outputs": []}
 
     for stage_id, row in stage_rows.items():
@@ -367,6 +454,8 @@ def resolve_wiring(
                     "consumers": consumers.get((stage_id, output.name), []),
                 }
             )
+            if output.produced_traits:
+                row["outputs"][-1]["produced_traits"] = list(output.produced_traits)
 
     return {
         "stages": stage_rows,
@@ -420,7 +509,11 @@ def _explicit_source(
             return []
         return [
             _source_row(
-                kind="constant", data_type="number", via="constant", explicit=True, value=value
+                kind="constant",
+                data_type="number",
+                via="constant",
+                explicit=True,
+                value=value,
             )
         ]
     if binding.source == "run_input":
@@ -462,7 +555,8 @@ def _explicit_source(
         return []
     outputs = output_ports(producer_spec)
     output = next(
-        (item for item in outputs if item.name == (binding.output or outputs[0].name)), None
+        (item for item in outputs if item.name == (binding.output or outputs[0].name)),
+        None,
     )
     if output is None:
         issues.append(
@@ -555,3 +649,52 @@ def rewired_warnings(pipeline: PipelineDefinition) -> list[str]:
 
     changed = bindings_changing_wiring(pipeline, strategy_registry, purpose_registry.get(pipeline.purpose))
     return ["rewired_inputs: " + ", ".join(changed)[:280]] if changed else []
+
+
+def terminal_contracts(
+    pipeline: PipelineDefinition,
+    registry: StrategyRegistry,
+    purpose: PipelinePurposeSpec,
+) -> tuple[dict[str, list[str]], list[PipelineValidationIssue]]:
+    """Find reachable consumer outputs and enforce their declared guarantees.
+
+    A successful stage with no normal successor may return to the consumer even
+    if it declares failure fallbacks. Unrelated diagnostic types are not consumer
+    outputs; `any` cannot satisfy a concrete purpose output contract.
+    """
+    descendants = _descendants(pipeline)
+    reachable = set(pipeline.entry_stage_ids)
+    for entry in pipeline.entry_stage_ids:
+        reachable.update(descendants.get(entry, set()))
+    terminals: dict[str, list[str]] = {}
+    issues = []
+    for stage in pipeline.stages:
+        spec = registry.get(stage.strategy)
+        if not stage.enabled or stage.next or stage.id not in reachable or spec is None:
+            continue
+        for output in output_ports(spec):
+            if purpose.output_type != "any" and output.data_type != purpose.output_type:
+                continue
+            missing = set(purpose.required_output_traits) - set(output.produced_traits)
+            if missing:
+                issues.append(
+                    _issue(
+                        "error",
+                        "terminal_traits_mismatch",
+                        f"Terminal output {stage.id!r}.{output.name} lacks required traits: "
+                        + ", ".join(sorted(missing)),
+                        stage.id,
+                    )
+                )
+            else:
+                terminals.setdefault(stage.id, []).append(output.name)
+    if not terminals:
+        issues.append(
+            _issue(
+                "error",
+                "missing_terminal_contract",
+                f"No reachable terminal produces the purpose output {purpose.output_type!r} "
+                "with its required traits.",
+            )
+        )
+    return terminals, issues

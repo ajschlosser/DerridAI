@@ -395,3 +395,242 @@ def test_multiple_fallback_port_does_not_add_an_extra_payload_layer():
         specs=[_strategy("transform", multiple=True)],
     ).run({"items": [1, 2]})
     assert result.outputs["fallback"]["items"] == [[1, 2]]
+
+
+def _trait_executor(
+    stages, specs, *, required_output_traits=(), run_traits=(), handlers=None
+):
+    purpose = PURPOSE.model_copy(
+        update={
+            "required_output_traits": list(required_output_traits),
+            "run_inputs": [
+                RunInputSpec(
+                    name="items",
+                    data_type="candidate_set",
+                    produced_traits=list(run_traits),
+                )
+            ],
+        }
+    )
+    pipeline = PipelineDefinition(
+        pipeline_id="test.traits",
+        name="Test traits",
+        purpose="test_graph",
+        entry_stage_ids=["start"],
+        stages=stages,
+    )
+    return GraphExecutor(
+        pipeline,
+        registry=StrategyRegistry(specs),
+        purpose=purpose,
+        handlers=handlers
+        or {
+            spec.strategy_id: lambda stage, inputs: StageResult(
+                {"items": inputs["items"]}
+            )
+            for spec in specs
+        },
+    )
+
+
+def test_required_input_traits_reject_same_type_without_support_and_accept_substitution():
+    producer = _strategy("collect")
+    consumer = _strategy("validate")
+    consumer.inputs[0].required_traits = ["source_bound"]
+    consumer.outputs[0].produced_traits = ["source_bound", "support_validated"]
+    stages = [
+        {"id": "start", "strategy": "collect", "next": ["final"]},
+        {"id": "final", "strategy": "validate"},
+    ]
+    with pytest.raises(ValueError, match="requires traits missing"):
+        _trait_executor(stages, [producer, consumer])
+    producer.outputs[0].produced_traits = ["source_bound"]
+    executor = _trait_executor(
+        stages,
+        [producer, consumer],
+        required_output_traits=["source_bound", "support_validated"],
+    )
+    assert executor.run({"items": [1]}).terminal_outputs == {"final": {"items": [1]}}
+    # Guarantees are supplied by contracts, not by strategy-name checks.
+    substitute = consumer.model_copy(
+        deep=True, update={"strategy_id": "alternative_validator"}
+    )
+    stages[1]["strategy"] = substitute.strategy_id
+    assert (
+        _trait_executor(
+            stages, [producer, substitute], required_output_traits=["support_validated"]
+        )
+        .run({"items": [1]})
+        .terminal_outputs
+    )
+
+
+def test_trait_requirements_apply_to_explicit_bindings_and_run_inputs():
+    producer = _strategy("collect")
+    consumer = _strategy("validate")
+    consumer.inputs[0].required_traits = ["source_bound"]
+    stages = [
+        {"id": "start", "strategy": "collect", "next": ["final"]},
+        {
+            "id": "final",
+            "strategy": "validate",
+            "inputs": {
+                "items": [{"source": "stage", "stage": "start", "output": "items"}]
+            },
+        },
+    ]
+    with pytest.raises(ValueError, match="requires traits missing"):
+        _trait_executor(stages, [producer, consumer])
+    with pytest.raises(ValueError):
+        _trait_executor([{"id": "start", "strategy": "validate"}], [consumer])
+    result = _trait_executor(
+        [{"id": "start", "strategy": "validate"}],
+        [consumer],
+        run_traits=["source_bound"],
+    ).run({"items": [1]})
+    assert result.terminal_outputs == {"start": {"items": [1]}}
+
+
+@pytest.mark.parametrize("shared_target", [False, True])
+def test_fallback_does_not_inherit_the_failed_stage_output_traits(shared_target):
+    scorer = _strategy("score")
+    scorer.outputs[0].produced_traits = ["support_validated"]
+    fallback = _strategy("fallback")
+    fallback.inputs[0].required_traits = ["support_validated"]
+    stages = [
+        {
+            "id": "start",
+            "strategy": "score",
+            "on_error": "fallback",
+            "next": ["fallback"] if shared_target else [],
+        },
+        {"id": "fallback", "strategy": "fallback"},
+    ]
+    with pytest.raises(ValueError, match="requires traits missing"):
+        _trait_executor(stages, [scorer, fallback])
+
+
+def test_terminal_contract_rejects_missing_guarantees_and_any_type_bypass():
+    spec = _strategy("collect")
+    stages = [{"id": "start", "strategy": "collect"}]
+    with pytest.raises(ValueError, match="lacks required traits"):
+        _trait_executor(stages, [spec], required_output_traits=["support_validated"])
+    spec.outputs[0].data_type = "any"
+    with pytest.raises(ValueError, match="No reachable terminal"):
+        _trait_executor(stages, [spec])
+
+
+def test_no_terminal_execution_is_a_visible_failure():
+    producer = _strategy("collect")
+    consumer = _strategy("validate")
+    executor = _trait_executor(
+        [
+            {"id": "start", "strategy": "collect", "next": ["final"]},
+            {"id": "final", "strategy": "validate"},
+        ],
+        [producer, consumer],
+        handlers={
+            "collect": lambda stage, inputs: StageResult({"items": []}),
+            "validate": lambda stage, inputs: pytest.fail("empty branch must skip"),
+        },
+    )
+    with pytest.raises(GraphExecutionError, match="missing_terminal_output"):
+        executor.run({"items": [1]})
+
+
+def test_wiring_options_exclude_outputs_that_lack_required_traits():
+    producer = _strategy("collect")
+    consumer = _strategy("validate")
+    consumer.inputs[0].required_traits = ["source_bound"]
+    executor = _trait_executor(
+        [
+            {"id": "start", "strategy": "collect", "next": ["final"]},
+            {
+                "id": "final",
+                "strategy": "validate",
+                "inputs": {"items": [{"source": "run_input", "name": "items"}]},
+            },
+        ],
+        [producer, consumer],
+        run_traits=["source_bound"],
+    )
+    port = executor.wiring["stages"]["final"]["inputs"][0]
+    assert port["required_traits"] == ["source_bound"]
+    assert not any(option.get("stage") == "start" for option in port["options"])
+
+
+def test_named_output_binding_is_validated_instead_of_primary_output_summary():
+    from app.pipelines.purposes import purpose_registry
+    from app.pipelines.service import PipelineService
+
+    producer = _strategy("collect")
+    producer.input_type = "context_packet"
+    producer.inputs[0].data_type = "context_packet"
+    producer.output_type = "context_packet"
+    producer.outputs = [
+        PortSpec(name="diagnostic", data_type="context_packet"),
+        PortSpec(name="proposal", data_type="model_output"),
+    ]
+    consumer = _strategy("validate")
+    consumer.input_type = consumer.output_type = "model_output"
+    consumer.inputs[0].data_type = consumer.outputs[0].data_type = "model_output"
+    pipeline = PipelineDefinition(
+        pipeline_id="test.named_outputs",
+        name="Test named outputs",
+        purpose="corpus_metadata_enrichment",
+        entry_stage_ids=["start"],
+        stages=[
+            {"id": "start", "strategy": "collect", "next": ["final"]},
+            {
+                "id": "final",
+                "strategy": "validate",
+                "inputs": {
+                    "items": [
+                        {"source": "stage", "stage": "start", "output": "proposal"}
+                    ]
+                },
+            },
+        ],
+    )
+    registry = StrategyRegistry([producer, consumer])
+    assert PipelineService(registry).validate(pipeline).valid
+    result = GraphExecutor(
+        pipeline,
+        registry=registry,
+        purpose=purpose_registry.get("corpus_metadata_enrichment"),
+        handlers={
+            "collect": lambda stage, inputs: StageResult(
+                {"diagnostic": {}, "proposal": {"label": "proposal"}}
+            ),
+            "validate": lambda stage, inputs: StageResult({"items": inputs["items"]}),
+        },
+    ).run({"context": {"record_id": "R1"}})
+    assert result.terminal_outputs == {"final": {"items": {"label": "proposal"}}}
+
+
+def test_fanin_requires_guarantees_from_every_bound_source():
+    first, second, merge = (
+        _strategy("first"),
+        _strategy("second"),
+        _strategy("merge", multiple=True),
+    )
+    first.outputs[0].produced_traits = ["source_bound"]
+    merge.inputs[0].required_traits = ["source_bound"]
+    with pytest.raises(ValueError, match="requires traits missing"):
+        _trait_executor(
+            [
+                {"id": "start", "strategy": "first", "next": ["second", "merge"]},
+                {"id": "second", "strategy": "second", "next": ["merge"]},
+                {
+                    "id": "merge",
+                    "strategy": "merge",
+                    "inputs": {
+                        "items": [
+                            {"source": "stage", "stage": "start", "output": "items"},
+                            {"source": "stage", "stage": "second", "output": "items"},
+                        ]
+                    },
+                },
+            ],
+            [first, second, merge],
+        )

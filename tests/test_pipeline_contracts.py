@@ -146,7 +146,6 @@ def test_builtin_resolution_exposes_assignment_pipeline_and_validation() -> None
     assert len(result["pipeline_hash"]) == 64
 
 
-
 def test_pipeline_validator_rejects_unknown_config_keys() -> None:
     service = PipelineService()
     pipeline = PipelineDefinition.model_validate(
@@ -178,7 +177,6 @@ def test_pipeline_validator_rejects_unknown_config_keys() -> None:
     assert any(issue.code == "unknown_config_key" for issue in result.issues)
 
 
-
 def test_active_evidence_pipeline_without_required_gates_is_invalid() -> None:
     service = PipelineService()
     legacy = next(
@@ -200,3 +198,55 @@ def test_active_evidence_pipeline_without_required_gates_is_invalid() -> None:
     codes = {issue.code for issue in result.issues}
     assert "evidence_without_support_gate" in codes
     assert "evidence_without_provenance_gate" in codes
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "embedding",
+        "metadata_candidate_set",
+        "metadata_hypothesis_set",
+        "metadata_inference_request_set",
+        "metadata_proposal_set",
+    ],
+)
+def test_metadata_artifact_types_are_explicit_port_contracts(dtype):
+    from app.pipelines.models import PortSpec
+
+    assert PortSpec(name="artifact", data_type=dtype).data_type == dtype
+
+
+def test_trait_contracts_normalize_and_preserve_legacy_serialization():
+    from app.pipelines.models import PortSpec
+    from app.pipelines.purposes import RunInputSpec
+
+    legacy = PortSpec(name="items", data_type="candidate_set").model_dump()
+    assert "required_traits" not in legacy and "produced_traits" not in legacy
+    assert (
+        "produced_traits"
+        not in RunInputSpec(name="items", data_type="candidate_set").model_dump()
+    )
+    port = PortSpec(
+        name="items",
+        data_type="candidate_set",
+        produced_traits=["source_bound", "support_validated", "source_bound"],
+    )
+    assert port.produced_traits == ["source_bound", "support_validated"]
+    assert (
+        PortSpec.model_validate(port.model_dump()).produced_traits
+        == port.produced_traits
+    )
+    with pytest.raises(ValidationError):
+        PortSpec(
+            name="items", data_type="candidate_set", required_traits=["invalid trait"]
+        )
+
+
+@pytest.mark.parametrize(
+    "authority", ["human_confirmed", "human_override", "reviewer_approval"]
+)
+def test_computational_output_traits_cannot_create_reviewer_authority(authority):
+    from app.pipelines.models import PortSpec
+
+    with pytest.raises(ValidationError, match="reviewer authority"):
+        PortSpec(name="items", data_type="candidate_set", produced_traits=[authority])

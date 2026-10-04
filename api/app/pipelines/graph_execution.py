@@ -36,7 +36,7 @@ from .models import PipelineDefinition, PipelineStageDefinition, PipelineStageTr
 from .purposes import PipelinePurposeSpec
 from .registry import StrategyRegistry
 from .service import PipelineService, pipeline_hash
-from .wiring import FALLBACK_EDGES, resolve_wiring
+from .wiring import FALLBACK_EDGES, resolve_wiring, terminal_contracts
 
 
 @dataclass(frozen=True)
@@ -57,6 +57,7 @@ class GraphResult:
 
     pipeline_hash: str
     outputs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    terminal_outputs: dict[str, dict[str, Any]] = field(default_factory=dict)
     stages: list[PipelineStageTrace] = field(default_factory=list)
 
 
@@ -123,6 +124,11 @@ class GraphExecutor:
         if issues:
             raise ValueError("; ".join(issue.message for issue in issues))
         self.order = self._topological_order()
+        self.terminals, terminal_issues = terminal_contracts(
+            self.pipeline, self.registry, purpose
+        )
+        if terminal_issues:
+            raise ValueError("; ".join(issue.message for issue in terminal_issues))
         self.resolved_hash = pipeline_hash(self.pipeline)
 
     def _topological_order(self) -> list[PipelineStageDefinition]:
@@ -281,4 +287,13 @@ class GraphExecutor:
             for target in targets:
                 active.add(target)
                 deliveries[(stage.id, target)] = edge
+        result.terminal_outputs = {
+            stage_id: {name: result.outputs[stage_id][name] for name in names}
+            for stage_id, names in self.terminals.items()
+            if stage_id in result.outputs
+            and traces[stage_id].status == "completed"
+            and traces[stage_id].fallback_reason != "on_empty"
+        }
+        if not result.terminal_outputs:
+            raise GraphExecutionError("terminal", "missing_terminal_output", result)
         return result

@@ -24,12 +24,13 @@ code is executable through this contract.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StringConstraints,
     field_validator,
     model_serializer,
     model_validator,
@@ -79,7 +80,13 @@ DataType = Literal[
     "evaluation",
     "number",
     "any",
+    "embedding",
+    "metadata_candidate_set",
+    "metadata_hypothesis_set",
+    "metadata_inference_request_set",
+    "metadata_proposal_set",
 ]
+ArtifactTrait = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_.:-]{0,79}$")]
 CostDriver = Literal["cpu", "storage", "embedding", "model_inference", "llm_generation"]
 CardinalityRule = Literal["same", "pool", "config_cap", "fixed", "sum_inputs"]
 
@@ -98,6 +105,30 @@ class PortSpec(BaseModel):
     accepts_constant: bool = False
     minimum: float | None = None
     maximum: float | None = None
+    required_traits: list[ArtifactTrait] = Field(default_factory=list, max_length=64)
+    produced_traits: list[ArtifactTrait] = Field(default_factory=list, max_length=64)
+
+    @field_validator("required_traits", "produced_traits")
+    @classmethod
+    def _normalize_traits(cls, value: list[str]) -> list[str]:
+        return sorted(set(value))
+
+    @field_validator("produced_traits")
+    @classmethod
+    def _computational_traits(cls, value: list[str]) -> list[str]:
+        if set(value) & {"human_confirmed", "human_override", "reviewer_approval"}:
+            raise ValueError(
+                "Computational outputs cannot establish reviewer authority."
+            )
+        return value
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_traits(self, handler: Any) -> dict[str, Any]:
+        data = handler(self)
+        for key in ("required_traits", "produced_traits"):
+            if not data.get(key):
+                data.pop(key, None)
+        return data
 
 
 class OutputCardinality(BaseModel):
