@@ -29,6 +29,7 @@ import {
 import { useI18nStore } from "../stores/i18n";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
+import SourcePageScopeControl from "./SourcePageScopeControl.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
@@ -279,8 +280,16 @@ const topologyPolicy = ref<CorpusTopologyPolicy>({
   source_units_per_record: 1,
   records_per_page: null,
 });
+const sourcePageScope = ref<number[]>([]);
 function applyCorpusBuildRequest(request: Record<string, unknown>) {
   applyBuildRequest(request);
+  const savedScope =
+    request.source_scope && typeof request.source_scope === "object"
+      ? (request.source_scope as { pages?: unknown })
+      : {};
+  sourcePageScope.value = Array.isArray(savedScope.pages)
+    ? savedScope.pages.map(Number).filter((page) => Number.isInteger(page) && page > 0)
+    : [];
   const saved =
     request.topology_policy && typeof request.topology_policy === "object"
       ? (request.topology_policy as Partial<CorpusTopologyPolicy>)
@@ -538,6 +547,7 @@ const documentMetadata = ref<Record<string, unknown>>({});
 watch(selectedAssetId, () => {
   documentMetadata.value = {};
   missingMetadataPromptFields.value = [];
+  sourcePageScope.value = [];
   topologyPolicy.value = {
     mode: "semantic",
     source_units_per_record: 1,
@@ -643,6 +653,8 @@ const {
   runGuidancePayload,
   documentMetadataPayload,
   topologyPolicyPayload: () => ({ ...topologyPolicy.value }),
+  sourceScopePayload: () =>
+    sourcePageScope.value.length ? { pages: [...sourcePageScope.value] } : {},
   applyBuildRequest: applyCorpusBuildRequest,
   setMessage,
   resetReviewForBuildStart: () => {
@@ -2753,8 +2765,37 @@ defineExpose({
             :filename="selectedAsset.filename"
             :page-count="selectedAsset.page_count"
             :block-count="selectedAsset.block_count"
+            :audio-provenance="selectedAsset.audio_provenance"
+            :speakers="
+              selectedAsset.initial_metadata?.speakers ||
+              (selectedAsset.initial_metadata?.speaker ? [selectedAsset.initial_metadata.speaker] : [])
+            "
+            :voice-assignments="
+              Object.fromEntries(
+                Object.entries(selectedAsset.voice_assignments || {}).map(([voice, assignment]) => [
+                  voice,
+                  assignment.display_name,
+                ]),
+              )
+            "
+            :voice-assignments-busy="busy === 'voice-assignments'"
+            :disabled="busy !== ''"
+            @save-voice-assignments="saveVoiceAssignments"
           />
         </template>
+        <SourcePageScopeControl
+          v-if="
+            selectedAsset &&
+            selectedAsset.media_kind !== 'audio' &&
+            Number(selectedAsset.page_count || 0) > 1
+          "
+          v-model="sourcePageScope"
+          :page-count="selectedAsset.page_count"
+          :page-detection="selectedAsset.page_number_detection"
+          :disabled="
+            busy !== '' || Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)
+          "
+        />
         <CorpusTopologyPolicyControl
           v-if="selectedAsset && selectedAsset.media_kind !== 'audio'"
           v-model="topologyPolicy"
@@ -2816,24 +2857,7 @@ defineExpose({
           :schema-choices="schemaChoices"
           :chosen-schema="chosenSchema"
           :run-guidance-fields="runGuidanceFields"
-          :media-kind="selectedAsset?.media_kind"
-          :speakers="
-            selectedAsset?.initial_metadata?.speakers ||
-            (selectedAsset?.initial_metadata?.speaker
-              ? [selectedAsset.initial_metadata.speaker]
-              : [])
-          "
-          :voice-assignments="
-            Object.fromEntries(
-              Object.entries(selectedAsset?.voice_assignments || {}).map(([voice, assignment]) => [
-                voice,
-                assignment.display_name,
-              ]),
-            )
-          "
-          :voice-assignments-busy="busy === 'voice-assignments'"
           :disabled="busy !== ''"
-          @save-voice-assignments="saveVoiceAssignments"
           @manage-schemas="schemaEditorOpen = true"
         />
         <div class="setup-continue">
