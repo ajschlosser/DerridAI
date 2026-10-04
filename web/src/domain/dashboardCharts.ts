@@ -89,13 +89,13 @@ export function multiLineChart(
         value: Number(row[series.key]) || 0,
         key: row.key,
       }));
-      const d = points
+      const pathData = points
         .map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)},${point.y.toFixed(1)}`)
         .join(" ");
-      return `<path class="chart-line chart-series-${seriesIndex}" d="${d}"/>${points.map((point) => `<circle class="chart-dot chart-series-${seriesIndex}" data-chart-tip="${esc(`${series.label} · ${point.key}: ${point.value.toLocaleString()}`)}" cx="${point.x}" cy="${point.y}" r="3"><title>${esc(series.label)} · ${esc(point.key)}: ${point.value.toLocaleString()}</title></circle>`).join("")}`;
+      return `<path class="chart-line chart-series-${seriesIndex}" d="${pathData}"/>${points.map((point) => `<circle class="chart-dot chart-series-${seriesIndex}" data-chart-tip="${esc(`${series.label} · ${point.key}: ${point.value.toLocaleString()}`)}" cx="${point.x}" cy="${point.y}" r="3"><title>${esc(series.label)} · ${esc(point.key)}: ${point.value.toLocaleString()}</title></circle>`).join("")}`;
     })
     .join("");
-  const mid = rows[Math.floor((rows.length - 1) / 2)]?.key || "";
+  const midpointLabel = rows[Math.floor((rows.length - 1) / 2)]?.key || "";
   return `<div class="dash-chart multi-line-chart">
     <div class="dash-chart-head"><div><div class="dash-chart-title">${esc(title)}</div>${note ? `<div class="dash-chart-note">${esc(note)}</div>` : ""}</div><div class="chart-legend multi-chart-legend">${seriesDefs.map((series, index) => `<span title="${esc(series.label)}"><i class="chart-series-${index}"></i>${esc(series.short_label || series.label)}</span>`).join("")}</div></div>
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(title)}">
@@ -103,7 +103,7 @@ export function multiLineChart(
       <path class="chart-axis" d="M${left},${top + plotHeight} H${width - right}"/>
       ${paths}
     </svg>
-    <div class="dash-chart-foot"><span>${esc(rows[0]?.key || "")}</span><span>${esc(mid)}</span><span>${esc(rows[rows.length - 1]?.key || "")}</span></div>
+    <div class="dash-chart-foot"><span>${esc(rows[0]?.key || "")}</span><span>${esc(midpointLabel)}</span><span>${esc(rows[rows.length - 1]?.key || "")}</span></div>
   </div>`;
 }
 
@@ -140,7 +140,7 @@ export function lineChart(
       return `<g class="chart-grade"><line x1="${left}" x2="${width - right}" y1="${y}" y2="${y}"/><text x="${left - 7}" y="${y + 3}" text-anchor="end">${value}</text></g>`;
     })
     .join("");
-  const mid = series[Math.floor((series.length - 1) / 2)]?.key || "";
+  const midpointLabel = series[Math.floor((series.length - 1) / 2)]?.key || "";
   return `<div class="dash-chart">
     <div class="dash-chart-head"><div class="dash-chart-title">${esc(title)}</div><div class="chart-legend"><i></i><span>${esc(legendLabel)}</span></div></div>
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(title)}">
@@ -149,7 +149,7 @@ export function lineChart(
       <path class="chart-line" d="${path}"/>
       ${points.map((point) => `<circle class="chart-dot" data-chart-tip="${esc(`${legendLabel} · ${point.key}: ${Number(point.value || 0).toLocaleString()}`)}" cx="${point.x}" cy="${point.y}" r="3"><title>${esc(point.key)}: ${Number(point.value || 0).toLocaleString()}</title></circle>`).join("")}
     </svg>
-    <div class="dash-chart-foot"><span>${esc(series[0]?.key || "")}</span><span>${esc(mid)}</span><span>${esc(series[series.length - 1]?.key || "")}</span></div>
+    <div class="dash-chart-foot"><span>${esc(series[0]?.key || "")}</span><span>${esc(midpointLabel)}</span><span>${esc(series[series.length - 1]?.key || "")}</span></div>
   </div>`;
 }
 
@@ -190,11 +190,14 @@ export function barChart(
   const resolvedValueLabel = valueLabel ?? tr("dashboard.average_characters");
   if (!series.length) return emptyChart(title, { tr });
   const recordsLabel = tr("dynamic.records");
-  const max = Math.max(1, ...series.map((item) => Number(item.value) || 0));
+  const maximumValue = Math.max(1, ...series.map((item) => Number(item.value) || 0));
   return `<section class="dash-chart dash-bar-chart"><div class="dash-chart-head"><div class="dash-chart-title">${esc(title)}</div><div class="chart-legend"><i></i><span>${esc(resolvedValueLabel)}</span></div></div><div class="dash-bars">${series
     .map((item) => {
-      const pct = Math.max(2, Math.round((Number(item.value || 0) / max) * 100));
-      return `<div class="dash-bar-row" data-chart-tip="${esc(`${item.key} · ${Number(item.value || 0).toLocaleString()} ${resolvedValueLabel.toLowerCase()} · ${Number(item.count || 0).toLocaleString()} ${recordsLabel}`)}"><div class="dash-bar-label" title="${esc(item.key)}"><b>${esc(item.key)}</b><span>${Number(item.count || 0).toLocaleString()} ${esc(recordsLabel)}</span></div><div class="dash-bar-track"><i style="width:${pct}%"></i></div><strong>${Number(item.value || 0).toLocaleString()}</strong></div>`;
+      const percentage = Math.max(
+        2,
+        Math.round((Number(item.value || 0) / maximumValue) * 100),
+      );
+      return `<div class="dash-bar-row" data-chart-tip="${esc(`${item.key} · ${Number(item.value || 0).toLocaleString()} ${resolvedValueLabel.toLowerCase()} · ${Number(item.count || 0).toLocaleString()} ${recordsLabel}`)}"><div class="dash-bar-label" title="${esc(item.key)}"><b>${esc(item.key)}</b><span>${Number(item.count || 0).toLocaleString()} ${esc(recordsLabel)}</span></div><div class="dash-bar-track"><i style="width:${percentage}%"></i></div><strong>${Number(item.value || 0).toLocaleString()}</strong></div>`;
     })
     .join("")}</div></section>`;
 }
