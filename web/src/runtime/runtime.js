@@ -34,11 +34,9 @@ import { sanitizeResearchGeneration } from "../domain/researchPayloads";
 import { fullCitation } from "../domain/citations";
 import "../domain/recordsFiles";
 import { tr as trCompat, trf as trfCompat } from "./legacyCompat.js";
-import { TOUCHUP_GROUPS } from "../domain/runtimeConstants";
 import "../domain/runtimeConstants";
 import { esc, icon } from "../domain/html";
 import { jsonPretty, reviewDiffSides } from "../domain/reviewPresentation";
-import { touchupFieldsForRecord } from "../domain/touchupFields";
 import "../domain/workMetadata";
 import "../domain/numberFormatting";
 import { refreshResearcherContentPolicy } from "../domain/researcherInputFilter";
@@ -60,7 +58,7 @@ import { registerOperationHooks } from "../domain/operationHooks";
 import { registerOperationProgress } from "../domain/operationProgressHooks";
 import "../domain/storeExport";
 import { evidenceSelection as sharedEvidenceSelection } from "../domain/sharedSearchSupport";
-import { label, normalizeRagGrade, pages } from "../domain/sharedRecordHelpers";
+import { label, pages } from "../domain/sharedRecordHelpers";
 import "../domain/sharedPdfLinking";
 import "../domain/sharedRecordWorkspace";
 import { recordPresenters as sharedRecordPresenters } from "../domain/sharedRecordPresenters";
@@ -84,18 +82,25 @@ import {
   removeFinishedJob,
   clearFinishedOperations,
   cancelBackgroundJob,
-  submitBackgroundLlmJob,
   syncJobProgressToasts,
 } from "../domain/jobsActions";
 import { registerResearchActions } from "../domain/researchActions";
 import { registerVectorStoreActions } from "../domain/vectorStoreActions";
 import { registerTouchupActions } from "../domain/touchupActions";
+import {
+  touchupWorkspaceInfo,
+  touchupProviderStatus,
+  touchupRequestConfig,
+  touchupRequest,
+  touchupSubmitBackground,
+  touchupApplyResults,
+} from "../domain/sharedTouchupWorkflow";
 import { registerOperationsPanelHooks } from "../domain/operationsPanelHooks";
 import "../domain/sharedDashboardData";
 import "../domain/sharedPdfExplorerRenderer";
 import { applyPdfLinkMatch, registerPdfLlmTaskHooks } from "../domain/pdfPageLlmActions";
+import { ragGradeHtml } from "../domain/ragGradeHtml";
 import { createJobDialogs } from "../domain/jobDialogs";
-import { normalizeTouchupItems } from "../domain/touchupLauncher";
 import "../domain/workDialogs";
 import { recordDialogs } from "../domain/sharedRecordDialogs";
 import { createOperationDock } from "../domain/operationDock";
@@ -150,8 +155,7 @@ function trf(key, fallback, values = {}) {
 }
 
 const { ragGradeEvidencePayload } = sharedRecordPresenters;
-const { providerProfiles, providerProfile, defaultProviderProfile, providerDisplayName } =
-  providerProfilesService;
+const { providerProfiles, providerProfile, providerDisplayName } = providerProfilesService;
 createJobsWorkspace({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -214,7 +218,6 @@ const {
   setEvidence,
   clearSelectedEvidence,
   selectedEvidencePayload,
-  clearReviewSelection,
 } = sharedEvidenceSelection;
 const {
   announceOperationDock,
@@ -403,29 +406,6 @@ const { openUpsertQueue } = recordDialogs;
 // continues to own browser-local corpus state, Chroma transport, evidence
 // selection, URL serialization, and the existing LLM review workflows.
 
-/** @param {{field?: string, op?: string, value?: string}} [options] */
-
-function ragGradeHtml(grade = {}) {
-  const normalized = normalizeRagGrade(grade);
-  const scoreKeys = [
-    ["query_relevance", "Query relevance"],
-    ["source_binding", "Source binding"],
-    ["claim_traceability", "Claim traceability"],
-    ["attribution_source_discrimination", "Attribution/source discrimination"],
-    ["claim_evidence_fidelity", "Claim/evidence fidelity"],
-    ["conceptual_precision", "Conceptual precision"],
-    ["coverage", "Coverage"],
-    ["interpretive_usefulness", "Interpretive usefulness"],
-    ["overall", "Overall"],
-  ];
-  const sections = [
-    ["Strengths", normalized.strengths],
-    ["Weaknesses", normalized.weaknesses],
-    ["Unsupported or risky claims", normalized.unsupported_or_risky_claims],
-  ];
-  return `<div class="rag-grade-content"><div class="rag-grade-scores">${scoreKeys.map(([key, name]) => `<div><span>${esc(name)}</span><strong>${esc(normalized.score(key))}</strong><small>/10</small></div>`).join("")}</div><section><b>Summary</b><p>${esc(normalized.summary || "No summary returned.")}</p></section>${sections.map(([name, items]) => `<section><b>${esc(name)}</b><ul>${items.map((item) => `<li>${esc(item)}</li>`).join("") || "<li>None reported.</li>"}</ul></section>`).join("")}</div>`;
-}
-
 const vectorCollectionBridge = createVectorCollectionBridge({
   state,
   workIndex,
@@ -446,178 +426,6 @@ function notifyVectorStoresChanged() {
 }
 function openCollectionCreationWizard(options = {}) {
   return vectorCollectionBridge.openCollectionCreationWizard(options);
-}
-
-const HIGH_RISK_TOUCHUP_FIELDS = new Set([
-  "text",
-  "record_id",
-  "canonical_work_id",
-  "inline_citation",
-  "full_citation",
-  "edition",
-  "year",
-  "page_start",
-  "page_end",
-]);
-
-function touchupWorkspaceInfo(inputItems = null, initialMode = "foreground") {
-  const items = normalizeTouchupItems(inputItems);
-  const availableFields = [];
-  for (const item of items) {
-    for (const field of touchupFieldsForRecord(item.record))
-      if (!availableFields.includes(field) && field !== "updates") availableFields.push(field);
-  }
-  const attributionPreset = [
-    "speaker",
-    "position_holder",
-    "target",
-    "is_direct_quote",
-    "quoted_speaker",
-    "quoted_author",
-    "quoted_work",
-    "quoted_position_holder",
-    "quoted_addressee",
-    "quoted_referent",
-    "quotation_chain",
-  ].filter((field) => availableFields.includes(field));
-  const semanticPreset = [
-    "discourse_role",
-    "proposition_status",
-    "semantic_function",
-    "stance",
-    "claim_scope",
-    "topics",
-    "concepts",
-    "persons",
-    "works_referenced",
-  ].filter((field) => availableFields.includes(field));
-  const preset = state.appConfig.default_review_preset;
-  return {
-    items,
-    initialMode,
-    availableFields,
-    attributionPreset,
-    semanticPreset,
-    defaultSelection:
-      preset === "text" && availableFields.includes("text")
-        ? ["text"]
-        : preset === "semantic"
-          ? semanticPreset
-          : attributionPreset,
-    groups: TOUCHUP_GROUPS,
-    highRiskFields: [...HIGH_RISK_TOUCHUP_FIELDS],
-    fieldLabels: Object.fromEntries(availableFields.map((field) => [field, label(field)])),
-    profiles: providerProfiles().map((profile) => ({ ...profile, api_key: undefined })),
-    providerProfileId:
-      state.appConfig.review_provider_profile ||
-      state.appConfig.default_provider_profile ||
-      defaultProviderProfile()?.id ||
-      "",
-    defaultMode:
-      initialMode === "auto"
-        ? "auto"
-        : state.appConfig.default_llm_run_mode === "foreground"
-          ? "foreground"
-          : "background",
-  };
-}
-async function touchupProviderStatus(profileId) {
-  const profile = providerProfile(profileId);
-  if (!profile)
-    return {
-      provider: "ollama",
-      available: false,
-      models: [],
-      configured_model: "",
-      error: "No provider profile configured",
-    };
-  try {
-    const status = await api("/api/llm/status", {
-      method: "POST",
-      body: JSON.stringify({
-        provider: profile.type,
-        base_url: profile.base_url || null,
-        api_key: profile.type === "openai" ? profile.api_key || "" : null,
-      }),
-    });
-    state.providerStatuses[profile.id] = status;
-    return status;
-  } catch (error) {
-    return {
-      provider: profile.type,
-      available: false,
-      models: [],
-      configured_model: profile.model || "",
-      error: error.message,
-    };
-  }
-}
-function touchupRequestConfig(profileId, model, fields = []) {
-  const profile = providerProfile(profileId);
-  const config = providerRequestConfig(profile, { textReview: fields.includes("text") });
-  if (config && model) config.model = model;
-  return config;
-}
-async function touchupRequest(item, fields, config, instructions = "") {
-  return api("/api/llm/touchup", {
-    method: "POST",
-    body: JSON.stringify({
-      record: touchupRecordPayload(item.file.records[item.index], fields),
-      fields,
-      instructions,
-      model: config.model,
-      provider: config.provider,
-      base_url: config.base_url,
-      api_key: config.api_key,
-      ollama: config.ollama,
-    }),
-  });
-}
-async function touchupSubmitBackground(items, config, fields, instructions, mode) {
-  return submitBackgroundLlmJob(items, config, fields, instructions, mode);
-}
-function touchupApplyResults(items, results, approvals, all = false, reviewOnly = false) {
-  const batchId = uid();
-  let appliedFields = 0,
-    reviewedRecords = 0;
-  for (const item of items) {
-    const result = results[item.key];
-    if (!result?.proposal) continue;
-    const fields = reviewOnly
-      ? []
-      : all
-        ? Object.keys(result.proposal.changes || {})
-        : [...(approvals[item.key] || [])];
-    const changes = {};
-    for (const field of fields)
-      if (field in result.proposal.changes) changes[field] = result.proposal.changes[field];
-    const record = item.file.records[item.index];
-    if (record.needs_review === true) changes.needs_review = false;
-    if (
-      record.review_reason !== undefined &&
-      record.review_reason !== null &&
-      record.review_reason !== ""
-    )
-      changes.review_reason = null;
-    appliedFields += applyRecordChanges(item.file, item.index, changes, {
-      source: "llm_review",
-      model: result.proposal.model,
-      batchId,
-      rationale: result.proposal.rationale,
-    });
-    reviewedRecords++;
-  }
-  clearReviewSelection();
-  shell();
-  renderView();
-  toast(
-    trf("runtime.toast.marked_reviewed", {
-      records: `${reviewedRecords} ${tr(reviewedRecords === 1 ? "dynamic.record_one" : "dynamic.records")}`,
-      fields: `${appliedFields} ${tr(appliedFields === 1 ? "runtime.toast.tracked_field_change_one" : "runtime.toast.tracked_field_change_many")}`,
-    }),
-    { tone: "success" },
-  );
-  return { appliedFields, reviewedRecords };
 }
 
 function triggerUpsertQueue() {
