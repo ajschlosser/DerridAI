@@ -1011,8 +1011,14 @@ ${evidence}`;
     return { records: unique, duplicatesRemoved };
   }
   function tokens(value, locale) {
-    const raw = String(value ?? "").toLocaleLowerCase(locale).match(/[\p{L}\p{N}’'_-]+/gu) ?? [];
-    return raw.map((token) => token.replace(/[’']s$/u, "").replace(/[’']$/u, "")).filter(Boolean);
+    const normalized2 = String(value ?? "").toLocaleLowerCase(locale);
+    const raw = normalized2.match(/[\p{L}\p{N}’'_-]+/gu) ?? [];
+    const normalizedTokens = [];
+    for (const token of raw) {
+      const withoutPossessive = token.replace(/[’']s$/u, "").replace(/[’']$/u, "");
+      if (withoutPossessive) normalizedTokens.push(withoutPossessive);
+    }
+    return normalizedTokens;
   }
   function searchable(record) {
     return Object.entries(record).filter(([key]) => !["source_spans", "field_assertions", "updates"].includes(key)).map(([, value]) => {
