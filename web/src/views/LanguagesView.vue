@@ -48,7 +48,7 @@ const i18n = useI18nStore();
 const route = useRoute();
 const router = useRouter();
 const languages = ref<LanguageInfo[]>([]);
-const selectedCode = ref(String(route.query.locale || "en-US"));
+const selectedCode = ref(String(route.query.locale || i18n.locale || "en-US"));
 const current = ref<LanguageDictionary | null>(null);
 const referenceDictionary = ref<Record<string, string>>({});
 const providerProfiles = ref<ProviderProfile[]>([]);
@@ -247,6 +247,19 @@ const installPartialCount = computed(() =>
 const pendingPolicyCount = computed(
   () => languages.value.filter((item) => !item.content_policy_ready).length,
 );
+const timeZoneOptions = computed(() => i18n.timeZones);
+const currentTimePreview = computed(() => {
+  try {
+    return new Intl.DateTimeFormat(i18n.locale || undefined, {
+      dateStyle: "full",
+      timeStyle: "long",
+      timeZone: i18n.timeZone,
+    }).format(new Date());
+  } catch {
+    return i18n.timeZone;
+  }
+});
+const browserLocaleInstalled = computed(() => Boolean(i18n.browserLocale && !i18n.missingBrowserLocale));
 const policyReady = computed(
   () =>
     contentPolicy.value?.status === "ready" &&
@@ -771,11 +784,17 @@ function monitorInstall(jobId: string) {
   });
 }
 
-function openInstallDialog() {
+function openInstallDialog(code = "") {
   resumeJobId.value = "";
-  install.value = { code: "", name: "", flag: "🌐" };
-  installAutoName.value = "";
-  installFlagTouched.value = false;
+  const normalized = code.trim().replaceAll("_", "-");
+  const name = normalized ? localeDisplayName(normalized) : "";
+  install.value = {
+    code: normalized,
+    name,
+    flag: normalized ? regionFlagForLocale(normalized) || "🌐" : "🌐",
+  };
+  installAutoName.value = name;
+  installFlagTouched.value = Boolean(normalized);
   translationRiskAcknowledged.value = false;
   installOpen.value = true;
 }
@@ -1079,6 +1098,22 @@ async function initialize() {
     workspaceReady.value = true;
     await load(selectedCode.value, false);
     if (!disposed) await restoreLanguageTranslationJob();
+
+    const requestedInstall = String(route.query.install || "").trim();
+    if (
+      !disposed &&
+      requestedInstall &&
+      !languages.value.some(
+        (item) =>
+          item.code.replaceAll("_", "-").toLowerCase() ===
+          requestedInstall.replaceAll("_", "-").toLowerCase(),
+      )
+    ) {
+      openInstallDialog(requestedInstall);
+      const query = { ...route.query };
+      delete query.install;
+      await router.replace({ query });
+    }
   } catch (exc) {
     if (disposed) return;
     readError.value = exc instanceof Error ? exc.message : String(exc);
@@ -1106,6 +1141,63 @@ onUnmounted(() => {
       :policy-pending-count="pendingPolicyCount"
       @install="openInstallDialog"
     />
+
+    <section class="locale-preferences-card" aria-labelledby="locale-preferences-title">
+      <div class="locale-preferences-heading">
+        <div>
+          <p class="section-label">{{ i18n.t("language.workspace_kicker") }}</p>
+          <h2 id="locale-preferences-title">{{ i18n.t("locale.preferences_title") }}</h2>
+          <p>{{ i18n.t("locale.preferences_help") }}</p>
+        </div>
+        <div class="locale-time-preview">
+          <span>{{ i18n.t("locale.current_time") }}</span>
+          <strong>{{ currentTimePreview }}</strong>
+        </div>
+      </div>
+
+      <div class="locale-preferences-grid">
+        <label class="locale-preference-field">
+          <span>{{ i18n.t("settings.interface_language") }}</span>
+          <select
+            class="control"
+            :value="i18n.locale"
+            @change="i18n.setLocale(($event.target as HTMLSelectElement).value)"
+          >
+            <option v-for="item in i18n.languages" :key="item.code" :value="item.code">
+              {{ item.name }} · {{ item.code }}
+            </option>
+          </select>
+          <small v-if="i18n.browserLocale && browserLocaleInstalled">
+            {{ i18n.tf("locale.browser_language_available", { locale: i18n.browserLocale }) }}
+          </small>
+          <small v-else-if="i18n.missingBrowserLocale" class="locale-browser-missing">
+            {{ i18n.tf("locale.browser_language_missing", { locale: i18n.missingBrowserLocale }) }}
+            <button
+              type="button"
+              class="btn tiny"
+              @click="openInstallDialog(i18n.missingBrowserLocale)"
+            >
+              {{ i18n.t("locale.install_browser_language") }}
+            </button>
+          </small>
+        </label>
+
+        <label class="locale-preference-field">
+          <span>{{ i18n.t("locale.time_zone") }}</span>
+          <select
+            class="control"
+            :value="i18n.timeZonePreference"
+            @change="i18n.setTimeZone(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="auto">
+              {{ i18n.tf("locale.time_zone_auto", { zone: i18n.browserTimeZone }) }}
+            </option>
+            <option v-for="zone in timeZoneOptions" :key="zone" :value="zone">{{ zone }}</option>
+          </select>
+          <small>{{ i18n.t("locale.time_zone_help") }}</small>
+        </label>
+      </div>
+    </section>
 
     <div v-if="readError" class="language-alert error language-read-error" role="alert">
       <span>{{ readError }}</span>
@@ -1999,6 +2091,67 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.locale-preferences-card {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.locale-preferences-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.locale-preferences-heading :is(h2, p) {
+  margin: 0;
+}
+.locale-preferences-heading > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+.locale-time-preview {
+  display: grid;
+  gap: 2px;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.locale-time-preview span,
+.locale-preference-field small {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.locale-preferences-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.locale-preference-field {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+.locale-browser-missing {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--tone-warn-fg);
+}
+@media (max-width: 720px) {
+  .locale-preferences-heading {
+    display: grid;
+  }
+  .locale-time-preview {
+    text-align: start;
+  }
+  .locale-preferences-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .language-policy-banner {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
