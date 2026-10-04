@@ -861,6 +861,28 @@ def test_scholarly_completeness_does_not_finish_unrun_enrichment(prepared, state
     assert repo.get_build(bid)["metadata_enriched_count"] == 1
 
 
+def test_scheduler_runs_schema_complete_record_until_automation_finishes(prepared, monkeypatch):
+    repo, bid, manager = prepared
+    record = repo.get_record(bid, "r1")
+    record["metadata_complete"] = True
+    record["metadata_enrichment_state"] = "queued"
+    repo.update_record(bid, record)
+    seen = []
+
+    def enrich(current, *_args, **_kwargs):
+        seen.append(current["record_id"])
+        return current
+
+    monkeypatch.setattr(manager, "_enrich_record", enrich)
+
+    rows = manager._schedule_build_enrichment(bid, {}, {}, repo.load_records(bid))
+
+    assert seen == ["r1"]
+    assert rows[0]["metadata_enrichment_state"] == "complete"
+    assert rows[0]["metadata_enrichment_finished"] is True
+    assert rows[1]["metadata_enrichment_state"] == "complete"
+
+
 @pytest.mark.parametrize("state", ["running", "queued", "stale", "failed"])
 def test_resume_requeues_only_unfinished_or_invalidated_passes(prepared, state):
     repo, bid, manager = prepared
