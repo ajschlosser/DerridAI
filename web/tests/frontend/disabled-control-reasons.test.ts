@@ -17,11 +17,13 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
-import * as runtime from "../../src/runtime/runtime";
+import "../../src/runtime/runtimeBridge";
+import { decorateDisabledControls } from "../../src/domain/disabledControls";
+import { setTranslationDictionary } from "../../src/domain/sharedTranslate";
 
 describe("disabled control reasons", () => {
   beforeAll(() => {
-    runtime.setTranslationDictionary("fr-CA", {
+    setTranslationDictionary("fr-CA", {
       "runtime.disabled.first_page": "Vous êtes déjà sur la première page.",
       "runtime.disabled.unavailable": "Indisponible pour l'instant.",
     });
@@ -29,7 +31,7 @@ describe("disabled control reasons", () => {
 
   it("explains a disabled control in the active locale", () => {
     document.body.innerHTML = `<div id="root"><button disabled data-page="x:first">«</button><button disabled id="other">x</button></div>`;
-    runtime.decorateDisabledControls(document.querySelector("#root")!);
+    decorateDisabledControls(document.querySelector("#root")!);
     expect(document.querySelector<HTMLButtonElement>("[data-page]")!.title).toBe(
       "Vous êtes déjà sur la première page.",
     );

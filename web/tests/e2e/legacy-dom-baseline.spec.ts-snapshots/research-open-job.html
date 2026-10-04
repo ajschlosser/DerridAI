@@ -295,7 +295,7 @@
 <div>
 <span class="section-label">02</span>
 <h3 id="research-settings-retrieval-title">Retrieval</h3>
-<p>Tune recall, rank fusion, reranking, and multilingual query routing.</p>
+<p>Choose request-level routing and scope for this run. To override a Pipeline Studio stage value, use Run overrides under Pipeline chain.</p>
 </div>
 <button class="research-text-action" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -345,13 +345,13 @@
 </div>
 </fieldset>
 <fieldset class="research-settings-card">
-<legend>Candidate pool</legend>
-<p>Control how broadly DerridAI searches before fusion and reranking.</p>
+<legend>Run inputs</legend>
+<p>These values shape this Research request without rewriting stage configuration. Stage-level changes belong under Run overrides in Pipeline chain.</p>
 <label class="research-toggle-setting automatic-sizing-toggle">
 <input type="checkbox">
 <span>
 <b>Automatic sizing</b>
-<small>Adapt candidate depth to median Record size, collapse short adjacent hits before reranking, and add same-document neighbors to short selected passages. k and fetch_k remain bounded baselines; reranking and the total evidence budget stay capped.</small>
+<small>Adapt retrieval depth to Record size while preserving the effective pipeline configuration.</small>
 </span>
 </label>
 <div class="research-settings-grid compact">
@@ -365,82 +365,11 @@
 </span>
 <input class="control" type="number" min="1" max="500">
 </label>
-<label>
-<span>
-<code>fetch_k</code>MMR candidate pool <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="The size of the initial candidate pool fetched before MMR or another selection method reduces it to the final k items." aria-describedby="ui-tooltip-<id>">
-<span aria-hidden="true">i</span>
-</button>
-</span>
-</span>
-<input class="control" type="number" min="1" max="5000">
-</label>
-<label>
-<span>
-<code>MMR λ</code>Relevance balance <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="The MMR trade-off between query relevance and diversity. Higher values favor relevance more strongly; lower values give more weight to avoiding redundancy." aria-describedby="ui-tooltip-<id>">
-<span aria-hidden="true">i</span>
-</button>
-</span>
-</span>
-<input class="control" type="number" step="0.05" min="0" max="1">
-</label>
-<label>
-<span>
-<code>RRF k</code>Fusion smoothing <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="A constant in reciprocal-rank fusion that controls how sharply the fusion rewards the very highest ranks." aria-describedby="ui-tooltip-<id>">
-<span aria-hidden="true">i</span>
-</button>
-</span>
-</span>
-<input class="control" type="number" min="1">
-</label>
-</div>
-</fieldset>
-<fieldset class="research-settings-card wide">
-<legend>Reranking &amp; query decomposition</legend>
-<p>Refine the fused candidate set and optionally expand the question into multilingual subqueries.</p>
-<div class="research-settings-grid three">
-<label>
-<span>Rerank top N <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="The maximum number of retrieved candidates sent through the more expensive reranking step." aria-describedby="ui-tooltip-<id>">
-<span aria-hidden="true">i</span>
-</button>
-</span>
-</span>
-<input class="control" type="number" min="1" max="500">
-</label>
-<label>
-<span>Reranker <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="A reranking model that reads the query and one candidate together, allowing it to judge their relationship more directly than independent embeddings do." aria-describedby="ui-tooltip-<id>">
-<span aria-hidden="true">i</span>
-</button>
-</span>
-</span>
-<select class="control">
-<option value="cross_encoder">Cross-encoder</option>
-<option value="lexical">Lexical/vector fallback</option>
-<option value="none">None</option>
-</select>
-</label>
-<label>
-<span>Query-decomposition tokens <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="Breaking or reformulating a research question into structured search instructions or subqueries before retrieval." aria-describedby="ui-tooltip-<id>">
-<span aria-hidden="true">i</span>
-</button>
-</span>
-</span>
-<input class="control" type="number" min="64" max="8192">
-</label>
-<label class="wide">
-<span>Cross-encoder model</span>
-<input class="control">
-</label>
-<label class="research-toggle-setting wide">
+<label class="research-toggle-setting">
 <input type="checkbox">
 <span>
 <b>Query decomposition</b>
-<small>Generate subqueries and French formulations before retrieval.</small>
+<small>Allow the selected pipeline's query-decomposition stage for this run. Its stage configuration is overridden separately.</small>
 </span>
 </label>
 </div>
@@ -452,7 +381,7 @@
 <div>
 <span class="section-label">03</span>
 <h3 id="research-settings-evidence-title">Evidence &amp; citations</h3>
-<p>Control evidence packet size and deterministic source binding.</p>
+<p>Citation, memory, metadata, and evaluation controls apply to this run. Evidence-packing stage limits are configured under Run overrides.</p>
 </div>
 <button class="research-text-action" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -467,22 +396,6 @@
 </svg>Reset section</button>
 </div>
 <div class="research-settings-card-grid">
-<fieldset class="research-settings-card wide">
-<legend>Evidence budget</legend>
-<p>Set an upper bound for each passage and for the full evidence packet sent to generation.</p>
-<div class="research-settings-grid two">
-<label>
-<span>Chars / evidence record</span>
-<input class="control" type="number" min="500" max="100000">
-<small>0 characters</small>
-</label>
-<label>
-<span>Total evidence chars</span>
-<input class="control" type="number" min="5000" max="1000000">
-<small>0 characters</small>
-</label>
-</div>
-</fieldset>
 <fieldset class="research-settings-card">
 <legend>Source binding</legend>
 <p>Keep generated claims auditable against deterministic evidence identifiers and citations.</p>
