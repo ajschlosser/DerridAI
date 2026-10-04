@@ -17,11 +17,29 @@ const props = withDefaults(defineProps<{
 const pages = defineModel<number[]>({ default: () => [] });
 const i18n = useI18nStore();
 const draft = ref(formatSourcePageSelection(pages.value));
+let locallyApplied = "";
 
-watch(() => pages.value, (value) => {
-  if (!parseSourcePageSelection(draft.value, props.pageCount).error) return;
-  draft.value = formatSourcePageSelection(value);
-}, { deep: true });
+watch(
+  () => pages.value,
+  (value) => {
+    const signature = value.join(",");
+    if (signature === locallyApplied) {
+      locallyApplied = "";
+      return;
+    }
+    draft.value = formatSourcePageSelection(value);
+  },
+  { deep: true },
+);
+watch(
+  () => props.pageCount,
+  () => {
+    const result = parseSourcePageSelection(draft.value, props.pageCount);
+    if (result.error) {
+      draft.value = formatSourcePageSelection(pages.value);
+    }
+  },
+);
 
 const parsed = computed(() => parseSourcePageSelection(draft.value, props.pageCount));
 const error = computed(() => parsed.value.error
@@ -42,10 +60,14 @@ const provenance = computed(() => {
 function update(value: string) {
   draft.value = value;
   const result = parseSourcePageSelection(value, props.pageCount);
-  if (!result.error) pages.value = result.pages;
+  if (!result.error) {
+    locallyApplied = result.pages.join(",");
+    pages.value = result.pages;
+  }
 }
 function useAllPages() {
   draft.value = "";
+  locallyApplied = "";
   pages.value = [];
 }
 </script>
