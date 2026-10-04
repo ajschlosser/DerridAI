@@ -10386,4 +10386,7 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
  "research.progress_saving": "Saving the Research result…",
  "research.progress_grading": "Evaluating the generated answer…",
  "research.progress_working": "Research run in progress…",
+ "settings.rag_database": "Default corpus database",
+ "settings.rag_database_help": "Choose which corpus database supplies the default Research work scope.",
+ "settings.rag_database_auto": "Choose per Research run",
 }
