@@ -211,6 +211,7 @@ import {
   maybeDesktopNotify,
   syncJobProgressToasts,
 } from "../domain/jobsActions";
+import { registerVectorStoreActions } from "../domain/vectorStoreActions";
 import { registerTouchupActions } from "../domain/touchupActions";
 import { registerOperationsPanelHooks } from "../domain/operationsPanelHooks";
 import { dashboardData } from "../domain/sharedDashboardData";
@@ -685,6 +686,7 @@ const {
 });
 registerPdfLlmTaskHooks({ openLlmTaskLauncher, openPdfDraftRecord });
 registerOperationsPanelHooks({ mountOperationsPanelHost, openJobResults, gradeRagResponse });
+registerVectorStoreActions({ openCollectionCreationWizard, triggerUpsertQueue });
 registerTouchupActions({
   touchupWorkspaceInfo,
   touchupProviderStatus,
@@ -1721,7 +1723,6 @@ export {
   triggerReviewFlagged,
   triggerAutoImproveFlagged,
   openTouchup,
-  triggerUpsertQueue,
   triggerEdit,
   getProviderProfilesForUi,
   getProviderRequestConfigForUi,
@@ -1738,7 +1739,6 @@ export {
   dbUnavailableReason,
   hasCorpusDb,
   notifyVectorStoresChanged,
-  openCollectionCreationWizard,
   upsertRows,
   persistPrefs,
   lookupRecord,

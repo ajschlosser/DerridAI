@@ -33,22 +33,19 @@ const runtime = vi.hoisted(() => ({
   exportStoreJsonl: vi.fn(),
   triggerUpsertQueue: vi.fn(),
   getShellSnapshot: vi.fn(() => ({})),
-  // Only the runtime-owned fields; the shared Vector Stores fields come from the vector store.
-  state: {
-    files: [],
-    activeFileId: null,
-    llmStatus: null,
-    health: null,
-    appConfig: {},
-  },
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({
-  ...runtime,
-  __v_isRef: false,
-  __v_isReadonly: false,
-  __v_isShallow: false,
-  __v_skip: true,
-  __v_raw: undefined,
+vi.mock("../../src/domain/sharedDbPresence", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/domain/sharedDbPresence")>()),
+  pendingUpsertRows: runtime.pendingUpsertRows,
+  upsertRows: runtime.upsertRows,
+}));
+vi.mock("../../src/domain/sharedSearchWorkspace", () => ({
+  searchWorkspace: { setSearchScope: runtime.setSearchScope },
+}));
+vi.mock("../../src/domain/vectorStoreActions", () => ({
+  registerVectorStoreActions: vi.fn(),
+  openCollectionCreationWizard: runtime.openCollectionCreationWizard,
+  triggerUpsertQueue: runtime.triggerUpsertQueue,
 }));
 
 const chromaApi = vi.hoisted(() => ({
