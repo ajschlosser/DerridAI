@@ -40,6 +40,8 @@ export interface LanguagePack {
   requires?: string[];
   missing_requirements?: string[];
   origin: "builtin" | "custom";
+  /** True when the model is part of the API image rather than installed at runtime. */
+  bundled?: boolean;
   files: LanguagePackFile[];
   installable: boolean;
   installed: boolean;
