@@ -1,5 +1,5 @@
 # This file is part of DerridAI, a cELF-compliant research workspace
-# Copyright © 2026  Aaron John Schlosser, PhD
+# Copyright Â© 2026  Aaron John Schlosser, PhD
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -304,3 +304,103 @@ def test_generic_graph_collection_fan_in_keeps_trace_free_of_values():
     assert all(trace.status == "completed" for trace in result.stages)
     traces = str([trace.model_dump() for trace in result.stages])
     assert "Rousseau" not in traces and TEXT not in traces
+
+
+@pytest.mark.parametrize("change", ["record", "revision", "source", "boolean", "quote"])
+def test_observer_rejects_invalid_current_locator(change):
+    from app.pipelines.metadata_candidate_observation import observe_candidate_routes
+    owner = collector()
+    packet = owner.collect_nlp()
+    candidate = packet.candidates[0]
+    ref = dict(candidate.origin_ref)
+    if change == "record":
+        ref["record_id"] = "other"
+    elif change == "revision":
+        ref["record_revision"] = 9
+    elif change == "source":
+        ref["source_document_id"] = "other"
+    elif change == "boolean":
+        ref["start"] = False
+    else:
+        ref["end"] = 7
+    packet = packet.model_copy(update={"candidates": (candidate.model_copy(update={"origin_ref": ref}),)})
+    result = observe_candidate_routes(owner, packet)
+    assert result.fields[0].route == "VERIFY"
+    assert result.fields[0].support[0].status == "invalid_locator"
+
+
+def test_observer_is_read_only_and_never_confers_semantic_authority():
+    from app.pipelines.metadata_candidate_observation import observe_candidate_routes
+    owner = collector(fields=["persons", "stance"])
+    before = deepcopy(owner.record)
+    result = observe_candidate_routes(owner, owner.collect_nlp())
+    assert [f.route for f in result.fields] == ["RESOLVE", "INFER"]
+    assert result.fields[0].support[0].semantic_support == "unchecked"
+    assert result.observe_only and owner.record == before
+    assert all(f.authority == "advisory" for f in result.fields)
+
+
+@pytest.mark.parametrize("kind", ["positive", "absence", "correction"])
+def test_observer_historical_candidates_never_supply_current_support(kind):
+    from app.pipelines.metadata_candidate_observation import observe_candidate_routes
+    schema = metadata_schema.default_schema()
+    owner = collector(exemplars={"persons": [exemplar(schema, kind=kind)]})
+    result = observe_candidate_routes(owner, owner.collect_reviewed_precedents())
+    assert result.fields[0].route == "VERIFY"
+    assert result.fields[0].support[0].status == "unchecked"
+
+
+def test_observer_rivals_and_stale_context():
+    from app.pipelines.metadata_candidate_observation import observe_candidate_routes
+    owner = collector()
+    packet = owner.collect_nlp()
+    rival = packet.candidates[0].model_copy(update={"candidate_id": "rival", "value": "other"})
+    packet = packet.model_copy(update={"candidates": (*packet.candidates, rival)})
+    assert observe_candidate_routes(owner, packet).fields[0].route == "VERIFY"
+    owner.record["record_revision"] = 2
+    with pytest.raises(ValueError, match="context changed"):
+        observe_candidate_routes(owner, packet)
+
+
+
+def test_observation_graph_named_ports_and_private_traces():
+    from app.pipelines.metadata_candidate_observation import (
+        candidate_observation_handler,
+        candidate_observation_strategy,
+    )
+    owner = collector()
+    specs = [*candidate_collection_strategies(), candidate_observation_strategy()]
+    handlers = owner.handlers() | {"metadata.observe_candidate_routes": candidate_observation_handler(owner)}
+    purpose = PipelinePurposeSpec(
+        purpose_id="test_observation", category="metadata", label="Test", description="Test",
+        consuming_feature="test", consumer="test", input_semantics="test", output_semantics="advisory",
+        authority_semantics="advisory", output_type="metadata_hypothesis_set",
+        run_inputs=[RunInputSpec(name="context", data_type="any")],
+    )
+    pipeline = PipelineDefinition(
+        pipeline_id="test.observation", name="Test", purpose="test_observation",
+        entry_stage_ids=["collect"], stages=[
+            {"id": "collect", "strategy": "metadata.collect_nlp", "next": ["observe"]},
+            {"id": "observe", "strategy": "metadata.observe_candidate_routes"},
+        ],
+    )
+    executor = GraphExecutor(pipeline, registry=StrategyRegistry(specs), purpose=purpose, handlers=handlers)
+    result = executor.run({"context": owner.binding})
+    assert result.terminal_outputs["observe"]["observations"].fields[0].route == "RESOLVE"
+    traces = str([t.model_dump() for t in result.stages])
+    assert "Rousseau" not in traces and TEXT not in traces
+
+
+@pytest.mark.parametrize("change", ["field_id", "semantic", "outside", "packet_binding"])
+def test_observer_rejects_incompatible_candidate_contract(change):
+    from app.pipelines.metadata_candidate_observation import observe_candidate_routes
+    owner = collector()
+    packet = owner.collect_nlp()
+    candidate = packet.candidates[0]
+    if change == "packet_binding":
+        packet = packet.model_copy(update={"binding": packet.binding.model_copy(update={"context_hash": "stale"})})
+    else:
+        update = {"field_id": "wrong"} if change == "field_id" else {"semantic_compatibility_id": "wrong"} if change == "semantic" else {"field_name": "stance"}
+        packet = packet.model_copy(update={"candidates": (candidate.model_copy(update=update),)})
+    with pytest.raises(ValueError):
+        observe_candidate_routes(owner, packet)
