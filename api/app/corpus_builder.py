@@ -297,10 +297,10 @@ from .field_assertions import (
     project_record_assertions,
 )
 from .language_segmentation import ends_sentence_text, starts_mid_sentence_text
-from .llm_failures import FailureDisposition, failure_disposition
 from .language_segmentation import (
     profile_metadata as language_segmentation_profile,
 )
+from .llm_failures import FailureDisposition, failure_disposition
 from .main_text_start import infer_main_text_start
 from .memory_prefill import prefill_records
 from .metadata_exemplar_projection import (
