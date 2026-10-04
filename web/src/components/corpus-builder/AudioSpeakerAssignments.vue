@@ -69,7 +69,9 @@ function saveSpeaker(speaker: string) {
   draft[speaker] = String(draft[speaker] || "").trim();
   emit(
     "save",
-    Object.fromEntries(\n      props.speakers.map((voice) => [voice, String(draft[voice] || "").trim()]),\n    ),
+    Object.fromEntries(
+      props.speakers.map((voice) => [voice, String(draft[voice] || "").trim()]),
+    ),
   );
 }
 </script>
@@ -78,9 +80,7 @@ function saveSpeaker(speaker: string) {
   <section class="speaker-assignments" :aria-labelledby="headingId">
     <header>
       <div>
-        <h3 :id="headingId">
-          {{ i18n.t("pdf_corpus.voice_assignments_title") }}
-        </h3>
+        <h3 :id="headingId">{{ i18n.t("pdf_corpus.voice_assignments_title") }}</h3>
         <p>{{ i18n.t("pdf_corpus.voice_assignments_help") }}</p>
       </div>
     </header>
