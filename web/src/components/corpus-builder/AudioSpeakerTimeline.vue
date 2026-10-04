@@ -52,11 +52,7 @@ const timedBlocks = computed(() =>
 );
 
 const timelineEnd = computed(() =>
-  Math.max(
-    props.duration || 0,
-    ...timedBlocks.value.map((block) => Number(block.end) || 0),
-    0.001,
-  ),
+  Math.max(props.duration || 0, ...timedBlocks.value.map((block) => Number(block.end) || 0), 0.001),
 );
 
 const rows = computed(() => {
