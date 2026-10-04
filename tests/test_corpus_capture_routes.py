@@ -148,7 +148,13 @@ def test_request_schemas_reject_invalid_identity_and_languages():
         CaptureCreate(wikidata_qid="Q9358", options={"languages": ["German"]})
     with pytest.raises(ValidationError):
         CaptureCreate(wikidata_qid="Q9358", options={"providers": ["archive_org"]})
-    assert CaptureCreate(wikidata_qid="Q9358", options={"languages": []}).options.languages is None
+    legacy = CaptureCreate(wikidata_qid="Q9358", options={"languages": []})
+    assert legacy.options.languages is None
+    assert legacy.identity_id == "wikidata:Q9358"
+    local = CaptureCreate(identity_id="gutenberg:1342:0", options={"providers": ["gutenberg"]})
+    assert local.wikidata_qid is None
+    with pytest.raises(ValidationError):
+        CaptureCreate(identity_id="gutenberg:not-an-id", options={"providers": ["gutenberg"]})
     with pytest.raises(ValidationError):
         CaptureSelectionPatch(candidate_ids=["x"])
 

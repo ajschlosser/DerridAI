@@ -121,9 +121,12 @@ def author_candidate(
         if language_item_codes and language_item_codes.get(item)
     ]
     available_languages.extend(code for code in wikisource_sitelinks(entity) if code != "mul")
+    qid = str(entity.get("id"))
     return AuthorCandidate(
-        wikidata_qid=str(entity.get("id")),
+        wikidata_qid=qid,
         label=label,
+        identity_id=f"wikidata:{qid}",
+        identity_source="wikidata",
         description=_label(entity, languages, "descriptions"),
         aliases=[alias for alias in aliases if alias != label][:40],
         birth_year=_year(next(iter(_claim_values(entity, "P569")), None)),
