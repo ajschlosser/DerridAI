@@ -64,11 +64,13 @@ def executable_version(name: str) -> str:
         return "unavailable"
 
 
-def extraction_provenance(extractor: str) -> dict:
+def extraction_provenance(
+    extractor: str, *, contract: str = "source-extraction-v2"
+) -> dict:
     from .config import APP_VERSION
 
     return {
-        "contract": "source-extraction-v2",
+        "contract": contract,
         "extractor": extractor,
         "app_version": APP_VERSION,
         "python": platform.python_version(),

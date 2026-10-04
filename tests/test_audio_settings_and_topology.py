@@ -54,6 +54,40 @@ def test_transcription_uses_the_settings_key_and_explains_a_missing_one(monkeypa
         source_audio.transcribe_entire_file(tmp_path / "a.wav")
 
 
+def test_transcription_requests_segment_and_word_timestamps(monkeypatch, tmp_path):
+    system_store.set_audio_transcription_settings(
+        base_url="https://x.test/v1",
+        model="whisper-test",
+        api_key="sk-test",
+    )
+    path = tmp_path / "a.wav"
+    path.write_bytes(b"audio")
+    captured = {}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "text": "Hello.",
+                "segments": [{"start": 0.0, "end": 1.0, "text": "Hello."}],
+                "words": [{"start": 0.0, "end": 1.0, "word": "Hello."}],
+            }
+
+    def post(url, **kwargs):
+        captured["url"] = url
+        captured["data"] = kwargs["data"]
+        return Response()
+
+    monkeypatch.setattr(source_audio.httpx, "post", post)
+
+    source_audio.transcribe_entire_file(path)
+
+    assert captured["url"] == "https://x.test/v1/audio/transcriptions"
+    assert captured["data"]["timestamp_granularities[]"] == ["segment", "word"]
+
+
 def test_settings_route_rejects_bad_urls():
     from app.models import SystemAudioTranscriptionUpdate
 

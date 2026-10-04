@@ -66,6 +66,39 @@ describe("SourceTranscriptionDialog", () => {
     expect(document.body.textContent).toContain("00:00:01–00:00:03 S1");
   });
 
+  it("marks uncertain speaker spans and makes audio timestamps seekable", () => {
+    mount(SourceTranscriptionDialog, {
+      props: {
+        open: true,
+        mediaKind: "audio",
+        audioUrl: "/clip.wav",
+        pdfUrl: "",
+        page: 1,
+        pageCount: 1,
+        text: "Transcript",
+        blocks: [
+          {
+            ...blocks[0],
+            speaker_assignment: {
+              method: "word_overlap",
+              confidence: 0.55,
+              ambiguous_word_count: 1,
+              word_count: 2,
+              review_recommended: true,
+            },
+          },
+        ],
+      },
+      attachTo: document.body,
+    });
+
+    expect(document.body.querySelector(".speaker-timeline")).toBeTruthy();
+    expect(document.body.querySelector(".timeline-segment")).toBeTruthy();
+    expect(document.body.querySelector(".time-seek")).toBeTruthy();
+    expect(document.body.querySelector(".speaker-review-needed")).toBeTruthy();
+    expect(document.body.querySelector(".speaker-review-note")?.textContent).toContain("uncertain");
+  });
+
   it("marks transcription edits busy while save is pending", () => {
     mount(SourceTranscriptionDialog, {
       props: { open: true, pdfUrl: "", page: 1, pageCount: 1, text: "Transcript", busy: true },

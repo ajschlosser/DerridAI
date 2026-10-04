@@ -33,6 +33,11 @@ const props = withDefaults(
       provider?: string;
       diarization_requested?: boolean;
       diarization_status?: string;
+      alignment_status?: string;
+      speaker_assignment_method?: string;
+      word_count?: number;
+      ambiguous_word_count?: number;
+      review_recommended_block_count?: number;
     };
     speakers?: string[];
     voiceAssignments?: Record<string, string>;
@@ -174,11 +179,52 @@ const copy = computed(() => {
             }}
           </dd>
         </div>
+        <div>
+          <dt>{{ i18n.t("pdf_corpus.audio_alignment_status", "Word alignment") }}</dt>
+          <dd>
+            {{
+              audioProvenance?.alignment_status ||
+              i18n.t("pdf_corpus.audio_alignment_unknown", "Unavailable")
+            }}
+          </dd>
+        </div>
+        <div>
+          <dt>{{ i18n.t("pdf_corpus.audio_speaker_assignment", "Speaker assignment") }}</dt>
+          <dd>
+            {{
+              audioProvenance?.speaker_assignment_method ||
+              i18n.t("pdf_corpus.audio_speaker_assignment_unknown", "Unavailable")
+            }}
+          </dd>
+        </div>
+        <div v-if="audioProvenance?.word_count">
+          <dt>{{ i18n.t("pdf_corpus.audio_aligned_words", "Aligned words") }}</dt>
+          <dd>{{ audioProvenance.word_count }}</dd>
+        </div>
+        <div v-if="audioProvenance?.ambiguous_word_count">
+          <dt>{{ i18n.t("pdf_corpus.audio_ambiguous_words", "Ambiguous words") }}</dt>
+          <dd>{{ audioProvenance.ambiguous_word_count }}</dd>
+        </div>
         <div v-if="audioProvenance?.model">
           <dt>{{ i18n.t("pdf_corpus.audio_transcription_model", "Transcription model") }}</dt>
           <dd>{{ audioProvenance.model }}</dd>
         </div>
       </dl>
+      <p
+        v-if="
+          (audioProvenance?.ambiguous_word_count || 0) > 0 ||
+          (audioProvenance?.review_recommended_block_count || 0) > 0
+        "
+        class="audio-review-note"
+        role="status"
+      >
+        {{
+          i18n.t(
+            "pdf_corpus.audio_speaker_review_recommended",
+            "Some timed words have uncertain speaker assignments. Review those spans before building records.",
+          )
+        }}
+      </p>
       <a class="audio-settings-link" href="/settings/services#settings-heading-audio">
         {{ i18n.t("pdf_corpus.audio_settings_link", "Audio transcription service settings") }}
       </a>
@@ -267,6 +313,14 @@ p {
   font-size: 0.875rem;
   font-weight: 700;
   overflow-wrap: anywhere;
+}
+.audio-review-note {
+  padding: 10px 12px;
+  border: 1px solid var(--tone-warn-edge);
+  border-radius: var(--radius-control);
+  color: var(--tone-warn-fg);
+  background: var(--tone-warn-bg);
+  font-size: var(--fs-sm);
 }
 .audio-settings-link {
   justify-self: start;
