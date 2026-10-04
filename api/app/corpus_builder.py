@@ -4693,11 +4693,16 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             nonlocal updates
             check_cancelled()
             for record in rows:
-                if record.get("metadata_complete") or record.get("metadata_enrichment_state") == "complete":
+                enrichment_state = str(record.get("metadata_enrichment_state") or "").strip().casefold()
+                if enrichment_state == "complete":
                     record["metadata_enrichment_state"] = "complete"
+                    record["metadata_enrichment_finished"] = True
                 else:
-                    # Restarted workers do not survive; their family checkpoints do.
+                    # Scholarly metadata completeness is not execution completion.
+                    # Deterministic/inherited values can satisfy the schema before
+                    # this Record's scheduled LLM enrichment pass has run.
                     record["metadata_enrichment_state"] = "queued"
+                    record["metadata_enrichment_finished"] = False
                     record.setdefault("metadata_stage_status", {})
             states = _metadata_family_states(rows)
             updates = {
