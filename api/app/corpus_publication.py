@@ -34,6 +34,49 @@ def warning_key(text: str) -> str:
 
 _RECORD_SCOPED = re.compile(r"^\s*([\w.\-]+):\s")
 
+# Public scholarly artifacts must never accidentally turn runtime credentials
+# into metadata. Keep this exact/suffix based rather than substring based so
+# ordinary scholarly keys such as "token_count" are not removed.
+_SECRET_PUBLIC_KEYS = {
+    "api_key",
+    "openai_api_key",
+    "password",
+    "authorization",
+    "access_token",
+    "refresh_token",
+    "session_token",
+    "auth_token",
+    "bearer_token",
+    "client_secret",
+}
+_SECRET_PUBLIC_SUFFIXES = (
+    "_api_key",
+    "_password",
+    "_access_token",
+    "_refresh_token",
+    "_session_token",
+    "_auth_token",
+    "_bearer_token",
+    "_client_secret",
+)
+
+
+def _is_secret_public_key(key: object) -> bool:
+    normalized = str(key or "").strip().casefold().replace("-", "_")
+    return normalized in _SECRET_PUBLIC_KEYS or normalized.endswith(_SECRET_PUBLIC_SUFFIXES)
+
+
+def _strip_public_secrets(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _strip_public_secrets(item)
+            for key, item in value.items()
+            if not _is_secret_public_key(key)
+        }
+    if isinstance(value, list):
+        return [_strip_public_secrets(item) for item in value]
+    return value
+
 
 def provenance_warnings(
     build: dict[str, Any], record_ids: set[str]
@@ -103,7 +146,9 @@ def validate_publication_record(record: dict[str, Any]) -> list[str]:
 
 
 def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
-    public_record = dict(record)
+    # Remove credential-shaped fields before assertion migration so a misplaced
+    # runtime secret can never be materialized as a scholarly FieldAssertion.
+    public_record = _strip_public_secrets(copy.deepcopy(record))
     migrate_record_assertions(public_record)
     if not public_record.get("source_document_id") and public_record.get("source_asset_id"):
         public_record["source_document_id"] = public_record["source_asset_id"]
@@ -178,11 +223,13 @@ def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
         "text_length",
         "corpus_build_details",
     }
-    return {
-        k: v
-        for k, v in public_record.items()
-        if k not in internal_fields and not k.startswith("_")
-    }
+    return _strip_public_secrets(
+        {
+            k: v
+            for k, v in public_record.items()
+            if k not in internal_fields and not k.startswith("_")
+        }
+    )
 
 
 def build_text_touchup_prompt(current_text: str, instructions: str) -> str:
