@@ -27,6 +27,8 @@ import {
   type UserRole,
 } from "../api/auth";
 import { expandPermissions, samePermissions } from "../domain/roles";
+import { queryClient, useDataQuery } from "../realtime/dataQuery";
+import { dataKey } from "../realtime/resourceKeys";
 import { useI18nStore } from "../stores/i18n";
 import { useAuthStore } from "../stores/auth";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
@@ -50,19 +52,66 @@ const i18n = useI18nStore();
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
-const roles = ref<RoleDefinition[]>([]);
-const capabilities = ref<CapabilityDefinition[]>([]);
-const users = ref<AuthUser[]>([]);
+// Server state lives in the query cache; realtime invalidation refreshes it (no manual reload).
+const scope = computed(() => [auth.user?.id ?? "anonymous", auth.user?.role ?? ""]);
+const enabled = computed(() => Boolean(auth.user));
+const rolesQuery = useDataQuery("roles", () => authApi.listRoles(), { detail: scope, enabled });
+const usersQuery = useDataQuery("users", () => authApi.listUsers(), { detail: scope, enabled });
+function denied(exc: unknown) {
+  return Boolean(
+    exc && typeof exc === "object" && "status" in exc && [401, 403].includes(Number(exc.status)),
+  );
+}
+const accessDenied = computed(
+  () => denied(rolesQuery.error.value) || denied(usersQuery.error.value),
+);
+// Account assignments are part of the role-delete safety check. Treat both datasets as one
+// snapshot so a partial response can never imply zero users.
+const snapshotLoaded = computed(
+  () =>
+    !accessDenied.value &&
+    rolesQuery.data.value !== undefined &&
+    usersQuery.data.value !== undefined,
+);
+const roles = computed<RoleDefinition[]>(() =>
+  snapshotLoaded.value ? (rolesQuery.data.value?.roles ?? []) : [],
+);
+const capabilities = computed<CapabilityDefinition[]>(() =>
+  snapshotLoaded.value ? (rolesQuery.data.value?.capabilities ?? []) : [],
+);
+const users = computed<AuthUser[]>(() =>
+  snapshotLoaded.value ? (usersQuery.data.value?.users ?? []) : [],
+);
+const dataCurrent = computed(
+  () => !accessDenied.value && rolesQuery.isSuccess.value && usersQuery.isSuccess.value,
+);
+const loading = computed(() => rolesQuery.isFetching.value || usersQuery.isFetching.value);
+function setRoles(next: { roles: RoleDefinition[]; capabilities: CapabilityDefinition[] }) {
+  queryClient.setQueryData(dataKey("roles", ...scope.value), {
+    roles: next.roles,
+    capabilities: next.capabilities,
+  });
+}
+function refetch() {
+  return Promise.all([rolesQuery.refetch(), usersQuery.refetch()]);
+}
 const selectedRole = ref<UserRole>(String(route.query.role || "researcher"));
 const permissions = ref<string[]>([]);
-const loading = ref(true);
-const dataCurrent = ref(false);
-const snapshotLoaded = ref(false);
-let readRequest = 0;
 const saving = ref(false);
 const creating = ref(false);
 const deleting = ref(false);
-const error = ref("");
+const actionError = ref("");
+// The permission list the draft started from; a change from it is an unsaved edit.
+const draftBase = ref<string[]>([]);
+const error = computed(
+  () =>
+    actionError.value ||
+    (rolesQuery.error.value || usersQuery.error.value
+      ? localizedAuthError(rolesQuery.error.value || usersQuery.error.value, (key, fallback) =>
+          i18n.t(key, fallback),
+        )
+      : ""),
+);
 const liveMessage = ref("");
 const createOpen = ref(false);
 const roleName = ref("");
@@ -160,68 +209,51 @@ function syncRouteState() {
   });
 }
 
-function applyRole(id: UserRole, resetFilter = true) {
+function applyRole(
+  id: UserRole,
+  resetFilter = true,
+  snapshot: { roles: RoleDefinition[]; capabilities: CapabilityDefinition[] } = {
+    roles: roles.value,
+    capabilities: capabilities.value,
+  },
+) {
   selectedRole.value = id;
   permissions.value = expandPermissions(
-    roles.value.find((item) => item.id === id)?.permissions || [],
-    capabilityIds.value,
+    snapshot.roles.find((item) => item.id === id)?.permissions || [],
+    snapshot.capabilities.map((item) => item.id),
   );
+  draftBase.value = [...permissions.value];
   if (resetFilter) permissionFilter.value = "";
   syncRouteState();
 }
 
-async function refresh(preferred?: string) {
-  const request = ++readRequest;
-  const draftRole = selectedRole.value;
-  const keepDraft = dirty.value && !preferred;
-  loading.value = true;
-  // Account assignments are part of the role-delete safety check. Treat both
-  // datasets as one snapshot so a partial request can never imply zero users.
-  dataCurrent.value = false;
-  error.value = "";
-  try {
-    const [roleData, userData] = await Promise.all([authApi.listRoles(), authApi.listUsers()]);
-    if (request !== readRequest) return;
-    roles.value = roleData.roles;
-    capabilities.value = roleData.capabilities;
-    users.value = userData.users;
-    dataCurrent.value = true;
-    snapshotLoaded.value = true;
-    const next = preferred || selectedRole.value;
-    const fallback =
-      roles.value.find((item) => item.id === "researcher")?.id ||
-      roles.value[0]?.id ||
-      "researcher";
-    if (
-      !(
-        keepDraft &&
-        selectedRole.value === draftRole &&
-        roles.value.some((item) => item.id === draftRole)
-      )
-    ) {
-      applyRole(roles.value.some((item) => item.id === next) ? next : fallback, false);
-    }
-  } catch (exc) {
-    if (request !== readRequest) return;
-    if (
-      exc &&
-      typeof exc === "object" &&
-      "status" in exc &&
-      [401, 403].includes(Number(exc.status))
-    ) {
-      roles.value = [];
-      capabilities.value = [];
-      users.value = [];
+// A new snapshot (first load, a realtime refresh, a retry) keeps an unsaved draft for the role being
+// edited and otherwise re-reads the selected role, or the default when it is gone.
+watch(
+  roles,
+  (next) => {
+    if (!next.length) {
       permissions.value = [];
-      snapshotLoaded.value = false;
-      createOpen.value = false;
-      confirm.value = null;
+      draftBase.value = [];
+      if (!snapshotLoaded.value) {
+        createOpen.value = false;
+        confirm.value = null;
+      }
+      return;
     }
-    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
-  } finally {
-    if (request === readRequest) loading.value = false;
-  }
-}
+    const keepDraft =
+      !samePermissions(permissions.value, draftBase.value) &&
+      next.some((item) => item.id === selectedRole.value);
+    if (keepDraft) return;
+    const fallback =
+      next.find((item) => item.id === "researcher")?.id || next[0]?.id || "researcher";
+    applyRole(
+      next.some((item) => item.id === selectedRole.value) ? selectedRole.value : fallback,
+      false,
+    );
+  },
+  { immediate: true },
+);
 
 function requestSelect(id: UserRole) {
   if (id === selectedRole.value) return;
@@ -241,17 +273,20 @@ async function save() {
   if (!dataCurrent.value) return false;
   if (role.value?.locked || !dirty.value) return true;
   saving.value = true;
-  error.value = "";
+  actionError.value = "";
   try {
     const result = await authApi.updateRolePermissions(selectedRole.value, permissions.value);
-    roles.value = result.roles;
-    capabilities.value = result.capabilities;
-    permissions.value = expandPermissions(result.permissions, capabilityIds.value);
+    permissions.value = expandPermissions(
+      result.permissions,
+      result.capabilities.map((item) => item.id),
+    );
+    draftBase.value = [...permissions.value];
+    setRoles(result);
     announce(i18n.t("roles.saved"));
     notify(i18n.t("roles.saved"), "success");
     return true;
   } catch (exc) {
-    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
+    actionError.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
     return false;
   } finally {
     saving.value = false;
@@ -277,21 +312,20 @@ async function createRole() {
   if (!dataCurrent.value) return;
   if (roleName.value.trim().length < 2) return;
   creating.value = true;
-  error.value = "";
+  actionError.value = "";
   try {
     const result = await authApi.createRole({
       name: roleName.value.trim(),
       description: roleDescription.value.trim(),
       clone_from: cloneFrom.value,
     });
-    roles.value = result.roles;
-    capabilities.value = result.capabilities;
+    setRoles(result);
     createOpen.value = false;
-    applyRole(result.role.id);
+    applyRole(result.role.id, true, result);
     announce(i18n.t("roles.created"));
     notify(i18n.t("roles.created"), "success");
   } catch (exc) {
-    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
+    actionError.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     creating.value = false;
   }
@@ -302,7 +336,7 @@ function openDelete() {
   const current = role.value;
   if (!current || current.builtin || current.locked) return;
   if (assignedCount.value) {
-    error.value = i18n.t("roles.cannot_delete_assigned");
+    actionError.value = i18n.t("roles.cannot_delete_assigned");
     return;
   }
   confirm.value = {
@@ -317,15 +351,16 @@ async function deleteSelected() {
   const current = role.value;
   if (!current || current.builtin || current.locked) return;
   deleting.value = true;
-  error.value = "";
+  actionError.value = "";
   try {
-    await authApi.deleteRole(current.id);
+    const result = await authApi.deleteRole(current.id);
     confirm.value = null;
     announce(i18n.t("roles.deleted"));
     notify(i18n.t("roles.deleted"), "success");
-    await refresh("researcher");
+    applyRole("researcher", false, result);
+    setRoles(result);
   } catch (exc) {
-    error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
+    actionError.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     deleting.value = false;
   }
@@ -404,20 +439,13 @@ onBeforeRouteLeave(() => {
 
 watch(permissionFilter, () => syncRouteState());
 watch(
-  () => `${auth.user?.id}:${auth.user?.role}`,
+  () => scope.value.join(":"),
   () => {
-    readRequest += 1;
-    roles.value = [];
-    capabilities.value = [];
-    users.value = [];
     permissions.value = [];
-    snapshotLoaded.value = false;
-    dataCurrent.value = false;
+    draftBase.value = [];
     createOpen.value = false;
     confirm.value = null;
-    error.value = "";
-    if (auth.user) void refresh();
-    else loading.value = false;
+    actionError.value = "";
   },
 );
 watch(
@@ -434,12 +462,8 @@ watch(
   },
 );
 
-onMounted(() => {
-  window.addEventListener("beforeunload", onBeforeUnload);
-  void refresh(String(route.query.role || ""));
-});
+onMounted(() => window.addEventListener("beforeunload", onBeforeUnload));
 onBeforeUnmount(() => {
-  readRequest += 1;
   window.removeEventListener("beforeunload", onBeforeUnload);
 });
 </script>
@@ -455,11 +479,6 @@ onBeforeUnmount(() => {
       :actions-label="i18n.t('roles.page_actions')"
     >
       <template #actions>
-        <UiButton
-          :label="i18n.t('common.refresh')"
-          :disabled="loading || saving || creating || deleting"
-          @click="refresh()"
-        />
         <SettingsSaveState
           v-if="snapshotLoaded"
           :status="saveStatus"
@@ -483,7 +502,7 @@ onBeforeUnmount(() => {
         v-if="snapshotLoaded && !dataCurrent"
         :label="i18n.t('ui.retry')"
         :disabled="loading"
-        @click="refresh()"
+        @click="refetch()"
       />
     </div>
     <section v-if="loading && !snapshotLoaded" class="roles-loading">
@@ -496,7 +515,7 @@ onBeforeUnmount(() => {
       :title="i18n.t('roles.title')"
       :description="error"
       :action-label="i18n.t('ui.retry')"
-      @action="refresh()"
+      @action="refetch()"
     />
     <div v-else class="roles-layout">
       <UiCard as="div" class="roles-list" :padded="false">
