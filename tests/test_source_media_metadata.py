@@ -36,6 +36,11 @@ from app import corpus_builder as cb
 from app import corpus_segmentation as segmentation
 from app import source_audio
 from app import source_media as sm
+from app.field_assertions import (
+    create_model_assertion,
+    current_assertion_by_name,
+    project_record_assertions,
+)
 
 
 def test_dialogue_speakers_and_record_inheritance():
@@ -77,6 +82,72 @@ def test_whisper_spans_use_whisperx_speakers_after_full_transcript():
     assert "speaker" not in meta
 
 
+def test_audio_ingest_automatically_diarizes_and_exposes_distinct_speakers(monkeypatch):
+    transcript = {
+        "text": "Hello there. Good evening.",
+        "language": "en",
+        "segments": [
+            {"start": 0.0, "end": 2.0, "text": "Hello there.", "avg_logprob": -0.2},
+            {"start": 2.0, "end": 4.0, "text": "Good evening.", "avg_logprob": -0.2},
+        ],
+    }
+    diarization_calls: list[Path] = []
+
+    monkeypatch.setattr(source_audio, "probe_audio", lambda _path: 4.0)
+    monkeypatch.setattr(source_audio, "transcribe_entire_file", lambda _path: transcript)
+    monkeypatch.setattr(source_audio, "tool_version", lambda _name: "test")
+    monkeypatch.setattr(source_audio, "executable_version", lambda _name: "test")
+
+    def diarize(path: Path):
+        diarization_calls.append(path)
+        return [
+            {
+                "start": 0.0,
+                "end": 2.0,
+                "speaker": "SPEAKER_1",
+                "provider_speaker": "SPEAKER_00",
+            },
+            {
+                "start": 2.0,
+                "end": 4.0,
+                "speaker": "SPEAKER_2",
+                "provider_speaker": "SPEAKER_01",
+            },
+        ]
+
+    monkeypatch.setattr(source_audio, "diarize_with_whisperx", diarize)
+
+    extracted = source_audio.extract_audio(b"not-real-audio", filename="interview.wav")
+
+    assert len(diarization_calls) == 1
+    assert extracted["audio_provenance"]["diarization_status"] == "complete"
+    assert extracted["initial_metadata"]["speakers"] == ["SPEAKER_1", "SPEAKER_2"]
+    assert [block["speaker"] for block in extracted["blocks"]] == ["SPEAKER_1", "SPEAKER_2"]
+
+
+def test_diarized_speaker_changes_are_deterministic_record_boundaries():
+    blocks = [
+        {
+            "block_id": "audio-1",
+            "text": "First voice.",
+            "type": "paragraph",
+            "speaker": "SPEAKER_1",
+        },
+        {
+            "block_id": "audio-2",
+            "text": "Second voice.",
+            "type": "paragraph",
+            "speaker": "SPEAKER_2",
+        },
+    ]
+
+    candidates = segmentation._deterministic_boundary_candidates(blocks, {}, "en")
+
+    assert len(candidates) == 1
+    assert "speaker_change" in candidates[0]["signals"]
+    assert segmentation._candidate_route(candidates[0], {}) == "split"
+
+
 def test_audio_voice_labels_start_at_one_and_reviewed_names_project_to_records():
     turns = source_audio.normalize_speaker_labels(
         [
@@ -109,6 +180,21 @@ def test_audio_voice_labels_start_at_one_and_reviewed_names_project_to_records()
     assert records[0]["source_spans"][0]["speaker"] == "SPEAKER_1"
     assert records[0]["source_spans"][0]["resolved_speaker"] == "Jacques Derrida"
     assert records[0]["metadata_field_status"]["speaker"]["method"] == "human_voice_assignment"
+    assertion = current_assertion_by_name(records[0], "speaker")
+    assert assertion is not None
+    assert assertion.derivation_method == "human"
+    assert assertion.authority_status == "human_override"
+
+    # A later enrichment worker may propose another identity, but the reviewed
+    # diarization assignment remains authoritative.
+    worker = json.loads(json.dumps(records[0]))
+    create_model_assertion(worker, "speaker", "Model guess", confidence=0.91)
+    project_record_assertions(worker)
+    merged = cb._merge_enrichment_snapshot(records[0], worker)
+    assert merged["speaker"] == "Jacques Derrida"
+    merged_assertion = current_assertion_by_name(merged, "speaker")
+    assert merged_assertion is not None
+    assert merged_assertion.authority_status == "human_override"
 
 
 def test_voice_assignments_are_reviewed_asset_state_not_block_rewrites(tmp_path: Path):

@@ -2753,22 +2753,6 @@ defineExpose({
             :filename="selectedAsset.filename"
             :page-count="selectedAsset.page_count"
             :block-count="selectedAsset.block_count"
-            :speakers="
-              selectedAsset.initial_metadata?.speakers ||
-              (selectedAsset.initial_metadata?.speaker
-                ? [selectedAsset.initial_metadata.speaker]
-                : [])
-            "
-            :voice-assignments="
-              Object.fromEntries(
-                Object.entries(selectedAsset.voice_assignments || {}).map(([voice, assignment]) => [
-                  voice,
-                  assignment.display_name,
-                ]),
-              )
-            "
-            :busy="busy === 'voice-assignments'"
-            @save-voice-assignments="saveVoiceAssignments"
           />
         </template>
         <CorpusTopologyPolicyControl
@@ -2832,7 +2816,24 @@ defineExpose({
           :schema-choices="schemaChoices"
           :chosen-schema="chosenSchema"
           :run-guidance-fields="runGuidanceFields"
+          :media-kind="selectedAsset?.media_kind"
+          :speakers="
+            selectedAsset?.initial_metadata?.speakers ||
+            (selectedAsset?.initial_metadata?.speaker
+              ? [selectedAsset.initial_metadata.speaker]
+              : [])
+          "
+          :voice-assignments="
+            Object.fromEntries(
+              Object.entries(selectedAsset?.voice_assignments || {}).map(([voice, assignment]) => [
+                voice,
+                assignment.display_name,
+              ]),
+            )
+          "
+          :voice-assignments-busy="busy === 'voice-assignments'"
           :disabled="busy !== ''"
+          @save-voice-assignments="saveVoiceAssignments"
           @manage-schemas="schemaEditorOpen = true"
         />
         <div class="setup-continue">

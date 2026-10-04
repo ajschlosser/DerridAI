@@ -25,20 +25,8 @@ const props = defineProps<{
   filename: string;
   pageCount?: number;
   blockCount?: number;
-  speakers?: string[];
-  voiceAssignments?: Record<string, string>;
-  busy?: boolean;
 }>();
-const emit = defineEmits<{ saveVoiceAssignments: [assignments: Record<string, string>] }>();
 const i18n = useI18nStore();
-const voiceDraft = computed(() =>
-  Object.fromEntries(
-    (props.speakers || []).map((voice) => [voice, props.voiceAssignments?.[voice] || ""]),
-  ),
-);
-function updateVoice(voice: string, value: string) {
-  emit("saveVoiceAssignments", { ...voiceDraft.value, [voice]: value });
-}
 const copy = computed(() => {
   switch (props.mediaKind) {
     case "audio":
@@ -120,19 +108,6 @@ const copy = computed(() => {
       <span v-if="blockCount">{{ blockCount }} {{ i18n.t("pdf_corpus.blocks", "blocks") }}</span>
     </div>
     <p class="media-detail">{{ copy.detail }}</p>
-    <fieldset v-if="mediaKind === 'audio' && speakers?.length" class="voice-assignments">
-      <legend>{{ i18n.t("pdf_corpus.voice_assignments_title") }}</legend>
-      <p>{{ i18n.t("pdf_corpus.voice_assignments_help") }}</p>
-      <label v-for="voice in speakers" :key="voice">
-        <span>{{ voice }}</span>
-        <input
-          :value="voiceAssignments?.[voice] || ''"
-          :disabled="busy"
-          :placeholder="i18n.t('pdf_corpus.voice_assignment_placeholder')"
-          @change="updateVoice(voice, ($event.target as HTMLInputElement).value)"
-        />
-      </label>
-    </fieldset>
   </section>
 </template>
 
@@ -187,36 +162,6 @@ p {
 }
 .media-detail {
   font-size: 0.875rem;
-}
-.voice-assignments {
-  display: grid;
-  gap: 10px;
-  margin: 0;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-.voice-assignments legend {
-  padding: 0 5px;
-  font-weight: 800;
-}
-.voice-assignments label {
-  display: grid;
-  grid-template-columns: minmax(8rem, auto) 1fr;
-  gap: 10px;
-  align-items: center;
-}
-.voice-assignments input {
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card);
-  color: var(--text);
-}
-.voice-assignments input:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
 }
 @media (max-width: 700px) {
   .media-structure header {

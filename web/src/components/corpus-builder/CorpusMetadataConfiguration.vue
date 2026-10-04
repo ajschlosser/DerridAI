@@ -22,15 +22,23 @@ import type { SchemaSummary } from "../../api/metadataSchemas";
 import type { RunGuidanceEntry, RunGuidanceField } from "../CorpusRunGuidance.vue";
 import { useI18nStore } from "../../stores/i18n";
 import CorpusRunGuidance from "../CorpusRunGuidance.vue";
+import AudioSpeakerAssignments from "./AudioSpeakerAssignments.vue";
 
 const props = defineProps<{
   schemaChoices: SchemaSummary[];
   chosenSchema?: SchemaSummary | null;
   runGuidanceFields: RunGuidanceField[];
+  mediaKind?: string;
+  speakers?: string[];
+  voiceAssignments?: Record<string, string>;
+  voiceAssignmentsBusy?: boolean;
   disabled?: boolean;
 }>();
 
-const emit = defineEmits<{ manageSchemas: [] }>();
+const emit = defineEmits<{
+  manageSchemas: [];
+  saveVoiceAssignments: [assignments: Record<string, string>];
+}>();
 const schemaId = defineModel<string>("schemaId", { required: true });
 const runGuidance = defineModel<Record<string, RunGuidanceEntry>>("runGuidance", {
   required: true,
@@ -53,6 +61,14 @@ const schemaSummary = computed(() => {
     role="tabpanel"
     aria-labelledby="corpus-config-tab-metadata"
   >
+    <AudioSpeakerAssignments
+      v-if="props.mediaKind === 'audio' && props.speakers?.length"
+      :speakers="props.speakers || []"
+      :assignments="props.voiceAssignments"
+      :disabled="props.disabled || props.voiceAssignmentsBusy"
+      @save="emit('saveVoiceAssignments', $event)"
+    />
+
     <details class="setup-section setup-disclosure" open>
       <summary>
         <span>
