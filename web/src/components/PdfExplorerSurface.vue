@@ -22,7 +22,7 @@ import "../domain/appBootstrap";
 import { toast } from "../composables/notifications";
 import { openMessageDialog } from "../composables/messageDialog";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { translateLegacyDom } from "../runtime/legacyCompat.js";
+import { translateLegacyDom } from "../domain/legacyCompat.js";
 import {
   cleanPdfPageWithLlm,
   draftPdfPageWithLlm,
