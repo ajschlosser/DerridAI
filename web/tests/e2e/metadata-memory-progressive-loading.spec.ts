@@ -191,3 +191,35 @@ test("a failed revalidation retains the last successful memory and is WCAG 2.2 A
   await expect(page.locator(".memory-read-error")).toHaveCount(0);
   await expect(page.locator(".memory-table")).toContainText("Levinas");
 });
+
+test("forbidden revalidation clears retained memory through a pending retry", async ({ page }) => {
+  await mockBackend(page, { role: "admin" });
+  let state: "ready" | "denied" | "retry" = "ready";
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/system/metadata-memory**", async (route) => {
+    if (state === "retry") await gate;
+    await route.fulfill({
+      status: state === "denied" ? 403 : 200,
+      contentType: "application/json",
+      body: JSON.stringify(state === "denied" ? { detail: "Forbidden" } : payload()),
+    });
+  });
+  await page.goto(APP + "/metadata-memory");
+  await expect(page.locator(".memory-table")).toContainText("Levinas");
+  await navigate(page, "/providers", "providers");
+  await expect(page.locator("#providers-page-title")).toBeVisible();
+  state = "denied";
+  await navigate(page, "/metadata-memory");
+  await expect(page.locator(".memory-read-error")).toBeVisible();
+  await expect(page.locator(".memory-table")).toHaveCount(0);
+  state = "retry";
+  await page.locator(".memory-read-error").getByRole("button", { name: "Retry" }).click();
+  await expect(page.locator(".memory-table-loading")).toBeVisible();
+  await expect(page.locator(".memory-table")).toHaveCount(0);
+  release();
+  await expect(page.locator(".memory-table")).toContainText("Levinas");
+  await expect(page.locator(".memory-read-error")).toHaveCount(0);
+});

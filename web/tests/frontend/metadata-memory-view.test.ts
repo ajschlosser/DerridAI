@@ -26,6 +26,7 @@ import { metadataMemoryApi, type MetadataMemoryPayload } from "../../src/api/met
 import { queryClient } from "../../src/realtime/dataQuery";
 import { dataKey } from "../../src/realtime/resourceKeys";
 import { useI18nStore } from "../../src/stores/i18n";
+import { useAuthStore } from "../../src/stores/auth";
 import MetadataMemoryView from "../../src/views/MetadataMemoryView.vue";
 
 const dictionary = {
@@ -199,6 +200,7 @@ describe("Metadata memory page", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    queryClient.setDefaultOptions({ queries: { retry: 1 } });
     mounted.splice(0).forEach((wrapper) => wrapper.unmount());
     queryClient.clear();
   });
@@ -406,4 +408,55 @@ describe("Metadata memory page", () => {
     expect(wrapper.text()).toContain("Levinas");
     expect(wrapper.text()).not.toContain("No precedents yet");
   });
+  it("clears retained precedents after a forbidden refresh", async () => {
+    const { wrapper } = await mountView();
+    await flushPromises();
+    queryClient.setDefaultOptions({ queries: { retry: false } });
+    vi.mocked(metadataMemoryApi.list).mockRejectedValue(
+      Object.assign(new Error("Forbidden"), { status: 403 }),
+    );
+    await queryClient.invalidateQueries({ queryKey: dataKey("metadata_exemplars") });
+    await flushPromises();
+    expect(wrapper.find(".memory-table").exists()).toBe(false);
+    expect(wrapper.get(".memory-read-error").text()).toContain("Forbidden");
+    const recovery = deferred<MetadataMemoryPayload>();
+    vi.mocked(metadataMemoryApi.list).mockReturnValue(recovery.promise);
+    await wrapper.get(".memory-read-error button").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".memory-table").exists()).toBe(false);
+    recovery.resolve(currentPayload());
+    await flushPromises();
+    expect(wrapper.text()).toContain("Levinas");
+  });
+
+  it.each(["identity", "role", "capabilities"])(
+    "clears old rows when %s changes",
+    async (change) => {
+      const auth = useAuthStore();
+      auth.user = {
+        id: 1,
+        username: "same",
+        role: "admin",
+        capabilities: ["metadata.read"],
+        active: true,
+        created_at: "",
+        updated_at: "",
+        login_count: 0,
+      };
+      const { wrapper } = await mountView();
+      await flushPromises();
+      const read = deferred<MetadataMemoryPayload>();
+      vi.mocked(metadataMemoryApi.list).mockReturnValue(read.promise);
+      if (change === "identity") auth.user = { ...auth.user, id: 2 };
+      else if (change === "role") auth.user.role = "researcher";
+      else auth.user.capabilities = [];
+      await flushPromises();
+      expect(wrapper.find(".memory-table").exists()).toBe(false);
+      expect(wrapper.text()).toContain("Loading metadata memory");
+      expect(metadataMemoryApi.list).toHaveBeenCalledTimes(2);
+      read.resolve(emptyPayload());
+      await flushPromises();
+      expect(wrapper.text()).toContain("No precedents yet");
+    },
+  );
 });
