@@ -37,7 +37,8 @@ function recordKey(record: ResponseFaqRecord, index: number) {
 function dateLabel(value?: string) {
   if (!value) return "";
   try {
-    return new Intl.DateTimeFormat(i18n.locale, { dateStyle: "medium" }).format(new Date(value));
+    return new Intl.DateTimeFormat(i18n.locale, {
+      timeZone: i18n.timeZone, dateStyle: "medium" }).format(new Date(value));
   } catch {
     return value;
   }
