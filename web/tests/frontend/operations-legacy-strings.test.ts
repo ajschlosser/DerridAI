@@ -19,7 +19,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import "../../src/runtime/runtimeBridge";
+import "../../src/domain/appBootstrap";
 import { operationPresenters } from "../../src/domain/sharedOperationPresenters";
 import { setTranslationDictionary } from "../../src/domain/sharedTranslate";
 import { state } from "../../src/domain/sharedUrlState";

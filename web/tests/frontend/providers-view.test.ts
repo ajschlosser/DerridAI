@@ -41,7 +41,7 @@ vi.mock("../../src/domain/sharedProviderProfiles", () => ({
   saveProviderProfilesForUi: (...args: unknown[]) => saved(...args),
   syncResearcherProviderProfiles: async () => undefined,
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({ notifyToast: vi.fn() }));
+vi.mock("../../src/domain/appBootstrap", () => ({ notifyToast: vi.fn() }));
 
 async function mountView(query: Record<string, string> = {}) {
   const pinia = createPinia();

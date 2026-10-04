@@ -19,7 +19,7 @@
 import { mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CommandSearch from "../../src/components/CommandSearch.vue";
-import "../../src/runtime/runtimeBridge";
+import "../../src/domain/appBootstrap";
 import { operationPresenters } from "../../src/domain/sharedOperationPresenters";
 
 const { jobProgressText } = operationPresenters;

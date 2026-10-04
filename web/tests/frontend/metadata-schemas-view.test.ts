@@ -25,7 +25,7 @@ vi.mock("../../src/domain/sharedProviderProfiles", () => ({
   getProviderProfilesForUi: () => [],
   getDefaultProviderProfileId: () => "",
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({
+vi.mock("../../src/domain/appBootstrap", () => ({
   getProviderProfilesForUi: () => [],
   getDefaultProviderProfileId: () => "",
 }));

@@ -56,7 +56,7 @@ const snapshot = {
 };
 
 vi.mock("../../src/domain/sharedRecordWorkspace", () => ({ sharedRecordWorkspace: {} }));
-vi.mock("../../src/runtime/runtime.js", () => ({}));
+vi.mock("../../src/domain/appBootstrap", () => ({}));
 vi.mock("../../src/domain/sharedAnnotations", () => ({
   annotationsWorkspace: {
     loadAnnotationsWorkspace: vi.fn(async () => snapshot),

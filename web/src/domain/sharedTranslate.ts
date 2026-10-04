@@ -20,7 +20,7 @@ import {
   setTranslationDictionary as setTranslationDictionaryCompat,
   tr as trCompat,
   trf as trfCompat,
-} from "../runtime/legacyCompat.js";
+} from "./legacyCompat.js";
 import { state } from "./sharedUrlState";
 
 // Translation lookups over the shared `translations` slice, usable without the legacy runtime. The runtime's own
