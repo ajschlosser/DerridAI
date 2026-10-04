@@ -135,6 +135,7 @@ For developers working inside a subsystem, the local maps are more specific than
 - [Corpus Builder components](web/src/components/corpus-builder/README.md)
 - [Pipeline Studio components](web/src/components/pipelines/README.md)
 - [Frontend test architecture](web/tests/README.md)
+
 ### Contributing by area
 
 | If you want to change…              | Start here                                                                                                                                                                                |
@@ -354,17 +355,17 @@ For browser coverage, Storybook, CI parity, and contribution rules, see [CONTRIB
 
 Start with the narrowest architectural map for the part you intend to change. This avoids learning the whole repository before making a focused contribution.
 
-| Change area | Start here | Important boundary / common trap |
-| --- | --- | --- |
-| Source ingestion and extraction | [Backend map](api/app/README.md), [ingestion safety](docs/INGESTION_VALIDATION.md) | Treat every source as inert untrusted data; preserve medium-specific locators and extractor provenance. |
-| Corpus Builder and review | [Backend application map](api/app/README.md), [frontend feature](web/src/features/corpus-builder/README.md), [components](web/src/components/corpus-builder/README.md) | `corpus_builder.py` and `PdfCorpusBuilder.vue` are orchestration/compatibility owners, not default homes for new domain logic. |
-| Metadata, assertions, and evidence | [Metadata schemas](docs/METADATA_SCHEMAS.md), [Metadata Memory](docs/METADATA_MEMORY.md), [project context](docs/PROJECT_CONTEXT.md) | Keep derivation, evaluation, authority, value state, revision, and evidence distinct; do not flatten them into one value or flag. |
-| Research, retrieval, and pipelines | [Pipeline backend](api/app/pipelines/README.md), [Pipeline UI](web/src/components/pipelines/README.md), [architecture](docs/ARCHITECTURE.md) | Retrieval scores and indexes are derived state. Exact evidence/support binding is deterministic scholarly state. |
-| REST, GraphQL, or realtime | [Backend map](api/README.md), [frontend API clients](web/src/api/README.md), [GraphQL](docs/GRAPHQL.md), [realtime](docs/REALTIME.md) | REST owns mutations; GraphQL is read-only; WebSocket messages signal change and must be followed by canonical reads. |
-| Frontend UI or state | [Frontend workspace](web/README.md), [application map](web/src/README.md), [domain layer](web/src/domain/README.md) | Keep user-facing strings in i18n, preserve WCAG behavior, and avoid new dependencies on the remaining compatibility runtime. |
-| Static research sites / SDK | [Frontend workspace](web/README.md), `web/site/`, `web/sdk/`, `api/app/site_publication.py` | Generated `api/app/site_assets/derridai-*.js` files are build outputs; change their TypeScript/Vue sources and regenerate. |
-| Tests and CI | [Backend tests](tests/README.md), [frontend tests](web/tests/README.md), [contributing](CONTRIBUTING.md) | Contract tests are intentionally separate from the broad backend run; characterization snapshots change only for understood behavior changes. |
-| cELF/specification or requirements | [SPECIFICATION.md](SPECIFICATION.md), [requirements](docs/requirements/README.md) | Preserve normative requirement identifiers and traceability; implementation detail must not silently redefine cELF semantics. |
+| Change area                        | Start here                                                                                                                                                             | Important boundary / common trap                                                                                                              |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source ingestion and extraction    | [Backend map](api/app/README.md), [ingestion safety](docs/INGESTION_VALIDATION.md)                                                                                     | Treat every source as inert untrusted data; preserve medium-specific locators and extractor provenance.                                       |
+| Corpus Builder and review          | [Backend application map](api/app/README.md), [frontend feature](web/src/features/corpus-builder/README.md), [components](web/src/components/corpus-builder/README.md) | `corpus_builder.py` and `PdfCorpusBuilder.vue` are orchestration/compatibility owners, not default homes for new domain logic.                |
+| Metadata, assertions, and evidence | [Metadata schemas](docs/METADATA_SCHEMAS.md), [Metadata Memory](docs/METADATA_MEMORY.md), [project context](docs/PROJECT_CONTEXT.md)                                   | Keep derivation, evaluation, authority, value state, revision, and evidence distinct; do not flatten them into one value or flag.             |
+| Research, retrieval, and pipelines | [Pipeline backend](api/app/pipelines/README.md), [Pipeline UI](web/src/components/pipelines/README.md), [architecture](docs/ARCHITECTURE.md)                           | Retrieval scores and indexes are derived state. Exact evidence/support binding is deterministic scholarly state.                              |
+| REST, GraphQL, or realtime         | [Backend map](api/README.md), [frontend API clients](web/src/api/README.md), [GraphQL](docs/GRAPHQL.md), [realtime](docs/REALTIME.md)                                  | REST owns mutations; GraphQL is read-only; WebSocket messages signal change and must be followed by canonical reads.                          |
+| Frontend UI or state               | [Frontend workspace](web/README.md), [application map](web/src/README.md), [domain layer](web/src/domain/README.md)                                                    | Keep user-facing strings in i18n, preserve WCAG behavior, and avoid new dependencies on the remaining compatibility runtime.                  |
+| Static research sites / SDK        | [Frontend workspace](web/README.md), `web/site/`, `web/sdk/`, `api/app/site_publication.py`                                                                            | Generated `api/app/site_assets/derridai-*.js` files are build outputs; change their TypeScript/Vue sources and regenerate.                    |
+| Tests and CI                       | [Backend tests](tests/README.md), [frontend tests](web/tests/README.md), [contributing](CONTRIBUTING.md)                                                               | Contract tests are intentionally separate from the broad backend run; characterization snapshots change only for understood behavior changes. |
+| cELF/specification or requirements | [SPECIFICATION.md](SPECIFICATION.md), [requirements](docs/requirements/README.md)                                                                                      | Preserve normative requirement identifiers and traceability; implementation detail must not silently redefine cELF semantics.                 |
 
 ## Repository map
 
