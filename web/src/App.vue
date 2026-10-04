@@ -74,7 +74,7 @@ import {
 } from "./domain/appNavigation";
 import { SETTINGS_SECTIONS, resolveSettingsSectionId } from "./domain/settings";
 import { viewConfig } from "./domain/runtimeConstants";
-import * as runtime from "./runtime/runtime.js";
+import * as runtime from "./domain/appBootstrap";
 import { navigateTo, repaintAfterLocationChange } from "./domain/sharedNavigation";
 import { viewFromPath } from "./domain/viewPaths";
 import { triggerImport } from "./domain/sharedFileLifecycle";
