@@ -26,6 +26,7 @@ type EvidenceItem = {
   recordId: string;
   work?: string;
   citation?: string;
+  documentAuthor?: string;
 };
 
 type PublicationRecord = {
@@ -54,6 +55,11 @@ const evidenceHeadingId = `${useId()}-published-evidence-heading`;
 
 function evidenceTargetId(evidenceId: string) {
   return `research-evidence-${String(evidenceId || "").replace(/[^A-Za-z0-9_-]+/g, "-")}`;
+}
+
+function evidenceHeading(item: EvidenceItem) {
+  const label = item.work || item.recordId;
+  return item.documentAuthor ? `${item.documentAuthor} · ${label}` : label;
 }
 
 function inlineCitation(item: EvidenceItem) {
@@ -134,7 +140,7 @@ const answerSegments = computed<AnswerSegment[]>(() => {
           >
             <span class="published-evidence-copy">
               <span class="sr-only">{{ openRecordLabel }}: </span>
-              <strong>[{{ item.evidenceId }}] {{ item.work || item.recordId }}</strong>
+              <strong>[{{ item.evidenceId }}] {{ evidenceHeading(item) }}</strong>
               <small>{{
                 item.citation ||
                 recordsById.get(String(item.recordId))?.full_citation ||
