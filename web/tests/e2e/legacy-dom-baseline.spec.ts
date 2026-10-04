@@ -791,7 +791,8 @@ const scenarios: Scenario[] = [
     },
   },
   // Works dialogs.
-  // Work metadata lookup is Vue-owned now; its component/composable tests cover that dialog.\n  {
+  // Work metadata lookup is Vue-owned now; its component/composable tests cover that dialog.
+  {
     name: "dialog-works-separate",
     contains: ["Separate works from a JSONL file"],
     nav: "Works",
