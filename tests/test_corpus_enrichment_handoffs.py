@@ -858,7 +858,10 @@ def test_scholarly_completeness_does_not_finish_unrun_enrichment(prepared, state
     assert rows[0]["metadata_enrichment_finished"] is False
     assert rows[1]["metadata_enrichment_state"] == "complete"
     assert rows[1]["metadata_enrichment_finished"] is True
-    assert repo.get_build(bid)["metadata_enriched_count"] == 1
+    build = repo.get_build(bid)
+    assert build["metadata_enriched_count"] == 1
+    assert build["metadata_tasks_completed"] == 3
+    assert build["metadata_tasks_queued"] == 3
 
 
 def test_scheduler_runs_schema_complete_record_until_automation_finishes(prepared, monkeypatch):
