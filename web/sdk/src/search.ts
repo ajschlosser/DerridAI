@@ -60,11 +60,13 @@ function dedupeRecords(records: PublicationRecord[]): {
 }
 
 function tokens(value: unknown, locale: string): string[] {
-  return (
+  const raw =
     String(value ?? "")
       .toLocaleLowerCase(locale)
-      .match(/[\p{L}\p{N}’'_-]+/gu) ?? []
-  );
+      .match(/[\p{L}\p{N}’'_-]+/gu) ?? [];
+  return raw
+    .map((token) => token.replace(/[’']s$/u, "").replace(/[’']$/u, ""))
+    .filter(Boolean);
 }
 
 function searchable(record: PublicationRecord): string {
