@@ -267,7 +267,12 @@ class PipelineManager:
             )
         validation = self.service.validate(pipeline)
         if not validation.valid:
-            raise ValueError("Cannot assign an invalid pipeline.")
+            messages = "; ".join(
+                issue.message for issue in validation.issues if issue.level == "error"
+            )
+            raise ValueError(
+                f"Cannot assign an invalid pipeline: {messages or 'validation failed.'}"
+            )
         if pipeline.status != "active":
             raise ValueError(
                 "Only active pipeline versions may be assigned system-wide. "
