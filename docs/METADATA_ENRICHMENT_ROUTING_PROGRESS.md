@@ -53,7 +53,8 @@ This is the authoritative resume point for the revised Pipeline Studio candidate
 - Ruff passed for changed Python files; targeted mypy passed for the five changed pipeline modules.
 - 47 focused frontend tests passed across workflow semantics, overrides, graph domain, and graph component suites. Frontend application/test typechecks and targeted ESLint passed. Prettier checked changed frontend/docs files.
 - Catalog exporter `--check` passed; regeneration was unnecessary because legacy serialized contracts are unchanged.
-- Full preflight and full API regression remain unverified in this fresh environment; required API dependencies are missing. Real-provider latency and reviewer-quality benchmarks have not run.
+- Full preflight was attempted. Backend lint/syntax, full frontend lint, frontend typechecks, and the production app build passed. Backend regression reported 865 passed, 48 failed, 2 skipped, and 115 collection errors; failures include missing HTTPX/FastAPI/JSON repair/Strawberry and incomplete test imports. None of the new graph/trait tests failed. Remaining broader failures are unresolved, not accepted as passing.
+- Preflight also could not find the mypy CLI (targeted module-based mypy passed) and could not validate the generated GraphQL artifact. The separately checked pipeline catalog is current. Real-provider latency and reviewer-quality benchmarks have not run.
 
 ## Integration
 
