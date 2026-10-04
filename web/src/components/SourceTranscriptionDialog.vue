@@ -23,6 +23,7 @@ import UiDialog from "./ui/UiDialog.vue";
 import UiButton from "./ui/UiButton.vue";
 import { hasPages, timeLabel } from "../domain/sourceMedia";
 import PdfEvidenceViewer from "./PdfEvidenceViewer.vue";
+import AudioSpeakerTimeline from "./corpus-builder/AudioSpeakerTimeline.vue";
 import { useI18nStore } from "../stores/i18n";
 import type { SourceBlock } from "../api/pdfCorpus";
 const props = withDefaults(
@@ -119,6 +120,12 @@ function seekToBlock(block: SourceBlock) {
           preload="metadata"
           :src="audioUrl"
           :aria-label="i18n.t('pdf_corpus.media_kind.audio')"
+        />
+        <AudioSpeakerTimeline
+          v-if="audioUrl"
+          :blocks="blocks"
+          :voice-assignments="voiceAssignments"
+          @seek="seekToBlock"
         />
         <fieldset v-if="audioUrl && voices.length" class="voice-assignments">
           <legend>{{ i18n.t("pdf_corpus.voice_assignments_title") }}</legend>
