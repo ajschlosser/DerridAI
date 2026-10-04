@@ -940,13 +940,13 @@ class PdfCorpusRepository:
             illegibility = 0.0
         digest = hashlib.sha256(data).hexdigest()
         # Default PDF uploads keep the historical content-addressed id.
+        extraction_contract = (
+            "source-extraction-v3-word-speakers"
+            if kind == "audio"
+            else "source-extraction-v2"
+        )
         identity = digest
         if kind != "pdf" or ocr_mode != "auto" or illegibility:
-            extraction_contract = (
-                "source-extraction-v3-word-speakers"
-                if kind == "audio"
-                else "source-extraction-v2"
-            )
             identity = hashlib.sha256(
                 f"{digest}|{kind}|{extraction_contract}|{ocr_mode}|{illegibility:.2f}".encode()
             ).hexdigest()
@@ -990,7 +990,10 @@ class PdfCorpusRepository:
                     blocks=blocks, catalog=catalog_metadata,
                 )
             checked_at = iso_now()
-            provenance = extraction_provenance(str(extracted.get("extractor") or kind))
+            provenance = extraction_provenance(
+                str(extracted.get("extractor") or kind),
+                contract=extraction_contract,
+            )
             if extracted.get("ocr_pages"):
                 provenance["tools"]["tesseract"] = executable_version("tesseract")
                 provenance["ocr_languages"] = ocr_languages
