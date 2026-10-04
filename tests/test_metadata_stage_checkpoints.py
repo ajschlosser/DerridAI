@@ -183,6 +183,88 @@ def test_metadata_stage_checkpoint_updates_only_target_record_and_counters(tmp_p
     assert after_complete["metadata_active_tasks"] == []
 
 
+def test_stale_terminal_checkpoint_clears_matching_active_task(tmp_path):
+    """A rejected stale result must not leave its old run visible as active.
+
+    Reviewer edits requeue the canonical Record while an older worker may still
+    finish against the previous revision. The scholarly result is discarded, but
+    the operational active-task projection must also retire that exact run and
+    restore its family to the queued counter.
+    """
+    from app.corpus_review_mutations import requeue_record_metadata
+
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _install_minimal_build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    record = {
+        "record_id": "r1",
+        "record_revision": 1,
+        "text": "Derrida discusses hospitality.",
+        "source_asset_id": "asset-elephant",
+        "source_block_ids": ["b1"],
+        "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}],
+        "metadata_stage_status": {
+            "discourse": "queued",
+            "quotation": "queued",
+            "indexing": "queued",
+        },
+        "metadata_execution_ledger": {},
+        "metadata_enrichment_state": "queued",
+    }
+    repo.save_records(build["build_id"], [record])
+    current = repo.get_build(build["build_id"])
+    current.update({
+        "metadata_tasks_total": 3,
+        "metadata_tasks_completed": 0,
+        "metadata_tasks_failed": 0,
+        "metadata_tasks_skipped": 0,
+        "metadata_tasks_running": 0,
+        "metadata_tasks_queued": 3,
+        "metadata_active_tasks": [],
+    })
+    repo.save_build(current)
+
+    running = json.loads(json.dumps(record))
+    running["metadata_stage_status"]["discourse"] = "running"
+    running["metadata_execution_ledger"]["discourse"] = {
+        "state": "running",
+        "started_at": "2026-01-01T00:00:00+00:00",
+    }
+    manager._persist_build_metadata_stage(
+        build["build_id"], 3, running, "discourse", "running", None,
+    )
+    after_running = repo.get_build(build["build_id"])
+    assert after_running["metadata_tasks_running"] == 1
+    assert after_running["metadata_tasks_queued"] == 2
+    assert len(after_running["metadata_active_tasks"]) == 1
+
+    live = repo.get_record(build["build_id"], "r1")
+    live["record_revision"] = 2
+    live["text"] = "Reviewer-corrected documentary text."
+    assert requeue_record_metadata(live, "Record text changed while enrichment was active.")
+    repo.update_record(build["build_id"], live)
+
+    stale_complete = json.loads(json.dumps(running))
+    stale_complete["metadata_stage_status"]["discourse"] = "complete"
+    stale_complete["metadata_execution_ledger"]["discourse"]["state"] = "complete"
+    stale_complete["metadata_execution_ledger"]["discourse"]["finished_at"] = (
+        "2026-01-01T00:00:10+00:00"
+    )
+    manager._persist_build_metadata_stage(
+        build["build_id"], 3, stale_complete, "discourse", "complete", None,
+    )
+
+    stored = repo.get_record(build["build_id"], "r1")
+    summary = repo.get_build(build["build_id"])
+    assert stored["record_revision"] == 2
+    assert stored["text"] == "Reviewer-corrected documentary text."
+    assert stored["metadata_stage_status"]["discourse"] == "queued"
+    assert summary["metadata_active_tasks"] == []
+    assert summary["metadata_tasks_running"] == 0
+    assert summary["metadata_tasks_queued"] == 3
+    assert summary["metadata_tasks_completed"] == 0
+
+
 def test_concurrent_family_checkpoint_does_not_regress_sibling_state(tmp_path):
     """A stale sibling snapshot may update only its own family checkpoint."""
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
