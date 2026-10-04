@@ -84,7 +84,7 @@ export const scenarios: Scenario[] = [
   {
     id: "languages-default",
     path: "/locale",
-    ready: (p) => p.getByRole("heading", { name: /Locale/ }),
+    ready: (p) => p.getByRole("heading", { name: "Locale", exact: true }),
   },
   {
     id: "languages-policy-needed",
