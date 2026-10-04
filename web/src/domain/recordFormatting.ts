@@ -54,7 +54,7 @@ export function highlightTerms(text: unknown, query: unknown): string {
         .trim()
         .split(/\s+/)
         // eslint-disable-next-line no-useless-escape -- SA-14: preserve legacy matching until dedicated text fixtures cover it.
-        .map((term) => term.replace(/^[\"'()\[\]{}]+|[\"'()\[\]{},.;:!?]+$/g, ""))
+        .map((term) => term.replace(/^["'()\[\]{}]+|["'()\[\]{},.;:!?]+$/g, ""))
         .filter((term) => term.length > 1),
     ),
   ].sort((left, right) => right.length - left.length);
