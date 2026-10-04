@@ -137,8 +137,10 @@ export function createCorpusAnalytics(deps: Deps) {
         .map(([work]) => work);
       if (!top.length) return { rows: [], series: [] };
 
-      const recordsByWork: Map<string, Loose[]> = new Map(
-        top.map((work: string) => [work, []] as [string, Loose[]]),
+      const recordsByWork: Map<string, ReviewStateHistory[]> = new Map(
+        top.map(
+          (work: string) => [work, []] as [string, ReviewStateHistory[]],
+        ),
       );
       for (const { record } of allRows()) {
         const work = String(record.work || "(Untitled work)");
