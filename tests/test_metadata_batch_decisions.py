@@ -37,6 +37,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 
 from app import corpus_builder as cb  # noqa: E402
 from app import corpus_review_actions as review_actions  # noqa: E402
+from app.field_assertions import (  # noqa: E402
+    create_model_assertion,
+    current_assertion_by_name,
+    project_record_assertions,
+)
 from test_review_decisions import install_repo, rec  # noqa: E402
 
 
@@ -77,6 +82,44 @@ def test_batch_decisions_resolve_disputes_and_record_value_decisions(tmp_path, m
     assert resolved["discourse_role"]["resolved_value"] == "exposition"
     assert {(item["field"], item["decision"]) for item in remembered} == {
         ("position_holder", "value"),
+        ("discourse_role", "value"),
+    }
+
+
+def test_batch_can_confirm_model_suggested_absence_and_values_in_one_revision(tmp_path, monkeypatch):
+    remembered: list = []
+    record = _disputed_record()
+    create_model_assertion(
+        record,
+        "position_holder",
+        None,
+        outcome="no_supported_value",
+        confidence=0.91,
+        model="test-model",
+    )
+    project_record_assertions(record)
+    repo, build, manager = _manager(tmp_path, record, monkeypatch, remembered)
+
+    result = manager.apply_metadata_decisions(
+        build["build_id"],
+        "r1",
+        {"position_holder": None, "discourse_role": "exposition"},
+        expected_revision=1,
+        confirmed_absent_fields=["position_holder"],
+    )
+
+    assert result["applied"] is True
+    assert sorted(result["changed_fields"]) == ["discourse_role", "position_holder"]
+    saved = repo.get_record(build["build_id"], "r1")
+    assert saved["record_revision"] == 2
+    absence = current_assertion_by_name(saved, "position_holder")
+    assert absence is not None
+    assert absence.derivation_method == "model"
+    assert absence.evaluation_status == "no_supported_value"
+    assert absence.authority_status == "human_confirmed"
+    assert absence.value_status == "confirmed_absent"
+    assert {(item["field"], item["decision"]) for item in remembered} == {
+        ("position_holder", "absence"),
         ("discourse_role", "value"),
     }
 

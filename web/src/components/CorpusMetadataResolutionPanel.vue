@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import {
+  isPlaceholderValue,
   metadataValueText,
   unwrapMetadataValue,
   usableListOptions,
@@ -39,6 +40,7 @@ import { assertionConflict, currentFieldAssertions } from "../domain/fieldAssert
 import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
 import { corpusBuilderApi, type MetadataPrecedents } from "../api/corpus";
 import { reviewableMetadataFieldNames } from "../features/corpus-builder/domain/recordMetadata";
+import { activeValueEditor } from "../domain/focus";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldPrecedents from "./CorpusFieldPrecedents.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
@@ -71,7 +73,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   resolve: [field: string, value: unknown];
   noValue: [field: string];
-  resolveMany: [changes: Record<string, unknown>];
+  resolveMany: [changes: Record<string, unknown>, confirmedAbsentFields: string[]];
   source: [field: string];
   resolveWithEvidence: [field: string, value: unknown, text: string];
   resolveWithHumanSource: [field: string, value: unknown, note: string];
@@ -407,23 +409,48 @@ const enrichmentPending = computed(() => ["queued", "running"].includes(enrichme
 const constraints = computed(() =>
   metadataConstraints({}, props.record as Record<string, unknown>),
 );
-const llmSuggestions = computed(() => {
-  const out: Record<string, unknown> = {};
+function modelDerived(info: Record<string, unknown>) {
+  return (
+    String(info.method || "").includes("llm") || String(info.derivation_method || "") === "model"
+  );
+}
+function modelSuggestedAbsence(info: Record<string, unknown>, value: unknown) {
+  const unwrapped = unwrapMetadataValue(value);
+  if (typeof unwrapped === "string" && isPlaceholderValue(unwrapped)) return true;
+  if (value !== null && value !== undefined && value !== "") return false;
+  return (
+    info.suggested_absence === true ||
+    info.evaluation_status === "no_supported_value" ||
+    info.reason_code === "no_supported_value" ||
+    info.reason_code === "required_no_supported_value"
+  );
+}
+const llmSuggestionBatch = computed(() => {
+  const changes: Record<string, unknown> = {};
+  const confirmedAbsentFields: string[] = [];
   for (const field of activeFields.value) {
     const info = status(field);
     const value = fieldValue(field);
-    if (
-      String(info.method || "").includes("llm") &&
-      unresolved.value.has(field) &&
-      value !== null &&
-      value !== undefined &&
-      value !== ""
-    )
-      out[field] = value;
+    if (!modelDerived(info) || !unresolved.value.has(field)) continue;
+    if (modelSuggestedAbsence(info, value)) {
+      changes[field] = null;
+      confirmedAbsentFields.push(field);
+    } else if (value !== null && value !== undefined && value !== "") {
+      changes[field] = value;
+    }
   }
-  return out;
+  return { changes, confirmedAbsentFields };
 });
+const llmSuggestions = computed(() => llmSuggestionBatch.value.changes);
 const llmSuggestionCount = computed(() => Object.keys(llmSuggestions.value).length);
+function resolveAllSuggestions() {
+  emit(
+    "resolveMany",
+    llmSuggestionBatch.value.changes,
+    llmSuggestionBatch.value.confirmedAbsentFields,
+  );
+  decided("");
+}
 type MemoryHint = { value: unknown; similarity: number; support: number; absence?: boolean };
 /** Less certain values earlier reviews attached to matching source spans (never pre-filled). */
 /** How many reviewed examples the model's prompt carried for this field (0 = the model worked alone). */
@@ -564,6 +591,14 @@ function decided(field: string) {
 function tryAdvance() {
   const from = advanceFrom.value;
   if (from === null || props.busy || props.savingField || props.batchSaving) return;
+  const activeEditor = activeValueEditor();
+  const activeField = activeEditor?.closest<HTMLElement>("[data-field]")?.dataset.field || "";
+  if (activeEditor && activeField !== from) {
+    // A delayed save/refresh may finish after the reviewer has already begun
+    // typing somewhere else. Their editor wins; never steal its focus.
+    advanceFrom.value = null;
+    return;
+  }
   advanceFrom.value = null;
   const order = decisionFields.value;
   const start = Math.max(0, order.indexOf(from));
@@ -676,10 +711,7 @@ function displayValue(field: string) {
           type="button"
           class="btn small primary"
           :disabled="busy || batchSaving"
-          @click="
-            emit('resolveMany', llmSuggestions);
-            decided('');
-          "
+          @click="resolveAllSuggestions"
         >
           {{ i18n.t("pdf_corpus.accept_all_suggestions") }}
         </button>

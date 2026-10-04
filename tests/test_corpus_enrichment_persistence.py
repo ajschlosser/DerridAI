@@ -253,21 +253,31 @@ def test_initial_family_checkpoint_decodes_and_writes_only_its_record(build_fact
     assert decoded == written == ["r1"]
 
 
-def test_initial_completion_preserves_actual_review_command_state(build_factory, monkeypatch):
+def test_initial_completion_requeues_after_actual_review_command(build_factory, monkeypatch):
     repo, build_id, manager = build_factory(count=1)
-    retained = {}
+    processed = []
 
     def enrich(record, *_args, **_kwargs):
-        manager.patch_metadata(build_id, "r1", {"speaker": "Reviewer speaker"}, expected_revision=1)
-        retained.update(repo.get_record(build_id, "r1"))
+        processed.append(record["record_revision"])
+        if len(processed) == 1:
+            manager.patch_metadata(
+                build_id,
+                "r1",
+                {"speaker": "Reviewer speaker"},
+                expected_revision=1,
+            )
         return _completed(record)
 
     monkeypatch.setattr(manager, "_enrich_record", enrich)
     result = manager._schedule_build_enrichment(build_id, {}, {}, repo.load_records(build_id))
-    assert result == [retained]
+
+    assert processed == [1, 2]
     assert result[0]["record_revision"] == 2
+    assert result[0]["speaker"] == "Reviewer speaker"
     assert current_assertion_by_name(result[0], "speaker").authority_status == "human_confirmed"
-    assert not repo.get_build(build_id).get("metadata_first_settled_at")
+    assert result[0]["metadata_complete"]
+    assert not result[0].get("metadata_requeue_requested")
+    assert repo.get_build(build_id).get("metadata_first_settled_at")
 
 
 def test_initial_completion_retries_requeued_current_documentary_context(build_factory, monkeypatch):

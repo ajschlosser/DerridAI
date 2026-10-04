@@ -33,6 +33,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
+from .metadata_values import is_placeholder
+
 # The specification lets a profile add namespaced derivation methods. ``derridai:memory`` is a value
 # suggested by reviewed precedents matched on the source span, ``derridai:nlp`` a statistical tagger's
 # judgement, ``derridai:computed`` an exact pattern or arithmetic. None of them is authoritative.
@@ -661,10 +663,20 @@ def override_assertion(record: dict[str, Any], field_name: str, value: Any, *, s
 
 
 def confirm_absence(record: dict[str, Any], field_name: str, *, schema: Any | None = None, prior: FieldAssertion | None = None, actor: str | None = None, reason: str = "") -> FieldAssertion:
+    legacy_model_placeholder = bool(
+        prior
+        and prior.derivation_method == "model"
+        and is_placeholder(prior.value)
+    )
     confirms_prior_absence = bool(
         prior
-        and prior.evaluation_status == "no_supported_value"
-        and prior.value_status in {"unresolved", "confirmed_absent"}
+        and (
+            (
+                prior.evaluation_status == "no_supported_value"
+                and prior.value_status in {"unresolved", "confirmed_absent"}
+            )
+            or legacy_model_placeholder
+        )
     )
     derivation: DerivationMethod = (
         prior.derivation_method if prior and confirms_prior_absence else "human"

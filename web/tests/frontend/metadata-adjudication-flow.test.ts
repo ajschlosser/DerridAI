@@ -132,6 +132,57 @@ describe("adjudicating a record's metadata", () => {
     wrapper.unmount();
   });
 
+  it("never steals focus from another field the reviewer started editing while a save settles", async () => {
+    const wrapper: ReturnType<typeof mountPanel> = mountPanel({
+      onResolve: (field: string) => void wrapper.setProps({ savingField: field }),
+    });
+    const [first, second] = cards(wrapper);
+    if (!first || !second) throw new Error("At least two pending fields are required.");
+
+    await wrapper.get(`[data-field="${first}"] [data-primary-action]`).trigger("click");
+    await nextTick();
+    const editor = wrapper.get('[data-field="speaker"] textarea');
+    (editor.element as HTMLTextAreaElement).focus();
+    await editor.setValue("Reviewer is typing here");
+    expect(document.activeElement).toBe(editor.element);
+
+    await wrapper.setProps({ savingField: "" });
+    await nextTick();
+    await nextTick();
+
+    expect(document.activeElement).toBe(editor.element);
+    expect(document.activeElement).not.toBe(
+      wrapper.get(`[data-field="${second}"] [data-primary-action]`).element,
+    );
+    wrapper.unmount();
+  });
+
+  it("includes model-suggested absences when accepting all LLM suggestions", async () => {
+    const wrapper = mountPanel({
+      record: record({
+        stance: "no value",
+        metadata_review_fields: ["stance", "speaker"],
+        metadata_field_status: {
+          stance: {
+            status: "unresolved",
+            method: "llm",
+            derivation_method: "model",
+          },
+          speaker: pending,
+        },
+      }),
+    });
+
+    const saveAll = wrapper.get(".suggestion-toolbar button");
+    await saveAll.trigger("click");
+
+    expect(wrapper.emitted("resolveMany")?.[0]).toEqual([
+      { stance: null, speaker: "Jacques Derrida" },
+      ["stance"],
+    ]);
+    wrapper.unmount();
+  });
+
   it("focuses No value when the next field has no proposal and advances after that decision", async () => {
     const wrapper = mountPanel();
     const [first, second, third] = cards(wrapper);
@@ -144,7 +195,7 @@ describe("adjudicating a record's metadata", () => {
     expect(document.activeElement).toBe(noValue.element);
     expect(noValue.attributes("data-primary-action")).toBeDefined();
     expect(wrapper.emitted("noValue")).toBeUndefined();
-    await noValue.trigger("click");
+    await noValue.trigger("keydown", { key: "Enter" });
     await nextTick();
     await nextTick();
     expect(wrapper.emitted("noValue")).toEqual([[second]]);
@@ -240,6 +291,56 @@ describe("a field's decision controls", () => {
     expect(wrapper.get("[data-primary-action]").text()).toMatch(/^Confirm/);
     await wrapper.get("select").setValue("reject");
     expect(wrapper.get("[data-primary-action]").text()).toMatch(/^Save/);
+    wrapper.unmount();
+  });
+
+  it("treats a literal model placeholder 'no value' as an absence decision", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "speaker",
+        value: "no value",
+        control: "text",
+        open: true,
+        status: { status: "unresolved", method: "llm", derivation_method: "model" },
+      },
+    });
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("");
+    expect(wrapper.get("[data-primary-action]").attributes("data-no-value-action")).toBeDefined();
+
+    await wrapper.get("[data-no-value-action]").trigger("keydown", { key: "Enter" });
+
+    expect(wrapper.emitted("noValue")).toEqual([[]]);
+    expect(wrapper.emitted("save")).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it("keeps an active typed draft mounted and focused through asynchronous field settlement", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      attachTo: document.body,
+      props: {
+        field: "speaker",
+        value: "Jacques Derrida",
+        control: "text",
+        open: true,
+        status: { status: "unresolved", method: "llm" },
+      },
+    });
+    const editor = wrapper.get("textarea");
+    (editor.element as HTMLTextAreaElement).focus();
+    await editor.setValue("Reviewer draft");
+    expect(document.activeElement).toBe(editor.element);
+
+    await wrapper.setProps({
+      open: false,
+      value: "Background refresh",
+      status: { status: "human_confirmed", method: "human" },
+    });
+    await nextTick();
+
+    const stillEditing = wrapper.get("textarea");
+    expect(stillEditing.element).toBe(editor.element);
+    expect((stillEditing.element as HTMLTextAreaElement).value).toBe("Reviewer draft");
+    expect(document.activeElement).toBe(editor.element);
     wrapper.unmount();
   });
 

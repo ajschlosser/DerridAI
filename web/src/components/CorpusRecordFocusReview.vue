@@ -171,7 +171,7 @@ const emit = defineEmits<{
   "update:inspectorTab": [value: InspectorTab];
   openTextCleanup: [];
   resolveMetadata: [field: string, value: unknown];
-  resolveMetadataMany: [changes: Record<string, unknown>];
+  resolveMetadataMany: [changes: Record<string, unknown>, confirmedAbsentFields: string[]];
   confirmNoMetadataValue: [field: string];
   metadataDirty: [dirty: boolean];
   metadataComplete: [];
@@ -559,7 +559,10 @@ watch(
               :blocking-fields="blockingFields"
               @complete="handleMetadataComplete"
               @resolve="(field, value) => emit('resolveMetadata', field, value)"
-              @resolve-many="(changes) => emit('resolveMetadataMany', changes)"
+              @resolve-many="
+                (changes, confirmedAbsentFields) =>
+                  emit('resolveMetadataMany', changes, confirmedAbsentFields)
+              "
               @no-value="(field) => emit('confirmNoMetadataValue', field)"
               @dirty="(value) => emit('metadataDirty', value)"
               @source="openFieldEvidence($event)"

@@ -1210,7 +1210,11 @@ def decide_pdf_corpus_record_metadata_batch(
 ) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.apply_metadata_decisions(
-            build_id, record_id, body.changes, body.expected_revision
+            build_id,
+            record_id,
+            body.changes,
+            body.expected_revision,
+            body.confirmed_absent_fields,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc

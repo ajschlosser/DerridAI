@@ -120,6 +120,7 @@ def test_human_text_correction_reopens_previously_accepted_record(tmp_path: Path
         "accepted": True,
         "rejected": False,
         "needs_review": False,
+        "human_touched_fields": ["__review__"],
     }
     repo, build = install_review_build(tmp_path, record)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
@@ -128,6 +129,8 @@ def test_human_text_correction_reopens_previously_accepted_record(tmp_path: Path
     assert updated["accepted"] is False
     assert updated["rejected"] is False
     assert updated["needs_review"] is True
+    assert "__review__" not in updated["human_touched_fields"]
+    assert "__text__" in updated["human_touched_fields"]
     assert "reviewed record text changed" in updated["review_reason"].lower()
     assert updated["review_events"][-1]["event"] == "text_corrected"
 
@@ -247,6 +250,136 @@ def test_human_requeue_places_record_at_front_of_active_enrichment_queue(tmp_pat
     updated = repo.get_build(build["build_id"])
     assert updated["metadata_priority_record_ids"] == ["r1", "r2"]
     assert updated["metadata_review_feedback"][-1]["source"] == "human_requeue"
+
+
+def test_text_edit_during_active_enrichment_forces_fresh_llm_pass(tmp_path: Path):
+    """A queued Record edited after scheduling is reprocessed from its reviewed text."""
+    repo, build = install_review_build(
+        tmp_path,
+        {
+            "text": "Original queued text.",
+            "metadata_enrichment_state": "queued",
+            "metadata_stage_status": {
+                "discourse": "queued",
+                "quotation": "queued",
+                "indexing": "queued",
+            },
+        },
+    )
+    active = repo.get_build(build["build_id"])
+    active.update(
+        {
+            "status": "running",
+            "stage": "enriching",
+            "metadata_priority_record_ids": [],
+        }
+    )
+    repo.save_build(active)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+
+    updated = manager.patch_record_text(
+        build["build_id"],
+        "r1",
+        "Reviewed text that the model must see.",
+        expected_revision=1,
+    )
+
+    assert updated["text"] == "Reviewed text that the model must see."
+    assert updated["metadata_requeue_requested"] is True
+    assert updated["metadata_enrichment_state"] == "stale"
+    assert updated["metadata_stage_status"] == {
+        "discourse": "queued",
+        "quotation": "queued",
+        "indexing": "queued",
+    }
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"][0] == "r1"
+
+
+def test_absence_decision_during_active_enrichment_forces_fresh_llm_pass(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """Confirming absence cannot invalidate an in-flight worker without a replacement pass."""
+    repo, build = install_review_build(
+        tmp_path,
+        {
+            "text": "Queued text.",
+            "metadata_enrichment_state": "queued",
+            "metadata_stage_status": {
+                "discourse": "queued",
+                "quotation": "queued",
+                "indexing": "queued",
+            },
+        },
+    )
+    active = repo.get_build(build["build_id"])
+    active.update(
+        {
+            "status": "running",
+            "stage": "enriching",
+            "metadata_priority_record_ids": [],
+        }
+    )
+    repo.save_build(active)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", lambda _build_id: None)
+
+    result = manager.metadata_decision(
+        build["build_id"],
+        "r1",
+        "speaker",
+        None,
+        expected_revision=1,
+        confirm_no_supported_value=True,
+    )
+
+    updated = result["record"]
+    assert updated["metadata_requeue_requested"] is True
+    assert updated["metadata_enrichment_state"] == "stale"
+    assert updated["metadata_field_status"]["speaker"]["status"] == "confirmed_absent"
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"][0] == "r1"
+
+
+def test_metadata_edit_during_active_enrichment_forces_fresh_llm_pass(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """A human field decision cannot strand the rest of a queued Record."""
+    repo, build = install_review_build(
+        tmp_path,
+        {
+            "text": "Queued text.",
+            "metadata_enrichment_state": "queued",
+            "metadata_stage_status": {
+                "discourse": "queued",
+                "quotation": "queued",
+                "indexing": "queued",
+            },
+        },
+    )
+    active = repo.get_build(build["build_id"])
+    active.update(
+        {
+            "status": "running",
+            "stage": "enriching",
+            "metadata_priority_record_ids": [],
+        }
+    )
+    repo.save_build(active)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", lambda _build_id: None)
+
+    updated = manager.patch_metadata(
+        build["build_id"],
+        "r1",
+        {"speaker": "Reviewer supplied speaker"},
+        expected_revision=1,
+    )
+
+    assert updated["speaker"] == "Reviewer supplied speaker"
+    assert updated["metadata_requeue_requested"] is True
+    assert updated["metadata_enrichment_state"] == "stale"
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"][0] == "r1"
 
 
 def test_dismissing_touchup_proposal_preserves_source_and_reviewed_text(tmp_path: Path):

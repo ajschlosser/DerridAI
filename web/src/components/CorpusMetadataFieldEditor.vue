@@ -25,6 +25,7 @@ import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.
 import UiCombobox from "./ui/UiCombobox.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
+import { activeValueEditor } from "../domain/focus";
 import {
   groupOptionsBySuggestion,
   matchOption,
@@ -33,6 +34,7 @@ import {
 import { useRecordTextSelection } from "../composables/useRecordTextSelection";
 import CorpusFieldSelectionPreview from "./CorpusFieldSelectionPreview.vue";
 import {
+  isPlaceholderValue,
   metadataValueText,
   unwrapMetadataValue,
   usableListOptions,
@@ -81,6 +83,7 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const labelId = `${useId()}-label`;
+const root = ref<HTMLElement | null>(null);
 const editing = ref(Boolean(props.open));
 const dirty = ref(false);
 const draft = ref<unknown>("");
@@ -134,9 +137,10 @@ function displayTimestamp(value: unknown) {
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
 }
-const modelSuggestion = computed(() =>
-  suggestedValues(props.status, props.value, isLlm.value, hasValue),
-);
+const modelSuggestion = computed(() => {
+  const values = suggestedValues(props.status, props.value, isLlm.value, hasValue);
+  return values.filter((value) => !isPlaceholderValue(value));
+});
 const optionGroups = computed(() =>
   groupOptionsBySuggestion(props.options || [], modelSuggestion.value),
 );
@@ -155,31 +159,41 @@ const hasValue = (value: unknown) =>
 const leakedAssessment = (value: unknown) =>
   typeof value === "string" &&
   /^\s*confidence\s*:\s*(?:null|[\d.]+)\s*,\s*needs_review\s*:/i.test(value);
+const modelPlaceholder = (value: unknown) => {
+  const unwrapped = unwrapMetadataValue(value);
+  return isLlm.value && typeof unwrapped === "string" && isPlaceholderValue(unwrapped);
+};
 const resolvedValue = computed(() => {
   const status = props.status || {};
   if (
     status.reason_code === "deterministic_llm_disagreement" &&
     status.prefilled_candidate === "llm" &&
-    hasValue(status.llm_value)
+    hasValue(status.llm_value) &&
+    !modelPlaceholder(status.llm_value)
   )
     return normalizeMetadataFieldValue(props.field, status.llm_value);
   if (status.reason_code === "human_llm_disagreement" && hasValue(status.prefilled_value))
     return normalizeMetadataFieldValue(props.field, status.prefilled_value);
   if (
     hasValue(props.value) &&
-    !(props.control === "multi-combobox" && leakedAssessment(props.value))
+    !(props.control === "multi-combobox" && leakedAssessment(props.value)) &&
+    !modelPlaceholder(props.value)
   )
     return normalizeMetadataFieldValue(props.field, withoutTransportItems(props.value));
   // Backward compatibility for records created before populated-but-unverified
   // proposals were written into the record itself. Confidence affects review
   // state, not whether the reviewer may see the proposed value.
-  if (!status.blind && hasValue(status.proposed_value))
+  if (!status.blind && hasValue(status.proposed_value) && !modelPlaceholder(status.proposed_value))
     return normalizeMetadataFieldValue(props.field, status.proposed_value);
   if (hasValue(props.constraint?.value))
     return normalizeMetadataFieldValue(props.field, props.constraint?.value);
   return normalizeMetadataFieldValue(
     props.field,
-    props.control === "multi-combobox" && leakedAssessment(props.value) ? [] : (props.value ?? ""),
+    modelPlaceholder(props.value)
+      ? ""
+      : props.control === "multi-combobox" && leakedAssessment(props.value)
+        ? []
+        : (props.value ?? ""),
   );
 });
 /**
@@ -189,9 +203,13 @@ const resolvedValue = computed(() => {
  */
 const suggestedAbsence = computed(() => {
   const status = props.status || {};
+  const placeholderReturned = [props.value, status.proposed_value, status.llm_value].some(
+    modelPlaceholder,
+  );
   return (
     !hasValue(resolvedValue.value) &&
-    (status.suggested_absence === true ||
+    (placeholderReturned ||
+      status.suggested_absence === true ||
       status.evaluation_status === "no_supported_value" ||
       status.reason_code === "no_supported_value" ||
       status.reason_code === "required_no_supported_value")
@@ -219,6 +237,10 @@ function editableValue() {
   if (text) return matchOption(options, text) ?? text;
   return props.status?.blind ? "" : (suggestedOptions.value[0] ?? "");
 }
+function activeEditorInside() {
+  const active = activeValueEditor();
+  return Boolean(active && root.value?.contains(active));
+}
 watch(
   () => [
     props.field,
@@ -230,7 +252,7 @@ watch(
     props.options,
   ],
   () => {
-    if (!dirty.value) draft.value = editableValue();
+    if (!dirty.value && !activeEditorInside()) draft.value = editableValue();
   },
   { immediate: true, deep: true },
 );
@@ -239,14 +261,21 @@ watch(
   (value) => {
     if (value) {
       editing.value = true;
-      dirty.value = false;
-      draft.value = editableValue();
-    } else if (!dirty.value) {
+      if (!activeEditorInside()) {
+        dirty.value = false;
+        draft.value = editableValue();
+      }
+    } else if (!dirty.value && !activeEditorInside()) {
       // A pending field that has just been decided folds back into its one-line summary.
       editing.value = false;
     }
   },
 );
+function onFocusout(event: FocusEvent) {
+  const next = event.relatedTarget;
+  if (next instanceof Node && root.value?.contains(next)) return;
+  if (!props.open && !dirty.value) editing.value = false;
+}
 
 watch(
   () => props.prefill?.key,
@@ -517,6 +546,7 @@ const traceRows = computed(() => {
 
 <template>
   <article
+    ref="root"
     class="metadata-field"
     :data-field="field"
     :data-mode="editing ? 'edit' : 'view'"
@@ -527,6 +557,7 @@ const traceRows = computed(() => {
     :data-review-state="open ? 'pending' : 'settled'"
     :aria-labelledby="labelId"
     @keydown="onKeydown"
+    @focusout="onFocusout"
   >
     <!-- A decided field is one line: what it is, its value, where the value came from. -->
     <div v-if="!editing" class="field-row">
@@ -800,6 +831,7 @@ const traceRows = computed(() => {
             data-no-value-action
             :data-primary-action="!hasDraftValue ? '' : undefined"
             :disabled="busy || saving"
+            @keydown.enter.prevent.stop="emit('noValue')"
             @click="emit('noValue')"
           >
             {{ i18n.t("pdf_corpus.no_value_short") }}

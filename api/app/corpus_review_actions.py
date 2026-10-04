@@ -99,6 +99,36 @@ from .semantic_identity_store import (
 from .system_store import system_store
 
 
+def _metadata_enrichment_active(
+    build: dict[str, Any],
+    record: dict[str, Any] | None = None,
+) -> bool:
+    """Whether reviewer edits can race or invalidate pending metadata work.
+
+    The build-level operation is authoritative when it is available. Record-level
+    queue/running state is also treated as active because review can occur after the
+    scheduler has snapshotted a Record but before the build summary reflects that
+    handoff. In either case, a reviewer edit must force the current revision back
+    through enrichment instead of relying on a stale worker snapshot.
+    """
+    stage = str(build.get("stage") or "")
+    build_active = str(build.get("status") or "") in {"queued", "running"} and (
+        stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun"}
+        or stage.startswith("metadata_enrichment:")
+    )
+    if build_active or record is None:
+        return build_active
+    state = str(record.get("metadata_enrichment_state") or "")
+    stage_status = (
+        record.get("metadata_stage_status")
+        if isinstance(record.get("metadata_stage_status"), dict)
+        else {}
+    )
+    return state in {"queued", "running", "stale"} or any(
+        str(value) in {"queued", "running"} for value in stage_status.values()
+    )
+
+
 def _serialize_record_mutation(method):
     """Serialize manager-level read/modify/write record transactions.
 
@@ -686,6 +716,11 @@ class ReviewActionsMixin:
         target["text_reviewed_at"] = iso_now()
         target["text_review_source"] = "human"
         _mark_human_touch(target, ["__text__"])
+        target["human_touched_fields"] = [
+            field
+            for field in (target.get("human_touched_fields") or [])
+            if str(field) != "__review__"
+        ]
         # Any text correction invalidates a prior record-level acceptance. The
         # reviewer may accept again after deciding whether selective metadata
         # reruns are warranted; automatic metadata is never silently treated as
@@ -706,8 +741,24 @@ class ReviewActionsMixin:
         reasons = list(target.get("metadata_attention_reasons") or [])
         reasons.append("Reviewed text changed; rerun only the metadata families that need reconsideration.")
         target["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
+        build = self.repo.get_build(build_id)
+        enrichment_active = _metadata_enrichment_active(build, target)
+        if enrichment_active:
+            # A worker may already hold the pre-edit Record snapshot. Its stale
+            # completion will be rejected by the source/revision guard; this
+            # marker guarantees a fresh pass against the reviewed text instead
+            # of leaving the Record stranded in a queued/skipped state.
+            requeue_record_metadata(
+                target,
+                "Reviewed text changed during metadata enrichment; rerun against the current text.",
+                force=True,
+            )
         target["record_revision"] = current_revision + 1
         self._rewrite_targeted_record(build_id, target, previous_record)
+        if enrichment_active:
+            latest_build = self.repo.get_build(build_id)
+            _prepend_metadata_priority(latest_build, record_id)
+            self.repo.save_build(latest_build)
         _decorate_review_state(target)
         return target
 
@@ -718,13 +769,26 @@ class ReviewActionsMixin:
         return record
 
     def _patch_metadata(
-        self, build_id: str, record_id: str, changes: dict[str, Any], expected_revision: int | None = None
+        self,
+        build_id: str,
+        record_id: str,
+        changes: dict[str, Any],
+        expected_revision: int | None = None,
+        *,
+        confirmed_absent_fields: set[str] | None = None,
     ) -> tuple[dict[str, Any], set[str]]:
         """Apply reviewer metadata edits; return the persisted record and the fields left unapplied.
 
         A field owed a blind second opinion is compared with the first answer and left
         unchanged, so callers must not treat it as decided.
         """
+        confirmed_absent_fields = set(confirmed_absent_fields or ())
+        unknown_absences = sorted(confirmed_absent_fields - set(changes))
+        if unknown_absences:
+            raise ValueError(
+                "Confirmed-absence fields must also appear in the metadata decision batch: "
+                + ", ".join(unknown_absences)
+            )
         forbidden = sorted(set(changes) - self._editable_fields(build_id))
         if forbidden:
             raise ValueError(
@@ -733,7 +797,11 @@ class ReviewActionsMixin:
             )
         # Validate the editable interpretive schema before modifying the persisted record.
         edit = self._edit_model(build_id)
-        schema_input = {key: value for key, value in changes.items() if key in edit.model_fields}
+        schema_input = {
+            key: value
+            for key, value in changes.items()
+            if key in edit.model_fields and key not in confirmed_absent_fields
+        }
         try:
             edit.model_validate(schema_input)
         except ValidationError as exc:
@@ -755,6 +823,32 @@ class ReviewActionsMixin:
             prior_status = dict(status.get(key) or {}) if isinstance(status.get(key), dict) else {}
             prior_value = target.get(key)
             prior_assertion = current_assertion_by_name(target, key)
+            if key in confirmed_absent_fields:
+                self._record_human_llm_feedback(
+                    build_id,
+                    key,
+                    prior_value,
+                    None,
+                    prior_status,
+                    target,
+                )
+                confirm_absence(
+                    target,
+                    key,
+                    schema=schema,
+                    prior=prior_assertion,
+                    reason="Reviewer confirmed that no supported value applies to this record.",
+                )
+                project_record_assertions(target)
+                decision_log.append(
+                    {
+                        "field": key,
+                        "value": None,
+                        "at": iso_now(),
+                        "source": "confirmed_absent",
+                    }
+                )
+                continue
             owed = _second_opinion_owed(target, key)
             if owed:
                 # This is the independent second opinion, not an edit: it is compared with the first answer and the record is left alone.
@@ -815,6 +909,17 @@ class ReviewActionsMixin:
         target["metadata_decisions"] = decision_log[-100:]
         target["metadata_reviewed_at"] = iso_now()
         _mark_human_touch(target, [key for key in changes if key not in skipped])
+        build = self.repo.get_build(build_id)
+        review_frozen = "__review__" in {
+            str(field) for field in (target.get("human_touched_fields") or [])
+        }
+        enrichment_active = _metadata_enrichment_active(build, target) and not review_frozen
+        if enrichment_active and any(key not in skipped for key in changes):
+            requeue_record_metadata(
+                target,
+                "Reviewer metadata changed during automatic enrichment; rerun against current human authority.",
+                force=True,
+            )
         profile = self._profile_for(build_id)
         # A due blind recheck reopens an *earlier* decision, so scheduled records
         # other than the target must be considered and persisted when they change.
@@ -832,6 +937,10 @@ class ReviewActionsMixin:
         _settle_enrichment_review_reason(target)
         target["record_revision"] = current_revision + 1
         self._rewrite_targeted_record(build_id, target, previous_record)
+        if enrichment_active and any(key not in skipped for key in changes):
+            latest_build = self.repo.get_build(build_id)
+            _prepend_metadata_priority(latest_build, record_id)
+            self.repo.save_build(latest_build)
         # Return the record as persisted after authoritative state derivation.
         persisted = target
         schema = self._schema_for(build_id)
@@ -842,6 +951,7 @@ class ReviewActionsMixin:
                     schema=schema,
                     field_name=key,
                     value=value,
+                    decision_kind="absence" if key in confirmed_absent_fields else "value",
                     scope_id=build_id,
                 )
         if any(key not in skipped for key in changes):
@@ -1119,10 +1229,27 @@ class ReviewActionsMixin:
             project_record_assertions(target)
             target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"confirmed_absent"})
             target["metadata_decisions"] = target["metadata_decisions"][-100:]
-            target["metadata_reviewed_at"] = iso_now(); _mark_human_touch(target,[field])
+            target["metadata_reviewed_at"] = iso_now()
+            _mark_human_touch(target, [field])
+            build = self.repo.get_build(build_id)
+            review_frozen = "__review__" in {
+                str(touched) for touched in (target.get("human_touched_fields") or [])
+            }
+            enrichment_active = _metadata_enrichment_active(build, target) and not review_frozen
+            if enrichment_active:
+                requeue_record_metadata(
+                    target,
+                    "Reviewer confirmed metadata absence during automatic enrichment; rerun against current human authority.",
+                    force=True,
+                )
             profile = self._profile_for(build_id)
-            _sync_record_metadata_state(target, profile); target["record_revision"] = current_revision + 1
+            _sync_record_metadata_state(target, profile)
+            target["record_revision"] = current_revision + 1
             self._rewrite_targeted_record(build_id, target, previous_record)
+            if enrichment_active:
+                latest_build = self.repo.get_build(build_id)
+                _prepend_metadata_priority(latest_build, record_id)
+                self.repo.save_build(latest_build)
             record = target
             persist_record_decision(
                 record=record,
@@ -1160,6 +1287,7 @@ class ReviewActionsMixin:
         record_id: str,
         decisions: dict[str, Any],
         expected_revision: int | None = None,
+        confirmed_absent_fields: list[str] | None = None,
     ) -> dict[str, Any]:
         """Persist several reviewer value decisions on one record as one revision.
 
@@ -1170,13 +1298,39 @@ class ReviewActionsMixin:
         """
         if not decisions:
             raise ValueError("Choose at least one metadata decision to save.")
+        absence_fields = set(map(str, confirmed_absent_fields or []))
+        missing_absences = sorted(absence_fields - set(decisions))
+        if missing_absences:
+            raise ValueError(
+                "Confirmed-absence fields must also appear in the metadata decision batch: "
+                + ", ".join(missing_absences)
+            )
+        non_null_absences = sorted(
+            name for name in absence_fields if decisions.get(name) is not None
+        )
+        if non_null_absences:
+            raise ValueError(
+                "Confirmed-absence decisions must use null values: "
+                + ", ".join(non_null_absences)
+            )
         self._validate_decision_fields(build_id, decisions)
-        _record, skipped = self._patch_metadata(build_id, record_id, decisions, expected_revision)
+        _record, skipped = self._patch_metadata(
+            build_id,
+            record_id,
+            decisions,
+            expected_revision,
+            confirmed_absent_fields=absence_fields,
+        )
         applied = {name: value for name, value in decisions.items() if name not in skipped}
         if not applied:
             return self._metadata_decision_result(build_id, record_id, applied=[], deferred=sorted(skipped))
         return self._finish_metadata_decisions(
-            build_id, record_id, applied, decision="value", deferred=sorted(skipped)
+            build_id,
+            record_id,
+            applied,
+            decision="value",
+            deferred=sorted(skipped),
+            absence_fields=absence_fields - skipped,
         )
 
     def _validate_decision_fields(self, build_id: str, fields: Any) -> None:
@@ -1193,13 +1347,24 @@ class ReviewActionsMixin:
         *,
         decision: str,
         deferred: list[str] | None = None,
+        absence_fields: set[str] | None = None,
     ) -> dict[str, Any]:
         """Settle disputes and adjudication memory for decisions that are already persisted."""
         current_record = self.repo.get_record(build_id, record_id, include_queue_version=True)
         previous_record = json.loads(json.dumps(current_record))
         warnings: list[str] = []
-        if decision == "value":
-            warnings.extend(self._cascade_evidence_for_accepted(build_id, current_record, decisions))
+        absence_fields = set(absence_fields or (decisions if decision == "absence" else ()))
+        value_decisions = {
+            name: value for name, value in decisions.items() if name not in absence_fields
+        }
+        if value_decisions:
+            warnings.extend(
+                self._cascade_evidence_for_accepted(
+                    build_id,
+                    current_record,
+                    value_decisions,
+                )
+            )
         disputes = current_record.get("metadata_disputes") if isinstance(current_record.get("metadata_disputes"), list) else []
         for dispute in disputes:
             name = dispute.get("field") if isinstance(dispute, dict) else None
@@ -1228,7 +1393,7 @@ class ReviewActionsMixin:
                     field=name,
                     value=value,
                     schema_version=str(build.get("schema_version") or ""),
-                    decision=decision,
+                    decision="absence" if name in absence_fields else decision,
                     field_id=schema.field_id(name),
                     value_key=_identity_key_for(schema, name, current_record, review_registry(self.repo, build_id, current_record, schema)),
                 )

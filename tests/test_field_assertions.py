@@ -295,6 +295,29 @@ def test_human_absence_supersedes_model_candidate_without_claiming_model_absence
 
 
 
+def test_confirmed_absence_repairs_legacy_model_placeholder_without_losing_provenance() -> None:
+    record = {"record_id": "r7", "record_revision": 1}
+    model = create_model_assertion(
+        record,
+        "position_holder",
+        "no value",
+        confidence=0.58,
+        model="legacy-model",
+        evidence=[{"block_ids": ["b1"]}],
+    )
+
+    absent = confirm_absence(record, "position_holder", prior=model, actor="reviewer")
+
+    assert absent.value is None
+    assert absent.derivation_method == "model"
+    assert absent.evaluation_status == "no_supported_value"
+    assert absent.authority_status == "human_confirmed"
+    assert absent.value_status == "confirmed_absent"
+    assert absent.model == "legacy-model"
+    assert absent.confidence == pytest.approx(0.58)
+    assert absent.evidence == model.evidence
+
+
 def test_confirmed_absence_preserves_model_provenance_and_evidence() -> None:
     record = {"record_id": "r8", "record_revision": 2}
     model = create_model_assertion(
