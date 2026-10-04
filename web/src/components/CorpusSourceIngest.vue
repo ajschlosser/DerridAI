@@ -462,7 +462,11 @@ onBeforeUnmount(() => {
               <small>{{ i18n.t("pdf_corpus.source_pending_help") }}</small>
             </div>
             <span class="kind-mark" aria-hidden="true">{{
-              pendingMediaKind === "image" ? "IMG" : pendingMediaKind === "audio" ? "AUD" : "PDF"
+              pendingMediaKind === "image"
+                ? "IMG"
+                : pendingMediaKind === "audio"
+                  ? "AUD"
+                  : "PDF"
             }}</span>
           </div>
           <fieldset v-if="ocrAvailable" class="ocr-choice" :disabled="sourceSetupDisabled">
@@ -492,7 +496,11 @@ onBeforeUnmount(() => {
               </label>
             </div>
           </fieldset>
-          <fieldset v-if="audioPending" class="audio-ingest-options" :disabled="sourceSetupDisabled">
+          <fieldset
+            v-if="audioPending"
+            class="audio-ingest-options"
+            :disabled="sourceSetupDisabled"
+          >
             <legend>
               {{ i18n.t("pdf_corpus.audio_ingest_title", "Audio transcription & speakers") }}
             </legend>
@@ -506,7 +514,12 @@ onBeforeUnmount(() => {
             </p>
             <UiCheckbox
               v-model="audioDiarization"
-              :label="i18n.t('pdf_corpus.audio_diarization_label', 'Identify speakers automatically')"
+              :label="
+                i18n.t(
+                  'pdf_corpus.audio_diarization_label',
+                  'Identify speakers automatically',
+                )
+              "
               :description="
                 i18n.t(
                   'pdf_corpus.audio_diarization_help',
@@ -516,7 +529,9 @@ onBeforeUnmount(() => {
               :disabled="sourceSetupDisabled"
             />
             <a class="audio-settings-link" href="/settings/services#settings-heading-audio">
-              {{ i18n.t("pdf_corpus.audio_settings_link", "Audio transcription service settings") }}
+              {{
+                i18n.t("pdf_corpus.audio_settings_link", "Audio transcription service settings")
+              }}
             </a>
           </fieldset>
           <div class="pending-source-actions">
