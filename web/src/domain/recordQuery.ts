@@ -23,6 +23,10 @@ type JsonObject = Record<string, unknown>;
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function parseJsonl(text: string): { records: JsonObject[]; errors: string[] } {
   const records: JsonObject[] = [];
   const errors: string[] = [];
