@@ -2809,7 +2809,7 @@ defineExpose({
             )
           "
           :voice-assignments-busy="busy === 'voice-assignments'"
-          :disabled="busy !== '' && busy !== 'voice-assignments'"
+          :disabled="busy !== ''"
           @save-voice-assignments="saveVoiceAssignments"
           @manage-schemas="schemaEditorOpen = true"
         />
