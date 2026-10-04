@@ -167,7 +167,8 @@ const resolvedValue = computed(() => {
   if (
     status.reason_code === "deterministic_llm_disagreement" &&
     status.prefilled_candidate === "llm" &&
-    hasValue(status.llm_value)
+    hasValue(status.llm_value) &&
+    !modelPlaceholder(status.llm_value)
   )
     return normalizeMetadataFieldValue(props.field, status.llm_value);
   if (status.reason_code === "human_llm_disagreement" && hasValue(status.prefilled_value))
@@ -187,7 +188,11 @@ const resolvedValue = computed(() => {
     return normalizeMetadataFieldValue(props.field, props.constraint?.value);
   return normalizeMetadataFieldValue(
     props.field,
-    props.control === "multi-combobox" && leakedAssessment(props.value) ? [] : (props.value ?? ""),
+    modelPlaceholder(props.value)
+      ? ""
+      : props.control === "multi-combobox" && leakedAssessment(props.value)
+        ? []
+        : (props.value ?? ""),
   );
 });
 /**
