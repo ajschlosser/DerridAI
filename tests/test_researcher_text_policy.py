@@ -30,6 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
+APP_BOOTSTRAP = (ROOT / "web/src/domain/appBootstrap.ts").read_text(encoding="utf-8")
 _INPUT_FILTER_PATH = ROOT / "web/src/domain/researcherInputFilter.ts"
 INPUT_FILTER = (
     _INPUT_FILTER_PATH.read_text(encoding="utf-8")
@@ -94,4 +95,6 @@ def test_researcher_text_policy_detects_nested_and_obfuscated_language():
     assert "researcherTokenDigest" in INPUT_FILTER
     assert "/api/i18n/content-policy" in INPUT_FILTER
     if _INPUT_FILTER_PATH.exists():
-        assert "researcherInputFilter" in RUNTIME
+        # runtime.js is now only a compatibility re-export. appBootstrap owns the
+        # startup side effect that imports and registers the focused input filter.
+        assert "researcherInputFilter" in APP_BOOTSTRAP
