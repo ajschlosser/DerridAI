@@ -491,10 +491,8 @@ describe("Corpus Builder metadata review", () => {
       },
     });
 
-    await state.review.resolveMetadataSuggestions(
-      { speaker: "Jacques Derrida", target: null },
-      ["target"],
-    );
+    const changes = { speaker: "Jacques Derrida", target: null };
+    await state.review.resolveMetadataSuggestions(changes, ["target"]);
 
     expect(state.selectedRecord.value?.metadata_field_status?.target).toMatchObject({
       status: "confirmed_absent",
@@ -512,7 +510,7 @@ describe("Corpus Builder metadata review", () => {
     expect(corpusBuilderApi.metadataDecisionBatch).toHaveBeenCalledWith(
       "b1",
       "r1",
-      { speaker: "Jacques Derrida", target: null },
+      changes,
       1,
       ["target"],
     );
