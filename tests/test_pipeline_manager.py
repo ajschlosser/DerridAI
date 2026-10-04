@@ -22,6 +22,7 @@ import pytest
 from app.pipelines.defaults import built_in_pipeline
 from app.pipelines.manager import PipelineManager
 from app.pipelines.models import PipelineAssignment
+from app.pipelines.registry import strategy_registry
 from app.pipelines.service import PipelineService
 from app.pipelines.store import PipelineStore
 
@@ -47,6 +48,53 @@ def test_system_assignment_rejects_draft_pipeline(tmp_path) -> None:
                 override_allowed=True,
             )
         )
+
+
+def test_imported_pipeline_with_incompatible_strategy_version_cannot_be_assigned(
+    tmp_path,
+) -> None:
+    manager = _manager(tmp_path)
+    source = built_in_pipeline("research.current", 1)
+    assert source is not None
+    pinned_stage = source.stages[0]
+    current_version = strategy_registry.require(pinned_stage.strategy).version
+    incompatible = pinned_stage.model_copy(
+        update={"strategy_version": current_version + 1}
+    )
+    imported = source.model_copy(
+        deep=True,
+        update={
+            "pipeline_id": "research.imported.old-strategy",
+            "version": 7,
+            "name": "Imported research pipeline",
+            "status": "active",
+            "built_in": False,
+            "stages": [incompatible, *source.stages[1:]],
+        },
+    )
+
+    # Simulate a historical/imported definition. Import compatibility is
+    # evaluated before assignment; validation must never rewrite source data.
+    manager.store.put_definition(imported)
+    before = manager.store.get_definition(imported.pipeline_id, imported.version)
+    assert before == imported
+
+    with pytest.raises(ValueError, match=r"expects strategy .* version .* provides version"):
+        manager.assign(
+            PipelineAssignment(
+                feature="research",
+                pipeline_id=imported.pipeline_id,
+                pipeline_version=imported.version,
+                override_allowed=True,
+            )
+        )
+
+    after = manager.store.get_definition(imported.pipeline_id, imported.version)
+    assert after == before
+    assert manager.store.get_assignment("research") is None
+    result = manager.service.validate(after)
+    assert result.valid is False
+    assert any(issue.code == "strategy_version_mismatch" for issue in result.issues)
 
 
 def test_active_custom_research_pipeline_can_be_saved_and_assigned(tmp_path) -> None:
