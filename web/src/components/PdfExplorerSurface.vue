@@ -17,10 +17,31 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
+// Load the runtime before the shared modules built on it, as the app does (the Step 3b gotcha in the retirement plan).
+import "../runtime/runtimeBridge";
 import { toast } from "../composables/notifications";
 import { openMessageDialog } from "../composables/messageDialog";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import * as runtime from "../runtime/runtime.js";
+import { translateLegacyDom } from "../runtime/legacyCompat.js";
+import {
+  cleanPdfPageWithLlm,
+  draftPdfPageWithLlm,
+  linkPdfPageWithLlm,
+} from "../domain/pdfPageLlmActions";
+import {
+  extractPdfAllSmart,
+  extractPdfPageSmart,
+  renderPdfCanvas,
+} from "../domain/sharedPdfExplorerRenderer";
+import { decorateDisabledControls } from "../domain/disabledControls";
+import { sharedPdfLinking } from "../domain/sharedPdfLinking";
+import { lookupRecord } from "../domain/sharedCompareLibrary";
+import { recordPresenters } from "../domain/sharedRecordPresenters";
+import { pages } from "../domain/sharedRecordHelpers";
+import { activeFile, selectedRecord } from "../domain/sharedRecordScopes";
+import { evidenceSelection } from "../domain/sharedSearchSupport";
+import { state as sharedState } from "../domain/sharedUrlState";
+import { shell } from "../domain/sharedWorkspaceStorage";
 import { recordOptionLabel } from "../domain/recordOptionLabel";
 import { selectedIndex } from "../domain/sharedUrlState";
 import { defaultProviderProfile, providerDisplayName } from "../domain/sharedProviderProfiles";
@@ -48,7 +69,7 @@ const copy = computed(() =>
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
-const state = runtime.state as unknown as Any;
+const state = sharedState as unknown as Any;
 const selectedAsEvidence = (key: string) => isEvidenceSelected(state, key);
 
 const mainEl = ref<HTMLElement>();
@@ -140,12 +161,16 @@ const copyIconInner =
 const closeIconInner = '<path d="m6 6 12 12M18 6 6 18"/>';
 
 const suggestions = computed(() =>
-  suggestionsOpen.value ? runtime.searchRecordOptions(recordSearchInput.value.trim(), 12) : [],
+  suggestionsOpen.value
+    ? recordPresenters.searchRecordOptions(recordSearchInput.value.trim(), 12)
+    : [],
 );
 
 function selectedRelated() {
   return Boolean(
-    selectedFile.value && selected.value && runtime.loadedPdfPagesForRecord(selected.value).length,
+    selectedFile.value &&
+      selected.value &&
+      sharedPdfLinking.loadedPdfPagesForRecord(selected.value).length,
   );
 }
 
@@ -153,10 +178,10 @@ async function refresh() {
   loaded.value = Boolean(state.pdf.file);
   canRender.value = Boolean(state.pdf.doc);
   extractReady.value = Boolean(state.pdf.doc || state.pdf.file);
-  linked.value = loaded.value ? runtime.linkedPdfRows(state.pdf.page) : [];
-  allRelated.value = loaded.value ? runtime.allLinkedRowsForLoadedPdf() : [];
-  selectedFile.value = runtime.activeFile();
-  selected.value = runtime.selectedRecord();
+  linked.value = loaded.value ? sharedPdfLinking.linkedPdfRows(state.pdf.page) : [];
+  allRelated.value = loaded.value ? sharedPdfLinking.allLinkedRowsForLoadedPdf() : [];
+  selectedFile.value = activeFile();
+  selected.value = selectedRecord();
   hasRecordOptions.value = state.files.some((file: Any) => file.records.length > 0);
   const currentRecordKey =
     selectedFile.value && selected.value
@@ -173,7 +198,7 @@ async function refresh() {
           ),
         }
       : null;
-  pdfTitle.value = runtime.pdfDisplayTitle();
+  pdfTitle.value = sharedPdfLinking.pdfDisplayTitle();
   relatedWorks.value = [
     ...new Set(allRelated.value.map((item: Any) => String(item.record.work || "")).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b));
@@ -194,15 +219,15 @@ async function refresh() {
   // before changing it: nothing else reads or depends on that inconsistency, so it is a bug, not a feature. Calling
   // it after every refresh makes the affordance reliably present whenever a card is actually tall enough for it.
   enhanceCollapsibles(mainEl.value);
-  runtime.decorateDisabledControls(mainEl.value);
-  runtime.translateLegacyDom(mainEl.value);
+  decorateDisabledControls(mainEl.value);
+  translateLegacyDom(sharedState, mainEl.value);
   if (canRender.value) void renderCanvas();
 }
 
 async function renderCanvas() {
   await nextTick();
   if (!canvasEl.value) return;
-  await runtime.renderPdfCanvas(state.pdf.page);
+  await renderPdfCanvas(state.pdf.page);
 }
 
 function openPdfPicker() {
@@ -241,7 +266,7 @@ async function onFileChange(event: Event) {
       state.pdf.extractError = copy.value.jsInitFailed(error.message);
     }
     await persistCurrentPdfAsset();
-    runtime.shell();
+    shell();
     await refresh();
   } catch (error: Any) {
     console.error("Could not open PDF", error);
@@ -298,7 +323,7 @@ async function extractPage() {
   state.pdf.page = Math.max(1, Math.min(state.pdf.doc?.numPages || pageToExtract, pageToExtract));
   extractingPage.value = true;
   try {
-    const result = await runtime.extractPdfPageSmart(state.pdf.page);
+    const result = await extractPdfPageSmart(state.pdf.page);
     state.pdf.text = result.text;
     state.pdf.extractionSource = result.source;
     state.pdf.extractError = result.warning || "";
@@ -312,7 +337,7 @@ async function extractPage() {
 async function extractAll() {
   extractingAll.value = true;
   try {
-    const result = await runtime.extractPdfAllSmart();
+    const result = await extractPdfAllSmart();
     state.pdf.text = result.text;
     state.pdf.extractionSource = result.source;
     state.pdf.extractError = result.warning || "";
@@ -324,13 +349,13 @@ async function extractAll() {
 }
 
 function openLlmClean() {
-  runtime.cleanPdfPageWithLlm();
+  cleanPdfPageWithLlm();
 }
 function openLlmDraft() {
-  runtime.draftPdfPageWithLlm();
+  draftPdfPageWithLlm();
 }
 function openLlmLink() {
-  runtime.linkPdfPageWithLlm();
+  linkPdfPageWithLlm();
 }
 function openProviders() {
   navigateTo("providers");
@@ -351,7 +376,7 @@ function openLinkedRecord(fileId: string, index: number) {
 function unlinkRecord(fileId: string, index: number) {
   const file = state.files.find((item: Any) => item.id === fileId);
   if (!file) return;
-  runtime.unlinkPdfLink(
+  sharedPdfLinking.unlinkPdfLink(
     file,
     index,
     { pdf_file: state.pdf.name, pdf_page: state.pdf.page },
@@ -360,7 +385,7 @@ function unlinkRecord(fileId: string, index: number) {
 }
 function evidenceKey(fileId: string, index: number) {
   const file = state.files.find((item: Any) => item.id === fileId);
-  return file ? runtime.workspaceEvidenceSelectionKey(file, index) : "";
+  return file ? evidenceSelection.workspaceEvidenceSelectionKey(file, index) : "";
 }
 
 function onRecordSearchFocus() {
@@ -387,13 +412,13 @@ function onDocumentClick(event: MouseEvent) {
 function linkCurrentPdf() {
   let key = recordSearchKey.value;
   if (!key) {
-    const exact = runtime
+    const exact = recordPresenters
       .searchRecordOptions(recordSearchInput.value, 24)
       .find((option: Any) => option.label === recordSearchInput.value);
     key = exact?.value || "";
   }
-  const item = runtime.lookupRecord(key);
-  if (item) runtime.linkPdfPage(item.file, item.index, state.pdf.page);
+  const item = lookupRecord(key);
+  if (item) sharedPdfLinking.linkPdfPage(item.file, item.index, state.pdf.page);
   else toast(copy.value.chooseAutocomplete, { tone: "warning" });
 }
 
@@ -750,7 +775,7 @@ onBeforeUnmount(() => {
                   <b>{{ record.record_id || copy.recordN(index + 1) }}</b>
                   <span
                     >{{ record.work || file.name }} ·
-                    {{ record.inline_citation || runtime.pages(record) }}</span
+                    {{ record.inline_citation || pages(record) }}</span
                   >
                 </button>
                 <div class="tools">

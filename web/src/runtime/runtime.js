@@ -134,7 +134,6 @@ import {
 } from "../domain/sharedRecordScopes";
 import { recordHistoryVersions, upsertAuditDelta } from "../domain/recordHistory";
 import { barChart, lineChart, multiLineChart, pieChart, statList } from "../domain/dashboardCharts";
-import { createOperationPresenters } from "../domain/operationPresenters";
 import {
   workIndex,
   dateKeys,
@@ -194,7 +193,10 @@ import { getTableColumns, tableAvailableFields } from "../domain/tableColumns";
 import { recordsWorkspace as sharedRecordsWorkspace } from "../domain/sharedRecordsWorkspace";
 import { activateFile, searchByMetadata } from "../domain/workspaceActions";
 import { pageInfo, setActiveStore, setListFilterValue } from "../domain/listPaging";
-import { createWorksWorkspace } from "../domain/worksWorkspace";
+import { worksWorkspace } from "../domain/sharedWorksWorkspace";
+import { workDialogs } from "../domain/sharedWorkDialogs";
+import { operationPresenters } from "../domain/sharedOperationPresenters";
+import { refreshStoreWorks } from "../domain/storeWorks";
 import { createJobsWorkspace } from "../domain/jobsWorkspace";
 import {
   refreshJobs,
@@ -211,7 +213,14 @@ import {
   syncJobProgressToasts,
 } from "../domain/jobsActions";
 import { createDashboardRenderer } from "../domain/dashboardRenderer";
-import { createPdfExplorerRenderer } from "../domain/pdfExplorerRenderer";
+import { pdfExplorerRenderer } from "../domain/sharedPdfExplorerRenderer";
+import {
+  applyPdfLinkMatch,
+  cleanPdfPageWithLlm,
+  draftPdfPageWithLlm,
+  linkPdfPageWithLlm,
+  registerPdfLlmTaskHooks,
+} from "../domain/pdfPageLlmActions";
 import { createJobDialogs } from "../domain/jobDialogs";
 import { normalizeTouchupItems, openTouchup } from "../domain/touchupLauncher";
 import { createWorkDialogs } from "../domain/workDialogs";
@@ -462,43 +471,7 @@ const {
   autoImproveWork,
   removeEntireWork,
   browseResearcherWork,
-} = createWorksWorkspace({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  allAnnotations: (...args) => allAnnotations(...args),
-  canUse: (...args) => canUse(...args),
-  dbUnavailableReason: (...args) => dbUnavailableReason(...args),
-  describeResearcherWork: (...args) => describeResearcherWork(...args),
-  display: (...args) => display(...args),
-  hasCorpusDb: (...args) => hasCorpusDb(...args),
-  isResearcher: (...args) => isResearcher(...args),
-  label: (...args) => label(...args),
-  navigateTo: (...args) => navigateTo(...args),
-  needsReviewItems: (...args) => needsReviewItems(...args),
-  openMixedWorkValuesDialog: (...args) => openMixedWorkValuesDialog(...args),
-  openRemoveWorkModal: (...args) => openRemoveWorkModal(...args),
-  openTouchup,
-  openWorkMetadataEditor: (...args) => openWorkMetadataEditor(...args),
-  openWorkMetadataLlmDialog: (...args) => openWorkMetadataLlmDialog(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  providerProfiles: (...args) => providerProfiles(...args),
-  recordStores: (...args) => recordStores(...args),
-  refreshPresenceForRows: (...args) => refreshPresenceForRows(...args),
-  refreshServerAnnotations: (...args) => refreshServerAnnotations(...args),
-  refreshStoreWorks: (...args) => refreshStoreWorks(...args),
-  refreshStores: (...args) => refreshStores(...args),
-  searchByMetadata: (...args) => searchByMetadata(...args),
-  setActiveStore: (...args) => setActiveStore(...args),
-  syncUrl: (...args) => syncUrl(...args),
-  tr: (...args) => tr(...args),
-  uid: (...args) => uid(...args),
-  uniqueWorkValues: (...args) => uniqueWorkValues(...args),
-  upsertRows: (...args) => upsertRows(...args),
-  workDbStatus: (...args) => workDbStatus(...args),
-  workIndex: (...args) => workIndex(...args),
-  workInsightMetrics: (...args) => workInsightMetrics(...args),
-  worksBiblioValue: (...args) => worksBiblioValue(...args),
-});
+} = worksWorkspace;
 createJobsWorkspace({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -752,17 +725,14 @@ const {
   getUrlSyncHook: () => getUrlSyncHook(),
   warmupProviderProfile: (...args) => warmupProviderProfile(...args),
 });
+registerPdfLlmTaskHooks({ openLlmTaskLauncher, openPdfDraftRecord });
 const {
   renderPdfCanvas,
   extractPdfPageBrowser,
   extractPdfApi,
   extractPdfPageSmart,
   extractPdfAllSmart,
-} = createPdfExplorerRenderer({
-  state,
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-});
+} = pdfExplorerRenderer;
 const {
   researchConfigForUi,
   getResearchWorkspaceSnapshot,
@@ -842,14 +812,7 @@ const {
   jobProgressText,
   operationDetailPairs,
   operationViewModel,
-} = createOperationPresenters({
-  tr,
-  trf,
-  getLocale: () => state.translations?.locale || "en-US",
-  getStores: () => state.stores,
-  providerProfiles: () => providerProfiles(),
-  providerDisplayName: (profile) => providerDisplayName(profile),
-});
+} = operationPresenters;
 
 function systemCardHtml() {
   const health = state.health;
@@ -957,41 +920,7 @@ const {
   openWorkMetadataProposalResult,
   openRemoveWorkModal,
   openSeparateWorksModal,
-} = createWorkDialogs({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  api: (...args) => api(...args),
-  applyRecordChanges: (...args) => applyRecordChanges(...args),
-  clearFileDerivedState: (...args) => clearFileDerivedState(...args),
-  cloneAuditValue: (...args) => cloneAuditValue(...args),
-  corpusCache,
-  decorateDisabledControls: (...args) => decorateDisabledControls(...args),
-  display: (...args) => display(...args),
-  jobLabel: (...args) => jobLabel(...args),
-  label: (...args) => label(...args),
-  navigateTo: (...args) => navigateTo(...args),
-  parseProposedMetadataValue: (...args) => parseProposedMetadataValue(...args),
-  parseWorkMetadataValue: (...args) => parseWorkMetadataValue(...args),
-  persistFileNow: (...args) => persistFileNow(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  providerProfile: (...args) => providerProfile(...args),
-  providerProfiles: (...args) => providerProfiles(...args),
-  providerRequestConfig: (...args) => providerRequestConfig(...args),
-  recordStores: (...args) => recordStores(...args),
-  refreshStores: (...args) => refreshStores(...args),
-  renderView: (...args) => renderView(...args),
-  representativeWorkMetadata: (...args) => representativeWorkMetadata(...args),
-  shell: (...args) => shell(...args),
-  showAppModal: (...args) => showAppModal(...args),
-  startJobPolling,
-  syncJobProgressToasts,
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-  uid: (...args) => uid(...args),
-  uniqueWorkValues: (...args) => uniqueWorkValues(...args),
-  workIndex: (...args) => workIndex(...args),
-  workMetadataControlSpec: (...args) => workMetadataControlSpec(...args),
-});
+} = workDialogs;
 function setUserContext(user) {
   const priorId = state.userContext?.id;
   state.userContext = user || null;
@@ -1050,43 +979,6 @@ function relativeTime(value) {
 
 /** @param {{field?: string, op?: string, value?: string}} [options] */
 
-async function currentPdfPageText() {
-  const result = await extractPdfPageSmart(state.pdf.page);
-  state.pdf.text = result.text;
-  state.pdf.extractionSource = result.source;
-  state.pdf.extractError = result.warning || "";
-  return result.text || "";
-}
-async function applyPdfLinkMatch(match) {
-  if (!match?.key)
-    return openMessageDialog({
-      title: "No supported record match",
-      message: match?.reason || "The model did not identify a sufficiently supported record.",
-    });
-  const item = reviewItemFromKey(match.key);
-  if (!item)
-    return openMessageDialog({
-      title: "Matched record unavailable",
-      message: "The matched record is no longer loaded.",
-      tone: "danger",
-    });
-  const confidence = Number(match.confidence);
-  const approved = await openMessageDialog({
-    title: "Link PDF page to record?",
-    message: `PDF page ${state.pdf.page} → ${item.record.record_id || "matched record"}\n\n${Number.isFinite(confidence) ? `${Math.round(confidence * 100)}% confidence` : "Confidence not reported"}${match.reason ? `\n${match.reason}` : ""}`,
-    confirmLabel: "Link page",
-    cancelLabel: "Cancel",
-  });
-  if (!approved) return;
-  linkPdfPage(item.file, item.index, state.pdf.page);
-  toast(
-    trf("runtime.toast.linked_page", {
-      page: state.pdf.page,
-      record: item.record.record_id || tr("dynamic.record_one"),
-    }),
-    { tone: "success" },
-  );
-}
 function ragGradeHtml(grade = {}) {
   const normalized = normalizeRagGrade(grade);
   const scoreKeys = [
@@ -1108,165 +1000,12 @@ function ragGradeHtml(grade = {}) {
   return `<div class="rag-grade-content"><div class="rag-grade-scores">${scoreKeys.map(([key, name]) => `<div><span>${esc(name)}</span><strong>${esc(normalized.score(key))}</strong><small>/10</small></div>`).join("")}</div><section><b>Summary</b><p>${esc(normalized.summary || "No summary returned.")}</p></section>${sections.map(([name, items]) => `<section><b>${esc(name)}</b><ul>${items.map((item) => `<li>${esc(item)}</li>`).join("") || "<li>None reported.</li>"}</ul></section>`).join("")}</div>`;
 }
 
-function rankPdfLinkCandidates(rawText) {
-  const titleTokens = new Set(
-    String(state.pdf.title || state.pdf.name || "")
-      .toLocaleLowerCase()
-      .split(/\W+/)
-      .filter((token) => token.length > 3),
-  );
-  const page = Number(state.pdf.page);
-  const pageTokens = new Set(
-    String(rawText || "")
-      .toLocaleLowerCase()
-      .split(/\W+/)
-      .filter((token) => token.length > 5)
-      .slice(0, 140),
-  );
-  return allRows()
-    .map(({ file, record, index }) => {
-      let score = 0;
-      const work = String(record.work || record.document_title || "").toLocaleLowerCase();
-      score +=
-        work.split(/\W+/).filter((token) => token.length > 3 && titleTokens.has(token)).length * 6;
-      const start = Number(record.page_start),
-        end = Number(record.page_end ?? record.page_start);
-      if (
-        Number.isFinite(start) &&
-        Number.isFinite(end) &&
-        page >= Math.min(start, end) &&
-        page <= Math.max(start, end)
-      )
-        score += 10;
-      if (pdfLinks(record).some((link) => link.pdf_file === state.pdf.name)) score += 12;
-      score += Math.min(
-        12,
-        String(record.text || "")
-          .toLocaleLowerCase()
-          .split(/\W+/)
-          .filter((token) => token.length > 5 && pageTokens.has(token))
-          .slice(0, 140).length,
-      );
-      return {
-        score,
-        candidate: {
-          key: reviewKey(file, index),
-          record_id: record.record_id || "",
-          work: record.work || "",
-          pages: pages(record),
-          citation: record.inline_citation || record.full_citation || "",
-          text: String(record.text || "").slice(0, 600),
-        },
-      };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 32)
-    .map((item) => item.candidate);
-}
-async function cleanPdfPageWithLlm() {
-  try {
-    const raw_text = await currentPdfPageText();
-    if (!raw_text.trim()) return toast(tr("runtime.toast.no_page_text"), { tone: "warning" });
-    openLlmTaskLauncher({
-      task: "pdf_clean_text",
-      title: "Clean PDF page text",
-      description: `${state.pdf.title || state.pdf.name} · page ${state.pdf.page}`,
-      payload: {
-        mode: "clean_text",
-        raw_text,
-        pdf_file: state.pdf.name || null,
-        pdf_title: state.pdf.title || null,
-        pdf_author: state.pdf.author || null,
-        pdf_page: state.pdf.page,
-        candidates: [],
-      },
-      onForegroundResult: async (result) => {
-        state.pdf.text = result.text || "";
-        state.pdf.extractionSource = `LLM cleanup · ${result.model || "model"} · page ${state.pdf.page}`;
-        state.pdf.extractError = "";
-        window.dispatchEvent(new CustomEvent("derridai:pdf-explorer-refresh"));
-      },
-    });
-  } catch (error) {
-    toast(trf("runtime.toast.llm_cleanup_prepare_failed", { detail: error.message }), {
-      tone: "danger",
-    });
-  }
-}
-async function draftPdfPageWithLlm() {
-  try {
-    const raw_text = await currentPdfPageText();
-    if (!raw_text.trim()) return toast(tr("runtime.toast.no_page_text"), { tone: "warning" });
-    openLlmTaskLauncher({
-      task: "pdf_draft_record",
-      title: "Create draft record from PDF page",
-      description: `${state.pdf.title || state.pdf.name} · page ${state.pdf.page}`,
-      payload: {
-        mode: "draft_record",
-        raw_text,
-        pdf_file: state.pdf.name || null,
-        pdf_title: state.pdf.title || null,
-        pdf_author: state.pdf.author || null,
-        pdf_page: state.pdf.page,
-        candidates: [],
-      },
-      onForegroundResult: async (result) => openPdfDraftRecord(result.record || {}),
-    });
-  } catch (error) {
-    toast(trf("runtime.toast.draft_prepare_failed", { detail: error.message }), { tone: "danger" });
-  }
-}
-async function linkPdfPageWithLlm() {
-  if (!state.files.length)
-    return toast(tr("runtime.toast.load_before_pdf_match"), { tone: "warning" });
-  try {
-    const raw_text = await currentPdfPageText(),
-      candidates = rankPdfLinkCandidates(raw_text);
-    if (!candidates.length)
-      return toast(tr("runtime.toast.no_candidate_records"), { tone: "warning" });
-    openLlmTaskLauncher({
-      task: "pdf_link_record",
-      title: "Link PDF page to record",
-      description: `${state.pdf.title || state.pdf.name} · page ${state.pdf.page} · ${candidates.length} pre-ranked candidates`,
-      payload: {
-        mode: "link_record",
-        raw_text,
-        pdf_file: state.pdf.name || null,
-        pdf_title: state.pdf.title || null,
-        pdf_author: state.pdf.author || null,
-        pdf_page: state.pdf.page,
-        candidates,
-      },
-      onForegroundResult: async (result) => applyPdfLinkMatch(result.match || {}),
-    });
-  } catch (error) {
-    toast(trf("runtime.toast.record_matching_prepare_failed", { detail: error.message }), {
-      tone: "danger",
-    });
-  }
-}
-
 function recordOptionForKey(key) {
   const item = lookupRecord(key);
   if (!item) return null;
   return { value: key, label: recordOptionLabel(item.file, item.record, item.index) };
 }
 
-async function refreshStoreWorks(force = false) {
-  if (!state.activeStore) {
-    state.storeWorks = [];
-    state.storeWorkStats = [];
-    state.storeWorksStore = "";
-    state.storeWork = "";
-    return;
-  }
-  if (!force && state.storeWorksStore === state.activeStore) return;
-  const data = await api(`/api/stores/${encodeURIComponent(state.activeStore)}/works`);
-  state.storeWorks = data.works || [];
-  state.storeWorkStats = data.stats || state.storeWorks.map((work) => ({ work, count: null }));
-  state.storeWorksStore = state.activeStore;
-  if (state.storeWork && !state.storeWorks.includes(state.storeWork)) state.storeWork = "";
-}
 const vectorCollectionBridge = createVectorCollectionBridge({
   state,
   workIndex,

@@ -17,7 +17,7 @@
  */
 
 import type { AnnotationWorkspaceItem, AnnotationsWorkspaceSnapshot } from "../types/annotations";
-import * as runtime from "../runtime/runtime.js";
+import { worksWorkspace } from "../domain/sharedWorksWorkspace";
 import { annotationsWorkspace } from "../domain/sharedAnnotations";
 import { sharedRecordWorkspace as recordWorkspace } from "../domain/sharedRecordWorkspace";
 
@@ -53,7 +53,7 @@ export const annotationsService: AnnotationService = {
   setView: (value) => annotationsWorkspace.setAnnotationsWorkspaceView(value),
   openRecord: (annotation) => annotationsWorkspace.openAnnotationsWorkspaceRecord(annotation),
   openWork: (work) => annotationsWorkspace.openAnnotationsWorkspaceWork(work),
-  openWorkAnnotations: (work) => runtime.openWorkAnnotations(work),
+  openWorkAnnotations: (work) => worksWorkspace.openWorkAnnotations(work),
   removeWorkspaceItem: (annotation) =>
     annotationsWorkspace.removeAnnotationsWorkspaceItem(annotation),
   addToCurrentRecord: (input) => recordWorkspace.addCurrentRecordAnnotation(input),
