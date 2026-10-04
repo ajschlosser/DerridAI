@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { reactive, watch } from "vue";
+import { reactive, useId, watch } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import UiField from "../ui/UiField.vue";
 import UiInput from "../ui/UiInput.vue";
@@ -41,7 +41,13 @@ const emit = defineEmits<{
 }>();
 
 const i18n = useI18nStore();
+const componentId = useId();
+const headingId = `${componentId}-title`;
 const draft = reactive<Record<string, string>>({});
+
+function speakerControlId(speaker: string) {
+  return `${componentId}-speaker-${speaker.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
 
 function synchronizeDraft() {
   const active = new Set(props.speakers);
@@ -71,10 +77,10 @@ function saveSpeaker(speaker: string) {
 </script>
 
 <template>
-  <section class="speaker-assignments" aria-labelledby="audio-speaker-assignments-title">
+  <section class="speaker-assignments" :aria-labelledby="headingId">
     <header>
       <div>
-        <h3 id="audio-speaker-assignments-title">
+        <h3 :id="headingId">
           {{ i18n.t("pdf_corpus.voice_assignments_title") }}
         </h3>
         <p>{{ i18n.t("pdf_corpus.voice_assignments_help") }}</p>
@@ -85,7 +91,7 @@ function saveSpeaker(speaker: string) {
         v-for="speaker in speakers"
         :key="speaker"
         :label="speaker"
-        :control-id="`audio-speaker-${speaker.replace(/[^a-zA-Z0-9_-]/g, '-')}`"
+        :control-id="speakerControlId(speaker)"
       >
         <template #default="{ describedby, invalid, controlId }">
           <UiInput
