@@ -23,6 +23,7 @@ import {
   type MetadataMemoryPayload,
 } from "../api/metadataMemory";
 import { useDataQuery } from "../realtime/dataQuery";
+import { useAuthStore } from "../stores/auth";
 
 /**
  * Owns the server-state semantics for Metadata Memory.
@@ -32,18 +33,29 @@ import { useDataQuery } from "../realtime/dataQuery";
  * Empty cached pages are never presented as current while a mandatory revalidation is running.
  */
 export function useMetadataMemoryData(applied: Ref<MetadataMemoryListFilters>) {
+  const auth = useAuthStore();
+  const scope = computed(() => [
+    auth.user?.id ?? "anonymous",
+    auth.user?.role ?? "",
+    [...(auth.user?.capabilities ?? [])].sort(),
+  ]);
+  const identity = computed(() => JSON.stringify([scope.value, applied.value]));
   const payload = ref<MetadataMemoryPayload | null>(null);
   const serviceError = ref("");
+  const accessRevoked = ref(false);
 
   const query = useDataQuery(
     "metadata_exemplars",
     () => metadataMemoryApi.list({ ...applied.value }),
     {
-      detail: () => ["workspace", applied.value],
+      detail: () => ["workspace", applied.value, ...scope.value],
       staleTime: 0,
       refetchOnMount: "always",
     },
   );
+
+  // Retained content belongs only to this exact filter and authorization scope.
+  watch(identity, clearForNewQuery, { flush: "sync" });
 
   const loading = computed(() => query.isFetching.value);
   const transportError = computed(() => {
@@ -53,16 +65,29 @@ export function useMetadataMemoryData(applied: Ref<MetadataMemoryListFilters>) {
   });
   const readError = computed(() => serviceError.value || transportError.value);
   const ready = computed(() => Boolean(payload.value));
-  const waiting = computed(() => !ready.value && !readError.value);
+  const waiting = computed(() => !ready.value && (loading.value || !readError.value));
   const refreshing = computed(() => loading.value && ready.value);
 
   watch(
     () => [query.data.value, query.error.value, query.isFetching.value] as const,
     ([data, error, fetching]) => {
+      const denied = Boolean(
+        error &&
+          typeof error === "object" &&
+          "status" in error &&
+          [401, 403].includes(Number(error.status)),
+      );
+      if (denied) {
+        accessRevoked.value = true;
+        payload.value = null;
+        serviceError.value = "";
+        return;
+      }
       if (fetching) {
         // Reuse a populated cache as stale-but-useful content while it revalidates.  Do not reuse
         // a cached zero-row result: that is the failure mode that made new precedents look absent.
-        if (!payload.value && data?.available && data.items.length > 0) payload.value = data;
+        if (!accessRevoked.value && !payload.value && data?.available && data.items.length > 0)
+          payload.value = data;
         return;
       }
       if (error || !data) return;
@@ -71,6 +96,7 @@ export function useMetadataMemoryData(applied: Ref<MetadataMemoryListFilters>) {
         return;
       }
       serviceError.value = "";
+      accessRevoked.value = false;
       payload.value = data;
     },
     { immediate: true },
