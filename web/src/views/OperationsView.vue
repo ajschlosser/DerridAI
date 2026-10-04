@@ -18,15 +18,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted } from "vue";
-import * as runtime from "../runtime/runtime.js";
+import { refreshJobs } from "../domain/jobsActions";
+import { mountOperationsPanelHost } from "../domain/operationsPanelHooks";
+import { unmountOperationsPanel } from "../runtime/operationsPanelHost";
 
 onMounted(async () => {
-  await runtime.refreshJobs?.({ rerender: true });
+  await refreshJobs({ rerender: true });
   await nextTick();
-  runtime.mountOperationsPanelHost();
+  mountOperationsPanelHost();
 });
 
-onBeforeUnmount(() => runtime.unmountOperationsPanel());
+onBeforeUnmount(() => unmountOperationsPanel());
 </script>
 
 <template>
