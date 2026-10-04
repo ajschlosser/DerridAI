@@ -10696,4 +10696,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  "research.progress_saving": "Enregistrement du résultat de recherche…",
  "research.progress_grading": "Évaluation de la réponse générée…",
  "research.progress_working": "Recherche en cours…",
+ "settings.rag_database": "Base du corpus par défaut",
+ "settings.rag_database_help": "Choisissez la base du corpus qui fournit la portée d’œuvres par défaut pour la recherche.",
+ "settings.rag_database_auto": "Choisir pour chaque recherche",
 }
