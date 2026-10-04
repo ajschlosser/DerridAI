@@ -328,9 +328,9 @@ def extract_audio(
 ) -> dict[str, Any]:
     """Transcribe the whole recording before any source span is created.
 
-    OpenAI Whisper must see the entire file first. whisperx then distinguishes
-    speakers. Only after both results exist are timed spans written. A missing
-    diarizer keeps the transcript and records a warning instead of dropping it.
+    OpenAI Whisper must see the entire file first. When requested, whisperx then
+    distinguishes speakers. Timed spans are written from the complete transcript
+    either way; a missing diarizer keeps that transcript and records a warning.
     """
     check_size(data, MAX_AUDIO_BYTES)
     suffix = Path(filename).suffix.lower()
