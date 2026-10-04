@@ -105,6 +105,14 @@ class MetadataProviderHealthCoordinator:
         with self._lock:
             self._states.pop(key, None)
 
+    def note_cancelled(self, key: str) -> None:
+        """Release a half-open probe without treating cancellation as provider health."""
+
+        with self._lock:
+            state = self._states.get(key)
+            if state is not None:
+                state.half_open_probe = False
+
     def note_failure(
         self,
         key: str,
