@@ -45,9 +45,7 @@ const i18n = useI18nStore();
 const timedBlocks = computed(() =>
   props.blocks.filter(
     (block) =>
-      typeof block.start === "number" &&
-      typeof block.end === "number" &&
-      block.end > block.start,
+      typeof block.start === "number" && typeof block.end === "number" && block.end > block.start,
   ),
 );
 
