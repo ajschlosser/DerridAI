@@ -211,6 +211,7 @@ import {
   maybeDesktopNotify,
   syncJobProgressToasts,
 } from "../domain/jobsActions";
+import { registerResearchActions } from "../domain/researchActions";
 import { registerVectorStoreActions } from "../domain/vectorStoreActions";
 import { registerTouchupActions } from "../domain/touchupActions";
 import { registerOperationsPanelHooks } from "../domain/operationsPanelHooks";
@@ -751,6 +752,19 @@ const {
   uid: (...args) => uid(...args),
 });
 registerOperationsPanelHooks({ prepareRagRerun });
+registerResearchActions({
+  getResearchWorkspaceSnapshot,
+  updateResearchConfig,
+  removeResearchEvidence,
+  clearResearchEvidence,
+  discoverResearchModels,
+  refreshResearchJobs,
+  cancelResearchJob,
+  deleteResearchJob,
+  startResearchRun,
+  gradeResearchJob,
+  prepareResearchRerun,
+});
 const {
   serverAnnotationItems,
   refreshServerAnnotations,
@@ -1803,18 +1817,7 @@ export {
   pendingUpsertRows,
   decorateDisabledControls,
   translateLegacyDom,
-  getResearchWorkspaceSnapshot,
-  updateResearchConfig,
-  removeResearchEvidence,
-  clearResearchEvidence,
-  discoverResearchModels,
-  refreshResearchJobs,
   getResearchJob,
-  cancelResearchJob,
-  deleteResearchJob,
-  startResearchRun,
-  gradeResearchJob,
-  prepareResearchRerun,
   getRecordWorkspaceSnapshot,
   getRecordObjectGraph,
   getDerridaiNormativeModel,

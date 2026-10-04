@@ -37,17 +37,12 @@ vi.mock("../../src/stores/auth", () => ({
 vi.mock("../../src/stores/i18n", () => ({
   useI18nStore: () => ({ t: (key: string) => key, tf: (key: string) => key, locale: "en-US" }),
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({
+vi.mock("../../src/domain/researchActions", () => ({
   getResearchWorkspaceSnapshot: mocks.snapshot,
-  getResearchJob: mocks.job,
   refreshResearchJobs: mocks.runs,
   updateResearchConfig: mocks.update,
-  __v_isRef: false,
-  __v_isReadonly: false,
-  __v_isShallow: false,
-  __v_skip: true,
-  __v_raw: undefined,
 }));
+vi.mock("../../src/domain/sharedAnnotations", () => ({ annotationsWorkspace: {} }));
 vi.mock("../../src/domain/sharedResearchJobs", () => ({ getResearchJob: mocks.job }));
 vi.mock("../../src/realtime/follow", () => ({ followResource: () => vi.fn() }));
 vi.mock("../../src/features/research/useResearchDraft", () => ({

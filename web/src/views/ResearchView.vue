@@ -36,7 +36,8 @@ import type {
   ResearchProfile,
   ResearchWorkspaceSnapshot,
 } from "../types/research";
-import * as runtime from "../runtime/runtime.js";
+import * as researchActions from "../domain/researchActions";
+import { annotationsWorkspace } from "../domain/sharedAnnotations";
 import { pipelinesApi } from "../api/pipelines";
 import { normalizedResearchConfig } from "../domain/researchPayloads";
 import { getResearchJob } from "../domain/sharedResearchJobs";
@@ -54,7 +55,7 @@ function evidenceTarget(index: number) {
 function openEvidenceRecord(index: number) {
   const target = evidenceTarget(index);
   if (!target) return;
-  runtime.openAnnotationsWorkspaceRecord({
+  annotationsWorkspace.openAnnotationsWorkspaceRecord({
     server: true,
     source: target.store,
     record_id: target.recordId,
@@ -297,7 +298,7 @@ async function loadWorkspace(refresh = true) {
   loading.value = true;
   workspaceError.value = "";
   try {
-    const snapshot = (await runtime.getResearchWorkspaceSnapshot({
+    const snapshot = (await researchActions.getResearchWorkspaceSnapshot({
       refresh,
       includeJobs: false,
       includePipelines: false,
@@ -352,14 +353,18 @@ function persistDraft() {
   if (!config.value) return;
   window.clearTimeout(draftTimer);
   draftTimer = window.setTimeout(
-    () => runtime.updateResearchConfig({ prompt: prompt.value, instructions: instructions.value }),
+    () =>
+      researchActions.updateResearchConfig({
+        prompt: prompt.value,
+        instructions: instructions.value,
+      }),
     250,
   );
 }
 function updateConfig(patch: Partial<ResearchConfig>) {
   if (!config.value) return;
   config.value = { ...config.value, ...patch };
-  config.value = runtime.updateResearchConfig(patch) as ResearchConfig;
+  config.value = researchActions.updateResearchConfig(patch) as ResearchConfig;
 }
 function applyPreset(value: string) {
   preset.value = value;
@@ -419,7 +424,7 @@ async function runResearch() {
   starting.value = true;
   try {
     persistDraft();
-    const job = (await runtime.startResearchRun({
+    const job = (await researchActions.startResearchRun({
       prompt: prompt.value,
       instructions: instructions.value,
       provider_profile_id: config.value.provider_profile_id,
@@ -448,7 +453,7 @@ async function refreshLiveJobs() {
   const request = answerRequest;
   try {
     if (canManageRuns.value) {
-      const refreshed = (await runtime.refreshResearchJobs()) as ResearchJob[];
+      const refreshed = (await researchActions.refreshResearchJobs()) as ResearchJob[];
       if (disposed || request !== answerRequest || !isNativeResearch.value) return;
       jobs.value = refreshed;
       if (activeJob.value) {
@@ -524,7 +529,7 @@ async function openJob(job: ResearchJob) {
 }
 async function cancelJob(job: ResearchJob) {
   try {
-    const updated = (await runtime.cancelResearchJob(job.id)) as ResearchJob;
+    const updated = (await researchActions.cancelResearchJob(job.id)) as ResearchJob;
     if (activeJob.value?.id === job.id) activeJob.value = updated;
     await refreshRuns();
   } catch (error) {
@@ -534,7 +539,7 @@ async function cancelJob(job: ResearchJob) {
 async function removeJob(job: ResearchJob) {
   if (!window.confirm(i18n.t("research.remove_run_confirm"))) return;
   try {
-    await runtime.deleteResearchJob(job.id);
+    await researchActions.deleteResearchJob(job.id);
     if (activeJob.value?.id === job.id) activeJob.value = null;
     await refreshRuns();
   } catch (error) {
@@ -546,7 +551,7 @@ async function refreshRuns() {
   runsLoading.value = true;
   runsError.value = "";
   try {
-    const refreshed = (await runtime.refreshResearchJobs()) as ResearchJob[];
+    const refreshed = (await researchActions.refreshResearchJobs()) as ResearchJob[];
     if (disposed || request !== runsRequest || !isNativeResearch.value) return;
     jobs.value = refreshed;
     if (!activeJob.value) {
@@ -606,7 +611,7 @@ function loadHistory(item: Record<string, unknown>) {
 }
 function removeEvidence(key: string) {
   try {
-    const evidence = runtime.removeResearchEvidence(key);
+    const evidence = researchActions.removeResearchEvidence(key);
     if (workspace.value) workspace.value = { ...workspace.value, selected_evidence: evidence };
     if (!evidence.length && preset.value === "evidence") applyPreset("balanced");
   } catch (error) {
@@ -615,7 +620,7 @@ function removeEvidence(key: string) {
 }
 function clearEvidence() {
   try {
-    runtime.clearResearchEvidence();
+    researchActions.clearResearchEvidence();
     if (workspace.value) workspace.value = { ...workspace.value, selected_evidence: [] };
     if (config.value) config.value = { ...config.value, skip_retrieval: false };
     if (preset.value === "evidence") preset.value = "balanced";
@@ -645,7 +650,7 @@ function focusEvidence(index: number) {
 async function gradeAnswer() {
   if (!activeJob.value) return;
   try {
-    await runtime.gradeResearchJob(activeJob.value.id);
+    await researchActions.gradeResearchJob(activeJob.value.id);
   } catch (error) {
     toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
@@ -653,7 +658,7 @@ async function gradeAnswer() {
 function prepareRerun() {
   if (!activeJob.value) return;
   if (route.query.job) void router.replace({ path: "/rag" });
-  const next = runtime.prepareResearchRerun(activeJob.value) as ResearchConfig;
+  const next = researchActions.prepareResearchRerun(activeJob.value) as ResearchConfig;
   config.value = { ...next };
   prompt.value = next.prompt || "";
   instructions.value = next.instructions || "";
@@ -671,7 +676,7 @@ function prepareRerun() {
 async function discoverModels() {
   if (!config.value) return;
   try {
-    discoveredModels.value = (await runtime.discoverResearchModels(
+    discoveredModels.value = (await researchActions.discoverResearchModels(
       config.value.provider_profile_id,
     )) as string[];
     toast(`${discoveredModels.value.length} ${i18n.t("research.models_found")}`, {
