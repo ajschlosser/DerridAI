@@ -90,6 +90,7 @@ from .field_assertions import (
     reopen_assertion,
 )
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
+from .metadata_failure_recovery import plan_metadata_recovery
 from .metadata_candidates import (
     apply_indexing_nlp_candidates,
     is_direct_nlp_indexing_candidate,
@@ -1231,7 +1232,9 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             # A fully materialized family no longer needs its bulky raw response.
             # Tracked normalized outputs must match both dependencies and output
             # state below. Historical untracked families retain resume semantics.
-            # Failed/user-skipped families remain terminal until an explicit retry.
+            # Terminal failures/user skips stay settled. A retry-pending family is
+            # owned by outer recovery orchestration and runs only after it is
+            # explicitly promoted back to queued.
             prior_ledger = stage_ledger.get(task_name)
             materialized = prior_state == "complete" and task_name not in persisted_stage_results
             if materialized and (
@@ -1243,6 +1246,12 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 continue
             if prior_state in {"failed", "needs_review", "skipped"}:
                 prior_error = RuntimeError(f"{task_name} metadata previously settled as {prior_state}.")
+                stage_results.append((task_name, None, prior_error))
+                continue
+            if prior_state == "retry_pending":
+                prior_error = RuntimeError(
+                    f"{task_name} metadata is waiting for bounded automatic provider recovery."
+                )
                 stage_results.append((task_name, None, prior_error))
                 continue
             if build_id:
@@ -1337,6 +1346,11 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 str(name)
                 for name in getattr(metadata_contract, "model_fields", {})
             )
+            prior_recovery_attempts = (
+                int(prior_ledger.get("automatic_recovery_attempts") or 0)
+                if isinstance(prior_ledger, dict)
+                else 0
+            )
             ledger_context = {
                 "provider_profile_id": active_request.get("provider_profile_id"),
                 "provider": active_request.get("provider"),
@@ -1347,6 +1361,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 "max_output_tokens": max_tokens,
                 "timeout_seconds": _stage_timeouts(active_request).get(task_name),
                 "checkpoint_invalidation_reason": invalidation_reason,
+                "automatic_recovery_attempts": prior_recovery_attempts,
             }
             stage_status[task_name] = "running"
             stage_ledger[task_name] = {**ledger_context, "state": "running", "started_at": started_at, "finished_at": None, "error": None}
@@ -1486,6 +1501,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "residual_contradiction_fields": residual_contradictions,
                     "model_invocations": model_invocations,
                     "inflight_coalesced_calls": int(model_call_counter.get("coalesced") or 0),
+                    "recovered_after_retry": prior_recovery_attempts > 0,
                 }
                 if not residual_contradictions:
                     stage_ledger[task_name]["dependency_fingerprint"] = dependency_fingerprint
@@ -1532,21 +1548,35 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             except InterruptedError:
                 raise
             except Exception as exc:
-                stage_status[task_name] = "failed"
+                recovery_decision = plan_metadata_recovery(exc, ledger_context)
+                settled_state = "retry_pending" if recovery_decision.schedule else "failed"
+                stage_status[task_name] = settled_state
                 model_invocations = int(model_call_counter.get("attempts") or 0)
                 stage_ledger[task_name] = {
                     **ledger_context,
                     **({"pipeline": session.identity()} if session else {}),
-                    "state": "failed",
+                    "state": settled_state,
                     "started_at": started_at,
                     "finished_at": iso_now(),
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000),
                     "error": str(exc)[:1200],
+                    "failure_code": recovery_decision.disposition.code,
+                    "failure_class": recovery_decision.disposition.failure_class,
+                    "retryable": recovery_decision.disposition.retryable,
+                    "provider_http_status": recovery_decision.disposition.http_status,
+                    "provider_error_code": recovery_decision.disposition.provider_code,
+                    "capability_mismatch": recovery_decision.disposition.capability_mismatch,
                     "recovery_kind": recovery_kind,
                     "recovery_fields": recovery_fields,
                     "recovery_calls": recovery_calls,
                     "recovery_max_output_tokens": recovery_max_tokens,
                     "model_invocations": model_invocations,
+                    "dependency_fingerprint": dependency_fingerprint,
+                    "automatic_recovery_attempts": recovery_decision.completed_attempts,
+                    "next_automatic_recovery_attempt": recovery_decision.next_attempt,
+                    "retry_delay_seconds": recovery_decision.delay_seconds,
+                    "retry_not_before": recovery_decision.not_before,
+                    "automatic_recovery_terminal_reason": recovery_decision.terminal_reason,
                 }
                 stage_results.append((task_name, None, exc))
                 self._ledger.append(
@@ -1569,6 +1599,10 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     recovery_max_output_tokens=recovery_max_tokens,
                     residual_contradiction_fields=residual_contradictions,
                     model_invocations=model_invocations,
+                    failure_code=recovery_decision.disposition.code,
+                    failure_class=recovery_decision.disposition.failure_class,
+                    automatic_recovery_scheduled=recovery_decision.schedule,
+                    automatic_recovery_attempts=recovery_decision.completed_attempts,
                     provider_input_chars=int(model_call_counter.get("provider_input_chars") or 0),
                     provider_output_chars=int(model_call_counter.get("provider_output_chars") or 0),
                     provider_responses=int(model_call_counter.get("provider_responses") or 0),
@@ -1581,9 +1615,18 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     ),
                 )
                 if stage_callback:
-                    stage_callback(record, task_name, "failed", str(exc))
-                if build_id:
-                    self._append_warning(build_id, f"{record.get('record_id')}: {task_name} metadata requires review ({exc})")
+                    stage_callback(record, task_name, settled_state, str(exc))
+                if build_id and not recovery_decision.schedule:
+                    recovery_note = (
+                        "automatic recovery exhausted"
+                        if recovery_decision.terminal_reason == "automatic_recovery_exhausted"
+                        else "review required"
+                    )
+                    self._append_warning(
+                        build_id,
+                        f"{record.get('record_id')}: {task_name} metadata failed "
+                        f"({recovery_decision.disposition.code}); {recovery_note}.",
+                    )
 
         return stage_results
 
@@ -1809,7 +1852,13 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
 
         for task_name, result, failure in stage_results:
             if failure is not None or not isinstance(result, dict):
-                review_reasons.append(f"{task_name} metadata extraction could not be validated: {failure}")
+                # A transient provider failure that is already scheduled for
+                # automatic recovery is operationally unresolved, not yet a
+                # scholarly review conclusion.
+                if str(stage_status.get(task_name) or "") != "retry_pending":
+                    review_reasons.append(
+                        f"{task_name} metadata extraction could not be validated: {failure}"
+                    )
                 continue
             successful_tasks += 1
             metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
