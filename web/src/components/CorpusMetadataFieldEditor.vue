@@ -136,7 +136,9 @@ function displayTimestamp(value: unknown) {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
 }
 const modelSuggestion = computed(() =>
-  suggestedValues(props.status, props.value, isLlm.value, hasValue),
+  suggestedValues(props.status, props.value, isLlm.value, hasValue).filter(
+    (value) => !isPlaceholderValue(value),
+  ),
 );
 const optionGroups = computed(() =>
   groupOptionsBySuggestion(props.options || [], modelSuggestion.value),
@@ -810,6 +812,7 @@ const traceRows = computed(() => {
             data-no-value-action
             :data-primary-action="!hasDraftValue ? '' : undefined"
             :disabled="busy || saving"
+            @keydown.enter.prevent.stop="emit('noValue')"
             @click="emit('noValue')"
           >
             {{ i18n.t("pdf_corpus.no_value_short") }}
