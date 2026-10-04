@@ -54,7 +54,12 @@ class CaptureOptionsBody(BaseModel):
 
 
 class CaptureCreate(BaseModel):
-    wikidata_qid: str = Field(pattern=r"^Q[1-9]\d{0,11}$")
+    # Backward-compatible field name. It accepts either a Wikidata QID or a
+    # server-issued local Gutenberg identity returned by /authors/search.
+    wikidata_qid: str = Field(
+        max_length=400,
+        pattern=r"^(?:Q[1-9]\d{0,11}|gutenberg:-?\d*:-?\d*:[A-Za-z0-9._~%\-]+)$",
+    )
     options: CaptureOptionsBody = Field(default_factory=CaptureOptionsBody)
     start_discovery: bool = True
     ui_language: str = Field(default="en", pattern=r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
