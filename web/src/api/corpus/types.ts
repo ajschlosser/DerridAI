@@ -1168,9 +1168,29 @@ export interface CorpusRecord {
     start?: number;
     end?: number;
     speaker?: string;
+    resolved_speaker?: string;
+    provider_speaker?: string;
     locator_kind?: string;
     bbox?: number[];
     extraction_method?: string;
+    confidence?: number;
+    speaker_assignment?: {
+      method?: string;
+      confidence?: number;
+      ambiguous_word_count?: number;
+      word_count?: number;
+      review_recommended?: boolean;
+    };
+    source_words?: Array<{
+      word?: string;
+      start?: number;
+      end?: number;
+      speaker?: string | null;
+      provider_speaker?: string | null;
+      speaker_confidence?: number;
+      speaker_ambiguous?: boolean;
+      score?: number;
+    }>;
   }>;
   metadata_evidence?: Record<
     string,
