@@ -308,8 +308,23 @@ def _clock(seconds: float) -> str:
     return f"{total // 3600:02d}:{(total % 3600) // 60:02d}:{total % 60:02d}"
 
 
+def _audio_service_provenance() -> dict[str, str]:
+    """Persist the actual configured transcription endpoint/model, never its credential."""
+    from .system_store import system_store
+
+    config = system_store.audio_transcription_settings(include_key=False)
+    return {
+        "model": str(config.get("model") or "whisper-1"),
+        "provider": str(config.get("base_url") or "https://api.openai.com/v1"),
+    }
+
+
 def extract_audio(
-    data: bytes, *, filename: str, catalog: dict[str, Any] | None = None
+    data: bytes,
+    *,
+    filename: str,
+    catalog: dict[str, Any] | None = None,
+    diarize: bool = True,
 ) -> dict[str, Any]:
     """Transcribe the whole recording before any source span is created.
 
@@ -333,11 +348,14 @@ def extract_audio(
         initial_spans = spans_from_transcript(transcript, [])
         if any(block["end"] > duration + 1 for block in initial_spans):
             raise ValueError("Transcript timestamps exceed the recording duration.")
-        try:
-            turns = diarize_with_whisperx(path)
-        except Exception as exc:
+        if diarize:
+            try:
+                turns = diarize_with_whisperx(path)
+            except Exception as exc:
+                turns = []
+                warnings.append(f"whisperx speaker diarization unavailable: {exc}")
+        else:
             turns = []
-            warnings.append(f"whisperx speaker diarization unavailable: {exc}")
         blocks = spans_from_transcript(transcript, turns)
         if not blocks:
             raise ValueError("OpenAI Whisper returned no source spans.")
@@ -366,14 +384,14 @@ def extract_audio(
             "extractor": "openai-whisper+whisperx-v2",
             "source_transcription": transcript,
             "audio_provenance": {
-                "model": os.getenv("OPENAI_WHISPER_MODEL", "whisper-1"),
-                "provider": os.getenv(
-                    "OPENAI_WHISPER_BASE_URL", "https://api.openai.com/v1"
-                ),
+                **_audio_service_provenance(),
                 "httpx_version": tool_version("httpx"),
                 "ffprobe_version": executable_version("ffprobe"),
                 "whisperx_version": tool_version("whisperx"),
-                "diarization_status": "failed"
+                "diarization_requested": diarize,
+                "diarization_status": "disabled"
+                if not diarize
+                else "failed"
                 if warnings
                 else "complete"
                 if turns
