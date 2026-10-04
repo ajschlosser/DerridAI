@@ -30,6 +30,7 @@ from app.metadata_failure_recovery import (
     plan_metadata_recovery,
     queue_due_recoveries,
 )
+from app.structured_completion import StructuredCompletionError, complete_structured_json
 
 
 def test_provider_http_failures_have_stable_retry_semantics() -> None:
@@ -182,3 +183,44 @@ def test_only_due_retry_pending_families_are_requeued() -> None:
     assert discourse["state"] == "queued"
     assert discourse["automatic_recovery_attempts"] == 1
     assert "next_automatic_recovery_attempt" not in discourse
+
+
+
+def test_structured_completion_does_not_repeat_nonretryable_http_failure() -> None:
+    calls = 0
+
+    def request_once(_context):
+        nonlocal calls
+        calls += 1
+        raise ProviderRequestError("bad credentials", status_code=401)
+
+    with pytest.raises(StructuredCompletionError) as caught:
+        complete_structured_json(
+            request_once,
+            prompt="Return JSON.",
+            attempts=4,
+            sleep_fn=lambda _seconds: None,
+        )
+
+    assert calls == 1
+    assert caught.value.attempts == 1
+
+
+def test_structured_completion_can_retry_transient_http_failure_within_budget() -> None:
+    calls = 0
+
+    def request_once(_context):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise ProviderRequestError("temporary upstream", status_code=503)
+        return '{"ok": true}'
+
+    result = complete_structured_json(
+        request_once,
+        prompt="Return JSON.",
+        attempts=2,
+        sleep_fn=lambda _seconds: None,
+    )
+    assert result == {"ok": True}
+    assert calls == 2
