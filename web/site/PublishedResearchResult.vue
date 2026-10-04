@@ -57,11 +57,6 @@ function evidenceTargetId(evidenceId: string) {
   return `research-evidence-${String(evidenceId || "").replace(/[^A-Za-z0-9_-]+/g, "-")}`;
 }
 
-function evidenceHeading(item: EvidenceItem) {
-  const label = item.work || item.recordId;
-  return item.documentAuthor ? `${item.documentAuthor} · ${label}` : label;
-}
-
 function inlineCitation(item: EvidenceItem) {
   const record = props.recordsById.get(String(item.recordId));
   const inline = String(record?.inline_citation || "").trim();
@@ -140,7 +135,8 @@ const answerSegments = computed<AnswerSegment[]>(() => {
           >
             <span class="published-evidence-copy">
               <span class="sr-only">{{ openRecordLabel }}: </span>
-              <strong>[{{ item.evidenceId }}] {{ evidenceHeading(item) }}</strong>
+              <strong>[{{ item.evidenceId }}] {{ item.work || item.recordId }}</strong>
+              <small v-if="item.documentAuthor">{{ item.documentAuthor }}</small>
               <small>{{
                 item.citation ||
                 recordsById.get(String(item.recordId))?.full_citation ||
