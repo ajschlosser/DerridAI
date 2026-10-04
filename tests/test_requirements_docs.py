@@ -32,6 +32,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SPEC = ROOT / "SPECIFICATION.md"
 REQ_DIR = ROOT / "docs" / "requirements"
 INDEX = REQ_DIR / "README.md"
 MATRIX = REQ_DIR / "TRACEABILITY_MATRIX.md"
@@ -40,6 +41,8 @@ REQUIREMENT_ROW = re.compile(r"^\|\s+\*\*(PRD-[A-Z0-9]+-\d+)\*\*\s+\|")
 GLOBAL_ID = re.compile(r"PRD-G-\d+")
 MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 TOTAL_REQUIREMENTS = re.compile(r"Total requirements: \*\*(\d+)\*\*")
+CELF_REQUIREMENT_ID = re.compile(r"\b(?:CORE|PUB|RET|EVID|CLM|REP|PROV|ROCR|LOC)-ID-\d{3}\b")
+CELF_KEY_LINK = re.compile(r"\[((?:CORE|PUB|RET|EVID|CLM|REP|PROV|ROCR|LOC)-ID-\d{3})\]\(\.\./\.\./SPECIFICATION\.md(?:#[^)]+)?\)")
 
 
 def requirement_documents() -> list[Path]:
@@ -153,3 +156,26 @@ def test_relative_markdown_links_resolve_inside_repository() -> None:
 
     assert escaped == [], f"Requirements links escape repository root: {escaped}"
     assert broken == [], f"Broken relative requirements links: {broken}"
+
+def test_celf_requirement_key_links_resolve() -> None:
+    """Exact cELF keys in requirements must name real catalogue entries and link to the catalogue."""
+    specification = SPEC.read_text(encoding="utf-8")
+    catalogue_start = specification.find("### Normative Conformance Requirement Catalogue")
+    assert catalogue_start >= 0, "SPECIFICATION.md is missing the normative conformance catalogue"
+    catalogue = specification[catalogue_start:]
+    defined = set(CELF_REQUIREMENT_ID.findall(catalogue))
+
+    unknown: list[tuple[str, str]] = []
+    unlinked: list[tuple[str, str]] = []
+    for path in sorted(REQ_DIR.glob("*.md")):
+        content = path.read_text(encoding="utf-8")
+        linked = set(CELF_KEY_LINK.findall(content))
+        for key in set(CELF_REQUIREMENT_ID.findall(content)):
+            if key not in defined:
+                unknown.append((path.name, key))
+            if f"[{key}]" in content and key not in linked:
+                unlinked.append((path.name, key))
+
+    assert unknown == [], f"Unknown cELF requirement key(s): {unknown}"
+    assert unlinked == [], f"Unlinked exact cELF requirement key(s): {unlinked}"
+
