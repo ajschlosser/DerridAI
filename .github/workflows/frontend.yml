@@ -595,6 +595,38 @@ jobs:
           DERRIDAI_SITE_CONTAINER: derridai-publication-acceptance-${{ github.run_id }}
         run: sh scripts/check_publication_artifacts.sh .tmp/publication-acceptance
 
+  format-pr-branch:
+    if: github.event_name == 'pull_request' && github.head_ref == 'task/published-site-research-settings'
+    name: format-pr-branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Format PR frontend sources
+        run: |
+          cd web
+          npm ci --no-audit --no-fund
+          cd ..
+          ./web/node_modules/.bin/prettier --write web/src/components/pipelines/PipelineConfigOverridesEditor.vue web/src/components/research/ResearchSettingsDrawer.vue web/src/domain/pipelineOverrides.ts web/src/domain/researchWorkspace.ts web/src/views/ResearchView.vue web/src/views/SettingsView.vue web/tests/frontend/research-progressive-loading.test.ts --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
+          if git diff --quiet -- web; then
+            echo "Frontend sources are already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/src/components/pipelines/PipelineConfigOverridesEditor.vue web/src/components/research/ResearchSettingsDrawer.vue web/src/domain/pipelineOverrides.ts web/src/domain/researchWorkspace.ts web/src/views/ResearchView.vue web/src/views/SettingsView.vue web/tests/frontend/research-progressive-loading.test.ts
+          git commit -m "style: format Research configuration sources"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
   # Preserve the historical required-check name while allowing unrelated
   # surfaces to skip expensive compute without weakening the checks that own them.
   frontend:
