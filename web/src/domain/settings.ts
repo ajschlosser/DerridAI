@@ -286,51 +286,26 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     helpFallback: "How many passages to keep after ranking. Typical scholarly runs use 24–64.",
   },
   {
-    id: "rag-fetch-k",
+    id: "rag-pipeline-overrides",
     section: "retrieval",
-    labelKey: "settings.rag_fetch_k",
-    labelFallback: "MMR fetch_k",
-    advanced: true,
-  },
-  {
-    id: "rag-lambda",
-    section: "retrieval",
-    labelKey: "settings.rag_lambda",
-    labelFallback: "MMR lambda",
-    advanced: true,
-  },
-  {
-    id: "rag-rrf",
-    section: "retrieval",
-    labelKey: "settings.rag_rrf_k",
-    labelFallback: "RRF k",
-    advanced: true,
-  },
-  {
-    id: "rag-top-n",
-    section: "retrieval",
-    labelKey: "settings.rag_top_n",
-    labelFallback: "Rerank top N",
-  },
-  {
-    id: "rag-reranker",
-    section: "retrieval",
-    labelKey: "settings.rag_reranker",
-    labelFallback: "Default reranker",
-  },
-  {
-    id: "rag-cross-encoder",
-    section: "retrieval",
-    labelKey: "settings.rag_cross_encoder",
-    labelFallback: "Cross-encoder model",
-    advanced: true,
-  },
-  {
-    id: "rag-decompose",
-    section: "retrieval",
-    labelKey: "settings.rag_decompose",
-    labelFallback: "Query-decomposition max tokens",
-    advanced: true,
+    labelKey: "settings.pipeline_overrides_title",
+    labelFallback: "Global pipeline overrides",
+    helpKey: "settings.pipeline_overrides_help",
+    helpFallback:
+      "Override registered stage configuration from Pipeline Studio for an exact Research pipeline version.",
+    keywords: [
+      "pipeline",
+      "stage",
+      "override",
+      "fetch_k",
+      "lambda",
+      "rrf",
+      "rerank",
+      "cross encoder",
+      "evidence budget",
+      "query decomposition",
+    ],
+    targetId: "settings-field-pipeline-overrides",
   },
   {
     id: "rag-response-language",
@@ -347,21 +322,6 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     helpFallback:
       "Adapt retrieval depth to median Record size and restore bounded same-document context without raising reranker or evidence-budget caps.",
     keywords: ["record size", "automatic", "neighbors", "retrieval depth", "segmentation"],
-  },
-  {
-    id: "rag-record-chars",
-    section: "retrieval",
-    labelKey: "settings.rag_record_chars",
-    labelFallback: "Max characters per evidence record",
-    helpKey: "settings.rag_record_chars_help",
-    helpFallback:
-      "Caps each passage so the model cannot swallow an entire chapter as one evidence item.",
-  },
-  {
-    id: "rag-total-chars",
-    section: "retrieval",
-    labelKey: "settings.rag_total_chars",
-    labelFallback: "Total evidence characters",
   },
   {
     id: "rag-locales",
@@ -657,19 +617,6 @@ export function validateRag(draft: RagSettingsDraft): FieldError[] {
       messageKey: "settings.error.rag_routes",
       messageFallback: "Select at least one retrieval route.",
     });
-  if (draft.fetch_k < draft.k)
-    errors.push({
-      field: "fetch_k",
-      messageKey: "settings.error.rag_fetch_k",
-      messageFallback: "MMR fetch_k must be at least as large as retrieval k.",
-    });
-  if (draft.evidence_total_char_limit < draft.evidence_record_char_limit) {
-    errors.push({
-      field: "evidence_total_char_limit",
-      messageKey: "settings.error.rag_total_chars",
-      messageFallback: "Total evidence characters must be at least the per-record limit.",
-    });
-  }
   return errors;
 }
 
