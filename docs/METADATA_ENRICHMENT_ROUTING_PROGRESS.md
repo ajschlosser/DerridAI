@@ -24,18 +24,18 @@ This is the authoritative resume point for the revised Pipeline Studio candidate
 
 ## Checkpoints
 
-| Step                                                    | Status   | Evidence                                                                                                                  |
-| ------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Generic named-port execution foundation                 | Complete | `0eee61b7`, `d2e52720`; repeated stages, branching, fan-in, fallbacks, empty-branch skips, safe telemetry                 |
-| Typed metadata artifacts and computational traits       | Complete | Explicit candidate/hypothesis/inference-request/proposal/embedding types; required/produced port traits; run-input traits |
-| Consumer terminal guarantees                            | Complete | Compile-time type/trait checks; run-time terminal-output enforcement; `any` cannot satisfy a concrete final contract      |
-| Historical enrichment migration to generic executor     | Complete | `9381c191`; generic scheduling with historical provider/ledger/ownership/concurrency parity                               |
-| Safe parallel scheduling                                | Complete | `394745cf`; bounded server opt-in, stable fan-in/traces, shared capacity and cancellation coverage                        |
-| Baseline benchmark and instrumentation                  | Partial  | Isolated runner and character/lookup counters implemented; real-provider case/model selection remains pending             |
-| Candidate packet, collection, aggregation, invalidation | Complete | `fcf4ab99`; server-only collection foundation; production registration and routing remain disabled                        |
-| Current-record support and observe-only router          | Complete | Exact current-locator checks and server-only advisory route observations                                                  |
-| RESOLVE, VERIFY, scoped INFER and proposal fan-in       | Pending  | No new routing behavior enabled                                                                                           |
-| Retrieval consolidation, calibration, benchmark tuning  | Pending  | No 33% performance or reviewer-quality claim                                                                              |
+| Step                                                    | Status   | Evidence                                                                                                                        |
+| ------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Generic named-port execution foundation                 | Complete | `0eee61b7`, `d2e52720`; repeated stages, branching, fan-in, fallbacks, empty-branch skips, safe telemetry                       |
+| Typed metadata artifacts and computational traits       | Complete | Explicit candidate/hypothesis/inference-request/proposal/embedding types; required/produced port traits; run-input traits       |
+| Consumer terminal guarantees                            | Complete | Compile-time type/trait checks; run-time terminal-output enforcement; `any` cannot satisfy a concrete final contract            |
+| Historical enrichment migration to generic executor     | Complete | `9381c191`; generic scheduling with historical provider/ledger/ownership/concurrency parity                                     |
+| Safe parallel scheduling                                | Complete | `394745cf`; bounded server opt-in, stable fan-in/traces, shared capacity and cancellation coverage                              |
+| Baseline benchmark and instrumentation                  | Partial  | Isolated runner and character/lookup counters implemented; real-provider case/model selection remains pending                   |
+| Candidate packet, collection, aggregation, invalidation | Complete | `fcf4ab99`; server-only collection foundation; production registration and routing remain disabled                              |
+| Current-record support and observe-only router          | Complete | Exact current-locator checks and server-only advisory route observations                                                        |
+| RESOLVE, VERIFY, scoped INFER and proposal fan-in       | Complete | Server-only proposal routing, exact evidence gates, scoped structured adapters and ordered terminal fan-in; production disabled |
+| Retrieval consolidation, calibration, benchmark tuning  | Pending  | No 33% performance or reviewer-quality claim                                                                                    |
 
 ## Current contract
 
@@ -62,7 +62,7 @@ PR #508 merged into master at `51b481cf`; that master was merged into this branc
 
 ## Next action
 
-Implement RESOLVE/VERIFY, scoped INFER and proposal fan-in only after the applicable schema/value, semantic-support and reviewer-visibility gates are defined and validated. The observation checkpoint validates exact mention occurrence, not proposition-level support or calibrated resolution. Production activation remains disabled; preserve historical enrichment/provider behavior and authority policy. Real-provider benchmark corpus/model selection remains pending.
+Continue with retrieval consolidation, calibration and benchmark tuning. Choose a researcher-approved local benchmark corpus and provider/model, preserve A/B input/configuration fingerprints, and measure reviewer quality and complete enrichment latency before production activation. The experimental routing adapter is server-only; existing historical enrichment assignments, call counts and authority reconciliation remain unchanged. Production integration still requires calibrated policy and a reviewer-visible proposal/reconciliation path.
 
 ## Historical executor migration checkpoint (`9381c191`)
 
@@ -147,3 +147,12 @@ Final handoff: draft PR #517 is open at https://github.com/ajschlosser/DerridAI/
 
 - Checkpoint implementation commit: `ad0a7fe7`. Full preflight attempted after commit: full backend Ruff and Python syntax passed; required formatting gate could not find this fresh clone's `web/node_modules`, generated-artifact gate reported stale/unverifiable artifacts, mypy was missing, and full regression could not start because pytest-xdist was missing (`-n`/`--dist` unsupported). The separately executed public pipeline catalog check passed, and the touched Markdown was formatted with the existing workspace Prettier. These limitations are not accepted passes. Commit/push use `DERRIDAI_SKIP_PREFLIGHT=1` after the manual targeted checks and this failed full-preflight attempt.
 - Stopping after this bounded observation checkpoint with 11% of the five-hour allowance remaining at the latest usage check, above the requested 8% floor. Resume with semantic-support/reviewer gates and RESOLVE/VERIFY/scoped INFER/proposal fan-in; do not enable adaptive production routing based on exact mention occurrence alone.
+
+## Experimental RESOLVE/VERIFY/scoped INFER/proposal fan-in checkpoint (2026-10-04)
+
+- Added a server-only `CandidateRouting` adapter and code-owned graph contracts/handlers. RESOLVE consumes exact current person-indexing mentions, produces schema-validated list/text values with exact evidence and unavailable confidence, and makes no provider call. It establishes mention occurrence only, never attribution or reviewer approval.
+- VERIFY evaluates candidate-bearing fields through an injected field-scoped adapter. Returned values must belong to the supplied candidates (including list cardinality), pass current schema/placeholder/control-vocabulary checks, and carry matching Record ID/revision/SourceDocument, exact integer offsets and quote text. Semantic judgments retain `model_inferred` derivation. Unsupported/uncertain verification emits a visible diagnostic and forwards only that field to INFER; transport/domain failures remain failures rather than silent inference success.
+- INFER receives only unresolved fields and their exact field definitions. A provider-neutral factory uses `structured_completion.complete_structured_json`, the shared bounded retry policy and domain validation. Provider request factories still own credentials, transport, cancellation and quotas; no new production provider adapter or assignment is registered. Prompt contract is `metadata-candidate-routing-v1`; source/candidate contents are explicitly inert data, and speaker/author/position-holder distinctions remain instructions.
+- Typed proposal packets remain advisory and always require review. `no_supported_value` remains an evaluation result and does not become human-confirmed absence. Fan-in rechecks current dependencies, field/schema identity, evidence and ownership, rejects duplicates/missing field outputs, and preserves requested-field order. A separate preserved packet carries collector diagnostics and permits an all-owned graph to return an explicit empty terminal packet.
+- Human-touched, human-confirmed/override/absent and selected deterministic/inherited fields are preserved without provider calls. Collection identity now also fingerprints `human_touched_fields`, so an ownership change invalidates in-flight tasks even without a RecordRevision change. Canonical records, assertions and review decisions are not mutated by this adapter. Trace tests verify that source/quote text and private provider errors stay out of operational traces.
+- Refreshed master to `ad28261f` before implementation. Initial expanded validation: 253 focused tests passed; full backend Ruff, public catalog exporter `--check`, targeted mypy and full backend mypy (269 source files) passed. Later added graph-fallback, vocabulary and selected-assertion ownership cases are included in final focused validation below. Full backend regression is running in the isolated scratch environment; its result is recorded before the checkpoint push. Real-provider benchmarking, calibrated resolution, reviewer-quality improvement and production readiness remain unclaimed.

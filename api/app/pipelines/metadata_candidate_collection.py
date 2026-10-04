@@ -128,6 +128,7 @@ def candidate_binding(
         "assertions": record.get("field_assertions"),
         "selected_assertions": record.get("current_field_assertions"),
         "field_status": record.get("metadata_field_status"),
+        "human_touched_fields": record.get("human_touched_fields"),
         "evidence": record.get("metadata_evidence"),
         "nlp": record.get("nlp_candidates"),
         "document_intelligence": record.get("document_intelligence"),
