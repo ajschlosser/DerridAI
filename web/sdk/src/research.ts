@@ -107,16 +107,14 @@ function mentionedWorkGroups(manifest: PublicationManifest, question: string): s
 
   for (const works of authorWorks.values()) groups.push([...works]);
 
-  const seen = new Set<string>();
-  return groups
-    .map((works) => [...new Set(works)].sort())
-    .filter((works) => {
-      const key = works.join("\u0000");
-      if (!works.length || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 4);
+  const distinct: string[][] = [];
+  for (const works of groups.map((group) => [...new Set(group)].sort())) {
+    if (!works.length) continue;
+    if (distinct.some((existing) => existing.some((work) => works.includes(work)))) continue;
+    distinct.push(works);
+    if (distinct.length === 4) break;
+  }
+  return distinct;
 }
 
 function publicationScope(manifest: PublicationManifest): string {
