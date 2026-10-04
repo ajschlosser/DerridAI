@@ -89,13 +89,13 @@ from .field_assertions import (
     migrate_record_assertions,
     reopen_assertion,
 )
-from .metadata_adjudication_cache import suggestions as adjudication_suggestions
-from .metadata_failure_recovery import plan_metadata_recovery
 from .llm_failures import failure_disposition
+from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_candidates import (
     apply_indexing_nlp_candidates,
     is_direct_nlp_indexing_candidate,
 )
+from .metadata_failure_recovery import plan_metadata_recovery
 from .metadata_precedents_cache import CACHE_KEY as PRECEDENTS_CACHE_KEY
 from .metadata_precedents_cache import build_precedents_cache
 from .metadata_provider_health import metadata_provider_health
