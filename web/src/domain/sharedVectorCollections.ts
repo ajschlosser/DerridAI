@@ -17,7 +17,7 @@
  */
 
 import { toast } from "../composables/notifications";
-import { createVectorCollectionBridge } from "../runtime/vectorCollectionBridge.js";
+import { createVectorCollectionBridge } from "./vectorCollectionBridge.js";
 import { api } from "./legacyApi";
 import { decorateDisabledControls, showAppModal } from "./disabledControls";
 import { esc, icon } from "./html";

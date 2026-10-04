@@ -24,7 +24,7 @@ const runtime = vi.hoisted(() => ({
   ensureCorpusWorkspaceLoaded: vi.fn(async () => undefined),
   state: { view: "" },
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
+vi.mock("../../src/domain/appBootstrap", () => ({ ...runtime }));
 vi.mock("../../src/domain/sharedCorpusHydration", () => ({
   ensureCorpusWorkspaceLoaded: () => runtime.ensureCorpusWorkspaceLoaded(),
 }));

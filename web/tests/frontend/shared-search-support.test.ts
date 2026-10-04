@@ -18,7 +18,7 @@
 
 import { describe, expect, it } from "vitest";
 // The app enters through the runtime; sharedNavigation reaches it through the operations panel, so import it first.
-import "../../src/runtime/runtimeBridge";
+import "../../src/domain/appBootstrap";
 import { evidenceSelection, searchFacets } from "../../src/domain/sharedSearchSupport";
 import { dbSearchWhere, display, pages, recordFields } from "../../src/domain/sharedRecordHelpers";
 import { annotationsWorkspace } from "../../src/domain/sharedAnnotations";

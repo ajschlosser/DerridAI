@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { applyUiTheme } from "../runtime/legacyCompat.js";
+import { applyUiTheme } from "./legacyCompat.js";
 import { invalidateCorpusCache } from "./corpusCache";
 import { restoreCurrentPdfAsset } from "./pdfAssetPersistence";
 import { serializableRecordsFile } from "./recordsFiles";
