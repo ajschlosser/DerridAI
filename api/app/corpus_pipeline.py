@@ -17,7 +17,7 @@
 """Explicit context passed between corpus construction stages."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -30,7 +30,7 @@ class BuildScope:
     semantic_blocks: list[dict[str, Any]]
     source_quality: dict[str, Any]
     source_scope_repair: bool
-    source_pages: list[dict[str, Any]]
+    source_pages: list[dict[str, Any]] = field(default_factory=list)
 
 
 def select_source_pages(
