@@ -78,4 +78,15 @@ Root-level components are shared pieces that predate or span those domains. When
 - Add or update Storybook stories for reusable visual surfaces.
 - Use semantic design tokens and preserve WCAG 2.2 AA behavior, keyboard operation, localization, long-string resilience, and light/dark/high-contrast support.
 
+## Adding or refactoring a component
+
+1. Put reusable primitives in `ui/`; put product-specific UI in the owning domain folder.
+2. Keep network calls, persistence, and canonical authority decisions outside the component. Inject data/actions through props, composables, stores, or the owning feature layer.
+3. Give non-trivial computed state a descriptive name instead of embedding nested expressions in the template.
+4. Add/update a Storybook state for reusable visuals and focused Vitest coverage for behavior. Use Playwright when layout, focus, routing, scrolling, or cross-surface integration is essential.
+5. Verify keyboard operation, accessible names, focus behavior, reflow/zoom, high contrast/forced colors, reduced motion, and long localized strings.
+6. If the component replaces compatibility/runtime markup, preserve characterization coverage until the migrated behavior is explicitly owned by Vue tests.
+
+Common traps are direct `fetch` calls in components, hard-coded user-facing strings, using frontend state as scholarly authority, and adding another root-level component when a domain folder already owns the concept.
+
 See the focused maps for [Corpus Builder](corpus-builder/README.md) and [Pipeline Studio](pipelines/README.md).
