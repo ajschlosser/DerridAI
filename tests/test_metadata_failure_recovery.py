@@ -181,7 +181,8 @@ def test_only_due_retry_pending_families_are_requeued() -> None:
     assert record["metadata_stage_status"]["quotation"] == "retry_pending"
     discourse = record["metadata_execution_ledger"]["discourse"]
     assert discourse["state"] == "queued"
-    assert discourse["automatic_recovery_attempts"] == 1
+    assert discourse["automatic_recovery_attempts"] == 0
+    assert discourse["automatic_recovery_inflight_attempt"] == 1
     assert "next_automatic_recovery_attempt" not in discourse
 
 
