@@ -451,7 +451,18 @@ CURRENT REVIEWED RECORD TEXT:
 
         extraction_state = "complete" if int(build.get("source_block_count") or 0) else ("active" if running and stage in {"structure", "document_review"} else "waiting")
         construction_state = "complete" if record_count else ("active" if running and stage in {"segmenting", "reconciling"} else "waiting")
-        enrichment_state = "complete" if metadata_total and metadata_remaining == 0 else ("active" if running and stage in {"document_intelligence", "enriching", "metadata_retry"} else "attention" if record_count else "waiting")
+        enrichment_running = running and stage in {
+            "document_intelligence", "enriching", "metadata_retry", "metadata_enrichment_rerun",
+        }
+        enrichment_state = (
+            "active"
+            if enrichment_running
+            else "complete"
+            if metadata_total and metadata_remaining == 0
+            else "attention"
+            if record_count
+            else "waiting"
+        )
         review_state = "complete" if record_count and pending == 0 else ("attention" if record_count else "waiting")
         validation_state = "complete" if validation.get("valid") else ("blocked" if validation else "waiting")
         publication_state = "complete" if publication else ("active" if can_publish else "blocked" if record_count else "waiting")
