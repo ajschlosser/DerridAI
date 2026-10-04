@@ -48,7 +48,15 @@ describe("audio speaker assignments", () => {
         mediaKind: "audio",
         filename: "seminar.wav",
         blockCount: 12,
-        audioProvenance: { duration_seconds: 90, diarization_status: "complete" },
+        audioProvenance: {
+          duration_seconds: 90,
+          diarization_status: "complete",
+          alignment_status: "provider_word_timestamps",
+          speaker_assignment_method: "word_overlap",
+          word_count: 128,
+          ambiguous_word_count: 3,
+          review_recommended_block_count: 2,
+        },
         speakers: ["SPEAKER_1", "SPEAKER_2"],
         voiceAssignments: {},
       },
@@ -56,6 +64,11 @@ describe("audio speaker assignments", () => {
     });
     expect(audio.findComponent(AudioSpeakerAssignments).exists()).toBe(true);
     expect(audio.findAll("input")).toHaveLength(2);
+    expect(audio.text()).toContain("provider_word_timestamps");
+    expect(audio.text()).toContain("word_overlap");
+    expect(audio.text()).toContain("128");
+    expect(audio.text()).toContain("3");
+    expect(audio.find(".audio-review-note").exists()).toBe(true);
 
     const noSpeakers = mount(MediaStructureConfigurator, {
       props: {

@@ -686,18 +686,36 @@ Python/library versions, and source digest are saved with the asset.
 
 Audio is optional: the Docker API image includes FFmpeg (including `ffprobe`);
 local/non-Docker API environments must install FFmpeg separately. Configure
-`OPENAI_API_KEY` for full-file Whisper transcription. `whisperx` and its model
-runtime remain optional and must be installed separately if speaker diarization
-is required; configure `HF_TOKEN` where the diarization model requires access.
-Files must be at most 24 MiB and
-four hours. Unsupported codecs, probe timeouts, failed transcription, empty
-transcripts, and missing/invalid timestamps stop ingestion. Diarization failure
-preserves the transcript with a visible warning and no invented speaker.
-The model, provider endpoint, duration, and diarization status are retained.
+`OPENAI_API_KEY` for full-file Whisper transcription. `whisperx` provides forced
+word alignment and speaker diarization when those stages are enabled; configure
+`HF_TOKEN` where the diarization model requires access. Files must be at most
+24 MiB and four hours. Unsupported codecs, probe timeouts, failed transcription,
+empty transcripts, and missing/invalid timestamps stop ingestion.
+
+Audio ingestion now keeps transcription, alignment, diarization, and speaker
+assignment as distinct provenance stages. DerridAI asks the transcription provider
+for both segment and word timestamps. If the provider returns only segment times,
+WhisperX forced alignment adds word timing without replacing the provider's
+transcript text. Diarization is then matched to individual words by temporal
+overlap. Speaker changes inside one Whisper segment therefore become separate
+timed source spans instead of assigning the whole segment to whichever speaker
+occupied most of it.
+
+Each word-level speaker assertion retains the stable `SPEAKER_n` identity, the
+provider's original voice-cluster label, temporal confidence, and an ambiguity flag.
+Close overlaps are not silently treated as certain: the affected timed span is
+marked for speaker review, and the source summary reports ambiguous-word and
+review-recommended counts. When word alignment is unavailable, DerridAI explicitly
+records the fallback and uses segment-level overlap rather than claiming word-level
+precision. Diarization failure still preserves the transcript with a visible warning
+and no invented speaker. The immutable source asset retains the original provider
+transcript and normalized diarization turns alongside the derived timed spans.
+
 Distinct diarized voices are labelled `SPEAKER_1`, `SPEAKER_2`, and so on in
 order of first appearance. In Corpus Builder **Setup → Metadata**, each detected
-voice can be assigned a person's name before enrichment begins; the transcription
-review can also expose the same assignment when audio is being reviewed. DerridAI
+voice can be assigned a person's name before enrichment begins. In transcription
+review, timed audio spans are clickable: selecting a timestamp seeks playback to
+that evidence, and uncertain speaker spans are called out for review. DerridAI
 retains the original `SPEAKER_n` identifier on immutable source spans and projects
 the reviewed name into the record's authoritative `speaker` assertion. Automatic
 enrichment cannot overwrite that reviewed identity. Renaming a voice updates

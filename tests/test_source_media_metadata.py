@@ -125,6 +125,114 @@ def test_audio_ingest_automatically_diarizes_and_exposes_distinct_speakers(monke
     assert [block["speaker"] for block in extracted["blocks"]] == ["SPEAKER_1", "SPEAKER_2"]
 
 
+
+def test_word_timestamps_split_one_whisper_segment_at_speaker_change():
+    transcript = {
+        "text": "Hello there, good evening.",
+        "language": "en",
+        "segments": [
+            {
+                "start": 0.0,
+                "end": 4.0,
+                "text": "Hello there, good evening.",
+                "avg_logprob": -0.1,
+            }
+        ],
+        "words": [
+            {"start": 0.0, "end": 0.8, "word": "Hello"},
+            {"start": 0.9, "end": 1.8, "word": "there,"},
+            {"start": 2.1, "end": 2.8, "word": "good"},
+            {"start": 2.9, "end": 3.8, "word": "evening."},
+        ],
+    }
+    turns = source_audio.normalize_speaker_labels(
+        [
+            {"start": 0.0, "end": 2.0, "speaker": "voice-a"},
+            {"start": 2.0, "end": 4.0, "speaker": "voice-b"},
+        ]
+    )
+
+    blocks = source_audio.spans_from_transcript(transcript, turns)
+
+    assert [block["text"] for block in blocks] == ["Hello there,", "good evening."]
+    assert [block["speaker"] for block in blocks] == ["SPEAKER_1", "SPEAKER_2"]
+    assert all(
+        block["speaker_assignment"]["method"] == "word_overlap" for block in blocks
+    )
+    assert all(
+        block["extraction_method"] == "whisper+word-speaker-alignment"
+        for block in blocks
+    )
+    assert " ".join(block["text"] for block in blocks) == transcript["text"]
+
+
+def test_word_level_speaker_evidence_survives_record_construction():
+    transcript = {
+        "text": "First second.",
+        "language": "en",
+        "segments": [{"start": 0.0, "end": 2.0, "text": "First second."}],
+        "words": [
+            {"start": 0.0, "end": 0.8, "word": "First"},
+            {"start": 1.0, "end": 1.8, "word": "second."},
+        ],
+    }
+    turns = source_audio.normalize_speaker_labels(
+        [{"start": 0.0, "end": 2.0, "speaker": "provider-a"}]
+    )
+    blocks = source_audio.spans_from_transcript(transcript, turns)
+
+    records = segmentation._construct_records(
+        {"filename": "seminar.wav", "asset_id": "audio-a", "media_kind": "audio"},
+        blocks,
+        [],
+    )
+
+    span = records[0]["source_spans"][0]
+    assert span["speaker"] == "SPEAKER_1"
+    assert span["provider_speaker"] == "provider-a"
+    assert span["speaker_assignment"]["method"] == "word_overlap"
+    assert [word["word"] for word in span["source_words"]] == ["First", "second."]
+
+
+def test_word_speaker_assignment_marks_close_overlap_for_review():
+    transcript = {
+        "text": "Crossing",
+        "language": "en",
+        "segments": [{"start": 0.0, "end": 1.0, "text": "Crossing"}],
+        "words": [{"start": 0.0, "end": 1.0, "word": "Crossing"}],
+    }
+    turns = source_audio.normalize_speaker_labels(
+        [
+            {"start": 0.0, "end": 0.55, "speaker": "voice-a"},
+            {"start": 0.45, "end": 1.0, "speaker": "voice-b"},
+        ]
+    )
+
+    blocks = source_audio.spans_from_transcript(transcript, turns)
+
+    assert len(blocks) == 1
+    assignment = blocks[0]["speaker_assignment"]
+    assert assignment["ambiguous_word_count"] == 1
+    assert assignment["review_recommended"] is True
+    assert blocks[0]["source_words"][0]["speaker_ambiguous"] is True
+
+
+def test_provider_words_skip_whisperx_forced_alignment():
+    transcript = {
+        "text": "Hello.",
+        "language": "en",
+        "segments": [{"start": 0.0, "end": 1.0, "text": "Hello."}],
+        "words": [{"start": 0.0, "end": 1.0, "word": "Hello."}],
+    }
+
+    aligned, status = source_audio.align_transcript_with_whisperx(
+        Path("unused.wav"), transcript
+    )
+
+    assert aligned is transcript
+    assert status == "provider_word_timestamps"
+
+
 def test_diarized_speaker_changes_are_deterministic_record_boundaries():
     blocks = [
         {
