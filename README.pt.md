@@ -26,11 +26,11 @@ DerridAI é um ambiente de investigação local-first que preserva a proveniênc
 
 DerridAI é também a implementação de referência original do **cELF 1.0 — Capta-Enriched Lexical Format**, uma arquitetura de informação que preserva a proveniência para investigação documental assistida por IA. A implementação mantém separadamente inspecionáveis a identidade da fonte, a identidade e revisão do Record, as asserções de metadados, a evidência, os claims gerados e os support bindings, em vez de os achatar num único vector store opaco.
 
-Versão atual: **0.81.0 — Fall River** ([notas de versão](docs/notes/0.81.0.md)). A versão da aplicação não foi aumentada desde Fall River; este README descreve a branch `master` atual, incluindo trabalho posterior a 0.81.0 que não faz parte da versão marcada com tag.
+Versão atual: **0.82.0 — Gloucester** ([notas de versão](docs/notes/0.82.0.md)). Este README descreve a versão Gloucester.
 
 ## Estado atual de `master`
 
-A branch atual avançou substancialmente desde a tag 0.81.0, embora a versão da aplicação continue a ser 0.81.0. O resumo abaixo descreve o produto atual, não novas notas de versão.
+O resumo abaixo descreve a versão Gloucester.
 
 - **Corpus Builder é agora um fluxo progressivo Configuração → Build → Revisão → Publicação.** Suporta enriquecimento concorrente limitado, escolhas explícitas de topologia do corpus e tamanho dos Records, revisão retomável e consciente das revisões, filas persistentes locais ao Record, sessões focadas na correção de bloqueios de publicação, grupos de metadados repetíveis, atribuição de oradores em áudio e revisão segura de texto durante preparação verificada.
 - **O processamento de metadados e evidência faz menos trabalho de modelo e preserva semântica mais forte.** Routing determinístico/candidate-first, identidade semântica e equivalência de valores, evidence cascade v2 validada por suporte, reparação/classificação de structured completions e reconciliação incremental de Metadata Memory reduzem a latência sem permitir que relevância de retrieval ou output malformado se tornem evidência.
