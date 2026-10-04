@@ -575,6 +575,7 @@ def test_audio_word_speaker_provenance_persists_with_asset(monkeypatch, tmp_path
 
     assert reloaded["source_transcription"] == transcript
     assert reloaded["source_diarization"] == turns
+    assert reloaded["extraction_provenance"]["contract"] == "source-extraction-v3-word-speakers"
     assert reloaded["audio_provenance"]["alignment_status"] == "provider_word_timestamps"
     assert reloaded["audio_provenance"]["speaker_assignment_method"] == "word_overlap"
     assert blocks[0]["provider_speaker"] == "speaker-a"
