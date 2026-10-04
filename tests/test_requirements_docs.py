@@ -41,6 +41,8 @@ REQUIREMENT_ROW = re.compile(r"^\|\s+\*\*(PRD-[A-Z0-9]+-\d+)\*\*\s+\|")
 GLOBAL_ID = re.compile(r"PRD-G-\d+")
 MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 TOTAL_REQUIREMENTS = re.compile(r"Total requirements: \*\*(\d+)\*\*")
+CELF_REQUIREMENT_ID = re.compile(r"\b(?:CORE|PUB|RET|EVID|CLM|REP|PROV|ROCR|LOC)-ID-\d{3}\b")
+CELF_KEY_LINK = re.compile(r"\[((?:CORE|PUB|RET|EVID|CLM|REP|PROV|ROCR|LOC)-ID-\d{3})\]\(\.\./\.\./SPECIFICATION\.md#normative-conformance-requirement-catalogue\)")
 
 
 def requirement_documents() -> list[Path]:
