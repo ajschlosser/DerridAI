@@ -665,6 +665,16 @@ settings that can no longer affect them. Printed-page detection runs automatical
 during source ingestion using deterministic extraction, with the configured model
 used only as a fallback when no credible sequence is found.
 
+Source extraction does not hold the canonical repository lock while OCR,
+transcription, or page detection runs, so an unrelated build can still save
+reviewed Records. Source imports remain serialized within the API repository;
+this does not change review-readiness or publication requirements.
+Source bytes and extracted blocks are staged before a short coordinated
+publication, with metadata published last. Failed imports remain retryable;
+an already-completed identical source is reused rather than overwritten.
+Checkpoint persistence is coordinated per build without changing canonical
+Record authority, review decisions, or publication gates.
+
 Ingestion rejects malformed or unsupported files and embedded Word/RTF active
 content; it never runs document macros, fields, or linked objects. Non-PDF files
 are limited to 32 MiB (RTF to 8 MiB), Word archives to 2,048 entries and 64 MiB
