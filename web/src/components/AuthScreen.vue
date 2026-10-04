@@ -100,10 +100,7 @@ async function submit() {
           }}</strong>
           <span>{{ i18n.t("locale.install_requires_admin") }}</span>
         </div>
-        <a
-          class="btn"
-          :href="`/locale?install=${encodeURIComponent(i18n.missingBrowserLocale)}`"
-        >
+        <a class="btn" :href="`/locale?install=${encodeURIComponent(i18n.missingBrowserLocale)}`">
           {{ i18n.t("locale.install_browser_language") }}
         </a>
       </div>

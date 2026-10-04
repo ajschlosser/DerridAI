@@ -164,9 +164,10 @@ function formatDate(value?: unknown) {
   if (!value) return "";
   try {
     return new Intl.DateTimeFormat(i18n.locale, {
-      timeZone: i18n.timeZone, dateStyle: "medium", timeStyle: "short" }).format(
-      new Date(String(value)),
-    );
+      timeZone: i18n.timeZone,
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(String(value)));
   } catch {
     return String(value);
   }

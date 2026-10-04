@@ -1541,7 +1541,9 @@ onBeforeUnmount(() => {
                   <button type="button" class="search-view-open" @click="openSavedView(view)">
                     <b>{{ view.name }}</b
                     ><small>{{
-                      new Date(view.updated_at).toLocaleString(i18n.locale, { timeZone: i18n.timeZone })
+                      new Date(view.updated_at).toLocaleString(i18n.locale, {
+                        timeZone: i18n.timeZone,
+                      })
                     }}</small></button
                   ><button
                     type="button"
@@ -1572,7 +1574,12 @@ onBeforeUnmount(() => {
                           ? i18n.t("search.corpus_database")
                           : i18n.t("search.loaded_records")
                       }}
-                      · {{ new Date(item.created_at).toLocaleString(i18n.locale, { timeZone: i18n.timeZone }) }}</small
+                      ·
+                      {{
+                        new Date(item.created_at).toLocaleString(i18n.locale, {
+                          timeZone: i18n.timeZone,
+                        })
+                      }}</small
                     >
                   </button>
                 </article>

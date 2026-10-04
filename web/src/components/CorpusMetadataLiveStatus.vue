@@ -81,7 +81,9 @@ const hiddenActiveRecordCount = computed(() => Math.max(0, activeRecords.value.l
 const settled = computed(() => complete.value + failed.value + skipped.value);
 const lastProgress = computed(() =>
   props.build.metadata_last_progress_at
-    ? new Date(props.build.metadata_last_progress_at).toLocaleTimeString(i18n.locale, { timeZone: i18n.timeZone })
+    ? new Date(props.build.metadata_last_progress_at).toLocaleTimeString(i18n.locale, {
+        timeZone: i18n.timeZone,
+      })
     : i18n.t("pdf_corpus.not_yet"),
 );
 function elapsedSince(value?: string | null): number {

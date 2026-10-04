@@ -28,7 +28,9 @@ export interface BrowserLocaleMatch {
 }
 
 export function normalizeLocale(code: string): string {
-  const value = String(code || "").trim().replaceAll("_", "-");
+  const value = String(code || "")
+    .trim()
+    .replaceAll("_", "-");
   if (!value) return "";
   try {
     return new Intl.Locale(value).toString();
@@ -93,10 +95,7 @@ export function isSupportedTimeZone(zone: string): boolean {
   }
 }
 
-export function resolveTimeZone(
-  preference: string,
-  browserZone = detectBrowserTimeZone(),
-): string {
+export function resolveTimeZone(preference: string, browserZone = detectBrowserTimeZone()): string {
   if (preference && preference !== AUTO_TIME_ZONE && isSupportedTimeZone(preference)) {
     return preference;
   }

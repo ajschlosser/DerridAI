@@ -259,7 +259,9 @@ const currentTimePreview = computed(() => {
     return i18n.timeZone;
   }
 });
-const browserLocaleInstalled = computed(() => Boolean(i18n.browserLocale && !i18n.missingBrowserLocale));
+const browserLocaleInstalled = computed(() =>
+  Boolean(i18n.browserLocale && !i18n.missingBrowserLocale),
+);
 const policyReady = computed(
   () =>
     contentPolicy.value?.status === "ready" &&

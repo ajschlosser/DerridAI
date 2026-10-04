@@ -121,13 +121,13 @@ English, French, and Latin small spaCy pipelines are bundled with the API and re
 
 The built-in catalogue contains only models DerridAI can actually run. It no longer includes reference-only Propp or LLpro rows. Current administrator-installable entries are the pinned spaCy 3.8 model wheels, the multilingual entity fallback, and the two approved English BookNLP packs; LatinCy is shown in the same catalogue as **Bundled**.
 
-| Pack | Language | Engine | Delivery |
-| --- | --- | --- | --- |
-| LatinCy `la_core_web_sm` 3.9.8 | la | spaCy 3.8 | bundled |
-| spaCy `md` / `lg` models (24 languages: ca, da, de, el, en, es, fi, fr, hr, it, ja, ko, lt, mk, nb, nl, pl, pt, ro, ru, sl, sv, uk, zh) | per language | spaCy 3.8 | administrator install |
-| spaCy multilingual entities (`xx_ent_wiki_sm`) | any | spaCy 3.8 | administrator install |
-| BookNLP English, big models | en | BookNLP 1.0.8 | administrator install |
-| BookNLP English, small models | en | BookNLP 1.0.8 | administrator install |
+| Pack                                                                                                                                    | Language     | Engine        | Delivery              |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------- | --------------------- |
+| LatinCy `la_core_web_sm` 3.9.8                                                                                                          | la           | spaCy 3.8     | bundled               |
+| spaCy `md` / `lg` models (24 languages: ca, da, de, el, en, es, fi, fr, hr, it, ja, ko, lt, mk, nb, nl, pl, pt, ro, ru, sl, sv, uk, zh) | per language | spaCy 3.8     | administrator install |
+| spaCy multilingual entities (`xx_ent_wiki_sm`)                                                                                          | any          | spaCy 3.8     | administrator install |
+| BookNLP English, big models                                                                                                             | en           | BookNLP 1.0.8 | administrator install |
+| BookNLP English, small models                                                                                                           | en           | BookNLP 1.0.8 | administrator install |
 
 The current official spaCy trained-pipeline catalogue has no Arabic, Bengali, or Hindi pipeline packages. DerridAI therefore does not advertise non-existent packs for those languages. They may use the multilingual entity fallback, an administrator-provided compatible custom spaCy pack, or a future maintained trained pipeline once one is available. A legacy Bengali spaCy-v2 model and NER-only Arabic community packages are deliberately not built into the current spaCy-3.8 baseline.
 

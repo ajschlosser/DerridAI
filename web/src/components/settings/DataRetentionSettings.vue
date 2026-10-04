@@ -78,7 +78,9 @@ function count(value: number | undefined) {
 function date(value: string | null | undefined) {
   if (!value) return t("settings.retention_unknown", "Unknown");
   return new Intl.DateTimeFormat(i18n.locale, {
-      timeZone: i18n.timeZone, dateStyle: "medium" }).format(new Date(value));
+    timeZone: i18n.timeZone,
+    dateStyle: "medium",
+  }).format(new Date(value));
 }
 
 function storeLabel(store: RetentionStore) {

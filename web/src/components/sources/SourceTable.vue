@@ -201,9 +201,9 @@ function formatDate(value: string | null) {
   if (!value) return "—";
   try {
     return new Intl.DateTimeFormat(i18n.locale || undefined, {
-      timeZone: i18n.timeZone, dateStyle: "medium" }).format(
-      new Date(value),
-    );
+      timeZone: i18n.timeZone,
+      dateStyle: "medium",
+    }).format(new Date(value));
   } catch {
     return value;
   }

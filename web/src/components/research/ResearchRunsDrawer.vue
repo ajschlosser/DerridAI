@@ -52,7 +52,9 @@ function close() {
 function when(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date.toLocaleString(i18n.locale, { timeZone: i18n.timeZone }) : String(value);
+  return Number.isFinite(date.getTime())
+    ? date.toLocaleString(i18n.locale, { timeZone: i18n.timeZone })
+    : String(value);
 }
 function statusLabel(job: ResearchJob) {
   return i18n.t(`research.status_${job.status}`, job.status);
