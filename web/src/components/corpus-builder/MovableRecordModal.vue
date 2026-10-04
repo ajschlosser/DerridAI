@@ -92,7 +92,10 @@ function onKeydown(event: KeyboardEvent) {
   }
   const first = nodes[0];
   const last = nodes[nodes.length - 1];
-  if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.value)) {
+  if (
+    event.shiftKey &&
+    (document.activeElement === first || document.activeElement === dialog.value)
+  ) {
     event.preventDefault();
     last.focus();
   } else if (!event.shiftKey && document.activeElement === last) {
