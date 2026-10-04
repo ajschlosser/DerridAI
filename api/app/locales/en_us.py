@@ -5575,6 +5575,16 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
  'settings.pipeline_overrides_pipeline': 'Pipeline version',
  'settings.pipeline_overrides_target': 'Overrides target {pipeline}@{version}. They are never remapped to another version.',
  'settings.pipeline_overrides_select_help': ('Choose the immutable Pipeline Studio version whose stage configuration you want to override.'),
+ 'settings.pipeline_to_override': 'Pipeline to override',
+ 'settings.pipeline_to_override_help': ('Choose which immutable Research pipeline version these global overrides belong to. '
+                                        'This does not change the Pipeline Studio assignment.'),
+ 'settings.pipeline_system_assignment': 'System assignment',
+ 'settings.pipeline_baseline': 'Pipeline Studio baseline',
+ 'settings.open_pipeline_studio': 'Open Pipeline Studio',
+ 'settings.pipeline_overrides_loading': 'Loading Research pipelines…',
+ 'settings.research_request_defaults_title': 'Research request defaults',
+ 'settings.research_request_defaults_help': ('These are run inputs rather than Pipeline Studio stage configuration. They become the '
+                                             'starting values for Research and may be changed for one run without altering Settings.'),
  'settings.rag_top_n': 'Rerank top N',
  'settings.rag_top_n_help': 'How many candidates the reranker inspects.',
  'settings.rag_total_chars': 'Total evidence characters',
@@ -9200,6 +9210,15 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
  'research.run_pipeline_overrides': 'Run overrides',
  'research.run_pipeline_overrides_help': ('These settings apply only to this run. They override both Pipeline Studio configuration and any '
                                           'Settings overrides for this exact pipeline version.'),
+ 'research.retrieval_run_help': ('Choose request-level routing and scope for this run. To override a Pipeline Studio stage value, '
+                                 'use Run overrides under Pipeline chain.'),
+ 'research.request_controls': 'Run inputs',
+ 'research.request_controls_help': ('These values shape this Research request without rewriting stage configuration. Stage-level changes '
+                                    'belong under Run overrides in Pipeline chain.'),
+ 'research.query_decomposition_run_help': ('Allow the selected pipeline\'s query-decomposition stage for this run. Its stage configuration '
+                                           'is overridden separately.'),
+ 'research.evidence_citations_run_help': ('Citation, memory, metadata, and evaluation controls apply to this run. Evidence-packing stage '
+                                          'limits are configured under Run overrides.'),
  'research.pipeline_override_badge': 'Per-run override',
  'research.pipeline_system_assignment_badge': 'System assignment',
  'research.pipeline_trace': 'Pipeline execution trace',
