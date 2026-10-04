@@ -21,12 +21,22 @@
 // functions once they exist. Before that they do nothing.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Fn = (...args: any[]) => any;
-type Hooks = { mountOperationsPanelHost: Fn; openJobResults: Fn };
-let hooks: Hooks | null = null;
+type Hooks = {
+  mountOperationsPanelHost: Fn;
+  openJobResults: Fn;
+  gradeRagResponse: Fn;
+  prepareRagRerun: Fn;
+};
+let hooks: Partial<Hooks> | null = null;
 
-export function registerOperationsPanelHooks(next: Hooks | null) {
-  hooks = next;
+/** Registers hooks; a partial registration adds to the ones already present, `null` clears them all. */
+export function registerOperationsPanelHooks(next: Partial<Hooks> | null) {
+  hooks = next ? { ...hooks, ...next } : null;
 }
 /** Mounts the Vue operations panel into the `#operationsPanelHost` placeholder, when it is on the page. */
-export const mountOperationsPanelHost = (): unknown => hooks?.mountOperationsPanelHost();
-export const openJobResults = (jobId: string): unknown => hooks?.openJobResults(jobId);
+export const mountOperationsPanelHost = (): unknown => hooks?.mountOperationsPanelHost?.();
+export const openJobResults = (jobId: string): unknown => hooks?.openJobResults?.(jobId);
+/** Opens the LLM grading launcher for a response (runtime-built job dialogs). */
+export const gradeRagResponse = (request: unknown): unknown => hooks?.gradeRagResponse?.(request);
+/** Loads a saved Research request back into the Research form (research workspace). */
+export const prepareRagRerun = (request: unknown): unknown => hooks?.prepareRagRerun?.(request);

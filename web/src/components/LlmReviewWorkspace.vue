@@ -21,7 +21,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import UiButton from "./ui/UiButton.vue";
 import UiDialog from "./ui/UiDialog.vue";
 import { useI18nStore } from "../stores/i18n";
-import * as runtime from "../runtime/runtime.js";
+import { state as sharedState } from "../domain/sharedUrlState";
+import * as touchupRuntime from "../domain/touchupActions";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 
 type JsonRecord = Record<string, unknown>;
@@ -32,7 +33,6 @@ type TouchupProposal = {
   [key: string]: unknown;
 };
 type TouchupStatus = { available?: boolean; configured_model?: string; [key: string]: unknown };
-type TouchupConfig = { model?: string; [key: string]: unknown };
 type TouchupItem = {
   file: { name?: string; records: JsonRecord[] };
   index: number;
@@ -55,31 +55,6 @@ type WorkspaceInfo = {
   defaultMode: string;
 };
 const EMPTY_PROPOSAL: TouchupProposal = { changes: {}, rationale: {} };
-const touchupRuntime = runtime as unknown as {
-  touchupWorkspaceInfo(items: TouchupItem[], initialMode: string): WorkspaceInfo;
-  touchupProviderStatus(profileId: string): Promise<TouchupStatus>;
-  touchupRequestConfig(profileId: string, model: string, fields: string[]): TouchupConfig | null;
-  touchupRequest(
-    item: TouchupItem,
-    fields: string[],
-    config: TouchupConfig,
-    instructions: string,
-  ): Promise<TouchupProposal>;
-  touchupSubmitBackground(
-    items: TouchupItem[],
-    config: TouchupConfig,
-    fields: string[],
-    instructions: string,
-    mode: string,
-  ): Promise<unknown>;
-  touchupApplyResults(
-    items: TouchupItem[],
-    results: Record<string, TouchupResult>,
-    approvals: Record<string, string[]>,
-    all?: boolean,
-    reviewOnly?: boolean,
-  ): unknown;
-};
 
 const i18n = useI18nStore();
 const open = ref(false);
@@ -172,7 +147,10 @@ async function refreshStatus() {
 }
 function setMode(value: string) {
   mode.value = value as typeof mode.value;
-  if (mode.value !== "auto") runtime.state.appConfig.default_llm_run_mode = mode.value;
+  if (mode.value !== "auto")
+    (
+      sharedState as unknown as { appConfig: Record<string, unknown> }
+    ).appConfig.default_llm_run_mode = mode.value;
   persistPrefs();
 }
 function setProfile(value: string) {

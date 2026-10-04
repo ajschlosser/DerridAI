@@ -28,7 +28,7 @@ const bridge = vi.hoisted(() => ({
   gradeResponseFaqRecord: vi.fn(),
   rerunResponseFaqRecord: vi.fn(),
 }));
-vi.mock("../../src/runtime/runtimeBridge", () => bridge);
+vi.mock("../../src/domain/sharedResponseFaq", () => bridge);
 
 import ResponseFaqView from "../../src/views/ResponseFaqView.vue";
 import { queryClient } from "../../src/realtime/dataQuery";

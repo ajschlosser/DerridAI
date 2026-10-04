@@ -211,6 +211,9 @@ import {
   maybeDesktopNotify,
   syncJobProgressToasts,
 } from "../domain/jobsActions";
+import { registerResearchActions } from "../domain/researchActions";
+import { registerVectorStoreActions } from "../domain/vectorStoreActions";
+import { registerTouchupActions } from "../domain/touchupActions";
 import { registerOperationsPanelHooks } from "../domain/operationsPanelHooks";
 import { dashboardData } from "../domain/sharedDashboardData";
 import { pdfExplorerRenderer } from "../domain/sharedPdfExplorerRenderer";
@@ -683,7 +686,16 @@ const {
   warmupProviderProfile: (...args) => warmupProviderProfile(...args),
 });
 registerPdfLlmTaskHooks({ openLlmTaskLauncher, openPdfDraftRecord });
-registerOperationsPanelHooks({ mountOperationsPanelHost, openJobResults });
+registerOperationsPanelHooks({ mountOperationsPanelHost, openJobResults, gradeRagResponse });
+registerVectorStoreActions({ openCollectionCreationWizard, triggerUpsertQueue });
+registerTouchupActions({
+  touchupWorkspaceInfo,
+  touchupProviderStatus,
+  touchupRequestConfig,
+  touchupRequest,
+  touchupSubmitBackground,
+  touchupApplyResults,
+});
 const {
   renderPdfCanvas,
   extractPdfPageBrowser,
@@ -706,9 +718,6 @@ const {
   startResearchRun,
   gradeResearchJob,
   prepareResearchRerun,
-  getResponseFaqPage,
-  gradeResponseFaqRecord,
-  rerunResponseFaqRecord,
   rememberRagPrompt,
   rememberRagRun,
   prepareRagRerun,
@@ -741,6 +750,20 @@ const {
   syncJobProgressToasts,
   tr: (...args) => tr(...args),
   uid: (...args) => uid(...args),
+});
+registerOperationsPanelHooks({ prepareRagRerun });
+registerResearchActions({
+  getResearchWorkspaceSnapshot,
+  updateResearchConfig,
+  removeResearchEvidence,
+  clearResearchEvidence,
+  discoverResearchModels,
+  refreshResearchJobs,
+  cancelResearchJob,
+  deleteResearchJob,
+  startResearchRun,
+  gradeResearchJob,
+  prepareResearchRerun,
 });
 const {
   serverAnnotationItems,
@@ -1239,11 +1262,6 @@ function getNavItems() {
     }));
 }
 
-function toggleSidebar() {
-  state.sidebarCollapsed = !state.sidebarCollapsed;
-  persistPrefs();
-  shell();
-}
 function triggerBulkEdit() {
   return canUse("editLocalRecords")
     ? openBulkFieldEditor()
@@ -1713,20 +1731,12 @@ export {
   pathViewMap,
   bootstrapRuntime,
   renderView,
-  toggleSidebar,
   activateFile,
   triggerBulkEdit,
   triggerOcrClean,
   triggerReviewFlagged,
   triggerAutoImproveFlagged,
   openTouchup,
-  touchupWorkspaceInfo,
-  touchupProviderStatus,
-  touchupRequestConfig,
-  touchupRequest,
-  touchupSubmitBackground,
-  touchupApplyResults,
-  triggerUpsertQueue,
   triggerEdit,
   getProviderProfilesForUi,
   getProviderRequestConfigForUi,
@@ -1743,7 +1753,6 @@ export {
   dbUnavailableReason,
   hasCorpusDb,
   notifyVectorStoresChanged,
-  openCollectionCreationWizard,
   upsertRows,
   persistPrefs,
   lookupRecord,
@@ -1808,21 +1817,7 @@ export {
   pendingUpsertRows,
   decorateDisabledControls,
   translateLegacyDom,
-  getResearchWorkspaceSnapshot,
-  updateResearchConfig,
-  removeResearchEvidence,
-  clearResearchEvidence,
-  discoverResearchModels,
-  refreshResearchJobs,
   getResearchJob,
-  cancelResearchJob,
-  deleteResearchJob,
-  startResearchRun,
-  gradeResearchJob,
-  prepareResearchRerun,
-  getResponseFaqPage,
-  gradeResponseFaqRecord,
-  rerunResponseFaqRecord,
   getRecordWorkspaceSnapshot,
   getRecordObjectGraph,
   getDerridaiNormativeModel,

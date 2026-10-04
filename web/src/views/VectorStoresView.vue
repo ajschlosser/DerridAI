@@ -20,7 +20,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { toast } from "../composables/notifications";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import * as runtime from "../runtime/runtime.js";
+import { state as sharedState } from "../domain/sharedUrlState";
+import { pendingUpsertRows, upsertRows } from "../domain/sharedDbPresence";
+import { searchWorkspace } from "../domain/sharedSearchWorkspace";
+import { openCollectionCreationWizard, triggerUpsertQueue } from "../domain/vectorStoreActions";
 import { exportStoreJsonl } from "../domain/storeExport";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { chromaApi } from "../api/chroma";
@@ -55,8 +58,8 @@ import type {
 
 type VectorTab = "overview" | "data" | "retrieval" | "builds" | "settings";
 type BrowseMode = "works" | "records";
-// Workspace fields the runtime shares with this view live in the vector store; the rest are still read from the
-// runtime's own state.
+// Workspace fields this view shares with the runtime live in the vector store; the rest are read from the shared
+// workspace state.
 type RuntimeOnlyState = {
   files: Array<{ id: string; records: unknown[] }>;
   activeFileId: string | null;
@@ -64,7 +67,7 @@ type RuntimeOnlyState = {
   health: Record<string, unknown> | null;
   appConfig: { embedding_provider?: string; embedding_model?: string };
 };
-const runtimeState = runtime.state as unknown as RuntimeOnlyState;
+const runtimeState = sharedState as unknown as RuntimeOnlyState;
 const vector = useVectorStore();
 // The loaded files change while this view is open (a file imported or closed). The runtime edits them in place, so the
 // corpus version and active file tell this view when to count them again; without that the sync buttons stayed disabled
@@ -337,7 +340,7 @@ async function applyStores(stores: VectorCollection[]) {
     if (activeName.value !== previousName) clearBrowseAndSearch();
     workspace.stores = corpusStores;
     persistWorkspace();
-    pendingCount.value = runtime.pendingUpsertRows?.().length || 0;
+    pendingCount.value = pendingUpsertRows().length || 0;
     if (current.value && (settingsCollection !== current.value.name || !preserveSettings)) {
       settingsCollection = current.value.name;
       role.value = current.value.collection_role || "general";
@@ -479,7 +482,7 @@ async function loadData() {
 function openCreate() {
   if (!providersReady.value) return;
   const models = runtimeState.llmStatus?.models || [];
-  runtime.openCollectionCreationWizard({
+  openCollectionCreationWizard({
     defaultProvider: runtimeState.appConfig?.embedding_provider || "ollama",
     defaultModel: runtimeState.appConfig?.embedding_model || "bge-m3:latest",
     installedModels: models,
@@ -694,19 +697,17 @@ async function confirmAction() {
 function syncActive() {
   const file = runtimeState.files?.find((item) => item.id === runtimeState.activeFileId);
   if (!file) return toast(i18n.t("vector.load_jsonl_first"), { tone: "warning" });
-  void runtime
-    .upsertRows(
-      file.records.map((record: unknown, index: number) => ({ file, record, index })),
-      "records",
-    )
-    .then(() => load());
+  void upsertRows(
+    file.records.map((record: unknown, index: number) => ({ file, record, index })),
+    "records",
+  ).then(() => load());
 }
 function syncAll() {
   const rows = (runtimeState.files || []).flatMap((file) =>
     file.records.map((record, index) => ({ file, record, index })),
   );
   if (!rows.length) return toast(i18n.t("vector.load_jsonl_any_first"), { tone: "warning" });
-  void runtime.upsertRows(rows, "records").then(() => load());
+  void upsertRows(rows, "records").then(() => load());
 }
 
 function snippet(text: unknown) {
@@ -722,7 +723,7 @@ function toggleLanguage(code: string, checked: boolean) {
 }
 
 async function redirectResearcher() {
-  await runtime.setSearchScope("database");
+  await searchWorkspace.setSearchScope("database");
   await router.replace("/search");
 }
 
@@ -835,7 +836,7 @@ onBeforeUnmount(() => {
             <VectorCollectionHero
               :collection="current"
               :pending-count="pendingCount"
-              @sync="runtime.triggerUpsertQueue()"
+              @sync="triggerUpsertQueue()"
               @retrieval="setTab('retrieval')"
               @protection="toggleProtection"
               @delete="
