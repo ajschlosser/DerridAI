@@ -1673,6 +1673,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                         attempts=attempts, roles=(role,), escalated=escalated,
                     )
                 except InterruptedError:
+                    metadata_provider_health.note_cancelled(health_key)
                     raise
                 except Exception as exc:
                     metadata_provider_health.note_failure(
