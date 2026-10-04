@@ -4436,6 +4436,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         source_blocks, semantic_blocks = scope.source_blocks, scope.semantic_blocks
         source_quality, source_scope_repair = scope.source_quality, scope.source_scope_repair
         source_pages = scope.source_pages
+        source_scope = request.get("source_scope") if isinstance(request.get("source_scope"), dict) else {}
+        scoped_source = bool(source_scope.get("pages"))
         previous_build = self.repo.get_build(build_id)
         # A segmentation-blocked build intentionally has no authoritative final
         # boundary checkpoint. Resume retries unresolved semantic regions using
@@ -4619,8 +4621,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             try:
                 provider, model = source_projection.store.default_embedding_spec()
                 source_embedding_projection = source_projection.sync(
-                    str(asset.get("asset_id") or build_id), source_blocks,
-                    provider=provider, model=model, prune=True,
+                    str(asset.get("asset_id") or build_id),
+                    source_blocks,
+                    provider=provider,
+                    model=model,
+                    # A build-specific page subset must not delete embeddings for
+                    # source units outside that build's documentary scope.
+                    prune=not scoped_source,
                 )
             except Exception as exc:
                 source_embedding_projection = {
