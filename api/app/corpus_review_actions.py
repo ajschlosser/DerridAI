@@ -741,13 +741,26 @@ class ReviewActionsMixin:
         return record
 
     def _patch_metadata(
-        self, build_id: str, record_id: str, changes: dict[str, Any], expected_revision: int | None = None
+        self,
+        build_id: str,
+        record_id: str,
+        changes: dict[str, Any],
+        expected_revision: int | None = None,
+        *,
+        confirmed_absent_fields: set[str] | None = None,
     ) -> tuple[dict[str, Any], set[str]]:
         """Apply reviewer metadata edits; return the persisted record and the fields left unapplied.
 
         A field owed a blind second opinion is compared with the first answer and left
         unchanged, so callers must not treat it as decided.
         """
+        confirmed_absent_fields = set(confirmed_absent_fields or ())
+        unknown_absences = sorted(confirmed_absent_fields - set(changes))
+        if unknown_absences:
+            raise ValueError(
+                "Confirmed-absence fields must also appear in the metadata decision batch: "
+                + ", ".join(unknown_absences)
+            )
         forbidden = sorted(set(changes) - self._editable_fields(build_id))
         if forbidden:
             raise ValueError(
@@ -756,7 +769,11 @@ class ReviewActionsMixin:
             )
         # Validate the editable interpretive schema before modifying the persisted record.
         edit = self._edit_model(build_id)
-        schema_input = {key: value for key, value in changes.items() if key in edit.model_fields}
+        schema_input = {
+            key: value
+            for key, value in changes.items()
+            if key in edit.model_fields and key not in confirmed_absent_fields
+        }
         try:
             edit.model_validate(schema_input)
         except ValidationError as exc:
@@ -778,6 +795,32 @@ class ReviewActionsMixin:
             prior_status = dict(status.get(key) or {}) if isinstance(status.get(key), dict) else {}
             prior_value = target.get(key)
             prior_assertion = current_assertion_by_name(target, key)
+            if key in confirmed_absent_fields:
+                self._record_human_llm_feedback(
+                    build_id,
+                    key,
+                    prior_value,
+                    None,
+                    prior_status,
+                    target,
+                )
+                confirm_absence(
+                    target,
+                    key,
+                    schema=schema,
+                    prior=prior_assertion,
+                    reason="Reviewer confirmed that no supported value applies to this record.",
+                )
+                project_record_assertions(target)
+                decision_log.append(
+                    {
+                        "field": key,
+                        "value": None,
+                        "at": iso_now(),
+                        "source": "confirmed_absent",
+                    }
+                )
+                continue
             owed = _second_opinion_owed(target, key)
             if owed:
                 # This is the independent second opinion, not an edit: it is compared with the first answer and the record is left alone.
@@ -865,6 +908,7 @@ class ReviewActionsMixin:
                     schema=schema,
                     field_name=key,
                     value=value,
+                    decision_kind="absence" if key in confirmed_absent_fields else "value",
                     scope_id=build_id,
                 )
         if any(key not in skipped for key in changes):
@@ -1183,6 +1227,7 @@ class ReviewActionsMixin:
         record_id: str,
         decisions: dict[str, Any],
         expected_revision: int | None = None,
+        confirmed_absent_fields: list[str] | None = None,
     ) -> dict[str, Any]:
         """Persist several reviewer value decisions on one record as one revision.
 
@@ -1193,13 +1238,39 @@ class ReviewActionsMixin:
         """
         if not decisions:
             raise ValueError("Choose at least one metadata decision to save.")
+        absence_fields = set(map(str, confirmed_absent_fields or []))
+        missing_absences = sorted(absence_fields - set(decisions))
+        if missing_absences:
+            raise ValueError(
+                "Confirmed-absence fields must also appear in the metadata decision batch: "
+                + ", ".join(missing_absences)
+            )
+        non_null_absences = sorted(
+            name for name in absence_fields if decisions.get(name) is not None
+        )
+        if non_null_absences:
+            raise ValueError(
+                "Confirmed-absence decisions must use null values: "
+                + ", ".join(non_null_absences)
+            )
         self._validate_decision_fields(build_id, decisions)
-        _record, skipped = self._patch_metadata(build_id, record_id, decisions, expected_revision)
+        _record, skipped = self._patch_metadata(
+            build_id,
+            record_id,
+            decisions,
+            expected_revision,
+            confirmed_absent_fields=absence_fields,
+        )
         applied = {name: value for name, value in decisions.items() if name not in skipped}
         if not applied:
             return self._metadata_decision_result(build_id, record_id, applied=[], deferred=sorted(skipped))
         return self._finish_metadata_decisions(
-            build_id, record_id, applied, decision="value", deferred=sorted(skipped)
+            build_id,
+            record_id,
+            applied,
+            decision="value",
+            deferred=sorted(skipped),
+            absence_fields=absence_fields - skipped,
         )
 
     def _validate_decision_fields(self, build_id: str, fields: Any) -> None:
@@ -1216,13 +1287,24 @@ class ReviewActionsMixin:
         *,
         decision: str,
         deferred: list[str] | None = None,
+        absence_fields: set[str] | None = None,
     ) -> dict[str, Any]:
         """Settle disputes and adjudication memory for decisions that are already persisted."""
         current_record = self.repo.get_record(build_id, record_id, include_queue_version=True)
         previous_record = json.loads(json.dumps(current_record))
         warnings: list[str] = []
-        if decision == "value":
-            warnings.extend(self._cascade_evidence_for_accepted(build_id, current_record, decisions))
+        absence_fields = set(absence_fields or (decisions if decision == "absence" else ()))
+        value_decisions = {
+            name: value for name, value in decisions.items() if name not in absence_fields
+        }
+        if value_decisions:
+            warnings.extend(
+                self._cascade_evidence_for_accepted(
+                    build_id,
+                    current_record,
+                    value_decisions,
+                )
+            )
         disputes = current_record.get("metadata_disputes") if isinstance(current_record.get("metadata_disputes"), list) else []
         for dispute in disputes:
             name = dispute.get("field") if isinstance(dispute, dict) else None
@@ -1251,7 +1333,7 @@ class ReviewActionsMixin:
                     field=name,
                     value=value,
                     schema_version=str(build.get("schema_version") or ""),
-                    decision=decision,
+                    decision="absence" if name in absence_fields else decision,
                     field_id=schema.field_id(name),
                     value_key=_identity_key_for(schema, name, current_record, review_registry(self.repo, build_id, current_record, schema)),
                 )
