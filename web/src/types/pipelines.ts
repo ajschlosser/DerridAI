@@ -171,6 +171,8 @@ export type PipelineInputBinding =
 export type PipelineStage = {
   id: string;
   strategy: string;
+  /** Optional compatibility pin carried by imported/migrated definitions. */
+  strategy_version?: number | null;
   enabled: boolean;
   config: Record<string, unknown>;
   next: string[];
