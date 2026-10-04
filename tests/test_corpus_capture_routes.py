@@ -149,6 +149,9 @@ def test_request_schemas_reject_invalid_identity_and_languages():
     with pytest.raises(ValidationError):
         CaptureCreate(wikidata_qid="Q9358", options={"providers": ["archive_org"]})
     assert CaptureCreate(wikidata_qid="Q9358", options={"languages": []}).options.languages is None
+    assert CaptureCreate(
+        wikidata_qid="gutenberg:1775:1817:jane%20austen"
+    ).wikidata_qid.startswith("gutenberg:")
     with pytest.raises(ValidationError):
         CaptureSelectionPatch(candidate_ids=["x"])
 
