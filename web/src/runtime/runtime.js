@@ -189,7 +189,9 @@ import { recordPresenters as sharedRecordPresenters } from "../domain/sharedReco
 import { providerProfilesService, warmupProviderProfile } from "../domain/sharedProviderProfiles";
 import { searchWorkspace } from "../domain/sharedSearchWorkspace";
 import { getTableColumns, tableAvailableFields } from "../domain/tableColumns";
-import { createRecordsWorkspace } from "../domain/recordsWorkspace";
+import { recordsWorkspace as sharedRecordsWorkspace } from "../domain/sharedRecordsWorkspace";
+import { activateFile, searchByMetadata } from "../domain/workspaceActions";
+import { pageInfo, setActiveStore, setListFilterValue } from "../domain/listPaging";
 import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { createWorksWorkspace } from "../domain/worksWorkspace";
 import { createJobsWorkspace } from "../domain/jobsWorkspace";
@@ -255,7 +257,6 @@ import { recordOptionLabel } from "../domain/recordOptionLabel";
 import { loadStorePage, researcherDbRecords } from "../domain/sharedStoreRecords";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { annotationsWorkspace } from "../domain/sharedAnnotations";
-import { slimSemanticSource } from "../domain/semanticMap";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import {
   allRows,
@@ -419,48 +420,7 @@ const {
   setRecordsListSort,
   setRecordsListStore,
   toggleRecordsListEvidence,
-} = createRecordsWorkspace({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  activeFile: (...args) => activeFile(...args),
-  canUse: (...args) => canUse(...args),
-  clearReviewSelection: (...args) => clearReviewSelection(...args),
-  copyCitation: (...args) => copyCitation(...args),
-  copyJsonToClipboard: (...args) => copyJsonToClipboard(...args),
-  dbUnavailableReason: (...args) => dbUnavailableReason(...args),
-  evidenceIsSelected: (...args) => evidenceIsSelected(...args),
-  getTableColumns: (...args) => getTableColumns(...args),
-  hasCapability: (...args) => hasCapability(...args),
-  hasCorpusDb: (...args) => hasCorpusDb(...args),
-  label: (...args) => label(...args),
-  navigateTo: (...args) => navigateTo(...args),
-  needsReviewItems: (...args) => needsReviewItems(...args),
-  openBulkFieldEditor: (...args) => openBulkFieldEditor(...args),
-  openOcrCleanupDialog: (...args) => openOcrCleanupDialog(...args),
-  openTouchup,
-  pageInfo: (...args) => pageInfo(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  recordDbStatus: (...args) => recordDbStatus(...args),
-  recordStores: (...args) => recordStores(...args),
-  recordsListCell: (...args) => recordsListCell(...args),
-  refreshPresenceForRows: (...args) => refreshPresenceForRows(...args),
-  reviewKey: (...args) => reviewKey(...args),
-  rowMatchesListFilters: (...args) => rowMatchesListFilters(...args),
-  rowsFromReviewSelection: (...args) => rowsFromReviewSelection(...args),
-  selectedReviewItems: (...args) => selectedReviewItems(...args),
-  setActiveStore: (...args) => setActiveStore(...args),
-  setListFilterValue: (...args) => setListFilterValue(...args),
-  setReviewSelected: (...args) => setReviewSelected(...args),
-  shell: (...args) => shell(...args),
-  syncUrl: (...args) => syncUrl(...args),
-  tableAvailableFields: (...args) => tableAvailableFields(...args),
-  toggleSort: (...args) => toggleSort(...args),
-  toggleWorkspaceEvidence: (...args) => toggleWorkspaceEvidence(...args),
-  tr: (...args) => tr(...args),
-  upsertRows: (...args) => upsertRows(...args),
-  urlFromState: (...args) => urlFromState(...args),
-  workspaceEvidenceSelectionKey: (...args) => workspaceEvidenceSelectionKey(...args),
-});
+} = sharedRecordsWorkspace;
 const {
   recordWorkspaceRecord,
   researcherCurrentRecord,
@@ -1136,44 +1096,6 @@ function responseCacheStore() {
   return state.stores.find(isResponseCacheStore) || null;
 }
 
-function pageInfo(total, page) {
-  const pages = Math.max(1, Math.ceil(total / state.pageSize));
-  page = Math.max(1, Math.min(pages, page || 1));
-  return {
-    page,
-    pages,
-    start: (page - 1) * state.pageSize,
-    end: Math.min(total, page * state.pageSize),
-  };
-}
-
-function setListFilterValue(fileId, key, value) {
-  if (!state.listFilters[fileId]) state.listFilters[fileId] = {};
-  if (value === "" || value == null) delete state.listFilters[fileId][key];
-  else state.listFilters[fileId][key] = value;
-  persistPrefs();
-}
-
-function setActiveStore(name) {
-  const next = name || "";
-  if (state.activeStore !== next) {
-    state.storeWorksStore = "";
-    // Presence maps can become very large for corpus-scale workspaces. Keep
-    // only the selected store's map when switching collections.
-    state.storePresence =
-      next && state.storePresence?.[next] ? { [next]: state.storePresence[next] } : {};
-    state.storePresenceIds =
-      next && state.storePresenceIds?.[next] ? { [next]: state.storePresenceIds[next] } : {};
-    state.storePresenceCheckedAt =
-      next && state.storePresenceCheckedAt?.[next]
-        ? { [next]: state.storePresenceCheckedAt[next] }
-        : {};
-  }
-  state.activeStore = next;
-  persistPrefs();
-  syncUrl({ replace: true });
-}
-
 // Names of the facts shown for an operation (panel rows and the details dialog), translated at render time.
 
 // ---- Operations panel bridge -------------------------------------------------------------
@@ -1185,35 +1107,11 @@ function relativeTime(value) {
   return relativeTimeLabel(value, Date.now(), { tr, trf, locale: state.translations?.locale });
 }
 
-function searchByMetadata(field, value, { contains = false } = {}) {
-  const raw = String(value ?? "").trim();
-  if (!field || !raw) return;
-  state.globalPage = 1;
-  state.storeSearchResults = [];
-  if (isResearcher()) {
-    state.globalSearchMode = "database";
-    state.dbSearchMethod = "filter";
-    state.dbSearchWhere = { [field]: contains ? { $contains: raw } : raw };
-    state.globalSearch = "";
-    state.globalSearchAutoRun = true;
-  } else {
-    state.globalSearchMode = "traditional";
-    state.globalSearch = "";
-    state.globalFilters = [{ id: uid(), field, op: contains ? "has" : "eq", value: raw }];
-  }
-  persistPrefs();
-  navigateTo("global");
-}
-
 // 0.36.10 native Search bridge. SearchView owns presentation while the runtime
 // continues to own browser-local corpus state, Chroma transport, evidence
 // selection, URL serialization, and the existing LLM review workflows.
 
 /** @param {{field?: string, op?: string, value?: string}} [options] */
-
-function recordsListMetadataSearch(field, value, contains) {
-  return searchByMetadata(field, value, { contains: Boolean(contains) });
-}
 
 function cleanRecord(f, i) {
   const c = stripLigaturesAndArtifacts(f.records[i].text);
@@ -1783,56 +1681,6 @@ function touchupApplyResults(items, results, approvals, all = false, reviewOnly 
   return { appliedFields, reviewedRecords };
 }
 
-function listSemanticMapSources() {
-  const seen = new Set();
-  const records = [];
-  const push = (record) => {
-    const slim = slimSemanticSource(record);
-    if (!slim) return;
-    const key =
-      slim.id ||
-      [slim.work, slim.concepts.join("|"), slim.topics.join("|"), slim.persons.join("|")].join("~");
-    if (seen.has(key)) return;
-    seen.add(key);
-    records.push(slim);
-  };
-  const current = selectedRecord();
-  if (current) push(current);
-  const pools = isResearcher()
-    ? [researcherDbRecords(), state.storeRecords || []]
-    : [
-        (state.files || []).flatMap((file) => file.records || []),
-        state.storeRecords || [],
-        researcherDbRecords(),
-      ];
-  for (const pool of pools) {
-    for (const record of pool || []) {
-      push(record);
-      if (records.length >= 400) break;
-    }
-    if (records.length >= 400) break;
-  }
-  const focus = current || {};
-  return { records, focusId: String(focus.record_id || focus._chroma_id || "") };
-}
-
-/** Open a Record reached from a derived semantic-map node when it is in a local file. */
-function openSemanticRecord(recordId) {
-  const wanted = String(recordId || "");
-  if (!wanted) return false;
-  for (const file of state.files || []) {
-    const index = (file.records || []).findIndex(
-      (record) => String(record.record_id || record._chroma_id || "") === wanted,
-    );
-    if (index >= 0) {
-      navigateTo("record", { fileId: file.id, index });
-      return true;
-    }
-  }
-  navigateTo("global");
-  return false;
-}
-
 function translatedNavLabel(item) {
   const keys = {
     home: "nav.dashboard",
@@ -1923,15 +1771,6 @@ function toggleSidebar() {
   persistPrefs();
   shell();
 }
-function activateFile(fileId) {
-  if (["list", "record"].includes(state.view)) {
-    state.activeFileId = fileId;
-    persistPrefs();
-    syncUrl({ replace: true });
-    shell();
-    renderView();
-  } else navigateTo("list", { fileId });
-}
 function triggerMerge() {
   return canUse("manageCorpus")
     ? openMergeDialog()
@@ -1971,9 +1810,6 @@ function triggerEdit() {
   return canUse("editLocalRecords")
     ? openEditor()
     : toast(tr("runtime.toast.cannot_edit_records"), { tone: "warning" });
-}
-function closeWorkspaceFile(fileId) {
-  return closeFile(fileId);
 }
 
 let chartTooltip = null;
@@ -2416,7 +2252,6 @@ export {
   renderView,
   toggleSidebar,
   activateFile,
-  closeWorkspaceFile,
   triggerMerge,
   subsetSources,
   subsetSourceRecords,
@@ -2499,8 +2334,6 @@ export {
   refreshStoreWorks,
   renderCorpusBuildsHomeCard,
   renderOperationsPanel,
-  listSemanticMapSources,
-  openSemanticRecord,
   searchByMetadata,
   mountOperationsPanelHost,
   wireCorpusBuildsHomeCard,
@@ -2623,7 +2456,6 @@ export {
   copyRecordsListJson,
   copyRecordsListCitation,
   toggleRecordsListEvidence,
-  recordsListMetadataSearch,
   setRecordsListColumns,
   resetRecordsListColumns,
   getRecordsListShareHref,

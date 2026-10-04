@@ -29,7 +29,7 @@ import {
 } from "../api/system";
 import { jobsApi, type JobSummary } from "../api/jobs";
 import { useI18nStore } from "../stores/i18n";
-import * as runtime from "../runtime/runtime.js";
+import { registerExternalJob } from "../domain/jobsActions";
 import { navigateTo } from "../domain/sharedNavigation";
 import {
   getProviderProfilesForUi,
@@ -508,7 +508,7 @@ async function generateContentPolicy() {
       max_concurrent_requests: profile.max_concurrent_requests || 1,
     });
     policyJob.value = created;
-    runtime.registerExternalJob?.(created);
+    registerExternalJob(created);
     toast(i18n.t("language.content_policy_generating"), { tone: "info" });
     monitorPolicy(created.id);
   } catch (exc) {
@@ -911,7 +911,7 @@ async function installLanguage() {
     const wasResume = Boolean(resumeJobId.value);
     installOpen.value = false;
     installJob.value = created;
-    runtime.registerExternalJob?.(created);
+    registerExternalJob(created);
     toast(
       i18n.t(
         wasResume ? "language.translation_resumed" : "language.translation_started_modern",

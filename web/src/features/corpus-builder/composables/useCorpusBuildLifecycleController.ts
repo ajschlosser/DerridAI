@@ -23,7 +23,7 @@ import {
   type CorpusBuild,
   type PdfAsset,
 } from "../../../api/corpus";
-import * as runtime from "../../../runtime/runtime.js";
+import { registerExternalJob } from "../../../domain/jobsActions";
 import { followResource } from "../../../realtime/follow";
 import type {
   CorpusBuildEvent,
@@ -125,7 +125,7 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     const asset = options.assets.value.find((item) => item.asset_id === build.asset_id);
     const total = Math.max(1, Number(asset?.block_count || 1));
     const progress = Math.max(0, Math.min(1, Number(build.progress || 0)));
-    runtime.registerExternalJob?.({
+    registerExternalJob({
       id: build.build_id,
       build_id: build.build_id,
       type: "pdf_corpus",
