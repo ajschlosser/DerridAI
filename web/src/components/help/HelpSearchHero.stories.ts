@@ -54,6 +54,19 @@ export const SearchResults: Story = {
   },
 };
 
+export const FrenchLengthStress: Story = {
+  args: {
+    modelValue:
+      "FieldAssertion, provenance documentaire et relations entre les preuves et les affirmations générées",
+    searching: true,
+    matchCount: 12,
+  },
+  parameters: {
+    locale: "fr-CA",
+    viewport: { defaultViewport: "mobile1" },
+  },
+};
+
 export const NarrowViewport: Story = {
   args: {
     modelValue: "FieldAssertion and evidence provenance",
