@@ -872,7 +872,7 @@ ${evidence}`;
               {
                 query: question,
                 mode: retrievalMode,
-                filters: { ...filters ?? {}, work: works },
+                filters: { ...(filters ?? {}), work: works },
                 limit: Math.min(4, retrievalLimit),
                 signal: request2.signal
               },
