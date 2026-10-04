@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 `web/src/domain/` contains the frontend's framework-light domain helpers: workspace state models, transformations, formatting, presenters, validation helpers, URL/state codecs, and rules that are easier to test outside Vue components.
 
-The directory is intentionally broad, but it should not become a dumping ground. Group behavior by the product concept it represents and keep network/DOM effects at outer layers whenever practical.
+The directory is intentionally broad, but it should not become a dumping ground. Group behavior by the product concept it represents and keep network/DOM effects at outer layers whenever practical. Follow [`docs/CODE_READABILITY.md`](../../../docs/CODE_READABILITY.md) for naming and behavior-preserving refactor conventions.
 
 ## Architectural role
 
@@ -63,3 +63,5 @@ Good candidates are deterministic transformations, selectors, serializers/codecs
 Prefer `composables/` for Vue lifecycle/reactivity orchestration, `api/` for network calls, `components/` for rendering and direct interaction, and `stores/` for application-wide reactive state.
 
 When adding a large new domain, consider a focused subdirectory rather than extending the flat namespace indefinitely. Preserve existing public imports when refactoring and add focused Vitest coverage.
+
+For readability, use names that expose the rule being computed (`normalizedRuleValue`, `recordsByWork`, `candidateCount`) rather than carrying short names from the legacy runtime. Comments should explain compatibility behavior, reconstruction logic, ranking semantics, or stale-state rules rather than restating an expression.
