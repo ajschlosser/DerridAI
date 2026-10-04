@@ -268,6 +268,11 @@ class SearchRequest(BaseModel):
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
     pipeline_id: str | None = Field(default=None, min_length=1, max_length=160)
     pipeline_version: int | None = Field(default=None, ge=1)
+    # Pipeline Studio supplies the immutable baseline stage configuration.
+    # Settings overrides that exact version, and a run-specific layer may
+    # override Settings again. These layers cannot alter graph structure.
+    settings_pipeline_overrides: PipelineConfigOverrideSet | None = None
+    run_pipeline_overrides: PipelineConfigOverrideSet | None = None
     # Pipeline Studio defines the baseline. Settings may override registered
     # stage configuration, and this run may override Settings again. Both layers
     # are version-bound so stale overrides can never silently target a new graph.
