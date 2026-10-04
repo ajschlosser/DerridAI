@@ -270,7 +270,12 @@ def test_spacy_catalog_covers_many_languages_with_pinned_wheels_and_a_multilingu
     languages = {item["language"] for item in spacy_packs}
     assert {"en", "fr", "de", "it", "es", "pt", "ru", "zh", "ja", "xx"} <= languages
     assert len(languages) >= 20
+    assert "la" in languages
     for item in spacy_packs:
+        if item.get("bundled"):
+            assert item["pack_id"] == "spacy-la-latincy-sm"
+            assert item["files"] == []
+            continue
         (wheel,) = item["files"]
         assert wheel["role"] == "wheel" and wheel["url"].startswith("https://github.com/explosion/spacy-models/")
         assert len(wheel["sha256"]) == 64 and wheel["size"] > 0
