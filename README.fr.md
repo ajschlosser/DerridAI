@@ -26,11 +26,11 @@ DerridAI est un environnement de recherche axé sur l’exécution locale et la 
 
 DerridAI est aussi l’implémentation de référence d’origine de **cELF 1.0 — Capta-Enriched Lexical Format**, une architecture d’information qui préserve la provenance pour la recherche documentaire assistée par IA. L’implémentation maintient séparément l’identité des sources, l’identité et les révisions des notices, les assertions de métadonnées, les preuves, les affirmations générées et leurs liens de support, plutôt que de les aplatir dans une base vectorielle opaque.
 
-Version actuelle : **0.81.0 — Fall River** ([notes de version](docs/notes/0.81.0.md)). La version de l’application n’a pas été incrémentée depuis Fall River ; ce README décrit la branche `master` actuelle, y compris les travaux postérieurs à 0.81.0 qui ne font pas partie de la version balisée.
+Version actuelle : **0.82.0 — Gloucester** ([notes de version](docs/notes/0.82.0.md)). Ce README décrit la version Gloucester.
 
 ## État actuel de `master`
 
-La branche actuelle a beaucoup évolué depuis le tag 0.81.0 tout en conservant le numéro de version 0.81.0. Le résumé ci-dessous décrit le produit actuel, et non de nouvelles notes de version.
+Le résumé ci-dessous décrit la version Gloucester.
 
 - **Corpus Builder suit désormais un flux progressif Configuration → Construction → Révision → Publication.** Il prend en charge l’enrichissement concurrent borné, les choix explicites de topologie du corpus et de taille des Records, la reprise et la révision sensibles aux révisions, des files de révision persistantes et locales au Record, des sessions ciblées de correction des blocages de publication, des groupes de métadonnées répétables, l’affectation des locuteurs audio et la révision sûre du texte pendant une préparation vérifiée.
 - **Le traitement des métadonnées et des preuves sollicite moins le modèle tout en renforçant la sémantique.** Le routage déterministe et centré sur les candidats, l’identité sémantique et l’équivalence des valeurs, la cascade de preuves v2 validée par le support, la réparation/classification des sorties structurées et la réconciliation incrémentale de Metadata Memory réduisent la latence sans transformer la pertinence de recherche ou une sortie mal formée en preuve.
