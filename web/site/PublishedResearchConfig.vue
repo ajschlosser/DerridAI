@@ -30,8 +30,9 @@ const props = withDefaults(
   defineProps<{
     modelValue: PublishedResearchSettings;
     idPrefix?: string;
+    disabled?: boolean;
   }>(),
-  { idPrefix: "published-research-config" },
+  { idPrefix: "published-research-config", disabled: false },
 );
 const emit = defineEmits<{
   "update:modelValue": [value: PublishedResearchSettings];
@@ -72,6 +73,7 @@ function toggleWork(work: string, checked: boolean) {
             :id="controlId"
             :model-value="modelValue.mode"
             :aria-describedby="describedby"
+            :disabled="disabled"
             @update:model-value="update({ mode: $event as PublishedResearchMode })"
           >
             <option value="auto">{{ site.t("site.runtime.research_mode_auto") }}</option>
@@ -95,6 +97,7 @@ function toggleWork(work: string, checked: boolean) {
             min="1"
             max="500"
             :aria-describedby="describedby"
+            :disabled="disabled"
             @update:model-value="update({ k: numberValue($event, modelValue.k) })"
           />
         </template>
@@ -113,6 +116,7 @@ function toggleWork(work: string, checked: boolean) {
             min="1"
             max="5000"
             :aria-describedby="describedby"
+            :disabled="disabled"
             @update:model-value="update({ fetchK: numberValue($event, modelValue.fetchK) })"
           />
         </template>
@@ -131,6 +135,7 @@ function toggleWork(work: string, checked: boolean) {
             min="1"
             max="100"
             :aria-describedby="describedby"
+            :disabled="disabled"
             @update:model-value="update({ topN: numberValue($event, modelValue.topN) })"
           />
         </template>
@@ -150,6 +155,7 @@ function toggleWork(work: string, checked: boolean) {
             max="1"
             step="0.01"
             :aria-describedby="describedby"
+            :disabled="disabled"
             @update:model-value="
               update({ mmrLambda: numberValue($event, modelValue.mmrLambda) })
             "
@@ -175,6 +181,7 @@ function toggleWork(work: string, checked: boolean) {
           <input
             type="checkbox"
             :checked="modelValue.works.includes(String(item.work))"
+            :disabled="disabled"
             @change="
               toggleWork(
                 String(item.work),
