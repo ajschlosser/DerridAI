@@ -98,7 +98,9 @@ class MetadataProviderHealthCoordinator:
             if state.open_until > clock:
                 raise MetadataProviderCircuitOpen(state.open_until - clock)
             if state.half_open_probe:
-                raise MetadataProviderCircuitOpen(self.cooldown_seconds)
+                # A peer should re-check soon after the single probe settles;
+                # it does not need to wait through another full outage cooldown.
+                raise MetadataProviderCircuitOpen(min(1.0, self.cooldown_seconds))
             state.half_open_probe = True
 
     def note_success(self, key: str) -> None:
