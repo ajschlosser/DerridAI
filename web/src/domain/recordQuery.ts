@@ -116,8 +116,7 @@ export function countOccurrences(text: unknown, query: unknown): number {
 
 /** Filter-row matching for the operators `empty`, `notempty`, `eq`, `neq`, `has`, `nhas`, `gte` and `lte`. */
 export function valueMatches(value: unknown, operator: string, operand: unknown): boolean {
-  const isEmpty =
-    value == null || value === "" || (Array.isArray(value) && !value.length);
+  const isEmpty = value == null || value === "" || (Array.isArray(value) && !value.length);
   if (operator === "empty") return isEmpty;
   if (operator === "notempty") return !isEmpty;
 
@@ -168,15 +167,11 @@ export function subsetRuleMatches(
   switch (rule.operator) {
     case "equals":
       return Array.isArray(fieldValue)
-        ? fieldValue.some(
-            (item) => normalize(subsetValueText(item)) === normalizedRuleValue,
-          )
+        ? fieldValue.some((item) => normalize(subsetValueText(item)) === normalizedRuleValue)
         : normalizedFieldText === normalizedRuleValue;
     case "not_equals":
       return Array.isArray(fieldValue)
-        ? !fieldValue.some(
-            (item) => normalize(subsetValueText(item)) === normalizedRuleValue,
-          )
+        ? !fieldValue.some((item) => normalize(subsetValueText(item)) === normalizedRuleValue)
         : normalizedFieldText !== normalizedRuleValue;
     case "contains":
       return normalizedFieldText.includes(normalizedRuleValue);
@@ -185,31 +180,19 @@ export function subsetRuleMatches(
     case "array_contains":
       return (
         Array.isArray(fieldValue) &&
-        fieldValue.some(
-          (item) => normalize(subsetValueText(item)) === normalizedRuleValue,
-        )
+        fieldValue.some((item) => normalize(subsetValueText(item)) === normalizedRuleValue)
       );
     case "exists":
-      return (
-        fieldValue !== undefined &&
-        fieldValue !== null &&
-        subsetValueText(fieldValue) !== ""
-      );
+      return fieldValue !== undefined && fieldValue !== null && subsetValueText(fieldValue) !== "";
     case "missing":
-      return (
-        fieldValue === undefined ||
-        fieldValue === null ||
-        subsetValueText(fieldValue) === ""
-      );
+      return fieldValue === undefined || fieldValue === null || subsetValueText(fieldValue) === "";
     case "truthy":
       return Boolean(fieldValue);
     case "falsy":
       return !fieldValue;
     case "regex":
       try {
-        return new RegExp(rawRuleValue, caseSensitive ? "" : "i").test(
-          subsetValueText(fieldValue),
-        );
+        return new RegExp(rawRuleValue, caseSensitive ? "" : "i").test(subsetValueText(fieldValue));
       } catch {
         return false;
       }
