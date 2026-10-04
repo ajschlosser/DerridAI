@@ -273,6 +273,12 @@ export interface GutenbergStatus {
     total_bytes?: number | null;
     imported_texts?: number;
     error?: string | null;
+    /** Remote validators retained so a partial multi-GB archive can resume safely. */
+    etag?: string | null;
+    last_modified?: string | null;
+    /** Consecutive transient failures; reset after the next verified range. */
+    retry_count?: number;
+    next_retry_at?: string | null;
   };
 }
 
