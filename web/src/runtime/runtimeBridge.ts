@@ -21,9 +21,6 @@ import * as runtime from "./runtime.js";
 // Each export reads the runtime when it is called, not when this module loads, so a test that mocks only part of the
 // runtime does not fail just by importing the stores.
 
-export const setTranslationDictionary = (
-  ...args: Parameters<typeof runtime.setTranslationDictionary>
-) => runtime.setTranslationDictionary(...args);
 export const setUserContext = (...args: Parameters<typeof runtime.setUserContext>) =>
   runtime.setUserContext(...args);
 export const setShellRefreshHook = (...args: Parameters<typeof runtime.setShellRefreshHook>) =>
@@ -34,6 +31,4 @@ export const bootstrapRuntime = (...args: Parameters<typeof runtime.bootstrapRun
   runtime.bootstrapRuntime(...args);
 export const syncFromLocation = (...args: Parameters<typeof runtime.syncFromLocation>) =>
   runtime.syncFromLocation(...args);
-export const responseCacheStore = (...args: Parameters<typeof runtime.responseCacheStore>) =>
-  runtime.responseCacheStore(...args);
 export default runtime;
