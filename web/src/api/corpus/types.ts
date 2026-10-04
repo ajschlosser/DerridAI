@@ -175,7 +175,14 @@ export interface PdfAsset {
     whisperx_version?: string;
     diarization_requested?: boolean;
     diarization_status?: "disabled" | "failed" | "complete" | "no_speakers" | string;
-    alignment_status?: "provider_word_timestamps" | "whisperx_word_alignment" | "failed" | "not_applicable" | "not_requested" | "disabled" | string;
+    alignment_status?:
+      | "provider_word_timestamps"
+      | "whisperx_word_alignment"
+      | "failed"
+      | "not_applicable"
+      | "not_requested"
+      | "disabled"
+      | string;
     speaker_assignment_method?: "word_overlap" | "segment_overlap" | "none" | string;
     word_count?: number;
     ambiguous_word_count?: number;
