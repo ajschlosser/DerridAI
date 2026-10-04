@@ -96,9 +96,7 @@ describe("SourceTranscriptionDialog", () => {
     expect(document.body.querySelector(".timeline-segment")).toBeTruthy();
     expect(document.body.querySelector(".time-seek")).toBeTruthy();
     expect(document.body.querySelector(".speaker-review-needed")).toBeTruthy();
-    expect(document.body.querySelector(".speaker-review-note")?.textContent).toContain(
-      "uncertain",
-    );
+    expect(document.body.querySelector(".speaker-review-note")?.textContent).toContain("uncertain");
   });
 
   it("marks transcription edits busy while save is pending", () => {
