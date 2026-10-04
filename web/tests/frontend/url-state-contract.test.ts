@@ -18,7 +18,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNavigation } from "../../src/domain/navigation";
-import { compressUrlState } from "../../src/domain/urlState";
+import { compressUrlState, decompressUrlState } from "../../src/domain/urlState";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 
 // Shareable links outlive the builds that made them, so these pin the URL shapes the runtime reads and writes. They are
@@ -121,6 +121,43 @@ describe("shareable URL state", () => {
     expect(second.state.selected.f1).toBe(3);
     expect(second.state.searches.f1).toBe("différance");
     expect(second.state.pages.f1).toBe(2);
+  });
+
+  it("never serializes sensitive or unsaved transient state into a shareable URL", () => {
+    const { state, navigation } = setup();
+    const secrets = [
+      "sk-route-secret-123",
+      "password-route-secret-456",
+      "token-route-secret-789",
+      "unsaved-schema-secret-321",
+      "system-command-secret-654",
+    ];
+
+    state.view = "global";
+    state.globalSearch = "traceability";
+    state.appConfig.openai_api_key = secrets[0];
+    state.password = secrets[1];
+    state.sessionToken = secrets[2];
+    state.unsavedSchemaDraft = { body: secrets[3] };
+    state.systemCommand = secrets[4];
+
+    visit("/search");
+    const href = navigation.urlFromState();
+    const url = new URL(href, "http://derridai.test");
+    const compressed = url.searchParams.get("ts");
+    const decoded = compressed ? decompressUrlState(compressed) : null;
+    const shareableState = JSON.stringify({
+      href,
+      query: Object.fromEntries(url.searchParams.entries()),
+      decoded,
+    });
+
+    for (const secret of secrets) expect(shareableState).not.toContain(secret);
+    expect(shareableState).not.toContain("openai_api_key");
+    expect(shareableState).not.toContain("password");
+    expect(shareableState).not.toContain("sessionToken");
+    expect(shareableState).not.toContain("unsavedSchemaDraft");
+    expect(shareableState).not.toContain("systemCommand");
   });
 
   it("keeps the sub-path the router owns for Settings and System Data", () => {
