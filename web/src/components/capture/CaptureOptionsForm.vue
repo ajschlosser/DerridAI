@@ -127,7 +127,11 @@ function addLanguageValue(value: string) {
           type="checkbox"
           :checked="providers.includes(provider)"
           :data-provider="provider"
-          :disabled="provider === 'wikisource' && author?.identity_source === 'gutenberg' && !author.wikidata_qid"
+          :disabled="
+            provider === 'wikisource' &&
+            author?.identity_source === 'gutenberg' &&
+            !author.wikidata_qid
+          "
           @change="toggleProvider(provider, ($event.target as HTMLInputElement).checked)"
         />
         <span>
