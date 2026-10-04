@@ -911,3 +911,17 @@ The migration is complete only when a fresh production-code audit can demonstrat
 - none of that computational configuration replaces cELF provenance authority.
 
 Until those statements are true, use “pipeline migration in progress,” not “pipeline migration complete.”
+
+## Adaptive metadata routing execution foundation (2026-10-04)
+
+The revised candidate-routing plan requires Pipeline Studio to own the executable graph. The first checkpoint adds `graph_execution.py`, a server-handler runtime over the existing named-port wiring resolver. It supports repeated strategy instances, named branch outputs, definition-stable fan-in, explicit fallback input delivery, empty required-input skips, cancellation propagation, immutable definition/strategy snapshots, and safe count/configuration-hash telemetry. Multiple input ports receive ordered artifacts; handlers own payload merging and domain validation.
+
+This checkpoint does not change production assignments or built-in versions. Historical metadata enrichment `@1` and `@2` have fake-provider graph characterization coverage for their primary attempt budgets and review-provider escalation. Existing enrichment sessions still use their historical adapter. The runtime currently schedules serially; declared concurrency capabilities, semantic artifact traits, terminal guarantee validation, and migration of the enrichment adapter remain prerequisites before activating adaptive routing.
+
+Next implement metadata artifact/trait contracts and purpose-terminal guarantees, then migrate the historical enrichment path with full provider/evidence/reconciliation parity. Follow with candidate collection, current-record support, and observe-only routing before enabling RESOLVE or VERIFY. Preserve human ownership and current-source evidence at the canonical boundary. Do not claim the 33% latency gate until fixed-corpus A/B runs and reviewer quality checks demonstrate it.
+
+Baseline is `master` at `94ca23d9`. PR #508's fetched head is `a59aac51`; it adds Research stage-configuration overrides and changes shared pipeline models/service. This checkpoint avoids those files and must be checked against the eventual merge of #508 before extending shared contracts.
+
+Validation: 72 focused graph/wiring/contracts/workflow tests passed. Ruff checks passed for the new implementation and tests. The new runtime also passes targeted mypy. Broader enrichment collection remains unavailable because the fresh environment lacks API dependencies (HTTPX/Chroma). Full preflight was attempted: repository backend lint and syntax passed, but the initial environment lacked mypy/pytest-xdist and generated-artifact validation could not complete. Tooling was added for targeted validation; full preflight, real-provider latency benchmarks, reviewer quality comparisons, and CI remain unverified.
+
+Subsequent candidate-routing checkpoints are tracked in `docs/METADATA_ENRICHMENT_ROUTING_PROGRESS.md`. Its current status supersedes the initial foundation's remaining-work summary above.

@@ -23,6 +23,7 @@ import json
 from collections import defaultdict, deque
 from typing import Any, Literal
 
+from .contracts import input_ports
 from .defaults import (
     BUILT_IN_ASSIGNMENTS,
     BUILT_IN_PIPELINES,
@@ -37,7 +38,7 @@ from .models import (
 )
 from .purposes import FAMILY_PHASES, effect_note, purpose_registry
 from .registry import StrategyRegistry, strategy_registry
-from .wiring import ordering_only_edges, resolve_wiring
+from .wiring import ordering_only_edges, resolve_wiring, terminal_contracts
 
 
 def canonical_pipeline_json(pipeline: PipelineDefinition) -> str:
@@ -142,6 +143,12 @@ class PipelineService:
                     continue
                 if (stage.id, target) in ordering_only:
                     continue
+                # An explicit primary binding names the delivered output. The
+                # wiring resolver validates it; a next edge may only order work.
+                if target in stage.next and stages[target].inputs.get(
+                    input_ports(target_spec)[0].name
+                ):
+                    continue
                 # A fallback edge hands the target the input the failed stage
                 # was given, so either the stage's output or input type fits.
                 compatible = self._types_compatible(
@@ -200,7 +207,9 @@ class PipelineService:
             enabled_strategies = {
                 stage.strategy for stage in pipeline.stages if stage.enabled
             }
-            gate_level: Literal["error", "warning"] = "error" if pipeline.status == "active" else "warning"
+            gate_level: Literal["error", "warning"] = (
+                "error" if pipeline.status == "active" else "warning"
+            )
             if "validate.evidence_support" not in enabled_strategies:
                 issues.append(
                     PipelineValidationIssue(
@@ -230,6 +239,10 @@ class PipelineService:
 
         if pipeline.purpose == "evidence_recovery":
             issues.extend(self._recovery_issues(pipeline))
+
+        purpose = purpose_registry.get(pipeline.purpose)
+        if purpose is not None and purpose.required_output_traits:
+            issues.extend(terminal_contracts(pipeline, self.registry, purpose)[1])
 
         return PipelineValidationResult(
             valid=not any(issue.level == "error" for issue in issues),

@@ -36,7 +36,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Self
+from typing import Any, NoReturn, Self
 
 from .models import PipelineDefinition, PipelineRunTrace, PipelineStageDefinition
 from .registry import reject_unhonoured_config
@@ -255,28 +255,32 @@ class StructuredStageSession:
                 )
                 path.append({"stage_id": stage.id, "provider_role": role, "status": "completed"})
                 return result
-            if not failures:
-                raise LookupError(
-                    f"No provider is configured for any stage of the {self.spec.label} pipeline."
-                )
-            if len(failures) == 1:
-                raise failures[0][1]
-            pieces = [
-                item
-                for role, exc in failures
-                for item in (getattr(exc, "failures", None) or [f"{role}: {exc}"])
-            ]
-            suffix = (
-                "review-provider escalation"
-                if stage_role(self.plan.fallback or self.plan.entry) == "review"
-                else "pipeline escalation"
-            )
-            raise ValueError(
-                f"LLM structured output failed after bounded retry and {suffix}: "
-                + " | ".join(pieces)
-            )
+            self._raise_failures(failures)
         finally:
             self._remember_path(path)
+
+    def _raise_failures(self, failures: list[tuple[str, Exception]]) -> NoReturn:
+        """Preserve structured-provider error aggregation across execution engines."""
+        if not failures:
+            raise LookupError(
+                f"No provider is configured for any stage of the {self.spec.label} pipeline."
+            )
+        if len(failures) == 1:
+            raise failures[0][1]
+        pieces = [
+            item
+            for role, exc in failures
+            for item in (getattr(exc, "failures", None) or [f"{role}: {exc}"])
+        ]
+        suffix = (
+            "review-provider escalation"
+            if stage_role(self.plan.fallback or self.plan.entry) == "review"
+            else "pipeline escalation"
+        )
+        raise ValueError(
+            f"LLM structured output failed after bounded retry and {suffix}: "
+            + " | ".join(pieces)
+        )
 
     def finish(self, *, cancelled: bool = False) -> None:
         """Persist the trace when any stage ran. Telemetry failure never touches the task's result."""

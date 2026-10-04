@@ -32,9 +32,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 
-from .models import ScholarlyEffect, StageFamily
+from .models import ArtifactTrait, ScholarlyEffect, StageFamily
 
 WorkflowCategory = Literal["research", "evidence", "search", "metadata", "memory", "corpus"]
 WorkflowGuarantee = Literal[
@@ -75,6 +75,14 @@ class RunInputSpec(BaseModel):
 
     name: str = Field(min_length=1, max_length=60)
     data_type: str = Field(min_length=1, max_length=40)
+    produced_traits: list[ArtifactTrait] = Field(default_factory=list, max_length=64)
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_traits(self, handler: Any) -> dict[str, Any]:
+        data = handler(self)
+        if not data.get("produced_traits"):
+            data.pop("produced_traits", None)
+        return data
 
 
 class PipelinePurposeSpec(BaseModel):
@@ -94,6 +102,18 @@ class PipelinePurposeSpec(BaseModel):
     override_allowed: bool = False
     required_guarantees: list[WorkflowGuarantee] = Field(default_factory=list)
     run_inputs: list[RunInputSpec] = Field(default_factory=list)
+    # Computational guarantees only; authority/access obligations stay in
+    # required_guarantees and are enforced outside ordinary graph computation.
+    required_output_traits: list[ArtifactTrait] = Field(
+        default_factory=list, max_length=64
+    )
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_traits(self, handler: Any) -> dict[str, Any]:
+        data = handler(self)
+        if not data.get("required_output_traits"):
+            data.pop("required_output_traits", None)
+        return data
 
 
 def _key_stem(value: str) -> str:
