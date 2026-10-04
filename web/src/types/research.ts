@@ -207,6 +207,9 @@ export type ResearchConfig = {
   pipeline_version?: number | null;
   /** Settings-level stage configuration overrides, keyed by pipeline ID@version. */
   pipeline_config_overrides?: Record<string, PipelineConfigOverrideSet>;
+  /** Ephemeral layers retained when preparing/replaying one run. */
+  settings_pipeline_overrides?: PipelineConfigOverrideSet | null;
+  run_pipeline_overrides?: PipelineConfigOverrideSet | null;
   source_collection: string;
   locales: string[];
   search_types: string[];
