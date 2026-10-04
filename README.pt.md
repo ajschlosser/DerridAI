@@ -94,6 +94,7 @@ flowchart LR
         REST["REST commands + mutations"]
         GQL["façade GraphQL de leitura"]
         WS["notificações WebSocket"]
+        Reads["serviços de leitura cELF"]
         Domains["Corpus · Research · Pipelines · Jobs"]
     end
 
@@ -107,11 +108,15 @@ flowchart LR
     Browser --> GQL
     Browser <-->|bounded events| WS
     REST --> Domains
-    GQL --> Domains
+    REST --> Reads
+    GQL --> Reads
+    Reads --> Canonical
+    Reads -. query derived projections .-> Chroma
     Domains --> Canonical
     Domains --> System
     Domains -. index / retrieve .-> Chroma
     Domains --> Providers
+    Domains -. change notifications .-> WS
     Domains -. bounded reviewed text .-> NLP
     NLP -. derived annotations .-> Domains
 ```
