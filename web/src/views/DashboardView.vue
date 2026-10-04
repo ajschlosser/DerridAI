@@ -19,7 +19,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { toast } from "../composables/notifications";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import * as runtime from "../runtime/runtime.js";
+import { api } from "../domain/legacyApi";
+import { annotationsWorkspace } from "../domain/sharedAnnotations";
+import { workIndex, recentAuditChanges } from "../domain/sharedCorpusAnalytics";
+import { decorateDisabledControls } from "../domain/disabledControls";
+import { dbSearchWhere, label } from "../domain/sharedRecordHelpers";
+import { recordPresenters } from "../domain/sharedRecordPresenters";
+import { recordStores } from "../domain/storeAvailability";
+import { refreshStoreWorks } from "../domain/storeWorks";
+import { mountOperationsPanelHost, openJobResults } from "../domain/operationsPanelHooks";
+import { dashboardData } from "../domain/sharedDashboardData";
+import { state as sharedState } from "../domain/sharedUrlState";
 import { searchByMetadata } from "../domain/workspaceActions";
 import { compactNumber } from "../domain/numberFormatting";
 import { defaultProviderProfile, providerDisplayName } from "../domain/sharedProviderProfiles";
@@ -81,31 +91,31 @@ type Any = any;
 
 function metricBodyHtml() {
   const metric = activeMetric();
-  return metric ? runtime.dashboardMetricBody(metric) : "";
+  return metric ? recordPresenters.dashboardMetricBody(metric) : "";
 }
 
 async function refresh() {
-  const state = runtime.state as unknown as Record<string, Any>;
+  const state = sharedState as unknown as Record<string, Any>;
   isResearcher.value = sessionIsResearcher();
   if (isResearcher.value) {
     try {
       await refreshStores();
-      if (!state.activeStore) state.activeStore = runtime.recordStores()[0]?.name || "";
-      if (state.activeStore) await runtime.refreshStoreWorks(true);
+      if (!state.activeStore) state.activeStore = recordStores()[0]?.name || "";
+      if (state.activeStore) await refreshStoreWorks(true);
     } catch (error) {
       console.warn("Could not refresh researcher dashboard data", error);
     }
   }
   try {
-    await runtime.refreshServerAnnotations(
+    await annotationsWorkspace.refreshServerAnnotations(
       isResearcher.value && state.serverAnnotationsStore !== String(state.activeStore || ""),
     );
   } catch (error) {
     console.warn("Could not refresh annotations for dashboard", error);
   }
 
-  totals.value = runtime.dashboardTotals();
-  const workMap = isResearcher.value ? null : runtime.workIndex();
+  totals.value = dashboardData.dashboardTotals();
+  const workMap = isResearcher.value ? null : workIndex();
   const workItems: Any[] = isResearcher.value
     ? (state.storeWorkStats || []).map((item: Any) => ({
         work: item.work,
@@ -149,7 +159,7 @@ async function refresh() {
       ? (workMap as Map<string, Any>).get(workItems[0].work)
       : null;
   metricSets.value = singleLoadedWork
-    ? runtime.workInsightMetrics(singleLoadedWork.rows, singleLoadedWork.work)
+    ? recordPresenters.workInsightMetrics(singleLoadedWork.rows, singleLoadedWork.work)
     : [
         {
           id: "average",
@@ -185,14 +195,14 @@ async function refresh() {
           id: "record-share",
           type: "pie",
           title: i18n.t("dashboard.work_record_share"),
-          values: runtime.pieShareSeries(workItems, "count"),
+          values: recordPresenters.pieShareSeries(workItems, "count"),
           valueLabel: i18n.t("dynamic.records"),
         },
         {
           id: "word-share",
           type: "pie",
           title: i18n.t("dashboard.work_word_share"),
-          values: runtime.pieShareSeries(workItems, "totalWords"),
+          values: recordPresenters.pieShareSeries(workItems, "totalWords"),
           valueLabel: i18n.t("dashboard.words"),
         },
       ];
@@ -229,7 +239,7 @@ async function refresh() {
           )
           .slice(0, 4)
       : []
-    : runtime.recentAuditChanges(4).map(({ file, record, index, update }: Any) => ({
+    : recentAuditChanges(4).map(({ file, record, index, update }: Any) => ({
         kind: "record",
         timestamp: update.timestamp || "",
         file,
@@ -244,13 +254,13 @@ async function refresh() {
   currentLanguageFlag.value = state.translations?.info?.flag || "🌐";
   latestAnnotation.value =
     !isResearcher.value || hasCapability("annotations.read")
-      ? runtime.recentAnnotations(1)[0] || null
+      ? annotationsWorkspace.recentAnnotations(1)[0] || null
       : null;
   uiColorTheme.value = state.appConfig?.ui_color_theme || "green";
   globalSearch.value = state.globalSearch || "";
   globalSearchMode.value = state.globalSearchMode || "traditional";
 
-  const preview = await runtime.dashboardRecordPreview();
+  const preview = await dashboardData.dashboardRecordPreview();
   previewRecord.value = preview.record;
   previewTarget.value = preview.target;
   previewLastViewed.value = preview.lastViewed;
@@ -272,7 +282,7 @@ async function refresh() {
   await nextTick();
   if (mainEl.value) {
     enhanceCollapsibles(mainEl.value);
-    runtime.decorateDisabledControls(mainEl.value);
+    decorateDisabledControls(mainEl.value);
   }
 }
 
@@ -292,7 +302,7 @@ async function persistAndRefresh() {
 }
 
 async function goSearch() {
-  const state = runtime.state as unknown as Any;
+  const state = sharedState as unknown as Any;
   state.globalSearch = searchQueryInputEl.value?.value?.trim() || "";
   const work = searchWorkSelectEl.value?.value || "";
   const semantic = state.globalSearchMode === "database";
@@ -305,7 +315,7 @@ async function goSearch() {
       } catch {
         // Best effort: keep going with what we have.
       }
-      state.activeStore = runtime.recordStores()[0]?.name || "";
+      state.activeStore = recordStores()[0]?.name || "";
     }
     state.globalSearchMode = "database";
     if (!state.activeStore) {
@@ -332,20 +342,17 @@ async function goSearch() {
     navigateTo("global");
     try {
       const mode = state.dbSearchMethod || "similarity";
-      const data: Any = await runtime.api(
-        `/api/stores/${encodeURIComponent(state.activeStore)}/search`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            query: state.globalSearch,
-            mode,
-            n_results: 100,
-            where: Object.keys(runtime.dbSearchWhere()).length ? runtime.dbSearchWhere() : null,
-            fetch_k: Number(state.dbSearchFetchK || 100),
-            lambda_mult: Number(state.dbSearchLambda ?? 0.7),
-          }),
-        },
-      );
+      const data: Any = await api(`/api/stores/${encodeURIComponent(state.activeStore)}/search`, {
+        method: "POST",
+        body: JSON.stringify({
+          query: state.globalSearch,
+          mode,
+          n_results: 100,
+          where: Object.keys(dbSearchWhere()).length ? dbSearchWhere() : null,
+          fetch_k: Number(state.dbSearchFetchK || 100),
+          lambda_mult: Number(state.dbSearchLambda ?? 0.7),
+        }),
+      });
       state.storeSearchResults = data.results || [];
     } catch (error) {
       toast(
@@ -362,7 +369,7 @@ async function goSearch() {
     if (isResearcher.value) state.dbSearchWhere = work ? { work } : {};
     else
       state.globalFilters = work
-        ? [{ id: runtime.uid(), field: "work", op: "eq", value: work }]
+        ? [{ id: crypto.randomUUID(), field: "work", op: "eq", value: work }]
         : [];
     persistPrefs();
     navigateTo("global");
@@ -376,7 +383,7 @@ function onSearchQueryKeydown(event: KeyboardEvent) {
 }
 
 async function setSearchMode(mode: string) {
-  runtime.state.globalSearchMode = mode;
+  sharedState.globalSearchMode = mode;
   await persistAndRefresh();
 }
 
@@ -385,7 +392,7 @@ function goNav(view: string) {
 }
 
 async function openWork(work: string) {
-  runtime.state.workOverview = work;
+  sharedState.workOverview = work;
   persistPrefs();
   navigateTo("works");
 }
@@ -450,15 +457,15 @@ function openRecordPreview() {
   if (target.kind === "workspace") {
     navigateTo("record", { fileId: target.fileId, index: target.index });
   } else {
-    runtime.state.activeStore = target.store;
-    runtime.state.researcherRecordId = target.id;
+    sharedState.activeStore = target.store;
+    sharedState.researcherRecordId = target.id;
     persistPrefs();
     navigateTo("record");
   }
 }
 
 async function stepMetric(delta: number) {
-  const state = runtime.state as unknown as Any;
+  const state = sharedState as unknown as Any;
   state.dashboardMetricIndex =
     (Number(state.dashboardMetricIndex) + delta + metricSets.value.length) %
     metricSets.value.length;
@@ -466,14 +473,14 @@ async function stepMetric(delta: number) {
 }
 
 async function selectMetric(index: number) {
-  runtime.state.dashboardMetricIndex = index;
+  sharedState.dashboardMetricIndex = index;
   await persistAndRefresh();
 }
 
 async function onMetricDotKeydown(event: KeyboardEvent) {
   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
   event.preventDefault();
-  const state = runtime.state as unknown as Any;
+  const state = sharedState as unknown as Any;
   const count = metricSets.value.length;
   if (event.key === "Home") state.dashboardMetricIndex = 0;
   else if (event.key === "End") state.dashboardMetricIndex = count - 1;
@@ -493,7 +500,7 @@ function openRecentAnnotation(fileId: string, index: number) {
 }
 
 function openSharedAnnotation(store: string, recordId: string) {
-  runtime.openSharedAnnotationRecord(store, recordId);
+  dashboardData.openSharedAnnotationRecord(store, recordId);
 }
 
 function openCorpusBuilder() {
@@ -505,7 +512,7 @@ function openCorpusBuilder() {
 }
 
 function openCorpusBuild(jobId: string) {
-  runtime.openJobResults(jobId);
+  openJobResults(jobId);
 }
 
 // Some runtime code (provider warm-up, work metadata updates) still asks the dashboard to refresh this way; it used
@@ -526,7 +533,7 @@ watch(
 
 onMounted(async () => {
   await refresh();
-  runtime.mountOperationsPanelHost();
+  mountOperationsPanelHost();
   window.addEventListener("derridai:dashboard-refresh", onDashboardRefreshRequested);
 });
 onBeforeUnmount(() => {
@@ -785,11 +792,7 @@ onBeforeUnmount(() => {
                   }}
                 </span>
                 <span v-else>
-                  {{
-                    runtime.label(
-                      (item.update as Any).field_name || i18n.t("dashboard.updated_record"),
-                    )
-                  }}
+                  {{ label((item.update as Any).field_name || i18n.t("dashboard.updated_record")) }}
                   ·
                   {{
                     (item.record as Any).work ||
