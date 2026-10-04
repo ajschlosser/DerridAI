@@ -1637,10 +1637,23 @@ const selectedRecordActivitySummary = computed(() => {
     ? ` · ${i18n.tf("pdf_corpus.record_activity_summary", { human, llm, passes })}`
     : "";
 });
+const sourceScopeSummary = computed(() => {
+  const asset = selectedAsset.value;
+  if (!asset || asset.media_kind === "audio" || Number(asset.page_count || 0) < 2) return "";
+  return sourcePageScope.value.length
+    ? `${i18n.t("pdf_corpus.source_scope_selected_label", "Pages selected")}: ${sourcePageScope.value.length}`
+    : `${i18n.t("pdf_corpus.source_scope_all_label", "All pages")}: ${asset.page_count}`;
+});
 const selectedStructureSummary = computed(() => {
   const plan = selectedAsset.value?.document_layout;
-  if (!plan) return i18n.t("pdf_corpus.readiness.structure_unset");
   const parts: string[] = [];
+  if (sourceScopeSummary.value) parts.push(sourceScopeSummary.value);
+  if (!plan) {
+    return (
+      parts.join(" · ") ||
+      i18n.t("pdf_corpus.readiness.structure_source_interpretation", "Source interpretation")
+    );
+  }
   parts.push(
     plan.page_layout === "two_up"
       ? i18n.t("pdf_corpus.two_up_layout")
