@@ -191,6 +191,12 @@ describe("Corpus Builder focus review interactions", () => {
       clientY: 30,
     });
     expect(wrapper.get(".record-popout").attributes("style")).toContain("translate(40px, 30px)");
+    expect(wrapper.get(".record-popout-head").attributes("tabindex")).toBe("0");
+    expect(wrapper.get(".record-popout-head").attributes("aria-keyshortcuts")).toBe(
+      "ArrowLeft ArrowRight ArrowUp ArrowDown",
+    );
+    await wrapper.get(".record-popout-head").trigger("keydown", { key: "ArrowRight" });
+    expect(wrapper.get(".record-popout").attributes("style")).toContain("translate(56px, 30px)");
     await wrapper.get(".record-popout button").trigger("click");
     expect(wrapper.find(".record-popout").exists()).toBe(false);
     wrapper.unmount();

@@ -870,6 +870,10 @@ class PdfCorpusRepository:
         for part in ("assets", "builds", "publications"):
             (self.root / part).mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+        self._asset_ingest_lock = threading.RLock()
+        # Registry access stays under _lock. Retain entries after deletion so a
+        # queued caller cannot obtain a different admission lock for the same ID.
+        self._checkpoint_locks: dict[str, Any] = {}
         # Review paging is read-heavy. Keep a small, read-only parsed snapshot cache so
         # changing pages does not JSON-decode and migrate the entire corpus on every
         # GraphQL request. The SQLite file signature catches writers in another process;
@@ -944,11 +948,14 @@ class PdfCorpusRepository:
         asset_id = f"pdf-{identity[:24]}"
         suffix = ".pdf" if kind == "pdf" else content_suffix_for(kind, filename)
         meta_path = self.asset_meta_path(asset_id)
-        with self._lock:
-            existing = _json_read(meta_path)
-            existing_suffix = str(existing.get("content_suffix") or ".pdf") if isinstance(existing, dict) else suffix
-            if isinstance(existing, dict) and self.asset_content_path(asset_id, existing_suffix).exists():
-                return existing
+        # Keep extractor admission serialized without holding canonical coordination.
+        # Lock order is ingestion then repository; extraction runs outside the latter.
+        with self._asset_ingest_lock:
+            with self._lock:
+                existing = _json_read(meta_path)
+                existing_suffix = str(existing.get("content_suffix") or ".pdf") if isinstance(existing, dict) else suffix
+                if isinstance(existing, dict) and self.asset_content_path(asset_id, existing_suffix).exists():
+                    return existing
             extracted = self._extract_for_ingest(
                 data, filename=filename, kind=kind, ocr_mode=ocr_mode, ocr_languages=ocr_languages,
                 source_illegibility=illegibility, catalog_metadata=catalog_metadata,
@@ -983,12 +990,46 @@ class PdfCorpusRepository:
                 **({} if not source_url else {"source_url": source_url}),
                 **extracted,
             }
-            self.asset_content_path(asset_id, suffix).write_bytes(data)
-            with self.asset_blocks_path(asset_id).open("w", encoding="utf-8") as handle:
-                for block in blocks:
-                    handle.write(json.dumps(block, ensure_ascii=False) + "\n")
-            _json_write(meta_path, meta)
-            return meta
+            staged = self.root / "assets" / f".ingest-{uuid.uuid4().hex}"
+            staged.mkdir()
+            published: list[Path] = []
+            try:
+                self._stage_asset(staged, data, blocks, meta)
+                with self._lock:
+                    existing = _json_read(meta_path)
+                    existing_suffix = str(existing.get("content_suffix") or ".pdf") if isinstance(existing, dict) else suffix
+                    if isinstance(existing, dict) and self.asset_content_path(asset_id, existing_suffix).exists():
+                        return existing
+                    try:
+                        for source, target in (
+                            (staged / "content", self.asset_content_path(asset_id, suffix)),
+                            (staged / "blocks", self.asset_blocks_path(asset_id)),
+                            (staged / "meta", meta_path),
+                        ):
+                            os.replace(source, target)
+                            published.append(target)
+                    except BaseException:
+                        for target in reversed(published):
+                            target.unlink(missing_ok=True)
+                        raise
+                return meta
+            finally:
+                shutil.rmtree(staged)
+
+    @staticmethod
+    def _stage_asset(staged: Path, data: bytes, blocks: list[dict[str, Any]], meta: dict[str, Any]) -> None:
+        # Metadata is the publication marker and is replaced last. Flush source
+        # artifacts before admission; repository coordination only covers renames.
+        with (staged / "content").open("wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        with (staged / "blocks").open("w", encoding="utf-8") as handle:
+            for block in blocks:
+                handle.write(json.dumps(block, ensure_ascii=False) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        _json_write(staged / "meta", meta)
 
     def preview_unit_policy(self, asset_id: str, policy: dict[str, Any] | None) -> dict[str, Any]:
         """Counts and sample units for a source-unit policy, without saving anything."""
@@ -1849,10 +1890,18 @@ class PdfCorpusRepository:
         return self.root / "builds" / build_id / "checkpoints" / f"{safe}.json"
 
     def save_checkpoint(self, build_id: str, name: str, payload: Any) -> None:
-        self.get_build(build_id)
-        _json_write(self.build_checkpoint_path(build_id, name), payload)
-        if name == "document_intelligence":
-            system_store.mark_semantic_map_dirty(build_id, reason="document_intelligence_checkpoint")
+        # Order: repository then checkpoint. Never reacquire repository while
+        # holding checkpoint admission. Canonical Record writers are unchanged.
+        with self._lock:
+            self._read_build_snapshot(build_id)
+            lock = self._checkpoint_locks.setdefault(build_id, threading.RLock())
+            lock.acquire()
+        try:
+            _json_write(self.build_checkpoint_path(build_id, name), payload)
+            if name == "document_intelligence":
+                system_store.mark_semantic_map_dirty(build_id, reason="document_intelligence_checkpoint")
+        finally:
+            lock.release()
 
     def load_checkpoint(self, build_id: str, name: str, default: Any = None) -> Any:
         self.get_build(build_id)
@@ -1890,18 +1939,21 @@ class PdfCorpusRepository:
             raise KeyError(build_id)
         target = self.root / "builds" / build_id
         with self._lock:
-            if not target.is_dir():
-                raise KeyError(build_id)
-            shutil.rmtree(target)
-            self._invalidate_review_records_cache(build_id)
+            lock = self._checkpoint_locks.setdefault(build_id, threading.RLock())
+            with lock:
+                if not target.is_dir():
+                    raise KeyError(build_id)
+                shutil.rmtree(target)
+                self._invalidate_review_records_cache(build_id)
 
     def delete_asset_files(self, asset_id: str) -> None:
         """Remove a source asset's metadata, extracted blocks and stored bytes."""
-        if not self._SAFE_ID.match(asset_id) or not self.asset_meta_path(asset_id).exists():
-            raise KeyError(asset_id)
-        for path in (self.root / "assets").glob(f"{asset_id}.*"):
-            if path.is_file():
-                path.unlink()
+        with self._lock:
+            if not self._SAFE_ID.match(asset_id) or not self.asset_meta_path(asset_id).exists():
+                raise KeyError(asset_id)
+            for path in (self.root / "assets").glob(f"{asset_id}.*"):
+                if path.is_file():
+                    path.unlink()
 
     def save_build(self, build: dict[str, Any]) -> None:
         build_id = str(build["build_id"])

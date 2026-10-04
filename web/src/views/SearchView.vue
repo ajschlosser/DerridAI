@@ -659,6 +659,9 @@ function columnStyle(key: string) {
       }
     : undefined;
 }
+function clampColumnWidth(key: string, width: number) {
+  return Math.max(key === "text" ? 260 : 96, Math.min(900, width));
+}
 function startResize(event: PointerEvent, key: string) {
   event.preventDefault();
   event.stopPropagation();
@@ -667,10 +670,7 @@ function startResize(event: PointerEvent, key: string) {
   const startX = event.clientX,
     startWidth = th.getBoundingClientRect().width;
   const move = (moveEvent: PointerEvent) => {
-    columnWidths[key] = Math.max(
-      key === "text" ? 260 : 96,
-      Math.min(900, startWidth + (moveEvent.clientX - startX)),
-    );
+    columnWidths[key] = clampColumnWidth(key, startWidth + (moveEvent.clientX - startX));
   };
   const stop = () => {
     window.removeEventListener("pointermove", move);
@@ -678,6 +678,20 @@ function startResize(event: PointerEvent, key: string) {
   };
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", stop, { once: true });
+}
+function resizeColumnFromKeyboard(event: KeyboardEvent, key: string) {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  const th = (event.currentTarget as HTMLElement).closest("th") as HTMLElement | null;
+  if (!th) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const currentWidth = columnWidths[key] ?? th.getBoundingClientRect().width;
+  const step = event.shiftKey ? 40 : 12;
+  columnWidths[key] = clampColumnWidth(
+    key,
+    currentWidth + (event.key === "ArrowRight" ? step : -step),
+  );
+  persistColumnWidths();
 }
 function toggleText(key: string) {
   expandedText.has(key) ? expandedText.delete(key) : expandedText.add(key);
@@ -1267,7 +1281,9 @@ onBeforeUnmount(() => {
                             type="button"
                             class="search-column-resizer"
                             :aria-label="i18n.tf('search.resize_column', { column: column.label })"
+                            aria-keyshortcuts="ArrowLeft ArrowRight"
                             @pointerdown="startResize($event, column.key)"
+                            @keydown="resizeColumnFromKeyboard($event, column.key)"
                           ></button>
                         </th>
                         <th class="search-actions-column ui-table-sticky-end" scope="col">
