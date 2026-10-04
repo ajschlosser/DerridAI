@@ -26,11 +26,11 @@ DerridAI ist eine lokal ausgerichtete, provenanzerhaltende Forschungsumgebung zu
 
 DerridAI ist außerdem die ursprüngliche Referenzimplementierung von **cELF 1.0 — Capta-Enriched Lexical Format**, einer provenanzerhaltenden Informationsarchitektur für KI-gestützte Dokumentforschung. Quellenidentität, Record-Identität und Revision, Metadaten-Assertions, Evidenz, generierte Claims und Support-Bindungen bleiben getrennt prüfbar, statt in einem undurchsichtigen Vektorspeicher zusammenzufallen.
 
-Aktuelle Version: **0.81.0 — Fall River** ([Release Notes](docs/notes/0.81.0.md)). Die Anwendungsversion wurde seit Fall River nicht erhöht; dieses README beschreibt den aktuellen Stand von `master`, einschließlich der Arbeit nach 0.81.0, die nicht Teil des getaggten Releases ist.
+Aktuelle Version: **0.82.0 — Gloucester** ([Release Notes](docs/notes/0.82.0.md)). Dieses README beschreibt die Gloucester-Version.
 
 ## Aktueller Stand von `master`
 
-Der aktuelle Branch hat sich seit dem Tag 0.81.0 erheblich weiterentwickelt, behält aber die Anwendungsversion 0.81.0. Die folgende Übersicht beschreibt das heutige Produkt und keine neuen Release Notes.
+Die folgende Zusammenfassung beschreibt die Gloucester-Version.
 
 - **Corpus Builder ist jetzt ein progressiver Ablauf Einrichtung → Build → Review → Veröffentlichung.** Unterstützt werden begrenzte parallele Anreicherung, explizite Entscheidungen zu Korpus-Topologie und Record-Größe, fortsetzbares revisionsbewusstes Review, persistente Record-lokale Review-Warteschlangen, fokussierte Sitzungen zur Behebung von Publikationsblockern, wiederholbare Metadatengruppen, Audio-Sprecherzuordnungen und sicheres Text-Review während verifizierter Vorbereitung.
 - **Metadaten- und Evidenzverarbeitung benötigt weniger Modellarbeit und bewahrt stärkere Semantik.** Deterministisches/kandidatenorientiertes Routing, semantische Identität und Wertäquivalenz, support-validierte Evidenzkaskade v2, Reparatur/Klassifikation strukturierter Ausgaben und inkrementelle Metadata-Memory-Abgleiche senken die Latenz, ohne Retrieval-Relevanz oder fehlerhafte Ausgaben zu Evidenz zu erheben.
