@@ -608,6 +608,61 @@ jobs:
           DERRIDAI_SITE_CONTAINER: derridai-publication-acceptance-${{ github.run_id }}
         run: sh scripts/check_publication_artifacts.sh .tmp/publication-acceptance
 
+
+  refresh-publication-assets:
+    if: github.event_name == 'pull_request' && github.head_ref == 'task/published-site-research-settings'
+    name: refresh-publication-assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Refresh formatted sources and generated publication assets
+        run: |
+          cd web
+          npm ci --no-audit --no-fund
+          npx prettier --write \
+            site/PublishedProvidersView.vue \
+            site/PublishedResearchConfig.vue \
+            site/PublishedResearchView.vue \
+            site/siteContext.ts \
+            tests/e2e/static-site-a11y.spec.ts
+          npm run build:sdk
+          npm run build:site
+          cd ..
+          if git diff --quiet -- \
+            web/site/PublishedProvidersView.vue \
+            web/site/PublishedResearchConfig.vue \
+            web/site/PublishedResearchView.vue \
+            web/site/siteContext.ts \
+            web/tests/e2e/static-site-a11y.spec.ts \
+            api/app/site_assets/derridai-sdk.js \
+            api/app/site_assets/derridai-site.js; then
+            echo "Publication sources and generated assets are already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            web/site/PublishedProvidersView.vue \
+            web/site/PublishedResearchConfig.vue \
+            web/site/PublishedResearchView.vue \
+            web/site/siteContext.ts \
+            web/tests/e2e/static-site-a11y.spec.ts \
+            api/app/site_assets/derridai-sdk.js \
+            api/app/site_assets/derridai-site.js
+          git commit -m "chore(site): refresh generated publication assets"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
+
   # Preserve the historical required-check name while allowing unrelated
   # surfaces to skip expensive compute without weakening the checks that own them.
   frontend:
