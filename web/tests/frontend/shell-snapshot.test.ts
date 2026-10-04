@@ -30,10 +30,10 @@ describe("shell snapshot", () => {
 
   it("counts only queued, running and cancelling jobs as active", () => {
     jobsState.jobs = [
-      { status: "running" },
-      { status: "queued" },
-      { status: "cancelling" },
-      { status: "succeeded" },
+      { id: "running", status: "running" },
+      { id: "queued", status: "queued" },
+      { id: "cancelling", status: "cancelling" },
+      { id: "succeeded", status: "succeeded" },
     ];
     expect(getShellSnapshot().activeJobs).toBe(3);
   });
