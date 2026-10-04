@@ -19,7 +19,6 @@
 // Compatibility composition root for workflows that have not yet moved fully into Vue/domain modules.
 // Prefer adding new behavior to the focused imports below and expose only the narrow bridge needed here;
 // moving logic back into this file makes the remaining runtime migration harder to reason about and test.
-import { openMessageDialog } from "../composables/messageDialog";
 import { toast } from "../composables/notifications";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?worker";
@@ -74,6 +73,7 @@ import "../domain/sharedSearchWorkspace";
 import "../domain/tableColumns";
 import "../domain/sharedRecordsWorkspace";
 import { wireMetadataSearchDelegation } from "../domain/legacyDomListeners";
+import "../domain/legacyClickDelegation";
 import "../domain/listPaging";
 import "../domain/sharedWorksWorkspace";
 import { workDialogs } from "../domain/sharedWorkDialogs";
@@ -103,7 +103,7 @@ import { normalizeTouchupItems } from "../domain/touchupLauncher";
 import "../domain/workDialogs";
 import { recordDialogs } from "../domain/sharedRecordDialogs";
 import { createOperationDock } from "../domain/operationDock";
-import { copyCitation, copyJsonToClipboard } from "../domain/clipboardCopy";
+import "../domain/clipboardCopy";
 import {
   getUrlSyncHook,
   navSnapshot,
@@ -125,7 +125,7 @@ import {
 import * as sharedRecordEditing from "../domain/sharedRecordEditing";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
 import "../domain/fileDerivedState";
-import { importFiles } from "../domain/sharedFileLifecycle";
+import "../domain/sharedFileLifecycle";
 import { persistFileNow, restoreWorkspace } from "../domain/sharedWorkspacePersistence";
 import { createAppLifecycle } from "../domain/appLifecycle";
 import "../domain/sharedCompareLibrary";
@@ -242,7 +242,6 @@ const {
   reviewItemFromKey,
   selectedEvidenceEntries,
   setEvidence,
-  toggleWorkspaceEvidence,
   clearSelectedEvidence,
   selectedEvidencePayload,
   clearReviewSelection,
@@ -663,103 +662,6 @@ function triggerUpsertQueue() {
     : toast(tr("runtime.toast.cannot_manage_dbs"), { tone: "warning" });
 }
 
-document.addEventListener(
-  "click",
-  (event) => {
-    const resultButton = event.target.closest?.(
-      "[data-toast-open-result],[data-job-result],[data-rag-job-result],[data-recent-rag-result]",
-    );
-    if (!resultButton) return;
-    const jobId =
-      resultButton.dataset.toastOpenResult ||
-      resultButton.dataset.jobResult ||
-      resultButton.dataset.ragJobResult ||
-      resultButton.dataset.recentRagResult;
-    if (!jobId) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    resultButton.disabled = true;
-    const original = resultButton.innerHTML;
-    resultButton.textContent = "Opening…";
-    void openJobResults(jobId)
-      .catch((error) =>
-        openMessageDialog({
-          title: "Could not open operation result",
-          message: error.message || String(error),
-          tone: "danger",
-        }),
-      )
-      .finally(() => {
-        if (resultButton.isConnected) {
-          resultButton.disabled = false;
-          resultButton.innerHTML = original;
-        }
-      });
-  },
-  { capture: true },
-);
-
-document.addEventListener("click", (event) => {
-  const loadedButton = event.target.closest("[data-copy-row-key]");
-  if (loadedButton) {
-    event.stopPropagation();
-    const item = reviewItemFromKey(loadedButton.dataset.copyRowKey);
-    if (item)
-      copyJsonToClipboard(
-        item.file.records[item.index],
-        item.record.record_id || tr("dynamic.record_one"),
-      );
-    else toast(tr("runtime.toast.source_record_gone"), { tone: "danger" });
-    return;
-  }
-  const citeButton = event.target.closest("[data-cite-row-key]");
-  if (citeButton) {
-    event.stopPropagation();
-    const item = reviewItemFromKey(citeButton.dataset.citeRowKey);
-    if (item) copyCitation(item.record, citeButton.dataset.citeKind || "inline");
-    return;
-  }
-  const dbCite = event.target.closest("[data-admin-db-cite],[data-r-cite]");
-  if (dbCite) {
-    event.preventDefault();
-    event.stopPropagation();
-    const id = String(dbCite.dataset.adminDbId || dbCite.dataset.rId || "");
-    const result = (state.storeSearchResults || []).find(
-      (item) => String(item.id || item.record?._chroma_id || item.record?.record_id || "") === id,
-    );
-    const record =
-      result?.record ||
-      (state.storeRecords || []).find(
-        (item) => String(item._chroma_id || item.record_id || "") === id,
-      );
-    if (record)
-      copyCitation(record, dbCite.dataset.adminDbCite || dbCite.dataset.rCite || "inline");
-    else toast(tr("runtime.toast.citation_source_gone"), { tone: "warning" });
-    return;
-  }
-  const evidenceButton = event.target.closest("[data-toggle-workspace-evidence]");
-  if (evidenceButton) {
-    event.stopPropagation();
-    const item = reviewItemFromKey(evidenceButton.dataset.toggleWorkspaceEvidence);
-    if (item) {
-      toggleWorkspaceEvidence(item.file, item.index);
-      renderView();
-    }
-    return;
-  }
-  const storeButton = event.target.closest("[data-copy-store-record]");
-  if (storeButton) {
-    event.stopPropagation();
-    const record = state.storeRecords.find(
-      (item) => String(item._chroma_id || "") === String(storeButton.dataset.copyStoreRecord || ""),
-    );
-    if (record) {
-      const copy = { ...record };
-      delete copy._chroma_id;
-      copyJsonToClipboard(copy, copy.record_id || tr("runtime.toast.chroma_record"));
-    }
-  }
-});
 /**
  * Re-derive runtime view state from the browser location (the router owns the URL) and repaint.
  * Used by browser back/forward and whenever a router navigation settles somewhere the runtime did not expect.
