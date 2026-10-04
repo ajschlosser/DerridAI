@@ -30,6 +30,7 @@ class BuildScope:
     semantic_blocks: list[dict[str, Any]]
     source_quality: dict[str, Any]
     source_scope_repair: bool
+    source_pages: list[dict[str, Any]]
 
 
 def select_source_pages(
