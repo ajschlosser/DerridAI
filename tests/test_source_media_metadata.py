@@ -82,6 +82,49 @@ def test_whisper_spans_use_whisperx_speakers_after_full_transcript():
     assert "speaker" not in meta
 
 
+def test_audio_ingest_automatically_diarizes_and_exposes_distinct_speakers(monkeypatch):
+    transcript = {
+        "text": "Hello there. Good evening.",
+        "language": "en",
+        "segments": [
+            {"start": 0.0, "end": 2.0, "text": "Hello there.", "avg_logprob": -0.2},
+            {"start": 2.0, "end": 4.0, "text": "Good evening.", "avg_logprob": -0.2},
+        ],
+    }
+    diarization_calls: list[Path] = []
+
+    monkeypatch.setattr(source_audio, "probe_audio", lambda _path: 4.0)
+    monkeypatch.setattr(source_audio, "transcribe_entire_file", lambda _path: transcript)
+    monkeypatch.setattr(source_audio, "tool_version", lambda _name: "test")
+    monkeypatch.setattr(source_audio, "executable_version", lambda _name: "test")
+
+    def diarize(path: Path):
+        diarization_calls.append(path)
+        return [
+            {
+                "start": 0.0,
+                "end": 2.0,
+                "speaker": "SPEAKER_1",
+                "provider_speaker": "SPEAKER_00",
+            },
+            {
+                "start": 2.0,
+                "end": 4.0,
+                "speaker": "SPEAKER_2",
+                "provider_speaker": "SPEAKER_01",
+            },
+        ]
+
+    monkeypatch.setattr(source_audio, "diarize_with_whisperx", diarize)
+
+    extracted = source_audio.extract_audio(b"not-real-audio", filename="interview.wav")
+
+    assert len(diarization_calls) == 1
+    assert extracted["audio_provenance"]["diarization_status"] == "complete"
+    assert extracted["initial_metadata"]["speakers"] == ["SPEAKER_1", "SPEAKER_2"]
+    assert [block["speaker"] for block in extracted["blocks"]] == ["SPEAKER_1", "SPEAKER_2"]
+
+
 def test_audio_voice_labels_start_at_one_and_reviewed_names_project_to_records():
     turns = source_audio.normalize_speaker_labels(
         [
