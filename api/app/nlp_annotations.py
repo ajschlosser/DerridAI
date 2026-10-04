@@ -112,16 +112,19 @@ def reset_pipelines() -> None:
 
 
 def _candidate_models(language: str) -> list[tuple[str, str]]:
-    """(load target, reported name) in priority order: configured package, installed pack, multilingual."""
+    """(load target, reported name) in priority order: explicit override, installed pack, bundled default, multilingual."""
     from .document_nlp_packs import installed_spacy_model
 
     out: list[tuple[str, str]] = []
-    configured = os.environ.get(f"SPACY_MODEL_{language.upper()}") or DEFAULT_MODELS.get(language)
-    if configured:
-        out.append((configured, configured))
+    override = os.environ.get(f"SPACY_MODEL_{language.upper()}")
+    if override:
+        out.append((override, override))
     pack = installed_spacy_model(language)
     if pack:
         out.append(pack)
+    default = DEFAULT_MODELS.get(language)
+    if default and default != override:
+        out.append((default, default))
     if language != MULTILINGUAL:
         fallback = installed_spacy_model(MULTILINGUAL)
         out.append(
