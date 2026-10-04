@@ -1229,10 +1229,27 @@ class ReviewActionsMixin:
             project_record_assertions(target)
             target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"confirmed_absent"})
             target["metadata_decisions"] = target["metadata_decisions"][-100:]
-            target["metadata_reviewed_at"] = iso_now(); _mark_human_touch(target,[field])
+            target["metadata_reviewed_at"] = iso_now()
+            _mark_human_touch(target, [field])
+            build = self.repo.get_build(build_id)
+            review_frozen = "__review__" in {
+                str(touched) for touched in (target.get("human_touched_fields") or [])
+            }
+            enrichment_active = _metadata_enrichment_active(build, target) and not review_frozen
+            if enrichment_active:
+                requeue_record_metadata(
+                    target,
+                    "Reviewer confirmed metadata absence during automatic enrichment; rerun against current human authority.",
+                    force=True,
+                )
             profile = self._profile_for(build_id)
-            _sync_record_metadata_state(target, profile); target["record_revision"] = current_revision + 1
+            _sync_record_metadata_state(target, profile)
+            target["record_revision"] = current_revision + 1
             self._rewrite_targeted_record(build_id, target, previous_record)
+            if enrichment_active:
+                latest_build = self.repo.get_build(build_id)
+                _prepend_metadata_priority(latest_build, record_id)
+                self.repo.save_build(latest_build)
             record = target
             persist_record_decision(
                 record=record,
