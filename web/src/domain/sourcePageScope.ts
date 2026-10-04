@@ -20,7 +20,10 @@ export interface PageSelectionParseResult {
  * malformed/reversed/out-of-range tokens are rejected instead of silently
  * changing the documentary scope of a build.
  */
-export function parseSourcePageSelection(value: string, pageCount: number): PageSelectionParseResult {
+export function parseSourcePageSelection(
+  value: string,
+  pageCount: number,
+): PageSelectionParseResult {
   const raw = value.trim();
   if (!raw) return { pages: [], error: "" };
   if (!Number.isInteger(pageCount) || pageCount < 1) {
