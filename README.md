@@ -129,6 +129,18 @@ For developers working inside a subsystem, the local maps are more specific than
 - [Corpus Builder components](web/src/components/corpus-builder/README.md)
 - [Pipeline Studio components](web/src/components/pipelines/README.md)
 - [Frontend test architecture](web/tests/README.md)
+### Contributing by area
+
+| If you want to change… | Start here |
+| --- | --- |
+| Backend/domain behavior | [`api/README.md`](api/README.md) → [`api/app/README.md`](api/app/README.md) |
+| Frontend route/workspace behavior | [`web/README.md`](web/README.md) → [`web/src/README.md`](web/src/README.md) |
+| Reusable UI or Storybook components | [`web/src/components/README.md`](web/src/components/README.md) |
+| Corpus Builder | [`web/src/features/corpus-builder/README.md`](web/src/features/corpus-builder/README.md) and [`web/src/components/corpus-builder/README.md`](web/src/components/corpus-builder/README.md) |
+| Pipeline Studio | [`api/app/pipelines/README.md`](api/app/pipelines/README.md) and [`web/src/components/pipelines/README.md`](web/src/components/pipelines/README.md) |
+| Tests / CI ownership | [`tests/README.md`](tests/README.md) and [`web/tests/README.md`](web/tests/README.md) |
+
+Read [`docs/CODE_READABILITY.md`](docs/CODE_READABILITY.md) before a refactor. It records naming, documentation, nesting, and provenance-preservation conventions, plus the main traps in legacy/derived-state code.
 
 ### Runtime services
 
@@ -309,10 +321,11 @@ cd ..
 Fast local quality gates:
 
 ```bash
-ruff check api/app tests scripts/check_frontend_api_contract.py
+ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 mypy
-pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
+pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py --ignore=tests/test_frontend_graphql_contract.py
 pytest -q -m contract tests/test_frontend_api_contract.py
+pytest -q -m contract tests/test_frontend_graphql_contract.py
 
 cd web
 npm run format:repo:check
