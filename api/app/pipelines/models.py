@@ -190,6 +190,9 @@ class PipelineStageDefinition(BaseModel):
 
     id: str = Field(min_length=1, max_length=120)
     strategy: str = Field(min_length=1, max_length=120)
+    # Optional compatibility pin for imported/migrated definitions. Historical
+    # definitions omit it and therefore resolve the registry's current version.
+    strategy_version: int | None = Field(default=None, ge=1)
     enabled: bool = True
     config: dict[str, Any] = Field(default_factory=dict)
     next: list[str] = Field(default_factory=list, max_length=16)
@@ -207,6 +210,10 @@ class PipelineStageDefinition(BaseModel):
         data = handler(self)
         if not data.get("inputs"):
             data.pop("inputs", None)
+        # Keep historical definition hashes stable unless a migration/import
+        # explicitly pins the strategy contract version it expects.
+        if data.get("strategy_version") is None:
+            data.pop("strategy_version", None)
         return data
 
     def edge_targets(self) -> list[str]:
