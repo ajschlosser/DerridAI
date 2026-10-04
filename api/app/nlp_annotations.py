@@ -16,7 +16,7 @@
 
 """Deterministic, offline POS/NER candidates for schema fields.
 
-spaCy runs locally with bundled English/French model packages and administrator-installed
+spaCy runs locally with bundled English/French/Latin model packages and administrator-installed
 language packs (no network during corpus processing). Its output is a raw *candidate
 surface-form* layer: exact substrings of the record text
 with offsets and the linguistic tag that matched. A raw candidate is not scholarly
@@ -56,12 +56,14 @@ MAX_TERMS = 60
 # Universal POS runs kept as record terms. Function words are never dropped from the
 # text; they only end a run, so a term is always an exact contiguous span.
 TERM_POS_TAGS = ("PROPN", "NOUN")
-# English and French are the built-in baseline. Other languages remain explicit,
-# administrator-installed resources; SPACY_MODEL_<LANG> can still override either
-# the bundled baseline or a managed pack when an operator needs a custom model.
+# English, French, and Latin are the built-in baseline. Latin uses LatinCy, whose
+# model is trained on multiple academic/classical Latin corpora and treebanks.
+# Other languages remain explicit administrator-installed resources.
+# SPACY_MODEL_<LANG> can still override a bundled baseline or managed pack.
 DEFAULT_MODELS = {
     "en": "en_core_web_sm",
     "fr": "fr_core_news_sm",
+    "la": "la_core_web_sm",
 }
 # Non-English pipelines use different entity inventories; map to the shared vocabulary.
 _LABEL_ALIASES = {"PER": "PERSON"}
