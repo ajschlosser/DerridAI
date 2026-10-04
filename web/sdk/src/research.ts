@@ -216,9 +216,7 @@ export class ResearchEngine {
             },
             `${runId}-scope-${index + 1}`,
           );
-          seed = scoped.results.find(
-            (item) => !seededIds.has(String(item.record.record_id)),
-          );
+          seed = scoped.results.find((item) => !seededIds.has(String(item.record.record_id)));
         }
         if (!seed) continue;
         scopeSeeds.push(seed);
@@ -228,9 +226,10 @@ export class ResearchEngine {
 
     if (scopeSeeds.length) {
       const seedIds = new Set(scopeSeeds.map((item) => String(item.record.record_id)));
-      retrieval.results = [...scopeSeeds, ...retrieval.results.filter(
-        (item) => !seedIds.has(String(item.record.record_id)),
-      )]
+      retrieval.results = [
+        ...scopeSeeds,
+        ...retrieval.results.filter((item) => !seedIds.has(String(item.record.record_id))),
+      ]
         .slice(0, retrievalLimit)
         .map((item, index) => ({ ...item, rank: index + 1 }));
     }
