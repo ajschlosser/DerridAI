@@ -542,6 +542,7 @@ class GutenbergOfflineService:
         self.staging_library_db_path.unlink(missing_ok=True)
         self._init_library_db(self.staging_library_db_path, staging=True)
         count = 0
+        seen_ids: set[int] = set()
         try:
             with zipfile.ZipFile(self.archive_path) as outer:
                 tar_name = next((name for name in outer.namelist() if name.lower().endswith(".tar")), None)
@@ -559,10 +560,11 @@ class GutenbergOfflineService:
                             continue
                         payload = extracted.read()
                         text = payload.decode("utf-8", errors="replace")
+                        etext_id = int(match.group(1))
                         library.execute(
                             "INSERT OR REPLACE INTO gutenberg_texts VALUES(?,?,?,?,?,?)",
                             (
-                                int(match.group(1)),
+                                etext_id,
                                 text,
                                 hashlib.sha256(payload).hexdigest(),
                                 len(payload),
@@ -570,7 +572,9 @@ class GutenbergOfflineService:
                                 _now(),
                             ),
                         )
-                        count += 1
+                        if etext_id not in seen_ids:
+                            seen_ids.add(etext_id)
+                            count += 1
                         if count % 250 == 0:
                             library.commit()
                             with sqlite3.connect(self.db_path) as state:
