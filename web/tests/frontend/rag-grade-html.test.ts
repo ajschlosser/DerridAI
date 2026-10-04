@@ -16,12 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Compatibility entry point. The runtime's code lives in domain/appBootstrap.ts (the functions `App.vue` calls) and
-// runtime/registrations.js (load-order side effects); this file keeps the old import path working for tests.
-export {
-  bootstrapRuntime,
-  setShellRefreshHook,
-  setUrlSyncHook,
-  setUserContext,
-  syncFromLocation,
-} from "../domain/appBootstrap";
+import { describe, expect, it } from "vitest";
+import { ragGradeHtml } from "../../src/domain/ragGradeHtml";
+
+describe("ragGradeHtml", () => {
+  it("escapes model-supplied text and lists strengths", () => {
+    const html = ragGradeHtml({ strengths: ["<b>clear</b>"], overall: 4 });
+    expect(html).toContain("&lt;b&gt;clear&lt;/b&gt;");
+    expect(html).not.toContain("<b>clear</b>");
+  });
+
+  it("says nothing was reported for an empty grade", () => {
+    expect(ragGradeHtml({})).toContain("None reported.");
+  });
+});
