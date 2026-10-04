@@ -59,11 +59,10 @@ function synchronizeDraft() {
   }
 }
 
-watch(
-  () => [props.speakers, props.assignments] as const,
-  synchronizeDraft,
-  { deep: true, immediate: true },
-);
+watch(() => [props.speakers, props.assignments] as const, synchronizeDraft, {
+  deep: true,
+  immediate: true,
+});
 
 function saveSpeaker(speaker: string) {
   draft[speaker] = String(draft[speaker] || "").trim();
