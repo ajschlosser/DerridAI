@@ -262,3 +262,58 @@ def test_an_oversize_text_is_refused(monkeypatch):
     with pytest.raises(CaptureError) as error:
         sg.GutenbergProvider(http_for(lambda r: httpx.Response(500), "gutenberg"), catalogue=object()).fetch_source(candidate, max_bytes=1000)
     assert error.value.code == CaptureErrorCode.SOURCE_TOO_LARGE
+
+
+def test_installed_archive_supports_fully_local_author_capture(tmp_path, monkeypatch):
+    """An installed archive can resolve, enumerate and acquire an author with networking disabled."""
+    from app import gutenberg_catalogue
+
+    archive_path = tmp_path / "txt-files.tar.zip"
+    text = b"Title: Pride and Prejudice\nAuthor: Austen, Jane\n\nIt is a truth universally acknowledged.\n"
+    tar_buffer = io.BytesIO()
+    with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
+        info = tarfile.TarInfo("1342-0.txt")
+        info.size = len(text)
+        tar.addfile(info, io.BytesIO(text))
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as outer:
+        outer.writestr("txt-files.tar", tar_buffer.getvalue())
+
+    service = GutenbergOfflineService(tmp_path / "system.sqlite", archive_path, start_worker=False)
+    with sqlite3.connect(service.db_path) as db:
+        db.execute(
+            """
+            INSERT INTO gutenberg_catalogue_books(
+                etext_id,title,author,language,issued,updated_at,item_type
+            ) VALUES(1342,'Pride and Prejudice','Austen, Jane, 1775-1817','en','1813','now','Text')
+            """
+        )
+        service._index_rows(db, [(1342, "Austen, Jane, 1775-1817", "en")])
+        db.execute("UPDATE gutenberg_catalogue SET status='ready',item_count=1 WHERE id=1")
+    assert service.extract_catalogue() == 1
+    with sqlite3.connect(service.db_path) as db:
+        db.execute("UPDATE gutenberg_archive SET status='ready' WHERE id=1")
+    archive_path.unlink()
+
+    people = service.search_authors("Jane Austen")
+    assert len(people) == 1
+    assert people[0]["wikidata_qid"].startswith("gutenberg:")
+    local_author = service.resolve_author(people[0]["wikidata_qid"])
+    assert local_author.canonical_name == "Jane Austen"
+    assert local_author.wikidata_qid is None
+
+    provider = sg.GutenbergProvider(
+        http_for(lambda _request: (_ for _ in ()).throw(AssertionError("network used")), "gutenberg"),
+        catalogue=service,
+    )
+    found, _report = _enumerate(provider, who=local_author)
+    assert set(found) == {"1342"}
+
+    monkeypatch.setattr(gutenberg_catalogue, "gutenberg_offline", service)
+    monkeypatch.setattr(
+        sg,
+        "_gutendex_etext",
+        lambda _id: (_ for _ in ()).throw(AssertionError("remote Gutenberg fallback used")),
+    )
+    acquired = provider.fetch_source(found["1342"], max_bytes=10_000)
+    assert b"truth universally acknowledged" in acquired.data
+    assert acquired.catalog_metadata["gutenberg_id"] == 1342
