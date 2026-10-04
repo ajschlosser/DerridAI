@@ -202,9 +202,7 @@ jobs:
             '*.md' '*.json' '*.yml' '*.yaml' '*.js' '*.mjs' '*.cjs' \
             '*.ts' '*.tsx' '*.vue' '*.css' '*.scss' '*.html' \
             | xargs -0 --no-run-if-empty ./web/node_modules/.bin/prettier \
-              --write --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
-          git diff -- . ':(exclude)web/package-lock.json'
-          exit 1
+              --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
 
   backend-lint:
     needs: changes
