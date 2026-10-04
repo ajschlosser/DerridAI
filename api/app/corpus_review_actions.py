@@ -99,12 +99,33 @@ from .semantic_identity_store import (
 from .system_store import system_store
 
 
-def _metadata_enrichment_active(build: dict[str, Any]) -> bool:
-    """Whether reviewer edits can race an automatic metadata worker."""
+def _metadata_enrichment_active(
+    build: dict[str, Any],
+    record: dict[str, Any] | None = None,
+) -> bool:
+    """Whether reviewer edits can race or invalidate pending metadata work.
+
+    The build-level operation is authoritative when it is available. Record-level
+    queue/running state is also treated as active because review can occur after the
+    scheduler has snapshotted a Record but before the build summary reflects that
+    handoff. In either case, a reviewer edit must force the current revision back
+    through enrichment instead of relying on a stale worker snapshot.
+    """
     stage = str(build.get("stage") or "")
-    return str(build.get("status") or "") in {"queued", "running"} and (
+    build_active = str(build.get("status") or "") in {"queued", "running"} and (
         stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun"}
         or stage.startswith("metadata_enrichment:")
+    )
+    if build_active or record is None:
+        return build_active
+    state = str(record.get("metadata_enrichment_state") or "")
+    stage_status = (
+        record.get("metadata_stage_status")
+        if isinstance(record.get("metadata_stage_status"), dict)
+        else {}
+    )
+    return state in {"queued", "running", "stale"} or any(
+        str(value) in {"queued", "running"} for value in stage_status.values()
     )
 
 
@@ -721,7 +742,7 @@ class ReviewActionsMixin:
         reasons.append("Reviewed text changed; rerun only the metadata families that need reconsideration.")
         target["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
         build = self.repo.get_build(build_id)
-        enrichment_active = _metadata_enrichment_active(build)
+        enrichment_active = _metadata_enrichment_active(build, target)
         if enrichment_active:
             # A worker may already hold the pre-edit Record snapshot. Its stale
             # completion will be rejected by the source/revision guard; this
@@ -892,7 +913,7 @@ class ReviewActionsMixin:
         review_frozen = "__review__" in {
             str(field) for field in (target.get("human_touched_fields") or [])
         }
-        enrichment_active = _metadata_enrichment_active(build) and not review_frozen
+        enrichment_active = _metadata_enrichment_active(build, target) and not review_frozen
         if enrichment_active and any(key not in skipped for key in changes):
             requeue_record_metadata(
                 target,
