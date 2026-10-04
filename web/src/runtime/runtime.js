@@ -74,7 +74,7 @@ import "../domain/listPaging";
 import "../domain/sharedWorksWorkspace";
 import { workDialogs } from "../domain/sharedWorkDialogs";
 import { operationPresenters } from "../domain/sharedOperationPresenters";
-import { refreshStoreWorks } from "../domain/storeWorks";
+import "../domain/storeWorks";
 import { createJobsWorkspace } from "../domain/jobsWorkspace";
 import {
   refreshJobs,
@@ -110,7 +110,6 @@ import {
   repaintAfterLocationChange,
 } from "../domain/sharedNavigation";
 import "../domain/sharedUrlState";
-import { systemCardHtml } from "../domain/shellSnapshot";
 import "../domain/navigation";
 import {
   persistPrefs,
@@ -123,7 +122,7 @@ import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
 import "../domain/fileDerivedState";
 import "../domain/sharedFileLifecycle";
 import { persistFileNow, restoreWorkspace } from "../domain/sharedWorkspacePersistence";
-import { createAppLifecycle } from "../domain/appLifecycle";
+import { checkHealth, warmupConfiguredLlm } from "../domain/sharedAppLifecycle";
 import "../domain/sharedCompareLibrary";
 import "../domain/recordOptionLabel";
 import "../domain/sharedStoreRecords";
@@ -151,14 +150,8 @@ function trf(key, fallback, values = {}) {
 }
 
 const { ragGradeEvidencePayload } = sharedRecordPresenters;
-const {
-  ensureProviderProfiles,
-  providerProfiles,
-  providerProfile,
-  defaultProviderProfile,
-  providerDisplayName,
-  refreshProviderStatuses,
-} = providerProfilesService;
+const { providerProfiles, providerProfile, defaultProviderProfile, providerDisplayName } =
+  providerProfilesService;
 createJobsWorkspace({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -183,22 +176,6 @@ createJobsWorkspace({
   trf: (...args) => trf(...args),
   updateDbStatusElements: (...args) => updateDbStatusElements(...args),
   updateOperationStackCount: (...args) => updateOperationStackCount(...args),
-});
-const { warmupConfiguredLlm, checkHealth } = createAppLifecycle({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  api: (...args) => api(...args),
-  defaultProviderProfile: (...args) => defaultProviderProfile(...args),
-  ensureProviderProfiles: (...args) => ensureProviderProfiles(...args),
-  isResearcher: (...args) => isResearcher(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  warmupProviderProfile,
-  refreshProviderStatuses: (...args) => refreshProviderStatuses(...args),
-  refreshStoreWorks: (...args) => refreshStoreWorks(...args),
-  refreshStores: (...args) => refreshStores(...args),
-  renderView: (...args) => renderView(...args),
-  shell: (...args) => shell(...args),
-  updateSystemCard: (...args) => updateSystemCard(...args),
 });
 const {
   notifyOperationsChanged,
@@ -393,11 +370,6 @@ const {
   jobProgressText,
   operationViewModel,
 } = operationPresenters;
-
-function updateSystemCard() {
-  const card = document.querySelector(".system-card");
-  if (card) card.innerHTML = systemCardHtml();
-}
 
 const uid = () => crypto.randomUUID();
 
