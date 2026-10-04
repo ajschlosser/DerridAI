@@ -1353,6 +1353,11 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 if isinstance(prior_ledger, dict)
                 else 0
             )
+            recovery_inflight_attempt = (
+                int(prior_ledger.get("automatic_recovery_inflight_attempt") or 0)
+                if isinstance(prior_ledger, dict)
+                else 0
+            )
             ledger_context = {
                 "provider_profile_id": active_request.get("provider_profile_id"),
                 "provider": active_request.get("provider"),
@@ -1364,6 +1369,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 "timeout_seconds": _stage_timeouts(active_request).get(task_name),
                 "checkpoint_invalidation_reason": invalidation_reason,
                 "automatic_recovery_attempts": prior_recovery_attempts,
+                "automatic_recovery_inflight_attempt": recovery_inflight_attempt or None,
             }
             stage_status[task_name] = "running"
             stage_ledger[task_name] = {**ledger_context, "state": "running", "started_at": started_at, "finished_at": None, "error": None}
@@ -1488,6 +1494,12 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 persisted_stage_results[task_name] = result
                 stage_status[task_name] = "complete"
                 model_invocations = int(model_call_counter.get("attempts") or 0)
+                completed_recovery_attempts = prior_recovery_attempts
+                if recovery_inflight_attempt > 0 and model_invocations > 0:
+                    completed_recovery_attempts = max(
+                        completed_recovery_attempts,
+                        recovery_inflight_attempt,
+                    )
                 stage_ledger[task_name] = {
                     **ledger_context,
                     "pipeline": session.identity(),
@@ -1503,7 +1515,9 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "residual_contradiction_fields": residual_contradictions,
                     "model_invocations": model_invocations,
                     "inflight_coalesced_calls": int(model_call_counter.get("coalesced") or 0),
-                    "recovered_after_retry": prior_recovery_attempts > 0,
+                    "automatic_recovery_attempts": completed_recovery_attempts,
+                    "automatic_recovery_inflight_attempt": None,
+                    "recovered_after_retry": completed_recovery_attempts > 0,
                 }
                 if not residual_contradictions:
                     stage_ledger[task_name]["dependency_fingerprint"] = dependency_fingerprint
@@ -1550,10 +1564,19 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             except InterruptedError:
                 raise
             except Exception as exc:
-                recovery_decision = plan_metadata_recovery(exc, ledger_context)
+                model_invocations = int(model_call_counter.get("attempts") or 0)
+                completed_recovery_attempts = prior_recovery_attempts
+                if recovery_inflight_attempt > 0 and model_invocations > 0:
+                    completed_recovery_attempts = max(
+                        completed_recovery_attempts,
+                        recovery_inflight_attempt,
+                    )
+                recovery_decision = plan_metadata_recovery(
+                    exc,
+                    {"automatic_recovery_attempts": completed_recovery_attempts},
+                )
                 settled_state = "retry_pending" if recovery_decision.schedule else "failed"
                 stage_status[task_name] = settled_state
-                model_invocations = int(model_call_counter.get("attempts") or 0)
                 stage_ledger[task_name] = {
                     **ledger_context,
                     **({"pipeline": session.identity()} if session else {}),
@@ -1575,6 +1598,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "model_invocations": model_invocations,
                     "dependency_fingerprint": dependency_fingerprint,
                     "automatic_recovery_attempts": recovery_decision.completed_attempts,
+                    "automatic_recovery_inflight_attempt": None,
                     "next_automatic_recovery_attempt": recovery_decision.next_attempt,
                     "retry_delay_seconds": recovery_decision.delay_seconds,
                     "retry_not_before": recovery_decision.not_before,
