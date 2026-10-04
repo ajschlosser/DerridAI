@@ -113,7 +113,11 @@ import CorpusSemanticWorkspace from "./corpus-builder/CorpusSemanticWorkspace.vu
 import CorpusRecordSemanticMap from "./corpus-builder/CorpusRecordSemanticMap.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusMissingDocumentFields from "./corpus-builder/CorpusMissingDocumentFields.vue";
-import { missingRequiredDocumentFields, suppliedDocumentMetadata } from "../domain/documentFields";
+import {
+  missingRequiredDocumentFields,
+  suppliedDocumentMetadata,
+  type MissingDocumentField,
+} from "../domain/documentFields";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
 import { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import CorpusRecordDecisionDock from "./corpus-builder/CorpusRecordDecisionDock.vue";
@@ -422,6 +426,7 @@ const configurationSection = ref<CorpusSetupSectionId | "">("source");
 const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
 const missingMetadataPromptOpen = ref(false);
+const missingMetadataPromptFields = ref<MissingDocumentField[]>([]);
 /** Skipping review is offered once processing is done and until a publication exists. */
 const canPublishUnreviewed = computed(() =>
   Boolean(
@@ -525,6 +530,7 @@ const showReviewWorkspace = computed(
 const documentMetadata = ref<Record<string, unknown>>({});
 watch(selectedAssetId, () => {
   documentMetadata.value = {};
+  missingMetadataPromptFields.value = [];
   topologyPolicy.value = {
     mode: "semantic",
     source_units_per_record: 1,
@@ -573,10 +579,13 @@ const documentMetadataPayload = () =>
       typeof value === "string" ? value.trim() || null : value,
     ]),
   );
+// The final "not detected" checkpoint is a stable form. Once it opens, fields
+// stay mounted while the reviewer types; live readiness still uses
+// missingDocumentFields above and may shrink as values become available.
 const missingDocumentMetadata = computed<Record<string, string>>({
   get: () =>
     Object.fromEntries(
-      missingDocumentFields.value.map(({ name }) => [
+      missingMetadataPromptFields.value.map(({ name }) => [
         name,
         String(documentMetadata.value[name] ?? "").trim(),
       ]),
@@ -585,11 +594,14 @@ const missingDocumentMetadata = computed<Record<string, string>>({
     documentMetadata.value = { ...documentMetadata.value, ...values };
   },
 });
-const missingMetadataComplete = computed(
+const missingMetadataPromptComplete = computed(
   () =>
     Object.keys(
-      suppliedDocumentMetadata(missingDocumentFields.value, missingDocumentMetadata.value),
-    ).length === missingDocumentFields.value.length,
+      suppliedDocumentMetadata(
+        missingMetadataPromptFields.value,
+        missingDocumentMetadata.value,
+      ),
+    ).length === missingMetadataPromptFields.value.length,
 );
 
 const {
@@ -642,7 +654,14 @@ const {
   tf: (key, values) => i18n.tf(key, values),
 });
 async function startBuild(fromMetadataPrompt = false) {
-  if (!fromMetadataPrompt && missingDocumentFields.value.length && !missingMetadataComplete.value) {
+  if (!fromMetadataPrompt && missingDocumentFields.value.length) {
+    // Snapshot the unresolved fields before opening the checkpoint. If this used
+    // the live computed list, each keystroke would make a newly supplied field
+    // cease to be "missing" and Vue would unmount its input.
+    missingMetadataPromptFields.value = missingDocumentFields.value.map((field) => ({
+      ...field,
+      requiredFor: [...field.requiredFor],
+    }));
     missingMetadataPromptOpen.value = true;
     return;
   }
@@ -3342,7 +3361,7 @@ defineExpose({
     >
       <CorpusMissingDocumentFields
         v-model="missingDocumentMetadata"
-        :fields="missingDocumentFields"
+        :fields="missingMetadataPromptFields"
         :disabled="busy !== ''"
       />
       <template #footer>
@@ -3355,7 +3374,7 @@ defineExpose({
         <UiButton
           variant="primary"
           :label="i18n.t('common.continue', 'Continue')"
-          :disabled="busy !== '' || !missingMetadataComplete"
+          :disabled="busy !== '' || !missingMetadataPromptComplete"
           @click="continueBuildWithDocumentMetadata()"
         />
       </template>
