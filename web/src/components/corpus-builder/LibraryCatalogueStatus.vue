@@ -18,9 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 /**
- * What the Project Gutenberg search needs locally: the catalogue (required for
- * search) and the optional text collection. Imports download one verified
- * text regardless of the collection.
+ * Project Gutenberg installation status. Catalogue search can work before the
+ * text database is installed; the full collection enables genuinely local
+ * author capture and book acquisition.
  */
 import { computed } from "vue";
 import type { GutenbergStatus } from "../../api/corpus";
@@ -43,7 +43,11 @@ const catalogueRefreshing = computed(() =>
   ["refreshing", "indexing"].includes(String(props.status?.catalogue.status || "")),
 );
 const bytesOnDisk = computed(() => Number(props.status?.archive.bytes_done || 0));
+const importedTexts = computed(() => Number(props.status?.archive.imported_texts || 0));
 
+function formatNumber(value: number) {
+  return new Intl.NumberFormat(i18n.locale || undefined).format(value);
+}
 function formatBytes(value?: number | null) {
   const bytes = Math.max(0, Number(value || 0));
   if (bytes < 1024) return `${bytes} B`;
@@ -134,6 +138,9 @@ function archiveActionLabel() {
           {{ formatBytes(status.archive.total_bytes) }}</small
         >
       </template>
+      <small v-if="archiveStatus === 'unpacking' && importedTexts">
+        {{ i18n.tf("pdf_corpus.gutenberg_import_progress", { count: formatNumber(importedTexts) }) }}
+      </small>
     </div>
     <small v-if="status?.catalogue.error" class="ls-error-text">{{ status.catalogue.error }}</small>
     <small v-if="status?.archive.error" class="ls-error-text">{{ status.archive.error }}</small>
