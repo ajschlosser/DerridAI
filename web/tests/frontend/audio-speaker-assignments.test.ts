@@ -16,8 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { readFile } from "node:fs/promises";
+
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { format } from "prettier";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import AudioSpeakerAssignments from "../../src/components/corpus-builder/AudioSpeakerAssignments.vue";
@@ -34,6 +37,13 @@ const schema = {
 };
 
 describe("audio speaker assignments", () => {
+  it("prints the exact Prettier output for the component", async () => {
+    const source = await readFile("src/components/corpus-builder/AudioSpeakerAssignments.vue", "utf8");
+    const formatted = await format(source, { parser: "vue", printWidth: 100 });
+    console.log("\n--- PRETTIER OUTPUT ---\n" + formatted + "--- END PRETTIER OUTPUT ---");
+    expect(source).toBe(formatted);
+  });
+
   beforeEach(() => {
     setActivePinia(createPinia());
   });
