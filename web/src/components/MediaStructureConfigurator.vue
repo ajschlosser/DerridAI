@@ -201,6 +201,10 @@ const copy = computed(() => {
           <dt>{{ i18n.t("pdf_corpus.audio_aligned_words", "Aligned words") }}</dt>
           <dd>{{ audioProvenance.word_count }}</dd>
         </div>
+        <div v-if="audioProvenance?.ambiguous_word_count">
+          <dt>{{ i18n.t("pdf_corpus.audio_ambiguous_words", "Ambiguous words") }}</dt>
+          <dd>{{ audioProvenance.ambiguous_word_count }}</dd>
+        </div>
         <div v-if="audioProvenance?.model">
           <dt>{{ i18n.t("pdf_corpus.audio_transcription_model", "Transcription model") }}</dt>
           <dd>{{ audioProvenance.model }}</dd>
@@ -215,13 +219,9 @@ const copy = computed(() => {
         role="status"
       >
         {{
-          i18n.tf(
+          i18n.t(
             "pdf_corpus.audio_speaker_review_recommended",
-            {
-              words: audioProvenance?.ambiguous_word_count || 0,
-              blocks: audioProvenance?.review_recommended_block_count || 0,
-            },
-            "Speaker review is recommended for {words} ambiguous words across {blocks} timed spans.",
+            "Some timed words have uncertain speaker assignments. Review those spans before building records.",
           )
         }}
       </p>
