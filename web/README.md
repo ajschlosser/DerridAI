@@ -22,6 +22,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Use the root [README](../README.md) for installation, [the architecture overview](../docs/ARCHITECTURE.md) for cross-process boundaries, and [`web/src/README.md`](src/README.md) for the application code map.
 
+Use [the code readability guide](../docs/CODE_READABILITY.md) for naming, comments, and refactor conventions; frontend-specific placement rules live below and in the local `src/` READMEs.
+
 ## Runtime and developer surfaces
 
 ```mermaid
@@ -70,6 +72,21 @@ The browser/API transport split is intentional: REST owns commands and mutations
 | `.storybook/`     | Storybook configuration                                                   |
 | `scripts/`        | Frontend-specific checks and generation helpers                           |
 | `public/`         | Static assets copied into the frontend build                              |
+
+## Where to contribute
+
+| Change | Start in |
+| --- | --- |
+| Route/page composition | `src/views/` |
+| Reusable interaction/UI | `src/components/` (and Storybook) |
+| Cohesive feature orchestration | `src/features/` |
+| Vue lifecycle/async coordination | `src/composables/` |
+| Pure transformations/presenters/codecs | `src/domain/` |
+| REST/GraphQL transport | `src/api/` |
+| Shared application state | `src/stores/` or `src/state/` |
+| Frontend tests | `tests/frontend/` or `tests/e2e/` according to the boundary |
+
+Do not add new product logic to `src/runtime/runtime.js` unless the change is specifically maintaining that compatibility boundary.
 
 ## Development rules
 
