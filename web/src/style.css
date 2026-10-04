@@ -3629,7 +3629,7 @@ code {
 }
 .btn.tiny {
   justify-self: start;
-  min-height: 22px;
+  min-height: 24px;
   padding: 3px 6px;
   font-size: 0.8125rem;
 }
@@ -4192,7 +4192,7 @@ code {
   white-space: nowrap;
 }
 .operation-progress .btn.tiny {
-  min-height: 22px;
+  min-height: 24px;
   padding: 3px 7px;
 }
 .operation-progress-detail {
