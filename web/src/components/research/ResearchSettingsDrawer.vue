@@ -539,7 +539,12 @@ defineExpose({ open, close });
               <div>
                 <span class="section-label">02</span>
                 <h3 id="research-settings-retrieval-title">{{ i18n.t("research.retrieval") }}</h3>
-                <p>{{ i18n.t("research.retrieval_expert_help") }}</p>
+                <p>{{
+                  i18n.t(
+                    "research.retrieval_run_help",
+                    "Choose request-level routing and scope for this run. To override a Pipeline Studio stage value, use Run overrides under Pipeline chain.",
+                  )
+                }}</p>
               </div>
               <button class="research-text-action" type="button" @click="resetSection('retrieval')">
                 <AppIcon name="refresh" />{{ i18n.t("research.reset_section") }}
@@ -594,110 +599,53 @@ defineExpose({ open, close });
               </fieldset>
 
               <fieldset class="research-settings-card">
-                <legend>{{ i18n.t("research.candidate_pool") }}</legend>
-                <p>{{ i18n.t("research.candidate_pool_help") }}</p>
-                <label class="research-toggle-setting automatic-sizing-toggle"
-                  ><input v-model="draft.automatic_sizing" type="checkbox" /><span
-                    ><b>{{ i18n.t("research.automatic_sizing", "Automatic sizing") }}</b
-                    ><small>{{
+                <legend>{{ i18n.t("research.request_controls", "Run inputs") }}</legend>
+                <p>
+                  {{
+                    i18n.t(
+                      "research.request_controls_help",
+                      "These values shape this Research request without rewriting stage configuration. Stage-level changes belong under Run overrides in Pipeline chain.",
+                    )
+                  }}
+                </p>
+                <label class="research-toggle-setting automatic-sizing-toggle">
+                  <input v-model="draft.automatic_sizing" type="checkbox" />
+                  <span>
+                    <b>{{ i18n.t("research.automatic_sizing", "Automatic sizing") }}</b>
+                    <small>{{
                       i18n.t(
                         "research.automatic_sizing_help",
-                        "Adapt candidate depth to median Record size, collapse short adjacent hits before reranking, and add same-document neighbors to short selected passages. k and fetch_k remain bounded baselines; reranking and the total evidence budget stay capped.",
+                        "Adapt retrieval depth to Record size while preserving the effective pipeline configuration.",
                       )
-                    }}</small></span
-                  ></label
-                >
+                    }}</small>
+                  </span>
+                </label>
                 <div class="research-settings-grid compact">
-                  <label
-                    ><span
-                      ><code>k</code>{{ i18n.t("research.k_label") }}
-                      <UiTooltip :text="i18n.t('research.k_help')" /></span
-                    ><input
+                  <label>
+                    <span>
+                      <code>k</code>{{ i18n.t("research.k_label") }}
+                      <UiTooltip :text="i18n.t('research.k_help')" />
+                    </span>
+                    <input
                       v-model.number="draft.k"
                       class="control"
                       type="number"
                       min="1"
                       max="500"
-                  /></label>
-                  <label
-                    ><span
-                      ><code>fetch_k</code>{{ i18n.t("research.fetch_k_label") }}
-                      <UiTooltip :text="i18n.t('help.glossary.fetch_k.definition')" /></span
-                    ><input
-                      v-model.number="draft.fetch_k"
-                      class="control"
-                      type="number"
-                      min="1"
-                      max="5000"
-                  /></label>
-                  <label
-                    ><span
-                      ><code>MMR λ</code>{{ i18n.t("research.lambda_label") }}
-                      <UiTooltip :text="i18n.t('help.glossary.mmr_lambda.definition')" /></span
-                    ><input
-                      v-model.number="draft.lambda_mult"
-                      class="control"
-                      type="number"
-                      step="0.05"
-                      min="0"
-                      max="1"
-                  /></label>
-                  <label
-                    ><span
-                      ><code>RRF k</code>{{ i18n.t("research.rrf_label") }}
-                      <UiTooltip :text="i18n.t('help.glossary.rrf_k.definition')" /></span
-                    ><input v-model.number="draft.rrf_k" class="control" type="number" min="1"
-                  /></label>
-                </div>
-              </fieldset>
-
-              <fieldset class="research-settings-card wide">
-                <legend>{{ i18n.t("research.reranking_decomposition") }}</legend>
-                <p>{{ i18n.t("research.reranking_decomposition_help") }}</p>
-                <div class="research-settings-grid three">
-                  <label
-                    ><span
-                      >{{ i18n.t("research.rerank_top_n") }}
-                      <UiTooltip :text="i18n.t('help.glossary.rerank_top_n.definition')" /></span
-                    ><input
-                      v-model.number="draft.rerank_top_n"
-                      class="control"
-                      type="number"
-                      min="1"
-                      max="500"
-                  /></label>
-                  <label
-                    ><span
-                      >{{ i18n.t("research.reranker") }}
-                      <UiTooltip :text="i18n.t('help.glossary.cross_encoder.definition')" /></span
-                    ><select v-model="draft.reranker" class="control">
-                      <option value="cross_encoder">{{ i18n.t("research.cross_encoder") }}</option>
-                      <option value="lexical">{{ i18n.t("research.lexical_fallback") }}</option>
-                      <option value="none">{{ i18n.t("research.none") }}</option>
-                    </select></label
-                  >
-                  <label
-                    ><span
-                      >{{ i18n.t("research.decomposition_tokens") }}
-                      <UiTooltip
-                        :text="i18n.t('help.glossary.query_decomposition.definition')" /></span
-                    ><input
-                      v-model.number="draft.query_decomposition_num_predict"
-                      class="control"
-                      type="number"
-                      min="64"
-                      max="8192"
-                  /></label>
-                  <label class="wide"
-                    ><span>{{ i18n.t("research.cross_encoder_model") }}</span
-                    ><input v-model="draft.cross_encoder_model" class="control"
-                  /></label>
-                  <label class="research-toggle-setting wide"
-                    ><input v-model="draft.query_decomposition" type="checkbox" /><span
-                      ><b>{{ i18n.t("research.query_decomposition") }}</b
-                      ><small>{{ i18n.t("research.query_decomposition_help") }}</small></span
-                    ></label
-                  >
+                    />
+                  </label>
+                  <label class="research-toggle-setting">
+                    <input v-model="draft.query_decomposition" type="checkbox" />
+                    <span>
+                      <b>{{ i18n.t("research.query_decomposition") }}</b>
+                      <small>{{
+                        i18n.t(
+                          "research.query_decomposition_run_help",
+                          "Allow the selected pipeline's query-decomposition stage for this run. Its stage configuration is overridden separately.",
+                        )
+                      }}</small>
+                    </span>
+                  </label>
                 </div>
               </fieldset>
             </div>
@@ -714,49 +662,19 @@ defineExpose({ open, close });
                 <h3 id="research-settings-evidence-title">
                   {{ i18n.t("research.evidence_citations") }}
                 </h3>
-                <p>{{ i18n.t("research.evidence_citations_help") }}</p>
+                <p>{{
+                  i18n.t(
+                    "research.evidence_citations_run_help",
+                    "Citation, memory, metadata, and evaluation controls apply to this run. Evidence-packing stage limits are configured under Run overrides.",
+                  )
+                }}</p>
               </div>
               <button class="research-text-action" type="button" @click="resetSection('evidence')">
                 <AppIcon name="refresh" />{{ i18n.t("research.reset_section") }}
               </button>
             </div>
             <div class="research-settings-card-grid">
-              <fieldset class="research-settings-card wide">
-                <legend>{{ i18n.t("research.evidence_budget") }}</legend>
-                <p>{{ i18n.t("research.evidence_budget_help") }}</p>
-                <div class="research-settings-grid two">
-                  <label
-                    ><span>{{ i18n.t("research.record_char_limit") }}</span
-                    ><input
-                      v-model.number="draft.evidence_record_char_limit"
-                      class="control"
-                      type="number"
-                      min="500"
-                      max="100000"
-                    /><small
-                      >{{
-                        Number(draft.evidence_record_char_limit || 0).toLocaleString(i18n.locale)
-                      }}
-                      {{ i18n.t("research.characters") }}</small
-                    ></label
-                  >
-                  <label
-                    ><span>{{ i18n.t("research.total_char_limit") }}</span
-                    ><input
-                      v-model.number="draft.evidence_total_char_limit"
-                      class="control"
-                      type="number"
-                      min="5000"
-                      max="1000000"
-                    /><small
-                      >{{
-                        Number(draft.evidence_total_char_limit || 0).toLocaleString(i18n.locale)
-                      }}
-                      {{ i18n.t("research.characters") }}</small
-                    ></label
-                  >
-                </div>
-              </fieldset>
+
               <fieldset class="research-settings-card">
                 <legend>{{ i18n.t("research.source_binding") }}</legend>
                 <p>{{ i18n.t("research.source_binding_help") }}</p>
