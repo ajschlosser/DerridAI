@@ -63,6 +63,8 @@ const runtime = vi.hoisted(() => ({
       desktop_notifications: false,
     },
     ragConfig: {
+      source_collection: "corpus",
+      work_filter: [],
       k: 64,
       fetch_k: 500,
       lambda_mult: 0.7,
@@ -78,6 +80,14 @@ const runtime = vi.hoisted(() => ({
       search_types: ["similarity", "lexical", "mmr"],
       auto_grade: false,
     },
+    stores: [
+      {
+        name: "corpus",
+        count: 20,
+        source_works: ["Glas", "Of Grammatology"],
+        collection_role: "primary",
+      },
+    ],
     health: { chroma: { path: "/data/chroma" } },
     providerStatuses: { p1: { available: true, checked_at: "2026-01-01T00:00:00Z" } },
     files: [],
@@ -174,6 +184,7 @@ describe("SettingsView", () => {
     runtime.state.appConfig.embedding_model = "bge-m3:latest";
     runtime.state.ragConfig.k = 64;
     runtime.state.ragConfig.fetch_k = 500;
+    runtime.state.ragConfig.work_filter = [];
     runtime.state.ragConfig.locales = ["en", "fr"];
     runtime.state.ragConfig.search_types = ["similarity", "lexical", "mmr"];
   });
@@ -225,6 +236,22 @@ describe("SettingsView", () => {
     const { wrapper } = await mountView("admin", { section: "retrieval" });
     expect(wrapper.get("#settings-section-retrieval").isVisible()).toBe(true);
     expect(wrapper.get("#settings-nav-retrieval").attributes("aria-current")).toBe("page");
+  });
+
+  it("saves selected works as default Research scope", async () => {
+    const { wrapper } = await mountView("admin", { section: "retrieval" });
+    const glas = wrapper
+      .findAll(".research-work-filter-options label")
+      .find((label) => label.text().includes("Glas"));
+    expect(glas).toBeDefined();
+    await glas!.get("input").setValue(true);
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Save RAG defaults"))
+      ?.trigger("click");
+    await flushPromises();
+    expect(runtime.state.ragConfig.work_filter).toEqual(["Glas"]);
+    expect(runtime.flushWorkspacePrefs).toHaveBeenCalled();
   });
 
   it("preserves retrieval input after a validation failure", async () => {
