@@ -706,8 +706,31 @@ class ReviewActionsMixin:
         reasons = list(target.get("metadata_attention_reasons") or [])
         reasons.append("Reviewed text changed; rerun only the metadata families that need reconsideration.")
         target["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
+        build = self.repo.get_build(build_id)
+        build_stage = str(build.get("stage") or "")
+        enrichment_active = (
+            str(build.get("status") or "") in {"queued", "running"}
+            and (
+                build_stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun"}
+                or build_stage.startswith("metadata_enrichment:")
+            )
+        )
+        if enrichment_active:
+            # A worker may already hold the pre-edit Record snapshot. Its stale
+            # completion will be rejected by the source/revision guard; this
+            # marker guarantees a fresh pass against the reviewed text instead
+            # of leaving the Record stranded in a queued/skipped state.
+            requeue_record_metadata(
+                target,
+                "Reviewed text changed during metadata enrichment; rerun against the current text.",
+                force=True,
+            )
         target["record_revision"] = current_revision + 1
         self._rewrite_targeted_record(build_id, target, previous_record)
+        if enrichment_active:
+            latest_build = self.repo.get_build(build_id)
+            _prepend_metadata_priority(latest_build, record_id)
+            self.repo.save_build(latest_build)
         _decorate_review_state(target)
         return target
 
