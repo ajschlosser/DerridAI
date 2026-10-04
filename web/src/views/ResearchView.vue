@@ -914,7 +914,6 @@ onBeforeUnmount(() => {
         :pipeline-strategies="workspace?.pipeline_strategies || []"
         :pipeline-assignment="workspace?.pipeline_assignment || null"
         :pipeline-override-allowed="workspace?.pipeline_override_allowed || false"
-        :settings-pipeline-overrides="settingsPipelineOverrides"
         :run-pipeline-overrides="runPipelineOverrides"
         @apply="applySettings"
         @discover="discoverModels"
