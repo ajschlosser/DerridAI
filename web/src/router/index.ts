@@ -17,6 +17,7 @@
  */
 
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
+import { sanitizeShareableQuery } from "../domain/shareableUrlPolicy";
 import { useAuthStore } from "../stores/auth";
 
 const systemDataRoute = (
@@ -255,7 +256,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/pdf",
     redirect: (to) => {
-      const query = { ...to.query };
+      const query = sanitizeShareableQuery({ ...to.query });
       const explorer = query.mode === "explorer";
       delete query.mode;
       return { name: explorer ? "source-explorer" : "corpus-builder", query };
@@ -278,7 +279,10 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   },
   {
     path: "/response-cache",
-    redirect: (to) => ({ name: "system-data-responses", query: to.query }),
+    redirect: (to) => ({
+      name: "system-data-responses",
+      query: sanitizeShareableQuery({ ...to.query }),
+    }),
   },
   {
     path: "/system-data",
@@ -293,7 +297,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
         "advanced",
       ]);
       const section = allowed.has(requested) ? requested : "overview";
-      const query = { ...to.query };
+      const query = sanitizeShareableQuery({ ...to.query });
       delete query.section;
       if (section === "pipelines") return { name: "pipelines", query };
       return { name: `system-data-${section}`, query };
@@ -319,7 +323,10 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   ),
   {
     path: "/system-data/pipelines",
-    redirect: (to) => ({ name: "pipelines", query: to.query }),
+    redirect: (to) => ({
+      name: "pipelines",
+      query: sanitizeShareableQuery({ ...to.query }),
+    }),
   },
   systemDataRoute(
     "/system-data/databases",
@@ -397,7 +404,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
     path: "/settings",
     redirect: (to) => {
       const section = String(to.query.section || "overview");
-      const query = { ...to.query };
+      const query = sanitizeShareableQuery({ ...to.query });
       delete query.section;
       return { name: "settings-section", params: { section }, query };
     },
