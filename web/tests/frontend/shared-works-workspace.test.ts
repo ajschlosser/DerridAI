@@ -40,6 +40,7 @@ import { worksService } from "../../src/services/works";
 describe("shared Works workspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    jobsState.jobs = [];
     Object.assign(state, { files: [], activeFileId: null, userContext: null, worksSearch: "" });
   });
 
