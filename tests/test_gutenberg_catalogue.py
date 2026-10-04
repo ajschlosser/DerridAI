@@ -211,7 +211,12 @@ def test_streaming_archive_download_uses_bounded_request_and_marks_downloaded(tm
     with patch("app.gutenberg_catalogue.httpx.stream", side_effect=fake_stream):
         state = service.download_archive()
 
-    assert seen == [{"Range": f"bytes=0-{gutenberg_catalogue.CHUNK_SIZE - 1}"}]
+    assert seen == [
+        {
+            "Range": f"bytes=0-{gutenberg_catalogue.CHUNK_SIZE - 1}",
+            "Accept-Encoding": "identity",
+        }
+    ]
     assert service.archive_path.read_bytes() == b"fourmore"
     assert state["archive"]["status"] == "downloaded"
     assert state["archive"]["bytes_done"] == 8
@@ -233,6 +238,7 @@ def test_first_archive_request_is_always_bounded_by_range(tmp_path: Path):
         state = service.download_chunk(chunk_size=4)
 
     assert seen["Range"] == "bytes=0-3"
+    assert seen["Accept-Encoding"] == "identity"
     assert state["archive"]["bytes_done"] == 4
     assert state["archive"]["status"] == "downloading"
 
@@ -356,6 +362,7 @@ def test_download_resume_requires_range_support(tmp_path: Path):
         else:
             raise AssertionError("resume unexpectedly accepted an unbounded response")
 
+
 def _complete_archive(tmp_path: Path, size: int = 8):
     service = GutenbergOfflineService(
         tmp_path / "state.sqlite", tmp_path / "archive.zip", start_worker=False
@@ -473,6 +480,7 @@ def test_transient_retry_state_keeps_partial_download_resumable(tmp_path: Path):
     assert state["retry_count"] == 1
     assert state["next_retry_at"]
     assert "retrying automatically" in state["error"]
+
 
 def test_stale_ready_archive_and_catalogue_are_not_reported_ready(tmp_path: Path):
     service = GutenbergOfflineService(
