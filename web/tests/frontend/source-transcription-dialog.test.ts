@@ -92,6 +92,8 @@ describe("SourceTranscriptionDialog", () => {
       attachTo: document.body,
     });
 
+    expect(document.body.querySelector(".speaker-timeline")).toBeTruthy();
+    expect(document.body.querySelector(".timeline-segment")).toBeTruthy();
     expect(document.body.querySelector(".time-seek")).toBeTruthy();
     expect(document.body.querySelector(".speaker-review-needed")).toBeTruthy();
     expect(document.body.querySelector(".speaker-review-note")?.textContent).toContain(
