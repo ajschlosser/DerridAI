@@ -1185,6 +1185,9 @@ class ChromaStore:
             "language_codes": language_codes,
             "collection_role": role,
             "source_collection": source_collection,
+            "source_works": self._decode_json_metadata(
+                metadata.get(self._SOURCE_WORKS_KEY), []
+            ),
             **manifest,
             "last_build_error": metadata.get("__derridai_last_build_error"),
         }
