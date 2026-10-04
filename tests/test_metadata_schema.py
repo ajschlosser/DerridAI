@@ -57,6 +57,8 @@ def test_the_built_in_schema_prompts_require_complete_assessments():
     assert "Never put a proposed value only in the reason" in discourse
     assert "requires the corresponding metadata value to be non-null/non-empty" in discourse
     assert "every one of is_direct_quote" in quotation
+    assert "assessed_value" in quotation
+    assert "MUST exactly repeat the corresponding metadata value" in quotation
     assert "never put a proposed value only in the reason" in quotation
     assert "even when the corresponding metadata list is empty" in indexing
     assert "supported_value\" only for a supported non-empty list" in indexing
@@ -143,7 +145,13 @@ def test_response_consistency_degrades_assessment_value_contradictions_to_review
         for name in assessed
     }
     for name in ("region_type", "primary_text", "discourse_role"):
-        assessments[name] = {"confidence": 0.95, "needs_review": False, "reason": "clear", "outcome": "supported_value"}
+        assessments[name] = {
+            "confidence": 0.95,
+            "needs_review": False,
+            "reason": "clear",
+            "outcome": "supported_value",
+            **({"assessed_value": True} if name == "primary_text" else {}),
+        }
     evidence = {
         name: {"block_ids": ["b1"], "confidence": 0.95, "reason": "clear"}
         for name in ("region_type", "primary_text", "discourse_role")
@@ -398,7 +406,16 @@ def test_the_output_shape_is_generated_and_matches_the_hand_written_models():
             **{name: None for name in scalar_quotation_fields},
             "quotation_chain": [],
         },
-        "field_assessments": {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "no_supported_value"} for name in quotation_fields},
+        "field_assessments": {
+            name: {
+                "confidence": 0.9,
+                "needs_review": False,
+                "reason": "clear",
+                "outcome": "no_supported_value",
+                **({"assessed_value": None} if name == "is_direct_quote" else {}),
+            }
+            for name in quotation_fields
+        },
     })
     assert answer.metadata.is_direct_quote is None
     assert answer.metadata.quoted_speaker is None
@@ -411,7 +428,18 @@ def test_the_output_shape_is_generated_and_matches_the_hand_written_models():
             **{name: None for name in scalar_quotation_fields if name != "quoted_speaker"},
             "quotation_chain": ["Derrida", "Levinas"],
         },
-        "field_assessments": {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "supported_value" if name in {"is_direct_quote", "quoted_speaker", "quotation_chain"} else "no_supported_value"} for name in quotation_fields},
+        "field_assessments": {
+            name: {
+                "confidence": 0.9,
+                "needs_review": False,
+                "reason": "clear",
+                "outcome": "supported_value"
+                if name in {"is_direct_quote", "quoted_speaker", "quotation_chain"}
+                else "no_supported_value",
+                **({"assessed_value": True} if name == "is_direct_quote" else {}),
+            }
+            for name in quotation_fields
+        },
     })
     assert populated.metadata.quoted_speaker == "Emmanuel Levinas"
     with pytest.raises(Exception):
@@ -422,7 +450,18 @@ def test_the_output_shape_is_generated_and_matches_the_hand_written_models():
                 **{name: None for name in scalar_quotation_fields if name != "quoted_speaker"},
                 "quotation_chain": [],
             },
-            "field_assessments": {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "supported_value" if name in {"is_direct_quote", "quoted_speaker"} else "no_supported_value"} for name in quotation_fields},
+            "field_assessments": {
+                name: {
+                    "confidence": 0.9,
+                    "needs_review": False,
+                    "reason": "clear",
+                    "outcome": "supported_value"
+                    if name in {"is_direct_quote", "quoted_speaker"}
+                    else "no_supported_value",
+                    **({"assessed_value": True} if name == "is_direct_quote" else {}),
+                }
+                for name in quotation_fields
+            },
         })
     generated = ms.response_model_for(schema, "discourse").model_json_schema()
     assert "field_assessments" in generated["required"]
@@ -605,7 +644,16 @@ def test_a_custom_schema_shapes_the_prompt_and_the_answer():
     assert "Report region_type, primary_text, discourse_role, and mood.\n" in text  # the locked core is always assessed
     assert prompt(schema, "ideas").startswith("List the ideas.\n\n<<CONTEXT>>")
     model = ms.response_model_for(schema, "discourse")
-    assessments = {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "supported_value"} for name in ("region_type", "primary_text", "discourse_role", "mood")}
+    assessments = {
+        name: {
+            "confidence": 0.9,
+            "needs_review": False,
+            "reason": "clear",
+            "outcome": "supported_value",
+            **({"assessed_value": True} if name == "primary_text" else {}),
+        }
+        for name in ("region_type", "primary_text", "discourse_role", "mood")
+    }
     evidence = {name: {"block_ids": ["b1"], "confidence": 0.9, "reason": "clear"} for name in ("region_type", "primary_text", "discourse_role", "mood")}
     ok = model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "calm"}, "field_assessments": assessments, "field_evidence": evidence})
     assert ok.metadata.mood == "calm"
@@ -910,6 +958,7 @@ def test_boolean_false_is_supported_value_not_missing_value():
                 "needs_review": False,
                 "reason": "No direct quotation is present.",
                 "outcome": "no_supported_value",
+                **({"assessed_value": False} if name == "is_direct_quote" else {}),
             }
             for name in [field.name for field in schema.fields_in("quotation") if field.assess]
         },
@@ -934,6 +983,7 @@ def test_open_fields_reject_pos_ner_and_foreign_closed_vocabulary_leakage():
             "needs_review": False,
             "reason": "candidate",
             "outcome": "supported_value",
+            **({"assessed_value": None} if field.name == "is_direct_quote" else {}),
         }
         for field in schema.fields_in("quotation")
         if field.assess
@@ -1000,6 +1050,7 @@ def test_composite_assessment_states_cannot_populate_scalar_metadata():
                 name: {
                     "confidence": 0.9, "needs_review": False, "reason": "no candidate",
                     "outcome": "no_supported_value",
+                    **({"assessed_value": None} if name == "primary_text" else {}),
                 }
                 for name in ms.CORE_FIELDS
             },
