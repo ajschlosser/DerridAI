@@ -36,6 +36,7 @@ import {
 import { navigateTo } from "../domain/sharedNavigation";
 import { flushWorkspacePrefs, persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { apiRequest } from "../api/http";
+import { pipelinesApi } from "../api/pipelines";
 import {
   systemApi,
   type ProviderProfile,
@@ -58,6 +59,7 @@ import SettingsServicesPanel from "../components/settings/SettingsServicesPanel.
 import SettingsTroubleshootingPanel from "../components/settings/SettingsTroubleshootingPanel.vue";
 import SettingsSearch, { type SettingsSearchHit } from "../components/settings/SettingsSearch.vue";
 import SettingsSection from "../components/settings/SettingsSection.vue";
+import PipelineConfigOverridesEditor from "../components/pipelines/PipelineConfigOverridesEditor.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import AppBuildInfo from "../components/AppBuildInfo.vue";
 import {
@@ -80,6 +82,16 @@ import {
   type SaveStatus,
   type SettingsSectionId,
 } from "../domain/settings";
+import {
+  overridesForPipeline,
+  pipelineVersionKey,
+  withOverridesForPipeline,
+} from "../domain/pipelineOverrides";
+import type {
+  PipelineConfigOverrideSet,
+  PipelineDefinition,
+  ResearchPipelineOptions,
+} from "../types/pipelines";
 
 type RuntimeSettings = {
   storageReady?: boolean;
@@ -113,6 +125,10 @@ const embeddingSaved = ref(
 const embeddingDraft = ref(cloneJson(embeddingSaved.value));
 const ragSaved = ref(normalizeRag(workspace.ragConfig as unknown as RagSettingsDraft));
 const ragDraft = ref(cloneJson(ragSaved.value));
+const researchPipelineOptions = ref<ResearchPipelineOptions | null>(null);
+const researchPipelinesLoading = ref(false);
+const researchPipelinesError = ref("");
+const settingsOverridePipelineKey = ref("");
 const notificationsOn = ref(Boolean(workspace.appConfig.desktop_notifications));
 const nukePhrase = ref("");
 const query = ref("");
@@ -209,6 +225,58 @@ const overviewItems = computed(() => {
       return { ...item, path: `/settings/${item.id}` };
     });
 });
+const settingsOverridePipeline = computed<PipelineDefinition | null>(() => {
+  const options = researchPipelineOptions.value?.pipelines || [];
+  if (!options.length) return null;
+  const explicit = options.find(
+    (pipeline) => pipelineVersionKey(pipeline) === settingsOverridePipelineKey.value,
+  );
+  if (explicit) return explicit;
+  const assignment = researchPipelineOptions.value?.assignment;
+  return (
+    options.find(
+      (pipeline) =>
+        pipeline.pipeline_id === assignment?.pipeline_id &&
+        pipeline.version === assignment?.pipeline_version,
+    ) ||
+    options[0] ||
+    null
+  );
+});
+const settingsPipelineOverrideSet = computed<PipelineConfigOverrideSet | null>({
+  get: () =>
+    overridesForPipeline(ragDraft.value.pipeline_config_overrides, settingsOverridePipeline.value),
+  set: (value) => {
+    const pipeline = settingsOverridePipeline.value;
+    if (!pipeline) return;
+    ragDraft.value.pipeline_config_overrides = withOverridesForPipeline(
+      ragDraft.value.pipeline_config_overrides,
+      pipeline,
+      value,
+    );
+  },
+});
+async function loadResearchPipelineOptions() {
+  researchPipelinesLoading.value = true;
+  researchPipelinesError.value = "";
+  try {
+    researchPipelineOptions.value = await pipelinesApi.researchOptions();
+    const assignment = researchPipelineOptions.value.assignment;
+    const assigned = (researchPipelineOptions.value.pipelines || []).find(
+      (pipeline) =>
+        pipeline.pipeline_id === assignment?.pipeline_id &&
+        pipeline.version === assignment?.pipeline_version,
+    );
+    const selected = assigned || researchPipelineOptions.value.pipelines?.[0] || null;
+    settingsOverridePipelineKey.value = selected ? pipelineVersionKey(selected) : "";
+  } catch (error) {
+    researchPipelinesError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    researchPipelinesLoading.value = false;
+  }
+}
+onMounted(loadResearchPipelineOptions);
+
 const appearanceDirty = computed(() => !sameSettings(appearanceDraft.value, appearanceSaved.value));
 const reviewDirty = computed(() => !sameSettings(reviewDraft.value, reviewSaved.value));
 // Audio transcription has its own endpoint and key so it is never confused with a chat profile.
@@ -1251,6 +1319,65 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             <p v-if="Object.keys(ragErrors).length" class="info error" role="alert">
               {{ i18n.t("settings.validation_summary") }}
             </p>
+            <section class="settings-pipeline-overrides" aria-labelledby="settings-pipeline-overrides-title">
+              <div class="settings-group-label">
+                <h3 id="settings-pipeline-overrides-title">
+                  {{ i18n.t("settings.pipeline_overrides_title", "Global pipeline overrides") }}
+                </h3>
+                <p>
+                  {{
+                    i18n.t(
+                      "settings.pipeline_overrides_help",
+                      "Pipeline Studio defines the baseline. Overrides saved here replace configuration on the named stages for this exact pipeline version. Research run overrides take precedence over these values.",
+                    )
+                  }}
+                </p>
+              </div>
+              <p v-if="researchPipelinesError" class="info error" role="alert">
+                {{ researchPipelinesError }}
+              </p>
+              <UiField
+                :label="i18n.t('settings.pipeline_overrides_pipeline', 'Pipeline version')"
+                :hint="
+                  settingsOverridePipeline
+                    ? i18n.tf(
+                        'settings.pipeline_overrides_target',
+                        {
+                          pipeline: settingsOverridePipeline.pipeline_id,
+                          version: settingsOverridePipeline.version,
+                        },
+                        'Overrides target {pipeline}@{version}. They are never remapped to another version.',
+                      )
+                    : i18n.t(
+                        'settings.pipeline_overrides_select_help',
+                        'Choose the immutable Pipeline Studio version whose stage configuration you want to override.',
+                      )
+                "
+              >
+                <select
+                  id="settings-field-pipeline-overrides"
+                  v-model="settingsOverridePipelineKey"
+                  class="control"
+                  :disabled="researchPipelinesLoading || !researchPipelineOptions?.pipelines?.length"
+                >
+                  <option
+                    v-for="pipeline in researchPipelineOptions?.pipelines || []"
+                    :key="pipelineVersionKey(pipeline)"
+                    :value="pipelineVersionKey(pipeline)"
+                  >
+                    {{ pipeline.name }} · {{ pipeline.pipeline_id }}@{{ pipeline.version }}
+                  </option>
+                </select>
+              </UiField>
+              <PipelineConfigOverridesEditor
+                v-if="settingsOverridePipeline"
+                v-model="settingsPipelineOverrideSet"
+                :pipeline="settingsOverridePipeline"
+                :strategies="researchPipelineOptions?.strategies || []"
+                layer="settings"
+                :disabled="researchPipelinesLoading"
+              />
+            </section>
             <div class="config-grid">
               <div class="settings-group-label field-full">
                 <h3>{{ i18n.t("settings.retrieval_strategy_title") }}</h3>
@@ -1674,6 +1801,18 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 .providers-summary small {
   color: var(--muted);
   font-size: 0.8125rem;
+}
+.settings-pipeline-overrides {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+.settings-pipeline-overrides > .settings-group-label {
+  padding-top: 0;
 }
 .settings-advanced {
   border: 1px solid var(--line);
