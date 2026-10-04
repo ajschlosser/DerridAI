@@ -21,6 +21,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import PipelineStageList from "../pipelines/PipelineStageList.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
+import ResearchWorkFilter from "./ResearchWorkFilter.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   PipelineAssignment,
@@ -43,6 +44,7 @@ const props = withDefaults(
     model: string;
     models: string[];
     metadataFields: string[];
+    works: string[];
     researcher: boolean;
     pipelineOptions?: PipelineDefinition[];
     pipelineStrategies?: PipelineStrategy[];
@@ -139,6 +141,7 @@ function sync() {
     pipeline_version: props.config.pipeline_version || null,
     locales: [...(props.config.locales || [])],
     search_types: [...(props.config.search_types || [])],
+    work_filter: [...(props.config.work_filter || [])],
     k: props.config.k,
     fetch_k: props.config.fetch_k,
     automatic_sizing: props.config.automatic_sizing,
@@ -227,6 +230,7 @@ function resetSection(section: SettingsSection) {
     Object.assign(draft.value, {
       locales: [...(source.locales || [])],
       search_types: [...(source.search_types || [])],
+      work_filter: [...(source.work_filter || [])],
       k: source.k,
       fetch_k: source.fetch_k,
       automatic_sizing: source.automatic_sizing,
@@ -557,6 +561,14 @@ defineExpose({ open, close });
                   </div>
                 </div>
               </fieldset>
+
+              <ResearchWorkFilter
+                class="research-settings-card wide"
+                :model-value="draft.work_filter || []"
+                :works="works"
+                legend-id="research-run-work-filter"
+                @update:model-value="draft.work_filter = $event"
+              />
 
               <fieldset class="research-settings-card">
                 <legend>{{ i18n.t("research.candidate_pool") }}</legend>
