@@ -4696,13 +4696,11 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 enrichment_state = str(record.get("metadata_enrichment_state") or "").strip().casefold()
                 if enrichment_state == "complete":
                     record["metadata_enrichment_state"] = "complete"
-                    record["metadata_enrichment_finished"] = True
                 else:
                     # Scholarly metadata completeness is not execution completion.
                     # Deterministic/inherited values can satisfy the schema before
                     # this Record's scheduled LLM enrichment pass has run.
                     record["metadata_enrichment_state"] = "queued"
-                    record["metadata_enrichment_finished"] = False
                     record.setdefault("metadata_stage_status", {})
             states = _metadata_family_states(rows)
             updates = {
@@ -4798,7 +4796,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     try:
                         completed_record = future.result()
                         completed_record["metadata_enrichment_state"] = "complete"
-                        completed_record["metadata_enrichment_finished"] = True
                         records[index] = completed_record
                     except Exception as exc:
                         # A programming/provider failure in one metadata worker
@@ -4841,7 +4838,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         reasons.append(f"Metadata worker failed and requires review: {exc}")
                         fallback["metadata_attention_reasons"] = list(dict.fromkeys(reason for reason in reasons if reason))[:50]
                         fallback["metadata_enrichment_state"] = "failed"
-                        fallback["metadata_enrichment_finished"] = True
                         records[index] = fallback
                         self._append_warning(build_id, f"{fallback.get('record_id')}: metadata worker failed; the source-bound record was preserved for review.")
                     completed += 1
