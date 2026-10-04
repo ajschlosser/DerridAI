@@ -163,16 +163,12 @@ def _provenance(
 
     resolved: dict[str, dict[str, dict[str, Any]]] = {}
     for stage_id in sorted(stage_ids):
-        baseline_config = dict((baseline_stages.get(stage_id) or PipelineStageDefinition(
-            id=stage_id,
-            strategy="missing",
-        )).config)
+        baseline_stage = baseline_stages.get(stage_id)
+        effective_stage = effective_stages.get(stage_id)
+        baseline_config = dict(baseline_stage.config) if baseline_stage is not None else {}
         settings_config = dict(settings.stages.get(stage_id) or {}) if settings else {}
         run_config = dict(run.stages.get(stage_id) or {}) if run else {}
-        effective_config = dict((effective_stages.get(stage_id) or PipelineStageDefinition(
-            id=stage_id,
-            strategy="missing",
-        )).config)
+        effective_config = dict(effective_stage.config) if effective_stage is not None else {}
         keys = set(baseline_config) | set(settings_config) | set(run_config)
         if not keys:
             continue
