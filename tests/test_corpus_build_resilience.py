@@ -794,3 +794,48 @@ def test_sparse_resume_sizing_is_validated_against_saved_settings(monkeypatch, t
     assert resumed["request"]["record_sizing"]["preferred_record_chars"] == 6000
     assert resumed["request"]["record_sizing"]["long_record_chars"] == 7000
     manager._executor.shutdown(wait=True)
+
+
+
+def test_resume_reuses_current_document_intelligence(monkeypatch, tmp_path: Path):
+    """A paused/resumed build must not redo whole-document NLP when its binding is unchanged."""
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    records = [{"record_id": "r1", "text": "Stable documentary text."}]
+    persisted = {
+        "version": cb.DOCUMENT_INTELLIGENCE_VERSION,
+        "status": "ok",
+        "stale": False,
+        "profile": "scholarly",
+        "selected_provider": "auto",
+        "configuration": {"include_events": False, "language": "en"},
+    }
+    monkeypatch.setattr(
+        manager,
+        "_document_intelligence_for_records",
+        lambda build_id, rows: dict(persisted),
+    )
+
+    reused = manager._reusable_document_intelligence(
+        "build-1",
+        records,
+        {"language": "en"},
+        {
+            "document_intelligence_profile": "scholarly",
+            "document_nlp_provider": "auto",
+            "document_nlp_include_events": False,
+        },
+    )
+    assert reused == persisted
+
+    changed = manager._reusable_document_intelligence(
+        "build-1",
+        records,
+        {"language": "en"},
+        {
+            "document_intelligence_profile": "scholarly",
+            "document_nlp_provider": "auto",
+            "document_nlp_include_events": True,
+        },
+    )
+    assert changed is None
