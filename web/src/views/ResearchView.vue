@@ -36,10 +36,12 @@ import type {
   ResearchProfile,
   ResearchWorkspaceSnapshot,
 } from "../types/research";
+import type { PipelineConfigOverrideSet } from "../types/pipelines";
 import * as researchActions from "../domain/researchActions";
 import { annotationsWorkspace } from "../domain/sharedAnnotations";
 import { pipelinesApi } from "../api/pipelines";
 import { normalizedResearchConfig } from "../domain/researchPayloads";
+import { overridesForPipeline } from "../domain/pipelineOverrides";
 import { getResearchJob } from "../domain/sharedResearchJobs";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { followResource } from "../realtime/follow";
@@ -91,6 +93,7 @@ const canCreateDatabase = computed(() => auth.can("page.vector"));
 const starting = ref(false);
 const workspace = ref<ResearchWorkspaceSnapshot | null>(null);
 const config = ref<ResearchConfig | null>(null);
+const runPipelineOverrides = ref<PipelineConfigOverrideSet | null>(null);
 const prompt = ref("");
 const instructions = ref("");
 const preset = ref("balanced");
@@ -137,6 +140,9 @@ const effectivePipeline = computed(() => {
 });
 const pipelineOverrideActive = computed(() =>
   Boolean(String(config.value?.pipeline_id || "").trim()),
+);
+const settingsPipelineOverrides = computed(() =>
+  overridesForPipeline(config.value?.pipeline_config_overrides, effectivePipeline.value),
 );
 const metadataFields = computed(() => {
   const fields = new Set<string>();
@@ -363,8 +369,8 @@ function persistDraft() {
 }
 function updateConfig(patch: Partial<ResearchConfig>) {
   if (!config.value) return;
+  // Controls on Research are a one-run draft. Settings owns persisted defaults.
   config.value = { ...config.value, ...patch };
-  config.value = researchActions.updateResearchConfig(patch) as ResearchConfig;
 }
 function applyPreset(value: string) {
   preset.value = value;
@@ -432,6 +438,8 @@ async function runResearch() {
       generation: generation.value,
       skip_retrieval: preset.value === "evidence" || config.value.skip_retrieval,
       config: { ...config.value, prompt: prompt.value, instructions: instructions.value },
+      settings_pipeline_overrides: settingsPipelineOverrides.value,
+      run_pipeline_overrides: runPipelineOverrides.value,
     })) as ResearchJob;
     sessionJobIds.value.add(job.id);
     activeJob.value = job;
@@ -660,6 +668,7 @@ function prepareRerun() {
   if (route.query.job) void router.replace({ path: "/rag" });
   const next = researchActions.prepareResearchRerun(activeJob.value) as ResearchConfig;
   config.value = { ...next };
+  runPipelineOverrides.value = next.run_pipeline_overrides || null;
   prompt.value = next.prompt || "";
   instructions.value = next.instructions || "";
   preset.value = inferPreset(next);
@@ -690,8 +699,10 @@ function applySettings(payload: {
   config: Partial<ResearchConfig>;
   generation: Record<string, unknown>;
   model: string;
+  runPipelineOverrides: PipelineConfigOverrideSet | null;
 }) {
   updateConfig(payload.config);
+  runPipelineOverrides.value = payload.runPipelineOverrides;
   generation.value = { ...payload.generation };
   model.value = payload.model || profileModel(selectedProfile.value);
   preset.value = "custom";
@@ -903,6 +914,8 @@ onBeforeUnmount(() => {
         :pipeline-strategies="workspace?.pipeline_strategies || []"
         :pipeline-assignment="workspace?.pipeline_assignment || null"
         :pipeline-override-allowed="workspace?.pipeline_override_allowed || false"
+        :settings-pipeline-overrides="settingsPipelineOverrides"
+        :run-pipeline-overrides="runPipelineOverrides"
         @apply="applySettings"
         @discover="discoverModels"
       />
