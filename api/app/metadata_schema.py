@@ -726,7 +726,7 @@ def build_group_prompt(
             "- Boolean fields (" + ", ".join(boolean_fields) + ") are three-state: true, false, or null. "
             "False is an explicit supported value, not absence. When the source supports false, return false "
             "with outcome=\"supported_value\". Use outcome=\"no_supported_value\" only with null when "
-            "the field genuinely has no applicable value. For every Boolean field, its field_assessments "
+            "the field genuinely has no applicable value. For every assessed Boolean field, its field_assessments "
             "entry MUST include assessed_value and that value MUST exactly repeat the corresponding metadata "
             "value as true, false, or null."
         )
