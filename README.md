@@ -394,6 +394,7 @@ Start with the documents describing current behavior:
 - [Metadata schemas](docs/METADATA_SCHEMAS.md) — configurable field contracts and model guidance
 - [Metadata memory](docs/METADATA_MEMORY.md) — reviewed precedents and authority boundaries
 - [FieldAssertion migration](docs/FIELD_ASSERTION_MIGRATION.md) — canonical assertion model and compatibility work
+- [Code readability](docs/CODE_READABILITY.md) — naming, documentation, complex-logic, and refactoring conventions
 - [Contributing](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) — development rules and quality gates
 
 Release history is in [CHANGELOG.md](CHANGELOG.md) and `docs/notes/<version>.md`. Version-specific release notes are historical records, not current architecture or backlog documents.
