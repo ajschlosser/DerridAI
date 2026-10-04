@@ -35,7 +35,13 @@ from typing import Any
 
 CONFIDENCE_THRESHOLD = 0.9
 
-WEIGHTS = {"outline_first_chapter": 0.75, "first_chapter_heading": 0.65, "page_numbering_restarts": 0.5, "front_matter_ends": 0.45, "outline_after_front_matter": 0.5}
+WEIGHTS = {
+    "outline_first_chapter": 0.75,
+    "first_chapter_heading": 0.65,
+    "page_numbering_restarts": 0.5,
+    "front_matter_ends": 0.45,
+    "outline_after_front_matter": 0.5,
+}
 
 _NUMBER_WORDS = r"(?:one|two|first|i|1)"
 _FIRST_CHAPTER = re.compile(rf"^\s*(?:chapter|chap\.|chapitre|part|book|livre|partie)\s+{_NUMBER_WORDS}\b[\s.:—–-]*(?:.{{0,80}})?$", re.I)
@@ -71,54 +77,202 @@ def _looks_like_contents(lines: list[str]) -> bool:
     return numbered / len(lines) >= 0.5
 
 
-def _clues(pages: dict[int, list[str]], labels: dict[int, str | None], outline: list[tuple[int, str]], page_count: int) -> list[dict[str, Any]]:
+
+def _clues(
+    pages: dict[int, list[str]],
+    labels: dict[int, str | None],
+    outline: list[tuple[int, str]],
+    page_count: int,
+) -> list[dict[str, Any]]:
+    """Collect deterministic clues that vote for a main-text start page."""
     clues: list[dict[str, Any]] = []
-    contents_pages = {p for p, lines in pages.items() if _looks_like_contents(lines) or any(_FRONT_HEADING.match(x) and re.match(r"^\s*(?:table|contents)", x, re.I) for x in lines[:3])}
+    contents_page_numbers = {
+        page_number
+        for page_number, page_lines in pages.items()
+        if _looks_like_contents(page_lines)
+        or any(
+            _FRONT_HEADING.match(line)
+            and re.match(r"^\s*(?:table|contents)", line, re.I)
+            for line in page_lines[:3]
+        )
+    }
 
-    for page, title in outline:
-        if 1 <= page <= page_count and (_FIRST_CHAPTER.match(title) or _NUMBERED_FIRST.match(title)):
-            clues.append({"page": page, "kind": "outline_first_chapter", "detail": f'Bookmark "{title.strip()}" points to PDF page {page}.'})
+    # A first-chapter bookmark is the strongest structural clue because it is
+    # explicit document navigation rather than a typography inference.
+    for page_number, title in outline:
+        if (
+            1 <= page_number <= page_count
+            and (_FIRST_CHAPTER.match(title) or _NUMBERED_FIRST.match(title))
+        ):
+            clues.append(
+                {
+                    "page": page_number,
+                    "kind": "outline_first_chapter",
+                    "detail": (
+                        f'Bookmark "{title.strip()}" points to PDF page '
+                        f"{page_number}."
+                    ),
+                }
+            )
             break
 
-    entries = [(p, t) for p, t in outline if 1 <= p <= page_count]
-    last_front = max((i for i, (p, t) in enumerate(entries) if p <= max(1, page_count // 3) and _FRONT_HEADING.match(t)), default=None)
-    if last_front is not None:
-        # The first bookmark after the front matter, skipping an introduction (which may or may not be main text).
-        after = next(((p, t) for p, t in entries[last_front + 1 :] if not _INTRO.match(t) and p > entries[last_front][0]), None)
-        if after is not None:
-            clues.append({"page": after[0], "kind": "outline_after_front_matter", "detail": f'Bookmark "{after[1].strip()}" is the first after the front matter (PDF page {after[0]}.'})
+    valid_outline_entries = [
+        (page_number, title)
+        for page_number, title in outline
+        if 1 <= page_number <= page_count
+    ]
+    last_front_matter_index = max(
+        (
+            index
+            for index, (page_number, title) in enumerate(valid_outline_entries)
+            if page_number <= max(1, page_count // 3)
+            and _FRONT_HEADING.match(title)
+        ),
+        default=None,
+    )
+    if last_front_matter_index is not None:
+        last_front_matter_page = valid_outline_entries[last_front_matter_index][0]
+        # Skip an Introduction because an author's own introduction is not
+        # automatically the start of the canonical main text.
+        first_after_front_matter = next(
+            (
+                (page_number, title)
+                for page_number, title in valid_outline_entries[
+                    last_front_matter_index + 1 :
+                ]
+                if not _INTRO.match(title)
+                and page_number > last_front_matter_page
+            ),
+            None,
+        )
+        if first_after_front_matter is not None:
+            page_number, title = first_after_front_matter
+            clues.append(
+                {
+                    "page": page_number,
+                    "kind": "outline_after_front_matter",
+                    "detail": (
+                        f'Bookmark "{title.strip()}" is the first after the '
+                        f"front matter (PDF page {page_number}."
+                    ),
+                }
+            )
 
-    for page in sorted(pages):
-        if page in contents_pages:
+    for page_number in sorted(pages):
+        if page_number in contents_page_numbers:
             continue
-        lines = pages[page]
-        head = [x for x in lines[:4]]
-        hit = next((x for x in head if _FIRST_CHAPTER.match(x) or _NUMBERED_FIRST.match(x)), None)
-        if hit is None and len(head) >= 2 and re.match(r"^\s*(?:chapter|chapitre)\s*$", head[0], re.I) and _BARE_FIRST.match(head[1]):
-            hit = f"{head[0]} {head[1]}"
-        if hit:
-            clues.append({"page": page, "kind": "first_chapter_heading", "detail": f'"{hit[:60]}" appears as a heading on PDF page {page}.'})
+        page_lines = pages[page_number]
+        heading_lines = page_lines[:4]
+        first_chapter_heading = next(
+            (
+                line
+                for line in heading_lines
+                if _FIRST_CHAPTER.match(line) or _NUMBERED_FIRST.match(line)
+            ),
+            None,
+        )
+        if (
+            first_chapter_heading is None
+            and len(heading_lines) >= 2
+            and re.match(
+                r"^\s*(?:chapter|chapitre)\s*$",
+                heading_lines[0],
+                re.I,
+            )
+            and _BARE_FIRST.match(heading_lines[1])
+        ):
+            first_chapter_heading = f"{heading_lines[0]} {heading_lines[1]}"
+        if first_chapter_heading:
+            clues.append(
+                {
+                    "page": page_number,
+                    "kind": "first_chapter_heading",
+                    "detail": (
+                        f'"{first_chapter_heading[:60]}" appears as a heading '
+                        f"on PDF page {page_number}."
+                    ),
+                }
+            )
             break
 
-    first_arabic = next((p for p in sorted(labels) if str(labels[p] or "") == "1"), None)
-    if first_arabic:
-        earlier = [labels[p] for p in sorted(labels) if p < first_arabic and labels[p]]
-        if earlier and sum(bool(_ROMAN.match(str(x))) for x in earlier) >= 2:
-            clues.append({"page": first_arabic, "kind": "page_numbering_restarts", "detail": f"Roman numerals give way to page 1 on PDF page {first_arabic}."})
+    first_arabic_page = next(
+        (
+            page_number
+            for page_number in sorted(labels)
+            if str(labels[page_number] or "") == "1"
+        ),
+        None,
+    )
+    if first_arabic_page:
+        earlier_labels = [
+            labels[page_number]
+            for page_number in sorted(labels)
+            if page_number < first_arabic_page and labels[page_number]
+        ]
+        roman_label_count = sum(
+            bool(_ROMAN.match(str(label))) for label in earlier_labels
+        )
+        if earlier_labels and roman_label_count >= 2:
+            clues.append(
+                {
+                    "page": first_arabic_page,
+                    "kind": "page_numbering_restarts",
+                    "detail": (
+                        "Roman numerals give way to page 1 on PDF page "
+                        f"{first_arabic_page}."
+                    ),
+                }
+            )
 
-    front = [p for p in sorted(pages) if p <= max(1, page_count // 3) and pages[p] and (_FRONT_HEADING.match(pages[p][0]) or p in contents_pages)]
-    if front:
-        run_end = front[0]
-        for p in front[1:]:
-            if p - run_end <= 3:  # allow a page or two of running front matter between headings
-                run_end = p
-        # Only the last front-matter heading's section is known to end at the next heading-bearing page.
-        following = next((p for p in sorted(pages) if p > run_end and p not in contents_pages and not _FRONT_HEADING.match(pages[p][0])
-                          and any(_looks_like_heading(x) for x in pages[p][:2])), None)
-        if following:
-            clues.append({"page": following, "kind": "front_matter_ends", "detail": f'Front matter ({", ".join(pages[p][0][:24] for p in front[:3])}) ends before PDF page {following}.'})
+    front_matter_pages = [
+        page_number
+        for page_number in sorted(pages)
+        if page_number <= max(1, page_count // 3)
+        and pages[page_number]
+        and (
+            _FRONT_HEADING.match(pages[page_number][0])
+            or page_number in contents_page_numbers
+        )
+    ]
+    if front_matter_pages:
+        front_matter_run_end = front_matter_pages[0]
+        for page_number in front_matter_pages[1:]:
+            # Allow one or two running front-matter pages between headings.
+            if page_number - front_matter_run_end <= 3:
+                front_matter_run_end = page_number
+
+        # We only know that the last front-matter section has ended once a
+        # subsequent page supplies its own heading-like structural evidence.
+        following_heading_page = next(
+            (
+                page_number
+                for page_number in sorted(pages)
+                if page_number > front_matter_run_end
+                and page_number not in contents_page_numbers
+                and not _FRONT_HEADING.match(pages[page_number][0])
+                and any(
+                    _looks_like_heading(line)
+                    for line in pages[page_number][:2]
+                )
+            ),
+            None,
+        )
+        if following_heading_page:
+            front_matter_labels = ", ".join(
+                pages[page_number][0][:24]
+                for page_number in front_matter_pages[:3]
+            )
+            clues.append(
+                {
+                    "page": following_heading_page,
+                    "kind": "front_matter_ends",
+                    "detail": (
+                        f"Front matter ({front_matter_labels}) ends before PDF "
+                        f"page {following_heading_page}."
+                    ),
+                }
+            )
     return clues
-
 
 def _looks_like_heading(text: str) -> bool:
     return len(text) < 60 and not text.rstrip().endswith((",", ";", ".", "?", "!", ":")) and bool(re.match(r"^[A-Z0-9“\"]", text))
@@ -129,35 +283,65 @@ def infer_main_text_start(
     pages: list[dict[str, Any]],
     outline: list[tuple[int, str]] | None = None,
 ) -> dict[str, Any]:
-    """Return {"page", "confidence", "clues", "offered"} for the best candidate.
+    """Return the best main-text start candidate and its supporting clues.
 
-    `page` and `confidence` describe the best candidate even when it is below the threshold, so the
-    evaluation script can measure calibration; `offered` says whether it may be shown as a value.
+    Page and confidence describe the best candidate even below the display
+    threshold so the evaluation script can measure calibration. Offered
+    indicates whether the candidate is strong enough to present as a proposed
+    value for human review.
     """
     page_count = len(pages)
-    labels = {int(p["pdf_page"]): (str(p["printed_page_label"]) if p.get("printed_page_label") else None) for p in pages}
-    clues = _clues(_page_lines(blocks), labels, list(outline or []), page_count)
-    by_page: dict[int, list[dict[str, Any]]] = {}
+    printed_label_by_pdf_page = {
+        int(page["pdf_page"]): (
+            str(page["printed_page_label"])
+            if page.get("printed_page_label")
+            else None
+        )
+        for page in pages
+    }
+    clues = _clues(
+        _page_lines(blocks),
+        printed_label_by_pdf_page,
+        list(outline or []),
+        page_count,
+    )
+    clues_by_page: dict[int, list[dict[str, Any]]] = {}
     for clue in clues:
-        by_page.setdefault(int(clue["page"]), []).append(clue)
-    if not by_page:
-        return {"page": None, "confidence": 0.0, "clues": [], "offered": False}
+        clues_by_page.setdefault(int(clue["page"]), []).append(clue)
 
-    def confidence(items: list[dict[str, Any]]) -> float:
-        remaining = 1.0
-        for item in items:
-            remaining *= 1 - WEIGHTS[item["kind"]]
-        return 1 - remaining
+    if not clues_by_page:
+        return {
+            "page": None,
+            "confidence": 0.0,
+            "clues": [],
+            "offered": False,
+        }
 
-    scored = sorted(((confidence(v), p) for p, v in by_page.items()), reverse=True)
-    best_confidence, best_page = scored[0]
-    if len(scored) > 1:
-        # Disagreement is evidence against the leader: discount by the strength of the strongest rival.
-        best_confidence *= 1 - 0.5 * scored[1][0]
+    def combined_confidence(page_clues: list[dict[str, Any]]) -> float:
+        """Combine agreeing clues as independent pieces of evidence."""
+        remaining_uncertainty = 1.0
+        for clue in page_clues:
+            remaining_uncertainty *= 1 - WEIGHTS[clue["kind"]]
+        return 1 - remaining_uncertainty
+
+    scored_pages = sorted(
+        (
+            (combined_confidence(page_clues), page_number)
+            for page_number, page_clues in clues_by_page.items()
+        ),
+        reverse=True,
+    )
+    best_confidence, best_page = scored_pages[0]
+    if len(scored_pages) > 1:
+        # Disagreement is evidence against the leader. Discount it by half the
+        # strength of the strongest independently supported rival page.
+        strongest_rival_confidence = scored_pages[1][0]
+        best_confidence *= 1 - 0.5 * strongest_rival_confidence
+
     best_confidence = round(best_confidence, 3)
     return {
         "page": best_page,
         "confidence": best_confidence,
-        "clues": by_page[best_page],
+        "clues": clues_by_page[best_page],
         "offered": best_confidence >= CONFIDENCE_THRESHOLD,
     }
