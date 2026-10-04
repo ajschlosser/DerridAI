@@ -1071,6 +1071,7 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
         uniform_voice = speakers[0] if speakers and len(set(speakers)) == 1 and (not audio or len(speakers) == len(group)) else None
         assigned = voice_assignments.get(uniform_voice) if uniform_voice else None
         assigned_name = str(assigned.get("display_name") or "").strip() if isinstance(assigned, dict) else ""
+        assigned_reviewer = str(assigned.get("reviewer") or "").strip() if isinstance(assigned, dict) else ""
         uniform_speaker = assigned_name or uniform_voice
         source_spans = []
         for block in group:
@@ -1139,9 +1140,7 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
                     "speaker",
                     uniform_speaker,
                     override=True,
-                    actor=str(assigned.get("reviewer") or "").strip() or None
-                    if isinstance(assigned, dict)
-                    else None,
+                    actor=assigned_reviewer or None,
                     method="human_voice_assignment",
                     reason=f"Reviewer assigned the diarized voice {uniform_voice}.",
                 )
