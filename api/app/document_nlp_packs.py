@@ -331,7 +331,7 @@ def pack_status(entry: dict[str, Any]) -> dict[str, Any]:
             **entry,
             "bundled": True,
             "installable": False,
-            "missing_requirements": [],
+            "missing_requirements": [] if installed else [bundled_package],
             "installed": installed,
             "installed_at": None,
             "download_bytes": 0,
