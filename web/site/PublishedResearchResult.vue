@@ -26,7 +26,6 @@ type EvidenceItem = {
   recordId: string;
   work?: string;
   citation?: string;
-  documentAuthor?: string;
 };
 
 type PublicationRecord = {
@@ -136,7 +135,6 @@ const answerSegments = computed<AnswerSegment[]>(() => {
             <span class="published-evidence-copy">
               <span class="sr-only">{{ openRecordLabel }}: </span>
               <strong>[{{ item.evidenceId }}] {{ item.work || item.recordId }}</strong>
-              <small v-if="item.documentAuthor">{{ item.documentAuthor }}</small>
               <small>{{
                 item.citation ||
                 recordsById.get(String(item.recordId))?.full_citation ||
