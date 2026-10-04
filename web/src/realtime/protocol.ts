@@ -124,6 +124,9 @@ export interface GutenbergActivitySummary {
   archive_status: string;
   bytes_done: number;
   total_bytes: number | null;
+  items_done?: number;
+  items_total?: number | null;
+  local_text_count?: number;
   ready: boolean;
   search_ready: boolean;
   has_error: boolean;
