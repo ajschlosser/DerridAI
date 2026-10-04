@@ -93,7 +93,7 @@ describe("WorkMetadataLlmDialog", () => {
     const wrapper = mount(WorkMetadataLlmDialog, { attachTo: document.body });
     open();
     await flushPromises();
-    expect(wrapper.find(".metadata-scope-sample").text()).toContain("+7");
+    expect(document.body.querySelector(".metadata-scope-sample")?.textContent).toContain("+7");
     wrapper.unmount();
   });
 
