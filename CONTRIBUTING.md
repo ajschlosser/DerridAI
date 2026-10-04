@@ -130,6 +130,18 @@ mypy
 
 Python formatting/style debt tracked in [docs/STATIC_ANALYSIS_FOLLOWUPS.md](docs/STATIC_ANALYSIS_FOLLOWUPS.md) is separate from Prettier. Do not mechanically rewrite Python modules in a feature PR just to reduce style debt; make those changes as deliberate, reviewable formatting/refactor work.
 
+## Readability and documentation conventions
+
+Human readability is a maintained quality attribute, not a cleanup phase reserved for later.
+
+- **Name the domain concept.** Prefer `record_revision`, `boundary_block_id`, `selectedVersion`, or `normalizedQuery` over `data`, `item`, `x`, or `v` when the value survives beyond a tiny mathematical/indexing loop. Conventional coordinates and short loop indexes are fine when their meaning is immediate.
+- **Python follows normal docstring conventions.** Modules, public classes/functions, and non-obvious private algorithms should use PEP 257-style docstrings. Describe the contract, invariant, or reason for the algorithm rather than narrating each statement.
+- **TypeScript uses JSDoc where the contract is not obvious from the type.** Exported algorithms, transformations with authority/provenance implications, and compatibility shims should explain their semantics and failure assumptions. Local comments should explain why a branch exists, not restate the syntax.
+- **Flatten difficult control flow.** Prefer guard clauses, named predicates, and small helpers to deeply nested conditionals or nested ternaries. Do not split a function merely to reduce line count when the extraction would hide the invariant or create a dependency cycle.
+- **Comment state reconstruction, heuristics, and provenance boundaries.** A future reader should be able to tell why ordering, confidence thresholds, rollback logic, deterministic fallbacks, or source-conservation checks are safe.
+- **Keep compatibility debt explicit.** Existing `Loose`/broad-dictionary boundaries and runtime bridges may be necessary, but new code should use precise local types and focused dependencies when practical. Do not keep “moved verbatim” comments after materially refactoring the code.
+- **Avoid stale comments.** When behavior changes, update or remove nearby rationale, diagrams, README paths, and gotchas in the same change.
+
 ## Test commands
 
 Backend/release regression:
@@ -170,6 +182,14 @@ npm run test:e2e:a11y
 The Storybook suites run against the static build, as CI does, so run `npm run build-storybook` (and `npm run build` for the app suites) first; the configs fail fast if it is missing. They never reuse a server that is already listening: if port 6006 or 5199 is busy, set `STORYBOOK_PORT` or `APP_PORT`; do not weaken a test gate to work around a local port collision.
 
 See [tests/README.md](tests/README.md) for pytest markers, test taxonomy, and focused test guidance.
+
+For normal local handoff, `scripts/preflight.sh` derives the required gates from the diff, checks branch freshness against `origin/master`, verifies generated artifacts when relevant, and runs the applicable backend/frontend static and unit checks. Playwright/browser work stays in CI by design.
+
+```bash
+scripts/preflight.sh
+```
+
+Use the explicit commands above when debugging one gate or when your platform cannot run the shell script.
 
 ## CI gates
 
@@ -213,6 +233,10 @@ Browser jobs share the Chromium cache while avoiding concurrent writes. Composed
 - Generated GraphQL/SDK/site assets must be changed through their generators. A hand edit may appear correct locally and still fail the freshness gate.
 - The default host-provider URLs use `host.docker.internal`; Compose maps that name to the host gateway so the same documented setup works on Docker Desktop and native Docker Engine.
 - Playwright/Storybook suites use built artifacts and dedicated ports. Build first, and change the configured test port when one is occupied rather than reusing an arbitrary running dev server.
+- Legacy DOM snapshots are characterization artifacts. Regenerate them only for a reviewed, intentional behavior change, and do not reformat them.
+- English and Canadian-French frontend keys are parity-checked. Adding a visible string to only one locale will fail validation.
+- REST and GraphQL contract tests are separate from the broad backend pytest run. Transport/schema changes need both focused contract files even when the general suite is green.
+
 ## Before handing a change to another developer
 
 Run the smallest set of checks that covers the change, then report exactly what ran. For a cross-cutting change, the expected local handoff is:
