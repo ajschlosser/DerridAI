@@ -1655,12 +1655,28 @@ const selectedRecordActivitySummary = computed(() => {
     ? ` · ${i18n.tf("pdf_corpus.record_activity_summary", { human, llm, passes })}`
     : "";
 });
+const selectedAudioSpeakers = computed<string[]>(() => {
+  const metadata = selectedAsset.value?.initial_metadata;
+  if (Array.isArray(metadata?.speakers)) return metadata.speakers.map(String);
+  return metadata?.speaker ? [String(metadata.speaker)] : [];
+});
+const selectedVoiceAssignments = computed<Record<string, string>>(() =>
+  Object.fromEntries(
+    Object.entries(selectedAsset.value?.voice_assignments || {}).map(([voice, assignment]) => [
+      voice,
+      assignment.display_name,
+    ]),
+  ),
+);
 const sourceScopeSummary = computed(() => {
   const asset = selectedAsset.value;
   if (!asset || asset.media_kind === "audio" || Number(asset.page_count || 0) < 2) return "";
-  return sourcePageScope.value.length
-    ? `${i18n.t("pdf_corpus.source_scope_selected_label", "Pages selected")}: ${sourcePageScope.value.length}`
-    : `${i18n.t("pdf_corpus.source_scope_all_label", "All pages")}: ${asset.page_count}`;
+  const scoped = sourcePageScope.value.length > 0;
+  const label = scoped
+    ? i18n.t("pdf_corpus.source_scope_selected_label", "Pages selected")
+    : i18n.t("pdf_corpus.source_scope_all_label", "All pages");
+  const count = scoped ? sourcePageScope.value.length : asset.page_count;
+  return `${label}: ${count}`;
 });
 const selectedStructureSummary = computed(() => {
   const plan = selectedAsset.value?.document_layout;
@@ -2797,18 +2813,8 @@ defineExpose({
             :page-count="selectedAsset.page_count"
             :block-count="selectedAsset.block_count"
             :audio-provenance="selectedAsset.audio_provenance"
-            :speakers="
-              selectedAsset.initial_metadata?.speakers ||
-              (selectedAsset.initial_metadata?.speaker ? [selectedAsset.initial_metadata.speaker] : [])
-            "
-            :voice-assignments="
-              Object.fromEntries(
-                Object.entries(selectedAsset.voice_assignments || {}).map(([voice, assignment]) => [
-                  voice,
-                  assignment.display_name,
-                ]),
-              )
-            "
+            :speakers="selectedAudioSpeakers"
+            :voice-assignments="selectedVoiceAssignments"
             :voice-assignments-busy="busy === 'voice-assignments'"
             :disabled="busy !== ''"
             @save-voice-assignments="saveVoiceAssignments"
