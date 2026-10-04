@@ -94,8 +94,14 @@ def source_providers() -> dict[str, Any]:
 
 @router.get("/api/corpus/authors/search")
 def search_authors(q: str = Query(min_length=1, max_length=200), language: str = Query(default="en", pattern=r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"), limit: int = Query(default=10, ge=1, le=20)) -> dict[str, Any]:
+    from ..gutenberg_catalogue import gutenberg_offline
     from ..source_wikidata import search_authors as wikidata_search
 
+    # A local Gutenberg hit is enough to resolve an author without any provider
+    # network. Only fall back to Wikidata when the local catalogue has no match.
+    local = gutenberg_offline.search_authors(q, limit=limit)
+    if local:
+        return {"items": local}
     try:
         people = wikidata_search(ProviderHttp("wikimedia"), q, language=language, limit=limit)
     except CaptureError as exc:
@@ -119,12 +125,25 @@ def _get_capture(capture_id: str) -> dict[str, Any]:
 
 @router.post("/api/corpus/captures")
 def create_capture(body: CaptureCreate, request: Request) -> dict[str, Any]:
+    from ..gutenberg_catalogue import gutenberg_offline
     from ..source_wikidata import resolve_author
 
     try:
-        # The person is resolved server-side from the chosen QID; the browser never supplies identity data.
-        author = resolve_author(ProviderHttp("wikimedia"), body.wikidata_qid, language=body.ui_language)
+        identity_id = str(body.identity_id or "")
         options = CaptureOptions.from_dict(body.options.model_dump())
+        if identity_id.startswith("gutenberg:"):
+            try:
+                author = gutenberg_offline.resolve_author(identity_id)
+            except ValueError as exc:
+                raise CaptureError(CaptureErrorCode.AUTHOR_NOT_FOUND, str(exc)) from exc
+            if options.providers != ["gutenberg"]:
+                raise CaptureError(
+                    CaptureErrorCode.INVALID_OPTIONS,
+                    "A local Gutenberg author identity can only use the Gutenberg provider.",
+                )
+        else:
+            qid = body.wikidata_qid or identity_id.removeprefix("wikidata:")
+            author = resolve_author(ProviderHttp("wikimedia"), qid, language=body.ui_language)
         options.validate_for_author(author)
         capture = capture_service.create(author, options)
     except CaptureError as exc:
