@@ -23,176 +23,58 @@ import { openMessageDialog } from "../composables/messageDialog";
 import { toast } from "../composables/notifications";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?worker";
-import { diffWordsWithSpace } from "diff";
+import "diff";
+import "../domain/operationsDock";
+import "./operationsPanelHost";
+import "../domain/operationsPanel";
+import { cloneAuditValue } from "../domain/recordValues";
+import "../domain/urlState";
+import { formatTimestamp } from "../domain/recordTableHelpers";
+import "../domain/recordQuery";
+import { sanitizeResearchGeneration } from "../domain/researchPayloads";
+import { fullCitation } from "../domain/citations";
+import "../domain/recordsFiles";
 import {
-  dockCollapsedSummary,
-  isActiveJobStatus,
-  isTerminalJobStatus,
-  jobIdsToPruneFromDock,
-  jobProgressPercent,
-  shouldMountOperationDock,
-  statusBadgeTone,
-} from "../domain/operationsDock";
-import { mountOperationsPanel, unmountOperationsPanel } from "./operationsPanelHost";
-import { formatDuration } from "../domain/operationsPanel";
-import { cloneAuditValue, compareValues, sameValue, sortRows } from "../domain/recordValues";
-import { compressUrlState, decompressUrlState } from "../domain/urlState";
-import { formatTimestamp, localRecordKey, toggleSort } from "../domain/recordTableHelpers";
-import {
-  countOccurrences,
-  flattenValueList,
-  parseJsonl,
-  valueMatches,
-} from "../domain/recordQuery";
-import {
-  finiteResearchNumber,
-  normalizedResearchConfig,
-  researchEvidenceForUi,
-  researchJobForUi,
-  researchProfileForUi,
-  sanitizeResearchGeneration,
-} from "../domain/researchPayloads";
-import {
-  fullCitation,
-  inlineCitation,
-  mlaAuthorName,
-  mlaPageSpan,
-  mlaSentence,
-} from "../domain/citations";
-import { describeRecordsFile, serializableRecordsFile } from "../domain/recordsFiles";
-import {
-  applyUiTheme as applyUiThemeCompat,
   setTranslationDictionary as setTranslationDictionaryCompat,
-  syncColorScheme as syncColorSchemeCompat,
   tr as trCompat,
   trf as trfCompat,
-  translateDynamicUiValue as translateDynamicUiValueCompat,
-  translateLegacyDom as translateLegacyDomCompat,
 } from "./legacyCompat.js";
-import {
-  TOUCHUP_CREATABLE_FIELDS,
-  TOUCHUP_GROUPS,
-  WORK_METADATA_LLM_FIELDS,
-} from "../domain/runtimeConstants";
-import {
-  FIELD_LABELS,
-  SEARCH_AUTOCOMPLETE_EXCLUDED,
-  SEARCH_FACET_FIELDS,
-  SEARCH_FILTER_FIELDS,
-  SEARCH_LOADED_COLUMNS,
-  viewConfig,
-} from "../domain/runtimeConstants";
+import { TOUCHUP_GROUPS } from "../domain/runtimeConstants";
+import "../domain/runtimeConstants";
 import { esc, icon } from "../domain/html";
-import {
-  annotationMatches,
-  jsonPretty,
-  llmDiffSides,
-  ragAnswerHtml,
-  reviewDiffSides,
-} from "../domain/reviewPresentation";
+import { jsonPretty, reviewDiffSides } from "../domain/reviewPresentation";
 import { touchupFieldsForRecord } from "../domain/touchupFields";
-import {
-  commonWorkValue,
-  parseProposedMetadataValue,
-  representativeWorkMetadata,
-  workCoverUrl,
-  workOverviewMetadataRows,
-} from "../domain/workMetadata";
-import { compactNumber } from "../domain/numberFormatting";
+import "../domain/workMetadata";
+import "../domain/numberFormatting";
 import { normalizeResearcherToken } from "../domain/researcherContentFilter";
-import { filterOpsForField } from "../domain/searchFilterSchema";
-import {
-  compactRecordHistory,
-  pdfLinks,
-  ragEvidenceRecordPayload,
-  recordPayload,
-  touchupRecordPayload,
-  upsertRecordPayload,
-} from "../domain/recordPayloads";
-import {
-  highlight,
-  highlightTerms,
-  modelOptionLabel,
-  openAiModelMatchesKind,
-  semanticSimilarity,
-  snippet,
-} from "../domain/recordFormatting";
+import "../domain/searchFilterSchema";
+import { touchupRecordPayload, upsertRecordPayload } from "../domain/recordPayloads";
+import "../domain/recordFormatting";
 import { api } from "../domain/legacyApi";
-import { parsePastedRecord } from "../domain/pastedRecord";
+import "../domain/pastedRecord";
 import { providerRequestConfig } from "../domain/providerRequest";
 import { decorateDisabledControls, showAppModal } from "../domain/disabledControls";
-import {
-  activeFile,
-  bulkEditRowsForScope,
-  cleanRows,
-  download,
-  downloadBlob,
-  fileJsonl,
-  needsReviewItems,
-  selectedRecord,
-} from "../domain/sharedRecordScopes";
-import { recordHistoryVersions, upsertAuditDelta } from "../domain/recordHistory";
-import { barChart, lineChart, multiLineChart, pieChart, statList } from "../domain/dashboardCharts";
-import {
-  workIndex,
-  dateKeys,
-  topNeedsReviewWorkSeries,
-  needsReviewTimeline,
-  topFieldValues,
-  publicationYearSeries,
-  workRecordShares,
-  averageRecordLengthForTopWorks,
-  recentAuditChanges,
-} from "../domain/sharedCorpusAnalytics";
-import {
-  recordDbStatus,
-  workDbStatus,
-  refreshPresenceForRows,
-  updateDbStatusElements,
-  ignoredFingerprint,
-  pendingUpsertRows,
-  pendingChangesForRow,
-  removeFromUpsertQueue,
-  buildUpsertItems,
-  upsertRows,
-  rowsFromReviewSelection,
-} from "../domain/sharedDbPresence";
-import {
-  candidateChromaIds,
-  corpusStoreExists,
-  dbUnavailableReason,
-  hasChromaService,
-  hasCorpusDb,
-  recordStores,
-  storeReceipt,
-} from "../domain/storeAvailability";
+import "../domain/sharedRecordScopes";
+import "../domain/recordHistory";
+import "../domain/dashboardCharts";
+import { workIndex } from "../domain/sharedCorpusAnalytics";
+import { updateDbStatusElements, upsertRows } from "../domain/sharedDbPresence";
+import { hasCorpusDb, recordStores } from "../domain/storeAvailability";
 import { registerOperationHooks } from "../domain/operationHooks";
 import { registerOperationProgress } from "../domain/operationProgressHooks";
-import { exportStoreJsonl } from "../domain/storeExport";
-import {
-  searchFacets as sharedSearchFacets,
-  evidenceSelection as sharedEvidenceSelection,
-} from "../domain/sharedSearchSupport";
-import {
-  label,
-  display,
-  normalizeRagGrade,
-  parseBulkFieldValue,
-  parseWorkMetadataValue,
-  pages,
-  recordFields,
-  dbSearchWhere,
-} from "../domain/sharedRecordHelpers";
-import { sharedPdfLinking } from "../domain/sharedPdfLinking";
-import { sharedRecordWorkspace } from "../domain/sharedRecordWorkspace";
+import "../domain/storeExport";
+import { evidenceSelection as sharedEvidenceSelection } from "../domain/sharedSearchSupport";
+import { label, normalizeRagGrade, pages } from "../domain/sharedRecordHelpers";
+import "../domain/sharedPdfLinking";
+import "../domain/sharedRecordWorkspace";
 import { recordPresenters as sharedRecordPresenters } from "../domain/sharedRecordPresenters";
 import { providerProfilesService, warmupProviderProfile } from "../domain/sharedProviderProfiles";
-import { searchWorkspace } from "../domain/sharedSearchWorkspace";
-import { getTableColumns, tableAvailableFields } from "../domain/tableColumns";
-import { recordsWorkspace as sharedRecordsWorkspace } from "../domain/sharedRecordsWorkspace";
-import { activateFile, searchByMetadata } from "../domain/workspaceActions";
-import { pageInfo, setActiveStore, setListFilterValue } from "../domain/listPaging";
-import { worksWorkspace } from "../domain/sharedWorksWorkspace";
+import "../domain/sharedSearchWorkspace";
+import "../domain/tableColumns";
+import "../domain/sharedRecordsWorkspace";
+import { searchByMetadata } from "../domain/workspaceActions";
+import "../domain/listPaging";
+import "../domain/sharedWorksWorkspace";
 import { workDialogs } from "../domain/sharedWorkDialogs";
 import { operationPresenters } from "../domain/sharedOperationPresenters";
 import { refreshStoreWorks } from "../domain/storeWorks";
@@ -204,29 +86,20 @@ import {
   pruneClientJobState,
   removeFinishedJob,
   clearFinishedOperations,
-  syncUpsertJobReceipts,
   cancelBackgroundJob,
   submitBackgroundLlmJob,
-  registerExternalJob,
-  maybeDesktopNotify,
   syncJobProgressToasts,
 } from "../domain/jobsActions";
 import { registerResearchActions } from "../domain/researchActions";
 import { registerVectorStoreActions } from "../domain/vectorStoreActions";
 import { registerTouchupActions } from "../domain/touchupActions";
 import { registerOperationsPanelHooks } from "../domain/operationsPanelHooks";
-import { dashboardData } from "../domain/sharedDashboardData";
-import { pdfExplorerRenderer } from "../domain/sharedPdfExplorerRenderer";
-import {
-  applyPdfLinkMatch,
-  cleanPdfPageWithLlm,
-  draftPdfPageWithLlm,
-  linkPdfPageWithLlm,
-  registerPdfLlmTaskHooks,
-} from "../domain/pdfPageLlmActions";
+import "../domain/sharedDashboardData";
+import "../domain/sharedPdfExplorerRenderer";
+import { applyPdfLinkMatch, registerPdfLlmTaskHooks } from "../domain/pdfPageLlmActions";
 import { createJobDialogs } from "../domain/jobDialogs";
-import { normalizeTouchupItems, openTouchup } from "../domain/touchupLauncher";
-import { createWorkDialogs } from "../domain/workDialogs";
+import { normalizeTouchupItems } from "../domain/touchupLauncher";
+import "../domain/workDialogs";
 import { recordDialogs } from "../domain/sharedRecordDialogs";
 import { createOperationDock } from "../domain/operationDock";
 import { copyCitation, copyJsonToClipboard } from "../domain/clipboardCopy";
@@ -234,69 +107,44 @@ import {
   getUrlSyncHook,
   navSnapshot,
   setUrlSyncHook,
-  currentTableUrlState,
-  applyCompressedTableUrlState,
-  urlFromState,
-  syncUrl,
   applyUrlState,
   navigateTo,
   renderView,
   repaintAfterLocationChange,
 } from "../domain/sharedNavigation";
-import { selectedIndex, sharedUrlStateCodec } from "../domain/sharedUrlState";
-import { getShellSnapshot, systemCardHtml } from "../domain/shellSnapshot";
-import { pathViewMap, viewPathMap } from "../domain/navigation";
+import "../domain/sharedUrlState";
+import { systemCardHtml } from "../domain/shellSnapshot";
+import "../domain/navigation";
 import {
-  workspaceDb,
-  workspacePrefs,
   persistPrefs,
-  flushWorkspacePrefs,
   setShellRefreshHook,
   refreshShell,
   shell,
 } from "../domain/sharedWorkspaceStorage";
 import * as sharedRecordEditing from "../domain/sharedRecordEditing";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
-import { clearFileDerivedState as clearFileDerivedStateOf } from "../domain/fileDerivedState";
-import { closeFile, importFiles } from "../domain/sharedFileLifecycle";
-import {
-  fileTimers,
-  persistFile,
-  persistFileNow,
-  restoreWorkspace,
-} from "../domain/sharedWorkspacePersistence";
+import "../domain/fileDerivedState";
+import { importFiles } from "../domain/sharedFileLifecycle";
+import { persistFileNow, restoreWorkspace } from "../domain/sharedWorkspacePersistence";
 import { createAppLifecycle } from "../domain/appLifecycle";
-import { compareSearchIndex, lookupRecord } from "../domain/sharedCompareLibrary";
-import { recordOptionLabel } from "../domain/recordOptionLabel";
-import { loadStorePage, researcherDbRecords } from "../domain/sharedStoreRecords";
+import "../domain/sharedCompareLibrary";
+import "../domain/recordOptionLabel";
+import "../domain/sharedStoreRecords";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
-import { annotationsWorkspace } from "../domain/sharedAnnotations";
-import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
-import {
-  allRows,
-  corpusCache,
-  invalidateCorpusCache,
-  memoCorpus,
-  recordFingerprint,
-} from "../domain/corpusCache";
+import "../domain/sharedAnnotations";
+import "../state/jobsState";
+import { recordFingerprint } from "../domain/corpusCache";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
-import { refreshStores, responseCacheStore } from "../domain/sharedStores";
+import { refreshStores } from "../domain/sharedStores";
 import { canAccessPage, canUse, hasCapability, isResearcher } from "../domain/sharedSession";
-import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
+import "../domain/databaseCreationRequest";
 import { applyAppearance } from "../domain/sharedAppearance";
-import { relativeTimeLabel } from "../domain/relativeTimeLabel";
+import "../domain/relativeTimeLabel";
 
 pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 
 const state = createRuntimeState();
-
-function syncColorScheme() {
-  return syncColorSchemeCompat(state);
-}
-function applyUiTheme(theme) {
-  return applyUiThemeCompat(state, theme);
-}
 
 function setTranslationDictionary(locale, dictionary = {}, base = {}, info = {}) {
   return setTranslationDictionaryCompat(state, locale, dictionary, base, info);
@@ -307,54 +155,8 @@ function tr(key, fallback = "") {
 function trf(key, fallback, values = {}) {
   return trfCompat(state, key, fallback, values);
 }
-function translateDynamicUiValue(value) {
-  return translateDynamicUiValueCompat(state, value);
-}
-function translateLegacyDom(root = document.querySelector("#main")) {
-  return translateLegacyDomCompat(state, root);
-}
 
-const {
-  searchFacetRawValues,
-  searchFacetDisplay,
-  searchFacetMatches,
-  searchRowMatchesFacets,
-  searchRecordMatchesFacets,
-  searchFacetCountsFromRows,
-  searchFacetCountsFromRecords,
-  buildSearchFacets,
-  searchSuggestions,
-  searchFilterDescriptor,
-  dbSearchFilterDescriptors,
-  searchColumnOptions,
-  searchSimilarity,
-  searchMatchReasons,
-  rowMatchesListFilters,
-} = sharedSearchFacets;
-const {
-  uniqueWorkValues,
-  normalizedRecordAnnotation,
-  workInsightPieHtml,
-  flattenedMetricValues,
-  topRecordFieldShare,
-  topRecordFieldValues,
-  workInsightMetrics,
-  mixedWorkValueButton,
-  workMetadataControlSpec,
-  dashboardPieChart,
-  pieShareSeries,
-  dashboardMetricBody,
-  worksBiblioValue,
-  emptyWorksBiblio,
-  describeResearcherWork,
-  pager,
-  ragEvidencePreview,
-  storeCellHtml,
-  recordsListCell,
-  metadataSearchable,
-  searchRecordOptions,
-  ragGradeEvidencePayload,
-} = sharedRecordPresenters;
+const { ragGradeEvidencePayload } = sharedRecordPresenters;
 const {
   ensureProviderProfiles,
   providerProfiles,
@@ -362,121 +164,7 @@ const {
   defaultProviderProfile,
   providerDisplayName,
   refreshProviderStatuses,
-  getProviderProfilesForUi,
-  getProviderRequestConfigForUi,
-  saveProviderProfilesForUi,
-  addProviderProfileForUi,
-  removeProviderProfileForUi,
-  setDefaultProviderProfileForUi,
-  testProviderProfileForUi,
-  warmProviderProfileForUi,
-  getWarmOnStartForUi,
-  setWarmOnStartForUi,
-  getDefaultProviderProfileId,
-  getProviderStatusesForUi,
-  getProviderWarmupsForUi,
 } = providerProfilesService;
-const {
-  localSearchBaseRows,
-  searchScope,
-  searchLayout,
-  searchResultFromKey,
-  buildWorkspaceSearchResult,
-  buildDatabaseSearchResult,
-  sortDatabaseSearchResults,
-  getSearchWorkspaceSnapshot,
-  setSearchScope,
-  updateSearchQuery,
-  setSearchAdvancedOpen,
-  setSearchMethod,
-  setSearchStore,
-  setSearchMmrOptions,
-  setSearchLayout,
-  setSearchPage,
-  setSearchPageSize,
-  setSearchColumns,
-  setSearchSort,
-  toggleSearchFacet,
-  clearSearchFacetFilters,
-  clearSearchAllFilters,
-  addSearchAdvancedFilter,
-  removeSearchAdvancedFilter,
-  runSearchWorkspace,
-  searchResultAction,
-  setSearchResultSelected,
-  setSearchPageSelected,
-  clearSearchSelection,
-  runSearchSelectionAction,
-  getSearchShareHref,
-  restoreSearchViewFromHref,
-  safeDbSearchWhere,
-} = searchWorkspace;
-const {
-  clearRecordsListFilters,
-  clearRecordsListSelection,
-  copyRecordsListCitation,
-  copyRecordsListJson,
-  getRecordsListShareHref,
-  getRecordsListSnapshot,
-  openRecordsListRecord,
-  recordsListCommand,
-  resetRecordsListColumns,
-  selectRecordsListMatches,
-  setRecordsListColumns,
-  setRecordsListFilter,
-  setRecordsListPage,
-  setRecordsListPageSelected,
-  setRecordsListPageSize,
-  setRecordsListQuery,
-  setRecordsListRowSelected,
-  setRecordsListSort,
-  setRecordsListStore,
-  toggleRecordsListEvidence,
-} = sharedRecordsWorkspace;
-const {
-  recordWorkspaceRecord,
-  researcherCurrentRecord,
-  getRecordWorkspaceSnapshot,
-  getRecordObjectGraph,
-  getDerridaiNormativeModel,
-  recordWorkspaceNavigate,
-  setRecordWorkspaceFind,
-  toggleCurrentRecordEvidence,
-  toggleCurrentRecordReviewSelection,
-  copyCurrentRecordCitation,
-  copyCurrentRecordJson,
-  saveCurrentRecordChanges,
-  addCurrentRecordAnnotation,
-  replyToCurrentAnnotation,
-  removeCurrentRecordAnnotation,
-  currentRecordPrimaryAction,
-  searchCurrentRecordMetadata,
-  navigateRecordWorkspace,
-} = sharedRecordWorkspace;
-const {
-  describeAdminWork,
-  worksSnapshotBase,
-  prepareWorksWorkspace,
-  getWorksWorkspaceSnapshot,
-  setWorksSearch,
-  setWorksOverview,
-  setWorksView,
-  setWorksStore,
-  syncWork,
-  syncAllWorks,
-  searchWorkRecords,
-  searchWorkOverview,
-  openWorkMetadataEditorForVue,
-  openWorkMetadataLlmDialogForVue,
-  openWorkAnnotations,
-  populateAllWorksMetadata,
-  inspectWorksMixedField,
-  searchWorksInsight,
-  reviewFlaggedWork,
-  autoImproveWork,
-  removeEntireWork,
-  browseResearcherWork,
-} = worksWorkspace;
 createJobsWorkspace({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -502,12 +190,6 @@ createJobsWorkspace({
   updateDbStatusElements: (...args) => updateDbStatusElements(...args),
   updateOperationStackCount: (...args) => updateOperationStackCount(...args),
 });
-const {
-  openSharedAnnotationRecord,
-  dashboardTotals,
-  dashboardWorkspaceRecordTarget,
-  dashboardRecordPreview,
-} = dashboardData;
 const { warmupConfiguredLlm, checkHealth } = createAppLifecycle({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -525,31 +207,12 @@ const { warmupConfiguredLlm, checkHealth } = createAppLifecycle({
   updateSystemCard: (...args) => updateSystemCard(...args),
 });
 const {
-  pdfDisplayTitle,
-  loadedPdfPagesForRecord,
-  allLinkedRowsForLoadedPdf,
-  openPdfExplorerWorkspace,
-  openLoadedPdfPage,
-  linkedPdfRows,
-  linkPdfPage,
-  unlinkPdfLink,
-  unlinkAllPdfLinks,
-} = sharedPdfLinking;
-const {
   notifyOperationsChanged,
-  operationsBridge,
-  renderOperationsPanel,
   mountOperationsPanelHost,
   refreshOperationsPanelOnly,
-  wireCorpusBuildsHomeCard,
   refreshCorpusBuildsHomeCardOnly,
   gradeRagResponse,
-  removeRagJob,
-  clearFinishedRagJobs,
-  ragProgressPanelHtml,
-  wireRagProgressPanel,
   refreshRagProgressPanel,
-  renderCorpusBuildsHomeCard,
 } = createOperationsPanelBridge({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -572,38 +235,19 @@ const {
   trf: (...args) => trf(...args),
 });
 registerOperationHooks({ refreshOperationsPanelOnly, notifyVectorStoresChanged });
-const {
-  applyRecordChanges,
-  clearRecordUpdates,
-  clearAllUpdates,
-  historyVersionChanges,
-  restoreRecordHistoryVersion,
-} = sharedRecordEditing;
+const { applyRecordChanges } = sharedRecordEditing;
 const {
   reviewKey,
   reviewItemFromKey,
-  selectedReviewItems,
-  workspaceEvidenceKey,
-  dbEvidenceKey,
   selectedEvidenceEntries,
-  evidenceIsSelected,
   setEvidence,
-  workspaceDbEvidenceTarget,
-  workspaceEvidenceSelectionKey,
   toggleWorkspaceEvidence,
-  toggleDbEvidence,
   clearSelectedEvidence,
   selectedEvidencePayload,
-  setReviewSelected,
   clearReviewSelection,
 } = sharedEvidenceSelection;
 const {
-  applyOperationStackPosition,
-  setOperationDockMinimized,
   announceOperationDock,
-  operationDockCardStats,
-  wireOperationStackDrag,
-  progressStack,
   updateOperationStackCount,
   showOperationProgress,
   updateOperationProgress,
@@ -630,63 +274,56 @@ registerOperationProgress({
   update: updateOperationProgress,
   hide: hideOperationProgress,
 });
-const {
-  openJobDetails,
-  openJobResults,
-  openRagResult,
-  openReviewRecordPreview,
-  openLlmToolResult,
-  openLlmTaskLauncher,
-  openPdfDraftRecord,
-} = createJobDialogs({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  api: (...args) => api(...args),
-  applyPdfLinkMatch: (...args) => applyPdfLinkMatch(...args),
-  applyRecordChanges: (...args) => applyRecordChanges(...args),
-  canAccessPage: (...args) => canAccessPage(...args),
-  cancelBackgroundJob,
-  cloneAuditValue: (...args) => cloneAuditValue(...args),
-  formatTimestamp: (...args) => formatTimestamp(...args),
-  fullCitation: (...args) => fullCitation(...args),
-  isResearcher: (...args) => isResearcher(...args),
-  jobLabel: (...args) => jobLabel(...args),
-  jsonPretty: (...args) => jsonPretty(...args),
-  label: (...args) => label(...args),
-  navSnapshot: (...args) => navSnapshot(...args),
-  navigateTo: (...args) => navigateTo(...args),
-  openWorkMetadataProposalResult: (...args) => openWorkMetadataProposalResult(...args),
-  pages: (...args) => pages(...args),
-  persistFileNow: (...args) => persistFileNow(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  providerDisplayName: (...args) => providerDisplayName(...args),
-  providerProfile: (...args) => providerProfile(...args),
-  providerProfiles: (...args) => providerProfiles(...args),
-  providerRequestConfig: (...args) => providerRequestConfig(...args),
-  pruneClientJobState,
-  ragGradeHtml: (...args) => ragGradeHtml(...args),
-  recordFingerprint: (...args) => recordFingerprint(...args),
-  recordStores: (...args) => recordStores(...args),
-  refreshJobs,
-  refreshRagProgressPanel: (...args) => refreshRagProgressPanel(...args),
-  refreshStores: (...args) => refreshStores(...args),
-  renderView: (...args) => renderView(...args),
-  reviewDiffSides: (...args) => reviewDiffSides(...args),
-  reviewItemFromKey: (...args) => reviewItemFromKey(...args),
-  reviewKey: (...args) => reviewKey(...args),
-  sanitizeResearchGeneration: (...args) => sanitizeResearchGeneration(...args),
-  shell: (...args) => shell(...args),
-  shellRefreshHook: refreshShell,
-  showAppModal: (...args) => showAppModal(...args),
-  startJobPolling,
-  syncJobProgressToasts,
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-  uid: (...args) => uid(...args),
-  upsertRecordPayload: (...args) => upsertRecordPayload(...args),
-  getUrlSyncHook: () => getUrlSyncHook(),
-  warmupProviderProfile: (...args) => warmupProviderProfile(...args),
-});
+const { openJobDetails, openJobResults, openLlmTaskLauncher, openPdfDraftRecord } =
+  createJobDialogs({
+    state,
+    // Wrapped so each helper is looked up when it is called: several are declared later in this module.
+    api: (...args) => api(...args),
+    applyPdfLinkMatch: (...args) => applyPdfLinkMatch(...args),
+    applyRecordChanges: (...args) => applyRecordChanges(...args),
+    canAccessPage: (...args) => canAccessPage(...args),
+    cancelBackgroundJob,
+    cloneAuditValue: (...args) => cloneAuditValue(...args),
+    formatTimestamp: (...args) => formatTimestamp(...args),
+    fullCitation: (...args) => fullCitation(...args),
+    isResearcher: (...args) => isResearcher(...args),
+    jobLabel: (...args) => jobLabel(...args),
+    jsonPretty: (...args) => jsonPretty(...args),
+    label: (...args) => label(...args),
+    navSnapshot: (...args) => navSnapshot(...args),
+    navigateTo: (...args) => navigateTo(...args),
+    openWorkMetadataProposalResult: (...args) => openWorkMetadataProposalResult(...args),
+    pages: (...args) => pages(...args),
+    persistFileNow: (...args) => persistFileNow(...args),
+    persistPrefs: (...args) => persistPrefs(...args),
+    providerDisplayName: (...args) => providerDisplayName(...args),
+    providerProfile: (...args) => providerProfile(...args),
+    providerProfiles: (...args) => providerProfiles(...args),
+    providerRequestConfig: (...args) => providerRequestConfig(...args),
+    pruneClientJobState,
+    ragGradeHtml: (...args) => ragGradeHtml(...args),
+    recordFingerprint: (...args) => recordFingerprint(...args),
+    recordStores: (...args) => recordStores(...args),
+    refreshJobs,
+    refreshRagProgressPanel: (...args) => refreshRagProgressPanel(...args),
+    refreshStores: (...args) => refreshStores(...args),
+    renderView: (...args) => renderView(...args),
+    reviewDiffSides: (...args) => reviewDiffSides(...args),
+    reviewItemFromKey: (...args) => reviewItemFromKey(...args),
+    reviewKey: (...args) => reviewKey(...args),
+    sanitizeResearchGeneration: (...args) => sanitizeResearchGeneration(...args),
+    shell: (...args) => shell(...args),
+    shellRefreshHook: refreshShell,
+    showAppModal: (...args) => showAppModal(...args),
+    startJobPolling,
+    syncJobProgressToasts,
+    tr: (...args) => tr(...args),
+    trf: (...args) => trf(...args),
+    uid: (...args) => uid(...args),
+    upsertRecordPayload: (...args) => upsertRecordPayload(...args),
+    getUrlSyncHook: () => getUrlSyncHook(),
+    warmupProviderProfile: (...args) => warmupProviderProfile(...args),
+  });
 registerPdfLlmTaskHooks({ openLlmTaskLauncher, openPdfDraftRecord });
 registerOperationsPanelHooks({ mountOperationsPanelHost, openJobResults, gradeRagResponse });
 registerVectorStoreActions({ openCollectionCreationWizard, triggerUpsertQueue });
@@ -699,29 +336,17 @@ registerTouchupActions({
   touchupApplyResults,
 });
 const {
-  renderPdfCanvas,
-  extractPdfPageBrowser,
-  extractPdfApi,
-  extractPdfPageSmart,
-  extractPdfAllSmart,
-} = pdfExplorerRenderer;
-const {
-  researchConfigForUi,
   getResearchWorkspaceSnapshot,
   updateResearchConfig,
   removeResearchEvidence,
   clearResearchEvidence,
   discoverResearchModels,
   refreshResearchJobs,
-  getResearchJob,
   cancelResearchJob,
   deleteResearchJob,
-  generationFromProfile,
   startResearchRun,
   gradeResearchJob,
   prepareResearchRerun,
-  rememberRagPrompt,
-  rememberRagRun,
   prepareRagRerun,
 } = createResearchWorkspace({
   state,
@@ -768,30 +393,10 @@ registerResearchActions({
   prepareResearchRerun,
 });
 const {
-  serverAnnotationItems,
-  refreshServerAnnotations,
-  allAnnotations,
-  recentAnnotations,
-  annotationTimeline,
-  getAnnotationsWorkspaceSnapshot,
-  annotationWorkspaceItem,
-  loadAnnotationsWorkspace,
-  setAnnotationsWorkspaceQuery,
-  setAnnotationsWorkspaceView,
-  openAnnotationsWorkspaceRecord,
-  openAnnotationsWorkspaceWork,
-  removeAnnotationsWorkspaceItem,
-} = annotationsWorkspace;
-const {
   jobLabel,
   jobProviderSummary,
   jobElapsedSeconds,
   humanDuration,
-  fact,
-  decisionLabel,
-  operationIcon,
-  operationResultKind,
-  operationSubtitle,
   jobProgressText,
   operationDetailPairs,
   operationViewModel,
@@ -803,20 +408,12 @@ function updateSystemCard() {
 }
 
 const uid = () => crypto.randomUUID();
-const clearFileDerivedState = (fileId) => clearFileDerivedStateOf(state, fileId);
 
 // Corpus-derived data is read far more often than it changes. Keep one flattened
 // index and memoized derived values instead of rebuilding thousands of row
 // wrapper objects on every render/chart/filter pass. Any persisted corpus edit
 // invalidates the cache synchronously.
-const {
-  openMixedWorkValuesDialog,
-  openWorkMetadataEditor,
-  openWorkMetadataLlmDialog,
-  openWorkMetadataProposalResult,
-  openRemoveWorkModal,
-  openSeparateWorksModal,
-} = workDialogs;
+const { openWorkMetadataProposalResult } = workDialogs;
 function setUserContext(user) {
   const priorId = state.userContext?.id;
   state.userContext = user || null;
@@ -829,23 +426,7 @@ function setUserContext(user) {
   void refreshResearcherContentPolicy();
 }
 
-const {
-  openMergeDialog,
-  openBulkFieldEditor,
-  openOcrCleanupDialog,
-  openEditor,
-  openStoreRecordEditor,
-  openRecordHistoryBrowser,
-  openUpsertQueue,
-} = recordDialogs;
-
-const idbGetAll = workspaceDb.getAll;
-const idbGet = workspaceDb.get;
-const idbPut = workspaceDb.put;
-const idbDelete = workspaceDb.remove;
-function serializableFile(file) {
-  return serializableRecordsFile(file);
-}
+const { openUpsertQueue } = recordDialogs;
 
 // Names of the facts shown for an operation (panel rows and the details dialog), translated at render time.
 
@@ -853,10 +434,6 @@ function serializableFile(file) {
 // The panel itself is a Vue component (components/OperationsPanel.vue). The runtime still owns
 // job state, the dock, toasts, and the details/results dialogs, so the panel reads a plain view
 // model from here and calls back into the existing functions.
-
-function relativeTime(value) {
-  return relativeTimeLabel(value, Date.now(), { tr, trf, locale: state.translations?.locale });
-}
 
 // 0.36.10 native Search bridge. SearchView owns presentation while the runtime
 // continues to own browser-local corpus state, Chroma transport, evidence
@@ -883,12 +460,6 @@ function ragGradeHtml(grade = {}) {
     ["Unsupported or risky claims", normalized.unsupported_or_risky_claims],
   ];
   return `<div class="rag-grade-content"><div class="rag-grade-scores">${scoreKeys.map(([key, name]) => `<div><span>${esc(name)}</span><strong>${esc(normalized.score(key))}</strong><small>/10</small></div>`).join("")}</div><section><b>Summary</b><p>${esc(normalized.summary || "No summary returned.")}</p></section>${sections.map(([name, items]) => `<section><b>${esc(name)}</b><ul>${items.map((item) => `<li>${esc(item)}</li>`).join("") || "<li>None reported.</li>"}</ul></section>`).join("")}</div>`;
-}
-
-function recordOptionForKey(key) {
-  const item = lookupRecord(key);
-  if (!item) return null;
-  return { value: key, label: recordOptionLabel(item.file, item.record, item.index) };
 }
 
 const vectorCollectionBridge = createVectorCollectionBridge({
@@ -1085,35 +656,10 @@ function touchupApplyResults(items, results, approvals, all = false, reviewOnly 
   return { appliedFields, reviewedRecords };
 }
 
-function triggerBulkEdit() {
-  return canUse("editLocalRecords")
-    ? openBulkFieldEditor()
-    : toast(tr("runtime.toast.cannot_edit_records"), { tone: "warning" });
-}
-function triggerOcrClean() {
-  return canUse("editLocalRecords")
-    ? openOcrCleanupDialog()
-    : toast(tr("runtime.toast.cannot_edit_records"), { tone: "warning" });
-}
-function triggerReviewFlagged() {
-  return canUse("editLocalRecords")
-    ? openTouchup(needsReviewItems())
-    : toast(tr("runtime.toast.cannot_review_records"), { tone: "warning" });
-}
-function triggerAutoImproveFlagged() {
-  return canUse("editLocalRecords")
-    ? openTouchup(needsReviewItems(), "auto")
-    : toast(tr("runtime.toast.cannot_modify_records"), { tone: "warning" });
-}
 function triggerUpsertQueue() {
   return canUse("manageCorpus")
     ? openUpsertQueue()
     : toast(tr("runtime.toast.cannot_manage_dbs"), { tone: "warning" });
-}
-function triggerEdit() {
-  return canUse("editLocalRecords")
-    ? openEditor()
-    : toast(tr("runtime.toast.cannot_edit_records"), { tone: "warning" });
 }
 
 let chartTooltip = null;
