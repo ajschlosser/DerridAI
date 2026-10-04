@@ -101,23 +101,29 @@ def test_bulk_metadata_patch_supports_selection_and_all_records(tmp_path:Path):
     assert all(row.get('language')=='en' for row in repo.load_records(build['build_id']))
 
 
-def test_worker_merge_preserves_human_owned_fields_and_discards_frozen_record_results():
-    """Merging a worker's snapshot into the live record never clobbers human edits.
+def test_worker_merge_preserves_human_owned_fields_without_freezing_reviewed_text():
+    """Fresh enrichment may use reviewed text while human assertions remain protected.
 
-    Case 1: the human set speaker="Human"; the worker proposes speaker="Model" and
-    target="Kant". Result keeps "Human" and accepts the new target.
-    Case 2: the record's text was hand-edited ("__text__" touched), so the whole worker
-    result is discarded (its stage becomes "skipped") and the human target stays.
+    A matching worker snapshot may merge model-owned fields after a text correction;
+    source/revision matching rejects stale snapshots before this helper runs. Completing
+    record review still freezes the whole record against late automatic enrichment.
     """
     live={'record_id':'r1','text':'reviewed','speaker':'Human','human_touched_fields':['speaker'],'metadata_field_status':{'speaker':{'status':'human_confirmed'}},'metadata_stage_status':{},'metadata_execution_ledger':{}}
     worker={'record_id':'r1','text':'reviewed','speaker':'Model','target':'Kant','metadata_field_status':{'speaker':{'status':'model_inferred'},'target':{'status':'model_inferred'}},'metadata_stage_status':{'discourse':'complete'},'metadata_execution_ledger':{'discourse':{'state':'complete'}}}
     merged=cb._merge_enrichment_snapshot(live,worker)
     assert merged['speaker']=='Human'
     assert merged['target']=='Kant'
-    frozen={**live,'human_touched_fields':['__text__'],'target':'Human target'}
-    merged2=cb._merge_enrichment_snapshot(frozen,worker)
-    assert merged2['target']=='Human target'
-    assert merged2['metadata_stage_status']['discourse']=='skipped'
+
+    reviewed_text={**live,'human_touched_fields':['__text__'],'target':'Human target'}
+    merged2=cb._merge_enrichment_snapshot(reviewed_text,worker)
+    assert merged2['speaker']=='Human'
+    assert merged2['target']=='Kant'
+    assert merged2['metadata_stage_status']['discourse']=='complete'
+
+    reviewed_record={**live,'human_touched_fields':['__review__'],'target':'Human target'}
+    merged3=cb._merge_enrichment_snapshot(reviewed_record,worker)
+    assert merged3['target']=='Human target'
+    assert merged3['metadata_stage_status']['discourse']=='skipped'
 
 
 
