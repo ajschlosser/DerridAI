@@ -38,3 +38,8 @@ export async function refreshStores() {
   if (!state.activeStore && corpus.length) state.activeStore = corpus[0].name;
   return state.stores;
 }
+
+/** The vector store that holds the Response Library cache, or null when it is not listed. */
+export function responseCacheStore() {
+  return state.stores.find(isResponseCacheStore) || null;
+}

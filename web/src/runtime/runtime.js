@@ -103,7 +103,6 @@ import { normalizeResearcherToken } from "../domain/researcherContentFilter";
 import { filterOpsForField } from "../domain/searchFilterSchema";
 import {
   compactRecordHistory,
-  isResponseCacheStore,
   pdfLinks,
   ragEvidenceRecordPayload,
   recordPayload,
@@ -212,7 +211,8 @@ import {
   maybeDesktopNotify,
   syncJobProgressToasts,
 } from "../domain/jobsActions";
-import { createDashboardRenderer } from "../domain/dashboardRenderer";
+import { registerOperationsPanelHooks } from "../domain/operationsPanelHooks";
+import { dashboardData } from "../domain/sharedDashboardData";
 import { pdfExplorerRenderer } from "../domain/sharedPdfExplorerRenderer";
 import {
   applyPdfLinkMatch,
@@ -276,7 +276,7 @@ import {
 } from "../domain/corpusCache";
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
-import { refreshStores } from "../domain/sharedStores";
+import { refreshStores, responseCacheStore } from "../domain/sharedStores";
 import { canAccessPage, canUse, hasCapability, isResearcher } from "../domain/sharedSession";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { applyAppearance } from "../domain/sharedAppearance";
@@ -502,50 +502,7 @@ const {
   dashboardTotals,
   dashboardWorkspaceRecordTarget,
   dashboardRecordPreview,
-} = createDashboardRenderer({
-  state,
-  openAnnotationsWorkspaceRecord: (...args) => openAnnotationsWorkspaceRecord(...args),
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  allRows: (...args) => allRows(...args),
-  api: (...args) => api(...args),
-  applyUiTheme: (...args) => applyUiTheme(...args),
-  canAccessPage: (...args) => canAccessPage(...args),
-  compactNumber: (...args) => compactNumber(...args),
-  dashboardMetricBody: (...args) => dashboardMetricBody(...args),
-  dbSearchWhere: (...args) => dbSearchWhere(...args),
-  decorateDisabledControls: (...args) => decorateDisabledControls(...args),
-  defaultProviderProfile: (...args) => defaultProviderProfile(...args),
-  formatTimestamp: (...args) => formatTimestamp(...args),
-  hasCapability: (...args) => hasCapability(...args),
-  isResearcher: (...args) => isResearcher(...args),
-  label: (...args) => label(...args),
-  memoCorpus: (...args) => memoCorpus(...args),
-  mountOperationsPanelHost: (...args) => mountOperationsPanelHost(...args),
-  navigateTo: (...args) => navigateTo(...args),
-  openDatabaseCreationFromResearch,
-  persistPrefs: (...args) => persistPrefs(...args),
-  pieShareSeries: (...args) => pieShareSeries(...args),
-  providerDisplayName: (...args) => providerDisplayName(...args),
-  recentAnnotations: (...args) => recentAnnotations(...args),
-  recentAuditChanges: (...args) => recentAuditChanges(...args),
-  recordStores: (...args) => recordStores(...args),
-  refreshServerAnnotations: (...args) => refreshServerAnnotations(...args),
-  refreshStoreWorks: (...args) => refreshStoreWorks(...args),
-  refreshStores: (...args) => refreshStores(...args),
-  relativeTime: (...args) => relativeTime(...args),
-  renderCorpusBuildsHomeCard: (...args) => renderCorpusBuildsHomeCard(...args),
-  renderOperationsPanel: (...args) => renderOperationsPanel(...args),
-  researcherDbRecords: (...args) => researcherDbRecords(...args),
-  responseCacheStore: (...args) => responseCacheStore(...args),
-  searchByMetadata: (...args) => searchByMetadata(...args),
-  syncUrl: (...args) => syncUrl(...args),
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-  uid: (...args) => uid(...args),
-  wireCorpusBuildsHomeCard: (...args) => wireCorpusBuildsHomeCard(...args),
-  workIndex: (...args) => workIndex(...args),
-  workInsightMetrics: (...args) => workInsightMetrics(...args),
-});
+} = dashboardData;
 const { warmupConfiguredLlm, checkHealth } = createAppLifecycle({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -726,6 +683,7 @@ const {
   warmupProviderProfile: (...args) => warmupProviderProfile(...args),
 });
 registerPdfLlmTaskHooks({ openLlmTaskLauncher, openPdfDraftRecord });
+registerOperationsPanelHooks({ mountOperationsPanelHost, openJobResults });
 const {
   renderPdfCanvas,
   extractPdfPageBrowser,
@@ -956,10 +914,6 @@ const idbPut = workspaceDb.put;
 const idbDelete = workspaceDb.remove;
 function serializableFile(file) {
   return serializableRecordsFile(file);
-}
-
-function responseCacheStore() {
-  return state.stores.find(isResponseCacheStore) || null;
 }
 
 // Names of the facts shown for an operation (panel rows and the details dialog), translated at render time.
