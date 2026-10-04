@@ -193,10 +193,7 @@ export function barChart(
   const maximumValue = Math.max(1, ...series.map((item) => Number(item.value) || 0));
   return `<section class="dash-chart dash-bar-chart"><div class="dash-chart-head"><div class="dash-chart-title">${esc(title)}</div><div class="chart-legend"><i></i><span>${esc(resolvedValueLabel)}</span></div></div><div class="dash-bars">${series
     .map((item) => {
-      const percentage = Math.max(
-        2,
-        Math.round((Number(item.value || 0) / maximumValue) * 100),
-      );
+      const percentage = Math.max(2, Math.round((Number(item.value || 0) / maximumValue) * 100));
       return `<div class="dash-bar-row" data-chart-tip="${esc(`${item.key} · ${Number(item.value || 0).toLocaleString()} ${resolvedValueLabel.toLowerCase()} · ${Number(item.count || 0).toLocaleString()} ${recordsLabel}`)}"><div class="dash-bar-label" title="${esc(item.key)}"><b>${esc(item.key)}</b><span>${Number(item.count || 0).toLocaleString()} ${esc(recordsLabel)}</span></div><div class="dash-bar-track"><i style="width:${percentage}%"></i></div><strong>${Number(item.value || 0).toLocaleString()}</strong></div>`;
     })
     .join("")}</div></section>`;
