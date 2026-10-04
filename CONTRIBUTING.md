@@ -40,6 +40,17 @@ Do not start in a compatibility monolith merely because a symbol is re-exported 
 
 CI is the compatibility baseline: Python 3.12, Node 22, npm via the checked-in `web/package-lock.json`, Chromium for Playwright, and Docker Compose for the full local stack. Using newer runtimes can expose dependency behavior that CI does not exercise; reproduce a CI failure on the CI versions before treating it as an application defect.
 
+Before installing dependencies, verify that the expected tools resolve from the shell you will use for development:
+
+```bash
+python3.12 --version
+node --version
+npm --version
+docker compose version
+```
+
+If `python3.12` is named differently on your platform, use the equivalent Python 3.12 executable consistently when creating the virtual environment.
+
 ## Bootstrap a clean checkout
 
 From the repository root:
@@ -63,6 +74,17 @@ On Windows, activate the virtual environment with the shell-appropriate command 
 `api/requirements-dev.txt` already includes runtime requirements, pytest, pytest-xdist, Ruff, and mypy. Do not install a second hand-maintained package list on top of it.
 
 Backend tests need no storage environment setup. `tests/conftest.py` redirects application storage to temporary directories while preserving values deliberately supplied by CI. Do **not** globally export `CHROMA_DATA_ROOT`, `AUTH_DB_PATH`, `SYSTEM_DB_PATH`, or `CHROMA_PATH`: `docker-compose.yml` interpolates those names too, and a test-only host path can make the next container startup fail.
+
+## Find the owning change surface
+
+Start at the narrowest README for the area you are changing. The repository is intentionally layered; following the local ownership map is usually faster than searching outward from a large compatibility module.
+
+- **Backend routes, reads, persistence, or domain logic:** start with [api/README.md](api/README.md) and [api/app/README.md](api/app/README.md). Put transport in `routers/`, reusable scholarly reads in `celf_queries/`, and domain behavior in the focused owning module.
+- **Corpus Builder:** read both [the frontend feature map](web/src/features/corpus-builder/README.md) and [the component map](web/src/components/corpus-builder/README.md), then use [tests/README.md](tests/README.md) to locate topology, enrichment, review, or publication coverage. Do not add new domain behavior to `PdfCorpusBuilder.vue` or `corpus_builder.py` merely because those files still coordinate compatibility paths.
+- **Frontend application work:** start with [web/README.md](web/README.md) and [web/src/README.md](web/src/README.md). Framework-light transformations belong in `domain/`; Vue lifecycle/state coordination belongs in composables/stores; network effects belong in `api/` or `realtime/`.
+- **Research and pipelines:** use [api/app/pipelines/README.md](api/app/pipelines/README.md), [web/src/components/pipelines/README.md](web/src/components/pipelines/README.md), and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Retrieval scores are derived diagnostics; source/evidence/support binding is a separate deterministic authority concern.
+- **Tests:** use [tests/README.md](tests/README.md) for pytest and [web/tests/README.md](web/tests/README.md) for Vitest/Playwright ownership. Prefer the smallest test file that owns the behavior rather than adding a new release-numbered test.
+- **cELF, requirements, or provenance semantics:** read [SPECIFICATION.md](SPECIFICATION.md), [docs/requirements/README.md](docs/requirements/README.md), and [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) before changing object meanings or traceability relationships.
 
 ## Run the application
 
