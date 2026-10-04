@@ -71,6 +71,12 @@ const rowsByStage = computed(() => {
         properties && typeof properties === "object" && !Array.isArray(properties)
           ? Object.entries(properties as Record<string, Record<string, unknown>>)
           : [];
+      if (
+        Object.prototype.hasOwnProperty.call(stage.config || {}, "optional") &&
+        !entries.some(([key]) => key === "optional")
+      ) {
+        entries.push(["optional", { type: "boolean" }]);
+      }
       return {
         stage,
         strategy,
@@ -98,6 +104,7 @@ function seedValue(row: ConfigRow): unknown {
     runOverrides: props.modelValue,
   }).value;
   if (effective !== undefined) return effective;
+  if (Object.prototype.hasOwnProperty.call(row.rule, "default")) return row.rule.default;
   if (row.rule.type === "boolean") return false;
   const values = enumValues(row.rule);
   if (values?.length) return values[0];
@@ -177,9 +184,9 @@ function sourceLabel(source: "pipeline" | "settings" | "run") {
       }}
     </div>
 
+    <template v-else>
     <fieldset
       v-for="group in rowsByStage"
-      v-else
       :key="group.stage.id"
       class="pipeline-override-stage"
     >
@@ -288,6 +295,7 @@ function sourceLabel(source: "pipeline" | "settings" | "run") {
         </div>
       </div>
     </fieldset>
+    </template>
   </div>
 </template>
 
