@@ -292,6 +292,48 @@ def test_text_edit_during_active_enrichment_forces_fresh_llm_pass(tmp_path: Path
     assert repo.get_build(build["build_id"])["metadata_priority_record_ids"][0] == "r1"
 
 
+def test_metadata_edit_during_active_enrichment_forces_fresh_llm_pass(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """A human field decision cannot strand the rest of a queued Record."""
+    repo, build = install_review_build(
+        tmp_path,
+        {
+            "text": "Queued text.",
+            "metadata_enrichment_state": "queued",
+            "metadata_stage_status": {
+                "discourse": "queued",
+                "quotation": "queued",
+                "indexing": "queued",
+            },
+        },
+    )
+    active = repo.get_build(build["build_id"])
+    active.update(
+        {
+            "status": "running",
+            "stage": "enriching",
+            "metadata_priority_record_ids": [],
+        }
+    )
+    repo.save_build(active)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", lambda _build_id: None)
+
+    updated = manager.patch_metadata(
+        build["build_id"],
+        "r1",
+        {"speaker": "Reviewer supplied speaker"},
+        expected_revision=1,
+    )
+
+    assert updated["speaker"] == "Reviewer supplied speaker"
+    assert updated["metadata_requeue_requested"] is True
+    assert updated["metadata_enrichment_state"] == "stale"
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"][0] == "r1"
+
+
 def test_dismissing_touchup_proposal_preserves_source_and_reviewed_text(tmp_path: Path):
     repo, build = install_review_build(
         tmp_path,
