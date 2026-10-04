@@ -152,9 +152,13 @@ def _merge_enrichment_snapshot(live: dict[str, Any], worker: dict[str, Any], all
     migrate_record_assertions(worker)
     merged = json.loads(json.dumps(live))
     touched_markers = set(str(v) for v in (live.get("human_touched_fields") or []))
-    text_was_touched = "__text__" in touched_markers
     record_frozen_by_review = "__review__" in touched_markers
-    automatic_merge_blocked = (text_was_touched or record_frozen_by_review) and not live.get("metadata_requeue_requested")
+    # A text edit invalidates stale worker snapshots via _record_source_matches, but
+    # it must not permanently freeze automatic enrichment. A fresh worker that was
+    # started from the reviewed text may merge normally; human-owned assertions are
+    # still protected field-by-field below. Completing record review remains the
+    # explicit whole-record freeze.
+    automatic_merge_blocked = record_frozen_by_review and not live.get("metadata_requeue_requested")
     merge_fields = (
         set(allowed_fields)
         if allowed_fields is not None
@@ -191,7 +195,7 @@ def _merge_enrichment_snapshot(live: dict[str, Any], worker: dict[str, Any], all
     if automatic_merge_blocked:
         status = merged.setdefault("metadata_stage_status", {})
         ledger = merged.setdefault("metadata_execution_ledger", {})
-        reason = "Human edited reviewed text before automatic enrichment settled." if text_was_touched else "Human completed record review before automatic enrichment settled."
+        reason = "Human completed record review before automatic enrichment settled."
         if not live.get("metadata_requeue_requested"):
             for family in ("discourse", "quotation", "indexing"):
                 status[family] = "skipped"
