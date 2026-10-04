@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 ProviderId = Literal["gutenberg", "wikisource"]
 RoleId = Literal["author", "coauthor", "translator", "editor", "contributor", "about_author"]
@@ -54,10 +54,30 @@ class CaptureOptionsBody(BaseModel):
 
 
 class CaptureCreate(BaseModel):
-    wikidata_qid: str = Field(pattern=r"^Q[1-9]\d{0,11}$")
+    # New clients send a provider-neutral identity. wikidata_qid remains a
+    # compatibility field for existing API clients and stored tests.
+    identity_id: str | None = Field(default=None, min_length=3, max_length=200)
+    wikidata_qid: str | None = Field(default=None, pattern=r"^Q[1-9]\d{0,11}$")
     options: CaptureOptionsBody = Field(default_factory=CaptureOptionsBody)
     start_discovery: bool = True
     ui_language: str = Field(default="en", pattern=r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
+
+    @model_validator(mode="after")
+    def _identity(self) -> "CaptureCreate":
+        if self.identity_id is None and self.wikidata_qid:
+            self.identity_id = f"wikidata:{self.wikidata_qid}"
+        if not self.identity_id:
+            raise ValueError("Choose an author identity.")
+        if self.identity_id.startswith("wikidata:"):
+            qid = self.identity_id.split(":", 1)[1]
+            if not re.fullmatch(r"Q[1-9]\d{0,11}", qid):
+                raise ValueError("Invalid Wikidata author identity.")
+            if self.wikidata_qid and self.wikidata_qid != qid:
+                raise ValueError("Author identity and Wikidata QID disagree.")
+            self.wikidata_qid = qid
+        elif not re.fullmatch(r"gutenberg:\d+:\d+", self.identity_id):
+            raise ValueError("Unsupported author identity.")
+        return self
 
 
 class CaptureSelectionPatch(BaseModel):
