@@ -17,6 +17,7 @@
  */
 
 import { allRows } from "./corpusCache";
+import { jobsState } from "../state/jobsState";
 import { getNavItems } from "./navItems";
 import { describeRecordsFile } from "./recordsFiles";
 import { canUse } from "./sharedSession";
@@ -129,7 +130,7 @@ export function getShellSnapshot() {
     0,
   );
   const cacheCount = Number(responseCacheStore()?.count || 0);
-  const activeJobs = state.jobs.filter((job: Any) =>
+  const activeJobs = jobsState.jobs.filter((job: Any) =>
     ["queued", "running", "cancelling"].includes(job.status),
   ).length;
   return {
