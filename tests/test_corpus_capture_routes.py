@@ -156,6 +156,30 @@ def test_request_schemas_reject_invalid_identity_and_languages():
         CaptureSelectionPatch(candidate_ids=["x"])
 
 
+def test_create_capture_accepts_server_resolved_local_gutenberg_identity(tmp_path, monkeypatch):
+    from app import gutenberg_catalogue
+
+    store, service, jobs = _jobs(tmp_path, [])
+    monkeypatch.setattr(routes, "capture_store", store)
+    monkeypatch.setattr(routes, "capture_service", service)
+    monkeypatch.setattr(routes, "capture_jobs", jobs)
+    identity = "gutenberg:1844:1900:friedrich%20wilhelm%20nietzsche"
+    local_author = author(identity_id=identity, wikidata_qid=None)
+    monkeypatch.setattr(
+        gutenberg_catalogue.gutenberg_offline,
+        "resolve_author",
+        lambda value: local_author if value == identity else (_ for _ in ()).throw(ValueError(value)),
+    )
+    body = CaptureCreate(
+        wikidata_qid=identity,
+        options={"providers": ["gutenberg"]},
+        start_discovery=False,
+    )
+    created = routes.create_capture(body, SimpleNamespace())
+    assert created["author"]["identity_id"] == identity
+    assert created["author"]["wikidata_qid"] is None
+
+
 def _jobs(tmp_path, items):
     store = CaptureStore(tmp_path / "jobs.sqlite")
     service = CorpusCaptureService(
