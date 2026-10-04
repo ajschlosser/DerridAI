@@ -152,7 +152,7 @@ def _whisperx_device() -> str:
         if bool(torch.cuda.is_available()):
             return "cuda"
     except Exception:
-        pass
+        return "cpu"
     return "cpu"
 
 
