@@ -5140,11 +5140,15 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
 
             recovery_ids = [str(row.get("record_id") or "") for row in recovery_rows]
             promoted_ids: list[str] = []
+            promoted_family_count = 0
 
             def promote_due_recoveries(rows: list[dict[str, Any]]) -> None:
+                nonlocal promoted_family_count
                 for row in rows:
-                    if queue_due_recoveries(row):
+                    due = queue_due_recoveries(row)
+                    if due:
                         promoted_ids.append(str(row.get("record_id") or ""))
+                        promoted_family_count += len(due)
 
             self.repo.reconcile_records(
                 build_id,
@@ -5160,7 +5164,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     metadata_recovery_pending=max(
                         0,
                         sum(len(pending_recovery_families(row)) for row in recovery_rows)
-                        - len(promoted_ids),
+                        - promoted_family_count,
                     ),
                     metadata_recovery_wait_seconds=0.0,
                     metadata_last_progress_at=iso_now(),
