@@ -29,7 +29,7 @@ This is the authoritative resume point for the revised Pipeline Studio candidate
 | Generic named-port execution foundation                 | Complete | `0eee61b7`, `d2e52720`; repeated stages, branching, fan-in, fallbacks, empty-branch skips, safe telemetry                 |
 | Typed metadata artifacts and computational traits       | Complete | Explicit candidate/hypothesis/inference-request/proposal/embedding types; required/produced port traits; run-input traits |
 | Consumer terminal guarantees                            | Complete | Compile-time type/trait checks; run-time terminal-output enforcement; `any` cannot satisfy a concrete final contract      |
-| Historical enrichment migration to generic executor     | Pending  | Fake-provider `@1`/`@2` characterization exists; production session migration and full domain parity remain               |
+| Historical enrichment migration to generic executor     | Complete | `9381c191`; generic scheduling with historical provider/ledger/ownership/concurrency parity                               |
 | Safe parallel scheduling                                | Pending  | Executor is serial; capability declarations and concurrency tests required                                                |
 | Baseline benchmark and instrumentation                  | Pending  | Original baseline: `94ca23d9`; no real-provider benchmark run                                                             |
 | Candidate packet, collection, aggregation, invalidation | Pending  | Reuse existing memory, semantic identity, NLP/DI and evidence contracts                                                   |
@@ -47,7 +47,7 @@ This is the authoritative resume point for the revised Pipeline Studio candidate
 - Empty trait fields are omitted from serialization. Existing catalog bytes and built-in identities remain unchanged. New types/traits are available to server contracts; no new production strategy or UI control is registered yet.
 - Handlers still validate payloads and evidence. Declared traits are not a substitute for checking actual current-record support at the domain boundary.
 
-## Validation
+## Earlier validation: artifact traits checkpoint
 
 - 93 focused backend tests passed: graph execution, wiring/analysis, contracts, workflow semantics, and catalog fixture.
 - Ruff passed for changed Python files; targeted mypy passed for the five changed pipeline modules.
@@ -58,17 +58,29 @@ This is the authoritative resume point for the revised Pipeline Studio candidate
 
 ## Integration
 
-PR #508 merged into master at `51b481cf`; that master was merged into this branch before the trait changes. Its Research configuration override contracts are retained. No Research settings or authority behavior was changed by this work.
+PR #508 merged into master at `51b481cf`; that master was merged into this branch before the trait changes. The migration checkpoint also incorporates master `caad9c43`, including PR #512. Its Research configuration override contracts are retained. No Research settings or authority behavior was changed by this work.
 
 ## Next action
 
 Add explicit concurrency capabilities and safe parallel scheduling to the generic executor, preserving definition order for merges/traces and provider capacity controls. Then construct the candidate packet and collection stages; keep routing observe-only until current-record support and authority invariants pass. The historical compiler still accepts its bounded provider graph; arbitrary adaptive graph compilation awaits registered domain handlers.
 
-## Historical executor migration checkpoint
+## Historical executor migration checkpoint (`9381c191`)
 
 - Metadata provider scheduling now follows the generic executor's resolved ports and selected edges. The assigned pipeline, built-in versions, attempt budgets and schema-derived tasks remain unchanged.
 - One executor snapshot is compiled per session. Each call supplies server-owned task context; sibling calls share only locked telemetry. Call-local stage paths and existing execution-ledger linkage are retained.
 - `StageFailure` lets a server handler declare a coded failure edge without leaking private exception text. Metadata retains its historical unavailable/timeout/error classification and original caller error aggregation.
 - Identity/trace persistence remains on the existing session surface. Reconciliation, evidence validation and canonical authority handling are unchanged. No adaptive branches or parallel graph scheduling are enabled.
 - Before migration: 169 passed, 6 skipped. After migration: the same suite passed; expanded parity coverage passed 266 tests with 6 existing skips. Tests also prove the legacy provider loop is unused, compilation happens once per session, and cancellation does not invoke fallback.
-- Ruff and targeted mypy passed. Pipeline catalog check passed. Full preflight results for this checkpoint are recorded below after completion.
+- Ruff and targeted mypy passed. Full backend mypy passed for 265 source files. Schema/catalog checks passed (6 tests) after moving dependencies into the workspace Python environment; the first preflight generated-artifact gate had lost the target dependency paths.
+- Full backend regression: 2340 passed, 28 skipped, 4 failed. Full frontend lint/typechecks and production build passed. Full preflight remains red because of the four failures below; no CI or real-provider performance claim is made.
+
+### Existing failures reproduced on the baseline
+
+All four also fail on an isolated archive of pre-migration commit `c2192a5e`, using the same workspace environment:
+
+- `test_review_queue_projection.py::test_projection_refresh_rejects_external_write_and_recovers`: projection refresh assertion.
+- `test_gutenberg_catalogue.py::test_streamed_archive_extraction_installs_text_in_database_and_zip_is_disposable`: Windows file-handle conflict.
+- `test_gutenberg_catalogue.py::test_pause_during_inflight_chunk_does_not_resurrect_download`: Windows file-handle conflict.
+- `test_corpus_enrichment_handoffs.py::test_loaded_model_cache_is_detached_and_rejects_late_response`: late model-cache response assertion.
+
+These remain unresolved and outside this checkpoint. Fix them separately before claiming full regression/merge readiness.
