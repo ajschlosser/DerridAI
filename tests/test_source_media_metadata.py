@@ -166,6 +166,34 @@ def test_word_timestamps_split_one_whisper_segment_at_speaker_change():
     assert " ".join(block["text"] for block in blocks) == transcript["text"]
 
 
+def test_word_level_speaker_evidence_survives_record_construction():
+    transcript = {
+        "text": "First second.",
+        "language": "en",
+        "segments": [{"start": 0.0, "end": 2.0, "text": "First second."}],
+        "words": [
+            {"start": 0.0, "end": 0.8, "word": "First"},
+            {"start": 1.0, "end": 1.8, "word": "second."},
+        ],
+    }
+    turns = source_audio.normalize_speaker_labels(
+        [{"start": 0.0, "end": 2.0, "speaker": "provider-a"}]
+    )
+    blocks = source_audio.spans_from_transcript(transcript, turns)
+
+    records = segmentation._construct_records(
+        {"filename": "seminar.wav", "asset_id": "audio-a", "media_kind": "audio"},
+        blocks,
+        [],
+    )
+
+    span = records[0]["source_spans"][0]
+    assert span["speaker"] == "SPEAKER_1"
+    assert span["provider_speaker"] == "provider-a"
+    assert span["speaker_assignment"]["method"] == "word_overlap"
+    assert [word["word"] for word in span["source_words"]] == ["First", "second."]
+
+
 def test_word_speaker_assignment_marks_close_overlap_for_review():
     transcript = {
         "text": "Crossing",
