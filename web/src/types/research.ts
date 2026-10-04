@@ -18,6 +18,7 @@
 
 import type {
   PipelineAssignment,
+  PipelineConfigOverrideSet,
   PipelineDefinition,
   PipelineRunTrace,
   PipelineStrategy,
@@ -160,6 +161,8 @@ export type ResearchResult = {
     pipeline_id?: string;
     pipeline_version?: number;
     pipeline_hash?: string;
+    baseline_pipeline_hash?: string;
+    config_resolution?: Record<string, unknown>;
     name?: string;
     purpose?: string;
     resolved_pipeline?: Record<string, unknown>;
@@ -202,6 +205,8 @@ export type ResearchConfig = {
   /** Exact pipeline version to replay; absent means use the current system assignment. */
   pipeline_id?: string;
   pipeline_version?: number | null;
+  /** Settings-level stage configuration overrides, keyed by pipeline ID@version. */
+  pipeline_config_overrides?: Record<string, PipelineConfigOverrideSet>;
   source_collection: string;
   locales: string[];
   search_types: string[];
