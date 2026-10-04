@@ -189,6 +189,13 @@ class GutenbergOfflineService:
                 archive_member TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS gutenberg_meta (
+                id INTEGER PRIMARY KEY CHECK(id=1),
+                status TEXT NOT NULL DEFAULT 'empty',
+                item_count INTEGER NOT NULL DEFAULT 0,
+                installed_at TEXT
+            )""")
+            db.execute("INSERT OR IGNORE INTO gutenberg_meta(id) VALUES(1)")
 
     def _library_count(self, path: Path | None = None) -> int:
         target = path or self.library_db_path
@@ -199,6 +206,17 @@ class GutenbergOfflineService:
                 return int(db.execute("SELECT COUNT(*) FROM gutenberg_texts").fetchone()[0])
         except sqlite3.Error:
             return 0
+
+    def _library_state(self) -> tuple[str, int, int]:
+        if not self.library_db_path.is_file():
+            return ("empty", 0, 0)
+        try:
+            with sqlite3.connect(self.library_db_path) as db:
+                row = db.execute("SELECT status,item_count FROM gutenberg_meta WHERE id=1").fetchone()
+                count = int(db.execute("SELECT COUNT(*) FROM gutenberg_texts").fetchone()[0])
+            return (str(row[0]) if row else "empty", int(row[1]) if row else 0, count)
+        except sqlite3.Error:
+            return ("error", 0, 0)
 
     def _migrate_legacy_books(self) -> None:
         """One-time migration from the old extracted-file cache into the local text database."""
@@ -228,6 +246,11 @@ class GutenbergOfflineService:
                 imported += 1
                 if imported % 500 == 0:
                     library.commit()
+            if imported:
+                library.execute(
+                    "UPDATE gutenberg_meta SET status='legacy',item_count=?,installed_at=? WHERE id=1",
+                    (imported, _now()),
+                )
 
     @staticmethod
     def _index_rows(db: sqlite3.Connection, rows: list[tuple[int, str, str]]) -> None:
@@ -274,9 +297,13 @@ class GutenbergOfflineService:
             catalogue_rows = int(db.execute("SELECT COUNT(*) FROM gutenberg_catalogue_books").fetchone()[0])
         # Readiness belongs to the installed database, not the disposable ZIP.
         # This keeps a verified local collection usable during updates and after the archive is deleted.
-        imported_texts = self._library_count()
+        library_status, installed_count, imported_texts = self._library_state()
         archive["imported_texts"] = imported_texts
-        archive["ready"] = imported_texts > 0
+        archive["ready"] = (
+            library_status == "ready"
+            and imported_texts > 0
+            and imported_texts == installed_count
+        )
         declared_count = int(catalogue.get("item_count") or 0)
         search_ready = (
             catalogue["status"] == "ready"
@@ -553,6 +580,11 @@ class GutenbergOfflineService:
                             self._changed()
             if count <= 0 or self._library_count(self.staging_library_db_path) != count:
                 raise ValueError("Gutenberg archive contained no installable plain-text books.")
+            with sqlite3.connect(self.staging_library_db_path) as library:
+                library.execute(
+                    "UPDATE gutenberg_meta SET status='ready',item_count=?,installed_at=? WHERE id=1",
+                    (count, _now()),
+                )
             # Readers opening after this rename see either the previous complete collection
             # or the new complete collection; never a half-populated database.
             self.staging_library_db_path.replace(self.library_db_path)
