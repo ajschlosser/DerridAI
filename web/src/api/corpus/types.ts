@@ -271,6 +271,11 @@ export interface GutenbergStatus {
     status: string;
     bytes_done: number;
     total_bytes?: number | null;
+    /** Texts durably imported into the local SQLite collection. */
+    items_done?: number;
+    /** Catalogue text count used as the install-progress denominator. */
+    items_total?: number | null;
+    local_text_count?: number;
     error?: string | null;
   };
 }
