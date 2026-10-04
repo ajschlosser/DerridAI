@@ -68,7 +68,6 @@ type Helper =
   | "label"
   | "navSnapshot"
   | "navigateTo"
-  | "normalizeTouchupItems"
   | "openWorkMetadataProposalResult"
   | "pages"
   | "persistFileNow"
@@ -118,7 +117,6 @@ export function createJobDialogs(deps: Deps) {
     label,
     navSnapshot,
     navigateTo,
-    normalizeTouchupItems,
     openWorkMetadataProposalResult,
     pages,
     persistFileNow,
@@ -1094,13 +1092,6 @@ export function createJobDialogs(deps: Deps) {
       },
     });
   }
-  function openTouchup(inputItems = null, initialMode = "foreground") {
-    const items = normalizeTouchupItems(inputItems);
-    if (!items.length) return;
-    window.dispatchEvent(
-      new CustomEvent("derridai:open-touchup", { detail: { items, initialMode } }),
-    );
-  }
   return {
     openJobDetails,
     openJobResults,
@@ -1109,6 +1100,5 @@ export function createJobDialogs(deps: Deps) {
     openLlmToolResult,
     openLlmTaskLauncher,
     openPdfDraftRecord,
-    openTouchup,
   };
 }

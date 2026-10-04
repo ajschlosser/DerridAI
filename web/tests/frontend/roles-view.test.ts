@@ -20,6 +20,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
+import { VueQueryPlugin } from "@tanstack/vue-query";
 
 const notifications = vi.hoisted(() => ({
   notify: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock("../../src/api/auth", async () => {
   return { ...actual, authApi };
 });
 
+import { queryClient } from "../../src/realtime/dataQuery";
 import RolesView from "../../src/views/RolesView.vue";
 import { useAuthStore } from "../../src/stores/auth";
 import { useI18nStore } from "../../src/stores/i18n";
@@ -92,6 +94,12 @@ const roles = [
   },
 ];
 
+// Realtime invalidation (or a window refocus) is what refreshes the page; the tests invalidate directly.
+async function invalidate() {
+  await queryClient.invalidateQueries({ queryKey: ["data"] });
+  await flushPromises();
+}
+
 async function mountView(translations: Record<string, string> = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -108,7 +116,10 @@ async function mountView(translations: Record<string, string> = {}) {
   await router.isReady();
   const wrapper = mount(
     { template: "<RouterView />" },
-    { attachTo: document.body, global: { plugins: [pinia, router] } },
+    {
+      attachTo: document.body,
+      global: { plugins: [pinia, router, [VueQueryPlugin, { queryClient }]] },
+    },
   );
   await flushPromises();
   return { wrapper, router };
@@ -116,6 +127,8 @@ async function mountView(translations: Record<string, string> = {}) {
 
 describe("RolesView", () => {
   beforeEach(() => {
+    queryClient.clear();
+    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 30_000 } });
     notifications.notify.mockClear();
     authApi.listRoles.mockResolvedValue({ roles, capabilities });
     authApi.listUsers.mockResolvedValue({
@@ -179,14 +192,17 @@ describe("RolesView", () => {
     });
   });
 
+  it("has no manual refresh control", async () => {
+    const { wrapper } = await mountView();
+    expect(wrapper.findAll("button").some((b) => b.text() === "Refresh")).toBe(false);
+    wrapper.unmount();
+  });
+
   it("marks a failed atomic refresh stale, retains the editor and retries", async () => {
     const { wrapper } = await mountView();
     const editor = wrapper.find(".role-editor").element;
-    const refresh = wrapper.findAll("button").find((b) => b.text() === "Refresh");
-    expect(refresh).toBeDefined();
     authApi.listUsers.mockRejectedValueOnce(new Error("offline"));
-    await refresh!.trigger("click");
-    await flushPromises();
+    await invalidate();
     expect(wrapper.find(".role-editor").element).toBe(editor);
     expect(wrapper.text()).toContain("The refresh failed. Previously loaded content is shown.");
     expect(
@@ -214,10 +230,7 @@ describe("RolesView", () => {
     const { wrapper } = await mountView();
     const checkbox = wrapper.findAll("input[type=checkbox]")[1]!;
     await checkbox.setValue(false);
-    const refresh = wrapper.findAll("button").find((b) => b.text() === "Refresh");
-    expect(refresh).toBeDefined();
-    await refresh!.trigger("click");
-    await flushPromises();
+    await invalidate();
     expect((wrapper.findAll("input[type=checkbox]")[1]!.element as HTMLInputElement).checked).toBe(
       false,
     );
@@ -227,11 +240,7 @@ describe("RolesView", () => {
   it("clears the retained role snapshot on forbidden refresh", async () => {
     const { wrapper } = await mountView();
     authApi.listUsers.mockRejectedValueOnce(Object.assign(new Error("forbidden"), { status: 403 }));
-    await wrapper
-      .findAll("button")
-      .find((b) => b.text() === "Refresh")!
-      .trigger("click");
-    await flushPromises();
+    await invalidate();
     expect(wrapper.find(".role-editor").exists()).toBe(false);
     expect(
       wrapper
