@@ -30,15 +30,18 @@ test("bulk metadata modal contains keyboard focus", async ({ page }) => {
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
 
-  const close = dialog.locator(".bulk-close");
-  const apply = dialog.locator(".bulk-footer button").last();
+  const focusable = dialog.locator(
+    'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])',
+  );
+  const first = focusable.first();
+  const last = focusable.last();
 
-  await apply.focus();
+  await last.focus();
   await page.keyboard.press("Tab");
-  await expect(close).toBeFocused();
+  await expect(first).toBeFocused();
 
   await page.keyboard.press("Shift+Tab");
-  await expect(apply).toBeFocused();
+  await expect(last).toBeFocused();
 });
 
 test("run guidance removable cues meet the WCAG 2.2 target-size minimum", async ({ page }) => {
