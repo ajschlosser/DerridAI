@@ -703,13 +703,17 @@ it stays on gutenberg.org and names the same eBook. Any other redirect, missing
 text, mismatched identity, timeout, or undecodable content fails visibly. The
 importer does not guess another download or substitute another edition. Two
 editions with identical text remain distinct assets. The catalogue is required
-for search, but the full local text archive is optional for an individual import:
-when that archive is absent, DerridAI downloads and verifies the selected eBook
-directly instead of disabling the result. The dialog still offers the local
-collection for offline/repeated use. A paused or failed collection download
-resumes from the bytes already on disk, and a download that had in fact finished
-moves straight on to unpacking; **Redownload** (after a confirmation) deletes the
-file and starts over.
+for search. A single eBook can still be downloaded and verified directly before
+the local collection is installed.
+
+**Install local Gutenberg** downloads the weekly `txt-files.tar.zip` archive,
+streams its text members into a staging `gutenberg.sqlite3.next` database, verifies
+the installed row count, and atomically replaces the active
+`/data/gutenberg/gutenberg.sqlite3`. The transport ZIP is deleted after a
+successful install, so readiness depends on the verified database rather than a
+large archive remaining on disk. A paused or failed download resumes from the
+bytes already present. During a replacement install, the previous verified
+database remains usable until the new one is ready.
 
 Wikisource search covers one language edition at a time (English, French,
 German, and others; French is preselected in the French interface). A work's
@@ -733,10 +737,14 @@ when the source was added. The table is server-paginated and server-sorted, with
 filters for provider, language, capture, build state, relationship, and role.
 Inspecting a row shows provenance without loading the source text into the table.
 
-**Import an author** is available from Sources and Corpus Builder. It resolves a
-person through Wikidata, then lets the researcher choose Project Gutenberg and/or
-Wikisource, contribution roles, original works or translations, and language
-scope. Available languages discovered from the author are offered as
+**Import an author** is available from Sources and Corpus Builder. Author search
+uses the installed Gutenberg catalogue first and falls back to Wikidata only
+when the local catalogue has no match. A locally resolved Gutenberg author runs
+as a Gutenberg-only capture: work discovery, text acquisition, and registration
+can complete with provider network access disabled. A Wikidata-resolved person
+can still use Project Gutenberg and/or Wikisource, contribution roles, original
+works or translations, and language scope. Available languages discovered from
+the author are offered as
 autocomplete suggestions, but a researcher may enter another language. When
 translations are disabled, language scope is locked to the detected original
 language; if no original language is available, one language must be entered.
