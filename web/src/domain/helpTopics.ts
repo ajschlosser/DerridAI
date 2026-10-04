@@ -460,7 +460,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
   {
     id: "languages",
     routeName: "languages",
-    path: "/languages",
+    path: "/locale",
     group: "system",
     showImpact: true,
     capability: "page.languages",
