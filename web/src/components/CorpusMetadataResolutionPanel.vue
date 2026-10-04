@@ -409,27 +409,31 @@ const enrichmentPending = computed(() => ["queued", "running"].includes(enrichme
 const constraints = computed(() =>
   metadataConstraints({}, props.record as Record<string, unknown>),
 );
+function modelDerived(info: Record<string, unknown>) {
+  return (
+    String(info.method || "").includes("llm") ||
+    String(info.derivation_method || "") === "model"
+  );
+}
+function modelSuggestedAbsence(info: Record<string, unknown>, value: unknown) {
+  const unwrapped = unwrapMetadataValue(value);
+  if (typeof unwrapped === "string" && isPlaceholderValue(unwrapped)) return true;
+  if (value !== null && value !== undefined && value !== "") return false;
+  return (
+    info.suggested_absence === true ||
+    info.evaluation_status === "no_supported_value" ||
+    info.reason_code === "no_supported_value" ||
+    info.reason_code === "required_no_supported_value"
+  );
+}
 const llmSuggestionBatch = computed(() => {
   const changes: Record<string, unknown> = {};
   const confirmedAbsentFields: string[] = [];
   for (const field of activeFields.value) {
     const info = status(field);
     const value = fieldValue(field);
-    const modelDerived =
-      String(info.method || "").includes("llm") ||
-      String(info.derivation_method || "") === "model";
-    if (!modelDerived || !unresolved.value.has(field)) continue;
-    const unwrappedValue = unwrapMetadataValue(value);
-    const placeholderAbsence =
-      typeof unwrappedValue === "string" && isPlaceholderValue(unwrappedValue);
-    const suggestedAbsence =
-      (value === null || value === undefined || value === "" || placeholderAbsence) &&
-      (placeholderAbsence ||
-        info.suggested_absence === true ||
-        info.evaluation_status === "no_supported_value" ||
-        info.reason_code === "no_supported_value" ||
-        info.reason_code === "required_no_supported_value");
-    if (suggestedAbsence) {
+    if (!modelDerived(info) || !unresolved.value.has(field)) continue;
+    if (modelSuggestedAbsence(info, value)) {
       changes[field] = null;
       confirmedAbsentFields.push(field);
     } else if (value !== null && value !== undefined && value !== "") {
