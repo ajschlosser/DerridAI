@@ -228,6 +228,14 @@ def _deterministic_boundary_candidates(
         ):
             signals.append("language_context_change")
             score += 0.40
+        left_speaker = str(left.get("speaker") or "").strip()
+        right_speaker = str(right.get("speaker") or "").strip()
+        if left_speaker and right_speaker and left_speaker != right_speaker:
+            # Diarization is documentary structure for timed media. Splitting at
+            # an explicit voice transition keeps a Record's speaker assertion
+            # unambiguous instead of asking enrichment to untangle two voices.
+            signals.append("speaker_change")
+            score += 1.0
         if right_type in heading_types:
             normalized_heading = _normalize_text(right_text).casefold()
             if normalized_heading and heading_counts.get(normalized_heading, 0) >= 3:
@@ -285,7 +293,7 @@ def _layout_region_change(left: dict[str, Any], right: dict[str, Any]) -> bool:
 
 def _candidate_route(candidate: dict[str, Any], profile: dict[str, Any]) -> str:
     signals = set(candidate.get("signals") or [])
-    if "layout_region_change" in signals:
+    if {"layout_region_change", "speaker_change"} & signals:
         return "split"
     if bool(candidate.get("protected")):
         return "keep"
