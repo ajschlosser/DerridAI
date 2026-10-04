@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import re
 import sqlite3
@@ -32,11 +33,11 @@ import httpx
 
 from . import operation_events
 from .config import settings
-from .source_identity import PersonName, normalize_languages
+from .source_identity import PersonName, fold, normalize_languages
 
 CATALOGUE_URL = "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv"
 ARCHIVE_URL = "https://www.gutenberg.org/cache/epub/feeds/txt-files.tar.zip"
-CHUNK_SIZE = 8 * 1024 * 1024
+CHUNK_SIZE = 64 * 1024 * 1024
 
 
 def _now() -> str:
@@ -91,6 +92,10 @@ class GutenbergOfflineService:
         self.db_path = Path(db_path or settings.system_db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.archive_path = Path(archive_path or getattr(settings, "gutenberg_archive_path", "/data/gutenberg/txt-files.tar.zip"))
+        # The downloaded archive is disposable transport. The installed collection lives in
+        # its own SQLite file so the system database does not grow by tens of gigabytes.
+        self.library_db_path = self.archive_path.parent / "gutenberg.sqlite3"
+        self.staging_library_db_path = self.archive_path.parent / "gutenberg.sqlite3.next"
         self._worker: threading.Thread | None = None
         self._catalogue_worker: threading.Thread | None = None
         self._stop = threading.Event()
@@ -165,6 +170,64 @@ class GutenbergOfflineService:
                 (ARCHIVE_URL, str(self.archive_path)),
             )
             self._backfill_normalized(db)
+        self._init_library_db(self.library_db_path)
+        self._migrate_legacy_books()
+
+    @staticmethod
+    def _init_library_db(path: Path, *, staging: bool = False) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(path) as db:
+            if staging:
+                # A staging database is disposable until the final atomic rename.
+                db.execute("PRAGMA journal_mode=OFF")
+                db.execute("PRAGMA synchronous=OFF")
+            db.execute("""CREATE TABLE IF NOT EXISTS gutenberg_texts (
+                etext_id INTEGER PRIMARY KEY,
+                content TEXT NOT NULL,
+                content_sha256 TEXT NOT NULL,
+                byte_length INTEGER NOT NULL,
+                archive_member TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )""")
+
+    def _library_count(self, path: Path | None = None) -> int:
+        target = path or self.library_db_path
+        if not target.is_file():
+            return 0
+        try:
+            with sqlite3.connect(target) as db:
+                return int(db.execute("SELECT COUNT(*) FROM gutenberg_texts").fetchone()[0])
+        except sqlite3.Error:
+            return 0
+
+    def _migrate_legacy_books(self) -> None:
+        """One-time migration from the old extracted-file cache into the local text database."""
+        if self._library_count():
+            return
+        with sqlite3.connect(self.db_path) as db:
+            rows = db.execute("SELECT etext_id,path,content FROM gutenberg_books ORDER BY etext_id").fetchall()
+        if not rows:
+            return
+        imported = 0
+        with sqlite3.connect(self.library_db_path) as library:
+            for etext_id, raw_path, stored in rows:
+                text = str(stored or "")
+                member = "legacy-db"
+                if not text and raw_path:
+                    source = Path(str(raw_path))
+                    if source.is_file():
+                        text = source.read_text(encoding="utf-8", errors="replace")
+                        member = str(source)
+                if not text:
+                    continue
+                payload = text.encode("utf-8")
+                library.execute(
+                    "INSERT OR REPLACE INTO gutenberg_texts VALUES(?,?,?,?,?,?)",
+                    (int(etext_id), text, hashlib.sha256(payload).hexdigest(), len(payload), member, _now()),
+                )
+                imported += 1
+                if imported % 500 == 0:
+                    library.commit()
 
     @staticmethod
     def _index_rows(db: sqlite3.Connection, rows: list[tuple[int, str, str]]) -> None:
@@ -208,26 +271,13 @@ class GutenbergOfflineService:
             db.row_factory = sqlite3.Row
             catalogue = dict(db.execute("SELECT * FROM gutenberg_catalogue WHERE id=1").fetchone())
             archive = dict(db.execute("SELECT * FROM gutenberg_archive WHERE id=1").fetchone())
-        archive_path = Path(archive["path"])
-        archive_size = archive_path.stat().st_size if archive_path.is_file() else 0
-        # A process restart or an operator restoring only the SQLite file can
-        # leave bookkeeping ahead of the files it describes. Never advertise a
-        # stale downloaded/ready state, and let the next start reconcile it.
-        if archive["status"] == "ready" and not archive_path.is_file():
-            archive["ready"] = False
-        else:
-            archive["ready"] = archive["status"] == "ready" and (
-                not archive.get("total_bytes") or archive_size == int(archive["total_bytes"])
-            )
-        # Catalogue search and local text availability are deliberately separate:
-        # users can discover titles as soon as metadata indexing finishes, while
-        # import remains gated until the full collection has downloaded/unpacked.
-        with sqlite3.connect(self.db_path) as db:
             catalogue_rows = int(db.execute("SELECT COUNT(*) FROM gutenberg_catalogue_books").fetchone()[0])
+        # Readiness belongs to the installed database, not the disposable ZIP.
+        # This keeps a verified local collection usable during updates and after the archive is deleted.
+        imported_texts = self._library_count()
+        archive["imported_texts"] = imported_texts
+        archive["ready"] = imported_texts > 0
         declared_count = int(catalogue.get("item_count") or 0)
-        # Older/local test catalogues may predate the persisted count. A
-        # non-empty indexed table is still authoritative in that case; once a
-        # non-zero count is declared it must match exactly.
         search_ready = (
             catalogue["status"] == "ready"
             and catalogue_rows > 0
@@ -387,11 +437,12 @@ class GutenbergOfflineService:
             self._stop.set()
         if action == "refetch":
             self.archive_path.unlink(missing_ok=True)
+            self.staging_library_db_path.unlink(missing_ok=True)
+            # Keep the last verified local database available while a replacement downloads.
+            # Legacy extracted files are no longer part of the active collection.
             if self.extract_root.is_dir():
                 for path in self.extract_root.glob("*.txt"):
                     path.unlink(missing_ok=True)
-            with sqlite3.connect(self.db_path) as db:
-                db.execute("DELETE FROM gutenberg_books")
         with sqlite3.connect(self.db_path) as db:
             if action == "refetch":
                 db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=0,total_bytes=NULL,error=NULL,updated_at=? WHERE id=1",
@@ -426,7 +477,7 @@ class GutenbergOfflineService:
             while not self._stop.is_set():
                 status = str(self.status()["archive"]["status"])
                 if status == "downloading":
-                    self.download_chunk()
+                    self.download_archive()
                     continue
                 if status in {"downloaded", "unpacking", "complete"}:
                     with sqlite3.connect(self.db_path) as db:
@@ -441,6 +492,9 @@ class GutenbergOfflineService:
                             "UPDATE gutenberg_archive SET status='ready',error=NULL,updated_at=? WHERE id=1",
                             (_now(),),
                         )
+                    # The archive is only installation transport. The verified SQLite collection
+                    # is authoritative and survives independently of this file.
+                    self.archive_path.unlink(missing_ok=True)
                     self._changed()
                     break
                 break
@@ -453,71 +507,58 @@ class GutenbergOfflineService:
             self._changed()
 
     def extract_catalogue(self) -> int:
-        """Unpack safe text files and persist only searchable file metadata in SQLite."""
+        """Stream the archive into a staging SQLite database, then atomically install it."""
 
         if not self.archive_path.is_file():
             raise ValueError("Gutenberg archive is missing.")
-        self.extract_root.mkdir(parents=True, exist_ok=True)
+        self.staging_library_db_path.unlink(missing_ok=True)
+        self._init_library_db(self.staging_library_db_path, staging=True)
         count = 0
-        with zipfile.ZipFile(self.archive_path) as outer:
-            tar_name = next(
-                (name for name in outer.namelist() if name.lower().endswith(".tar")),
-                None,
-            )
-            if not tar_name:
-                raise ValueError("Gutenberg archive does not contain a tar payload.")
-            with outer.open(tar_name, "r") as tar_stream, tarfile.open(
-                fileobj=tar_stream, mode="r|*"
-            ) as archive, sqlite3.connect(self.db_path) as db:
-                for info in archive:
-                    match = re.search(r"(?:^|/)(\d+)\.txt$", info.name, re.I)
-                    if not match or not info.isfile() or info.size > 5_000_000:
-                        continue
-                    extracted = archive.extractfile(info)
-                    if extracted is None:
-                        continue
-                    payload = extracted.read()
-                    text = payload.decode("utf-8", errors="replace")
-                    etext_id = int(match.group(1))
-                    target = self.extract_root / f"{etext_id}.txt"
-                    target.write_bytes(payload)
-                    title = re.search(r"(?im)^title:\s*(.+)$", text)
-                    author = re.search(r"(?im)^author:\s*(.+)$", text)
-                    catalogue = db.execute(
-                        """
-                        SELECT title,author,language
-                        FROM gutenberg_catalogue_books
-                        WHERE etext_id=?
-                        """,
-                        (etext_id,),
-                    ).fetchone()
-                    resolved_title = (
-                        str(catalogue[0])
-                        if catalogue and catalogue[0]
-                        else (title.group(1).strip() if title else "")
-                    )
-                    resolved_author = (
-                        str(catalogue[1])
-                        if catalogue and catalogue[1]
-                        else (author.group(1).strip() if author else "")
-                    )
-                    resolved_language = str(catalogue[2]) if catalogue and catalogue[2] else ""
-                    db.execute(
-                        """
-                        INSERT OR REPLACE INTO gutenberg_books(
-                            etext_id,title,author,language,path,content,updated_at
-                        ) VALUES(?,?,?,?,?,'',?)
-                        """,
-                        (
-                            etext_id,
-                            resolved_title,
-                            resolved_author,
-                            resolved_language,
-                            str(target),
-                            _now(),
-                        ),
-                    )
-                    count += 1
+        try:
+            with zipfile.ZipFile(self.archive_path) as outer:
+                tar_name = next((name for name in outer.namelist() if name.lower().endswith(".tar")), None)
+                if not tar_name:
+                    raise ValueError("Gutenberg archive does not contain a tar payload.")
+                with outer.open(tar_name, "r") as tar_stream, tarfile.open(
+                    fileobj=tar_stream, mode="r|*"
+                ) as archive, sqlite3.connect(self.staging_library_db_path) as library:
+                    for info in archive:
+                        match = re.search(r"(?:^|/)(\d+)\.txt$", info.name, re.I)
+                        if not match or not info.isfile():
+                            continue
+                        extracted = archive.extractfile(info)
+                        if extracted is None:
+                            continue
+                        payload = extracted.read()
+                        text = payload.decode("utf-8", errors="replace")
+                        library.execute(
+                            "INSERT OR REPLACE INTO gutenberg_texts VALUES(?,?,?,?,?,?)",
+                            (
+                                int(match.group(1)),
+                                text,
+                                hashlib.sha256(payload).hexdigest(),
+                                len(payload),
+                                info.name,
+                                _now(),
+                            ),
+                        )
+                        count += 1
+                        if count % 250 == 0:
+                            library.commit()
+                            with sqlite3.connect(self.db_path) as state:
+                                state.execute(
+                                    "UPDATE gutenberg_archive SET status='unpacking',updated_at=? WHERE id=1",
+                                    (_now(),),
+                                )
+                            self._changed()
+            if count <= 0 or self._library_count(self.staging_library_db_path) != count:
+                raise ValueError("Gutenberg archive contained no installable plain-text books.")
+            # Readers opening after this rename see either the previous complete collection
+            # or the new complete collection; never a half-populated database.
+            self.staging_library_db_path.replace(self.library_db_path)
+        except Exception:
+            self.staging_library_db_path.unlink(missing_ok=True)
+            raise
         return count
 
     def search(self, query: str, limit: int = 12) -> list[dict[str, Any]]:
@@ -542,6 +583,108 @@ class GutenbergOfflineService:
             }
             for row in rows
         ]
+
+    def search_authors(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Search distinct catalogue authors locally; no provider network is required."""
+        raw = str(query or "").strip()
+        if not raw:
+            return []
+        term = f"%{raw}%"
+        folded = f"%{fold(raw)}%"
+        with sqlite3.connect(self.db_path) as db:
+            db.row_factory = sqlite3.Row
+            rows = db.execute(
+                """
+                SELECT * FROM gutenberg_item_contributors
+                WHERE role='author' AND (name LIKE ? OR normalized_name LIKE ?)
+                ORDER BY etext_id,position
+                LIMIT ?
+                """,
+                (term, folded, max(100, min(1000, int(limit) * 40))),
+            ).fetchall()
+        found: list[dict[str, Any]] = []
+        seen: set[tuple[str, int | None, int | None]] = set()
+        for row in rows:
+            key = (str(row["normalized_name"]), row["birth_year"], row["death_year"])
+            if key in seen:
+                continue
+            seen.add(key)
+            name = str(row["name"])
+            parsed = PersonName.parse(name)
+            label = name
+            if "," in name:
+                surname, rest = name.split(",", 1)
+                label = f"{rest.strip()} {surname.strip()}".strip()
+            found.append({
+                "identity_id": f"gutenberg:{int(row['etext_id'])}:{int(row['position'])}",
+                "identity_source": "gutenberg",
+                "wikidata_qid": None,
+                "label": label,
+                "description": "Project Gutenberg catalogue author",
+                "aliases": [],
+                "birth_year": row["birth_year"],
+                "death_year": row["death_year"],
+                "wikisource_sitelinks": {},
+                "original_languages": [],
+                "languages": [],
+                "normalized_name": parsed.full,
+            })
+            if len(found) >= max(1, min(20, int(limit))):
+                break
+        return found
+
+    def resolve_author(self, identity_id: str) -> Any:
+        """Resolve a previously offered local author identity without Wikidata."""
+        match = re.fullmatch(r"gutenberg:(\d+):(\d+)", str(identity_id or ""))
+        if not match:
+            raise ValueError("Choose a Project Gutenberg author from the local search results.")
+        etext_id, position = (int(match.group(1)), int(match.group(2)))
+        with sqlite3.connect(self.db_path) as db:
+            db.row_factory = sqlite3.Row
+            row = db.execute(
+                "SELECT * FROM gutenberg_item_contributors WHERE etext_id=? AND position=? AND role='author'",
+                (etext_id, position),
+            ).fetchone()
+            if row is None:
+                raise ValueError("The selected local Gutenberg author no longer exists in the catalogue.")
+            variants = db.execute(
+                """
+                SELECT DISTINCT name FROM gutenberg_item_contributors
+                WHERE role='author' AND normalized_name=?
+                  AND birth_year IS ? AND death_year IS ?
+                ORDER BY name
+                """,
+                (row["normalized_name"], row["birth_year"], row["death_year"]),
+            ).fetchall()
+            language_rows = db.execute(
+                """
+                SELECT DISTINCT l.language_code
+                FROM gutenberg_item_contributors c
+                JOIN gutenberg_item_languages l ON l.etext_id=c.etext_id
+                WHERE c.role='author' AND c.normalized_name=?
+                  AND c.birth_year IS ? AND c.death_year IS ?
+                ORDER BY l.language_code
+                """,
+                (row["normalized_name"], row["birth_year"], row["death_year"]),
+            ).fetchall()
+        from .source_identity import ResolvedAuthor
+
+        canonical = str(row["name"])
+        if "," in canonical:
+            surname, rest = canonical.split(",", 1)
+            canonical = f"{rest.strip()} {surname.strip()}".strip()
+        aliases = [str(item[0]) for item in variants if str(item[0]) != str(row["name"])]
+        return ResolvedAuthor(
+            identity_id=str(identity_id),
+            canonical_name=canonical,
+            wikidata_qid=None,
+            aliases=aliases,
+            description="Project Gutenberg catalogue author",
+            birth_year=row["birth_year"],
+            death_year=row["death_year"],
+            languages=[str(item[0]) for item in language_rows],
+            external_ids={"gutenberg_local": str(identity_id)},
+        )
 
     def sources_for_author(
         self, names: list[str], *, birth_year: int | None = None, death_year: int | None = None
@@ -629,33 +772,99 @@ class GutenbergOfflineService:
         return sorted(results, key=lambda row: row["etext_id"])
 
     def text(self, etext_id: int) -> tuple[str, dict[str, Any]] | None:
-        with sqlite3.connect(self.db_path) as db:
-            row = db.execute(
-                "SELECT title,author,language,path,content FROM gutenberg_books WHERE etext_id=?",
+        with sqlite3.connect(self.library_db_path) as library:
+            row = library.execute(
+                "SELECT content,content_sha256,byte_length,archive_member FROM gutenberg_texts WHERE etext_id=?",
                 (int(etext_id),),
             ).fetchone()
         if not row:
             return None
-        content = str(row[4] or "")
-        if not content:
-            path = Path(str(row[3] or ""))
-            if not path.is_file():
-                return None
-            content = path.read_text(encoding="utf-8", errors="replace")
-        return content, {
+        with sqlite3.connect(self.db_path) as db:
+            meta = db.execute(
+                "SELECT title,author,language FROM gutenberg_catalogue_books WHERE etext_id=?",
+                (int(etext_id),),
+            ).fetchone()
+        title, author, language = meta if meta else ("", "", "")
+        return str(row[0]), {
             "gutenberg_id": int(etext_id),
-            "title": row[0],
-            "document_author": row[1],
-            "language": row[2],
+            "title": title,
+            "document_author": author,
+            "language": language,
             "publisher": "Project Gutenberg",
             "document_type": "book",
             "edition": f"Project Gutenberg eBook #{int(etext_id)}",
             "source_url": f"https://www.gutenberg.org/ebooks/{int(etext_id)}",
+            "source_sha256": str(row[1]),
+            "byte_length": int(row[2]),
+            "archive_member": str(row[3]),
             "retrieved_at": _now(),
         }
 
     def _bytes_done(self) -> int:
         return self.archive_path.stat().st_size if self.archive_path.is_file() else 0
+
+    def download_archive(self) -> dict[str, Any]:
+        """Download the archive in one streaming request, resuming from the current byte offset."""
+
+        state = self.status()["archive"]
+        if state["status"] != "downloading":
+            raise ValueError("Archive is not running; start or resume it first.")
+        offset = self._bytes_done()
+        headers = {"Range": f"bytes={offset}-"} if offset else {}
+        try:
+            with httpx.stream(
+                "GET",
+                ARCHIVE_URL,
+                headers=headers,
+                timeout=httpx.Timeout(120.0, connect=20.0),
+                follow_redirects=True,
+            ) as response:
+                if response.status_code == 416 and offset:
+                    return self._finish_or_explain_unsatisfiable_range(response, offset)
+                response.raise_for_status()
+                if offset and response.status_code != 206:
+                    raise ValueError("Gutenberg server did not honor the resume range request.")
+                content_range = str(response.headers.get("content-range") or "")
+                range_total = content_range.rsplit("/", 1)[-1] if "/" in content_range else ""
+                total = int(range_total) if range_total.isdigit() else 0
+                if not total:
+                    length = int(response.headers.get("content-length") or 0)
+                    total = offset + length if length else 0
+                self.archive_path.parent.mkdir(parents=True, exist_ok=True)
+                mode = "ab" if offset else "wb"
+                with self.archive_path.open(mode) as handle:
+                    for chunk in response.iter_bytes(chunk_size=CHUNK_SIZE):
+                        if self._stop.is_set() or self.status()["archive"]["status"] != "downloading":
+                            return self.status()
+                        handle.write(chunk)
+                        handle.flush()
+                        done = self._bytes_done()
+                        with sqlite3.connect(self.db_path) as db:
+                            db.execute(
+                                "UPDATE gutenberg_archive SET bytes_done=?,total_bytes=?,error=NULL,updated_at=? WHERE id=1",
+                                (done, total or None, _now()),
+                            )
+                        self._changed()
+            done = self._bytes_done()
+            if total and done != total:
+                raise ValueError(
+                    f"Gutenberg archive ended at {done:,} bytes; expected {total:,}. Resume the download."
+                )
+            with sqlite3.connect(self.db_path) as db:
+                db.execute(
+                    "UPDATE gutenberg_archive SET status='downloaded',bytes_done=?,total_bytes=?,error=NULL,updated_at=? WHERE id=1",
+                    (done, total or done, _now()),
+                )
+            self._changed()
+            return self.status()
+        except (httpx.HTTPError, OSError, ValueError) as exc:
+            with sqlite3.connect(self.db_path) as db:
+                db.execute(
+                    "UPDATE gutenberg_archive SET status='error',error=?,bytes_done=?,updated_at=? WHERE id=1",
+                    (str(exc) or exc.__class__.__name__, self._bytes_done(), _now()),
+                )
+            self._changed()
+            raise
 
     def _finish_or_explain_unsatisfiable_range(self, response: Any, offset: int) -> dict[str, Any]:
         """A 416 after some bytes: the file on disk may already be the whole archive.
