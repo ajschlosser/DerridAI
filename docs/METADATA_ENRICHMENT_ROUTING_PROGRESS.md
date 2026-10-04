@@ -30,7 +30,7 @@ This is the authoritative resume point for the revised Pipeline Studio candidate
 | Typed metadata artifacts and computational traits       | Complete | Explicit candidate/hypothesis/inference-request/proposal/embedding types; required/produced port traits; run-input traits |
 | Consumer terminal guarantees                            | Complete | Compile-time type/trait checks; run-time terminal-output enforcement; `any` cannot satisfy a concrete final contract      |
 | Historical enrichment migration to generic executor     | Complete | `9381c191`; generic scheduling with historical provider/ledger/ownership/concurrency parity                               |
-| Safe parallel scheduling                                | Pending  | Executor is serial; capability declarations and concurrency tests required                                                |
+| Safe parallel scheduling                                | Complete | `394745cf`; bounded server opt-in, stable fan-in/traces, shared capacity and cancellation coverage                        |
 | Baseline benchmark and instrumentation                  | Pending  | Original baseline: `94ca23d9`; no real-provider benchmark run                                                             |
 | Candidate packet, collection, aggregation, invalidation | Pending  | Reuse existing memory, semantic identity, NLP/DI and evidence contracts                                                   |
 | Current-record support and observe-only router          | Pending  | Must precede activation of RESOLVE/VERIFY                                                                                 |
@@ -62,7 +62,7 @@ PR #508 merged into master at `51b481cf`; that master was merged into this branc
 
 ## Next action
 
-Add explicit concurrency capabilities and safe parallel scheduling to the generic executor, preserving definition order for merges/traces and provider capacity controls. Then construct the candidate packet and collection stages; keep routing observe-only until current-record support and authority invariants pass. The historical compiler still accepts its bounded provider graph; arbitrary adaptive graph compilation awaits registered domain handlers.
+Construct the candidate packet and collection stages; keep routing observe-only until current-record support and authority invariants pass. The historical compiler still accepts its bounded provider graph; arbitrary adaptive graph compilation awaits registered domain handlers.
 
 ## Historical executor migration checkpoint (`9381c191`)
 
@@ -84,3 +84,14 @@ All four also fail on an isolated archive of pre-migration commit `c2192a5e`, us
 - `test_corpus_enrichment_handoffs.py::test_loaded_model_cache_is_detached_and_rejects_late_response`: late model-cache response assertion.
 
 These remain unresolved and outside this checkpoint. Fix them separately before claiming full regression/merge readiness.
+
+## Safe parallel scheduling checkpoint (`394745cf`)
+
+- Server-owned `ConcurrencyCapability` declarations opt handlers into parallel execution. The default worker limit is one; undeclared handlers form serial barriers. Historical metadata scheduling remains unchanged.
+- Independent ready stages run in bounded waves. Edge and explicit-port dependencies finish before consumers; outputs, merges and traces retain definition order regardless of completion order.
+- A capacity key shares one semaphore across strategies and concurrent calls on an executor. Conflicting limits are rejected. Wider provider quotas remain the adapter's responsibility; separate executors do not share this semaphore.
+- Opted-in handlers must be thread-safe and treat inputs as read-only. Capabilities are supplied by server code, never editable pipeline JSON. Existing catalog bytes, assignment identities and public schema are unchanged.
+- Fatal failure/cancellation cancels queued futures and joins running work before returning. In-flight provider I/O still needs adapter cancellation support. Elapsed traces include local capacity waiting, excluding waits for earlier traces to be projected.
+- Added ten tests covering actual overlap, reverse completion order, default/undeclared serialization, unsafe-handler barriers, capacity across runs, empty branches, fallbacks, fatal failure/cancellation and inconsistent capacity declarations.
+- Expanded parity: 276 passed, 6 existing skips. Ruff and targeted mypy passed. Full backend typechecking passed (265 source files); catalog exporter check passed. Full backend regression: 2349 passed, 28 skipped, 5 failed. Four failures match the documented baseline failures; the additional provider-profile switch test hit Windows `os.replace` access denial and passed isolated reruns on both this branch and baseline `c2192a5e`. Frontend lint, app/test typechecks and production build passed; dependency-selected frontend unit tests selected no files. Full preflight remains red. The checkpoint push uses the documented preflight bypass after this completed run; it does not indicate merge readiness.
+- Merged current master `7f6c3015` (PR #513) at `0df67aff` before expanded validation. No adaptive routing, new production provider concurrency or latency claim is enabled.
