@@ -995,14 +995,30 @@ export function createPublishedSiteContext() {
     const generation = generationProfile
       ? directGenerationProvider(generationProfile, sessionApiKeys.get(generationProfile.id) || "")
       : host.generation;
-    client.value = await sdk.createClient({
+    const nextClient = await sdk.createClient({
       dataSource: sdk.dataSources.inline(publicationPackage),
       storage: host.storage,
       embeddings,
       generation,
       locale: locale.value,
     });
-    capabilities.value = await client.value.capabilities();
+    client.value = nextClient;
+
+    // Capability discovery reads the browser's derived vector-index cache.
+    // IndexedDB can be slow, blocked, or unavailable (notably on file:// and
+    // privacy-restricted origins), so it must not delay the publication shell,
+    // tutorial, lexical search, or provider controls. Keep the result tied to
+    // the client instance so a stale probe cannot overwrite a newer rebuild.
+    capabilities.value = null;
+    void nextClient
+      .capabilities()
+      .then((nextCapabilities) => {
+        if (client.value === nextClient) capabilities.value = nextCapabilities;
+      })
+      .catch(() => {
+        // Derived-cache capability state is optional. Search/index actions
+        // surface their own errors if the browser later refuses persistence.
+      });
   }
 
   async function setLocaleAndRebuild(value: string): Promise<void> {
