@@ -142,7 +142,7 @@ function onMenu(run: PipelineRunTrace, id: string) {
                 :aria-current="selectedRunId === run.run_id ? 'true' : undefined"
                 @click.stop="emit('select', run.run_id)"
               >
-                {{ formatPipelineDate(run.started_at, i18n.locale) }}
+                {{ formatPipelineDate(run.started_at, i18n.locale, i18n.timeZone) }}
               </button>
             </th>
             <td class="run-workflow">
