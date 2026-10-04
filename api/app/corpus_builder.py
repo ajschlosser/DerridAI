@@ -198,7 +198,7 @@ from .corpus_models import (
     SegmentationResponseModel as SegmentationResponseModel,
 )
 from .corpus_operations import OperationsMixin
-from .corpus_pipeline import BuildScope
+from .corpus_pipeline import BuildScope, select_source_pages
 from .corpus_publication import (
     build_text_touchup_prompt,
     mark_unreviewed_publication,
@@ -273,6 +273,7 @@ from .corpus_segmentation import (
 from .corpus_segmentation_execution import BuildSegmentationExecutionMixin
 from .derridai_ledger import write_jsonl_zst
 from .document_intelligence import (
+    DOCUMENT_INTELLIGENCE_VERSION,
     analyze_document,
     document_text_for_records,
     project_annotations_to_records,
@@ -2816,6 +2817,36 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     break
         return self.repo.load_records(build_id)
 
+    def _reusable_document_intelligence(
+        self,
+        build_id: str,
+        records: list[dict[str, Any]],
+        manifest: dict[str, Any],
+        request: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Return a current persisted analysis when resume has no DI dependency changes."""
+        existing = self._document_intelligence_for_records(build_id, records)
+        if (
+            not existing
+            or existing.get("stale")
+            or existing.get("status") not in {"ok", "skipped"}
+            or int(existing.get("version") or 0) != DOCUMENT_INTELLIGENCE_VERSION
+        ):
+            return None
+
+        expected_configuration = {
+            "include_events": bool(request.get("document_nlp_include_events")),
+            "language": str(manifest.get("language") or ""),
+        }
+        if (
+            str(existing.get("profile") or "") != str(request.get("document_intelligence_profile") or "scholarly")
+            or str(existing.get("selected_provider") or "") != str(request.get("document_nlp_provider") or "auto")
+            or existing.get("configuration") != expected_configuration
+        ):
+            return None
+        return existing
+
+
     def _run_document_intelligence(
         self,
         build_id: str,
@@ -4301,8 +4332,20 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 blocks,
                 [str(item.get("id")) for item in raw_regions if isinstance(item, dict) and item.get("id")],
             )
+
+        source_scope = request.get("source_scope") if isinstance(request.get("source_scope"), dict) else None
+        blocks, selected_source_pages = select_source_pages(blocks, asset, source_scope)
+        if selected_source_pages:
+            self._update(
+                build_id,
+                source_scope={
+                    "pages": selected_source_pages,
+                    "page_count": len(selected_source_pages),
+                    "block_count": len(blocks),
+                },
+            )
         if not blocks:
-            raise ValueError("No SourceUnits were extracted from the PDF. Check OCR support and extraction warnings.")
+            raise ValueError("No SourceUnits were extracted from the selected source scope.")
 
         manifest = self.repo.load_checkpoint(build_id, "manifest") if resume else None
         if not isinstance(manifest, dict):
@@ -4628,7 +4671,18 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             record_count=len(records),
             progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.40),
         )
-        self._run_document_intelligence(build_id, records, manifest, request)
+        reusable_intelligence = (
+            self._reusable_document_intelligence(build_id, records, manifest, request)
+            if resume
+            else None
+        )
+        if reusable_intelligence is None:
+            self._run_document_intelligence(build_id, records, manifest, request)
+            self._update(build_id, document_intelligence_resume_reused=False)
+        else:
+            # Resume should return to unfinished enrichment, not redo a whole-document
+            # NLP pass whose source text, topology and DI configuration are unchanged.
+            self._update(build_id, document_intelligence_resume_reused=True)
 
         records = self._persist_preparation_records(build_id, preparation_base, records)
         trash_quality = self._apply_source_illegibility(
