@@ -46,7 +46,8 @@ import { jsonPretty, reviewDiffSides } from "../domain/reviewPresentation";
 import { touchupFieldsForRecord } from "../domain/touchupFields";
 import "../domain/workMetadata";
 import "../domain/numberFormatting";
-import { normalizeResearcherToken } from "../domain/researcherContentFilter";
+import { refreshResearcherContentPolicy } from "../domain/researcherInputFilter";
+import { wireTabScrollPreservation } from "../domain/tabScrollPreservation";
 import "../domain/searchFilterSchema";
 import { touchupRecordPayload, upsertRecordPayload } from "../domain/recordPayloads";
 import "../domain/recordFormatting";
@@ -790,106 +791,6 @@ document.addEventListener("click", (event) => {
     }
   }
 });
-let researcherPolicy = { ready: false, blocked: new Set(), contextual: [] };
-let researcherPolicyToastAt = 0;
-async function researcherTokenDigest(value) {
-  if (!globalThis.crypto?.subtle) return "";
-  const buf = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(normalizeResearcherToken(value)),
-  );
-  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
-}
-async function refreshResearcherContentPolicy() {
-  if (!state.userContext) {
-    researcherPolicy = { ready: false, blocked: new Set(), contextual: [] };
-    return;
-  }
-  try {
-    const data = await api("/api/i18n/content-policy");
-    researcherPolicy = {
-      ready: Boolean(data?.ready),
-      blocked: new Set(Array.isArray(data?.blocked_term_hashes) ? data.blocked_term_hashes : []),
-      contextual: Array.isArray(data?.contextual) ? data.contextual : [],
-    };
-  } catch {
-    researcherPolicy = { ready: false, blocked: new Set(), contextual: [] };
-  }
-}
-async function filterResearcherInputElement(target) {
-  if (!isResearcher() || !(target instanceof HTMLElement) || !researcherPolicy.ready) return;
-  const acceptsText =
-    target instanceof HTMLTextAreaElement ||
-    (target instanceof HTMLInputElement &&
-      ["text", "search", "url", "email", "tel"].includes(target.type)) ||
-    target.isContentEditable;
-  if (!acceptsText) return;
-  const original = target.isContentEditable ? target.textContent || "" : target.value || "";
-  const words = [...original.matchAll(/[\w'’]+/g)];
-  const remove = [];
-  for (const match of words) {
-    const raw = match[0];
-    const digest = await researcherTokenDigest(raw);
-    if (!digest) continue;
-    if (researcherPolicy.blocked.has(digest)) {
-      remove.push(raw);
-      continue;
-    }
-    const rule = researcherPolicy.contextual.find((item) => item.term_hash === digest);
-    if (!rule) continue;
-    if (
-      rule.allow_title_case &&
-      raw === raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() &&
-      raw !== raw.toLowerCase()
-    )
-      continue;
-    const index = words.indexOf(match);
-    const surrounding = words
-      .slice(Math.max(0, index - 3), index + 4)
-      .map((item) => normalizeResearcherToken(item[0]))
-      .join(" ");
-    if (
-      (rule.allow_if_surrounding || []).some((marker) =>
-        surrounding.includes(normalizeResearcherToken(marker)),
-      )
-    )
-      continue;
-    const before = normalizeResearcherToken(
-      original.slice(Math.max(0, match.index - 20), match.index),
-    );
-    if (
-      (rule.allow_if_before_markers || []).some((marker) =>
-        before.includes(normalizeResearcherToken(marker)),
-      )
-    )
-      continue;
-    remove.push(raw);
-  }
-  if (!remove.length) return;
-  let filtered = original;
-  for (const token of remove)
-    filtered = filtered.replace(
-      new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`),
-      "",
-    );
-  filtered = filtered.replace(/ {2,}/g, " ");
-  if (target.isContentEditable) target.textContent = filtered;
-  else target.value = filtered;
-  target.dispatchEvent(new Event("change", { bubbles: true }));
-  const now = Date.now();
-  if (now - researcherPolicyToastAt > 1200) {
-    researcherPolicyToastAt = now;
-    toast(tr("content_filter.warning"), { tone: "warning" });
-  }
-}
-document.addEventListener(
-  "input",
-  (event) => {
-    void filterResearcherInputElement(event.target);
-  },
-  true,
-);
-
 /**
  * Re-derive runtime view state from the browser location (the router owns the URL) and repaint.
  * Used by browser back/forward and whenever a router navigation settles somewhere the runtime did not expect.
@@ -922,79 +823,6 @@ function wireMetadataSearchDelegation() {
     true,
   );
 }
-let tabScrollPreservationWired = false;
-function wireTabScrollPreservation() {
-  if (tabScrollPreservationWired) return;
-  tabScrollPreservationWired = true;
-  const selector = [
-    '[role="tab"]',
-    ".view-tab",
-    ".db-browser-tab",
-    ".search-mode-tabs button",
-    ".dashboard-search-tabs button",
-    ".annotation-tabs button",
-    ".annotations-tabs button",
-    ".record-view-tabs button",
-    ".compare-tabs button",
-    ".config-tabs button",
-  ].join(",");
-  const arm = (target) => {
-    if (!target) return;
-    const top = window.scrollY,
-      left = window.scrollX,
-      main = document.querySelector("#main");
-    let cancelled = false,
-      quietTimer = null,
-      stopTimer = null,
-      observer = null;
-    const restore = () => {
-      if (cancelled) return;
-      if (Math.abs(window.scrollY - top) > 1 || Math.abs(window.scrollX - left) > 1)
-        window.scrollTo({ top, left, behavior: "auto" });
-    };
-    const stop = () => {
-      observer?.disconnect();
-      if (quietTimer) clearTimeout(quietTimer);
-      if (stopTimer) clearTimeout(stopTimer);
-      window.removeEventListener("wheel", cancel);
-      window.removeEventListener("touchmove", cancel);
-    };
-    const cancel = () => {
-      cancelled = true;
-      stop();
-    };
-    observer = main
-      ? new MutationObserver(() => {
-          restore();
-          if (quietTimer) clearTimeout(quietTimer);
-          quietTimer = setTimeout(stop, 140);
-        })
-      : null;
-    observer?.observe(main, { childList: true, subtree: true });
-    window.addEventListener("wheel", cancel, { passive: true, once: true });
-    window.addEventListener("touchmove", cancel, { passive: true, once: true });
-    requestAnimationFrame(restore);
-    stopTimer = setTimeout(stop, 1200);
-  };
-  document.addEventListener(
-    "pointerdown",
-    (event) => {
-      const target = event.target instanceof Element ? event.target.closest(selector) : null;
-      if (target) arm(target);
-    },
-    true,
-  );
-  document.addEventListener(
-    "keydown",
-    (event) => {
-      if (!["Enter", " "].includes(event.key)) return;
-      const target = event.target instanceof Element ? event.target.closest(selector) : null;
-      if (target) arm(target);
-    },
-    true,
-  );
-}
-
 async function bootstrapRuntime() {
   wireTabScrollPreservation();
   wireMetadataSearchDelegation();
