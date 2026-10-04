@@ -5842,6 +5842,15 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'settings.rag_rrf_k_help': 'Constante de lissage pour la fusion par rang réciproque. 60 est une v'
                                        'aleur courante.',
  'settings.rag_title': 'Valeurs par défaut du pipeline RAG',
+ 'settings.pipeline_overrides_title': 'Remplacements globaux du pipeline',
+ 'settings.pipeline_overrides_help': ('L’Atelier de pipelines définit la configuration de référence. Les remplacements enregistrés ici '
+                                      'remplacent les paramètres des étapes nommées pour cette version exacte du pipeline. Les remplacements '
+                                      'propres à une exécution de Recherche ont priorité sur ces valeurs.'),
+ 'settings.pipeline_overrides_pipeline': 'Version du pipeline',
+ 'settings.pipeline_overrides_target': ('Les remplacements ciblent {pipeline}@{version}. Ils ne sont jamais reportés automatiquement '
+                                        'sur une autre version.'),
+ 'settings.pipeline_overrides_select_help': ('Choisissez la version immuable de l’Atelier de pipelines dont vous voulez remplacer '
+                                             'les paramètres d’étape.'),
  'settings.rag_top_n': 'N de reclassement',
  'settings.rag_top_n_help': 'Nombre de candidats inspectés par le reclassement.',
  'settings.rag_total_chars': 'Caractères totaux de preuve',
@@ -9064,6 +9073,15 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'pipelines.explain_input_type': 'Expliquer ce type d’entrée',
  'pipelines.explain_output_type': 'Expliquer ce type de sortie',
  'pipelines.explain_setting': 'Expliquer ce paramètre',
+ 'pipelines.override_not_set': 'Non défini',
+ 'pipelines.override_source_run': 'Cette exécution',
+ 'pipelines.override_source_settings': 'Paramètres',
+ 'pipelines.override_source_pipeline': 'Atelier de pipelines',
+ 'pipelines.override_select_pipeline': 'Sélectionnez un pipeline de recherche pour configurer les remplacements.',
+ 'pipelines.override_no_config': 'Ce pipeline ne contient aucun paramètre d’étape enregistré pouvant être remplacé.',
+ 'pipelines.override_pipeline_value': 'Pipeline',
+ 'pipelines.override_settings_value': 'Paramètres',
+ 'pipelines.override_effective_value': 'Valeur effective',
  'pipelines.graph_validation_help': ('La validation vérifie la structure de la recette : ID d’étapes, connexions, types et plages '
                                       'des paramètres, ainsi que les autres règles vérifiables avant l’exécution.'),
  'pipelines.how_to_read_chain': 'Comment lire cette chaîne',
@@ -9496,6 +9514,9 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'research.pipeline_override_allowed': 'Les remplacements autorisés s’appliquent uniquement à cette configuration de recherche; la version résolue est enregistrée avec l’exécution.',
  'research.pipeline_effective': 'Chaîne effective',
  'research.pipeline_admin_note': 'Les administrateurs créent, versionnent, valident et activent les chaînes dans Données système → Atelier de pipelines.',
+ 'research.run_pipeline_overrides': 'Remplacements pour cette exécution',
+ 'research.run_pipeline_overrides_help': ('Ces paramètres s’appliquent uniquement à cette exécution. Ils remplacent à la fois la configuration '
+                                          'de l’Atelier de pipelines et les remplacements des Paramètres pour cette version exacte du pipeline.'),
  'research.pipeline_override_badge': 'Remplacement pour cette exécution',
  'research.pipeline_system_assignment_badge': 'Affectation système',
  'research.pipeline_trace': 'Trace d’exécution du pipeline',
