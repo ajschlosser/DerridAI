@@ -43,6 +43,9 @@ vi.mock("../../src/domain/sharedProviderProfiles", () => ({
   getDefaultProviderProfileId: api.runtime.getDefaultProviderProfileId,
   getProviderProfilesForUi: api.runtime.getProviderProfilesForUi,
 }));
+vi.mock("../../src/domain/jobsActions", () => ({
+  registerExternalJob: api.runtime.registerExternalJob,
+}));
 vi.mock("../../src/runtime/runtime.js", () => ({
   notifyToast: api.runtime.notifyToast,
   getDefaultProviderProfileId: api.runtime.getDefaultProviderProfileId,

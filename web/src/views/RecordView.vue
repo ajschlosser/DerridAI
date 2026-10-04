@@ -23,6 +23,7 @@ import { decompressUrlState } from "../domain/urlState";
 import { useAuthStore } from "../stores/auth";
 import { useRoute } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
+import { openSemanticRecord } from "../domain/semanticMapSources";
 import { navigateTo } from "../domain/sharedNavigation";
 import { useI18nStore } from "../stores/i18n";
 import { useNewerData } from "../composables/useNewerData";
@@ -476,7 +477,7 @@ onBeforeUnmount(() => {
           record_revision:
             typeof record.record_revision === 'number' ? record.record_revision : undefined,
         }"
-        @open-record="runtime.openSemanticRecord?.($event)"
+        @open-record="openSemanticRecord($event)"
       />
       <p v-else-if="showRecordMap" class="info">
         {{ i18n.t("record.semantic_map_unavailable") }}

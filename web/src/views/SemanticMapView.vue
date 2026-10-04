@@ -21,7 +21,7 @@ import { onMounted, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import { useSemanticMapStore } from "../stores/semanticMap";
 import type { SemanticMapSource } from "../domain/semanticMap";
-import * as runtime from "../runtime/runtime.js";
+import { listSemanticMapSources } from "../domain/semanticMapSources";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
 
@@ -32,7 +32,7 @@ const focusId = ref("");
 
 function load() {
   try {
-    const data = runtime.listSemanticMapSources();
+    const data = listSemanticMapSources();
     sources.value = data?.records || [];
     focusId.value = data?.focusId || "";
   } catch {

@@ -255,7 +255,6 @@ import { recordOptionLabel } from "../domain/recordOptionLabel";
 import { loadStorePage, researcherDbRecords } from "../domain/sharedStoreRecords";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { annotationsWorkspace } from "../domain/sharedAnnotations";
-import { slimSemanticSource } from "../domain/semanticMap";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import {
   allRows,
@@ -1783,56 +1782,6 @@ function touchupApplyResults(items, results, approvals, all = false, reviewOnly 
   return { appliedFields, reviewedRecords };
 }
 
-function listSemanticMapSources() {
-  const seen = new Set();
-  const records = [];
-  const push = (record) => {
-    const slim = slimSemanticSource(record);
-    if (!slim) return;
-    const key =
-      slim.id ||
-      [slim.work, slim.concepts.join("|"), slim.topics.join("|"), slim.persons.join("|")].join("~");
-    if (seen.has(key)) return;
-    seen.add(key);
-    records.push(slim);
-  };
-  const current = selectedRecord();
-  if (current) push(current);
-  const pools = isResearcher()
-    ? [researcherDbRecords(), state.storeRecords || []]
-    : [
-        (state.files || []).flatMap((file) => file.records || []),
-        state.storeRecords || [],
-        researcherDbRecords(),
-      ];
-  for (const pool of pools) {
-    for (const record of pool || []) {
-      push(record);
-      if (records.length >= 400) break;
-    }
-    if (records.length >= 400) break;
-  }
-  const focus = current || {};
-  return { records, focusId: String(focus.record_id || focus._chroma_id || "") };
-}
-
-/** Open a Record reached from a derived semantic-map node when it is in a local file. */
-function openSemanticRecord(recordId) {
-  const wanted = String(recordId || "");
-  if (!wanted) return false;
-  for (const file of state.files || []) {
-    const index = (file.records || []).findIndex(
-      (record) => String(record.record_id || record._chroma_id || "") === wanted,
-    );
-    if (index >= 0) {
-      navigateTo("record", { fileId: file.id, index });
-      return true;
-    }
-  }
-  navigateTo("global");
-  return false;
-}
-
 function translatedNavLabel(item) {
   const keys = {
     home: "nav.dashboard",
@@ -2499,8 +2448,6 @@ export {
   refreshStoreWorks,
   renderCorpusBuildsHomeCard,
   renderOperationsPanel,
-  listSemanticMapSources,
-  openSemanticRecord,
   searchByMetadata,
   mountOperationsPanelHost,
   wireCorpusBuildsHomeCard,

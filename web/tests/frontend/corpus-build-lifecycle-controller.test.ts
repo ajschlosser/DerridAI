@@ -40,7 +40,7 @@ const runtime = vi.hoisted(() => ({
   registerExternalJob: vi.fn(),
 }));
 
-vi.mock("../../src/runtime/runtime.js", () => runtime);
+vi.mock("../../src/domain/jobsActions", () => runtime);
 
 const follow = vi.hoisted(() => ({
   calls: [] as Array<Record<string, any>>,
