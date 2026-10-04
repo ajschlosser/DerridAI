@@ -39,7 +39,7 @@ export function parseJsonl(text: string): { records: JsonObject[]; errors: strin
       if (!Array.isArray(parsedRoot)) throw Error("Root is not an array");
 
       parsedRoot.forEach((item, itemIndex) => {
-        if (typeof item === "object" && item && !Array.isArray(item)) {
+        if (isJsonObject(item)) {
           records.push(item);
         } else {
           errors.push(`Item ${itemIndex + 1}: not an object`);
@@ -55,7 +55,7 @@ export function parseJsonl(text: string): { records: JsonObject[]; errors: strin
     if (!line.trim()) return;
     try {
       const parsedLine = JSON.parse(line);
-      if (typeof parsedLine === "object" && parsedLine && !Array.isArray(parsedLine)) {
+      if (isJsonObject(parsedLine)) {
         records.push(parsedLine);
       } else {
         errors.push(`Line ${lineIndex + 1}: not an object`);
