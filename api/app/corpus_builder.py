@@ -4691,9 +4691,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     if isinstance(live_record.get("metadata_stage_status"), dict)
                     else {}
                 )
+                enrichment_state = str(live_record.get("metadata_enrichment_state") or "").strip().casefold()
                 prior_state = str(
                     row_status.get(task_name)
-                    or ("complete" if live_record.get("metadata_complete") else "queued")
+                    or ("complete" if enrichment_state == "complete" else "queued")
                 )
                 # A sibling may have advanced since this worker's snapshot.
                 # Merge only the callback's own status and ledger entry.
@@ -4773,10 +4774,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             nonlocal updates
             check_cancelled()
             for record in rows:
-                if record.get("metadata_complete") or record.get("metadata_enrichment_state") == "complete":
+                enrichment_state = str(record.get("metadata_enrichment_state") or "").strip().casefold()
+                if enrichment_state == "complete":
                     record["metadata_enrichment_state"] = "complete"
                 else:
-                    # Restarted workers do not survive; their family checkpoints do.
+                    # Scholarly metadata completeness is not execution completion.
+                    # Deterministic/inherited values can satisfy the schema before
+                    # this Record's scheduled LLM enrichment pass has run.
                     record["metadata_enrichment_state"] = "queued"
                     record.setdefault("metadata_stage_status", {})
             states = _metadata_family_states(rows)

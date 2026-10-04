@@ -839,6 +839,53 @@ def test_restart_resume_does_not_repeat_completed_review_pending_pass(prepared, 
         restarted._executor.shutdown(wait=True)
 
 
+@pytest.mark.parametrize("state", [None, "queued", "running", "stale", "failed"])
+def test_scholarly_completeness_does_not_finish_unrun_enrichment(prepared, state):
+    repo, bid, manager = prepared
+    record = repo.get_record(bid, "r1")
+    record["metadata_complete"] = True
+    record.pop("metadata_stage_status", None)
+    if state is None:
+        record.pop("metadata_enrichment_state", None)
+    else:
+        record["metadata_enrichment_state"] = state
+    repo.update_record(bid, record)
+
+    rows = manager._initialize_build_enrichment(bid, {})
+
+    assert rows[0]["metadata_complete"] is True
+    assert rows[0]["metadata_enrichment_state"] == "queued"
+    assert cb._metadata_enrichment_finished(rows[0]) is False
+    assert rows[1]["metadata_enrichment_state"] == "complete"
+    assert cb._metadata_enrichment_finished(rows[1]) is True
+    build = repo.get_build(bid)
+    assert build["metadata_enriched_count"] == 1
+    assert build["metadata_tasks_completed"] == 3
+    assert build["metadata_tasks_queued"] == 3
+
+
+def test_scheduler_runs_schema_complete_record_until_automation_finishes(prepared, monkeypatch):
+    repo, bid, manager = prepared
+    record = repo.get_record(bid, "r1")
+    record["metadata_complete"] = True
+    record["metadata_enrichment_state"] = "queued"
+    repo.update_record(bid, record)
+    seen = []
+
+    def enrich(current, *_args, **_kwargs):
+        seen.append(current["record_id"])
+        return current
+
+    monkeypatch.setattr(manager, "_enrich_record", enrich)
+
+    rows = manager._schedule_build_enrichment(bid, {}, {}, repo.load_records(bid))
+
+    assert seen == ["r1"]
+    assert rows[0]["metadata_enrichment_state"] == "complete"
+    assert cb._metadata_enrichment_finished(rows[0]) is True
+    assert rows[1]["metadata_enrichment_state"] == "complete"
+
+
 @pytest.mark.parametrize("state", ["running", "queued", "stale", "failed"])
 def test_resume_requeues_only_unfinished_or_invalidated_passes(prepared, state):
     repo, bid, manager = prepared
