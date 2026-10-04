@@ -40,7 +40,11 @@ from typing import Any
 
 from .document_intelligence import record_annotations_current
 from .nlp_annotations import current_terms
-from .semantic_content_graph import _slug, document_entity_node_id
+from .semantic_content_graph import (
+    _slug,
+    document_entity_kind,
+    document_entity_node_id,
+)
 from .semantic_identity import text_key
 
 RECORD_SEMANTIC_MAP_VERSION = 1
@@ -51,16 +55,6 @@ MAX_SHARED_PER_LINK = 12
 MAX_NODE_EDGES = 60
 MAX_NODE_RECORDS = 50
 PREVIEW_CHARS = 140
-
-_NER_KINDS = {
-    "PERSON": "person",
-    "PER": "person",
-    "ORG": "organization",
-    "GPE": "place",
-    "LOC": "place",
-    "FAC": "place",
-    "WORK_OF_ART": "work",
-}
 
 EPISTEMIC_NOTE = (
     "A shared node, term, or relation shows where Records meet in the derived graph. "
@@ -205,7 +199,16 @@ class _SemanticIndex:
                     if record_id not in node["record_ids"]:
                         node["record_ids"].append(record_id)
                 else:
-                    kind = _NER_KINDS.get(tag, "entity") if source == "ner" else "term"
+                    kind = (
+                        document_entity_kind(
+                            tag,
+                            profile=str(self.graph.get("profile") or "scholarly"),
+                        )
+                        if source == "ner"
+                        else "term"
+                    )
+                    if not kind:
+                        continue
                     node_id = f"term:{kind}:{_slug(identity or surface)}"
                     node = self.nodes.setdefault(
                         node_id,
@@ -279,6 +282,11 @@ class _SemanticIndex:
         mentions: list[dict[str, Any]] = []
         for item in local.get("entities") or []:
             if not isinstance(item, dict):
+                continue
+            if not document_entity_kind(
+                str(item.get("entity_type") or ""),
+                profile=str(analysis.get("profile") or "scholarly"),
+            ):
                 continue
             node_id = self._resolve_id(document_entity_node_id(str(item.get("entity_id") or ""), str(item.get("label") or "")))
             mentions.append(

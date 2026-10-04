@@ -20,6 +20,8 @@ import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
 import CorpusMissingDocumentFields from "../../src/components/corpus-builder/CorpusMissingDocumentFields.vue";
+import UiInput from "../../src/components/ui/UiInput.vue";
+import UiSelect from "../../src/components/ui/UiSelect.vue";
 import { completeDocumentFields } from "../../src/api/metadataSchemas";
 import {
   missingRequiredDocumentFields,
@@ -56,6 +58,23 @@ describe("required document fields detection missed", () => {
   it("renders nothing when every required field was detected", () => {
     const wrapper = mount(CorpusMissingDocumentFields, { props: { fields: [], modelValue: {} } });
     expect(wrapper.find("section").exists()).toBe(false);
+  });
+
+  it("uses the shared form primitives for text and choice fields", () => {
+    const wrapper = mount(CorpusMissingDocumentFields, {
+      props: {
+        fields: [
+          { name: "document_author", requiredFor: ["evidence" as const] },
+          { name: "document_is_translation", requiredFor: ["publication" as const] },
+        ],
+        modelValue: {},
+      },
+    });
+
+    expect(wrapper.findAllComponents(UiInput)).toHaveLength(1);
+    expect(wrapper.findAllComponents(UiSelect)).toHaveLength(1);
+    expect(wrapper.findComponent(UiInput).attributes("id")).toBeTruthy();
+    expect(wrapper.findComponent(UiSelect).attributes("id")).toBeTruthy();
   });
 
   it("edits the supplied values", async () => {

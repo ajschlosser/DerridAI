@@ -72,6 +72,71 @@ def test_cooccurrence_is_observational_not_a_claimed_relationship():
     assert "Observational edges" in graph["epistemic_note"]
 
 
+def test_numeric_document_annotations_do_not_become_semantic_entities():
+    analysis = {
+        "profile": "scholarly",
+        "provider": "spacy",
+        "record_spans": [{"record_id": "r1", "start": 0, "end": 38}],
+        "entity_clusters": [
+            {
+                "cluster_id": "person",
+                "canonical": "Jacques Derrida",
+                "aliases": ["Derrida"],
+                "entity_type": "PERSON",
+            },
+            {
+                "cluster_id": "count",
+                "canonical": "3",
+                "aliases": ["3"],
+                "entity_type": "CARDINAL",
+            },
+            {
+                "cluster_id": "year",
+                "canonical": "1972",
+                "aliases": ["1972"],
+                "entity_type": "DATE",
+            },
+        ],
+        "entities": [
+            {
+                "cluster_id": "person",
+                "start_char": 0,
+                "end_char": 7,
+                "text": "Derrida",
+                "entity_type": "PERSON",
+            },
+            {
+                "cluster_id": "count",
+                "start_char": 18,
+                "end_char": 19,
+                "text": "3",
+                "entity_type": "CARDINAL",
+            },
+            {
+                "cluster_id": "year",
+                "start_char": 30,
+                "end_char": 34,
+                "text": "1972",
+                "entity_type": "DATE",
+            },
+        ],
+    }
+    records = [
+        {
+            "record_id": "r1",
+            "record_revision": 1,
+            "text": "Derrida published 3 essays in 1972.",
+        }
+    ]
+
+    graph = build_semantic_content_graph(records, analysis)
+
+    labels = {node["label"] for node in graph["nodes"]}
+    assert "Jacques Derrida" in labels
+    assert "3" not in labels
+    assert "1972" not in labels
+
+
 def test_fiction_profile_turns_person_clusters_into_characters_and_maps_dialogue_proximity():
     text = "Elizabeth speaks.\n\nDarcy replies."
     analysis = {

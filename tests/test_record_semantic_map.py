@@ -147,6 +147,31 @@ def test_pos_and_ner_terms_join_existing_nodes_or_link_records_by_surface_form()
     assert [row["record_id"] for row in walk["records"]] == ["r1", "r2"] and walk["edges"] == []
 
 
+def test_numeric_record_ner_terms_do_not_become_map_entities():
+    text = "Derrida published 3 essays in 1972."
+    records = [
+        {
+            "record_id": "r1",
+            "record_revision": 1,
+            "text": text,
+            "nlp_candidates": _terms(
+                text,
+                ("Derrida", "ner", "PERSON"),
+                ("3", "ner", "CARDINAL"),
+                ("1972", "ner", "DATE"),
+            ),
+        }
+    ]
+
+    _, result = _map(records, "r1")
+
+    labels = {node["label"] for node in result["nodes"]}
+    assert "Derrida" in labels
+    assert "3" not in labels
+    assert "1972" not in labels
+    assert {mention["text"] for mention in result["mentions"]} == {"Derrida"}
+
+
 def test_stale_term_and_document_layers_are_reported_not_projected():
     records = _records()
     records[0]["nlp_candidates"] = _terms(records[0]["text"], ("trace", "pos", "NOUN"))
@@ -258,6 +283,58 @@ def test_hot_record_map_reads_do_not_reload_or_rewalk_the_build(
     )
     assert projection is not None
     assert projection["generation"] == store.semantic_map_state(build_id)["generation"]
+
+
+def test_graph_overview_defers_record_node_and_work_projection_indexing(
+    tmp_path,
+    monkeypatch,
+):
+    import app.system_store as system_store_module
+
+    system_repository = SQLiteSystemRepository(tmp_path / "system.sqlite3")
+    monkeypatch.setattr(system_store_module, "system_repository", system_repository)
+    store = system_store_module.SystemStore()
+    monkeypatch.setattr(cb, "system_store", store)
+
+    manager, repo, build_id = _manager(tmp_path)
+    repo.save_records(build_id, _records())
+
+    original_projection_builder = cb.build_semantic_map_projections
+
+    def unexpected_secondary_projection(*_args, **_kwargs):
+        raise AssertionError("graph overview built every Record/node/Work projection")
+
+    monkeypatch.setattr(
+        cb,
+        "build_semantic_map_projections",
+        unexpected_secondary_projection,
+    )
+    view = manager.semantic_content_graph_view(build_id)
+    assert view["kind"] == "semantic_content_graph_view"
+    assert store.get_semantic_map_projection(
+        "graph",
+        build_id,
+        build_id,
+        audience="",
+    ) is not None
+    assert store.get_semantic_map_projection(
+        "record",
+        "r1",
+        build_id,
+        audience="",
+    ) is None
+
+    monkeypatch.setattr(
+        cb,
+        "build_semantic_map_projections",
+        original_projection_builder,
+    )
+
+    def unexpected_graph_rebuild(*_args, **_kwargs):
+        raise AssertionError("secondary projection rebuilt the already-current graph")
+
+    monkeypatch.setattr(cb, "build_semantic_content_graph", unexpected_graph_rebuild)
+    assert manager.record_semantic_map(build_id, "r1")["record_id"] == "r1"
 
 
 def test_a_second_reviewer_cannot_read_a_sealed_value_through_the_record_map(tmp_path):
