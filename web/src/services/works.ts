@@ -16,8 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import * as runtime from "../runtime/runtime.js";
 import { ensureCorpusWorkspaceLoaded } from "../domain/sharedCorpusHydration";
+import { workDialogs } from "../domain/sharedWorkDialogs";
+import { worksWorkspace } from "../domain/sharedWorksWorkspace";
+import { state } from "../domain/sharedUrlState";
 import type { WorksDbStatusKind, WorksSnapshot, WorksSort, WorksViewMode } from "../types/works";
 import { annotationsService } from "./annotations";
 import { requestCorpusFiles } from "./corpusFiles";
@@ -63,50 +65,50 @@ export interface WorksService {
 /**
  * Operation-specific compatibility boundary for the Works workspace.
  *
- * The general runtime still owns several corpus and dialog operations, but Vue
- * code no longer imports that facade directly. Each dependency is named here so
+ * Every dependency is a shared module; Vue code does not import the legacy runtime. Each is named here so
  * it can migrate to a typed store/service without changing the composable or UI.
  */
 export const worksService: WorksService = {
-  getSnapshot: () => runtime.getWorksWorkspaceSnapshot?.() as WorksSnapshot | undefined,
+  getSnapshot: () => worksWorkspace.getWorksWorkspaceSnapshot() as WorksSnapshot | undefined,
 
-  prepare: () => runtime.prepareWorksWorkspace?.() as Promise<WorksPrepareResult | undefined>,
+  prepare: () => worksWorkspace.prepareWorksWorkspace() as Promise<WorksPrepareResult | undefined>,
 
   async activate(onHydrated) {
-    runtime.state.view = "works";
+    state.view = "works";
     await ensureCorpusWorkspaceLoaded();
     onHydrated?.();
-    return runtime.prepareWorksWorkspace?.() as Promise<WorksPrepareResult | undefined>;
+    return worksWorkspace.prepareWorksWorkspace() as Promise<WorksPrepareResult | undefined>;
   },
 
-  setQuery: (value) => runtime.setWorksSearch?.(value),
-  setOverview: (work) => runtime.setWorksOverview?.(work),
-  setView: (patch) => runtime.setWorksView?.(patch),
+  setQuery: (value) => worksWorkspace.setWorksSearch(value),
+  setOverview: (work) => worksWorkspace.setWorksOverview(work),
+  setView: (patch) => worksWorkspace.setWorksView(patch),
 
   async setStore(name) {
-    await runtime.setWorksStore?.(name);
+    await worksWorkspace.setWorksStore(name);
   },
 
   async syncWork(work) {
-    await runtime.syncWork?.(work);
+    await worksWorkspace.syncWork(work);
   },
 
   async syncAll() {
-    await runtime.syncAllWorks?.();
+    await worksWorkspace.syncAllWorks();
   },
 
   chooseFiles: requestCorpusFiles,
-  separateWorks: () => runtime.openSeparateWorksModal?.(),
-  populateAll: () => runtime.populateAllWorksMetadata?.(),
-  populateWork: (work) => runtime.openWorkMetadataLlmDialog?.(work),
-  editMetadata: (work) => runtime.openWorkMetadataEditor?.(work),
+  separateWorks: () => workDialogs.openSeparateWorksModal(),
+  populateAll: () => worksWorkspace.populateAllWorksMetadata(),
+  populateWork: (work) => worksWorkspace.openWorkMetadataLlmDialogForVue(work),
+  editMetadata: (work) => worksWorkspace.openWorkMetadataEditorForVue(work),
   openAnnotations: (work) => annotationsService.openWorkAnnotations(work),
-  searchOverview: (work) => runtime.searchWorkOverview?.(work),
-  searchRecords: (work, needsReview = false) => runtime.searchWorkRecords?.(work, { needsReview }),
-  inspectMixed: (work, field) => runtime.inspectWorksMixedField?.(work, field),
-  searchInsight: (field, value) => runtime.searchWorksInsight?.(field, value),
-  reviewFlagged: (work) => runtime.reviewFlaggedWork?.(work),
-  autoImprove: (work) => runtime.autoImproveWork?.(work),
-  removeWork: (work) => runtime.removeEntireWork?.(work),
-  browseResearcher: (work) => runtime.browseResearcherWork?.(work),
+  searchOverview: (work) => worksWorkspace.searchWorkOverview(work),
+  searchRecords: (work, needsReview = false) =>
+    worksWorkspace.searchWorkRecords(work, { needsReview }),
+  inspectMixed: (work, field) => worksWorkspace.inspectWorksMixedField(work, field),
+  searchInsight: (field, value) => worksWorkspace.searchWorksInsight(field, value),
+  reviewFlagged: (work) => worksWorkspace.reviewFlaggedWork(work),
+  autoImprove: (work) => worksWorkspace.autoImproveWork(work),
+  removeWork: (work) => worksWorkspace.removeEntireWork(work),
+  browseResearcher: (work) => worksWorkspace.browseResearcherWork(work),
 };

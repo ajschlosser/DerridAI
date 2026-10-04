@@ -150,6 +150,20 @@ const runtime = vi.hoisted(() => ({
   setTranslationDictionary: vi.fn(),
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
+vi.mock("../../src/domain/sharedWorksWorkspace", () => ({
+  worksWorkspace: {
+    ...runtime,
+    openWorkMetadataLlmDialogForVue: runtime.openWorkMetadataLlmDialog,
+    openWorkMetadataEditorForVue: runtime.openWorkMetadataEditor,
+  },
+}));
+vi.mock("../../src/domain/sharedWorkDialogs", () => ({
+  workDialogs: { openSeparateWorksModal: runtime.openSeparateWorksModal },
+}));
+vi.mock("../../src/domain/sharedUrlState", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  state: runtime.state,
+}));
 vi.mock("../../src/domain/sharedCorpusHydration", () => ({
   ensureCorpusWorkspaceLoaded: () => runtime.ensureCorpusWorkspaceLoaded(),
 }));
