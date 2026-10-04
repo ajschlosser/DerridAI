@@ -193,6 +193,13 @@ class _StreamResponse:
         return False
 
 
+class _ResettingStreamResponse(_StreamResponse):
+    def iter_bytes(self, chunk_size=None):
+        assert chunk_size
+        yield b"partial"
+        raise httpx.ReadError("connection reset by peer")
+
+
 def test_streaming_archive_download_uses_bounded_request_and_marks_downloaded(tmp_path: Path):
     service = GutenbergOfflineService(
         tmp_path / "state.sqlite", tmp_path / "archive.zip", start_worker=False
@@ -433,7 +440,10 @@ def test_background_worker_retries_connection_reset_and_completes(tmp_path: Path
     service.set_archive_status("start")
     responses = iter(
         (
-            httpx.ReadTimeout("connection reset by peer"),
+            _ResettingStreamResponse(
+                206,
+                {"content-range": "bytes 0-3/4", "etag": '"archive-v1"'},
+            ),
             _StreamResponse(
                 206,
                 {"content-range": "bytes 0-3/4", "etag": '"archive-v1"'},
@@ -442,15 +452,18 @@ def test_background_worker_retries_connection_reset_and_completes(tmp_path: Path
         )
     )
 
-    def fake_stream(*_args, **_kwargs):
-        response = next(responses)
-        if isinstance(response, Exception):
-            raise response
-        return response
+    def fake_extract():
+        # The failed range lived only in the disposable .chunk file. Retrying
+        # the same range must not duplicate or retain its partial bytes.
+        assert service.archive_path.read_bytes() == b"done"
+        return 1
 
-    with patch("app.gutenberg_catalogue.httpx.stream", side_effect=fake_stream), patch.object(
-        service._stop, "wait", return_value=False
-    ), patch.object(service, "extract_catalogue", return_value=1):
+    with patch(
+        "app.gutenberg_catalogue.httpx.stream",
+        side_effect=lambda *_a, **_k: next(responses),
+    ), patch.object(service._stop, "wait", return_value=False), patch.object(
+        service, "extract_catalogue", side_effect=fake_extract
+    ):
         service._run_worker()
 
     state = service.status()["archive"]
