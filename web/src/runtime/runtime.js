@@ -211,6 +211,7 @@ import {
   maybeDesktopNotify,
   syncJobProgressToasts,
 } from "../domain/jobsActions";
+import { registerTouchupActions } from "../domain/touchupActions";
 import { registerOperationsPanelHooks } from "../domain/operationsPanelHooks";
 import { dashboardData } from "../domain/sharedDashboardData";
 import { pdfExplorerRenderer } from "../domain/sharedPdfExplorerRenderer";
@@ -684,6 +685,14 @@ const {
 });
 registerPdfLlmTaskHooks({ openLlmTaskLauncher, openPdfDraftRecord });
 registerOperationsPanelHooks({ mountOperationsPanelHost, openJobResults, gradeRagResponse });
+registerTouchupActions({
+  touchupWorkspaceInfo,
+  touchupProviderStatus,
+  touchupRequestConfig,
+  touchupRequest,
+  touchupSubmitBackground,
+  touchupApplyResults,
+});
 const {
   renderPdfCanvas,
   extractPdfPageBrowser,
@@ -1712,12 +1721,6 @@ export {
   triggerReviewFlagged,
   triggerAutoImproveFlagged,
   openTouchup,
-  touchupWorkspaceInfo,
-  touchupProviderStatus,
-  touchupRequestConfig,
-  touchupRequest,
-  touchupSubmitBackground,
-  touchupApplyResults,
   triggerUpsertQueue,
   triggerEdit,
   getProviderProfilesForUi,
