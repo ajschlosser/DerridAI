@@ -191,6 +191,7 @@ function formatDate(value?: string | null) {
   if (!value) return unset();
   try {
     return new Intl.DateTimeFormat(i18n.locale || undefined, {
+      timeZone: i18n.timeZone,
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(value));
