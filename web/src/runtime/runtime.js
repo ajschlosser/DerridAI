@@ -33,11 +33,7 @@ import "../domain/recordQuery";
 import { sanitizeResearchGeneration } from "../domain/researchPayloads";
 import { fullCitation } from "../domain/citations";
 import "../domain/recordsFiles";
-import {
-  setTranslationDictionary as setTranslationDictionaryCompat,
-  tr as trCompat,
-  trf as trfCompat,
-} from "./legacyCompat.js";
+import { tr as trCompat, trf as trfCompat } from "./legacyCompat.js";
 import { TOUCHUP_GROUPS } from "../domain/runtimeConstants";
 import "../domain/runtimeConstants";
 import { esc, icon } from "../domain/html";
@@ -147,9 +143,6 @@ pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 
 const state = createRuntimeState();
 
-function setTranslationDictionary(locale, dictionary = {}, base = {}, info = {}) {
-  return setTranslationDictionaryCompat(state, locale, dictionary, base, info);
-}
 function tr(key, fallback = "") {
   return trCompat(state, key, fallback);
 }
@@ -398,7 +391,6 @@ const {
   jobElapsedSeconds,
   humanDuration,
   jobProgressText,
-  operationDetailPairs,
   operationViewModel,
 } = operationPresenters;
 
@@ -746,16 +738,4 @@ async function bootstrapRuntime() {
 // history is summarized separately so the heavyweight `updates` payload never
 // becomes ordinary component state.
 
-export {
-  bootstrapRuntime,
-  decorateDisabledControls,
-  jobProgressText,
-  operationDetailPairs,
-  operationViewModel,
-  setShellRefreshHook,
-  setTranslationDictionary,
-  setUrlSyncHook,
-  setUserContext,
-  state,
-  syncFromLocation,
-};
+export { bootstrapRuntime, setShellRefreshHook, setUrlSyncHook, setUserContext, syncFromLocation };

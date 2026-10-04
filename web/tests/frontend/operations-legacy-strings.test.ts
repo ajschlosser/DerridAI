@@ -19,12 +19,11 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  operationDetailPairs,
-  operationViewModel,
-  setTranslationDictionary,
-  state,
-} from "../../src/runtime/runtime.js";
+import "../../src/runtime/runtimeBridge";
+import { operationPresenters } from "../../src/domain/sharedOperationPresenters";
+import { setTranslationDictionary } from "../../src/domain/sharedTranslate";
+import { state } from "../../src/domain/sharedUrlState";
+const { operationDetailPairs, operationViewModel } = operationPresenters;
 import { formatDuration } from "../../src/domain/operationsPanel";
 
 // The Operations panel and its details dialog get their labels, fact names and sentence fragments from the

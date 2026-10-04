@@ -19,7 +19,10 @@
 import { mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CommandSearch from "../../src/components/CommandSearch.vue";
-import { jobProgressText } from "../../src/runtime/runtime.js";
+import "../../src/runtime/runtimeBridge";
+import { operationPresenters } from "../../src/domain/sharedOperationPresenters";
+
+const { jobProgressText } = operationPresenters;
 
 describe("CommandSearch shortcut hint", () => {
   afterEach(() => vi.unstubAllGlobals());
