@@ -129,7 +129,7 @@ def _segmentation_windows(blocks: list[dict[str, Any]], token_budget: int) -> li
         current_chars += block_chars
         index += 1
     if current:
-        if windows and current == windows[-1][-len(current):]:
+        if windows and current == windows[-1][-len(current) :]:
             return windows
         windows.append(current)
     return windows
