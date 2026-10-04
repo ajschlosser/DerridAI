@@ -166,6 +166,7 @@ def extract_non_pdf(
     catalog: dict[str, Any] | None = None,
     detect_page_numbers: bool = True,
     page_llm: Any = None,
+    audio_diarization: bool = True,
 ) -> dict[str, Any]:
     from .source_safety import check_size
 
@@ -173,7 +174,12 @@ def extract_non_pdf(
     if kind not in {"audio", "docx", "doc", "rtf", "html", "image", "text", "gutenberg", "url"}:
         raise ValueError("Unsupported source format.")
     if kind == "audio":
-        return extract_audio(data, filename=filename, catalog=catalog)
+        return extract_audio(
+            data,
+            filename=filename,
+            catalog=catalog,
+            diarize=audio_diarization,
+        )
     if kind == "docx":
         text, embedded = docx_to_text(data)
         method = "docx"
