@@ -95,6 +95,7 @@ export function useCorpusReviewWorkspace() {
   }
 
   function focusFirstMetadataBlocker() {
+    if (activeValueEditor()) return;
     reviewInspectorTab.value = "metadata";
     void nextTick(() => {
       if (activeValueEditor()) return;
@@ -118,6 +119,7 @@ export function useCorpusReviewWorkspace() {
   }
 
   function setReviewWorkspaceMode(mode: ReviewWorkspaceMode) {
+    if (activeValueEditor()) return;
     reviewWorkspaceMode.value = mode;
     if (mode !== "record") reviewInspectorTab.value = mode;
     void nextTick(() => {
