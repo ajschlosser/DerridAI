@@ -235,7 +235,10 @@ export function useCorpusSourceConfiguration(
     }
   }
 
-  async function upload(file?: File | null) {
+  async function upload(
+    file?: File | null,
+    options: { audioDiarization?: boolean } = {},
+  ) {
     if (!file) return;
     busy.value = "upload";
     setMessage("");
@@ -245,6 +248,7 @@ export function useCorpusSourceConfiguration(
         "auto",
         sourceIllegibility.value,
         pageDetection(),
+        options.audioDiarization !== false,
       );
       await refreshAssets();
       rememberAsset(asset, true);
