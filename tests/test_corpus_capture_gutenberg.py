@@ -24,7 +24,10 @@ service's idempotent backfill; remote Gutenberg calls are replaced by in-process
 """
 from __future__ import annotations
 
+import io
 import sqlite3
+import tarfile
+import zipfile
 
 import httpx
 import pytest
