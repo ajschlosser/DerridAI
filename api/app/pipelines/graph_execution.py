@@ -29,7 +29,7 @@ import json
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from .contracts import output_ports
 from .models import PipelineDefinition, PipelineStageDefinition, PipelineStageTrace
@@ -69,6 +69,16 @@ class GraphExecutionError(RuntimeError):
         self.stage_id = stage_id
         self.reason = reason
         self.result = result
+
+
+class StageFailure(Exception):
+    """A server handler's explicit failure category, without private error text."""
+
+    def __init__(
+        self, edge: Literal["on_unavailable", "on_timeout", "on_error"]
+    ) -> None:
+        super().__init__(edge)
+        self.edge = edge
 
 
 def _empty(value: Any) -> bool:
@@ -250,11 +260,16 @@ class GraphExecutor:
                 raise
             except Exception as exc:  # noqa: BLE001 - explicit graph edges own degradation
                 edge = (
-                    "on_unavailable"
-                    if isinstance(exc, LookupError)
-                    else "on_timeout"
-                    if isinstance(exc, TimeoutError) or getattr(exc, "timed_out", False)
-                    else "on_error"
+                    exc.edge
+                    if isinstance(exc, StageFailure)
+                    else (
+                        "on_unavailable"
+                        if isinstance(exc, LookupError)
+                        else "on_timeout"
+                        if isinstance(exc, TimeoutError)
+                        or getattr(exc, "timed_out", False)
+                        else "on_error"
+                    )
                 )
                 if edge == "on_unavailable":
                     trace.status = "unavailable"

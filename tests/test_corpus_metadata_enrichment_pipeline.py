@@ -777,3 +777,68 @@ def test_compiler_rejects_graphs_the_runtime_cannot_honour(changes, message) -> 
     })
     with pytest.raises(ValueError, match=message):
         compile_enrichment_pipeline(pipeline)
+
+
+def test_enrichment_uses_generic_executor_without_legacy_provider_loop(monkeypatch, manager, traces):
+    from app.pipelines.graph_execution import GraphExecutor
+    from app.pipelines.structured_llm_stage import StructuredStageSession
+
+    executed = []
+    original = GraphExecutor.run
+
+    def run_graph(executor, inputs):
+        executed.append(executor.resolved_hash)
+        return original(executor, inputs)
+
+    monkeypatch.setattr(GraphExecutor, 'run', run_graph)
+    monkeypatch.setattr(StructuredStageSession, 'run', lambda *args, **kwargs: pytest.fail('legacy provider loop must not execute'))
+    calls = _provider(monkeypatch, {'primary-model': ['invalid'], 'review-model': [VALID]})
+    record, (_, answer, error) = _enrich(manager, WITH_REVIEW)
+    assert error is None and answer == {'label': 'ok'}
+    assert len(executed) == 1
+    assert executed[0] == record['metadata_execution_ledger']['discourse']['pipeline']['pipeline_hash']
+    assert [call['model'] for call in calls] == ['primary-model', 'review-model']
+
+
+def test_enrichment_session_compiles_once_and_keeps_call_local_context(monkeypatch):
+    from app.pipelines.corpus_metadata_enrichment import EnrichmentSession
+    from app.pipelines.graph_execution import GraphExecutor
+
+    compiled = []
+    original = GraphExecutor.__init__
+
+    def compile_graph(executor, *args, **kwargs):
+        compiled.append(args[0].pipeline_id)
+        original(executor, *args, **kwargs)
+
+    monkeypatch.setattr(GraphExecutor, '__init__', compile_graph)
+    session = EnrichmentSession.open()
+    calls = []
+
+    def invoke(role, attempts, escalated):
+        calls.append((role, attempts, escalated))
+        return {'label': 'proposal'}
+
+    for contract in ('first_contract', 'second_contract'):
+        assert session.run(invoke, response_contract=contract, providers={'primary': ('fake', 'model')}) == {'label': 'proposal'}
+        assert session.identity()['stages'] == [{'stage_id': 'primary', 'provider_role': 'primary', 'status': 'completed'}]
+    assert len(compiled) == 1
+    assert calls == [('primary', 1, False), ('primary', 1, False)]
+    assert session.counts['primary']['contracts'] == {'first_contract', 'second_contract'}
+
+
+def test_enrichment_cancellation_does_not_invoke_fallback_or_create_failed_observation():
+    from app.pipelines.corpus_metadata_enrichment import EnrichmentSession
+
+    session = EnrichmentSession.open()
+    roles = []
+
+    def invoke(role, attempts, escalated):
+        roles.append(role)
+        raise InterruptedError('cancelled')
+
+    with pytest.raises(InterruptedError):
+        session.run(invoke, response_contract='test', providers={})
+    assert roles == ['primary']
+    assert session.identity()['stages'] == []
+    assert session.counts == {}

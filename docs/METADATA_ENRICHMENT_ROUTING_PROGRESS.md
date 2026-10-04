@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Updated: 2026-10-04. Branch: `task/metadata-candidate-routing`.
 
-This is the authoritative resume point for the revised Pipeline Studio candidate-routing implementation plan. Production enrichment remains on its historical adapter. Adaptive routing is not enabled; no latency improvement is claimed.
+This is the authoritative resume point for the revised Pipeline Studio candidate-routing implementation plan. Historical metadata enrichment now executes through the generic graph engine. Adaptive routing is not enabled; no latency improvement is claimed.
 
 ## Checkpoints
 
@@ -62,4 +62,13 @@ PR #508 merged into master at `51b481cf`; that master was merged into this branc
 
 ## Next action
 
-Migrate historical metadata enrichment sessions to the generic executor using the existing schema-derived task and provider invoker. Preserve attempt budgets, failure classification, cancellation, call-local stage identity, ledger linkage, and concurrent-session trace aggregation. Validate full enrichment/evidence/reconciliation parity before changing production assignments. Then add safe concurrency declarations and the candidate collection artifact; keep the router observe-only until support and authority invariants pass.
+Add explicit concurrency capabilities and safe parallel scheduling to the generic executor, preserving definition order for merges/traces and provider capacity controls. Then construct the candidate packet and collection stages; keep routing observe-only until current-record support and authority invariants pass. The historical compiler still accepts its bounded provider graph; arbitrary adaptive graph compilation awaits registered domain handlers.
+
+## Historical executor migration checkpoint
+
+- Metadata provider scheduling now follows the generic executor's resolved ports and selected edges. The assigned pipeline, built-in versions, attempt budgets and schema-derived tasks remain unchanged.
+- One executor snapshot is compiled per session. Each call supplies server-owned task context; sibling calls share only locked telemetry. Call-local stage paths and existing execution-ledger linkage are retained.
+- `StageFailure` lets a server handler declare a coded failure edge without leaking private exception text. Metadata retains its historical unavailable/timeout/error classification and original caller error aggregation.
+- Identity/trace persistence remains on the existing session surface. Reconciliation, evidence validation and canonical authority handling are unchanged. No adaptive branches or parallel graph scheduling are enabled.
+- Before migration: 169 passed, 6 skipped. After migration: the same suite passed; expanded parity coverage passed 266 tests with 6 existing skips. Tests also prove the legacy provider loop is unused, compilation happens once per session, and cancellation does not invoke fallback.
+- Ruff and targeted mypy passed. Pipeline catalog check passed. Full preflight results for this checkpoint are recorded below after completion.
