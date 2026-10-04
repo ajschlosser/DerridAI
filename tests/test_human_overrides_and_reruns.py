@@ -295,6 +295,51 @@ def test_text_edit_during_active_enrichment_forces_fresh_llm_pass(tmp_path: Path
     assert repo.get_build(build["build_id"])["metadata_priority_record_ids"][0] == "r1"
 
 
+def test_absence_decision_during_active_enrichment_forces_fresh_llm_pass(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """Confirming absence cannot invalidate an in-flight worker without a replacement pass."""
+    repo, build = install_review_build(
+        tmp_path,
+        {
+            "text": "Queued text.",
+            "metadata_enrichment_state": "queued",
+            "metadata_stage_status": {
+                "discourse": "queued",
+                "quotation": "queued",
+                "indexing": "queued",
+            },
+        },
+    )
+    active = repo.get_build(build["build_id"])
+    active.update(
+        {
+            "status": "running",
+            "stage": "enriching",
+            "metadata_priority_record_ids": [],
+        }
+    )
+    repo.save_build(active)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", lambda _build_id: None)
+
+    result = manager.metadata_decision(
+        build["build_id"],
+        "r1",
+        "speaker",
+        None,
+        expected_revision=1,
+        confirm_no_supported_value=True,
+    )
+
+    updated = result["record"]
+    assert updated["metadata_requeue_requested"] is True
+    assert updated["metadata_enrichment_state"] == "stale"
+    assert updated["metadata_field_status"]["speaker"]["status"] == "confirmed_absent"
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"][0] == "r1"
+
+
 def test_metadata_edit_during_active_enrichment_forces_fresh_llm_pass(
     tmp_path: Path,
     monkeypatch,
