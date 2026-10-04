@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from app.corpus_llm_helpers import StructuredOutputError
 from app.llm_failures import (
     FailureDisposition,
@@ -30,7 +32,10 @@ from app.metadata_failure_recovery import (
     plan_metadata_recovery,
     queue_due_recoveries,
 )
-from app.structured_completion import StructuredCompletionError, complete_structured_json
+from app.structured_completion import (
+    StructuredCompletionError,
+    complete_structured_json,
+)
 
 
 def test_provider_http_failures_have_stable_retry_semantics() -> None:
