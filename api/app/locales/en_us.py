@@ -5549,8 +5549,8 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
  'settings.rag_fetch_k': 'MMR fetch_k',
  'settings.rag_fetch_k_help': 'Candidate pool size before diversity ranking. Must be at least retr'
                                        'ieval k.',
- 'settings.rag_help': 'Retrieval, fusion, reranking, and evidence-budget defaults. These values ar'
-                                       'e stored with each run so later audit can reproduce it.',
+ 'settings.rag_help': ('Configure global stage overrides on immutable Research pipelines, plus request-level defaults that new '
+                       'Research runs inherit. Each run records the effective configuration for audit.'),
  'settings.rag_k': 'Retrieval k',
  'settings.rag_k_help': 'How many passages to keep after ranking. Typical scholarly runs use 24–64'
                                        '.',
@@ -5568,7 +5568,7 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
  'settings.rag_rrf_k': 'RRF k',
  'settings.rag_rrf_k_help': 'Smoothing constant for reciprocal-rank fusion. 60 is a common default'
                                        '.',
- 'settings.rag_title': 'RAG pipeline defaults',
+ 'settings.rag_title': 'Research retrieval and pipeline overrides',
  'settings.pipeline_overrides_title': 'Global pipeline overrides',
  'settings.pipeline_overrides_help': ('Pipeline Studio defines the baseline. Overrides saved here replace configuration on the named stages '
                                       'for this exact pipeline version. Research run overrides take precedence over these values.'),
@@ -5600,7 +5600,7 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
                                        'expose database or source-management controls.',
  'settings.reset_appearance': 'Reset appearance defaults',
  'settings.reset_columns': 'Reset table columns',
- 'settings.reset_rag': 'Reset retrieval defaults',
+ 'settings.reset_rag': 'Reset Research configuration',
  'settings.restore_backup': 'Load from backup',
  'settings.restore_confirm_message': 'This replaces the current browser workspace and every collec'
                                        'tion in the active Chroma database.',
@@ -5623,7 +5623,7 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
                                        'rom Operations.',
  'settings.save_appearance': 'Save appearance',
  'settings.save_embedding': 'Save embedding defaults',
- 'settings.save_rag': 'Save RAG defaults',
+ 'settings.save_rag': 'Save Research configuration',
  'settings.save_research': 'Save research defaults',
  'settings.save_review': 'Save review behavior',
  'settings.scheme_dark': 'Dark',
