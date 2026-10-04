@@ -135,11 +135,10 @@ function displayTimestamp(value: unknown) {
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
 }
-const modelSuggestion = computed(() =>
-  suggestedValues(props.status, props.value, isLlm.value, hasValue).filter(
-    (value) => !isPlaceholderValue(value),
-  ),
-);
+const modelSuggestion = computed(() => {
+  const values = suggestedValues(props.status, props.value, isLlm.value, hasValue);
+  return values.filter((value) => !isPlaceholderValue(value));
+});
 const optionGroups = computed(() =>
   groupOptionsBySuggestion(props.options || [], modelSuggestion.value),
 );
@@ -182,11 +181,7 @@ const resolvedValue = computed(() => {
   // Backward compatibility for records created before populated-but-unverified
   // proposals were written into the record itself. Confidence affects review
   // state, not whether the reviewer may see the proposed value.
-  if (
-    !status.blind &&
-    hasValue(status.proposed_value) &&
-    !modelPlaceholder(status.proposed_value)
-  )
+  if (!status.blind && hasValue(status.proposed_value) && !modelPlaceholder(status.proposed_value))
     return normalizeMetadataFieldValue(props.field, status.proposed_value);
   if (hasValue(props.constraint?.value))
     return normalizeMetadataFieldValue(props.field, props.constraint?.value);
