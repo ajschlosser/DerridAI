@@ -26,11 +26,11 @@ A DerridAI helyi futtatásra épülő, provenienciát megőrző kutatási körny
 
 A DerridAI egyben a **cELF 1.0 — Capta-Enriched Lexical Format** eredeti referencia-implementációja, amely provenienciát megőrző információs architektúrát határoz meg MI-támogatott dokumentumkutatáshoz. A rendszer külön és ellenőrizhetően kezeli a forrásazonosságot, a rekordazonosságot és revíziót, a metaadat-állításokat, a bizonyítékot, a generált állításokat és a támogatási kapcsolatokat, ahelyett hogy mindezt egy átláthatatlan vektoradatbázisba lapítaná.
 
-Aktuális verzió: **0.81.0 — Fall River** ([kiadási jegyzetek](docs/notes/0.81.0.md)). Az alkalmazás verziószáma Fall River óta nem változott; ez a README az aktuális `master` ágat írja le, beleértve a 0.81.0 utáni, a címkézett kiadásban még nem szereplő munkát is.
+Aktuális verzió: **0.82.0 — Gloucester** ([kiadási jegyzetek](docs/notes/0.82.0.md)). Ez a README a Gloucester kiadást írja le.
 
 ## Az aktuális `master` állapota
 
-Az aktuális ág jelentősen továbbfejlődött a 0.81.0 címke óta, miközben az alkalmazás verziója továbbra is 0.81.0. Az alábbi összefoglaló a jelenlegi terméket írja le, nem új kiadási jegyzet.
+Az alábbi összefoglaló a Gloucester kiadást írja le.
 
 - **A Corpus Builder ma már fokozatos Beállítás → Build → Áttekintés → Közzététel munkafolyamat.** Támogatja a korlátozott párhuzamos gazdagítást, az explicit korpusztopológia- és Record-méretválasztást, a folytatható és revíziótudatos ellenőrzést, a tartós Record-lokális sorokat, a publikációs blokkolók célzott javítását, az ismételhető metaadatcsoportokat, az audio beszélő-hozzárendelést és az ellenőrzött előkészítés közbeni biztonságos szövegrevíziót.
 - **A metaadat- és bizonyítékfeldolgozás kevesebb modellmunkával erősebb szemantikát tart meg.** A determinisztikus/candidate-first routing, a szemantikai azonosság és értékegyenértékűség, a támogatással validált evidence cascade v2, a strukturált kimenetek javítása/osztályozása és a Metadata Memory inkrementális egyeztetése csökkenti a késleltetést anélkül, hogy a retrieval relevanciát vagy hibás kimenetet bizonyítékká emelné.
