@@ -84,16 +84,16 @@ The browser/API transport split is intentional: REST owns commands and mutations
 
 ## Where to contribute
 
-| Change | Start in |
-| --- | --- |
-| Route/page composition | `src/views/` |
-| Reusable interaction/UI | `src/components/` (and Storybook) |
-| Cohesive feature orchestration | `src/features/` |
-| Vue lifecycle/async coordination | `src/composables/` |
-| Pure transformations/presenters/codecs | `src/domain/` |
-| REST/GraphQL transport | `src/api/` |
-| Shared application state | `src/stores/` or `src/state/` |
-| Frontend tests | `tests/frontend/` or `tests/e2e/` according to the boundary |
+| Change                                 | Start in                                                    |
+| -------------------------------------- | ----------------------------------------------------------- |
+| Route/page composition                 | `src/views/`                                                |
+| Reusable interaction/UI                | `src/components/` (and Storybook)                           |
+| Cohesive feature orchestration         | `src/features/`                                             |
+| Vue lifecycle/async coordination       | `src/composables/`                                          |
+| Pure transformations/presenters/codecs | `src/domain/`                                               |
+| REST/GraphQL transport                 | `src/api/`                                                  |
+| Shared application state               | `src/stores/` or `src/state/`                               |
+| Frontend tests                         | `tests/frontend/` or `tests/e2e/` according to the boundary |
 
 Do not add new product logic to `src/runtime/runtime.js` unless the change is specifically maintaining that compatibility boundary.
 
