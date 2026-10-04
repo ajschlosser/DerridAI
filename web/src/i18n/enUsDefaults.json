@@ -1977,7 +1977,7 @@
   "pdf_corpus.library.importing": "Importing…",
   "pdf_corpus.library.matching_parts": "{count} matching parts",
   "pdf_corpus.library.words": "{count} words",
-  "pdf_corpus.library.collection_needed": "Install the full local Gutenberg text database for offline author capture and local imports. Individual books can still be downloaded directly before installation.",
+  "pdf_corpus.library.collection_needed": "Install the full local Gutenberg text database for offline author capture and local imports. Individual imports can still download one verified text directly before installation.",
   "pdf_corpus.library.catalogue_needed": "Fetch the catalogue to search Project Gutenberg.",
   "pdf_corpus.assign_selected_evidence_short": "Save with selection as evidence",
   "pdf_corpus.evidence_selection_label": "Selected as evidence",
