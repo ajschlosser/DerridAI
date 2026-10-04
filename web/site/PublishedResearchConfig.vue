@@ -179,10 +179,10 @@ function toggleWork(work: string, checked: boolean) {
       </p>
       <div class="published-work-options">
         <UiCheckbox
-          v-for="item in site.publication.works"
+          v-for="(item, index) in site.publication.works"
           :key="item.work"
           class="published-work-option"
-          :input-id="`${idPrefix}-work-${String(item.work).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`"
+          :input-id="`${idPrefix}-work-${index}`"
           :label="String(item.work)"
           :model-value="modelValue.works.includes(String(item.work))"
           :disabled="disabled"
