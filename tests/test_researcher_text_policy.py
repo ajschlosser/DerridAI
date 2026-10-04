@@ -29,19 +29,10 @@ import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
 _APP_BOOTSTRAP_PATH = ROOT / "web/src/domain/appBootstrap.ts"
-APP_BOOTSTRAP = (
-    _APP_BOOTSTRAP_PATH.read_text(encoding="utf-8")
-    if _APP_BOOTSTRAP_PATH.exists()
-    else RUNTIME
-)
 _INPUT_FILTER_PATH = ROOT / "web/src/domain/researcherInputFilter.ts"
-INPUT_FILTER = (
-    _INPUT_FILTER_PATH.read_text(encoding="utf-8")
-    if _INPUT_FILTER_PATH.exists()
-    else RUNTIME
-)
+APP_BOOTSTRAP = _APP_BOOTSTRAP_PATH.read_text(encoding="utf-8")
+INPUT_FILTER = _INPUT_FILTER_PATH.read_text(encoding="utf-8")
 POLICY_ROUTES = "\n".join(
     (ROOT / path).read_text(encoding="utf-8")
     for path in (
