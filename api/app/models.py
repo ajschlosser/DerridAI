@@ -875,6 +875,7 @@ class PdfCorpusMetadataCacheClear(BaseModel):
 
 class PdfCorpusMetadataDecisionBatch(BaseModel):
     changes: dict[str, Any] = Field(min_length=1, max_length=60)
+    confirmed_absent_fields: list[str] = Field(default_factory=list, max_length=60)
     expected_revision: int | None = Field(default=None, ge=1)
 
 
