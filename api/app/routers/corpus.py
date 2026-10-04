@@ -184,6 +184,7 @@ async def create_pdf_asset(
     provider: str = Form(default=""),
     base_url: str = Form(default=""),
     api_key: str = Form(default=""),
+    audio_diarization: bool = Form(default=True),
 ) -> dict[str, Any]:
     if ocr_mode not in {"auto", "never", "always"}:
         raise HTTPException(status_code=422, detail="ocr_mode must be auto, never, or always")
@@ -226,6 +227,7 @@ async def create_pdf_asset(
                 page_number_detection, provider_profile_id, model,
                 provider=provider, base_url=base_url, api_key=api_key,
             ),
+            audio_diarization=audio_diarization,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
