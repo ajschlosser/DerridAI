@@ -18,17 +18,18 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { getShellSnapshot, systemCardHtml } from "../../src/domain/shellSnapshot";
+import { jobsState } from "../../src/state/jobsState";
 import { state } from "../../src/domain/sharedUrlState";
 
 describe("shell snapshot", () => {
   afterEach(() => {
     state.health = null;
-    state.jobs = [];
+    jobsState.jobs = [];
     state.view = "home";
   });
 
   it("counts only queued, running and cancelling jobs as active", () => {
-    state.jobs = [
+    jobsState.jobs = [
       { status: "running" },
       { status: "queued" },
       { status: "cancelling" },
