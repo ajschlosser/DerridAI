@@ -120,6 +120,7 @@ def test_human_text_correction_reopens_previously_accepted_record(tmp_path: Path
         "accepted": True,
         "rejected": False,
         "needs_review": False,
+        "human_touched_fields": ["__review__"],
     }
     repo, build = install_review_build(tmp_path, record)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
@@ -128,6 +129,8 @@ def test_human_text_correction_reopens_previously_accepted_record(tmp_path: Path
     assert updated["accepted"] is False
     assert updated["rejected"] is False
     assert updated["needs_review"] is True
+    assert "__review__" not in updated["human_touched_fields"]
+    assert "__text__" in updated["human_touched_fields"]
     assert "reviewed record text changed" in updated["review_reason"].lower()
     assert updated["review_events"][-1]["event"] == "text_corrected"
 
