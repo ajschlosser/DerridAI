@@ -22,6 +22,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
+from app import gutenberg_catalogue
+from app import source_gutenberg as source_gutenberg
 from app.gutenberg_catalogue import GutenbergOfflineService
 
 
@@ -52,7 +54,7 @@ def _make_archive(path: Path) -> None:
         archive.writestr("txt-files.tar", tar_buffer.getvalue())
 
 
-def test_streamed_archive_extraction_persists_text_and_metadata(tmp_path: Path):
+def test_streamed_archive_extraction_installs_text_in_database_and_zip_is_disposable(tmp_path: Path, monkeypatch):
     archive_path = tmp_path / "txt-files.tar.zip"
     _make_archive(archive_path)
     service = GutenbergOfflineService(
@@ -75,13 +77,31 @@ def test_streamed_archive_extraction_persists_text_and_metadata(tmp_path: Path):
     text, metadata = service.text(1342) or ("", {})
     assert "available offline" in text
     assert metadata["document_author"] == "A Local Author"
-    with sqlite3.connect(service.db_path) as db:
+    assert len(metadata["source_sha256"]) == 64
+    with sqlite3.connect(service.library_db_path) as db:
         row = db.execute(
-            "SELECT path,content FROM gutenberg_books WHERE etext_id=1342"
+            "SELECT content,byte_length,archive_member FROM gutenberg_texts WHERE etext_id=1342"
         ).fetchone()
     assert row is not None
-    assert Path(row[0]).is_file()
-    assert row[1] == ""
+    assert "available offline" in row[0]
+    assert row[1] > 0
+    assert row[2] == "1342.txt"
+    assert not service.extract_root.exists()
+
+    # Installation readiness belongs to the verified database, not the 11 GB transport ZIP.
+    archive_path.unlink()
+    assert service.status()["ready"] is True
+
+    # When installed, single-book acquisition must not touch Gutendex/Gutenberg.
+    monkeypatch.setattr(gutenberg_catalogue, "gutenberg_offline", service)
+    monkeypatch.setattr(
+        source_gutenberg.httpx,
+        "get",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("network should not be used")),
+    )
+    local_text, local_meta = source_gutenberg.load_gutenberg_etext(1342)
+    assert "available offline" in local_text
+    assert local_meta["gutenberg_id"] == 1342
 
 
 def test_catalogue_refresh_indexes_local_search_before_archive_download(tmp_path: Path):
@@ -105,6 +125,76 @@ def test_catalogue_refresh_indexes_local_search_before_archive_download(tmp_path
     assert state["ready"] is False
     assert state["catalogue"]["item_count"] == 1
     assert service.search("Prejudice")[0]["etext_id"] == 1342
+
+
+def test_local_author_search_and_resolution_use_catalogue_only(tmp_path: Path):
+    service = GutenbergOfflineService(
+        tmp_path / "state.sqlite", tmp_path / "archive.zip", start_worker=False
+    )
+
+    class Response:
+        content = (
+            b"Text#,Type,Issued,Title,Language,Authors\n"
+            b"1342,Text,1998-06-01,Pride and Prejudice,en,\"Austen, Jane, 1775-1817\"\n"
+            b"158,Text,1994-01-01,Emma,en,\"Austen, Jane, 1775-1817\"\n"
+        )
+
+        def raise_for_status(self):
+            return None
+
+    with patch("app.gutenberg_catalogue.httpx.get", return_value=Response()):
+        service.refresh_catalogue()
+
+    people = service.search_authors("Jane Austen")
+    assert len(people) == 1
+    assert people[0]["identity_source"] == "gutenberg"
+    assert people[0]["wikidata_qid"] is None
+    assert people[0]["label"] == "Jane Austen"
+    resolved = service.resolve_author(people[0]["identity_id"])
+    assert resolved.canonical_name == "Jane Austen"
+    assert resolved.wikidata_qid is None
+    assert resolved.birth_year == 1775
+    assert {row["etext_id"] for row in service.sources_for_author(
+        resolved.names(), birth_year=resolved.birth_year, death_year=resolved.death_year
+    )} == {158, 1342}
+
+
+def test_streaming_archive_download_uses_one_request_and_marks_downloaded(tmp_path: Path):
+    service = GutenbergOfflineService(
+        tmp_path / "state.sqlite", tmp_path / "archive.zip", start_worker=False
+    )
+    service.set_archive_status("start")
+    seen: list[dict[str, str]] = []
+
+    class Response:
+        status_code = 200
+        headers = {"content-length": "8"}
+
+        def raise_for_status(self):
+            return None
+
+        def iter_bytes(self, chunk_size=None):
+            assert chunk_size
+            yield b"four"
+            yield b"more"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    def fake_stream(_method, _url, *, headers, **_kwargs):
+        seen.append(dict(headers))
+        return Response()
+
+    with patch("app.gutenberg_catalogue.httpx.stream", side_effect=fake_stream):
+        state = service.download_archive()
+
+    assert seen == [{}]
+    assert service.archive_path.read_bytes() == b"fourmore"
+    assert state["archive"]["status"] == "downloaded"
+    assert state["archive"]["bytes_done"] == 8
 
 
 def test_first_archive_request_is_always_bounded_by_range(tmp_path: Path):
