@@ -26,11 +26,11 @@ This matrix is a navigation and verification index. The detailed document contai
 
 ## Coverage summary
 
-- Total requirements: **402**
-- Requirements with verification text that includes **Direct**: **292**
+- Total requirements: **403**
+- Requirements with verification text that includes **Direct**: **293**
 - Requirements explicitly containing a **Gap** marker: **9**
 - Requirements with **Architectural** verification: **11**
-- Requirements mapped to one or more tracked cELF conformance keys: **106**
+- Requirements mapped to one or more tracked cELF conformance keys: **107**
 
 ## Traceability matrix
 
@@ -91,6 +91,7 @@ This matrix is a navigation and verification index. The detailed document contai
 | **PRD-CB-012** | Review navigation and resumed text review MUST be revision-aware and MUST NOT reuse stale Record state after a newer revision is known. | [INGESTION_AND_CORPUS_BUILDER.md](INGESTION_AND_CORPUS_BUILDER.md) | PRD-G-005, PRD-G-009, PRD-G-024, PRD-G-032 | [CORE-ID-006](../../SPECIFICATION.md#normative-conformance-requirement-catalogue), [CORE-ID-007](../../SPECIFICATION.md#normative-conformance-requirement-catalogue) | **Direct:** [review queue navigation cache](../../tests/test_review_queue_navigation_cache.py); [corpus build resilience](../../tests/test_corpus_build_resilience.py); [Record review reads](../../web/tests/frontend/corpus-review-records.test.ts) |
 | **PRD-CB-013** | Audio/documentary speaker assignments and repeatable media metadata MUST remain reviewed metadata state rather than destructive rewrites of extracted source units. | [INGESTION_AND_CORPUS_BUILDER.md](INGESTION_AND_CORPUS_BUILDER.md) | PRD-G-002, PRD-G-004, PRD-G-008 | [CORE-ID-002](../../SPECIFICATION.md#normative-conformance-requirement-catalogue), [CORE-ID-016](../../SPECIFICATION.md#normative-conformance-requirement-catalogue) | **Direct:** [source-media metadata](../../tests/test_source_media_metadata.py); [repeatable FieldAssertions](../../tests/test_field_assertions.py); [repeatable preparation persistence](../../tests/test_corpus_preparation_persistence.py) |
 | **PRD-CB-014** | Publication-blocker repair SHOULD open a focused remediation session that preserves the reviewer’s place and returns to readiness validation after the repair. | [INGESTION_AND_CORPUS_BUILDER.md](INGESTION_AND_CORPUS_BUILDER.md) | PRD-G-021, PRD-G-023, PRD-G-024 | — | **Direct/Partial:** [Corpus Builder characterization](../../web/tests/frontend/pdf-corpus-builder-characterization.test.ts); [publication lifecycle](../../tests/test_publication_lifecycle.py) |
+| **PRD-CB-015** | Interactive corpus/review reads MUST consume coherent canonical snapshots, and process-local caches or derived summaries MUST be invalidated when authoritative Record state changes. | [INGESTION_AND_CORPUS_BUILDER.md](INGESTION_AND_CORPUS_BUILDER.md) | PRD-G-003, PRD-G-009, PRD-G-024, PRD-G-033 | [CORE-ID-005](../../SPECIFICATION.md#normative-conformance-requirement-catalogue), [CORE-ID-006](../../SPECIFICATION.md#normative-conformance-requirement-catalogue) | **Direct:** [GraphQL Record reads](../../tests/test_graphql_record_reads.py); [Document Intelligence freshness](../../tests/test_document_intelligence_freshness.py); [review queue projection](../../tests/test_review_queue_projection.py); [incremental metadata exemplars](../../tests/test_incremental_metadata_exemplars.py) |
 | **PRD-COMP-001** | Durable user/scholarly state SHOULD remain readable across product evolution where doing so does not violate current integrity requirements. | [COMPATIBILITY_AND_MIGRATION.md](COMPATIBILITY_AND_MIGRATION.md) | PRD-G-039 | — | **Architectural/Partial:** subsystem migration/regression tests |
 | **PRD-COMP-002** | Compatibility code MUST NOT cause legacy representations to become the preferred architecture for new features. | [COMPATIBILITY_AND_MIGRATION.md](COMPATIBILITY_AND_MIGRATION.md) | PRD-G-035, PRD-G-039 | — | **Architectural/Partial:** FieldAssertion/schema/pipeline tests |
 | **PRD-COMP-003** | Where legacy behavior conflicts with provenance, authority, security, or evidence correctness, current integrity requirements take precedence over behavioral compatibility. | [COMPATIBILITY_AND_MIGRATION.md](COMPATIBILITY_AND_MIGRATION.md) | PRD-G-039, PRD-G-040 | [CORE-ID-014](../../SPECIFICATION.md#normative-conformance-requirement-catalogue), [CORE-ID-015](../../SPECIFICATION.md#normative-conformance-requirement-catalogue) | **Direct/Partial:** [evidence pipeline](../../tests/test_evidence_pipeline.py); security/route tests |
