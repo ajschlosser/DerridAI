@@ -209,7 +209,7 @@ onBeforeUnmount(() => {
               :label="i18n.tf('settings.nlp_packs_installing', { percent: percent(pack) })"
             />
             <UiStatusBadge
-              v-else-if="pack.bundled"
+              v-else-if="pack.bundled && pack.installed"
               tone="success"
               :label="i18n.t('settings.nlp_packs_bundled', 'Bundled')"
             />
