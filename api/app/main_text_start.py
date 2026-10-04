@@ -77,7 +77,6 @@ def _looks_like_contents(lines: list[str]) -> bool:
     return numbered / len(lines) >= 0.5
 
 
-
 def _clues(
     pages: dict[int, list[str]],
     labels: dict[int, str | None],
@@ -153,7 +152,7 @@ def _clues(
                     "kind": "outline_after_front_matter",
                     "detail": (
                         f'Bookmark "{title.strip()}" is the first after the '
-                        f"front matter (PDF page {page_number}."
+                        f"front matter (PDF page {page_number})."
                     ),
                 }
             )
