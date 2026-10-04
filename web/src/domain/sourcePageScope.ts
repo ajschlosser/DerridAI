@@ -28,7 +28,11 @@ export function parseSourcePageSelection(value: string, pageCount: number): Page
   }
 
   const selected = new Set<number>();
-  for (const token of raw.split(",").map((item) => item.trim()).filter(Boolean)) {
+  const tokens = raw.split(",").map((item) => item.trim());
+  if (tokens.some((token) => !token)) {
+    return { pages: [], error: "Page selections cannot contain empty entries." };
+  }
+  for (const token of tokens) {
     const match = token.match(/^(\d+)\s*(?:[-–]\s*(\d+))?$/);
     if (!match) return { pages: [], error: `Invalid page selection: "${token}".` };
 
