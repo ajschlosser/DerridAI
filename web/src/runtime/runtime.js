@@ -171,6 +171,8 @@ import {
   storeReceipt,
 } from "../domain/storeAvailability";
 import { registerOperationHooks } from "../domain/operationHooks";
+import { registerOperationProgress } from "../domain/operationProgressHooks";
+import { exportStoreJsonl } from "../domain/storeExport";
 import {
   searchFacets as sharedSearchFacets,
   evidenceSelection as sharedEvidenceSelection,
@@ -268,7 +270,6 @@ import {
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 import { refreshStores } from "../domain/sharedStores";
-import { createCorpusWorkspaceHydration } from "../domain/corpusWorkspaceHydration";
 import { canAccessPage, canUse, hasCapability, isResearcher } from "../domain/sharedSession";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { applyAppearance } from "../domain/sharedAppearance";
@@ -745,6 +746,11 @@ const {
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
   uid: (...args) => uid(...args),
+});
+registerOperationProgress({
+  show: showOperationProgress,
+  update: updateOperationProgress,
+  hide: hideOperationProgress,
 });
 const {
   openJobDetails,
@@ -1337,106 +1343,6 @@ async function refreshStoreWorks(force = false) {
   state.storeWorksStore = state.activeStore;
   if (state.storeWork && !state.storeWorks.includes(state.storeWork)) state.storeWork = "";
 }
-async function exportStoreJsonl({
-  store = state.activeStore,
-  work = null,
-  downloadFile = false,
-  loadTab = false,
-  navigate = true,
-  silent = false,
-} = {}) {
-  if (!store)
-    return silent ? null : toast(tr("records.toast.select_collection"), { tone: "warning" });
-  const params = new URLSearchParams();
-  if (work) params.set("work", work);
-  const op = silent ? null : showOperationProgress(`Exporting ${store}`, 1);
-  try {
-    if (op)
-      updateOperationProgress(
-        op,
-        0,
-        1,
-        work ? `Reading work: ${work}` : "Reading complete collection…",
-      );
-    const payload = await api(
-      `/api/stores/${encodeURIComponent(store)}/export${params.toString() ? `?${params}` : ""}`,
-    );
-    const records = payload.records || [];
-    const suffix = work
-      ? `-${String(work)
-          .replace(/[^a-z0-9]+/gi, "-")
-          .replace(/^-|-$/g, "")}`
-      : "";
-    const name = `${store}${suffix}.jsonl`;
-    const jsonl =
-      records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : "");
-    if (downloadFile) download(name, jsonl);
-    if (loadTab) {
-      const file = {
-        id: uid(),
-        name,
-        records: records.map((record) => cloneAuditValue(record)),
-        errors: [],
-        dirty: new Set(),
-        imported_at: new Date().toISOString(),
-        imported_from_chroma: store,
-      };
-      // Reloading the same collection/work replaces its clean earlier copy instead of duplicating every record.
-      const previous = state.files.findIndex(
-        (item) =>
-          item.imported_from_chroma === store &&
-          item.name === name &&
-          !(item.dirty && item.dirty.size),
-      );
-      if (previous >= 0) {
-        file.id = state.files[previous].id;
-        state.files.splice(previous, 1, file);
-      } else state.files.push(file);
-      invalidateCorpusCache();
-      await persistFileNow(file);
-      state.activeFileId = file.id;
-      persistPrefs();
-      if (navigate) navigateTo("list", { fileId: file.id });
-    }
-    if (op) {
-      updateOperationProgress(op, 1, 1, `${records.length.toLocaleString()} records exported`);
-      setTimeout(() => hideOperationProgress(op), 600);
-    }
-    if (!loadTab && !silent)
-      toast(
-        trf("dynamic.exported_records", {
-          count: records.length.toLocaleString(),
-          collection: store,
-        }),
-        { tone: "success" },
-      );
-    return records;
-  } catch (error) {
-    if (op) {
-      updateOperationProgress(op, 0, 1, `Failed: ${error.message}`);
-      setTimeout(() => hideOperationProgress(op), 1800);
-    }
-    if (!silent)
-      toast(trf("runtime.toast.chroma_export_failed", { detail: error.message }), {
-        tone: "danger",
-      });
-    return null;
-  }
-}
-const ensureCorpusWorkspaceLoaded = createCorpusWorkspaceHydration({
-  isResearcher,
-  hasFiles: () => Boolean(state.files.length),
-  hasStores: () => Boolean(state.stores.length),
-  refreshStores,
-  recordStores,
-  activeStore: () => state.activeStore,
-  setActiveStore: (name) => {
-    state.activeStore = name;
-  },
-  exportStore: (name) =>
-    exportStoreJsonl({ store: name, loadTab: true, navigate: false, silent: true }),
-  exportFailure: () => tr("records.hydration_export_failed"),
-});
 const vectorCollectionBridge = createVectorCollectionBridge({
   state,
   workIndex,
@@ -2222,8 +2128,6 @@ export {
   notifyVectorStoresChanged,
   openCollectionCreationWizard,
   upsertRows,
-  exportStoreJsonl,
-  ensureCorpusWorkspaceLoaded,
   persistPrefs,
   lookupRecord,
   copyJsonToClipboard,

@@ -63,6 +63,7 @@ const chromaApi = vi.hoisted(() => ({
   remove: vi.fn(),
   deriveLanguages: vi.fn(),
 }));
+vi.mock("../../src/domain/storeExport", () => ({ exportStoreJsonl: runtime.exportStoreJsonl }));
 vi.mock("../../src/api/chroma", () => ({ chromaApi }));
 
 const vectorBrowseReads = vi.hoisted(() => ({

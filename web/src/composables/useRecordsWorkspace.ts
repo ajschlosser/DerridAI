@@ -17,7 +17,7 @@
  */
 
 import { getCurrentScope, onScopeDispose, ref, watch } from "vue";
-import * as runtime from "../runtime/runtime.js";
+import { ensureCorpusWorkspaceLoaded } from "../domain/sharedCorpusHydration";
 import {
   createSubsetFile,
   defaultSubsetName as sharedDefaultSubsetName,
@@ -77,7 +77,7 @@ export function useRecordsWorkspace() {
     load();
     activation = (async () => {
       try {
-        const result = await runtime.ensureCorpusWorkspaceLoaded?.();
+        const result = await ensureCorpusWorkspaceLoaded();
         if (disposed) return;
         if (result?.status === "error") throw result.error;
         load();

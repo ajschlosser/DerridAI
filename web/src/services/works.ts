@@ -17,6 +17,7 @@
  */
 
 import * as runtime from "../runtime/runtime.js";
+import { ensureCorpusWorkspaceLoaded } from "../domain/sharedCorpusHydration";
 import type { WorksDbStatusKind, WorksSnapshot, WorksSort, WorksViewMode } from "../types/works";
 import { annotationsService } from "./annotations";
 import { requestCorpusFiles } from "./corpusFiles";
@@ -73,7 +74,7 @@ export const worksService: WorksService = {
 
   async activate(onHydrated) {
     runtime.state.view = "works";
-    await runtime.ensureCorpusWorkspaceLoaded?.();
+    await ensureCorpusWorkspaceLoaded();
     onHydrated?.();
     return runtime.prepareWorksWorkspace?.() as Promise<WorksPrepareResult | undefined>;
   },
