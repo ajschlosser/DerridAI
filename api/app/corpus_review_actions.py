@@ -695,6 +695,11 @@ class ReviewActionsMixin:
         target["text_reviewed_at"] = iso_now()
         target["text_review_source"] = "human"
         _mark_human_touch(target, ["__text__"])
+        target["human_touched_fields"] = [
+            field
+            for field in (target.get("human_touched_fields") or [])
+            if str(field) != "__review__"
+        ]
         # Any text correction invalidates a prior record-level acceptance. The
         # reviewer may accept again after deciding whether selective metadata
         # reruns are warranted; automatic metadata is never silently treated as
@@ -884,7 +889,10 @@ class ReviewActionsMixin:
         target["metadata_reviewed_at"] = iso_now()
         _mark_human_touch(target, [key for key in changes if key not in skipped])
         build = self.repo.get_build(build_id)
-        enrichment_active = _metadata_enrichment_active(build)
+        review_frozen = "__review__" in {
+            str(field) for field in (target.get("human_touched_fields") or [])
+        }
+        enrichment_active = _metadata_enrichment_active(build) and not review_frozen
         if enrichment_active and any(key not in skipped for key in changes):
             requeue_record_metadata(
                 target,
