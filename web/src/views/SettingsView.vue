@@ -60,6 +60,8 @@ import SettingsSearch, { type SettingsSearchHit } from "../components/settings/S
 import SettingsSection from "../components/settings/SettingsSection.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import AppBuildInfo from "../components/AppBuildInfo.vue";
+import ResearchWorkFilter from "../components/research/ResearchWorkFilter.vue";
+import { recordStores } from "../domain/storeAvailability";
 import {
   APPEARANCE_DEFAULTS,
   RAG_DEFAULTS,
@@ -142,6 +144,17 @@ const chromaPath = computed(() => String(workspace.health?.chroma?.path || "/dat
 const profiles = computed(() => (getProviderProfilesForUi() || []) as ProviderProfile[]);
 const defaultProfileId = computed(() =>
   String(getDefaultProviderProfileId() || reviewDraft.value.default_provider_profile),
+);
+const defaultResearchStore = computed(() => {
+  const stores = recordStores();
+  const configured = String(workspace.ragConfig.source_collection || "");
+  return stores.find((store) => store.name === configured) || stores[0] || null;
+});
+const defaultResearchWorks = computed(() =>
+  [...((defaultResearchStore.value?.source_works as string[] | undefined) || [])]
+    .map(String)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, i18n.locale)),
 );
 const localeInfo = computed(() => i18n.languages.find((item) => item.code === i18n.locale));
 const visibleSections = computed(() =>
@@ -1352,6 +1365,13 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 <h3>{{ i18n.t("settings.retrieval_scope_title") }}</h3>
                 <p>{{ i18n.t("settings.retrieval_scope_help") }}</p>
               </div>
+              <ResearchWorkFilter
+                id="settings-field-rag-works"
+                v-model="ragDraft.work_filter"
+                class="field field-full"
+                :works="defaultResearchWorks"
+                legend-id="settings-default-work-filter"
+              />
               <fieldset id="settings-field-rag-locales" class="field field-full">
                 <legend>{{ i18n.t("settings.rag_locales") }}</legend>
                 <div class="language-checks">
