@@ -25,6 +25,7 @@ const runtime = vi.hoisted(() => ({
   state: { view: "" },
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
+vi.mock("../../src/domain/sharedRecordsWorkspace", () => ({ recordsWorkspace: runtime }));
 
 import { useRecordsWorkspace } from "../../src/composables/useRecordsWorkspace";
 import { corpusState, touchCorpus } from "../../src/state/workspaceState";
