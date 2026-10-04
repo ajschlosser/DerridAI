@@ -18,7 +18,8 @@
 
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import * as runtime from "../runtime/runtimeBridge";
+import { getNavItems } from "../domain/navItems";
+import { getShellSnapshot } from "../domain/shellSnapshot";
 
 export interface ShellFile {
   id: string;
@@ -85,14 +86,14 @@ export const useShellStore = defineStore("shell", () => {
   const navReady = ref(false);
 
   function sync() {
-    snapshot.value = runtime.getShellSnapshot() as ShellSnapshot;
+    snapshot.value = getShellSnapshot() as ShellSnapshot;
     navReady.value = true;
   }
 
   // Publish only the menu. Cheap and independent of workspace bootstrap, so it can run
   // the moment a user signs in instead of waiting for the first full snapshot.
   function syncNav() {
-    snapshot.value = { ...snapshot.value, nav: runtime.getNavItems() as ShellNavItem[] };
+    snapshot.value = { ...snapshot.value, nav: getNavItems() as ShellNavItem[] };
     navReady.value = true;
   }
 

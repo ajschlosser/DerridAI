@@ -149,6 +149,10 @@ const runtime = vi.hoisted(() => ({
   decorateDisabledControls: vi.fn(),
   setTranslationDictionary: vi.fn(),
 }));
+vi.mock("../../src/domain/shellSnapshot", () => ({
+  getShellSnapshot: (...args: unknown[]) =>
+    (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
+}));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
 vi.mock("../../src/domain/sharedWorksWorkspace", () => ({
   worksWorkspace: {

@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { tr as trCompat, trf as trfCompat } from "../runtime/legacyCompat.js";
+import {
+  setTranslationDictionary as setTranslationDictionaryCompat,
+  tr as trCompat,
+  trf as trfCompat,
+} from "../runtime/legacyCompat.js";
 import { state } from "./sharedUrlState";
 
 // Translation lookups over the shared `translations` slice, usable without the legacy runtime. The runtime's own
@@ -27,3 +31,10 @@ export const trf = (
   fallback?: string | Record<string, unknown>,
   values: Record<string, unknown> = {},
 ): string => trfCompat(state, key, fallback, values);
+
+export const setTranslationDictionary = (
+  locale: string,
+  dictionary: Record<string, unknown> = {},
+  base: Record<string, unknown> = {},
+  info: Record<string, unknown> = {},
+) => setTranslationDictionaryCompat(state, locale, dictionary, base, info);

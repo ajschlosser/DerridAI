@@ -19,7 +19,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { toast } from "../../src/composables/notifications";
 import { copyCitation } from "../../src/domain/clipboardCopy";
-import { trf } from "../../src/domain/sharedTranslate";
+import { setTranslationDictionary, tr, trf } from "../../src/domain/sharedTranslate";
 import { state } from "../../src/domain/sharedUrlState";
 
 vi.mock("../../src/composables/notifications", () => ({ toast: vi.fn() }));
@@ -33,6 +33,19 @@ describe("shared translations", () => {
   it("reads the dictionary the runtime writes, and fills placeholders", () => {
     state.translations = { locale: "fr-CA", dictionary: { "x.key": "Copié {label}" }, base: {} };
     expect(trf("x.key", { label: "fiche" })).toBe("Copié fiche");
+  });
+
+  it("setTranslationDictionary writes the slice that tr reads, with the locale info", () => {
+    setTranslationDictionary(
+      "fr-CA",
+      { "x.key": "Bonjour" },
+      { "x.key": "Hello" },
+      { name: "Français" },
+    );
+    expect(tr("x.key")).toBe("Bonjour");
+    expect(state.translations.locale).toBe("fr-CA");
+    expect(state.translations.info).toEqual({ name: "Français" });
+    expect(state.translations.reverse.get("Hello")).toBe("x.key");
   });
 
   it("copyCitation reports the exact citation that reached the clipboard", async () => {

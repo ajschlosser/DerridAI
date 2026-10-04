@@ -241,9 +241,11 @@ import {
   applyUrlState,
   navigateTo,
   renderView,
+  repaintAfterLocationChange,
 } from "../domain/sharedNavigation";
 import { selectedIndex, sharedUrlStateCodec } from "../domain/sharedUrlState";
-import { pathViewMap, viewFromPath, viewPathMap } from "../domain/navigation";
+import { getShellSnapshot, systemCardHtml } from "../domain/shellSnapshot";
+import { pathViewMap, viewPathMap } from "../domain/navigation";
 import {
   workspaceDb,
   workspacePrefs,
@@ -795,96 +797,9 @@ const {
   operationViewModel,
 } = operationPresenters;
 
-function systemCardHtml() {
-  const health = state.health;
-  if (!health) {
-    return `<div class="system-row"><span>API</span><span class="system-value"><i class="status-dot warn"></i>Checking</span></div>
-      <div class="system-row"><span>Chroma</span><span class="system-value"><i class="status-dot"></i>Unknown</span></div>
-      <div class="system-row"><span>Ollama</span><span class="system-value"><i class="status-dot"></i>Unknown</span></div>`;
-  }
-  const apiOk = health?.ok === true;
-  const chromaOk = health?.chroma?.available === true;
-  const ollamaOk = (state.llmStatus || health?.ollama)?.available === true;
-  return `<div class="system-row"><span>API</span><span class="system-value"><i class="status-dot ${apiOk ? "ok" : "bad"}"></i>${apiOk ? "Online" : "Offline"}</span></div>
-    <div class="system-row"><span>Chroma</span><span class="system-value"><i class="status-dot ${chromaOk ? "ok" : apiOk ? "warn" : "bad"}"></i>${chromaOk ? "Ready" : apiOk ? "Unavailable" : "Unknown"}</span></div>
-    <div class="system-row"><span>Ollama</span><span class="system-value"><i class="status-dot ${ollamaOk ? "ok" : apiOk ? "warn" : "bad"}"></i>${ollamaOk ? "Ready" : apiOk ? "Unavailable" : "Unknown"}</span></div>`;
-}
-
 function updateSystemCard() {
   const card = document.querySelector(".system-card");
   if (card) card.innerHTML = systemCardHtml();
-}
-
-function currentContext() {
-  const f = activeFile(),
-    r = selectedRecord();
-  if (state.view === "record" && r)
-    return { kicker: r.record_id || "Record", title: r.work || "Record", meta: f?.name || "" };
-  const map = {
-    home: [
-      "Overview",
-      "Dashboard",
-      "Workspace, vector stores, review activity, and corpus statistics",
-    ],
-    list: [
-      "Corpora",
-      f?.name || "Records",
-      f ? `${f.records.length.toLocaleString()} ${tr("dynamic.records")}` : "Open a JSONL file",
-    ],
-    works: ["Corpora", "Works", "Cross-file work overview"],
-    global: ["Corpora", "Global Search", "Search and filter every loaded record"],
-    annotations: [
-      "Corpora",
-      "Annotations",
-      "Review annotations by work or in recent-activity order",
-    ],
-    semanticmap: ["Corpora", "Semantic map", "Concepts, topics, and persons that occur together"],
-    pdf: [
-      "Corpus Management",
-      state.pdf.title || "Corpus Builder",
-      state.pdf.name
-        ? `${state.pdf.name} · page ${state.pdf.page}`
-        : "Build, monitor, and review auditable corpus records",
-    ],
-    compare: ["Corpora", "Record Comparison", "Inspect field and text differences"],
-    vector: ["Corpus Management", "Corpus Data", "Persistent local ChromaDB collections"],
-    rag: [
-      "Research",
-      "Research",
-      "Run the evidence-grounded DerridAI retrieval and synthesis pipeline",
-    ],
-    faq: [
-      "Research",
-      "Response Library",
-      "Browse saved RAG questions, answers, evidence, reruns, and grades",
-    ],
-    responsecache: [
-      "System",
-      "System Data",
-      "Inspect application storage, trace derived metadata, and manage saved research responses.",
-    ],
-    providers: [
-      "AI & Automation",
-      "LLM Providers",
-      "Create, configure, test, warm, and reuse LLM provider profiles across every LLM workflow",
-    ],
-    config: [
-      "System",
-      "Settings",
-      "Application behavior, retrieval defaults, storage, backup, and reset controls",
-    ],
-  };
-  const dynamicTitle =
-    (state.view === "list" && f?.name) || (state.view === "pdf" && state.pdf.title);
-  const dynamicMeta = (state.view === "list" && f) || (state.view === "pdf" && state.pdf.name);
-  const key = map[state.view] ? state.view : "list";
-  const [kickerText, titleText, metaText] = map[key];
-  // Static labels are translated; data-driven titles (file names, PDF titles) are not.
-  return {
-    kicker: tr(`context.${key}.kicker`, kickerText),
-    title: dynamicTitle ? titleText : tr(`context.${key}.title`, titleText),
-    meta: dynamicMeta ? metaText : tr(`context.${key}.meta`, metaText),
-  };
 }
 
 const uid = () => crypto.randomUUID();
@@ -912,13 +827,6 @@ function setUserContext(user) {
   }
   if (!canAccessPage(state.view)) state.view = "home";
   void refreshResearcherContentPolicy();
-}
-function viewDisabledReason(view) {
-  if (!canAccessPage(view)) return "This workspace is available to administrators only.";
-  if (view === "vector" && isResearcher() && !hasChromaService()) return dbUnavailableReason();
-  if (view === "faq" && !hasChromaService())
-    return "ChromaDB is unavailable, so the Response Library cannot be opened.";
-  return "";
 }
 
 const {
@@ -1175,91 +1083,6 @@ function touchupApplyResults(items, results, approvals, all = false, reviewOnly 
     { tone: "success" },
   );
   return { appliedFields, reviewedRecords };
-}
-
-function translatedNavLabel(item) {
-  const keys = {
-    home: "nav.dashboard",
-    list: "nav.records",
-    record: "nav.record",
-    works: "nav.works",
-    global: "nav.search",
-    annotations: "nav.annotations",
-    semanticmap: "nav.semantic_map",
-    pdf: "nav.pdf",
-    compare: "nav.compare",
-    vector: "nav.vector",
-    rag: "nav.rag",
-    faq: "nav.faq",
-    responsecache: "runtime.system_data",
-    providers: "nav.providers",
-    schemas: "nav.schemas",
-    config: "nav.config",
-  };
-  return keys[item.id] ? tr(keys[item.id], item.label) : item.label;
-}
-function translatedSectionLabel(section) {
-  const keys = {
-    Overview: "section.overview",
-    Corpus: "section.corpora",
-    Corpora: "section.corpora",
-    Research: "section.research",
-    Tools: "section.corpus_management",
-    Build: "section.corpus_management",
-    "Corpus Management": "section.corpus_management",
-    "AI & Automation": "section.ai_automation",
-    System: "section.system",
-  };
-  return keys[section] ? tr(keys[section], section) : section;
-}
-function getShellSnapshot() {
-  const ctx = currentContext();
-  const totalLoaded = allRows().length;
-  const flagged = needsReviewItems().length;
-  const pending = state.activeStore ? pendingUpsertRows().length : 0;
-  const corpusStores = recordStores();
-  const dbRecords = corpusStores.reduce((sum, store) => sum + (Number(store.count) || 0), 0);
-  const cacheCount = Number(responseCacheStore()?.count || 0);
-  const activeJobs = state.jobs.filter((job) =>
-    ["queued", "running", "cancelling"].includes(job.status),
-  ).length;
-  return {
-    view: state.view,
-    files: state.files.map((file) => describeRecordsFile(file, state.activeFileId)),
-    context: ctx,
-    totalLoaded,
-    flagged,
-    pending,
-    activeJobs,
-    corpusStoreCount: corpusStores.length,
-    dbRecords,
-    cacheCount,
-    hasCorpusDb: hasCorpusDb(),
-    dbUnavailableReason: dbUnavailableReason(),
-    activeStore: state.activeStore,
-    canEdit: canUse("editLocalRecords") && state.view === "record" && Boolean(selectedRecord()),
-    selectedEvidenceCount: selectedEvidenceEntries().length,
-    systemHtml: systemCardHtml(),
-    nav: getNavItems(),
-  };
-}
-// Navigation membership depends only on the signed-in user, the static view list,
-// and translations, never on workspace/bootstrap state. The Vue shell calls this as
-// soon as a user exists so the menu is complete before the slow runtime bootstrap.
-function getNavItems() {
-  return viewConfig
-    .filter((item) => canAccessPage(item.id))
-    .map((item) => ({
-      ...item,
-      label:
-        item.id === "home"
-          ? tr("nav.home")
-          : isResearcher() && item.id === "vector"
-            ? tr("research.corpus_search")
-            : translatedNavLabel(item),
-      section: translatedSectionLabel(item.section),
-      disabledReason: viewDisabledReason(item.id),
-    }));
 }
 
 function triggerBulkEdit() {
@@ -1529,16 +1352,6 @@ function syncFromLocation() {
   applyUrlState();
   repaintAfterLocationChange();
 }
-/** Persist and repaint after the shared URL state has been applied (by the runtime or by the router). */
-function repaintAfterLocationChange() {
-  persistPrefs();
-  shell();
-  renderView();
-}
-/** The runtime view a path belongs to, or undefined for paths with no legacy view. */
-function viewForPath(path) {
-  return viewFromPath(path);
-}
 
 let metadataSearchDelegationWired = false;
 function wireMetadataSearchDelegation() {
@@ -1719,12 +1532,9 @@ export {
   viewConfig,
   setUserContext,
   setTranslationDictionary,
-  getShellSnapshot,
   setShellRefreshHook,
   setUrlSyncHook,
   syncFromLocation,
-  repaintAfterLocationChange,
-  viewForPath,
   refreshJobs,
   unmountOperationsPanel,
   viewPathMap,
@@ -1850,7 +1660,6 @@ export {
   openAnnotationsWorkspaceWork,
   removeAnnotationsWorkspaceItem,
   openWorkAnnotations,
-  getNavItems,
   getWarmOnStartForUi,
   setWarmOnStartForUi,
   prepareWorksWorkspace,

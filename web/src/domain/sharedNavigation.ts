@@ -45,6 +45,13 @@ export function renderView() {
   return null;
 }
 
+/** Persist and repaint after the shared URL state has been applied (by the runtime or by the router). */
+export function repaintAfterLocationChange() {
+  persistPrefs();
+  shell();
+  renderView();
+}
+
 export const {
   getUrlSyncHook,
   navSnapshot,

@@ -151,6 +151,10 @@ const runtime = vi.hoisted(() => ({
   setTranslationDictionary: vi.fn(),
   sync: vi.fn(),
 }));
+vi.mock("../../src/domain/shellSnapshot", () => ({
+  getShellSnapshot: (...args: unknown[]) =>
+    (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
+}));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
 vi.mock("../../src/domain/sharedCorpusHydration", () => ({
   ensureCorpusWorkspaceLoaded: () => runtime.ensureCorpusWorkspaceLoaded(),
