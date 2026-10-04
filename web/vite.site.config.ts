@@ -42,6 +42,12 @@ function inlinePublishedSiteCss(): Plugin {
 
 export default defineConfig({
   plugins: [vue(), inlinePublishedSiteCss()],
+  // The published runtime is a standalone browser bundle. Vue's distributed
+  // runtime contains NODE_ENV guards; replace them at build time rather than
+  // leaking a Node-only `process` reference into file:// and static hosting.
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
   build: {
     target: "es2022",
     emptyOutDir: false,
