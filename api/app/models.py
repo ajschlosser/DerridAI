@@ -30,6 +30,7 @@ from pydantic import (
 
 from .enrichment_cycles import MAX_PASSES
 from .metadata_schema import MetadataSchema
+from .pipelines.models import PipelineConfigOverrideSet
 
 LanguageCode = Literal["en", "fr"]
 CollectionRole = Literal["primary", "language", "general"]
@@ -267,6 +268,11 @@ class SearchRequest(BaseModel):
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
     pipeline_id: str | None = Field(default=None, min_length=1, max_length=160)
     pipeline_version: int | None = Field(default=None, ge=1)
+    # Pipeline Studio defines the baseline. Settings may override registered
+    # stage configuration, and this run may override Settings again. Both layers
+    # are version-bound so stale overrides can never silently target a new graph.
+    settings_pipeline_overrides: PipelineConfigOverrideSet | None = None
+    run_pipeline_overrides: PipelineConfigOverrideSet | None = None
 
 
 class OllamaTouchupOptions(BaseModel):
