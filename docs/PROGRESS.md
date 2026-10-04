@@ -22,6 +22,8 @@ Checkpoint: 2026-10-03. Branch: `feat/progressive-loading-p2`, continued after m
 
 ## Current checkpoint
 
+Latest continuation: 2026-10-04, `codex/metadata-memory-loading`, master `94ca23d9`. Metadata Memory already has progressive initial/refresh/error states; this increment isolates cached/retained rows by account, role and capabilities and clears denied data through retry. Final validation is recorded below. Other P2 routes and the broader readiness/cache/geometry matrix remain open.
+
 Latest: Users/Roles progressive readiness is implemented. Users exposes loaded accounts independently of pending role choices, with local errors/retries, truthful counts and retained rows/drafts. Query keys include signed-in user/role scope; forbidden reads clear displayed data. Roles retains its atomic roles/capabilities/account-assignment snapshot and gates mutations until both reads succeed. Refresh shows Updating, failed refresh shows stale feedback/Retry, and same-role permission drafts survive. Superseded/unmounted reads cannot apply. Validation for this checkpoint is recorded below; the complete plan remains unfinished.
 
 Annotations now retains its toolbar during initial reads and its loaded feed during refresh/failure, with region skeletons, Updating, out-of-date failure and Retry. Vue rejects superseded completions and clears queued searches on disposal. Workspace reads expose shared-annotation/store-discovery errors instead of silently reporting success. Authorization-denied errors clear retained feed content. The 15-second shared-read cache and other refresh callers retain their existing contracts. This is a scoped P2 increment, not completion of the readiness or scope/cache matrix.
