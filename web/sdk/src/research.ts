@@ -31,6 +31,10 @@ import type {
   SearchResponse,
 } from "./types";
 
+function optionalText(value: unknown): string | undefined {
+  return value == null || value === "" ? undefined : String(value);
+}
+
 function evidenceRef(
   manifest: PublicationManifest,
   record: SearchResponse["results"][number]["record"],
@@ -39,38 +43,121 @@ function evidenceRef(
   return {
     evidenceId: `E${index + 1}`,
     recordId: String(record.record_id),
-    recordRevision: record.record_revision == null ? undefined : String(record.record_revision),
+    recordRevision: optionalText(record.record_revision),
     publicationId: manifest.publication_id,
-    work: record.work == null ? undefined : String(record.work),
+    work: optionalText(record.work),
     citation: formatCitation(record).plain,
     text: String(record.text ?? ""),
-    speaker: record.speaker == null ? undefined : String(record.speaker),
-    quotedSpeaker: record.quoted_speaker == null ? undefined : String(record.quoted_speaker),
-    positionHolder: record.position_holder == null ? undefined : String(record.position_holder),
-    stance: record.stance == null ? undefined : String(record.stance),
-    target: record.target == null ? undefined : String(record.target),
-    discourseRole: record.discourse_role == null ? undefined : String(record.discourse_role),
+    documentAuthor: optionalText(record.document_author),
+    speaker: optionalText(record.speaker),
+    quotedSpeaker: optionalText(record.quoted_speaker),
+    quotedAuthor: optionalText(record.quoted_author),
+    quotedWork: optionalText(record.quoted_work),
+    positionHolder: optionalText(record.position_holder),
+    stance: optionalText(record.stance),
+    target: optionalText(record.target),
+    discourseRole: optionalText(record.discourse_role),
+    propositionStatus: optionalText(record.proposition_status),
   };
 }
 
-function prompt(question: string, packet: EvidencePacket): string {
+function normalizedScopeText(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLocaleLowerCase("en-US")
+    .replace(/[’']s\b/gu, "")
+    .replace(/[’']/gu, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function mentionsAuthor(question: string, author: string): boolean {
+  const query = normalizedScopeText(question);
+  const normalizedAuthor = normalizedScopeText(author);
+  if (!query || !normalizedAuthor) return false;
+  if (query.includes(normalizedAuthor)) return true;
+  const authorParts = normalizedAuthor.split(/\s+/).filter(Boolean);
+  const surname = authorParts[authorParts.length - 1];
+  return Boolean(surname && surname.length >= 4 && new Set(query.split(/\s+/)).has(surname));
+}
+
+function mentionedWorkGroups(manifest: PublicationManifest, question: string): string[][] {
+  const query = normalizedScopeText(question);
+  if (!query) return [];
+
+  const groups: string[][] = [];
+  const authorWorks = new Map<string, Set<string>>();
+
+  for (const summary of manifest.works ?? []) {
+    const work = String(summary.work ?? "").trim();
+    if (!work) continue;
+    const normalizedWork = normalizedScopeText(work);
+    if (normalizedWork && query.includes(normalizedWork)) groups.push([work]);
+
+    for (const rawAuthor of summary.authors ?? []) {
+      const author = String(rawAuthor ?? "").trim();
+      if (!author || !mentionsAuthor(question, author)) continue;
+      const key = normalizedScopeText(author);
+      const works = authorWorks.get(key) ?? new Set<string>();
+      works.add(work);
+      authorWorks.set(key, works);
+    }
+  }
+
+  for (const works of authorWorks.values()) groups.push([...works]);
+
+  const seen = new Set<string>();
+  return groups
+    .map((works) => [...new Set(works)].sort())
+    .filter((works) => {
+      const key = works.join("\u0000");
+      if (!works.length || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 4);
+}
+
+function publicationScope(manifest: PublicationManifest): string {
+  const works = manifest.works ?? [];
+  const visible = works.slice(0, 40).map((summary) => {
+    const authors = (summary.authors ?? []).map(String).filter(Boolean);
+    return `- ${summary.work}${authors.length ? ` — ${authors.join(", ")}` : ""}`;
+  });
+  if (works.length > visible.length) {
+    visible.push(`- … ${works.length - visible.length} additional works`);
+  }
+  return visible.join("\n");
+}
+
+function prompt(question: string, packet: EvidencePacket, manifest: PublicationManifest): string {
   const evidence = packet.evidence
     .map(
       (item) => `[${item.evidenceId}] ${item.citation}
 Record ID: ${item.recordId}
 Record revision: ${item.recordRevision ?? ""}
+Document author: ${item.documentAuthor ?? ""}
 Speaker: ${item.speaker ?? ""}
 Quoted speaker: ${item.quotedSpeaker ?? ""}
+Quoted author: ${item.quotedAuthor ?? ""}
+Quoted work: ${item.quotedWork ?? ""}
 Position holder: ${item.positionHolder ?? ""}
 Stance: ${item.stance ?? ""}
 Target: ${item.target ?? ""}
 Discourse role: ${item.discourseRole ?? ""}
+Proposition status: ${item.propositionStatus ?? ""}
 TEXT:
 ${item.text}`,
     )
     .join("\n\n");
 
-  return `Answer the research question using only the supplied evidence. Preserve attribution: distinguish the passage speaker, quoted speaker, position holder, stance, target, and discourse role. Do not attribute a quoted or analyzed position to Derrida unless the evidence supports that attribution. Cite evidence IDs such as [E1]. If the evidence is insufficient, say so rather than inventing support.
+  return `Answer the research question using only the supplied evidence for substantive claims. Preserve attribution: distinguish document author, passage speaker, quoted speaker/author/work, position holder, stance, target, discourse role, and proposition status. Do not equate document authorship with proposition ownership, and do not assign a quoted, reconstructed, analyzed, endorsed, questioned, or criticized position to the source author unless the evidence supports that attribution. Cite evidence IDs such as [E1]. If the evidence is insufficient, say so rather than inventing support.
+
+The publication inventory below is authoritative only for which works/authors are present in this published corpus. It is not substantive evidence and must not be cited. Do not claim that an author or work is absent from the publication merely because it is absent from the retrieved evidence packet.
+
+Publication inventory:
+${publicationScope(manifest)}
 
 Question: ${question}
 
@@ -90,22 +177,74 @@ export class ResearchEngine {
     const question = String(request.question ?? "").trim();
     if (!question) throw new Error("Research question is required.");
 
+    const retrievalLimit = request.retrieval?.limit ?? 24;
+    const evidenceLimit = request.retrieval?.evidenceLimit ?? 10;
+    const retrievalMode = request.retrieval?.mode ?? "hybrid";
+    const filters = request.retrieval?.filters;
     const retrieval = await this.searchEngine.search(
       {
         query: question,
-        mode: request.retrieval?.mode ?? "hybrid",
-        filters: request.retrieval?.filters,
-        limit: request.retrieval?.limit ?? 24,
+        mode: retrievalMode,
+        filters,
+        limit: retrievalLimit,
         signal: request.signal,
       },
       runId,
     );
 
-    const selected = this.searchEngine.diversify(
-      retrieval.results,
-      request.retrieval?.evidenceLimit ?? 10,
-      request.retrieval?.mmrLambda ?? 0.72,
+    // Named authors and works are deterministic corpus-scope signals, not semantic claims.
+    // Reserve one evidence slot for a named in-publication scope when broad retrieval missed it,
+    // while retaining the broader result set for comparison/cross-author questions.
+    const hasExplicitWorkFilter = Boolean(
+      filters?.work && (!Array.isArray(filters.work) || filters.work.length),
     );
+    const scopeSeeds: SearchResponse["results"] = [];
+    if (!hasExplicitWorkFilter) {
+      const representedWorks = new Set(
+        retrieval.results.map((item) => String(item.record.work ?? "")).filter(Boolean),
+      );
+      const seededIds = new Set(retrieval.results.map((item) => String(item.record.record_id)));
+      for (const [index, works] of mentionedWorkGroups(this.manifest, question).entries()) {
+        if (works.some((work) => representedWorks.has(work))) continue;
+        const scoped = await this.searchEngine.search(
+          {
+            query: question,
+            mode: retrievalMode,
+            filters: { ...(filters ?? {}), work: works },
+            limit: Math.min(4, retrievalLimit),
+            signal: request.signal,
+          },
+          `${runId}-scope-${index + 1}`,
+        );
+        const seed = scoped.results.find(
+          (item) => !seededIds.has(String(item.record.record_id)),
+        );
+        if (!seed) continue;
+        scopeSeeds.push(seed);
+        seededIds.add(String(seed.record.record_id));
+        representedWorks.add(String(seed.record.work ?? ""));
+      }
+    }
+
+    if (scopeSeeds.length) {
+      const seedIds = new Set(scopeSeeds.map((item) => String(item.record.record_id)));
+      retrieval.results = [...scopeSeeds, ...retrieval.results.filter(
+        (item) => !seedIds.has(String(item.record.record_id)),
+      )]
+        .slice(0, retrievalLimit)
+        .map((item, index) => ({ ...item, rank: index + 1 }));
+    }
+
+    const reserved = scopeSeeds.slice(0, evidenceLimit);
+    const reservedIds = new Set(reserved.map((item) => String(item.record.record_id)));
+    const selected = [
+      ...reserved,
+      ...this.searchEngine.diversify(
+        retrieval.results.filter((item) => !reservedIds.has(String(item.record.record_id))),
+        Math.max(0, evidenceLimit - reserved.length),
+        request.retrieval?.mmrLambda ?? 0.72,
+      ),
+    ].map((item, index) => ({ ...item, rank: index + 1 }));
     const evidencePacket: EvidencePacket = {
       publicationId: this.manifest.publication_id,
       evidence: selected.map((item, index) => evidenceRef(this.manifest, item.record, index)),
@@ -154,7 +293,7 @@ export class ResearchEngine {
     try {
       const generated = await this.generation.generate(
         {
-          prompt: prompt(question, evidencePacket),
+          prompt: prompt(question, evidencePacket, this.manifest),
           question,
           evidencePacket,
         },
