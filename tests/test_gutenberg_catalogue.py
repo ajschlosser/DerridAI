@@ -47,11 +47,20 @@ def _make_archive(path: Path) -> None:
     )
     tar_buffer = io.BytesIO()
     with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
-        info = tarfile.TarInfo("1342.txt")
+        info = tarfile.TarInfo("cache/epub/1342/pg1342.txt")
         info.size = len(text)
         tar.addfile(info, io.BytesIO(text))
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("txt-files.tar", tar_buffer.getvalue())
+
+
+def test_bulk_archive_member_parser_matches_current_gutenberg_layout():
+    from app.gutenberg_catalogue import _archive_etext_id
+
+    assert _archive_etext_id("cache/epub/1342/pg1342.txt") == 1342
+    assert _archive_etext_id("cache/epub/1342/pg1342.txt.utf-8") == 1342
+    assert _archive_etext_id("1342.txt") == 1342  # legacy local archive compatibility
+    assert _archive_etext_id("cache/epub/1342/pg999.txt") is None
 
 
 def test_streamed_archive_extraction_installs_text_in_database_and_zip_is_disposable(tmp_path: Path, monkeypatch):
@@ -85,7 +94,7 @@ def test_streamed_archive_extraction_installs_text_in_database_and_zip_is_dispos
     assert row is not None
     assert "available offline" in row[0]
     assert row[1] > 0
-    assert row[2] == "1342.txt"
+    assert row[2] == "cache/epub/1342/pg1342.txt"
     assert not service.extract_root.exists()
 
     # Installation readiness belongs to the verified database, not the 11 GB transport ZIP.
