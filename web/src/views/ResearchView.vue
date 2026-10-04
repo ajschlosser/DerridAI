@@ -116,6 +116,12 @@ let draftTimer: number | undefined;
 const selectedEvidence = computed(() => workspace.value?.selected_evidence || []);
 const profiles = computed(() => workspace.value?.profiles || []);
 const stores = computed(() => workspace.value?.stores || []);
+const selectedStore = computed(() =>
+  stores.value.find((store) => store.name === config.value?.source_collection) || null,
+);
+const availableWorks = computed(() =>
+  [...(selectedStore.value?.source_works || [])].sort((a, b) => a.localeCompare(b, i18n.locale)),
+);
 const effectivePipeline = computed(() => {
   const options = workspace.value?.pipeline_options || [];
   const configuredId = String(config.value?.pipeline_id || "").trim();
@@ -140,10 +146,7 @@ const pipelineOverrideActive = computed(() =>
 );
 const metadataFields = computed(() => {
   const fields = new Set<string>();
-  const selectedStore = stores.value.find(
-    (store) => store.name === config.value?.source_collection,
-  );
-  for (const field of selectedStore?.filter_fields || []) fields.add(String(field));
+  for (const field of selectedStore.value?.filter_fields || []) fields.add(String(field));
   for (const item of selectedEvidence.value) {
     for (const assertion of item.assertions || []) {
       if (assertion.field_name) fields.add(assertion.field_name);
@@ -199,6 +202,41 @@ const runDisabledReason = computed(() => {
   return "";
 });
 const canRun = computed(() => !runDisabledReason.value);
+const researchProgressMessage = computed(() => {
+  if (starting.value) return i18n.t("research.progress_starting");
+  const job = activeJob.value;
+  if (!job || !["queued", "running", "cancelling"].includes(job.status)) return "";
+  if (job.status === "cancelling") return i18n.t("research.progress_cancelling");
+  if (job.status === "queued") return i18n.t("research.progress_queued");
+
+  const selectedCount = Array.isArray(job.request?.selected_evidence)
+    ? job.request.selected_evidence.length
+    : selectedEvidence.value.length;
+  switch (String(job.stage || "")) {
+    case "query_metadata":
+      return i18n.t("research.progress_query");
+    case "retrieval":
+      return i18n.t("research.progress_retrieval");
+    case "deduplicate":
+      return i18n.t("research.progress_fusing");
+    case "rerank":
+      return i18n.t("research.progress_reranking");
+    case "context":
+      return i18n.t("research.progress_packaging");
+    case "generation":
+      return selectedCount > 0
+        ? i18n.t("research.progress_generation_selected")
+        : i18n.t("research.progress_generation");
+    case "bind_sources":
+      return i18n.t("research.progress_binding");
+    case "response_cache":
+      return i18n.t("research.progress_saving");
+    case "auto_grade":
+      return i18n.t("research.progress_grading");
+    default:
+      return i18n.t("research.progress_working");
+  }
+});
 
 function profileGeneration(profile: ResearchProfile | null) {
   if (!profile) return {};
@@ -364,7 +402,6 @@ function persistDraft() {
 function updateConfig(patch: Partial<ResearchConfig>) {
   if (!config.value) return;
   config.value = { ...config.value, ...patch };
-  config.value = researchActions.updateResearchConfig(patch) as ResearchConfig;
 }
 function applyPreset(value: string) {
   preset.value = value;
@@ -408,6 +445,16 @@ function applyPreset(value: string) {
       rerank_top_n: 32,
     });
 }
+function changeSourceCollection(name: string) {
+  const nextStore = stores.value.find((store) => store.name === name);
+  const works = new Set(nextStore?.source_works || []);
+  const current = config.value?.work_filter || [];
+  updateConfig({
+    source_collection: name,
+    work_filter: works.size ? current.filter((work) => works.has(work)) : [],
+  });
+}
+
 function changeProfile(id: string) {
   updateConfig({ provider_profile_id: id });
   const profile = profiles.value.find((item) => item.id === id) || null;
@@ -815,7 +862,7 @@ onBeforeUnmount(() => {
         :can-draft="auth.can('rag.run')"
         :can-manage-runs="canManageRuns"
         :disabled-reason="runDisabledReason"
-        @update:source-collection="updateConfig({ source_collection: $event })"
+        @update:source-collection="changeSourceCollection"
         @update:provider-profile-id="changeProfile"
         @update:response-language="updateConfig({ response_language: $event })"
         @update:preset="applyPreset"
@@ -848,6 +895,12 @@ onBeforeUnmount(() => {
         @select="openJob"
         @cancel="cancelJob"
         @open-runs="runsDrawer?.open()"
+      />
+      <UiLoadingState
+        v-if="researchProgressMessage"
+        class="research-run-progress"
+        variant="inline"
+        :label="researchProgressMessage"
       />
 
       <UiLoadingState
@@ -898,6 +951,7 @@ onBeforeUnmount(() => {
         :model="model"
         :models="discoveredModels"
         :metadata-fields="metadataFields"
+        :works="availableWorks"
         :researcher="workspace.is_researcher"
         :pipeline-options="workspace?.pipeline_options || []"
         :pipeline-strategies="workspace?.pipeline_strategies || []"
