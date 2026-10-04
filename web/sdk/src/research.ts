@@ -200,29 +200,31 @@ export class ResearchEngine {
     );
     const scopeSeeds: SearchResponse["results"] = [];
     if (!hasExplicitWorkFilter) {
-      const representedWorks = new Set(
-        retrieval.results.map((item) => String(item.record.work ?? "")).filter(Boolean),
-      );
-      const seededIds = new Set(retrieval.results.map((item) => String(item.record.record_id)));
+      const seededIds = new Set<string>();
       for (const [index, works] of mentionedWorkGroups(this.manifest, question).entries()) {
-        if (works.some((work) => representedWorks.has(work))) continue;
-        const scoped = await this.searchEngine.search(
-          {
-            query: question,
-            mode: retrievalMode,
-            filters: { ...(filters ?? {}), work: works },
-            limit: Math.min(4, retrievalLimit),
-            signal: request.signal,
-          },
-          `${runId}-scope-${index + 1}`,
+        let seed = retrieval.results.find(
+          (item) =>
+            works.includes(String(item.record.work ?? "")) &&
+            !seededIds.has(String(item.record.record_id)),
         );
-        const seed = scoped.results.find(
-          (item) => !seededIds.has(String(item.record.record_id)),
-        );
+        if (!seed) {
+          const scoped = await this.searchEngine.search(
+            {
+              query: question,
+              mode: retrievalMode,
+              filters: { ...(filters ?? {}), work: works },
+              limit: Math.min(4, retrievalLimit),
+              signal: request.signal,
+            },
+            `${runId}-scope-${index + 1}`,
+          );
+          seed = scoped.results.find(
+            (item) => !seededIds.has(String(item.record.record_id)),
+          );
+        }
         if (!seed) continue;
         scopeSeeds.push(seed);
         seededIds.add(String(seed.record.record_id));
-        representedWorks.add(String(seed.record.work ?? ""));
       }
     }
 
