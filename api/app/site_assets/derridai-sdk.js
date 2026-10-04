@@ -749,7 +749,7 @@ var DerridAI = (function(exports) {
     };
   }
   function normalizedScopeText(value) {
-    return String(value ?? "").normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase("en-US").replace(/[’']s\b/gu, "").replace(/[’']/gu, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    return String(value ?? "").normalize("NFKD").replace(new RegExp("\\p{M}", "gu"), "").toLocaleLowerCase("en-US").replace(/[’']s\b/gu, "").replace(/[’']/gu, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   }
   function mentionsAuthor(question, author) {
     const query = normalizedScopeText(question);
@@ -873,7 +873,7 @@ ${evidence}`;
               {
                 query: question,
                 mode: retrievalMode,
-                filters: { ...(filters ?? {}), work: works },
+                filters: { ...filters ?? {}, work: works },
                 limit: Math.min(4, retrievalLimit),
                 signal: request2.signal
               },
