@@ -234,12 +234,20 @@ def queue_due_recoveries(
     ledger = record.setdefault("metadata_execution_ledger", {})
     for family in due:
         entry = dict(ledger.get(family) or {})
-        next_attempt = int(
-            entry.get("next_automatic_recovery_attempt")
-            or entry.get("automatic_recovery_attempts")
-            or 0
+        completed = _completed_attempts(entry)
+        try:
+            next_attempt = int(
+                entry.get("next_automatic_recovery_attempt") or completed + 1
+            )
+        except (TypeError, ValueError):
+            next_attempt = completed + 1
+        # Promotion reserves an ordinal but does not consume the recovery budget.
+        # The family executor advances automatic_recovery_attempts only after an
+        # actual provider invocation. Circuit-open deferrals therefore cannot
+        # exhaust retries without doing model work.
+        entry["automatic_recovery_inflight_attempt"] = max(
+            completed + 1, next_attempt
         )
-        entry["automatic_recovery_attempts"] = max(0, next_attempt)
         entry.pop("next_automatic_recovery_attempt", None)
         entry["state"] = "queued"
         entry["queued_for_recovery_at"] = (now or datetime.now(UTC)).isoformat()
