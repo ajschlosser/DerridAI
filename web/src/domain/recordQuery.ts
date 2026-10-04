@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Pure record parsing, matching and text helpers extracted verbatim from the legacy runtime.
+// Pure record parsing, matching, and text helpers shared by record-oriented views.
 
 type JsonObject = Record<string, unknown>;
 
@@ -26,31 +26,38 @@ const errorMessage = (error: unknown): string =>
 export function parseJsonl(text: string): { records: JsonObject[]; errors: string[] } {
   const records: JsonObject[] = [];
   const errors: string[] = [];
-  const trimmed = text.trim();
-  if (!trimmed) return { records, errors };
-  if (trimmed.startsWith("[")) {
+  const trimmedText = text.trim();
+  if (!trimmedText) return { records, errors };
+
+  if (trimmedText.startsWith("[")) {
     try {
-      const value = JSON.parse(trimmed);
-      if (!Array.isArray(value)) throw Error("Root is not an array");
-      value.forEach((x, i) =>
-        typeof x === "object" && x && !Array.isArray(x)
-          ? records.push(x)
-          : errors.push(`Item ${i + 1}: not an object`),
-      );
+      const parsedRoot = JSON.parse(trimmedText);
+      if (!Array.isArray(parsedRoot)) throw Error("Root is not an array");
+
+      parsedRoot.forEach((item, itemIndex) => {
+        if (typeof item === "object" && item && !Array.isArray(item)) {
+          records.push(item);
+        } else {
+          errors.push(`Item ${itemIndex + 1}: not an object`);
+        }
+      });
       return { records, errors };
-    } catch (e) {
-      return { records, errors: [errorMessage(e)] };
+    } catch (error) {
+      return { records, errors: [errorMessage(error)] };
     }
   }
-  text.split(/\r?\n/).forEach((line, i) => {
+
+  text.split(/\r?\n/).forEach((line, lineIndex) => {
     if (!line.trim()) return;
     try {
-      const x = JSON.parse(line);
-      typeof x === "object" && x && !Array.isArray(x)
-        ? records.push(x)
-        : errors.push(`Line ${i + 1}: not an object`);
-    } catch (e) {
-      errors.push(`Line ${i + 1}: ${errorMessage(e)}`);
+      const parsedLine = JSON.parse(line);
+      if (typeof parsedLine === "object" && parsedLine && !Array.isArray(parsedLine)) {
+        records.push(parsedLine);
+      } else {
+        errors.push(`Line ${lineIndex + 1}: not an object`);
+      }
+    } catch (error) {
+      errors.push(`Line ${lineIndex + 1}: ${errorMessage(error)}`);
     }
   });
   return { records, errors };
@@ -88,31 +95,44 @@ export function flattenValueList(value: unknown): string[] {
 
 export function countOccurrences(text: unknown, query: unknown): number {
   if (!query) return 0;
-  const hay = String(text).toLocaleLowerCase();
+
+  const haystack = String(text).toLocaleLowerCase();
   const needle = String(query).toLocaleLowerCase();
-  let i = 0;
-  let count = 0;
-  while ((i = hay.indexOf(needle, i)) >= 0) {
-    count++;
-    i += Math.max(needle.length, 1);
+  let searchFrom = 0;
+  let occurrenceCount = 0;
+  let matchIndex = haystack.indexOf(needle, searchFrom);
+
+  while (matchIndex >= 0) {
+    occurrenceCount += 1;
+    searchFrom = matchIndex + Math.max(needle.length, 1);
+    matchIndex = haystack.indexOf(needle, searchFrom);
   }
-  return count;
+  return occurrenceCount;
 }
 
 /** Filter-row matching for the operators `empty`, `notempty`, `eq`, `neq`, `has`, `nhas`, `gte` and `lte`. */
-export function valueMatches(v: unknown, op: string, n: unknown): boolean {
-  const empty = v == null || v === "" || (Array.isArray(v) && !v.length);
-  if (op === "empty") return empty;
-  if (op === "notempty") return !empty;
-  const vals: unknown[] = Array.isArray(v) ? v : [v];
-  const q = String(n ?? "").toLocaleLowerCase();
-  const lower = (x: unknown) => String(x ?? "").toLocaleLowerCase();
-  if (op === "eq") return vals.some((x) => lower(x) === q);
-  if (op === "neq") return !vals.some((x) => lower(x) === q);
-  if (op === "has") return vals.some((x) => lower(x).includes(q));
-  if (op === "nhas") return !vals.some((x) => lower(x).includes(q));
-  if (op === "gte") return vals.some((x) => Number(x) >= Number(n));
-  if (op === "lte") return vals.some((x) => Number(x) <= Number(n));
+export function valueMatches(value: unknown, operator: string, operand: unknown): boolean {
+  const isEmpty =
+    value == null || value === "" || (Array.isArray(value) && !value.length);
+  if (operator === "empty") return isEmpty;
+  if (operator === "notempty") return !isEmpty;
+
+  const candidateValues: unknown[] = Array.isArray(value) ? value : [value];
+  const normalizedOperand = String(operand ?? "").toLocaleLowerCase();
+  const normalize = (candidate: unknown) => String(candidate ?? "").toLocaleLowerCase();
+
+  if (operator === "eq")
+    return candidateValues.some((candidate) => normalize(candidate) === normalizedOperand);
+  if (operator === "neq")
+    return !candidateValues.some((candidate) => normalize(candidate) === normalizedOperand);
+  if (operator === "has")
+    return candidateValues.some((candidate) => normalize(candidate).includes(normalizedOperand));
+  if (operator === "nhas")
+    return !candidateValues.some((candidate) => normalize(candidate).includes(normalizedOperand));
+  if (operator === "gte")
+    return candidateValues.some((candidate) => Number(candidate) >= Number(operand));
+  if (operator === "lte")
+    return candidateValues.some((candidate) => Number(candidate) <= Number(operand));
   return true;
 }
 
@@ -134,40 +154,58 @@ export function subsetRuleMatches(
   rule: SubsetRule,
   caseSensitive = false,
 ): boolean {
-  const value = record?.[rule.field];
-  const raw = String(rule.value ?? "");
+  const fieldValue = record?.[rule.field];
+  const rawRuleValue = String(rule.value ?? "");
   const normalize = (text: unknown) =>
     caseSensitive ? String(text) : String(text).toLocaleLowerCase();
-  const hay = normalize(subsetValueText(value));
-  const needle = normalize(raw);
+  const normalizedFieldText = normalize(subsetValueText(fieldValue));
+  const normalizedRuleValue = normalize(rawRuleValue);
+
   switch (rule.operator) {
     case "equals":
-      return Array.isArray(value)
-        ? value.some((item) => normalize(subsetValueText(item)) === needle)
-        : hay === needle;
+      return Array.isArray(fieldValue)
+        ? fieldValue.some(
+            (item) => normalize(subsetValueText(item)) === normalizedRuleValue,
+          )
+        : normalizedFieldText === normalizedRuleValue;
     case "not_equals":
-      return Array.isArray(value)
-        ? !value.some((item) => normalize(subsetValueText(item)) === needle)
-        : hay !== needle;
+      return Array.isArray(fieldValue)
+        ? !fieldValue.some(
+            (item) => normalize(subsetValueText(item)) === normalizedRuleValue,
+          )
+        : normalizedFieldText !== normalizedRuleValue;
     case "contains":
-      return hay.includes(needle);
+      return normalizedFieldText.includes(normalizedRuleValue);
     case "not_contains":
-      return !hay.includes(needle);
+      return !normalizedFieldText.includes(normalizedRuleValue);
     case "array_contains":
       return (
-        Array.isArray(value) && value.some((item) => normalize(subsetValueText(item)) === needle)
+        Array.isArray(fieldValue) &&
+        fieldValue.some(
+          (item) => normalize(subsetValueText(item)) === normalizedRuleValue,
+        )
       );
     case "exists":
-      return value !== undefined && value !== null && subsetValueText(value) !== "";
+      return (
+        fieldValue !== undefined &&
+        fieldValue !== null &&
+        subsetValueText(fieldValue) !== ""
+      );
     case "missing":
-      return value === undefined || value === null || subsetValueText(value) === "";
+      return (
+        fieldValue === undefined ||
+        fieldValue === null ||
+        subsetValueText(fieldValue) === ""
+      );
     case "truthy":
-      return Boolean(value);
+      return Boolean(fieldValue);
     case "falsy":
-      return !value;
+      return !fieldValue;
     case "regex":
       try {
-        return new RegExp(raw, caseSensitive ? "" : "i").test(subsetValueText(value));
+        return new RegExp(rawRuleValue, caseSensitive ? "" : "i").test(
+          subsetValueText(fieldValue),
+        );
       } catch {
         return false;
       }
