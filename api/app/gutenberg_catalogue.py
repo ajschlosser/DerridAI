@@ -1199,6 +1199,14 @@ class GutenbergOfflineService:
                 destination.flush()
             chunk_path.unlink(missing_ok=True)
 
+            # Pause/refetch can race the local append after the network stream has
+            # closed. Never let the old worker overwrite the newer durable state.
+            if (
+                self._stop.is_set()
+                or self.status()["archive"]["status"] != "downloading"
+            ):
+                return self.status()
+
             done = self._bytes_done()
             if done != offset + received:
                 raise OSError(
