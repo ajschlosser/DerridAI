@@ -769,8 +769,24 @@ class PdfCorpusFieldRunGuidance(BaseModel):
         return str(value or "").strip()
 
 
+class PdfCorpusSourceScope(BaseModel):
+    """Build-specific subset of source pages; an empty list means the complete source."""
+
+    model_config = ConfigDict(extra="forbid")
+    pages: list[int] = Field(default_factory=list, max_length=10000)
+
+    @field_validator("pages")
+    @classmethod
+    def normalize_pages(cls, value: list[int]) -> list[int]:
+        pages = sorted(set(value))
+        if any(page < 1 for page in pages):
+            raise ValueError("Source pages must be positive integers")
+        return pages
+
+
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
+    source_scope: PdfCorpusSourceScope | None = None
     profile_id: str = Field(default="derrida-scholarly-v12", min_length=1, max_length=200)
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None
