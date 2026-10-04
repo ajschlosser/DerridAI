@@ -117,23 +117,28 @@ function saveSpeaker(speaker: string) {
   padding: var(--space-4) 0 var(--space-5);
   border-top: 1px solid var(--border-subtle);
 }
+
 .speaker-assignments header {
   display: grid;
   gap: var(--space-2);
 }
+
 .speaker-assignments h3,
 .speaker-assignments p {
   margin: 0;
 }
+
 .speaker-assignments h3 {
   font-size: 0.9375rem;
 }
+
 .speaker-assignments p {
   max-width: 72ch;
   color: var(--muted);
   font-size: 0.8125rem;
   line-height: 1.5;
 }
+
 .speaker-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
