@@ -19,7 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
-import * as runtime from "../runtime/runtime.js";
+import { state as sharedState } from "../domain/sharedUrlState";
+import { clearAllUpdates } from "../domain/sharedRecordEditing";
+import { toggleSidebar } from "../domain/sidebarToggle";
 import {
   backupContainsCredentials,
   deleteAllDerridaiBrowserState,
@@ -32,7 +34,7 @@ import {
   getDefaultProviderProfileId,
 } from "../domain/sharedProviderProfiles";
 import { navigateTo } from "../domain/sharedNavigation";
-import { persistPrefs } from "../domain/sharedWorkspaceStorage";
+import { flushWorkspacePrefs, persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { apiRequest } from "../api/http";
 import {
   systemApi,
@@ -92,7 +94,7 @@ type RuntimeSettings = {
   upsertIgnored?: Record<string, unknown>;
   jobs?: Array<{ status?: string }>;
 };
-const workspace = runtime.state as RuntimeSettings;
+const workspace = sharedState as unknown as RuntimeSettings;
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const shell = useShellStore();
@@ -349,8 +351,7 @@ function mark(group: string, status: SaveStatus) {
   groupStatus.value = { ...groupStatus.value, [group]: status };
 }
 async function persistWorkspace() {
-  if (typeof runtime.flushWorkspacePrefs === "function") await runtime.flushWorkspacePrefs();
-  else persistPrefs();
+  await flushWorkspacePrefs();
   shell.sync();
 }
 async function saveGroup(group: string, apply: () => void | Promise<void>) {
@@ -544,7 +545,7 @@ function expandPanels() {
   announce(i18n.t("settings.panels_expanded"));
 }
 function expandSidebar() {
-  if (workspace.sidebarCollapsed) runtime.toggleSidebar();
+  if (workspace.sidebarCollapsed) toggleSidebar();
   announce(i18n.t("settings.sidebar_expanded"));
 }
 function clearUpsertSuppressions() {
@@ -592,7 +593,7 @@ async function applyConfirm() {
     if (kind === "backup") await downloadFullBackup({ confirmed: true });
     else if (kind === "restore" && restoreFile.value)
       await restoreFullBackup(restoreFile.value, { confirmed: true });
-    else if (kind === "updates") await runtime.clearAllUpdates({ confirmed: true });
+    else if (kind === "updates") await clearAllUpdates({ confirmed: true });
     else if (kind === "nuke") {
       await apiRequest("/api/admin/nuke", { method: "POST", body: "{}" });
       await deleteAllDerridaiBrowserState();

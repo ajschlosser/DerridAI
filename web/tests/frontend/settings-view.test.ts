@@ -93,6 +93,15 @@ vi.mock("../../src/domain/sharedProviderProfiles", () => ({
   getProviderProfilesForUi: runtime.getProviderProfilesForUi,
   getDefaultProviderProfileId: runtime.getDefaultProviderProfileId,
 }));
+vi.mock("../../src/domain/sharedUrlState", () => ({ state: runtime.state }));
+vi.mock("../../src/domain/sharedWorkspaceStorage", () => ({
+  persistPrefs: runtime.persistPrefs,
+  flushWorkspacePrefs: runtime.flushWorkspacePrefs,
+}));
+vi.mock("../../src/domain/sharedRecordEditing", () => ({
+  clearAllUpdates: runtime.clearAllUpdates,
+}));
+// The shell store still reads its snapshot through the runtime bridge.
 vi.mock("../../src/runtime/runtime.js", () => ({
   ...runtime,
   __v_isRef: false,
@@ -101,6 +110,7 @@ vi.mock("../../src/runtime/runtime.js", () => ({
   __v_skip: true,
   __v_raw: undefined,
 }));
+vi.mock("../../src/domain/sidebarToggle", () => ({ toggleSidebar: runtime.toggleSidebar }));
 
 import SettingsView from "../../src/views/SettingsView.vue";
 import { useAuthStore } from "../../src/stores/auth";

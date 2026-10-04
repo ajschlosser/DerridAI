@@ -1239,11 +1239,6 @@ function getNavItems() {
     }));
 }
 
-function toggleSidebar() {
-  state.sidebarCollapsed = !state.sidebarCollapsed;
-  persistPrefs();
-  shell();
-}
 function triggerBulkEdit() {
   return canUse("editLocalRecords")
     ? openBulkFieldEditor()
@@ -1713,7 +1708,6 @@ export {
   pathViewMap,
   bootstrapRuntime,
   renderView,
-  toggleSidebar,
   activateFile,
   triggerBulkEdit,
   triggerOcrClean,

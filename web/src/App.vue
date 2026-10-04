@@ -78,6 +78,7 @@ import * as runtime from "./runtime/runtime.js";
 import { navigateTo } from "./domain/sharedNavigation";
 import { triggerImport } from "./domain/sharedFileLifecycle";
 import { pauseRuntime } from "./domain/jobsPause";
+import { toggleSidebar } from "./domain/sidebarToggle";
 import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
 
 const router = useRouter();
@@ -588,7 +589,7 @@ watch(
       <SidebarBrand
         :collapsed="effectiveSidebarCollapsed"
         @navigate-home="navigate('home')"
-        @toggle="runtime.toggleSidebar()"
+        @toggle="toggleSidebar()"
       />
       <SidebarNavigator
         :groups="groupedNavItems"
