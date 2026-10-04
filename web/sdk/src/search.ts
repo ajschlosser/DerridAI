@@ -115,9 +115,7 @@ function lexicalScores(
         if (!termFrequency) continue;
         const matchingDocumentCount = documentFrequency.get(term) ?? 0;
         const inverseDocumentFrequency = Math.log(
-          1 +
-            (count - matchingDocumentCount + 0.5) /
-              (matchingDocumentCount + 0.5),
+          1 + (count - matchingDocumentCount + 0.5) / (matchingDocumentCount + 0.5),
         );
         const termSaturation = 1.2;
         const lengthNormalization = 0.75;
@@ -136,10 +134,7 @@ function lexicalScores(
     .sort(compareScored);
 }
 
-function cosine(
-  leftVector?: ArrayLike<number>,
-  rightVector?: ArrayLike<number>,
-): number {
+function cosine(leftVector?: ArrayLike<number>, rightVector?: ArrayLike<number>): number {
   if (
     !leftVector ||
     !rightVector ||
