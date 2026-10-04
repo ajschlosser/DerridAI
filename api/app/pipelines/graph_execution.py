@@ -28,7 +28,9 @@ import hashlib
 import json
 import time
 from collections.abc import Callable, Mapping
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
+from threading import BoundedSemaphore
 from typing import Any, Literal
 
 from .contracts import output_ports
@@ -49,6 +51,22 @@ class StageResult:
 
 
 StageHandler = Callable[[PipelineStageDefinition, Mapping[str, Any]], StageResult]
+
+
+@dataclass(frozen=True)
+class ConcurrencyCapability:
+    """Server-owned opt-in for read-only inputs and thread-safe handlers.
+
+    A shared capacity key bounds provider calls across runs on this executor.
+    The adapter still owns wider provider quotas and cancellation of in-flight I/O.
+    """
+
+    capacity_key: str
+    max_inflight: int = 1
+
+    def __post_init__(self) -> None:
+        if not self.capacity_key or self.max_inflight < 1:
+            raise ValueError("Concurrency requires a capacity key and positive limit.")
 
 
 @dataclass
@@ -97,12 +115,12 @@ def _count(value: Any) -> int:
 
 
 class GraphExecutor:
-    """Compile a snapshot and execute it serially with deterministic fan-in.
+    """Compile a snapshot with bounded opt-in concurrency and deterministic fan-in.
 
     Handlers are supplied by server code, keyed by registered strategy ID. A
     definition can never supply executable code. Each instance runs at most once
     per invocation; the same strategy may have any number of distinct instances.
-    Serial scheduling is deliberate until concurrency capabilities are declared.
+    Undeclared handlers remain serial. Parallel handlers must not mutate inputs.
     """
 
     def __init__(
@@ -112,12 +130,28 @@ class GraphExecutor:
         registry: StrategyRegistry,
         purpose: PipelinePurposeSpec,
         handlers: Mapping[str, StageHandler],
+        concurrency: Mapping[str, ConcurrencyCapability] | None = None,
+        max_workers: int = 1,
     ) -> None:
         self.pipeline = pipeline.model_copy(deep=True)
         self.registry = StrategyRegistry(
             spec.model_copy(deep=True) for spec in registry.list()
         )
         self.handlers = dict(handlers)
+        if max_workers < 1:
+            raise ValueError("max_workers must be positive.")
+        self.max_workers = max_workers
+        self.concurrency = dict(concurrency or {})
+        limits: dict[str, int] = {}
+        for strategy, capability in self.concurrency.items():
+            if strategy not in self.handlers:
+                raise ValueError(f"Concurrency names an unknown handler {strategy!r}.")
+            previous = limits.setdefault(
+                capability.capacity_key, capability.max_inflight
+            )
+            if previous != capability.max_inflight:
+                raise ValueError("A shared capacity key must have one limit.")
+        self.capacity = {key: BoundedSemaphore(limit) for key, limit in limits.items()}
         if self.pipeline.purpose != purpose.purpose_id:
             raise ValueError("The graph purpose must match its run-input contract.")
         self.wiring = resolve_wiring(self.pipeline, self.registry, purpose)
@@ -144,12 +178,7 @@ class GraphExecutor:
     def _topological_order(self) -> list[PipelineStageDefinition]:
         """Break ties in definition order, including fallback dependencies."""
         pending = {stage.id: stage for stage in self.pipeline.stages}
-        parents: dict[str, set[str]] = {
-            stage.id: set() for stage in self.pipeline.stages
-        }
-        for stage in self.pipeline.stages:
-            for target in stage.edge_targets():
-                parents[target].add(stage.id)
+        parents = self._parents()
         ordered = []
         while pending:
             ready = next(
@@ -163,7 +192,64 @@ class GraphExecutor:
                 dependencies.discard(ready.id)
         return ordered
 
+    def _parents(self) -> dict[str, set[str]]:
+        parents: dict[str, set[str]] = {
+            stage.id: set() for stage in self.pipeline.stages
+        }
+        for stage in self.pipeline.stages:
+            for target in stage.edge_targets():
+                parents[target].add(stage.id)
+            for port in self.wiring["stages"][stage.id]["inputs"]:
+                for source in port["sources"]:
+                    if source["stage"] is not None:
+                        parents[stage.id].add(source["stage"])
+        return parents
+
+    def _waves(self) -> list[list[PipelineStageDefinition]]:
+        parents = self._parents()
+        pending = {stage.id: stage for stage in self.order}
+        waves = []
+        while pending:
+            ready = [stage for key, stage in pending.items() if not parents[key]]
+            first = ready[0]
+            # A serial handler is a barrier; never overlap it with a safe handler.
+            wave = [first]
+            if self.max_workers > 1 and first.strategy in self.concurrency:
+                for stage in ready[1:]:
+                    if stage.strategy not in self.concurrency:
+                        break
+                    wave.append(stage)
+                    if len(wave) == self.max_workers:
+                        break
+            waves.append(wave)
+            for stage in wave:
+                del pending[stage.id]
+                for dependencies in parents.values():
+                    dependencies.discard(stage.id)
+        return waves
+
+    def _invoke(
+        self, stage: PipelineStageDefinition, inputs: Mapping[str, Any]
+    ) -> StageResult:
+        capability = self.concurrency.get(stage.strategy)
+        if capability is None:
+            return self.handlers[stage.strategy](stage.model_copy(deep=True), inputs)
+        with self.capacity[capability.capacity_key]:
+            return self.handlers[stage.strategy](stage.model_copy(deep=True), inputs)
+
     def run(self, run_inputs: Mapping[str, Any]) -> GraphResult:
+        # On failure, queued work is cancelled and running handlers are joined.
+        # No background handler outlives this run or its task-owned context.
+        with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
+            try:
+                return self._run(run_inputs, pool)
+            except BaseException:
+                pool.shutdown(wait=True, cancel_futures=True)
+                raise
+
+    def _run(
+        self, run_inputs: Mapping[str, Any], pool: ThreadPoolExecutor
+    ) -> GraphResult:
         """Follow only selected edges; a required empty branch skips its handler.
 
         Multiple ports receive an ordered list of artifacts (not a flattened
@@ -177,131 +263,168 @@ class GraphExecutor:
         stage_inputs: dict[str, dict[str, Any]] = {}
         traces: dict[str, PipelineStageTrace] = {}
 
-        for stage in self.order:
-            spec = self.registry.require(stage.strategy)
-            trace = PipelineStageTrace(
-                stage_id=stage.id,
-                strategy_id=stage.strategy,
-                strategy_version=spec.version,
-                status="skipped",
-                parameters={
-                    "config_hash": hashlib.sha256(
-                        json.dumps(
-                            stage.config, sort_keys=True, separators=(",", ":")
-                        ).encode()
-                    ).hexdigest()
-                },
-            )
-            traces[stage.id] = trace
-            result.stages = [
-                traces[item.id] for item in self.pipeline.stages if item.id in traces
-            ]
-            if not stage.enabled or stage.id not in active:
-                continue
-            inputs = {}
-            missing = False
-            for port in self.wiring["stages"][stage.id]["inputs"]:
-                values: list[Any] = []
-                for source in port["sources"]:
-                    kind, producer = source["kind"], source["stage"]
-                    if kind == "constant":
-                        value = source["value"]
-                    elif kind == "run_input":
-                        if source["name"] not in run_inputs:
-                            if port["required"]:
-                                raise GraphExecutionError(
-                                    stage.id, "missing_run_input", result
-                                )
-                            continue
-                        value = run_inputs[source["name"]]
-                    else:
-                        edge = deliveries.get((producer, stage.id))
-                        if not source["explicit"] and edge is None:
-                            continue
-                        if not source["explicit"] and edge in FALLBACK_EDGES:
-                            primary = self.wiring["stages"][producer]["inputs"][0][
-                                "port"
-                            ]
-                            value = stage_inputs.get(producer, {}).get(primary)
-                            producer_port = self.wiring["stages"][producer]["inputs"][0]
-                            if producer_port["multiple"] and port["multiple"]:
-                                values.extend(value or [])
+        for wave in self._waves():
+            submitted: dict[str, Future[StageResult]] = {}
+            elapsed: dict[str, int] = {}
+
+            def invoke(
+                stage: PipelineStageDefinition,
+                inputs: Mapping[str, Any],
+                durations: dict[str, int] = elapsed,
+            ) -> StageResult:
+                begun = time.perf_counter()
+                try:
+                    return self._invoke(stage, inputs)
+                finally:
+                    durations[stage.id] = max(
+                        0, int((time.perf_counter() - begun) * 1000)
+                    )
+
+            for stage in wave:
+                spec = self.registry.require(stage.strategy)
+                trace = PipelineStageTrace(
+                    stage_id=stage.id,
+                    strategy_id=stage.strategy,
+                    strategy_version=spec.version,
+                    status="skipped",
+                    parameters={
+                        "config_hash": hashlib.sha256(
+                            json.dumps(
+                                stage.config, sort_keys=True, separators=(",", ":")
+                            ).encode()
+                        ).hexdigest()
+                    },
+                )
+                traces[stage.id] = trace
+                result.stages = [
+                    traces[item.id]
+                    for item in self.pipeline.stages
+                    if item.id in traces
+                ]
+                if not stage.enabled or stage.id not in active:
+                    continue
+                inputs = {}
+                missing = False
+                for port in self.wiring["stages"][stage.id]["inputs"]:
+                    values: list[Any] = []
+                    for source in port["sources"]:
+                        kind, producer = source["kind"], source["stage"]
+                        if kind == "constant":
+                            value = source["value"]
+                        elif kind == "run_input":
+                            if source["name"] not in run_inputs:
+                                if port["required"]:
+                                    raise GraphExecutionError(
+                                        stage.id, "missing_run_input", result
+                                    )
                                 continue
-                        elif kind == "stage_input":
-                            continue  # This fallback was not selected.
+                            value = run_inputs[source["name"]]
                         else:
-                            outputs = result.outputs.get(producer, {})
-                            if source["output"] not in outputs:
+                            edge = deliveries.get((producer, stage.id))
+                            if not source["explicit"] and edge is None:
                                 continue
-                            value = outputs[source["output"]]
-                    if not _empty(value):
-                        values.append(value)
-                if port["required"] and not values:
-                    missing = True
-                inputs[port["port"]] = (
-                    values if port["multiple"] else (values[0] if values else None)
-                )
-            if missing:
-                trace.fallback_reason = "empty_required_input"
-                continue
-            stage_inputs[stage.id] = inputs
-            trace.input_count = sum(_count(value) for value in inputs.values())
-            begun = time.perf_counter()
-            try:
-                outcome = self.handlers[stage.strategy](
-                    stage.model_copy(deep=True), inputs
-                )
-                expected = {port.name for port in output_ports(spec)}
-                if set(outcome.outputs) != expected:
-                    raise ValueError(
-                        "Handler must return every declared output and no undeclared outputs."
+                            if not source["explicit"] and edge in FALLBACK_EDGES:
+                                primary = self.wiring["stages"][producer]["inputs"][0][
+                                    "port"
+                                ]
+                                value = stage_inputs.get(producer, {}).get(primary)
+                                producer_port = self.wiring["stages"][producer][
+                                    "inputs"
+                                ][0]
+                                if producer_port["multiple"] and port["multiple"]:
+                                    values.extend(value or [])
+                                    continue
+                            elif kind == "stage_input":
+                                continue  # This fallback was not selected.
+                            else:
+                                outputs = result.outputs.get(producer, {})
+                                if source["output"] not in outputs:
+                                    continue
+                                value = outputs[source["output"]]
+                        if not _empty(value):
+                            values.append(value)
+                    if port["required"] and not values:
+                        missing = True
+                    inputs[port["port"]] = (
+                        values if port["multiple"] else (values[0] if values else None)
                     )
-            except InterruptedError:
-                raise
-            except Exception as exc:  # noqa: BLE001 - explicit graph edges own degradation
-                edge = (
-                    exc.edge
-                    if isinstance(exc, StageFailure)
-                    else (
-                        "on_unavailable"
-                        if isinstance(exc, LookupError)
-                        else "on_timeout"
-                        if isinstance(exc, TimeoutError)
-                        or getattr(exc, "timed_out", False)
-                        else "on_error"
-                    )
-                )
-                if edge == "on_unavailable":
-                    trace.status = "unavailable"
-                elif edge == "on_timeout":
-                    trace.status = "timed_out"
+                if missing:
+                    trace.fallback_reason = "empty_required_input"
+                    continue
+                stage_inputs[stage.id] = inputs
+                trace.input_count = sum(_count(value) for value in inputs.values())
+                if len(wave) == 1:
+                    future: Future[StageResult] = Future()
+                    try:
+                        future.set_result(invoke(stage, inputs))
+                    except BaseException as exc:
+                        future.set_exception(exc)
+                    submitted[stage.id] = future
                 else:
-                    trace.status = "failed"
-                trace.fallback_reason = edge
-                target = getattr(stage, edge)
-                if target is None:
-                    raise GraphExecutionError(stage.id, edge, result) from None
-                targets = [target]
-            else:
-                result.outputs[stage.id] = dict(outcome.outputs)
-                trace.provider, trace.model = outcome.provider, outcome.model
-                trace.status = "completed"
-                trace.output_count = sum(
-                    _count(value) for value in outcome.outputs.values()
-                )
-                if (
-                    all(_empty(value) for value in outcome.outputs.values())
-                    and stage.on_empty
-                ):
-                    edge, targets = "on_empty", [stage.on_empty]
+                    submitted[stage.id] = pool.submit(invoke, stage, inputs)
+            for stage in wave:
+                if stage.id not in submitted:
+                    continue
+                future = submitted[stage.id]
+                trace = traces[stage.id]
+                spec = self.registry.require(stage.strategy)
+                try:
+                    outcome = future.result()
+                    expected = {port.name for port in output_ports(spec)}
+                    if set(outcome.outputs) != expected:
+                        raise ValueError(
+                            "Handler must return every declared output and no undeclared outputs."
+                        )
+                except InterruptedError:
+                    for pending_future in submitted.values():
+                        pending_future.cancel()
+                    raise
+                except Exception as exc:  # noqa: BLE001 - explicit graph edges own degradation
+                    edge = (
+                        exc.edge
+                        if isinstance(exc, StageFailure)
+                        else (
+                            "on_unavailable"
+                            if isinstance(exc, LookupError)
+                            else "on_timeout"
+                            if isinstance(exc, TimeoutError)
+                            or getattr(exc, "timed_out", False)
+                            else "on_error"
+                        )
+                    )
+                    if edge == "on_unavailable":
+                        trace.status = "unavailable"
+                    elif edge == "on_timeout":
+                        trace.status = "timed_out"
+                    else:
+                        trace.status = "failed"
                     trace.fallback_reason = edge
+                    target = getattr(stage, edge)
+                    if target is None:
+                        for pending_future in submitted.values():
+                            pending_future.cancel()
+                        raise GraphExecutionError(stage.id, edge, result) from None
+                    targets = [target]
                 else:
-                    edge, targets = "next", stage.next
-            finally:
-                trace.elapsed_ms = max(0, int((time.perf_counter() - begun) * 1000))
-            for target in targets:
-                active.add(target)
-                deliveries[(stage.id, target)] = edge
+                    result.outputs[stage.id] = dict(outcome.outputs)
+                    trace.provider, trace.model = outcome.provider, outcome.model
+                    trace.status = "completed"
+                    trace.output_count = sum(
+                        _count(value) for value in outcome.outputs.values()
+                    )
+                    if (
+                        all(_empty(value) for value in outcome.outputs.values())
+                        and stage.on_empty
+                    ):
+                        edge, targets = "on_empty", [stage.on_empty]
+                        trace.fallback_reason = edge
+                    else:
+                        edge, targets = "next", stage.next
+                finally:
+                    trace.elapsed_ms = elapsed[stage.id]
+                for target in targets:
+                    active.add(target)
+                    deliveries[(stage.id, target)] = edge
         result.terminal_outputs = {
             stage_id: {name: result.outputs[stage_id][name] for name in names}
             for stage_id, names in self.terminals.items()

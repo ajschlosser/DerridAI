@@ -18,8 +18,12 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Event, Lock
+
 import pytest
 from app.pipelines.graph_execution import (
+    ConcurrencyCapability,
     GraphExecutionError,
     GraphExecutor,
     StageResult,
@@ -65,7 +69,7 @@ PURPOSE = PipelinePurposeSpec(
 )
 
 
-def _executor(stages, handlers, *, specs=None, entries=("start",)):
+def _executor(stages, handlers, *, specs=None, entries=("start",), **options):
     pipeline = PipelineDefinition(
         pipeline_id="test.graph",
         name="Test graph",
@@ -75,7 +79,7 @@ def _executor(stages, handlers, *, specs=None, entries=("start",)):
     )
     registry = StrategyRegistry(specs or [_strategy("transform")])
     return GraphExecutor(
-        pipeline, registry=registry, purpose=PURPOSE, handlers=handlers
+        pipeline, registry=registry, purpose=PURPOSE, handlers=handlers, **options
     )
 
 
@@ -634,3 +638,205 @@ def test_fanin_requires_guarantees_from_every_bound_source():
             ],
             [first, second, merge],
         )
+
+
+def _parallel_graph(handler, *, capability=None, workers=2):
+    return _executor(
+        [
+            {"id": "left", "strategy": "transform", "next": ["merge"]},
+            {"id": "right", "strategy": "transform", "next": ["merge"]},
+            {"id": "merge", "strategy": "merge"},
+        ],
+        {"transform": handler, "merge": lambda stage, inputs: StageResult(inputs)},
+        specs=[_strategy("transform"), _strategy("merge", multiple=True)],
+        entries=("left", "right"),
+        concurrency={"transform": capability} if capability else {},
+        max_workers=workers,
+    )
+
+
+def test_parallel_branches_overlap_and_merge_in_definition_order():
+    rendezvous = Barrier(2, timeout=5)
+    right_finished = Event()
+
+    def handler(stage, inputs):
+        rendezvous.wait()
+        if stage.id == "right":
+            right_finished.set()
+        else:
+            assert right_finished.wait(5)
+        return StageResult({"items": [stage.id]})
+
+    executor = _parallel_graph(handler, capability=ConcurrencyCapability("provider", 2))
+    result = executor.run({"items": ["source"]})
+    assert result.terminal_outputs == {"merge": {"items": [["left"], ["right"]]}}
+    assert [trace.stage_id for trace in result.stages] == ["left", "right", "merge"]
+    assert all(trace.status == "completed" for trace in result.stages)
+
+
+@pytest.mark.parametrize(
+    "capability,workers", [(None, 2), (ConcurrencyCapability("provider", 2), 1)]
+)
+def test_undeclared_handlers_and_default_worker_limit_remain_serial(
+    capability, workers
+):
+    calls = []
+
+    def handler(stage, inputs):
+        calls.append(stage.id)
+        return StageResult({"items": [stage.id]})
+
+    result = _parallel_graph(handler, capability=capability, workers=workers).run(
+        {"items": [1]}
+    )
+    assert calls == ["left", "right"]
+    assert result.terminal_outputs["merge"]["items"] == [["left"], ["right"]]
+
+
+def test_provider_capacity_is_shared_across_concurrent_runs():
+    lock = Lock()
+    release = Event()
+    at_capacity = Event()
+    active = peak = calls = 0
+
+    def handler(stage, inputs):
+        nonlocal active, peak, calls
+        with lock:
+            active += 1
+            calls += 1
+            peak = max(peak, active)
+            if active == 2:
+                at_capacity.set()
+        try:
+            assert release.wait(5)
+            return StageResult({"items": [stage.id]})
+        finally:
+            with lock:
+                active -= 1
+
+    executor = _parallel_graph(handler, capability=ConcurrencyCapability("provider", 2))
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(executor.run, {"items": [1]})
+        second = pool.submit(executor.run, {"items": [2]})
+        try:
+            assert at_capacity.wait(5)
+        finally:
+            release.set()
+        assert first.result().terminal_outputs == second.result().terminal_outputs
+    assert (peak, calls, active) == (2, 4, 0)
+
+
+def test_parallel_failure_joins_sibling_and_fallback_receives_original_input():
+    rendezvous = Barrier(2, timeout=5)
+    sibling_finished = Event()
+
+    def handler(stage, inputs):
+        if stage.id in {"left", "right"}:
+            rendezvous.wait()
+            if stage.id == "left":
+                raise LookupError("private")
+            sibling_finished.set()
+        return StageResult({"items": inputs["items"]})
+
+    executor = _executor(
+        [
+            {"id": "left", "strategy": "transform", "on_unavailable": "fallback"},
+            {"id": "right", "strategy": "transform"},
+            {"id": "fallback", "strategy": "transform"},
+        ],
+        {"transform": handler},
+        entries=("left", "right"),
+        concurrency={"transform": ConcurrencyCapability("provider", 2)},
+        max_workers=2,
+    )
+    result = executor.run({"items": ["original"]})
+    assert sibling_finished.is_set()
+    assert result.outputs["fallback"]["items"] == ["original"]
+    assert result.stages[0].status == "unavailable"
+    assert "private" not in repr(result.stages)
+
+
+@pytest.mark.parametrize("failure", [ValueError("private"), InterruptedError()])
+def test_parallel_fatal_failure_and_cancellation_join_running_sibling(failure):
+    rendezvous = Barrier(2, timeout=5)
+    sibling_finished = Event()
+
+    def handler(stage, inputs):
+        rendezvous.wait()
+        if stage.id == "left":
+            raise failure
+        sibling_finished.set()
+        return StageResult({"items": inputs["items"]})
+
+    executor = _parallel_graph(handler, capability=ConcurrencyCapability("provider", 2))
+    with pytest.raises(
+        InterruptedError
+        if isinstance(failure, InterruptedError)
+        else GraphExecutionError
+    ):
+        executor.run({"items": [1]})
+    assert sibling_finished.is_set()
+
+
+def test_concurrency_rejects_conflicting_capacity_limits():
+    with pytest.raises(ValueError, match="one limit"):
+        _executor(
+            [{"id": "start", "strategy": "transform"}],
+            {
+                "transform": lambda stage, inputs: StageResult(inputs),
+                "other": lambda stage, inputs: StageResult(inputs),
+            },
+            concurrency={
+                "transform": ConcurrencyCapability("provider", 1),
+                "other": ConcurrencyCapability("provider", 2),
+            },
+        )
+
+
+def test_parallel_empty_branch_does_not_run_downstream_provider():
+    rendezvous = Barrier(2, timeout=5)
+    calls = []
+
+    def handler(stage, inputs):
+        calls.append(stage.id)
+        if stage.id in {"left", "right"}:
+            rendezvous.wait()
+        return StageResult({"items": [] if stage.id == "left" else inputs["items"]})
+
+    executor = _executor(
+        [
+            {"id": "left", "strategy": "transform", "next": ["empty_child"]},
+            {"id": "right", "strategy": "transform"},
+            {"id": "empty_child", "strategy": "transform"},
+        ],
+        {"transform": handler},
+        entries=("left", "right"),
+        concurrency={"transform": ConcurrencyCapability("provider", 2)},
+        max_workers=2,
+    )
+    result = executor.run({"items": [1]})
+    assert set(calls) == {"left", "right"}
+    assert result.stages[2].fallback_reason == "empty_required_input"
+
+
+def test_unsafe_handler_is_a_barrier_between_parallel_waves():
+    calls = []
+
+    def handler(stage, inputs):
+        calls.append(stage.id)
+        return StageResult({"items": inputs["items"]})
+
+    executor = _executor(
+        [
+            {"id": "start", "strategy": "transform"},
+            {"id": "unsafe", "strategy": "unsafe"},
+            {"id": "last", "strategy": "transform"},
+        ],
+        {"transform": handler, "unsafe": handler},
+        specs=[_strategy("transform"), _strategy("unsafe")],
+        entries=("start", "unsafe", "last"),
+        concurrency={"transform": ConcurrencyCapability("provider", 2)},
+        max_workers=2,
+    )
+    executor.run({"items": [1]})
+    assert calls == ["start", "unsafe", "last"]
