@@ -16,7 +16,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { computed, inject, provide, ref } from "vue";
+import { computed, inject, provide, ref, shallowRef } from "vue";
 import type {
   Annotation,
   AnnotationInput,
@@ -314,7 +314,10 @@ export function createPublishedSiteContext() {
   const searchWork = ref("");
   const recordDialog = ref<RecordDialogState | null>(null);
   const activeDevice = ref("");
-  const client = ref<SdkClient | null>(null);
+  // The SDK client is a class instance with nested stateful service objects.
+  // Keep it opaque to Vue: deep reactive proxying changes method receivers on
+  // those objects and can make initialization fail before the published UI mounts.
+  const client = shallowRef<SdkClient | null>(null);
   const capabilities = ref<ClientCapabilities | null>(null);
 
   const publishedBrowserProfile = {
