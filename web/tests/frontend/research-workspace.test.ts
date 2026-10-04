@@ -70,6 +70,79 @@ describe("research workspace commands", () => {
     expect(spies.shellRefreshHook).toHaveBeenCalled();
   });
 
+  it("submits per-run Research overrides without rewriting saved defaults", async () => {
+    const api = vi.fn(async (_path: string, options: { body?: string }) => ({
+      id: "job-1",
+      type: "rag",
+      status: "queued",
+      request: options?.body ? JSON.parse(options.body) : {},
+    }));
+    const profile = {
+      id: "p",
+      name: "Local",
+      type: "ollama",
+      model: "gemma",
+      base_url: "http://localhost:11434",
+      max_concurrent_requests: 1,
+      num_ctx: 16384,
+      num_predict: 2048,
+      temperature: 0,
+      top_p: 1,
+      top_k: 0,
+      repeat_penalty: 1.1,
+      keep_alive: "10m",
+      extra_options: "{}",
+    };
+    const { state, workspace } = setup({
+      api,
+      hasCapability: () => true,
+      selectedEvidenceEntries: () => [],
+      selectedEvidencePayload: () => [],
+      recordStores: () => [{ name: "corpus", count: 10 }],
+      providerProfile: (id: string) => (id === "p" ? profile : null),
+      providerProfiles: () => [profile],
+      providerDisplayName: () => "Local",
+      trf: () => "Research started",
+    });
+    state.ragConfig = {
+      ...state.ragConfig,
+      k: 64,
+      source_collection: "",
+      work_filter: [],
+      skip_retrieval: false,
+    };
+
+    await workspace.startResearchRun({
+      prompt: "What is the trace?",
+      provider_profile_id: "p",
+      model: "gemma",
+      config: {
+        source_collection: "corpus",
+        work_filter: ["Glas"],
+        locales: ["en"],
+        search_types: ["lexical"],
+        k: 8,
+        fetch_k: 16,
+        rerank_top_n: 4,
+      },
+    });
+
+    const request = JSON.parse(api.mock.calls[0][1].body);
+    expect(request).toMatchObject({
+      source_collection: "corpus",
+      work_filter: ["Glas"],
+      k: 8,
+      fetch_k: 16,
+      rerank_top_n: 4,
+    });
+    expect(state.ragConfig).toMatchObject({
+      k: 64,
+      source_collection: "",
+      work_filter: [],
+      prompt: "What is the trace?",
+    });
+  });
+
   it("turns off skipping retrieval when no evidence is selected", () => {
     const { state, workspace } = setup({ selectedEvidenceEntries: () => [] });
     workspace.updateResearchConfig({ k: 4 });
