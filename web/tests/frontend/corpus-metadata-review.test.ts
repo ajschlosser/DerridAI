@@ -507,12 +507,8 @@ describe("Corpus Builder metadata review", () => {
 
     await state.queued[0](false);
 
-    expect(corpusBuilderApi.metadataDecisionBatch).toHaveBeenCalledWith(
-      "b1",
-      "r1",
-      changes,
-      1,
-      ["target"],
-    );
+    expect(corpusBuilderApi.metadataDecisionBatch).toHaveBeenCalledWith("b1", "r1", changes, 1, [
+      "target",
+    ]);
   });
 });
