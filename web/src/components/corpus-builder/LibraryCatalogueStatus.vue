@@ -18,9 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 /**
- * What the Project Gutenberg search needs locally: the catalogue (required for
- * search) and the optional text collection. Imports download one verified
- * text regardless of the collection.
+ * Project Gutenberg local-library installation: metadata is indexed first,
+ * then the bulk text archive is downloaded and imported into SQLite. Single
+ * title imports can still use the verified remote fallback when not installed.
  */
 import { computed } from "vue";
 import type { GutenbergStatus } from "../../api/corpus";
@@ -43,6 +43,10 @@ const catalogueRefreshing = computed(() =>
   ["refreshing", "indexing"].includes(String(props.status?.catalogue.status || "")),
 );
 const bytesOnDisk = computed(() => Number(props.status?.archive.bytes_done || 0));
+
+function formatNumber(value?: number | null) {
+  return new Intl.NumberFormat(i18n.locale || undefined).format(Math.max(0, Number(value || 0)));
+}
 
 function formatBytes(value?: number | null) {
   const bytes = Math.max(0, Number(value || 0));
@@ -132,6 +136,24 @@ function archiveActionLabel() {
         <small
           >{{ formatBytes(status.archive.bytes_done) }} /
           {{ formatBytes(status.archive.total_bytes) }}</small
+        >
+      </template>
+      <template
+        v-if="
+          archiveStatus === 'unpacking' &&
+          status?.archive.items_total &&
+          status.archive.items_done !== undefined
+        "
+      >
+        <progress
+          class="ls-progress"
+          :value="status.archive.items_done"
+          :max="status.archive.items_total"
+          :aria-label="i18n.t('pdf_corpus.gutenberg_unpacking', 'Importing Gutenberg texts')"
+        />
+        <small
+          >{{ formatNumber(status.archive.items_done) }} /
+          {{ formatNumber(status.archive.items_total) }}</small
         >
       </template>
     </div>
