@@ -268,16 +268,6 @@ class SearchRequest(BaseModel):
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
     pipeline_id: str | None = Field(default=None, min_length=1, max_length=160)
     pipeline_version: int | None = Field(default=None, ge=1)
-    # Pipeline Studio supplies the immutable baseline stage configuration.
-    # Settings overrides that exact version, and a run-specific layer may
-    # override Settings again. These layers cannot alter graph structure.
-    settings_pipeline_overrides: PipelineConfigOverrideSet | None = None
-    run_pipeline_overrides: PipelineConfigOverrideSet | None = None
-    # Pipeline Studio defines the baseline. Settings may override registered
-    # stage configuration, and this run may override Settings again. Both layers
-    # are version-bound so stale overrides can never silently target a new graph.
-    settings_pipeline_overrides: PipelineConfigOverrideSet | None = None
-    run_pipeline_overrides: PipelineConfigOverrideSet | None = None
 
 
 class OllamaTouchupOptions(BaseModel):
@@ -462,6 +452,11 @@ class RAGRunRequest(BaseModel):
     # executable version. Persisting it on the request makes each run auditable.
     pipeline_id: str | None = Field(default=None, min_length=1, max_length=160)
     pipeline_version: int | None = Field(default=None, ge=1)
+    # Pipeline Studio is the baseline. Settings may override registered stage
+    # configuration for this exact immutable version, and one Research run may
+    # override Settings again. Neither layer can rewrite pipeline topology.
+    settings_pipeline_overrides: PipelineConfigOverrideSet | None = None
+    run_pipeline_overrides: PipelineConfigOverrideSet | None = None
     # Empty is valid only for selected-evidence-only runs. The pipeline enforces
     # a collection when vector retrieval is enabled.
     source_collection: str = ""
