@@ -37,6 +37,7 @@ flowchart TD
     Realtime["app/realtime/ · WebSocket"]
     Reads["app/celf_queries/"]
     Domains["Corpus / Research / Pipelines / Jobs / Providers"]
+    Events["app/operation_events.py"]
     Stores["Canonical + system stores"]
     Chroma["Derived Chroma projections"]
 
@@ -48,9 +49,11 @@ flowchart TD
     Routers --> Reads
     GraphQL --> Reads
     Reads --> Stores
-    Reads --> Chroma
+    Reads -. query .-> Chroma
     Domains --> Stores
     Domains -. derived indexing / retrieval .-> Chroma
+    Domains -. bounded change notifications .-> Events
+    Events --> Realtime
 ```
 
 The backend is intentionally split by responsibility:
@@ -122,6 +125,8 @@ docker compose up -d --build
 curl -fsS http://127.0.0.1:8000/api/live
 ```
 
+The default host-provider URLs use `host.docker.internal`. Compose maps that name through Docker's host gateway, so the same Ollama/OpenAI-compatible configuration works on Docker Desktop and native Linux Docker Engine.
+
 Backend tests do not require Docker, Ollama, a GPU, or a real Chroma service; test configuration redirects storage to isolated temporary paths.
 
 ## Validation
@@ -140,6 +145,8 @@ pytest -q -m contract tests/test_frontend_graphql_contract.py
 Focused test taxonomy and fixture guidance are in [tests/README.md](../tests/README.md).
 
 ## Backend change rules
+
+Follow the naming/docstring guidance in [CONTRIBUTING.md](../CONTRIBUTING.md): use domain-specific names, document non-obvious private algorithms and invariants, and prefer guard clauses or named helpers over deeply nested control flow. Compatibility dictionaries are not a reason to introduce new untyped payloads at a stable boundary.
 
 - Enforce authorization and role boundaries in the API even when the frontend also hides a capability.
 - Treat LLM output as untrusted proposals until deterministic schema, provenance, evidence, and vocabulary checks accept it.
