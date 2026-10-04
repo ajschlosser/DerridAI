@@ -1179,7 +1179,10 @@ class GutenbergOfflineService:
                     chunk_file.flush()
 
                 if received != expected:
-                    raise ValueError(
+                    # A clean-looking early EOF can occur when a proxy closes the
+                    # connection without surfacing a lower-level transport error.
+                    # Treat it like any other interrupted range and retry it.
+                    raise httpx.ReadError(
                         f"Gutenberg archive range ended at {received:,} bytes; expected {expected:,}."
                     )
 
