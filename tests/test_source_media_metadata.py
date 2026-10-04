@@ -125,6 +125,29 @@ def test_audio_ingest_automatically_diarizes_and_exposes_distinct_speakers(monke
     assert [block["speaker"] for block in extracted["blocks"]] == ["SPEAKER_1", "SPEAKER_2"]
 
 
+def test_diarized_speaker_changes_are_deterministic_record_boundaries():
+    blocks = [
+        {
+            "block_id": "audio-1",
+            "text": "First voice.",
+            "type": "paragraph",
+            "speaker": "SPEAKER_1",
+        },
+        {
+            "block_id": "audio-2",
+            "text": "Second voice.",
+            "type": "paragraph",
+            "speaker": "SPEAKER_2",
+        },
+    ]
+
+    candidates = segmentation._deterministic_boundary_candidates(blocks, {}, "en")
+
+    assert len(candidates) == 1
+    assert "speaker_change" in candidates[0]["signals"]
+    assert segmentation._candidate_route(candidates[0], {}) == "split"
+
+
 def test_audio_voice_labels_start_at_one_and_reviewed_names_project_to_records():
     turns = source_audio.normalize_speaker_labels(
         [
