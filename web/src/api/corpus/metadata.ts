@@ -206,12 +206,17 @@ export const corpusMetadataApi = {
     recordId: string,
     changes: Record<string, unknown>,
     expectedRevision?: number,
+    confirmedAbsentFields: string[] = [],
   ) =>
     apiRequest<MetadataDecisionResult>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata-decisions`,
       {
         method: "POST",
-        body: JSON.stringify({ changes, expected_revision: expectedRevision }),
+        body: JSON.stringify({
+          changes,
+          confirmed_absent_fields: confirmedAbsentFields,
+          expected_revision: expectedRevision,
+        }),
       },
     ),
   metadataCache: (buildId: string, recordId: string, field: string) =>
