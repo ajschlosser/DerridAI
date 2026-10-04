@@ -890,6 +890,12 @@ class PdfCorpusRepository:
         self._migration_fixed_points: set[tuple[bytes, bytes]] = set()
         self._metadata_projection_callback: Callable[[str], None] | None = None
         self._initialized_record_databases: dict[str, tuple[int, int, int]] = {}
+        # A cold JSONL -> SQLite bootstrap creates the database file before its
+        # canonical rows are committed. Track that narrow window separately from
+        # the repository lock so ordinary initialized reads remain lock-free while
+        # concurrent cold readers wait for the bootstrap leader to finish.
+        self._record_bootstrap_guard = threading.Lock()
+        self._record_bootstrapping: set[str] = set()
 
     def asset_meta_path(self, asset_id: str) -> Path:
         return self.root / "assets" / f"{asset_id}.json"
@@ -1827,7 +1833,10 @@ class PdfCorpusRepository:
     @contextmanager
     def _review_read_db(self, build_id: str) -> Iterator[tuple[sqlite3.Connection, MetadataSchema | None, bytes]]:
         self._read_build_snapshot(build_id)
-        if not self.build_records_db_path(build_id).exists():
+        path = self.build_records_db_path(build_id)
+        with self._record_bootstrap_guard:
+            bootstrap_in_progress = build_id in self._record_bootstrapping
+        if not path.exists() or bootstrap_in_progress:
             with self._lock:
                 self._bootstrap_records_db(build_id)
         for _attempt in range(3):
@@ -1858,32 +1867,38 @@ class PdfCorpusRepository:
         raise RuntimeError("Review projection changed repeatedly during read preparation.")
 
     def _bootstrap_records_db(self, build_id: str) -> None:
-        if self.build_records_db_path(build_id).exists():
-            return
-        records_path = self.build_records_path(build_id)
-        records: list[dict[str, Any]] = []
-        if records_path.exists():
-            with records_path.open("r", encoding="utf-8") as handle:
-                records = [
-                    _migrate_status_vocabulary(json.loads(line))
-                    for line in handle
-                    if line.strip()
-                ]
-        with self._records_db(build_id) as connection:
-            connection.executemany(
-                "INSERT OR REPLACE INTO corpus_records(record_id, ordinal, payload) VALUES (?, ?, ?)",
-                [
-                    (
-                        str(record.get("record_id") or ""),
-                        ordinal,
-                        json.dumps(record, ensure_ascii=False),
-                    )
-                    for ordinal, record in enumerate(records)
-                    if record.get("record_id")
-                ],
-            )
-            self._ensure_review_projection(connection, build_id, rebuild=True)
-            connection.commit()
+        with self._record_bootstrap_guard:
+            self._record_bootstrapping.add(build_id)
+        try:
+            if self.build_records_db_path(build_id).exists():
+                return
+            records_path = self.build_records_path(build_id)
+            records: list[dict[str, Any]] = []
+            if records_path.exists():
+                with records_path.open("r", encoding="utf-8") as handle:
+                    records = [
+                        _migrate_status_vocabulary(json.loads(line))
+                        for line in handle
+                        if line.strip()
+                    ]
+            with self._records_db(build_id) as connection:
+                connection.executemany(
+                    "INSERT OR REPLACE INTO corpus_records(record_id, ordinal, payload) VALUES (?, ?, ?)",
+                    [
+                        (
+                            str(record.get("record_id") or ""),
+                            ordinal,
+                            json.dumps(record, ensure_ascii=False),
+                        )
+                        for ordinal, record in enumerate(records)
+                        if record.get("record_id")
+                    ],
+                )
+                self._ensure_review_projection(connection, build_id, rebuild=True)
+                connection.commit()
+        finally:
+            with self._record_bootstrap_guard:
+                self._record_bootstrapping.discard(build_id)
 
     def build_checkpoint_path(self, build_id: str, name: str) -> Path:
         safe = re.sub(r"[^A-Za-z0-9._-]+", "_", str(name or "checkpoint"))
@@ -2375,7 +2390,14 @@ class PdfCorpusRepository:
     def _record_store_read_db(self, build_id: str) -> Iterator[sqlite3.Connection]:
         """Read raw canonical/journal rows without repairing derived projections."""
         self._read_build_snapshot(build_id)
-        if not self.build_records_db_path(build_id).exists():
+        path = self.build_records_db_path(build_id)
+        with self._record_bootstrap_guard:
+            bootstrap_in_progress = build_id in self._record_bootstrapping
+        if not path.exists() or bootstrap_in_progress:
+            # The file becomes visible as soon as sqlite3.connect opens it, before
+            # the JSONL rows are inserted. A reader arriving in that interval must
+            # join the repository bootstrap critical section instead of observing
+            # an empty-but-valid database.
             with self._lock:
                 self._bootstrap_records_db(build_id)
         with self._records_db(build_id) as connection:
