@@ -686,7 +686,9 @@ test("a provider the reader configures powers vector + LLM Research with method 
   await page.getByRole("button", { name: "Ask" }).click();
 
   await expect(
-    page.getByRole("status").filter({ hasText: "LLM: generating an answer from 2 selected evidence Records." }),
+    page
+      .getByRole("status")
+      .filter({ hasText: "LLM: generating an answer from 2 selected evidence Records." }),
   ).toBeVisible();
   await expect(page.locator(".research-run-progress")).toContainText("Stage 3 of 3");
   await expect(page.locator(".research-run-progress progress")).toBeVisible();
@@ -704,15 +706,15 @@ test("a provider the reader configures powers vector + LLM Research with method 
   await expect(evidenceItem).toContainText("[E1] Glas");
   const evidencePane = page.locator(".research-evidence-pane");
   const evidencePanel = page.locator(".research-evidence-panel");
-  expect(
-    await evidencePane.evaluate((element) => getComputedStyle(element).alignSelf),
-  ).toBe("start");
-  expect(
-    await evidencePane.evaluate((element) => getComputedStyle(element).position),
-  ).toBe("sticky");
-  expect(
-    await evidencePanel.evaluate((element) => getComputedStyle(element).alignContent),
-  ).toBe("start");
+  expect(await evidencePane.evaluate((element) => getComputedStyle(element).alignSelf)).toBe(
+    "start",
+  );
+  expect(await evidencePane.evaluate((element) => getComputedStyle(element).position)).toBe(
+    "sticky",
+  );
+  expect(await evidencePanel.evaluate((element) => getComputedStyle(element).alignContent)).toBe(
+    "start",
+  );
 
   await inlineCitation.click();
   await expect(page).toHaveURL(/#research-evidence-E1$/);

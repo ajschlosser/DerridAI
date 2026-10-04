@@ -61,11 +61,7 @@ const answerText = computed(() =>
 );
 
 function resolvedMode(settings: PublishedResearchSettings) {
-  return settings.mode === "auto"
-    ? site.semanticReady()
-      ? "hybrid"
-      : "keyword"
-    : settings.mode;
+  return settings.mode === "auto" ? (site.semanticReady() ? "hybrid" : "keyword") : settings.mode;
 }
 
 function startElapsedTimer() {
@@ -213,13 +209,7 @@ async function runResearch() {
         <progress :aria-label="status"></progress>
         <div class="meta" aria-hidden="true">{{ progressSummary }}</div>
       </div>
-      <div
-        class="status"
-        :class="statusTone"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
+      <div class="status" :class="statusTone" role="status" aria-live="polite" aria-atomic="true">
         {{ status }}
       </div>
       <PublishedIndexStatus

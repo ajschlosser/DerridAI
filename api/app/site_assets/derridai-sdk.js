@@ -854,6 +854,7 @@ ${evidence}`;
           mode: retrievalMode,
           filters,
           limit: retrievalLimit,
+          fetchLimit: request2.retrieval?.fetchLimit,
           signal: request2.signal
         },
         runId2
@@ -875,6 +876,7 @@ ${evidence}`;
                 mode: retrievalMode,
                 filters: { ...filters ?? {}, work: works },
                 limit: Math.min(4, retrievalLimit),
+                fetchLimit: request2.retrieval?.fetchLimit,
                 signal: request2.signal
               },
               `${runId2}-scope-${index + 1}`
@@ -907,6 +909,11 @@ ${evidence}`;
         publicationId: this.manifest.publication_id,
         evidence: selected.map((item, index) => evidenceRef(this.manifest, item.record, index))
       };
+      this.events.emit({
+        type: "evidence-selected",
+        runId: runId2,
+        evidenceCount: evidencePacket.evidence.length
+      });
       const warnings = [];
       if (retrieval.warnings.length) {
         warnings.push({
@@ -942,7 +949,11 @@ ${evidence}`;
           warnings
         };
       }
-      this.events.emit({ type: "generation-start", runId: runId2 });
+      this.events.emit({
+        type: "generation-start",
+        runId: runId2,
+        evidenceCount: evidencePacket.evidence.length
+      });
       try {
         const generated = await this.generation.generate(
           {
@@ -1107,11 +1118,13 @@ ${evidence}`;
       const modeRequested = request2.mode ?? "hybrid";
       const filters = request2.filters ?? {};
       const limit = Math.max(1, Math.min(500, request2.limit ?? 30));
+      const requestedFetchLimit = request2.fetchLimit;
       const signal = request2.signal;
       this.events.emit({ type: "search-start", runId: runId2, query });
       const candidateSet = await this.repository.candidates(filters, this.locale, runId2, signal);
       const deduped = dedupeRecords(candidateSet.records);
       const candidates = deduped.records;
+      const fetchLimit = requestedFetchLimit == null ? candidates.length : Math.max(limit, Math.min(5e3, requestedFetchLimit));
       const lexical = lexicalScores(query, candidates, this.locale);
       const publishedAvailable = Boolean(
         this.manifest.features?.semantic_search && this.manifest.vector_index?.dimension
@@ -1259,7 +1272,7 @@ ${evidence}`;
       }).filter((item) => item.semanticScore > -1).sort(compareScored);
       if (modeRequested === "semantic") {
         return this.finish(
-          semantic.slice(0, limit),
+          semantic.slice(0, fetchLimit).slice(0, limit),
           modeRequested,
           "semantic",
           [],
@@ -1270,14 +1283,23 @@ ${evidence}`;
           runId2
         );
       }
-      const lexicalMax = Math.max(...lexical.map((item) => item.score), 1);
+      const fetchedLexical = lexical.slice(0, fetchLimit);
+      const fetchedSemantic = semantic.slice(0, fetchLimit);
+      const fetchedIds = /* @__PURE__ */ new Set([
+        ...fetchedLexical.map((item) => String(item.record.record_id)),
+        ...fetchedSemantic.map((item) => String(item.record.record_id))
+      ]);
+      const fetchedCandidates = candidates.filter(
+        (record) => fetchedIds.has(String(record.record_id))
+      );
+      const lexicalMax = Math.max(...fetchedLexical.map((item) => item.score), 1);
       const semanticById = new Map(
-        semantic.map((item) => [String(item.record.record_id), item.semanticScore])
+        fetchedSemantic.map((item) => [String(item.record.record_id), item.semanticScore])
       );
       const lexicalById = new Map(
-        lexical.map((item) => [String(item.record.record_id), item.lexicalScore ?? 0])
+        fetchedLexical.map((item) => [String(item.record.record_id), item.lexicalScore ?? 0])
       );
-      const merged = candidates.map((record) => {
+      const merged = fetchedCandidates.map((record) => {
         const id2 = String(record.record_id);
         const lexicalScore = lexicalById.get(id2) ?? 0;
         const semanticScore = semanticById.get(id2);

@@ -157,9 +157,7 @@ function toggleWork(work: string, checked: boolean) {
             step="0.01"
             :aria-describedby="describedby"
             :disabled="disabled"
-            @update:model-value="
-              update({ mmrLambda: numberValue($event, modelValue.mmrLambda) })
-            "
+            @update:model-value="update({ mmrLambda: numberValue($event, modelValue.mmrLambda) })"
           />
         </template>
       </UiField>

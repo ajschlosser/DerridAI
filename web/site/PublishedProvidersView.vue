@@ -33,9 +33,7 @@ watch(site.researchDefaults, (value) => {
 });
 
 function saveResearchDefaults() {
-  researchDraft.value = cloneResearchSettings(
-    site.updateResearchDefaults(researchDraft.value),
-  );
+  researchDraft.value = cloneResearchSettings(site.updateResearchDefaults(researchDraft.value));
   researchStatus.value = site.t("site.runtime.research_defaults_saved");
 }
 
@@ -264,10 +262,7 @@ const activeDeviceText = computed(() =>
         {{ site.t("site.runtime.research_defaults_heading") }}
       </h3>
       <p class="muted">{{ site.t("site.runtime.research_defaults_help") }}</p>
-      <PublishedResearchConfig
-        v-model="researchDraft"
-        id-prefix="published-research-defaults"
-      />
+      <PublishedResearchConfig v-model="researchDraft" id-prefix="published-research-defaults" />
       <div class="chips">
         <UiButton
           variant="primary"

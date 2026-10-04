@@ -358,14 +358,8 @@ export function createPublishedSiteContext() {
         : fallback;
     };
     const k = integer(raw?.k, PUBLISHED_RESEARCH_DEFAULTS.k, 1, 500);
-    const fetchK = Math.max(
-      k,
-      integer(raw?.fetchK, PUBLISHED_RESEARCH_DEFAULTS.fetchK, 1, 5000),
-    );
-    const topN = Math.min(
-      k,
-      integer(raw?.topN, PUBLISHED_RESEARCH_DEFAULTS.topN, 1, 100),
-    );
+    const fetchK = Math.max(k, integer(raw?.fetchK, PUBLISHED_RESEARCH_DEFAULTS.fetchK, 1, 5000));
+    const topN = Math.min(k, integer(raw?.topN, PUBLISHED_RESEARCH_DEFAULTS.topN, 1, 100));
     const lambda = Number(raw?.mmrLambda);
     const mmrLambda = Number.isFinite(lambda)
       ? Math.max(0, Math.min(1, lambda))
@@ -374,7 +368,14 @@ export function createPublishedSiteContext() {
       (publication.works || []).map((item) => String(item.work || "").trim()).filter(Boolean),
     );
     const works = Array.isArray(raw?.works)
-      ? [...new Set(raw.works.map(String).map((value) => value.trim()).filter((value) => availableWorks.has(value)))]
+      ? [
+          ...new Set(
+            raw.works
+              .map(String)
+              .map((value) => value.trim())
+              .filter((value) => availableWorks.has(value)),
+          ),
+        ]
       : [];
     return { mode, k, fetchK, topN, mmrLambda, works };
   }
@@ -964,7 +965,8 @@ export function createPublishedSiteContext() {
           device,
           ...(profile.revision ? { revision: profile.revision } : {}),
           ...(profile.dtype ? { dtype: profile.dtype } : {}),
-          progress_callback: (progress: unknown) => modelProgressListener?.(normalizedModelProgress(progress)),
+          progress_callback: (progress: unknown) =>
+            modelProgressListener?.(normalizedModelProgress(progress)),
         });
       } catch (error) {
         if (device === "wasm") throw error;
@@ -973,7 +975,8 @@ export function createPublishedSiteContext() {
           device: "wasm",
           ...(profile.revision ? { revision: profile.revision } : {}),
           ...(profile.dtype ? { dtype: profile.dtype } : {}),
-          progress_callback: (progress: unknown) => modelProgressListener?.(normalizedModelProgress(progress)),
+          progress_callback: (progress: unknown) =>
+            modelProgressListener?.(normalizedModelProgress(progress)),
         });
       }
     })();
