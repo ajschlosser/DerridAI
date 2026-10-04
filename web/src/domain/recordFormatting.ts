@@ -20,30 +20,22 @@ import { esc } from "./html";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-// Framework-light text highlighting, snippets, and model/similarity display helpers.
+// Text highlighting, snippets and model/similarity display helpers, moved verbatim from the legacy runtime.
 
 export function highlight(text: unknown, query: unknown): string {
-  const source = String(text ?? "");
-  const searchText = String(query ?? "");
-  if (!searchText) return esc(source);
-
-  const normalizedSource = source.toLocaleLowerCase();
-  const normalizedSearchText = searchText.toLocaleLowerCase();
-  let rendered = "";
-  let searchFrom = 0;
-  let matchIndex = normalizedSource.indexOf(normalizedSearchText, searchFrom);
-
-  while (matchIndex >= 0) {
-    rendered +=
-      esc(source.slice(searchFrom, matchIndex)) +
-      "<mark>" +
-      esc(source.slice(matchIndex, matchIndex + searchText.length)) +
-      "</mark>";
-    searchFrom = matchIndex + Math.max(1, searchText.length);
-    matchIndex = normalizedSource.indexOf(normalizedSearchText, searchFrom);
+  const s = String(text ?? ""),
+    q = String(query ?? "");
+  if (!q) return esc(s);
+  const low = s.toLocaleLowerCase(),
+    needle = q.toLocaleLowerCase();
+  let out = "",
+    pos = 0,
+    i;
+  while ((i = low.indexOf(needle, pos)) >= 0) {
+    out += esc(s.slice(pos, i)) + "<mark>" + esc(s.slice(i, i + q.length)) + "</mark>";
+    pos = i + Math.max(1, q.length);
   }
-
-  return rendered + esc(source.slice(searchFrom));
+  return out + esc(s.slice(pos));
 }
 
 export function highlightTerms(text: unknown, query: unknown): string {
@@ -57,75 +49,59 @@ export function highlightTerms(text: unknown, query: unknown): string {
         .map((term) => term.replace(/^["'()\[\]{}]+|["'()\[\]{},.;:!?]+$/g, ""))
         .filter((term) => term.length > 1),
     ),
-  ].sort((left, right) => right.length - left.length);
+  ].sort((a, b) => b.length - a.length);
   if (!terms.length) return esc(source);
-
-  const escapedTerms = terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const pattern = new RegExp(`(${escapedTerms.join("|")})`, "gi");
-  let rendered = "";
-  let previousMatchEnd = 0;
-  let match = pattern.exec(source);
-
-  while (match) {
-    rendered +=
-      esc(source.slice(previousMatchEnd, match.index)) + `<mark>${esc(match[0])}</mark>`;
-    previousMatchEnd = match.index + match[0].length;
-
-    // Defensive guard for a future pattern that could match an empty string.
-    if (!match[0].length) pattern.lastIndex += 1;
-    match = pattern.exec(source);
+  const pattern = new RegExp(
+    `(${terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`,
+    "gi",
+  );
+  let out = "",
+    last = 0,
+    match;
+  while ((match = pattern.exec(source))) {
+    out += esc(source.slice(last, match.index)) + `<mark>${esc(match[0])}</mark>`;
+    last = match.index + match[0].length;
+    if (!match[0].length) pattern.lastIndex++;
   }
-
-  return rendered + esc(source.slice(previousMatchEnd));
+  return out + esc(source.slice(last));
 }
 
 export function snippet(text: unknown, query?: string | null, max: number = 430): string {
-  const source = String(text ?? "")
+  const s = String(text ?? "")
     .replace(/\s+/g, " ")
     .trim();
-  if (!source) return "";
-  if (!query) return source.length > max ? source.slice(0, max) + "…" : source;
-
-  const matchIndex = source.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
-  if (matchIndex < 0) return source.length > max ? source.slice(0, max) + "…" : source;
-
-  const startIndex = Math.max(0, matchIndex - Math.floor(max / 2));
-  const endIndex = Math.min(source.length, startIndex + max);
-  return (
-    (startIndex ? "…" : "") +
-    source.slice(startIndex, endIndex) +
-    (endIndex < source.length ? "…" : "")
-  );
+  if (!s) return "";
+  if (!query) return s.length > max ? s.slice(0, max) + "…" : s;
+  const i = s.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
+  if (i < 0) return s.length > max ? s.slice(0, max) + "…" : s;
+  const a = Math.max(0, i - Math.floor(max / 2)),
+    b = Math.min(s.length, a + max);
+  return (a ? "…" : "") + s.slice(a, b) + (b < s.length ? "…" : "");
 }
 
-/**
- * Convert a Chroma distance to a monotonic display score.
- *
- * The result is deliberately not presented as a calibrated probability; it
- * only makes smaller distances read naturally on a 0..1 display scale.
- */
 export function semanticSimilarity(distance: unknown): number | null {
-  const parsedDistance = Number(distance);
-  if (!Number.isFinite(parsedDistance)) return null;
-  return 1 / (1 + Math.max(0, parsedDistance));
+  const d = Number(distance);
+  if (!Number.isFinite(d)) return null;
+  // Chroma distances are not calibrated probabilities. This monotonic transform
+  // provides an intuitive 0..1 display while preserving the result ranking.
+  return 1 / (1 + Math.max(0, d));
 }
 
 export function modelOptionLabel(model: Loose): string {
-  const modelDetails = [];
-  if (model.parameter_size) modelDetails.push(model.parameter_size);
-  if (model.quantization_level) modelDetails.push(model.quantization_level);
-  return modelDetails.length ? `${model.name} · ${modelDetails.join(" · ")}` : model.name;
+  const bits = [];
+  if (model.parameter_size) bits.push(model.parameter_size);
+  if (model.quantization_level) bits.push(model.quantization_level);
+  return bits.length ? `${model.name} · ${bits.join(" · ")}` : model.name;
 }
 
 export function openAiModelMatchesKind(name: unknown, kind: string | null | undefined): boolean {
   if (!kind || kind === "any") return true;
-
-  const normalizedName = String(name || "").toLocaleLowerCase();
-  const kindPatterns: Record<string, string[]> = {
+  const value = String(name || "").toLocaleLowerCase();
+  const patterns: Record<string, string[]> = {
     reasoning: ["reason", "deepseek", "r1", "qwq", "o1", "o3", "thinking"],
     coding: ["code", "coder", "codex", "devstral", "starcoder"],
     fast: ["mini", "small", "flash", "haiku", "fast", "3b", "4b", "7b", "8b"],
     general: ["gpt", "gemma", "llama", "qwen", "mistral", "claude", "general", "chat"],
   };
-  return (kindPatterns[kind] || []).some((token) => normalizedName.includes(token));
+  return (patterns[kind] || []).some((token) => value.includes(token));
 }
