@@ -32,8 +32,7 @@ const i18n = useI18nStore();
 const controlIdPrefix = useId();
 
 const label = (name: string) => i18n.t(`schemas.document_field.${name}`, name);
-const controlId = (name: string) =>
-  `${controlIdPrefix}-${name.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+const controlId = (name: string) => `${controlIdPrefix}-${name.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 const requirement = (field: MissingDocumentField) =>
   field.requiredFor.map((r) => i18n.t(`schemas.required_for_${r}`)).join(" · ");
 function update(name: string, value: string) {
