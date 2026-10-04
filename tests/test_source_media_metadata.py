@@ -36,6 +36,11 @@ from app import corpus_builder as cb
 from app import corpus_segmentation as segmentation
 from app import source_audio
 from app import source_media as sm
+from app.field_assertions import (
+    create_model_assertion,
+    current_assertion_by_name,
+    project_record_assertions,
+)
 
 
 def test_dialogue_speakers_and_record_inheritance():
@@ -109,6 +114,21 @@ def test_audio_voice_labels_start_at_one_and_reviewed_names_project_to_records()
     assert records[0]["source_spans"][0]["speaker"] == "SPEAKER_1"
     assert records[0]["source_spans"][0]["resolved_speaker"] == "Jacques Derrida"
     assert records[0]["metadata_field_status"]["speaker"]["method"] == "human_voice_assignment"
+    assertion = current_assertion_by_name(records[0], "speaker")
+    assert assertion is not None
+    assert assertion.derivation_method == "human"
+    assert assertion.authority_status == "human_override"
+
+    # A later enrichment worker may propose another identity, but the reviewed
+    # diarization assignment remains authoritative.
+    worker = json.loads(json.dumps(records[0]))
+    create_model_assertion(worker, "speaker", "Model guess", confidence=0.91)
+    project_record_assertions(worker)
+    merged = cb._merge_enrichment_snapshot(records[0], worker)
+    assert merged["speaker"] == "Jacques Derrida"
+    merged_assertion = current_assertion_by_name(merged, "speaker")
+    assert merged_assertion is not None
+    assert merged_assertion.authority_status == "human_override"
 
 
 def test_voice_assignments_are_reviewed_asset_state_not_block_rewrites(tmp_path: Path):
