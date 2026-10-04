@@ -117,7 +117,7 @@ function lifespan(person: AuthorCandidate) {
           type="radio"
           :name="`${id}-person`"
           :value="identity(person)"
-          :checked="props.modelValue?.identity_id === person.identity_id"
+          :checked="props.modelValue ? identity(props.modelValue) === identity(person) : false"
           @change="emit('update:modelValue', person)"
         />
         <span class="ar-copy">
