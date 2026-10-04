@@ -21,28 +21,31 @@ import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import AudioSpeakerAssignments from "./corpus-builder/AudioSpeakerAssignments.vue";
 
-const props = withDefaults(defineProps<{
-  mediaKind?: string;
-  filename: string;
-  pageCount?: number;
-  blockCount?: number;
-  audioProvenance?: {
-    duration_seconds?: number;
-    model?: string;
-    provider?: string;
-    diarization_requested?: boolean;
-    diarization_status?: string;
-  };
-  speakers?: string[];
-  voiceAssignments?: Record<string, string>;
-  disabled?: boolean;
-  voiceAssignmentsBusy?: boolean;
-}>(), {
-  speakers: () => [],
-  voiceAssignments: () => ({}),
-  disabled: false,
-  voiceAssignmentsBusy: false,
-});
+const props = withDefaults(
+  defineProps<{
+    mediaKind?: string;
+    filename: string;
+    pageCount?: number;
+    blockCount?: number;
+    audioProvenance?: {
+      duration_seconds?: number;
+      model?: string;
+      provider?: string;
+      diarization_requested?: boolean;
+      diarization_status?: string;
+    };
+    speakers?: string[];
+    voiceAssignments?: Record<string, string>;
+    disabled?: boolean;
+    voiceAssignmentsBusy?: boolean;
+  }>(),
+  {
+    speakers: () => [],
+    voiceAssignments: () => ({}),
+    disabled: false,
+    voiceAssignmentsBusy: false,
+  },
+);
 const emit = defineEmits<{
   saveVoiceAssignments: [assignments: Record<string, string>];
 }>();
@@ -65,7 +68,10 @@ const copy = computed(() => {
     case "docx":
     case "rtf":
       return {
-        title: i18n.t("pdf_corpus.structured_text_structure_title", "Document structure & pagination"),
+        title: i18n.t(
+          "pdf_corpus.structured_text_structure_title",
+          "Document structure & pagination",
+        ),
         help: i18n.t(
           "pdf_corpus.structured_text_structure_help",
           "Structured documents can expose detected, native, or estimated page boundaries. Review the page scope below before record construction.",
@@ -147,7 +153,13 @@ const copy = computed(() => {
       <dl class="audio-status">
         <div>
           <dt>{{ i18n.t("pdf_corpus.audio_transcript_status", "Transcript") }}</dt>
-          <dd>{{ blockCount ? i18n.t("pdf_corpus.audio_transcript_ready", "Ready") : i18n.t("pdf_corpus.audio_transcript_missing", "Unavailable") }}</dd>
+          <dd>
+            {{
+              blockCount
+                ? i18n.t("pdf_corpus.audio_transcript_ready", "Ready")
+                : i18n.t("pdf_corpus.audio_transcript_missing", "Unavailable")
+            }}
+          </dd>
         </div>
         <div v-if="audioProvenance?.duration_seconds">
           <dt>{{ i18n.t("pdf_corpus.audio_duration", "Duration") }}</dt>
@@ -155,7 +167,12 @@ const copy = computed(() => {
         </div>
         <div>
           <dt>{{ i18n.t("pdf_corpus.audio_diarization_status", "Speaker detection") }}</dt>
-          <dd>{{ audioProvenance?.diarization_status || i18n.t("pdf_corpus.audio_diarization_unknown", "Unknown") }}</dd>
+          <dd>
+            {{
+              audioProvenance?.diarization_status ||
+              i18n.t("pdf_corpus.audio_diarization_unknown", "Unknown")
+            }}
+          </dd>
         </div>
         <div v-if="audioProvenance?.model">
           <dt>{{ i18n.t("pdf_corpus.audio_transcription_model", "Transcription model") }}</dt>
