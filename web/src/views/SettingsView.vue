@@ -145,10 +145,10 @@ const profiles = computed(() => (getProviderProfilesForUi() || []) as ProviderPr
 const defaultProfileId = computed(() =>
   String(getDefaultProviderProfileId() || reviewDraft.value.default_provider_profile),
 );
+const defaultResearchStores = computed(() => recordStores());
 const defaultResearchStore = computed(() => {
-  const stores = recordStores();
-  const configured = String(workspace.ragConfig.source_collection || "");
-  return stores.find((store) => store.name === configured) || stores[0] || null;
+  const configured = String(ragDraft.value.source_collection || "");
+  return defaultResearchStores.value.find((store) => store.name === configured) || null;
 });
 const defaultResearchWorks = computed(() =>
   [...((defaultResearchStore.value?.source_works as string[] | undefined) || [])]
@@ -435,6 +435,13 @@ function saveEmbedding() {
     void testEmbedding();
   });
 }
+function changeDefaultResearchStore(name: string) {
+  ragDraft.value.source_collection = name;
+  // Work titles are collection-scoped. Carrying a title selection across
+  // databases could silently exclude every candidate in the next run.
+  ragDraft.value.work_filter = [];
+}
+
 function saveRag() {
   ragDraft.value = normalizeRag(ragDraft.value);
   const errors = validateRag(ragDraft.value);
@@ -1365,6 +1372,27 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 <h3>{{ i18n.t("settings.retrieval_scope_title") }}</h3>
                 <p>{{ i18n.t("settings.retrieval_scope_help") }}</p>
               </div>
+              <UiField
+                wide
+                :label="i18n.t('settings.rag_database')"
+                :hint="i18n.t('settings.rag_database_help')"
+              >
+                <select
+                  id="settings-field-rag-database"
+                  class="control"
+                  :value="ragDraft.source_collection"
+                  @change="changeDefaultResearchStore(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">{{ i18n.t("settings.rag_database_auto") }}</option>
+                  <option
+                    v-for="store in defaultResearchStores"
+                    :key="store.name"
+                    :value="store.name"
+                  >
+                    {{ store.name }}
+                  </option>
+                </select>
+              </UiField>
               <ResearchWorkFilter
                 id="settings-field-rag-works"
                 v-model="ragDraft.work_filter"
