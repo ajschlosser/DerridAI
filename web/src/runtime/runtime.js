@@ -80,7 +80,6 @@ import {
   SEARCH_FACET_FIELDS,
   SEARCH_FILTER_FIELDS,
   SEARCH_LOADED_COLUMNS,
-  TABLE_DEFAULTS,
   viewConfig,
 } from "../domain/runtimeConstants";
 import { esc, icon } from "../domain/html";
@@ -188,7 +187,8 @@ import {
 } from "../domain/sharedRecordHelpers";
 import { recordPresenters as sharedRecordPresenters } from "../domain/sharedRecordPresenters";
 import { providerProfilesService, warmupProviderProfile } from "../domain/sharedProviderProfiles";
-import { createSearchWorkspace } from "../domain/searchWorkspace";
+import { searchWorkspace } from "../domain/sharedSearchWorkspace";
+import { getTableColumns, tableAvailableFields } from "../domain/tableColumns";
 import { createRecordsWorkspace } from "../domain/recordsWorkspace";
 import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { createWorksWorkspace } from "../domain/worksWorkspace";
@@ -210,6 +210,7 @@ import {
 import { createDashboardRenderer } from "../domain/dashboardRenderer";
 import { createPdfExplorerRenderer } from "../domain/pdfExplorerRenderer";
 import { createJobDialogs } from "../domain/jobDialogs";
+import { normalizeTouchupItems, openTouchup } from "../domain/touchupLauncher";
 import { createWorkDialogs } from "../domain/workDialogs";
 import { recordDialogs } from "../domain/sharedRecordDialogs";
 import { createOperationDock } from "../domain/operationDock";
@@ -396,59 +397,7 @@ const {
   getSearchShareHref,
   restoreSearchViewFromHref,
   safeDbSearchWhere,
-} = createSearchWorkspace({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  allRows: (...args) => allRows(...args),
-  api: (...args) => api(...args),
-  applyCompressedTableUrlState: (...args) => applyCompressedTableUrlState(...args),
-  buildSearchFacets: (...args) => buildSearchFacets(...args),
-  canAccessPage: (...args) => canAccessPage(...args),
-  canUse: (...args) => canUse(...args),
-  clearReviewSelection: (...args) => clearReviewSelection(...args),
-  copyCitation: (...args) => copyCitation(...args),
-  dbEvidenceKey: (...args) => dbEvidenceKey(...args),
-  dbSearchFilterDescriptors: (...args) => dbSearchFilterDescriptors(...args),
-  dbSearchWhere: (...args) => dbSearchWhere(...args),
-  evidenceIsSelected: (...args) => evidenceIsSelected(...args),
-  filterOpsForField: (...args) => filterOpsForField(...args),
-  getTableColumns: (...args) => getTableColumns(...args),
-  hasCapability: (...args) => hasCapability(...args),
-  isResearcher: (...args) => isResearcher(...args),
-  label: (...args) => label(...args),
-  navigateTo: (...args) => navigateTo(...args),
-  openBulkFieldEditor: (...args) => openBulkFieldEditor(...args),
-  openDatabaseCreationFromResearch,
-  openStoreRecordEditor: (...args) => openStoreRecordEditor(...args),
-  openTouchup: (...args) => openTouchup(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  recordDbStatus: (...args) => recordDbStatus(...args),
-  recordStores: (...args) => recordStores(...args),
-  refreshPresenceForRows: (...args) => refreshPresenceForRows(...args),
-  refreshStores: (...args) => refreshStores(...args),
-  reviewItemFromKey: (...args) => reviewItemFromKey(...args),
-  reviewKey: (...args) => reviewKey(...args),
-  searchColumnOptions: (...args) => searchColumnOptions(...args),
-  searchFilterDescriptor: (...args) => searchFilterDescriptor(...args),
-  searchMatchReasons: (...args) => searchMatchReasons(...args),
-  searchRecordMatchesFacets: (...args) => searchRecordMatchesFacets(...args),
-  searchRowMatchesFacets: (...args) => searchRowMatchesFacets(...args),
-  searchSimilarity: (...args) => searchSimilarity(...args),
-  searchSuggestions: (...args) => searchSuggestions(...args),
-  selectedEvidenceEntries: (...args) => selectedEvidenceEntries(...args),
-  selectedReviewItems: (...args) => selectedReviewItems(...args),
-  setReviewSelected: (...args) => setReviewSelected(...args),
-  shell: (...args) => shell(...args),
-  syncUrl: (...args) => syncUrl(...args),
-  tableAvailableFields: (...args) => tableAvailableFields(...args),
-  toggleDbEvidence: (...args) => toggleDbEvidence(...args),
-  toggleSort: (...args) => toggleSort(...args),
-  toggleWorkspaceEvidence: (...args) => toggleWorkspaceEvidence(...args),
-  tr: (...args) => tr(...args),
-  uid: (...args) => uid(...args),
-  urlFromState: (...args) => urlFromState(...args),
-  workspaceEvidenceSelectionKey: (...args) => workspaceEvidenceSelectionKey(...args),
-});
+} = searchWorkspace;
 const {
   clearRecordsListFilters,
   clearRecordsListSelection,
@@ -488,7 +437,7 @@ const {
   needsReviewItems: (...args) => needsReviewItems(...args),
   openBulkFieldEditor: (...args) => openBulkFieldEditor(...args),
   openOcrCleanupDialog: (...args) => openOcrCleanupDialog(...args),
-  openTouchup: (...args) => openTouchup(...args),
+  openTouchup,
   pageInfo: (...args) => pageInfo(...args),
   persistPrefs: (...args) => persistPrefs(...args),
   recordDbStatus: (...args) => recordDbStatus(...args),
@@ -554,7 +503,7 @@ const {
   openLoadedPdfPage: (...args) => openLoadedPdfPage(...args),
   openPdfExplorerWorkspace: (...args) => openPdfExplorerWorkspace(...args),
   openRecordHistoryBrowser: (...args) => openRecordHistoryBrowser(...args),
-  openTouchup: (...args) => openTouchup(...args),
+  openTouchup,
   pdfDisplayTitle: (...args) => pdfDisplayTitle(...args),
   persistPrefs: (...args) => persistPrefs(...args),
   refreshServerAnnotations: (...args) => refreshServerAnnotations(...args),
@@ -614,7 +563,7 @@ const {
   needsReviewItems: (...args) => needsReviewItems(...args),
   openMixedWorkValuesDialog: (...args) => openMixedWorkValuesDialog(...args),
   openRemoveWorkModal: (...args) => openRemoveWorkModal(...args),
-  openTouchup: (...args) => openTouchup(...args),
+  openTouchup,
   openWorkMetadataEditor: (...args) => openWorkMetadataEditor(...args),
   openWorkMetadataLlmDialog: (...args) => openWorkMetadataLlmDialog(...args),
   persistPrefs: (...args) => persistPrefs(...args),
@@ -846,7 +795,6 @@ const {
   openLlmToolResult,
   openLlmTaskLauncher,
   openPdfDraftRecord,
-  openTouchup,
 } = createJobDialogs({
   state,
   // Wrapped so each helper is looked up when it is called: several are declared later in this module.
@@ -864,7 +812,6 @@ const {
   label: (...args) => label(...args),
   navSnapshot: (...args) => navSnapshot(...args),
   navigateTo: (...args) => navigateTo(...args),
-  normalizeTouchupItems: (...args) => normalizeTouchupItems(...args),
   openWorkMetadataProposalResult: (...args) => openWorkMetadataProposalResult(...args),
   pages: (...args) => pages(...args),
   persistFileNow: (...args) => persistFileNow(...args),
@@ -1198,28 +1145,6 @@ function pageInfo(total, page) {
     start: (page - 1) * state.pageSize,
     end: Math.min(total, page * state.pageSize),
   };
-}
-
-function tableAvailableFields(rows, extra = []) {
-  const cachedRows = allRows();
-  if (rows === cachedRows) {
-    const set = new Set([...extra, ...recordFields().filter((key) => key !== "updates")]);
-    return [...set].sort((a, b) => label(a).localeCompare(label(b)));
-  }
-  const set = new Set(extra);
-  for (const row of rows)
-    for (const key of Object.keys(row.record || row || {})) if (key !== "updates") set.add(key);
-  return [...set].sort((a, b) => label(a).localeCompare(label(b)));
-}
-function getTableColumns(table, available) {
-  const defaults = TABLE_DEFAULTS[table] || available.slice(0, 8);
-  let cols = Array.isArray(state.tableColumns[table])
-    ? state.tableColumns[table].filter((key) => available.includes(key))
-    : [];
-  if (!cols.length) cols = defaults.filter((key) => available.includes(key));
-  if (!cols.length) cols = available.slice(0, 8);
-  state.tableColumns[table] = cols;
-  return cols;
 }
 
 function setListFilterValue(fileId, key, value) {
@@ -1698,22 +1623,6 @@ const HIGH_RISK_TOUCHUP_FIELDS = new Set([
   "page_end",
 ]);
 
-function normalizeTouchupItems(inputItems = null) {
-  const fallback = (() => {
-    const file = activeFile(),
-      record = selectedRecord();
-    if (!file || !record) return [];
-    const index = selectedIndex(file);
-    return [{ file, index, record, key: reviewKey(file, index) }];
-  })();
-  return (inputItems?.length ? inputItems : fallback)
-    .map((item) => ({
-      ...item,
-      record: item.file.records[item.index],
-      key: item.key || reviewKey(item.file, item.index),
-    }))
-    .filter((item) => item.record);
-}
 function touchupWorkspaceInfo(inputItems = null, initialMode = "foreground") {
   const items = normalizeTouchupItems(inputItems);
   const availableFields = [];
