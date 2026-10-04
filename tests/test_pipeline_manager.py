@@ -49,6 +49,40 @@ def test_system_assignment_rejects_draft_pipeline(tmp_path) -> None:
         )
 
 
+def test_assignment_rejects_imported_strategy_version_mismatch_with_actionable_error(
+    tmp_path,
+) -> None:
+    manager = _manager(tmp_path)
+    source = built_in_pipeline("research.current", 1)
+    assert source is not None
+    first = source.stages[0]
+    incompatible = source.model_copy(
+        deep=True,
+        update={
+            "pipeline_id": "research.imported-old-strategy",
+            "version": 1,
+            "status": "active",
+            "built_in": False,
+            "stages": [
+                first.model_copy(update={"strategy_version": 999}),
+                *source.stages[1:],
+            ],
+        },
+    )
+    # Simulate an imported/legacy row that predates current save-time validation.
+    manager.store.put_definition(incompatible)
+
+    with pytest.raises(ValueError, match=r"version 999.*Migrate the stage"):
+        manager.assign(
+            PipelineAssignment(
+                feature="research",
+                pipeline_id=incompatible.pipeline_id,
+                pipeline_version=incompatible.version,
+                override_allowed=True,
+            )
+        )
+
+
 def test_active_custom_research_pipeline_can_be_saved_and_assigned(tmp_path) -> None:
     manager = _manager(tmp_path)
     source = built_in_pipeline("research.balanced", 1)
