@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 DerridAI ist eine lokal ausgerichtete, provenanzerhaltende Forschungsumgebung zum Erstellen, Prüfen, Durchsuchen und Abfragen wissenschaftlicher Korpora. Die Docker-Anwendung verbindet Quellenaufnahme, Human-in-the-loop-Korpusaufbau, evidenzgebundene Metadatenanreicherung, abgeleitete Vektor-/Suchindizes und evidenzbasierte Retrieval-Augmented Generation (RAG).
 
-DerridAI ist außerdem die ursprüngliche Referenzimplementierung von **cELF 1.0 — Capta-Enriched Lexical Format**, einer provenanzerhaltenden Informationsarchitektur für KI-gestützte Dokumentforschung. Quellenidentität, Record-Identität und Revision, Metadaten-Assertions, Evidenz, generierte Claims und Support-Bindungen bleiben getrennt prüfbar, statt in einem undurchsichtigen Vektorspeicher zusammenzufallen.
+DerridAI ist außerdem die ursprüngliche Referenzimplementierung von **cELF 1.0 — Capta-Enriched Locatable Factum**, einer provenanzerhaltenden Informationsarchitektur für KI-gestützte Dokumentforschung. Quellenidentität, Record-Identität und Revision, Metadaten-Assertions, Evidenz, generierte Claims und Support-Bindungen bleiben getrennt prüfbar, statt in einem undurchsichtigen Vektorspeicher zusammenzufallen.
 
 Aktuelle Version: **0.82.0 — Gloucester** ([Release Notes](docs/notes/0.82.0.md)). Dieses README beschreibt die Gloucester-Version.
 

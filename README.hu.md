@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 A DerridAI helyi futtatásra épülő, provenienciát megőrző kutatási környezet tudományos korpuszok létrehozásához, ellenőrzéséhez, kereséséhez és lekérdezéséhez. Egyetlen Docker-alkalmazásban egyesíti a forrásbevitelt, az ember által felügyelt korpuszépítést, a bizonyítékhoz kötött metaadat-gazdagítást, a származtatott vektoros/keresési indexeket és a bizonyítékalapú retrieval-augmented generation (RAG) folyamatot.
 
-A DerridAI egyben a **cELF 1.0 — Capta-Enriched Lexical Format** eredeti referencia-implementációja, amely provenienciát megőrző információs architektúrát határoz meg MI-támogatott dokumentumkutatáshoz. A rendszer külön és ellenőrizhetően kezeli a forrásazonosságot, a rekordazonosságot és revíziót, a metaadat-állításokat, a bizonyítékot, a generált állításokat és a támogatási kapcsolatokat, ahelyett hogy mindezt egy átláthatatlan vektoradatbázisba lapítaná.
+A DerridAI egyben a **cELF 1.0 — Capta-Enriched Locatable Factum** eredeti referencia-implementációja, amely provenienciát megőrző információs architektúrát határoz meg MI-támogatott dokumentumkutatáshoz. A rendszer külön és ellenőrizhetően kezeli a forrásazonosságot, a rekordazonosságot és revíziót, a metaadat-állításokat, a bizonyítékot, a generált állításokat és a támogatási kapcsolatokat, ahelyett hogy mindezt egy átláthatatlan vektoradatbázisba lapítaná.
 
 Aktuális verzió: **0.82.0 — Gloucester** ([kiadási jegyzetek](docs/notes/0.82.0.md)). Ez a README a Gloucester kiadást írja le.
 

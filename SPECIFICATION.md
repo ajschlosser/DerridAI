@@ -16,7 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
-# Capta-Enriched Lexical Format (cELF)
+# Capta-Enriched Locatable Factum (cELF)
 
 ## Specification 1.0
 
@@ -28,11 +28,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 | **Status**        | Normative                |
 | **Short name**    | cELF (pronounced "self") |
 
-The **Capta-Enriched Lexical Format** (**cELF**) specifies an information model and conformance requirements for durable, text-bearing documentary research objects that preserve source identity, source location, revision state, scholarly assertions, evidence, and research provenance as documentary material is extracted, enriched, reviewed, exchanged, analyzed, searched, selected as evidence, supplied to artificial-intelligence systems, and cited.
+The **Capta-Enriched Locatable Factum** (**cELF**) specifies an information model and conformance requirements for durable, text-bearing documentary research objects that preserve source identity, source location, revision state, scholarly assertions, evidence, and research provenance as documentary material is extracted, enriched, reviewed, exchanged, analyzed, searched, selected as evidence, supplied to artificial-intelligence systems, and cited.
 
 **Evidence acquisition** is the mechanism-neutral process by which documentary material enters evidentiary consideration. In cELF, **retrieval** refers specifically to computational search over an index, store, publication, or corpus using a defined query and method. Vector, lexical, filtered, hybrid, database, fusion, and reranking operations may participate in retrieval; human selection, direct reference, import, and model-assisted location need not be mislabeled as retrieval.
 
-> **NOTE (informative).** _Capta_ emphasizes that research objects are selected, delimited, transcribed, categorized, or interpreted through explicit procedures rather than treated as context-free givens. **Lexical** names the durable text-bearing representation that cELF makes portable: documentary text together with stable identity and source linkage. It does not limit source media to plain text; PDF pages, images, audio, web documents, and other media can contribute lexical material through extraction, OCR, transcription, or another declared transformation while retaining medium-appropriate SourceSpans. **Enriched** refers to the assertions, provenance, authority, evidence, and run metadata associated with that representation. Retrieval, indexing, ranking, and embedding operate over cELF Records; they do not define Record identity.
+> **NOTE (informative).** _Capta_ emphasizes that research objects are selected, delimited, transcribed, categorized, or interpreted through explicit procedures rather than treated as context-free givens. **Locatable** names the requirement that each durable research object remain resolvable to its documentary source through reproducible, medium-appropriate locators such as pages, character ranges, image regions, or audio time spans. **Factum** names the resulting documentary research unit as something made or established through declared research procedures, without implying an uninterpreted given or an infallible truth claim. **Enriched** refers to the assertions, provenance, authority, evidence, and run metadata associated with that object. Retrieval, indexing, ranking, and embedding operate over cELF Records; they do not define Record identity.
 
 ## Contents
 
@@ -111,11 +111,11 @@ Conformance requirements have stable identifiers of the form `<area>-ID-<nnn>`. 
 
 #### Status and purpose
 
-The **Capta-Enriched Lexical Format** defines an information model and interoperability requirements for transforming heterogeneous documentary sources into durable, text-bearing Records that preserve source identity, location, revision, enrichment, review, and evidentiary provenance. Those lexical research objects can then be exchanged, analyzed, searched, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
+The **Capta-Enriched Locatable Factum** defines an information model and interoperability requirements for transforming heterogeneous documentary sources into durable, text-bearing Records that preserve source identity, location, revision, enrichment, review, and evidentiary provenance. Those locatable research objects can then be exchanged, analyzed, searched, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
 
 The specification is intended for systems in which document provenance, attribution, evidentiary support, source identity, record identity, normalization, traceability, information quality, and reproducibility materially affect the credibility of AI-assisted research.
 
-cELF is not a retrieval algorithm, model protocol, vector-database format, user-interface specification, or single application architecture. It defines the durable lexical and scholarly information that must remain stable across such systems and the relationships that must be preserved when information moves between them.
+cELF is not a retrieval algorithm, model protocol, vector-database format, user-interface specification, or single application architecture. It defines the durable documentary and scholarly information that must remain stable across such systems and the relationships that must be preserved when information moves between them.
 
 A conforming implementation MAY use local or remote databases, files, object stores, APIs, vector indexes, local models, hosted models, browser clients, desktop applications, command-line tools, or other technical means. Conformance depends on preservation of the cELF information model and invariants, not on implementation technology. This specification does not designate an implementation.
 
@@ -127,7 +127,7 @@ Sections explicitly marked _Non-normative_ are explanatory.
 
 #### Design goals
 
-A cELF system is designed so that: heterogeneous documentary inputs are normalized into stable lexical research objects with declared semantics; documentary data remains traceable to source; logical record identity remains distinct from storage identity; source facts remain distinguishable from deterministic derivations, model inferences, human judgments, unresolved states, and explicit absence; retrieval diagnostics remain properties of retrieval events rather than of the source record; evidence can be bound explicitly to generated claims; research runs retain enough versioned state for substantial reproducibility; source-derived facts such as identifiers, page maps, schema validity, and citation structure are handled deterministically when possible - that is, by fixed procedures whose results do not depend on model interpretation; uncertainty remains representable; and derived indexes do not silently replace authoritative corpus state.
+A cELF system is designed so that: heterogeneous documentary inputs are normalized into stable locatable research objects with declared semantics; documentary data remains traceable to source; logical record identity remains distinct from storage identity; source facts remain distinguishable from deterministic derivations, model inferences, human judgments, unresolved states, and explicit absence; retrieval diagnostics remain properties of retrieval events rather than of the source record; evidence can be bound explicitly to generated claims; research runs retain enough versioned state for substantial reproducibility; source-derived facts such as identifiers, page maps, schema validity, and citation structure are handled deterministically when possible - that is, by fixed procedures whose results do not depend on model interpretation; uncertainty remains representable; and derived indexes do not silently replace authoritative corpus state.
 
 > **Core rule.** The identity, provenance, and evidentiary integrity of documentary information MUST survive the transformations between source extraction and AI-assisted research, while computational mechanisms operating over that information remain replaceable.
 
@@ -277,7 +277,7 @@ A SourceSpan MUST NOT imply greater precision than the implementation actually p
 
 #### Record
 
-A **Record** is the central cELF lexical research object. It represents a persistent, text-bearing research unit derived from one or more contiguous or explicitly related SourceSpans.
+A **Record** is the central cELF documentary research object. It represents a persistent, text-bearing research unit derived from one or more contiguous or explicitly related SourceSpans.
 
 A conforming Record MUST contain `record_id`, `source_document_id`, `text`, and one or more `source_spans`. **[CORE-ID-003]** Every SourceSpan from which that Record derives MUST identify the same SourceDocument as the Record. **[CORE-ID-004]** It MAY also contain bibliographic, linguistic, semantic, discourse, attribution, indexing, and domain-specific metadata.
 

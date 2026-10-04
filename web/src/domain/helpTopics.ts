@@ -551,7 +551,7 @@ export const HELP_GLOSSARY: HelpGlossaryDefinition[] = [
   { id: "confirmed_absence", category: "provenance", aliases: ["no value"] },
   { id: "blind_second_opinion", category: "provenance", aliases: ["blind review"] },
   { id: "calibrated_autofill", category: "provenance", aliases: ["autofill"] },
-  { id: "celf", category: "provenance", aliases: ["capta-enriched lexical format"] },
+  { id: "celf", category: "provenance", aliases: ["capta-enriched locatable factum"] },
   { id: "chroma", category: "storage" },
   { id: "vector_collection", category: "storage", aliases: ["collection"] },
   { id: "vector_database", category: "storage", aliases: ["vector store"] },

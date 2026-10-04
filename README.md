@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 DerridAI is a local-first, provenance-preserving research environment for building, reviewing, searching, and querying scholarly corpora. It combines source ingestion, human-in-the-loop corpus construction, evidence-aware metadata enrichment, derived vector/search indexes, and evidence-grounded retrieval-augmented generation (RAG) in one Docker application.
 
-DerridAI is also the originating reference implementation of **cELF 1.0 — the Capta-Enriched Lexical Format**, a provenance-preserving information architecture for AI-assisted documentary research. The implementation keeps source identity, record identity and revision, metadata assertions, evidence, generated claims, and support bindings separately inspectable instead of flattening them into one opaque vector store.
+DerridAI is also the originating reference implementation of **cELF 1.0 — the Capta-Enriched Locatable Factum**, a provenance-preserving information architecture for AI-assisted documentary research. The implementation keeps source identity, record identity and revision, metadata assertions, evidence, generated claims, and support bindings separately inspectable instead of flattening them into one opaque vector store.
 
 Current version: **0.82.0 — Gloucester** ([release notes](docs/notes/0.82.0.md)). This README describes the Gloucester release.
 

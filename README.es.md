@@ -24,7 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 DerridAI es un entorno de investigación local-first que preserva la procedencia para construir, revisar, buscar y consultar corpus académicos. Integra ingestión de fuentes, construcción de corpus con revisión humana, enriquecimiento de metadatos vinculado a evidencia, índices vectoriales/de búsqueda derivados y generación aumentada por recuperación (RAG) basada en evidencia dentro de una sola aplicación Docker.
 
-DerridAI también es la implementación de referencia original de **cELF 1.0 — Capta-Enriched Lexical Format**, una arquitectura de información que preserva la procedencia para investigación documental asistida por IA. La implementación mantiene separadas e inspeccionables la identidad de la fuente, la identidad y revisión del registro, las afirmaciones de metadatos, la evidencia, las afirmaciones generadas y sus vínculos de soporte, en vez de aplanarlas dentro de una base vectorial opaca.
+DerridAI también es la implementación de referencia original de **cELF 1.0 — Capta-Enriched Locatable Factum**, una arquitectura de información que preserva la procedencia para investigación documental asistida por IA. La implementación mantiene separadas e inspeccionables la identidad de la fuente, la identidad y revisión del registro, las afirmaciones de metadatos, la evidencia, las afirmaciones generadas y sus vínculos de soporte, en vez de aplanarlas dentro de una base vectorial opaca.
 
 Versión actual: **0.82.0 — Gloucester** ([notas de versión](docs/notes/0.82.0.md)). Este README describe la versión Gloucester.
 
