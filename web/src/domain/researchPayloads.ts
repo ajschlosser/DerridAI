@@ -240,6 +240,15 @@ export function normalizedResearchConfig(cfg: Loose = {}) {
   const responseLanguage = ["auto", "en", "fr"].includes(String(cfg.response_language || ""))
     ? String(cfg.response_language)
     : "auto";
+  const workFilter = Array.isArray(cfg.work_filter)
+    ? [
+        ...new Set(
+          cfg.work_filter
+            .map((work: unknown) => String(work || "").trim())
+            .filter((work: string) => Boolean(work) && work.length <= 500),
+        ),
+      ].slice(0, 500)
+    : [];
   return {
     ...cfg,
     pipeline_id: String(cfg.pipeline_id || "").trim(),
@@ -269,6 +278,7 @@ export function normalizedResearchConfig(cfg: Loose = {}) {
       },
     ),
     response_language: responseLanguage,
+    work_filter: workFilter,
     evidence_record_char_limit: finiteResearchNumber(cfg.evidence_record_char_limit, 12000, {
       integer: true,
       min: 500,
