@@ -1498,8 +1498,8 @@ export interface WikisourceProviderInfo {
 export type SourceProviderInfo = GutenbergProviderInfo | WikisourceProviderInfo;
 
 export interface AuthorCandidate {
-  identity_id: string;
-  identity_source: "wikidata" | "gutenberg";
+  identity_id?: string;
+  identity_source?: "wikidata" | "gutenberg";
   wikidata_qid: string | null;
   label: string;
   description: string;
