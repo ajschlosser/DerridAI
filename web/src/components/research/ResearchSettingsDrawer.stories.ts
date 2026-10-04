@@ -21,6 +21,7 @@ import ResearchSettingsDrawer from "./ResearchSettingsDrawer.vue";
 
 const baseConfig = {
   source_collection: "derrida_primary",
+  work_filter: [],
   locales: ["en", "fr"],
   search_types: ["mmr", "similarity"],
   k: 64,
@@ -73,6 +74,7 @@ const meta: Meta<typeof ResearchSettingsDrawer> = {
     model: "phi4:14b",
     models: ["phi4:14b", "qwen3:14b"],
     metadataFields: ["speaker", "position_holder", "stance", "discourse_role"],
+    works: ["Dissemination", "Glas", "Of Grammatology", "Writing and Difference"],
     researcher: false,
   },
   render: (args) => ({
