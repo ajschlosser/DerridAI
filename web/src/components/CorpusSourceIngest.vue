@@ -32,6 +32,7 @@ import CorpusCaptureDialog from "./capture/CorpusCaptureDialog.vue";
 import SourceTable from "./sources/SourceTable.vue";
 import SourceInspector from "./sources/SourceInspector.vue";
 import UiButton from "./ui/UiButton.vue";
+import UiCheckbox from "./ui/UiCheckbox.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
 import UiDialog from "./ui/UiDialog.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
@@ -98,7 +99,7 @@ const emit = defineEmits<{
   "update:gutenbergQuery": [string];
   "update:wikisourceLanguage": [string];
   useCurrent: [];
-  file: [File];
+  file: [file: File, options?: { audioDiarization?: boolean }];
   loadUrl: [];
   searchGutenberg: [];
   searchWikisource: [];
@@ -171,6 +172,8 @@ const ocrAvailable = computed(
   () =>
     Boolean(pendingMediaKind.value) && sourceMediaCapabilities(pendingMediaKind.value).imageRegions,
 );
+const audioPending = computed(() => pendingMediaKind.value === "audio");
+const audioDiarization = ref(true);
 
 const ocrStrategy = computed(() => {
   if (props.illegibility >= 99.9) return "always";
@@ -232,8 +235,9 @@ function onOcrStrategy(strategy: string) {
 
 function stageFile(file: File) {
   const kind = sourceMediaKindForFile(file);
-  if (kind && sourceMediaCapabilities(kind).imageRegions) {
+  if (kind && (sourceMediaCapabilities(kind).imageRegions || kind === "audio")) {
     pendingFile.value = file;
+    if (kind === "audio") audioDiarization.value = true;
     return;
   }
   pendingFile.value = null;
@@ -243,8 +247,9 @@ function stageFile(file: File) {
 function confirmPendingFile() {
   const file = pendingFile.value;
   if (!file) return;
+  const kind = pendingMediaKind.value;
   pendingFile.value = null;
-  emit("file", file);
+  emit("file", file, kind === "audio" ? { audioDiarization: audioDiarization.value } : undefined);
 }
 
 function chooseDifferentFile() {
@@ -453,7 +458,7 @@ onBeforeUnmount(() => {
               <small>{{ i18n.t("pdf_corpus.source_pending_help") }}</small>
             </div>
             <span class="kind-mark" aria-hidden="true">{{
-              pendingMediaKind === "image" ? "IMG" : "PDF"
+              pendingMediaKind === "image" ? "IMG" : pendingMediaKind === "audio" ? "AUD" : "PDF"
             }}</span>
           </div>
           <fieldset v-if="ocrAvailable" class="ocr-choice" :disabled="sourceSetupDisabled">
@@ -482,6 +487,31 @@ onBeforeUnmount(() => {
                 <span class="ocr-option-help">{{ i18n.t(`pdf_corpus.${option[2]}`) }}</span>
               </label>
             </div>
+          </fieldset>
+          <fieldset v-if="audioPending" class="audio-ingest-options" :disabled="sourceSetupDisabled">
+            <legend>{{ i18n.t("pdf_corpus.audio_ingest_title", "Audio transcription & speakers") }}</legend>
+            <p>
+              {{
+                i18n.t(
+                  "pdf_corpus.audio_ingest_help",
+                  "The complete recording is transcribed before timed source spans are created. Speaker diarization is optional and can be reviewed after ingest.",
+                )
+              }}
+            </p>
+            <UiCheckbox
+              v-model="audioDiarization"
+              :label="i18n.t('pdf_corpus.audio_diarization_label', 'Identify speakers automatically')"
+              :description="
+                i18n.t(
+                  'pdf_corpus.audio_diarization_help',
+                  'Use WhisperX to assign stable SPEAKER_1, SPEAKER_2, … labels to timed transcript spans.',
+                )
+              "
+              :disabled="sourceSetupDisabled"
+            />
+            <a class="audio-settings-link" href="/settings/services#settings-heading-audio">
+              {{ i18n.t("pdf_corpus.audio_settings_link", "Audio transcription service settings") }}
+            </a>
           </fieldset>
           <div class="pending-source-actions">
             <UiButton
@@ -993,6 +1023,32 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 
+.audio-ingest-options {
+  display: grid;
+  gap: var(--space-3, 12px);
+  min-inline-size: 0;
+  margin: 0;
+  padding: var(--space-3, 12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+}
+.audio-ingest-options legend {
+  padding-inline: var(--space-1, 4px);
+  font-weight: var(--fw-bold);
+}
+.audio-ingest-options p {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+.audio-settings-link {
+  justify-self: start;
+  color: var(--accent-fg);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
 .pending-source-actions {
   display: flex;
   justify-content: flex-end;
