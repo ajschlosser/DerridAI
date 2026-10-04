@@ -447,8 +447,74 @@ describe("Corpus Builder metadata review", () => {
       "r1",
       { speaker: "Jacques Derrida", target: "hospitality" },
       1,
+      [],
     );
     expect(state.review.metadataSavingField.value).toBe("");
     expect(state.applyAuthoritativeRecord).toHaveBeenCalled();
+  });
+
+  it("persists model-suggested absences as confirmed absence in a mixed batch", async () => {
+    const state = setup();
+    corpusBuilderApi.metadataDecisionBatch.mockResolvedValue({
+      record: row({
+        speaker: "Jacques Derrida",
+        target: null,
+        record_revision: 2,
+        metadata_field_status: {
+          target: {
+            status: "confirmed_absent",
+            authority_status: "human_confirmed",
+            evaluation_status: "no_supported_value",
+            value_status: "confirmed_absent",
+          },
+        },
+      }),
+      build: { build_id: "b1" },
+      changed_fields: ["speaker", "target"],
+    });
+
+    state.selectedRecord.value = row({
+      target: null,
+      metadata_review_fields: ["speaker", "target"],
+      metadata_incomplete_fields: ["target"],
+      review_issue_codes: ["metadata"],
+      review_state: "metadata",
+      metadata_complete: false,
+      metadata_field_status: {
+        speaker: { status: "unresolved", method: "llm" },
+        target: {
+          status: "unresolved",
+          method: "llm",
+          evaluation_status: "no_supported_value",
+          suggested_absence: true,
+        },
+      },
+    });
+
+    await state.review.resolveMetadataSuggestions(
+      { speaker: "Jacques Derrida", target: null },
+      ["target"],
+    );
+
+    expect(state.selectedRecord.value?.metadata_field_status?.target).toMatchObject({
+      status: "confirmed_absent",
+      authority_status: "human_confirmed",
+      evaluation_status: "no_supported_value",
+      value_status: "confirmed_absent",
+      optimistic_review: true,
+    });
+    expect(state.selectedRecord.value?.metadata_review_fields).toEqual([]);
+    expect(state.selectedRecord.value?.metadata_incomplete_fields).toEqual([]);
+    expect(state.queued).toHaveLength(1);
+
+    await state.queued[0](false);
+
+    expect(corpusBuilderApi.metadataDecisionBatch).toHaveBeenCalledWith(
+      "b1",
+      "r1",
+      { speaker: "Jacques Derrida", target: null },
+      1,
+      ["target"],
+    );
   });
 });
