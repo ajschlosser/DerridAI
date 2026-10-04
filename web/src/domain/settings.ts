@@ -84,6 +84,7 @@ export interface RagSettingsDraft {
   response_language: ResponseLanguage;
   evidence_record_char_limit: number;
   evidence_total_char_limit: number;
+  work_filter: string[];
   locales: string[];
   search_types: RetrievalRoute[];
   auto_grade: boolean;
@@ -360,6 +361,15 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     labelFallback: "Total evidence characters",
   },
   {
+    id: "rag-works",
+    section: "retrieval",
+    labelKey: "settings.rag_works",
+    labelFallback: "Works to include",
+    helpKey: "settings.rag_works_help",
+    helpFallback: "Restrict Research retrieval to selected works. Leave empty to include all works.",
+    keywords: ["works", "scope", "filter", "research corpus"],
+  },
+  {
     id: "rag-locales",
     section: "retrieval",
     labelKey: "settings.rag_locales",
@@ -484,6 +494,7 @@ export const RAG_DEFAULTS: RagSettingsDraft = {
   response_language: "auto",
   evidence_record_char_limit: 12000,
   evidence_total_char_limit: 120000,
+  work_filter: [],
   locales: ["en", "fr"],
   search_types: ["similarity", "lexical", "mmr"],
   auto_grade: false,
@@ -575,6 +586,15 @@ export function normalizeRag(
           route === "similarity" || route === "lexical" || route === "mmr",
       )
     : [...RAG_DEFAULTS.search_types];
+  const workFilter = Array.isArray(source?.work_filter)
+    ? [
+        ...new Set(
+          source.work_filter
+            .map((work) => String(work || "").trim())
+            .filter((work) => Boolean(work) && work.length <= 500),
+        ),
+      ].slice(0, 500)
+    : [];
   return {
     k: Math.max(1, Math.min(500, finiteNumber(source?.k, RAG_DEFAULTS.k))),
     fetch_k: Math.max(1, Math.min(5000, finiteNumber(source?.fetch_k, RAG_DEFAULTS.fetch_k))),
@@ -608,6 +628,7 @@ export function normalizeRag(
       5000,
       finiteNumber(source?.evidence_total_char_limit, RAG_DEFAULTS.evidence_total_char_limit),
     ),
+    work_filter: workFilter,
     locales,
     search_types: routes,
     auto_grade: Boolean(source?.auto_grade),
