@@ -21,8 +21,6 @@ import * as runtime from "./runtime.js";
 // Each export reads the runtime when it is called, not when this module loads, so a test that mocks only part of the
 // runtime does not fail just by importing the stores.
 
-export const getNavItems = (...args: Parameters<typeof runtime.getNavItems>) =>
-  runtime.getNavItems(...args);
 export const getShellSnapshot = (...args: Parameters<typeof runtime.getShellSnapshot>) =>
   runtime.getShellSnapshot(...args);
 export const setTranslationDictionary = (

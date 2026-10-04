@@ -61,6 +61,7 @@ const runtime = vi.hoisted(() => ({
   toggleSidebar: vi.fn(),
   state: {} as Record<string, unknown>,
 }));
+vi.mock("../../src/domain/navItems", () => ({ getNavItems: runtime.getNavItems }));
 vi.mock("../../src/runtime/runtime.js", () => ({
   ...runtime,
   __v_isRef: false,

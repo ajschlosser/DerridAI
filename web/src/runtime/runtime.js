@@ -244,6 +244,7 @@ import {
   repaintAfterLocationChange,
 } from "../domain/sharedNavigation";
 import { selectedIndex, sharedUrlStateCodec } from "../domain/sharedUrlState";
+import { getNavItems } from "../domain/navItems";
 import { pathViewMap, viewPathMap } from "../domain/navigation";
 import {
   workspaceDb,
@@ -914,13 +915,6 @@ function setUserContext(user) {
   if (!canAccessPage(state.view)) state.view = "home";
   void refreshResearcherContentPolicy();
 }
-function viewDisabledReason(view) {
-  if (!canAccessPage(view)) return "This workspace is available to administrators only.";
-  if (view === "vector" && isResearcher() && !hasChromaService()) return dbUnavailableReason();
-  if (view === "faq" && !hasChromaService())
-    return "ChromaDB is unavailable, so the Response Library cannot be opened.";
-  return "";
-}
 
 const {
   openMergeDialog,
@@ -1178,41 +1172,6 @@ function touchupApplyResults(items, results, approvals, all = false, reviewOnly 
   return { appliedFields, reviewedRecords };
 }
 
-function translatedNavLabel(item) {
-  const keys = {
-    home: "nav.dashboard",
-    list: "nav.records",
-    record: "nav.record",
-    works: "nav.works",
-    global: "nav.search",
-    annotations: "nav.annotations",
-    semanticmap: "nav.semantic_map",
-    pdf: "nav.pdf",
-    compare: "nav.compare",
-    vector: "nav.vector",
-    rag: "nav.rag",
-    faq: "nav.faq",
-    responsecache: "runtime.system_data",
-    providers: "nav.providers",
-    schemas: "nav.schemas",
-    config: "nav.config",
-  };
-  return keys[item.id] ? tr(keys[item.id], item.label) : item.label;
-}
-function translatedSectionLabel(section) {
-  const keys = {
-    Overview: "section.overview",
-    Corpus: "section.corpora",
-    Corpora: "section.corpora",
-    Research: "section.research",
-    Tools: "section.corpus_management",
-    Build: "section.corpus_management",
-    "Corpus Management": "section.corpus_management",
-    "AI & Automation": "section.ai_automation",
-    System: "section.system",
-  };
-  return keys[section] ? tr(keys[section], section) : section;
-}
 function getShellSnapshot() {
   const ctx = currentContext();
   const totalLoaded = allRows().length;
@@ -1243,24 +1202,6 @@ function getShellSnapshot() {
     systemHtml: systemCardHtml(),
     nav: getNavItems(),
   };
-}
-// Navigation membership depends only on the signed-in user, the static view list,
-// and translations, never on workspace/bootstrap state. The Vue shell calls this as
-// soon as a user exists so the menu is complete before the slow runtime bootstrap.
-function getNavItems() {
-  return viewConfig
-    .filter((item) => canAccessPage(item.id))
-    .map((item) => ({
-      ...item,
-      label:
-        item.id === "home"
-          ? tr("nav.home")
-          : isResearcher() && item.id === "vector"
-            ? tr("research.corpus_search")
-            : translatedNavLabel(item),
-      section: translatedSectionLabel(item.section),
-      disabledReason: viewDisabledReason(item.id),
-    }));
 }
 
 function triggerBulkEdit() {
@@ -1839,7 +1780,6 @@ export {
   openAnnotationsWorkspaceWork,
   removeAnnotationsWorkspaceItem,
   openWorkAnnotations,
-  getNavItems,
   getWarmOnStartForUi,
   setWarmOnStartForUi,
   prepareWorksWorkspace,
