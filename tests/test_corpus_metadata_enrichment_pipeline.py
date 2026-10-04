@@ -34,6 +34,7 @@ from pathlib import Path
 import pytest
 from app import corpus_builder as cb
 from app.corpus_metadata_enrichment_execution import _materialized_family_fingerprint
+from app.llm_failures import ProviderRequestError
 from app.pipelines import manager as manager_module
 from app.pipelines import store as store_module
 from app.pipelines.corpus_metadata_enrichment import (
@@ -842,3 +843,87 @@ def test_enrichment_cancellation_does_not_invoke_fallback_or_create_failed_obser
     assert roles == ['primary']
     assert session.identity()['stages'] == []
     assert session.counts == {}
+
+
+
+def test_transient_provider_failure_becomes_retry_pending_and_recovers(
+    monkeypatch, manager, traces,
+):
+    calls = _provider(
+        monkeypatch,
+        {
+            "primary-model": [
+                ProviderRequestError(
+                    "OpenAI-compatible endpoint returned HTTP 502: upstream failed",
+                    status_code=502,
+                    provider_code="upstream_failed",
+                ),
+                VALID,
+            ]
+        },
+    )
+    record: dict[str, object] = {"record_id": "r1", "text": "Text."}
+    first = manager._execute_metadata_tasks(
+        record,
+        REQUEST,
+        [("discourse", PROMPT, Answer, 512, SCHEMA)],
+        "",
+        None,
+    )
+    assert first[0][1] is None
+    assert first[0][2] is not None
+    assert record["metadata_stage_status"]["discourse"] == "retry_pending"
+    ledger = record["metadata_execution_ledger"]["discourse"]
+    assert ledger["failure_code"] == "provider_upstream_failure"
+    assert ledger["retryable"] is True
+    assert ledger["next_automatic_recovery_attempt"] == 1
+
+    record["metadata_stage_status"]["discourse"] = "queued"
+    ledger["state"] = "queued"
+    ledger["automatic_recovery_attempts"] = 1
+    ledger.pop("next_automatic_recovery_attempt", None)
+
+    second = manager._execute_metadata_tasks(
+        record,
+        REQUEST,
+        [("discourse", PROMPT, Answer, 512, SCHEMA)],
+        "",
+        None,
+    )
+    assert second == [("discourse", {"label": "ok"}, None)]
+    assert record["metadata_stage_status"]["discourse"] == "complete"
+    assert record["metadata_execution_ledger"]["discourse"]["recovered_after_retry"] is True
+    assert record["metadata_execution_ledger"]["discourse"]["automatic_recovery_attempts"] == 1
+    assert len(calls) == 2
+
+
+def test_provider_graph_preserves_retryability_after_both_roles_fail(
+    monkeypatch, manager, traces,
+):
+    calls = _provider(
+        monkeypatch,
+        {
+            "primary-model": [
+                ProviderRequestError("primary upstream", status_code=502),
+            ],
+            "review-model": [
+                ProviderRequestError("review upstream", status_code=503),
+            ],
+        },
+    )
+    record: dict[str, object] = {"record_id": "r1", "text": "Text."}
+    result = manager._execute_metadata_tasks(
+        record,
+        WITH_REVIEW,
+        [("discourse", PROMPT, Answer, 512, SCHEMA)],
+        "",
+        None,
+    )
+    assert result[0][1] is None
+    assert result[0][2] is not None
+    assert record["metadata_stage_status"]["discourse"] == "retry_pending"
+    ledger = record["metadata_execution_ledger"]["discourse"]
+    assert ledger["retryable"] is True
+    assert ledger["failure_class"] == "transient_provider"
+    assert ledger["next_automatic_recovery_attempt"] == 1
+    assert [call["model"] for call in calls] == ["primary-model", "review-model"]
