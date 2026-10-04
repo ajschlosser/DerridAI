@@ -25,7 +25,7 @@ import { recordStores } from "./storeAvailability";
 import { exportStoreJsonl } from "./storeExport";
 
 // Loads the corpus into the workspace on demand (from the first collection when no file is open), over the shared
-// state, so the Records view no longer reaches it through `runtime.js`.
+// state, so the Records view no longer reaches it through the runtime.
 export const ensureCorpusWorkspaceLoaded = createCorpusWorkspaceHydration({
   isResearcher,
   hasFiles: () => Boolean(state.files.length),

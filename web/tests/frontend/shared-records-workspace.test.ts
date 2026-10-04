@@ -27,7 +27,7 @@ vi.mock("../../src/domain/sharedNavigation", async (importOriginal) => ({
   syncUrl: vi.fn(),
 }));
 
-import "../../src/runtime/runtimeBridge";
+import "../../src/domain/appBootstrap";
 import { pageInfo, setActiveStore, setListFilterValue } from "../../src/domain/listPaging";
 import { recordsWorkspace } from "../../src/domain/sharedRecordsWorkspace";
 import { searchByMetadata } from "../../src/domain/workspaceActions";

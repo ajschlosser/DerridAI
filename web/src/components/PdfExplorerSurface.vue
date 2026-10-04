@@ -18,11 +18,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 // Load the runtime before the shared modules built on it, as the app does (the Step 3b gotcha in the retirement plan).
-import "../runtime/runtimeBridge";
+import "../domain/appBootstrap";
 import { toast } from "../composables/notifications";
 import { openMessageDialog } from "../composables/messageDialog";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { translateLegacyDom } from "../runtime/legacyCompat.js";
+import { translateLegacyDom } from "../domain/legacyCompat.js";
 import {
   cleanPdfPageWithLlm,
   draftPdfPageWithLlm,

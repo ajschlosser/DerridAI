@@ -32,7 +32,7 @@ import "../domain/recordQuery";
 import "../domain/researchPayloads";
 import "../domain/citations";
 import "../domain/recordsFiles";
-import "./legacyCompat.js";
+import "../domain/legacyCompat.js";
 import "../domain/runtimeConstants";
 import "../domain/reviewPresentation";
 import "../domain/workMetadata";
