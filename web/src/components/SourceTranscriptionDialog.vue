@@ -23,6 +23,7 @@ import UiDialog from "./ui/UiDialog.vue";
 import UiButton from "./ui/UiButton.vue";
 import { hasPages, timeLabel } from "../domain/sourceMedia";
 import PdfEvidenceViewer from "./PdfEvidenceViewer.vue";
+import AudioSpeakerTimeline from "./corpus-builder/AudioSpeakerTimeline.vue";
 import { useI18nStore } from "../stores/i18n";
 import type { SourceBlock } from "../api/pdfCorpus";
 const props = withDefaults(
@@ -51,6 +52,7 @@ const emit = defineEmits<{
   saveVoiceAssignments: [assignments: Record<string, string>];
 }>();
 const i18n = useI18nStore();
+const audioElement = ref<HTMLAudioElement | null>(null);
 const voices = computed(() =>
   Array.from(new Set(props.blocks.map((block) => String(block.speaker || "")).filter(Boolean))),
 );
@@ -64,6 +66,14 @@ watch(
 );
 function move(delta: number) {
   emit("pageChange", Math.max(1, Math.min(props.pageCount || 1, props.page + delta)));
+}
+
+function seekToBlock(block: SourceBlock) {
+  if (!audioElement.value || typeof block.start !== "number") return;
+  audioElement.value.currentTime = Math.max(0, block.start);
+  void audioElement.value.play().catch(() => {
+    // Browsers may refuse scripted playback; seeking still succeeds.
+  });
 }
 </script>
 <template>
@@ -105,10 +115,17 @@ function move(delta: number) {
         <img v-if="imageUrl" :src="imageUrl" :alt="i18n.t('pdf_corpus.source_context')" />
         <audio
           v-if="audioUrl"
+          ref="audioElement"
           controls
           preload="metadata"
           :src="audioUrl"
           :aria-label="i18n.t('pdf_corpus.media_kind.audio')"
+        />
+        <AudioSpeakerTimeline
+          v-if="audioUrl"
+          :blocks="blocks"
+          :voice-assignments="voiceAssignments"
+          @seek="seekToBlock"
         />
         <fieldset v-if="audioUrl && voices.length" class="voice-assignments">
           <legend>{{ i18n.t("pdf_corpus.voice_assignments_title") }}</legend>
@@ -127,12 +144,39 @@ function move(delta: number) {
             />
           </label>
         </fieldset>
-        <article v-for="block in pdfUrl ? [] : blocks" :key="block.block_id">
-          <b
-            >{{ timeLabel(block.start, block.end) }}
-            {{ voiceAssignments?.[String(block.speaker || "")] || block.speaker }}</b
+        <article
+          v-for="block in pdfUrl ? [] : blocks"
+          :key="block.block_id"
+          :class="{ 'speaker-review-needed': block.speaker_assignment?.review_recommended }"
+        >
+          <button
+            v-if="audioUrl && typeof block.start === 'number'"
+            type="button"
+            class="time-seek"
+            :aria-label="
+              i18n.t(
+                'pdf_corpus.audio_seek_to_span',
+                'Play this timed transcript span from its start.',
+              )
+            "
+            @click="seekToBlock(block)"
           >
+            {{ timeLabel(block.start, block.end) }}
+            {{ voiceAssignments?.[String(block.speaker || "")] || block.speaker }}
+          </button>
+          <b v-else>
+            {{ timeLabel(block.start, block.end) }}
+            {{ voiceAssignments?.[String(block.speaker || "")] || block.speaker }}
+          </b>
           <p>{{ block.text }}</p>
+          <small v-if="block.speaker_assignment?.review_recommended" class="speaker-review-note">
+            {{
+              i18n.t(
+                "pdf_corpus.audio_span_review_recommended",
+                "Speaker assignment is uncertain for part of this span.",
+              )
+            }}
+          </small>
         </article>
       </section>
       <section class="transcription-pane" :aria-busy="busy">
@@ -241,6 +285,37 @@ audio {
 .transcription-pane :is(textarea, summary):focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
+}
+.source-pane article {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.time-seek {
+  padding: 4px 7px;
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-control);
+  color: var(--accent-fg);
+  background: var(--surface-card);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.time-seek:hover {
+  background: var(--surface-hover);
+}
+.time-seek:focus-visible {
+  outline: var(--focus-ring-width) solid var(--accent);
+  outline-offset: var(--focus-ring-offset);
+}
+.speaker-review-needed {
+  padding-inline: 10px;
+  border-inline-start: 3px solid var(--tone-warn-edge);
+  background: var(--tone-warn-bg);
+}
+.speaker-review-note {
+  display: block;
+  margin-top: 5px;
+  color: var(--tone-warn-fg);
 }
 .voice-assignments {
   display: grid;

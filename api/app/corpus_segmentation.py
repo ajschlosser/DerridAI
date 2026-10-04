@@ -1089,6 +1089,17 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
                 assignment = voice_assignments.get(str(block.get("speaker")))
                 if isinstance(assignment, dict) and str(assignment.get("display_name") or "").strip():
                     span["resolved_speaker"] = str(assignment["display_name"]).strip()
+            if block.get("provider_speaker"):
+                span["provider_speaker"] = block.get("provider_speaker")
+            if isinstance(block.get("speaker_assignment"), dict):
+                span["speaker_assignment"] = dict(block["speaker_assignment"])
+            if isinstance(block.get("source_words"), list):
+                # Word-level evidence is extracted source provenance. Keep it on the
+                # SourceSpan so a record-level speaker claim remains auditable to the
+                # exact timed words that produced the turn.
+                span["source_words"] = [
+                    dict(word) for word in block["source_words"] if isinstance(word, dict)
+                ]
             if block.get("start") is not None:
                 span["start"] = block.get("start")
                 span["end"] = block.get("end")

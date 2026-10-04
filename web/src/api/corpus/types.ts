@@ -175,7 +175,20 @@ export interface PdfAsset {
     whisperx_version?: string;
     diarization_requested?: boolean;
     diarization_status?: "disabled" | "failed" | "complete" | "no_speakers" | string;
+    alignment_status?:
+      | "provider_word_timestamps"
+      | "whisperx_word_alignment"
+      | "failed"
+      | "not_applicable"
+      | "not_requested"
+      | "disabled"
+      | string;
+    speaker_assignment_method?: "word_overlap" | "segment_overlap" | "none" | string;
+    word_count?: number;
+    ambiguous_word_count?: number;
+    review_recommended_block_count?: number;
     voice_labels?: Record<string, string>;
+    pipeline_stages?: Record<string, string>;
   };
   extraction_noise?: {
     page_count?: number;
@@ -1162,9 +1175,29 @@ export interface CorpusRecord {
     start?: number;
     end?: number;
     speaker?: string;
+    resolved_speaker?: string;
+    provider_speaker?: string;
     locator_kind?: string;
     bbox?: number[];
     extraction_method?: string;
+    confidence?: number;
+    speaker_assignment?: {
+      method?: string;
+      confidence?: number;
+      ambiguous_word_count?: number;
+      word_count?: number;
+      review_recommended?: boolean;
+    };
+    source_words?: Array<{
+      word?: string;
+      start?: number;
+      end?: number;
+      speaker?: string | null;
+      provider_speaker?: string | null;
+      speaker_confidence?: number;
+      speaker_ambiguous?: boolean;
+      score?: number;
+    }>;
   }>;
   metadata_evidence?: Record<
     string,
@@ -1381,6 +1414,26 @@ export interface SourceBlock {
   extraction_method: string;
   confidence: number;
   speaker?: string;
+  /** Raw diarizer label retained alongside the stable SPEAKER_n identity. */
+  provider_speaker?: string;
+  /** Word-level timing and speaker evidence retained for audio review. */
+  source_words?: Array<{
+    word: string;
+    start: number;
+    end: number;
+    speaker?: string | null;
+    provider_speaker?: string | null;
+    speaker_confidence?: number;
+    speaker_ambiguous?: boolean;
+    score?: number;
+  }>;
+  speaker_assignment?: {
+    method: "word_overlap" | "segment_overlap" | string;
+    confidence?: number;
+    ambiguous_word_count?: number;
+    word_count?: number;
+    review_recommended?: boolean;
+  };
 }
 
 export interface GutenbergHit {
