@@ -5851,6 +5851,17 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
                                         'sur une autre version.'),
  'settings.pipeline_overrides_select_help': ('Choisissez la version immuable de l’Atelier de pipelines dont vous voulez remplacer '
                                              'les paramètres d’étape.'),
+ 'settings.pipeline_to_override': 'Pipeline à remplacer',
+ 'settings.pipeline_to_override_help': ('Choisissez la version immuable du pipeline de Recherche à laquelle ces remplacements globaux '
+                                        's’appliquent. Cela ne change pas l’affectation de l’Atelier de pipelines.'),
+ 'settings.pipeline_system_assignment': 'Affectation système',
+ 'settings.pipeline_baseline': 'Configuration de référence de l’Atelier de pipelines',
+ 'settings.open_pipeline_studio': 'Ouvrir l’Atelier de pipelines',
+ 'settings.pipeline_overrides_loading': 'Chargement des pipelines de Recherche…',
+ 'settings.research_request_defaults_title': 'Valeurs par défaut de la requête de Recherche',
+ 'settings.research_request_defaults_help': ('Ce sont des entrées d’exécution, et non la configuration des étapes de l’Atelier de pipelines. '
+                                             'Elles deviennent les valeurs initiales de Recherche et peuvent être modifiées pour une seule '
+                                             'exécution sans modifier les Paramètres.'),
  'settings.rag_top_n': 'N de reclassement',
  'settings.rag_top_n_help': 'Nombre de candidats inspectés par le reclassement.',
  'settings.rag_total_chars': 'Caractères totaux de preuve',
@@ -9517,6 +9528,15 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'research.run_pipeline_overrides': 'Remplacements pour cette exécution',
  'research.run_pipeline_overrides_help': ('Ces paramètres s’appliquent uniquement à cette exécution. Ils remplacent à la fois la configuration '
                                           'de l’Atelier de pipelines et les remplacements des Paramètres pour cette version exacte du pipeline.'),
+ 'research.retrieval_run_help': ('Choisissez le routage et la portée de la requête pour cette exécution. Pour remplacer une valeur d’étape '
+                                 'de l’Atelier de pipelines, utilisez les remplacements d’exécution sous Chaîne de pipeline.'),
+ 'research.request_controls': 'Entrées d’exécution',
+ 'research.request_controls_help': ('Ces valeurs façonnent cette requête de Recherche sans réécrire la configuration des étapes. Les changements '
+                                    'au niveau des étapes se font sous Remplacements d’exécution dans Chaîne de pipeline.'),
+ 'research.query_decomposition_run_help': ('Autorisez l’étape de décomposition de requête du pipeline sélectionné pour cette exécution. '
+                                           'Sa configuration d’étape est remplacée séparément.'),
+ 'research.evidence_citations_run_help': ('Les contrôles de citation, de mémoire, de métadonnées et d’évaluation s’appliquent à cette exécution. '
+                                          'Les limites de l’étape de préparation des preuves se configurent sous Remplacements d’exécution.'),
  'research.pipeline_override_badge': 'Remplacement pour cette exécution',
  'research.pipeline_system_assignment_badge': 'Affectation système',
  'research.pipeline_trace': 'Trace d’exécution du pipeline',
