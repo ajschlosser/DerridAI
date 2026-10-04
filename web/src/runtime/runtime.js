@@ -73,7 +73,7 @@ import { providerProfilesService, warmupProviderProfile } from "../domain/shared
 import "../domain/sharedSearchWorkspace";
 import "../domain/tableColumns";
 import "../domain/sharedRecordsWorkspace";
-import { searchByMetadata } from "../domain/workspaceActions";
+import { wireMetadataSearchDelegation } from "../domain/legacyDomListeners";
 import "../domain/listPaging";
 import "../domain/sharedWorksWorkspace";
 import { workDialogs } from "../domain/sharedWorkDialogs";
@@ -663,37 +663,6 @@ function triggerUpsertQueue() {
     : toast(tr("runtime.toast.cannot_manage_dbs"), { tone: "warning" });
 }
 
-let chartTooltip = null;
-function ensureChartTooltip() {
-  if (chartTooltip?.isConnected) return chartTooltip;
-  chartTooltip = document.createElement("div");
-  chartTooltip.className = "chart-hover-tooltip";
-  document.body.appendChild(chartTooltip);
-  return chartTooltip;
-}
-document.addEventListener("pointermove", (event) => {
-  const target = event.target.closest?.("[data-chart-tip]");
-  if (!target) {
-    if (chartTooltip) chartTooltip.classList.remove("show");
-    return;
-  }
-  const tip = ensureChartTooltip();
-  tip.textContent = target.dataset.chartTip || "";
-  tip.style.left = `${Math.min(window.innerWidth - 280, event.clientX + 14)}px`;
-  tip.style.top = `${Math.max(8, event.clientY + 14)}px`;
-  tip.classList.add("show");
-});
-
-window.addEventListener("dragover", (e) => e.preventDefault());
-window.addEventListener("drop", (e) => {
-  if (e.dataTransfer?.files?.length) {
-    e.preventDefault();
-    if (!isResearcher())
-      importFiles(
-        [...e.dataTransfer.files].filter((f) => /\.(jsonl|ndjson|json|zst)$/i.test(f.name)),
-      );
-  }
-});
 document.addEventListener(
   "click",
   (event) => {
@@ -800,29 +769,6 @@ function syncFromLocation() {
   repaintAfterLocationChange();
 }
 
-let metadataSearchDelegationWired = false;
-function wireMetadataSearchDelegation() {
-  if (metadataSearchDelegationWired) return;
-  metadataSearchDelegationWired = true;
-  document.addEventListener(
-    "click",
-    (event) => {
-      const button =
-        event.target instanceof Element
-          ? event.target.closest("[data-meta-search-field][data-meta-search-value]")
-          : null;
-      if (!button) return;
-      if (button.closest("#main")) {
-        event.preventDefault();
-        event.stopPropagation();
-        searchByMetadata(button.dataset.metaSearchField, button.dataset.metaSearchValue, {
-          contains: button.dataset.metaSearchContains === "true",
-        });
-      }
-    },
-    true,
-  );
-}
 async function bootstrapRuntime() {
   wireTabScrollPreservation();
   wireMetadataSearchDelegation();
