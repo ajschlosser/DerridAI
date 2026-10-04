@@ -722,14 +722,17 @@ def test_review_provider_can_answer_first(monkeypatch, manager, traces) -> None:
     assert result == {"label": "ok"}
 
 
-def test_timeout_without_a_timeout_edge_does_not_escalate(monkeypatch, manager, traces) -> None:
+def test_timeout_without_a_timeout_edge_defers_outer_recovery(monkeypatch, manager, traces) -> None:
     _use(monkeypatch, [{"on_timeout": None}, {}])
     calls = _provider(monkeypatch, {"primary-model": [TimeoutError("read timed out")], "review-model": [VALID]})
     record, (_family, result, error) = _enrich(manager, WITH_REVIEW)
 
     assert [call["model"] for call in calls] == ["primary-model"]
     assert result is None and "timed out" in str(error)
-    assert record["metadata_stage_status"]["discourse"] == "failed"
+    assert record["metadata_stage_status"]["discourse"] == "retry_pending"
+    ledger = record["metadata_execution_ledger"]["discourse"]
+    assert ledger["retryable"] is True
+    assert ledger["next_automatic_recovery_attempt"] == 1
     assert traces[0].stages[0].fallback_reason == "provider_timed_out"
 
 
