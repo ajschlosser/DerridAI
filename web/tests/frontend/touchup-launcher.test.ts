@@ -17,7 +17,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import "../../src/runtime/runtimeBridge";
+import "../../src/domain/appBootstrap";
 import { normalizeTouchupItems, openTouchup } from "../../src/domain/touchupLauncher";
 import { state } from "../../src/domain/sharedUrlState";
 

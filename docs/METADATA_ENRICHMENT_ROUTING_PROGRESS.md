@@ -1,6 +1,6 @@
 <!--
 This file is part of DerridAI, a cELF-compliant research workspace
-Copyright Ã‚Â© 2026  Aaron John Schlosser, PhD
+Copyright © 2026  Aaron John Schlosser, PhD
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -147,3 +147,9 @@ Final handoff: draft PR #517 is open at https://github.com/ajschlosser/DerridAI/
 
 - Checkpoint implementation commit: `ad0a7fe7`. Full preflight attempted after commit: full backend Ruff and Python syntax passed; required formatting gate could not find this fresh clone's `web/node_modules`, generated-artifact gate reported stale/unverifiable artifacts, mypy was missing, and full regression could not start because pytest-xdist was missing (`-n`/`--dist` unsupported). The separately executed public pipeline catalog check passed, and the touched Markdown was formatted with the existing workspace Prettier. These limitations are not accepted passes. Commit/push use `DERRIDAI_SKIP_PREFLIGHT=1` after the manual targeted checks and this failed full-preflight attempt.
 - Stopping after this bounded observation checkpoint with 11% of the five-hour allowance remaining at the latest usage check, above the requested 8% floor. Resume with semantic-support/reviewer gates and RESOLVE/VERIFY/scoped INFER/proposal fan-in; do not enable adaptive production routing based on exact mention occurrence alone.
+
+## PR #520 CI repair (2026-10-04)
+
+- Merged current master `ad28261f`, including the completed legacy-runtime retirement from PR #518, before revalidating this branch.
+- Updated the researcher text-policy wiring guard to read the canonical `domain/appBootstrap.ts` and `domain/researcherInputFilter.ts` modules directly now that `runtime.js` has been retired. This removes the stale collection-time dependency on the deleted compatibility file without changing policy behavior.
+- Restored the touched files' UTF-8 copyright marker after an earlier shell-encoding round trip. This is repository hygiene only; it does not alter candidate-routing semantics.

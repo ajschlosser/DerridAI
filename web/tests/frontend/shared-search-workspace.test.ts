@@ -18,7 +18,7 @@
 
 import { describe, expect, it } from "vitest";
 // The app enters through the runtime; sharedNavigation reaches it through the operations panel, so import it first.
-import "../../src/runtime/runtimeBridge";
+import "../../src/domain/appBootstrap";
 import { searchWorkspace } from "../../src/domain/sharedSearchWorkspace";
 import { getTableColumns, tableAvailableFields } from "../../src/domain/tableColumns";
 import { state } from "../../src/domain/sharedUrlState";

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { applyUiTheme as applyUiThemeCompat } from "../runtime/legacyCompat.js";
+import { applyUiTheme as applyUiThemeCompat } from "./legacyCompat.js";
 import { state } from "./sharedUrlState";
 
 // Colour theme over the shared `appConfig` slice, usable without the legacy runtime.

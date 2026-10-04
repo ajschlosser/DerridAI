@@ -1,5 +1,5 @@
 # This file is part of DerridAI, a cELF-compliant research workspace
-# Copyright Â© 2026  Aaron John Schlosser, PhD
+# Copyright © 2026  Aaron John Schlosser, PhD
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as

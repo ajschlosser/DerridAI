@@ -31,7 +31,7 @@ vi.mock("../../src/composables/notifications", async (importOriginal) => ({
   toast,
 }));
 
-import "../../src/runtime/runtimeBridge";
+import "../../src/domain/appBootstrap";
 import {
   cleanPdfPageWithLlm,
   linkPdfPageWithLlm,

@@ -94,7 +94,7 @@ vi.mock("../../src/domain/sharedProviderProfiles", () => ({
   getDefaultProviderProfileId: runtime.getDefaultProviderProfileId,
 }));
 
-vi.mock("../../src/runtime/runtime.js", () => ({
+vi.mock("../../src/domain/appBootstrap", () => ({
   ...runtime,
   __v_isRef: false,
   __v_isReadonly: false,

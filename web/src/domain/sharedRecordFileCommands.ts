@@ -33,7 +33,7 @@ import { persistFileNow } from "./sharedWorkspacePersistence";
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 // Record-file commands for the Records view (subset files, merge, export) over the shared state, so Vue code no longer
-// reaches them through `runtime.js`. The runtime keeps no copy.
+// reaches them through the runtime. The runtime keeps no copy.
 export const {
   subsetSources,
   subsetSourceRecords,

@@ -41,7 +41,7 @@ const runtime = vi.hoisted(() => ({
   getDefaultProviderProfileId: vi.fn(() => "local"),
 }));
 
-vi.mock("../../src/runtime/runtime.js", () => runtime);
+vi.mock("../../src/domain/appBootstrap", () => runtime);
 vi.mock("../../src/domain/sharedProviderProfiles", () => ({
   getProviderProfilesForUi: runtime.getProviderProfilesForUi,
   getDefaultProviderProfileId: runtime.getDefaultProviderProfileId,
