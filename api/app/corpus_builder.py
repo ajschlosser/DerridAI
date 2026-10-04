@@ -942,7 +942,14 @@ class PdfCorpusRepository:
         # Default PDF uploads keep the historical content-addressed id.
         identity = digest
         if kind != "pdf" or ocr_mode != "auto" or illegibility:
-            identity = hashlib.sha256(f"{digest}|{kind}|source-extraction-v2|{ocr_mode}|{illegibility:.2f}".encode()).hexdigest()
+            extraction_contract = (
+                "source-extraction-v3-word-speakers"
+                if kind == "audio"
+                else "source-extraction-v2"
+            )
+            identity = hashlib.sha256(
+                f"{digest}|{kind}|{extraction_contract}|{ocr_mode}|{illegibility:.2f}".encode()
+            ).hexdigest()
         if catalog_metadata and catalog_metadata.get("gutenberg_id"):
             identity = hashlib.sha256(f"{identity}|gutenberg|{catalog_metadata['gutenberg_id']}".encode()).hexdigest()
         if kind == "audio" and not audio_diarization:
