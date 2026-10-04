@@ -271,6 +271,7 @@ export interface GutenbergStatus {
     status: string;
     bytes_done: number;
     total_bytes?: number | null;
+    imported_texts?: number;
     error?: string | null;
   };
 }
@@ -1497,7 +1498,9 @@ export interface WikisourceProviderInfo {
 export type SourceProviderInfo = GutenbergProviderInfo | WikisourceProviderInfo;
 
 export interface AuthorCandidate {
-  wikidata_qid: string;
+  identity_id: string;
+  identity_source: "wikidata" | "gutenberg";
+  wikidata_qid: string | null;
   label: string;
   description: string;
   aliases: string[];
