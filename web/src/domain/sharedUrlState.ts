@@ -16,14 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { bindJobsState } from "../state/jobsState";
 import { bindWorkspaceGroups } from "../state/workspaceState";
 import { createUrlStateCodec } from "./urlStateCodec";
 
-// The URL codec over the shared workspace state, usable without the legacy runtime. The runtime's state object reads
-// the same shared groups, so reading and applying a URL here and there is the same operation.
+// The URL codec sits on the complete shared workspace state, including background jobs. `bindWorkspaceGroups`
+// intentionally excludes jobs, so bind them explicitly here; shared consumers such as Works must mutate the same
+// job array that the runtime, Operations panel, and polling loop observe.
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export const state = bindWorkspaceGroups({}) as Loose;
+export const state = bindJobsState(bindWorkspaceGroups({})) as Loose;
 
 export const activeFile = () => state.files.find((f: Loose) => f.id === state.activeFileId) || null;
 export const selectedIndex = (f: Loose | null) =>

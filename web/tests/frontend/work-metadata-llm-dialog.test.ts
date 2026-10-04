@@ -18,7 +18,7 @@
 
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import WorkMetadataLlmDialog from "../../src/components/WorkMetadataLlmDialog.vue";
 import {
   closeWorkMetadataLlmDialog,
@@ -26,15 +26,6 @@ import {
   useWorkMetadataLlmDialog,
 } from "../../src/composables/workMetadataLlmDialog";
 
-beforeAll(() => {
-  HTMLDialogElement.prototype.showModal = function showModal() {
-    this.setAttribute("open", "");
-  };
-  HTMLDialogElement.prototype.close = function close() {
-    this.removeAttribute("open");
-    this.dispatchEvent(new Event("close"));
-  };
-});
 beforeEach(() => {
   setActivePinia(createPinia());
   closeWorkMetadataLlmDialog();
@@ -44,6 +35,12 @@ const profiles = [
   { id: "a", name: "A", type: "ollama", model: "m1" },
   { id: "b", name: "B", type: "openai", model: "m2" },
 ] as never;
+
+function primaryButton() {
+  const button = document.body.querySelector<HTMLButtonElement>("button.ui-button.variant-primary");
+  expect(button).not.toBeNull();
+  return button!;
+}
 
 function open(overrides = {}) {
   const start = vi.fn().mockResolvedValue(undefined);
@@ -66,7 +63,7 @@ describe("WorkMetadataLlmDialog", () => {
     const wrapper = mount(WorkMetadataLlmDialog, { attachTo: document.body });
     const { start } = open();
     await flushPromises();
-    await wrapper.find("button.btn.primary").trigger("click");
+    primaryButton().click();
     await flushPromises();
     expect(start).toHaveBeenCalledWith("b");
     expect(useWorkMetadataLlmDialog().current.value).toBeNull();
@@ -77,10 +74,10 @@ describe("WorkMetadataLlmDialog", () => {
     const wrapper = mount(WorkMetadataLlmDialog, { attachTo: document.body });
     open({ start: vi.fn().mockRejectedValue(new Error("boom")) });
     await flushPromises();
-    await wrapper.find("button.btn.primary").trigger("click");
+    primaryButton().click();
     await flushPromises();
     expect(useWorkMetadataLlmDialog().current.value).not.toBeNull();
-    expect(wrapper.find("button.btn.primary").attributes("disabled")).toBeUndefined();
+    expect(primaryButton().disabled).toBe(false);
     wrapper.unmount();
   });
 
@@ -88,7 +85,7 @@ describe("WorkMetadataLlmDialog", () => {
     const wrapper = mount(WorkMetadataLlmDialog, { attachTo: document.body });
     open({ profiles: [], defaultProfileId: "" });
     await flushPromises();
-    expect(wrapper.find("button.btn.primary").attributes("disabled")).toBeDefined();
+    expect(primaryButton().disabled).toBe(true);
     wrapper.unmount();
   });
 
@@ -96,7 +93,16 @@ describe("WorkMetadataLlmDialog", () => {
     const wrapper = mount(WorkMetadataLlmDialog, { attachTo: document.body });
     open();
     await flushPromises();
-    expect(wrapper.find(".work-metadata-sample").text()).toContain("+7");
+    expect(document.body.querySelector(".metadata-scope-sample")?.textContent).toContain("+7");
+    wrapper.unmount();
+  });
+
+  it("uses the shared application dialog instead of a native legacy dialog", async () => {
+    const wrapper = mount(WorkMetadataLlmDialog, { attachTo: document.body });
+    open();
+    await flushPromises();
+    expect(document.body.querySelector(".ui-dialog")).not.toBeNull();
+    expect(document.body.querySelector("dialog.work-metadata-llm-dialog")).toBeNull();
     wrapper.unmount();
   });
 });

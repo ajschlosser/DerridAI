@@ -29,6 +29,7 @@ vi.mock("../../src/domain/sharedNavigation", async (importOriginal) => ({
 
 import "../../src/runtime/runtimeBridge";
 import { state } from "../../src/domain/sharedUrlState";
+import { jobsState } from "../../src/state/jobsState";
 import { syncUrl } from "../../src/domain/sharedNavigation";
 import { persistPrefs } from "../../src/domain/sharedWorkspaceStorage";
 import { workDialogs } from "../../src/domain/sharedWorkDialogs";
@@ -39,11 +40,19 @@ import { worksService } from "../../src/services/works";
 describe("shared Works workspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    jobsState.jobs = [];
     Object.assign(state, { files: [], activeFileId: null, userContext: null, worksSearch: "" });
   });
 
   it("reads the Works snapshot from the shared state alone", () => {
     expect(worksService.getSnapshot()).toBeTruthy();
+  });
+
+  it("binds Works background jobs to the shared jobs state", () => {
+    jobsState.jobs = [{ id: "lookup", status: "running" }];
+    expect(state.jobs).toBe(jobsState.jobs);
+    state.jobs = [{ id: "replacement", status: "queued" }];
+    expect(jobsState.jobs).toBe(state.jobs);
   });
 
   it("persists and syncs the URL when the Works query changes", () => {
