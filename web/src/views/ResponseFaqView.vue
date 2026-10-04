@@ -33,7 +33,11 @@ import { queryClient, useDataQuery } from "../realtime/dataQuery";
 import { dataKey } from "../realtime/resourceKeys";
 import { useI18nStore } from "../stores/i18n";
 import type { ResearchResult, ResponseFaqPage, ResponseFaqRecord } from "../types/research";
-import * as runtime from "../runtime/runtimeBridge";
+import {
+  getResponseFaqPage,
+  gradeResponseFaqRecord,
+  rerunResponseFaqRecord,
+} from "../domain/sharedResponseFaq";
 
 const i18n = useI18nStore();
 const auth = useAuthStore();
@@ -255,7 +259,7 @@ const readScope = computed(() =>
 );
 const faqQuery = useDataQuery(
   "response_library",
-  () => runtime.getResponseFaqPage({ ...applied.value }) as Promise<ResponseFaqPage>,
+  () => getResponseFaqPage({ ...applied.value }) as Promise<ResponseFaqPage>,
   {
     detail: () => ["workspace", readScope.value, applied.value],
     enabled: () => Boolean(auth.user),
@@ -363,10 +367,10 @@ function focusEvidence(index: number) {
   activeEvidenceIndex.value = index;
 }
 function grade() {
-  if (selected.value) runtime.gradeResponseFaqRecord(selected.value);
+  if (selected.value) gradeResponseFaqRecord(selected.value);
 }
 function rerun() {
-  if (selected.value) runtime.rerunResponseFaqRecord(selected.value);
+  if (selected.value) rerunResponseFaqRecord(selected.value);
 }
 function focusDetails() {
   document.querySelector("#faqRunDetails")?.scrollIntoView({ behavior: "smooth", block: "start" });

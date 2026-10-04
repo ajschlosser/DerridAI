@@ -47,13 +47,4 @@ export const viewForPath = (...args: Parameters<typeof runtime.viewForPath>) =>
   runtime.viewForPath(...args);
 export const responseCacheStore = (...args: Parameters<typeof runtime.responseCacheStore>) =>
   runtime.responseCacheStore(...args);
-export const getResponseFaqPage = (...args: Parameters<typeof runtime.getResponseFaqPage>) =>
-  runtime.getResponseFaqPage(...args);
-export const gradeResponseFaqRecord = (
-  ...args: Parameters<typeof runtime.gradeResponseFaqRecord>
-) => runtime.gradeResponseFaqRecord(...args);
-export const rerunResponseFaqRecord = (
-  ...args: Parameters<typeof runtime.rerunResponseFaqRecord>
-) => runtime.rerunResponseFaqRecord(...args);
-
 export default runtime;

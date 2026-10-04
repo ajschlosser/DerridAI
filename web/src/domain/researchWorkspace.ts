@@ -19,6 +19,7 @@
 // The Research workspace and the Response Library: the workspace snapshot, configuration, evidence, running and grading
 // research, and the cached-answer page. Moved verbatim from the legacy runtime; the runtime's state object and helpers are
 // passed in as dependencies.
+import { createResponseFaq } from "./responseFaq";
 import { providerRequestConfig } from "./providerRequest";
 import { createGetResearchJob } from "./researchJobLookup";
 import { cloneAuditValue } from "./recordValues";
@@ -575,29 +576,13 @@ export function createResearchWorkspace(deps: Deps) {
     patch.instructions = request.instructions || "";
     return updateResearchConfig(patch);
   }
-  async function getResponseFaqPage({ limit = 50, offset = 0, query = "" } = {}) {
-    if (!canAccessPage("faq")) throw new Error(tr("permissions.faq_denied"));
-    const params = new URLSearchParams({
-      limit: String(Math.max(1, Math.min(1000, Number(limit) || 50))),
-      offset: String(Math.max(0, Number(offset) || 0)),
-    });
-    const search = String(query || "").trim();
-    if (search) params.set("query", search);
-    return api(`/api/response-cache/records?${params}`);
-  }
-  function gradeResponseFaqRecord(record: Loose = {}) {
-    return gradeRagResponse({
-      question: record.question || "",
-      answer: record.text || "",
-      evidence: Array.isArray(record.evidence) ? record.evidence : [],
-      responseRecordId: record.record_id || null,
-      generationProvider: record.provider || null,
-      generationModel: record.model || null,
-    });
-  }
-  function rerunResponseFaqRecord(record: Loose = {}) {
-    return prepareRagRerun(record.rag_request || {});
-  }
+  const { getResponseFaqPage, gradeResponseFaqRecord, rerunResponseFaqRecord } = createResponseFaq({
+    api,
+    canAccessPage,
+    tr,
+    gradeRagResponse,
+    prepareRagRerun: (request) => prepareRagRerun(request),
+  });
   function rememberRagPrompt(prompt: Any, instructions: Any, extra: Loose = {}) {
     const question = String(prompt || "").trim();
     const guidance = String(instructions || "").trim();

@@ -683,7 +683,7 @@ const {
   warmupProviderProfile: (...args) => warmupProviderProfile(...args),
 });
 registerPdfLlmTaskHooks({ openLlmTaskLauncher, openPdfDraftRecord });
-registerOperationsPanelHooks({ mountOperationsPanelHost, openJobResults });
+registerOperationsPanelHooks({ mountOperationsPanelHost, openJobResults, gradeRagResponse });
 const {
   renderPdfCanvas,
   extractPdfPageBrowser,
@@ -706,9 +706,6 @@ const {
   startResearchRun,
   gradeResearchJob,
   prepareResearchRerun,
-  getResponseFaqPage,
-  gradeResponseFaqRecord,
-  rerunResponseFaqRecord,
   rememberRagPrompt,
   rememberRagRun,
   prepareRagRerun,
@@ -742,6 +739,7 @@ const {
   tr: (...args) => tr(...args),
   uid: (...args) => uid(...args),
 });
+registerOperationsPanelHooks({ prepareRagRerun });
 const {
   serverAnnotationItems,
   refreshServerAnnotations,
@@ -1814,9 +1812,6 @@ export {
   startResearchRun,
   gradeResearchJob,
   prepareResearchRerun,
-  getResponseFaqPage,
-  gradeResponseFaqRecord,
-  rerunResponseFaqRecord,
   getRecordWorkspaceSnapshot,
   getRecordObjectGraph,
   getDerridaiNormativeModel,
