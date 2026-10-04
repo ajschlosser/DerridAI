@@ -2938,6 +2938,7 @@ class ChromaStore:
         store: str,
         query: str,
         n_results: int,
+        where: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         col = self._collection(store)
         count = col.count()
@@ -2950,11 +2951,14 @@ class ChromaStore:
             provider=provider,
             model=model,
         )
-        payload = col.query(
-            query_embeddings=[vector],
-            n_results=min(max(1, n_results), count),
-            include=["documents", "metadatas", "distances", "embeddings"],
-        )
+        query_args: dict[str, Any] = {
+            "query_embeddings": [vector],
+            "n_results": min(max(1, n_results), count),
+            "include": ["documents", "metadatas", "distances", "embeddings"],
+        }
+        if where:
+            query_args["where"] = where
+        payload = col.query(**query_args)
         ids = (payload.get("ids") or [[]])[0]
         documents = (payload.get("documents") or [[]])[0]
         metadatas = (payload.get("metadatas") or [[]])[0]
