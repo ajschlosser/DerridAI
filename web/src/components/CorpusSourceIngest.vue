@@ -249,7 +249,11 @@ function confirmPendingFile() {
   if (!file) return;
   const kind = pendingMediaKind.value;
   pendingFile.value = null;
-  emit("file", file, kind === "audio" ? { audioDiarization: audioDiarization.value } : undefined);
+  emit(
+    "file",
+    file,
+    kind === "audio" ? { audioDiarization: audioDiarization.value } : undefined,
+  );
 }
 
 function chooseDifferentFile() {
@@ -489,7 +493,9 @@ onBeforeUnmount(() => {
             </div>
           </fieldset>
           <fieldset v-if="audioPending" class="audio-ingest-options" :disabled="sourceSetupDisabled">
-            <legend>{{ i18n.t("pdf_corpus.audio_ingest_title", "Audio transcription & speakers") }}</legend>
+            <legend>
+              {{ i18n.t("pdf_corpus.audio_ingest_title", "Audio transcription & speakers") }}
+            </legend>
             <p>
               {{
                 i18n.t(
@@ -992,7 +998,7 @@ onBeforeUnmount(() => {
   font-weight: var(--fw-bold);
 }
 
-/* Reading strategy: staged only while a local PDF/image is waiting to be ingested. */
+/* Source-specific ingest choices stay staged until the reviewer confirms them. */
 .pending-source {
   display: grid;
   gap: var(--space-4, 16px);
