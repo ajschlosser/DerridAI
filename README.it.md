@@ -260,10 +260,11 @@ cd ..
 Controlli locali rapidi:
 
 ```bash
-ruff check api/app tests scripts/check_frontend_api_contract.py
+ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 mypy
-pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
+pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py --ignore=tests/test_frontend_graphql_contract.py
 pytest -q -m contract tests/test_frontend_api_contract.py
+pytest -q -m contract tests/test_frontend_graphql_contract.py
 
 cd web
 npm run format:repo:check
