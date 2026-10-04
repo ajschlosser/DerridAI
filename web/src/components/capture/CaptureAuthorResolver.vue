@@ -54,6 +54,10 @@ async function search() {
   }
 }
 
+function identity(person: AuthorCandidate) {
+  return person.identity_id || (person.wikidata_qid ? `wikidata:${person.wikidata_qid}` : "");
+}
+
 function lifespan(person: AuthorCandidate) {
   const year = (value: number | null) =>
     value === null
@@ -104,15 +108,15 @@ function lifespan(person: AuthorCandidate) {
       </p>
       <label
         v-for="person in results"
-        :key="person.identity_id"
+        :key="identity(person)"
         class="ar-person"
-        :class="{ 'is-chosen': props.modelValue?.identity_id === person.identity_id }"
-        :data-identity="person.identity_id"
+        :class="{ 'is-chosen': props.modelValue ? identity(props.modelValue) === identity(person) : false }"
+        :data-identity="identity(person)"
       >
         <input
           type="radio"
           :name="`${id}-person`"
-          :value="person.identity_id"
+          :value="identity(person)"
           :checked="props.modelValue?.identity_id === person.identity_id"
           @change="emit('update:modelValue', person)"
         />
