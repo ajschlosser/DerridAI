@@ -139,7 +139,11 @@ function archiveActionLabel() {
         >
       </template>
       <small v-if="archiveStatus === 'unpacking' && importedTexts">
-        {{ i18n.tf("pdf_corpus.gutenberg_import_progress", { count: formatNumber(importedTexts) }) }}
+        {{
+          i18n.tf("pdf_corpus.gutenberg_import_progress", {
+            count: formatNumber(importedTexts),
+          })
+        }}
       </small>
     </div>
     <small v-if="status?.catalogue.error" class="ls-error-text">{{ status.catalogue.error }}</small>
