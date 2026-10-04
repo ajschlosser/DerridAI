@@ -29,6 +29,7 @@ from .chroma_store import ChromaStore
 from .claim_memory import ClaimMemoryIndex
 from .config import settings
 from .cross_encoder import predict_scores
+from .llm_failures import ProviderRequestError
 from .models import OllamaTouchupOptions, RAGPromptMetadataPolicy, RAGRunRequest
 from .pipelines.manager import pipeline_manager
 from .pipelines.models import PipelineDefinition
@@ -141,17 +142,100 @@ def _extract_json(text: str) -> dict[str, Any]:
     return parse_json_object(text)
 
 
-def _response_detail(response: httpx.Response) -> str:
+def _response_error_metadata(
+    response: httpx.Response,
+) -> tuple[str, str | None, str | None]:
+    """Return bounded diagnostics plus machine-readable provider error identity."""
+
     try:
         payload = response.json()
         if isinstance(payload, dict):
             error = payload.get("error")
             if isinstance(error, dict):
-                return str(error.get("message") or error)
-            return str(payload.get("detail") or payload.get("message") or "")
+                return (
+                    str(error.get("message") or error)[:1200],
+                    str(error.get("code") or "") or None,
+                    str(error.get("type") or "") or None,
+                )
+            return (
+                str(payload.get("detail") or payload.get("message") or "")[:1200],
+                str(payload.get("code") or "") or None,
+                str(payload.get("type") or "") or None,
+            )
     except Exception:
         logger.debug("Could not parse provider error JSON; using response text", exc_info=True)
-    return response.text[:1200]
+    return response.text[:1200], None, None
+
+
+def _response_detail(response: httpx.Response) -> str:
+    """Compatibility helper returning only the bounded provider diagnostic."""
+
+    return _response_error_metadata(response)[0]
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    value = response.headers.get("retry-after")
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _provider_request_error(
+    response: httpx.Response,
+    *,
+    prefix: str,
+) -> ProviderRequestError:
+    detail, provider_code, provider_error_type = _response_error_metadata(response)
+    capability_text = f"{detail} {provider_code or ''} {provider_error_type or ''}".casefold()
+    capability_mismatch = any(
+        marker in capability_text
+        for marker in ("format_ignored", "response_format", "json_schema")
+    )
+    return ProviderRequestError(
+        f"{prefix} returned HTTP {response.status_code}: {detail}",
+        status_code=response.status_code,
+        provider_code=provider_code,
+        provider_error_type=provider_error_type,
+        retry_after_seconds=_retry_after_seconds(response),
+        capability_mismatch=capability_mismatch,
+    )
+
+
+def _provider_request_error_from_raw(
+    status_code: int,
+    detail: str,
+    *,
+    prefix: str,
+) -> ProviderRequestError:
+    """Build the same typed error for streaming failures without a live Response."""
+
+    provider_code: str | None = None
+    provider_error_type: str | None = None
+    bounded = str(detail or "")[:1200]
+    try:
+        payload = json.loads(detail)
+        if isinstance(payload, dict):
+            error = payload.get("error")
+            if isinstance(error, dict):
+                bounded = str(error.get("message") or error)[:1200]
+                provider_code = str(error.get("code") or "") or None
+                provider_error_type = str(error.get("type") or "") or None
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+    capability_text = f"{bounded} {provider_code or ''} {provider_error_type or ''}".casefold()
+    return ProviderRequestError(
+        f"{prefix} returned HTTP {status_code}: {bounded}",
+        status_code=status_code,
+        provider_code=provider_code,
+        provider_error_type=provider_error_type,
+        capability_mismatch=any(
+            marker in capability_text
+            for marker in ("format_ignored", "response_format", "json_schema")
+        ),
+    )
 
 
 def chat_complete(
@@ -325,8 +409,10 @@ def chat_complete(
                         raise InterruptedError("RAG generation cancelled.")
                     status = 200
             if status >= 400:
-                raise RuntimeError(
-                    f"OpenAI-compatible endpoint returned HTTP {status}: {detail}"
+                raise _provider_request_error_from_raw(
+                    status,
+                    detail,
+                    prefix="OpenAI-compatible endpoint",
                 )
             return complete(content, finish_reason)
 
@@ -352,9 +438,9 @@ def chat_complete(
                         json=body,
                     )
         if response.status_code >= 400:
-            raise RuntimeError(
-                f"OpenAI-compatible endpoint returned HTTP {response.status_code}: "
-                f"{_response_detail(response)}"
+            raise _provider_request_error(
+                response,
+                prefix="OpenAI-compatible endpoint",
             )
         payload = response.json()
         choices = payload.get("choices") or []
@@ -467,10 +553,7 @@ def chat_complete(
             fallback["format"] = "json"
             response = client.post(f"{url}/api/chat", json=fallback)
     if response.status_code >= 400:
-        raise RuntimeError(
-            f"Ollama returned HTTP {response.status_code}: "
-            f"{_response_detail(response)}"
-        )
+        raise _provider_request_error(response, prefix="Ollama")
     payload = response.json()
     finish_reason = payload.get("done_reason") or payload.get("stop_reason")
     return complete(
