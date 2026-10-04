@@ -222,7 +222,10 @@ def failure_disposition(error: BaseException) -> FailureDisposition:
         return error.disposition
 
     explicit = getattr(error, "failure_disposition", None)
-    if isinstance(explicit, FailureDisposition):
+    if (
+        isinstance(explicit, FailureDisposition)
+        and explicit.failure_class != "unknown"
+    ):
         return explicit
 
     details = getattr(error, "failure_details", None)
