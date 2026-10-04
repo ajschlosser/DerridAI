@@ -2271,7 +2271,9 @@
                   },
                 },
               },
-              node("strong", { text: `[${item.evidenceId}] ${item.work || item.recordId}` }),
+              node("strong", {
+                text: `[${item.evidenceId}] ${item.documentAuthor ? `${item.documentAuthor} · ` : ""}${item.work || item.recordId}`,
+              }),
               node("small", {
                 class: "muted",
                 text: item.citation || record?.full_citation || record?.citation || "",
