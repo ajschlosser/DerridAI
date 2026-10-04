@@ -57,7 +57,8 @@ type ConfigRow = {
 };
 
 const rowsByStage = computed(() => {
-  if (!props.pipeline) return [] as Array<{ stage: PipelineStage; strategy: PipelineStrategy; rows: ConfigRow[] }>;
+  if (!props.pipeline)
+    return [] as Array<{ stage: PipelineStage; strategy: PipelineStrategy; rows: ConfigRow[] }>;
   const strategies = new Map(props.strategies.map((item) => [item.strategy_id, item]));
   return props.pipeline.stages
     .map((stage) => {
@@ -80,9 +81,7 @@ const rowsByStage = computed(() => {
       return {
         stage,
         strategy,
-        rows: strategy
-          ? entries.map(([key, rule]) => ({ stage, strategy, key, rule }))
-          : [],
+        rows: strategy ? entries.map(([key, rule]) => ({ stage, strategy, key, rule })) : [],
       };
     })
     .filter(
@@ -117,13 +116,7 @@ function seedValue(row: ConfigRow): unknown {
 function toggleOverride(row: ConfigRow, enabled: boolean) {
   if (!props.pipeline) return;
   const next = enabled
-    ? setStageOverride(
-        props.pipeline,
-        props.modelValue,
-        row.stage.id,
-        row.key,
-        seedValue(row),
-      )
+    ? setStageOverride(props.pipeline, props.modelValue, row.stage.id, row.key, seedValue(row))
     : clearStageOverride(props.pipeline, props.modelValue, row.stage.id, row.key);
   emit("update:modelValue", next);
 }
@@ -143,8 +136,7 @@ function updateValue(row: ConfigRow, raw: string | boolean) {
 function displayValue(value: unknown): string {
   if (value === undefined) return t("pipelines.override_not_set", "Not set");
   if (value === null) return "—";
-  if (typeof value === "boolean")
-    return value ? t("common.yes", "Yes") : t("common.no", "No");
+  if (typeof value === "boolean") return value ? t("common.yes", "Yes") : t("common.no", "No");
   return String(value);
 }
 
@@ -173,7 +165,12 @@ function sourceLabel(source: "pipeline" | "settings" | "run") {
 <template>
   <div class="pipeline-override-editor">
     <div v-if="!pipeline" class="pipeline-override-empty" role="status">
-      {{ t("pipelines.override_select_pipeline", "Select a Research pipeline to configure overrides.") }}
+      {{
+        t(
+          "pipelines.override_select_pipeline",
+          "Select a Research pipeline to configure overrides.",
+        )
+      }}
     </div>
     <div v-else-if="!rowsByStage.length" class="pipeline-override-empty" role="status">
       {{
@@ -185,116 +182,104 @@ function sourceLabel(source: "pipeline" | "settings" | "run") {
     </div>
 
     <template v-else>
-    <fieldset
-      v-for="group in rowsByStage"
-      :key="group.stage.id"
-      class="pipeline-override-stage"
-    >
-      <legend>
-        <span>{{ group.stage.id }}</span>
-        <small>{{ pipelineStrategyLabel(group.strategy, t) }}</small>
-      </legend>
+      <fieldset v-for="group in rowsByStage" :key="group.stage.id" class="pipeline-override-stage">
+        <legend>
+          <span>{{ group.stage.id }}</span>
+          <small>{{ pipelineStrategyLabel(group.strategy, t) }}</small>
+        </legend>
 
-      <div class="pipeline-override-rows">
-        <div
-          v-for="row in group.rows"
-          :key="row.key"
-          class="pipeline-override-row"
-          :data-overridden="hasStageOverride(modelValue, row.stage.id, row.key)"
-        >
-          <div class="pipeline-override-heading">
-            <label :for="`override-${layer}-${row.stage.id}-${row.key}`">
-              <input
-                :id="`override-${layer}-${row.stage.id}-${row.key}`"
-                type="checkbox"
-                :checked="hasStageOverride(modelValue, row.stage.id, row.key)"
-                :disabled="disabled"
-                @change="
-                  toggleOverride(row, ($event.target as HTMLInputElement).checked)
-                "
-              />
-              <span>
-                {{ pipelineConfigLabel(row.key, t) }}
-                <code>{{ row.stage.id }}.{{ row.key }}</code>
-              </span>
-            </label>
-            <UiTooltip
-              :text="pipelineConfigHelp(row.key, t)"
-              :label="t('pipelines.explain_setting', 'Explain this setting')"
-            />
-          </div>
-
+        <div class="pipeline-override-rows">
           <div
-            v-if="hasStageOverride(modelValue, row.stage.id, row.key)"
-            class="pipeline-override-control"
+            v-for="row in group.rows"
+            :key="row.key"
+            class="pipeline-override-row"
+            :data-overridden="hasStageOverride(modelValue, row.stage.id, row.key)"
           >
-            <input
-              v-if="row.rule.type === 'number' || row.rule.type === 'integer'"
-              class="control"
-              type="number"
-              :step="row.rule.type === 'integer' ? 1 : 'any'"
-              :min="typeof row.rule.minimum === 'number' ? row.rule.minimum : undefined"
-              :max="typeof row.rule.maximum === 'number' ? row.rule.maximum : undefined"
-              :value="localValue(row)"
-              :disabled="disabled"
-              @input="updateValue(row, ($event.target as HTMLInputElement).value)"
-            />
-            <select
-              v-else-if="row.rule.type === 'boolean'"
-              class="control"
-              :value="String(localValue(row))"
-              :disabled="disabled"
-              @change="
-                updateValue(row, ($event.target as HTMLSelectElement).value === 'true')
-              "
-            >
-              <option value="true">{{ t("common.yes", "Yes") }}</option>
-              <option value="false">{{ t("common.no", "No") }}</option>
-            </select>
-            <select
-              v-else-if="enumValues(row.rule)"
-              class="control"
-              :value="String(localValue(row))"
-              :disabled="disabled"
-              @change="updateValue(row, ($event.target as HTMLSelectElement).value)"
-            >
-              <option
-                v-for="option in enumValues(row.rule)"
-                :key="option"
-                :value="option"
-              >
-                {{ pipelineConfigOptionLabel(row.key, option, t) }}
-              </option>
-            </select>
-            <input
-              v-else
-              class="control"
-              :value="String(localValue(row))"
-              :disabled="disabled"
-              @input="updateValue(row, ($event.target as HTMLInputElement).value)"
-            />
-          </div>
+            <div class="pipeline-override-heading">
+              <label :for="`override-${layer}-${row.stage.id}-${row.key}`">
+                <input
+                  :id="`override-${layer}-${row.stage.id}-${row.key}`"
+                  type="checkbox"
+                  :checked="hasStageOverride(modelValue, row.stage.id, row.key)"
+                  :disabled="disabled"
+                  @change="toggleOverride(row, ($event.target as HTMLInputElement).checked)"
+                />
+                <span>
+                  {{ pipelineConfigLabel(row.key, t) }}
+                  <code>{{ row.stage.id }}.{{ row.key }}</code>
+                </span>
+              </label>
+              <UiTooltip
+                :text="pipelineConfigHelp(row.key, t)"
+                :label="t('pipelines.explain_setting', 'Explain this setting')"
+              />
+            </div>
 
-          <dl class="pipeline-override-provenance">
-            <div>
-              <dt>{{ t("pipelines.override_pipeline_value", "Pipeline") }}</dt>
-              <dd>{{ displayValue(resolved(row).pipeline) }}</dd>
+            <div
+              v-if="hasStageOverride(modelValue, row.stage.id, row.key)"
+              class="pipeline-override-control"
+            >
+              <input
+                v-if="row.rule.type === 'number' || row.rule.type === 'integer'"
+                class="control"
+                type="number"
+                :step="row.rule.type === 'integer' ? 1 : 'any'"
+                :min="typeof row.rule.minimum === 'number' ? row.rule.minimum : undefined"
+                :max="typeof row.rule.maximum === 'number' ? row.rule.maximum : undefined"
+                :value="localValue(row)"
+                :disabled="disabled"
+                @input="updateValue(row, ($event.target as HTMLInputElement).value)"
+              />
+              <select
+                v-else-if="row.rule.type === 'boolean'"
+                class="control"
+                :value="String(localValue(row))"
+                :disabled="disabled"
+                @change="updateValue(row, ($event.target as HTMLSelectElement).value === 'true')"
+              >
+                <option value="true">{{ t("common.yes", "Yes") }}</option>
+                <option value="false">{{ t("common.no", "No") }}</option>
+              </select>
+              <select
+                v-else-if="enumValues(row.rule)"
+                class="control"
+                :value="String(localValue(row))"
+                :disabled="disabled"
+                @change="updateValue(row, ($event.target as HTMLSelectElement).value)"
+              >
+                <option v-for="option in enumValues(row.rule)" :key="option" :value="option">
+                  {{ pipelineConfigOptionLabel(row.key, option, t) }}
+                </option>
+              </select>
+              <input
+                v-else
+                class="control"
+                :value="String(localValue(row))"
+                :disabled="disabled"
+                @input="updateValue(row, ($event.target as HTMLInputElement).value)"
+              />
             </div>
-            <div v-if="layer === 'run'">
-              <dt>{{ t("pipelines.override_settings_value", "Settings") }}</dt>
-              <dd>{{ displayValue(resolved(row).settings) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t("pipelines.override_effective_value", "Effective") }}</dt>
-              <dd>
-                <strong>{{ displayValue(resolved(row).value) }}</strong>
-                <small>{{ sourceLabel(resolved(row).source) }}</small>
-              </dd>
-            </div>
-          </dl>
+
+            <dl class="pipeline-override-provenance">
+              <div>
+                <dt>{{ t("pipelines.override_pipeline_value", "Pipeline") }}</dt>
+                <dd>{{ displayValue(resolved(row).pipeline) }}</dd>
+              </div>
+              <div v-if="layer === 'run'">
+                <dt>{{ t("pipelines.override_settings_value", "Settings") }}</dt>
+                <dd>{{ displayValue(resolved(row).settings) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("pipelines.override_effective_value", "Effective") }}</dt>
+                <dd>
+                  <strong>{{ displayValue(resolved(row).value) }}</strong>
+                  <small>{{ sourceLabel(resolved(row).source) }}</small>
+                </dd>
+              </div>
+            </dl>
+          </div>
         </div>
-      </div>
-    </fieldset>
+      </fieldset>
     </template>
   </div>
 </template>

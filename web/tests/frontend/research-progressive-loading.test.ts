@@ -146,9 +146,7 @@ describe("Research progressive reads", () => {
     // Research controls are now a one-run draft: clearing a stale pipeline selection
     // must not mutate the Settings defaults persisted through updateResearchConfig.
     expect(mocks.update).not.toHaveBeenCalled();
-    expect(
-      w.findComponent(Composer).props("pipelineOverride"),
-    ).toBe(false);
+    expect(w.findComponent(Composer).props("pipelineOverride")).toBe(false);
     expect(w.find(".research-pipelines-status").exists()).toBe(false);
   });
   it("keeps optional run and pipeline reads independent of the composer", async () => {

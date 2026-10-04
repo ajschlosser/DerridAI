@@ -107,9 +107,7 @@ export function createResearchWorkspace(deps: Deps) {
   );
   function researchConfigForUi(): Loose {
     const cloned = cloneAuditValue(state.ragConfig || {});
-    return cloned && typeof cloned === "object" && !Array.isArray(cloned)
-      ? (cloned as Loose)
-      : {};
+    return cloned && typeof cloned === "object" && !Array.isArray(cloned) ? (cloned as Loose) : {};
   }
   async function getResearchWorkspaceSnapshot({
     refresh = false,
@@ -444,8 +442,7 @@ export function createResearchWorkspace(deps: Deps) {
         pipeline_version: cfg.pipeline_version || null,
         settings_pipeline_overrides:
           input.settings_pipeline_overrides ?? cfg.settings_pipeline_overrides ?? null,
-        run_pipeline_overrides:
-          input.run_pipeline_overrides ?? cfg.run_pipeline_overrides ?? null,
+        run_pipeline_overrides: input.run_pipeline_overrides ?? cfg.run_pipeline_overrides ?? null,
         source_collection: cfg.source_collection || "",
         selected_evidence: selectedPayload,
         skip_retrieval: skipRetrieval,

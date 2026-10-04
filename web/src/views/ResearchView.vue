@@ -382,7 +382,10 @@ function applyPresetStageOverrides(values: {
   if (!pipeline) return;
   let overrides = runPipelineOverrides.value;
   for (const stage of pipeline.stages) {
-    if (stage.strategy === "retrieve.chroma_similarity" || stage.strategy === "retrieve.lexical_bm25")
+    if (
+      stage.strategy === "retrieve.chroma_similarity" ||
+      stage.strategy === "retrieve.lexical_bm25"
+    )
       overrides = setStageOverride(pipeline, overrides, stage.id, "fetch_k", values.fetchK);
     else if (stage.strategy === "select.mmr")
       overrides = setStageOverride(pipeline, overrides, stage.id, "lambda_mult", values.lambdaMult);

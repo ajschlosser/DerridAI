@@ -313,7 +313,9 @@ const settingsOverridePipeline = computed(() => {
   if (settingsOverridePipelineKey.value) {
     const split = settingsOverridePipelineKey.value.lastIndexOf("@");
     const pipelineId =
-      split > 0 ? settingsOverridePipelineKey.value.slice(0, split) : settingsOverridePipelineKey.value;
+      split > 0
+        ? settingsOverridePipelineKey.value.slice(0, split)
+        : settingsOverridePipelineKey.value;
     const version = split > 0 ? Number(settingsOverridePipelineKey.value.slice(split + 1)) : 0;
     const selected = options.find(
       (pipeline) => pipeline.pipeline_id === pipelineId && pipeline.version === version,
@@ -1374,9 +1376,13 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 </UiField>
 
                 <p v-if="settingsOverridePipeline" class="pipeline-override-identity">
-                  <span>{{ i18n.t("settings.pipeline_baseline", "Pipeline Studio baseline") }}</span>
+                  <span>{{
+                    i18n.t("settings.pipeline_baseline", "Pipeline Studio baseline")
+                  }}</span>
                   <code>
-                    {{ settingsOverridePipeline.pipeline_id }}@{{ settingsOverridePipeline.version }}
+                    {{ settingsOverridePipeline.pipeline_id }}@{{
+                      settingsOverridePipeline.version
+                    }}
                   </code>
                 </p>
 
@@ -1400,7 +1406,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 
             <div class="config-grid settings-request-defaults">
               <div class="settings-group-label field-full">
-                <h3>{{ i18n.t("settings.research_request_defaults_title", "Research request defaults") }}</h3>
+                <h3>
+                  {{
+                    i18n.t("settings.research_request_defaults_title", "Research request defaults")
+                  }}
+                </h3>
                 <p>
                   {{
                     i18n.t(

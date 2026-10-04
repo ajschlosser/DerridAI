@@ -237,8 +237,7 @@ function resetSection(section: SettingsSection) {
       pipeline_version: source.pipeline_version || null,
     });
     runOverrideDraft.value = clonePipelineConfigOverrides(props.runPipelineOverrides);
-  }
-  else if (section === "retrieval")
+  } else if (section === "retrieval")
     Object.assign(draft.value, {
       locales: [...(source.locales || [])],
       search_types: [...(source.search_types || [])],
@@ -498,7 +497,10 @@ defineExpose({ open, close });
               <PipelineStageList :pipeline="selectedPipeline" :strategies="pipelineStrategies" />
             </div>
 
-            <fieldset v-if="selectedPipeline" class="research-settings-card pipeline-run-overrides-card">
+            <fieldset
+              v-if="selectedPipeline"
+              class="research-settings-card pipeline-run-overrides-card"
+            >
               <legend>{{ i18n.t("research.run_pipeline_overrides", "Run overrides") }}</legend>
               <p>
                 {{
@@ -539,12 +541,14 @@ defineExpose({ open, close });
               <div>
                 <span class="section-label">02</span>
                 <h3 id="research-settings-retrieval-title">{{ i18n.t("research.retrieval") }}</h3>
-                <p>{{
-                  i18n.t(
-                    "research.retrieval_run_help",
-                    "Choose request-level routing and scope for this run. To override a Pipeline Studio stage value, use Run overrides under Pipeline chain.",
-                  )
-                }}</p>
+                <p>
+                  {{
+                    i18n.t(
+                      "research.retrieval_run_help",
+                      "Choose request-level routing and scope for this run. To override a Pipeline Studio stage value, use Run overrides under Pipeline chain.",
+                    )
+                  }}
+                </p>
               </div>
               <button class="research-text-action" type="button" @click="resetSection('retrieval')">
                 <AppIcon name="refresh" />{{ i18n.t("research.reset_section") }}
@@ -662,19 +666,20 @@ defineExpose({ open, close });
                 <h3 id="research-settings-evidence-title">
                   {{ i18n.t("research.evidence_citations") }}
                 </h3>
-                <p>{{
-                  i18n.t(
-                    "research.evidence_citations_run_help",
-                    "Citation, memory, metadata, and evaluation controls apply to this run. Evidence-packing stage limits are configured under Run overrides.",
-                  )
-                }}</p>
+                <p>
+                  {{
+                    i18n.t(
+                      "research.evidence_citations_run_help",
+                      "Citation, memory, metadata, and evaluation controls apply to this run. Evidence-packing stage limits are configured under Run overrides.",
+                    )
+                  }}
+                </p>
               </div>
               <button class="research-text-action" type="button" @click="resetSection('evidence')">
                 <AppIcon name="refresh" />{{ i18n.t("research.reset_section") }}
               </button>
             </div>
             <div class="research-settings-card-grid">
-
               <fieldset class="research-settings-card">
                 <legend>{{ i18n.t("research.source_binding") }}</legend>
                 <p>{{ i18n.t("research.source_binding_help") }}</p>

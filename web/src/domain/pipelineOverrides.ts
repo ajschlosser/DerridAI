@@ -104,7 +104,8 @@ export function setStageOverride(
   value: unknown,
 ): PipelineConfigOverrideSet {
   const next =
-    clonePipelineConfigOverrides(current) || emptyPipelineConfigOverrides(pipeline as PipelineDefinition);
+    clonePipelineConfigOverrides(current) ||
+    emptyPipelineConfigOverrides(pipeline as PipelineDefinition);
   next.pipeline_id = pipeline.pipeline_id;
   next.pipeline_version = pipeline.version;
   next.stages[stageId] = { ...(next.stages[stageId] || {}), [key]: value };
@@ -118,7 +119,8 @@ export function clearStageOverride(
   key: string,
 ): PipelineConfigOverrideSet {
   const next =
-    clonePipelineConfigOverrides(current) || emptyPipelineConfigOverrides(pipeline as PipelineDefinition);
+    clonePipelineConfigOverrides(current) ||
+    emptyPipelineConfigOverrides(pipeline as PipelineDefinition);
   const stage = { ...(next.stages[stageId] || {}) };
   delete stage[key];
   if (Object.keys(stage).length) next.stages[stageId] = stage;
