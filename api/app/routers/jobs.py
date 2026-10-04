@@ -35,6 +35,7 @@ from ..models import (
     UpsertJobCreate,
 )
 from ..pipelines.access import resolve_research_pipeline
+from ..pipelines.overrides import resolve_pipeline_config
 from ..provider_profile_options import profile_generation_options
 from ..researcher_view import sanitize_rag_job
 from ..services import (
@@ -124,6 +125,15 @@ def create_rag_job(body: RAGRunRequest, request: Request) -> dict[str, Any]:
             requested_version=body.pipeline_version,
             is_admin=user.role == "admin",
         )
+        # Reject stale/invalid override targets before spawning a background job.
+        # The same resolver runs again inside RAG execution and produces the
+        # auditable effective-pipeline snapshot.
+        resolve_pipeline_config(
+            pipeline,
+            settings_overrides=body.settings_pipeline_overrides,
+            run_overrides=body.run_pipeline_overrides,
+        )
+
         pipeline_payload = body.model_dump()
         pipeline_payload.update(
             {

@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import type { PipelineConfigOverrideSet } from "../types/pipelines";
+
 export type SettingsSectionId =
   | "overview"
   | "preferences"
@@ -72,6 +74,8 @@ export interface EmbeddingSettingsDraft {
 }
 
 export interface RagSettingsDraft {
+  /** Global Settings overrides keyed by immutable Pipeline Studio ID@version. */
+  pipeline_config_overrides: Record<string, PipelineConfigOverrideSet>;
   k: number;
   fetch_k: number;
   automatic_sizing: boolean;
@@ -282,51 +286,26 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     helpFallback: "How many passages to keep after ranking. Typical scholarly runs use 24–64.",
   },
   {
-    id: "rag-fetch-k",
+    id: "rag-pipeline-overrides",
     section: "retrieval",
-    labelKey: "settings.rag_fetch_k",
-    labelFallback: "MMR fetch_k",
-    advanced: true,
-  },
-  {
-    id: "rag-lambda",
-    section: "retrieval",
-    labelKey: "settings.rag_lambda",
-    labelFallback: "MMR lambda",
-    advanced: true,
-  },
-  {
-    id: "rag-rrf",
-    section: "retrieval",
-    labelKey: "settings.rag_rrf_k",
-    labelFallback: "RRF k",
-    advanced: true,
-  },
-  {
-    id: "rag-top-n",
-    section: "retrieval",
-    labelKey: "settings.rag_top_n",
-    labelFallback: "Rerank top N",
-  },
-  {
-    id: "rag-reranker",
-    section: "retrieval",
-    labelKey: "settings.rag_reranker",
-    labelFallback: "Default reranker",
-  },
-  {
-    id: "rag-cross-encoder",
-    section: "retrieval",
-    labelKey: "settings.rag_cross_encoder",
-    labelFallback: "Cross-encoder model",
-    advanced: true,
-  },
-  {
-    id: "rag-decompose",
-    section: "retrieval",
-    labelKey: "settings.rag_decompose",
-    labelFallback: "Query-decomposition max tokens",
-    advanced: true,
+    labelKey: "settings.pipeline_overrides_title",
+    labelFallback: "Global pipeline overrides",
+    helpKey: "settings.pipeline_overrides_help",
+    helpFallback:
+      "Override registered stage configuration from Pipeline Studio for an exact Research pipeline version.",
+    keywords: [
+      "pipeline",
+      "stage",
+      "override",
+      "fetch_k",
+      "lambda",
+      "rrf",
+      "rerank",
+      "cross encoder",
+      "evidence budget",
+      "query decomposition",
+    ],
+    targetId: "settings-field-pipeline-overrides",
   },
   {
     id: "rag-response-language",
@@ -343,21 +322,6 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     helpFallback:
       "Adapt retrieval depth to median Record size and restore bounded same-document context without raising reranker or evidence-budget caps.",
     keywords: ["record size", "automatic", "neighbors", "retrieval depth", "segmentation"],
-  },
-  {
-    id: "rag-record-chars",
-    section: "retrieval",
-    labelKey: "settings.rag_record_chars",
-    labelFallback: "Max characters per evidence record",
-    helpKey: "settings.rag_record_chars_help",
-    helpFallback:
-      "Caps each passage so the model cannot swallow an entire chapter as one evidence item.",
-  },
-  {
-    id: "rag-total-chars",
-    section: "retrieval",
-    labelKey: "settings.rag_total_chars",
-    labelFallback: "Total evidence characters",
   },
   {
     id: "rag-locales",
@@ -472,6 +436,7 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
 ];
 
 export const RAG_DEFAULTS: RagSettingsDraft = {
+  pipeline_config_overrides: {},
   k: 64,
   fetch_k: 500,
   automatic_sizing: false,
@@ -575,7 +540,31 @@ export function normalizeRag(
           route === "similarity" || route === "lexical" || route === "mmr",
       )
     : [...RAG_DEFAULTS.search_types];
+  const rawOverrides =
+    source?.pipeline_config_overrides &&
+    typeof source.pipeline_config_overrides === "object" &&
+    !Array.isArray(source.pipeline_config_overrides)
+      ? source.pipeline_config_overrides
+      : {};
+  const pipelineConfigOverrides: Record<string, PipelineConfigOverrideSet> = {};
+  for (const [versionKey, candidate] of Object.entries(rawOverrides)) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+    const override = candidate as PipelineConfigOverrideSet;
+    const pipelineId = String(override.pipeline_id || "").trim();
+    const pipelineVersion = Number(override.pipeline_version || 0);
+    if (!pipelineId || !Number.isInteger(pipelineVersion) || pipelineVersion < 1) continue;
+    const stages =
+      override.stages && typeof override.stages === "object" && !Array.isArray(override.stages)
+        ? cloneJson(override.stages)
+        : {};
+    pipelineConfigOverrides[versionKey] = {
+      pipeline_id: pipelineId,
+      pipeline_version: pipelineVersion,
+      stages,
+    };
+  }
   return {
+    pipeline_config_overrides: pipelineConfigOverrides,
     k: Math.max(1, Math.min(500, finiteNumber(source?.k, RAG_DEFAULTS.k))),
     fetch_k: Math.max(1, Math.min(5000, finiteNumber(source?.fetch_k, RAG_DEFAULTS.fetch_k))),
     automatic_sizing: Boolean(source?.automatic_sizing),

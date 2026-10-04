@@ -11,9 +11,36 @@ import UiInput from "../src/components/ui/UiInput.vue";
 import UiSelect from "../src/components/ui/UiSelect.vue";
 import PublishedIndexStatus from "./PublishedIndexStatus.vue";
 import PublishedModelDialog from "./PublishedModelDialog.vue";
-import { type DiscoveredModel, type EndpointProfile, usePublishedSite } from "./siteContext";
+import PublishedResearchConfig from "./PublishedResearchConfig.vue";
+import {
+  type DiscoveredModel,
+  type EndpointProfile,
+  type PublishedResearchSettings,
+  usePublishedSite,
+} from "./siteContext";
 
 const site = usePublishedSite();
+
+function cloneResearchSettings(value: PublishedResearchSettings): PublishedResearchSettings {
+  return { ...value, works: [...value.works] };
+}
+
+const researchDraft = ref(cloneResearchSettings(site.researchDefaults.value));
+const researchStatus = ref("");
+
+watch(site.researchDefaults, (value) => {
+  researchDraft.value = cloneResearchSettings(value);
+});
+
+function saveResearchDefaults() {
+  researchDraft.value = cloneResearchSettings(site.updateResearchDefaults(researchDraft.value));
+  researchStatus.value = site.t("site.runtime.research_defaults_saved");
+}
+
+function resetResearchDefaults() {
+  researchDraft.value = cloneResearchSettings(site.resetResearchDefaults());
+  researchStatus.value = site.t("site.runtime.research_defaults_reset");
+}
 
 const providerStatus = ref("");
 const providerStatusTone = ref<"" | "warning" | "error" | "success">("");
@@ -229,6 +256,26 @@ const activeDeviceText = computed(() =>
   >
     <h2 id="provider-heading">{{ site.t("site.runtime.providers") }}</h2>
     <p class="muted">{{ site.t("site.runtime.providers_intro") }}</p>
+
+    <UiCard class="card stack" heading-id="research-defaults-heading">
+      <h3 id="research-defaults-heading">
+        {{ site.t("site.runtime.research_defaults_heading") }}
+      </h3>
+      <p class="muted">{{ site.t("site.runtime.research_defaults_help") }}</p>
+      <PublishedResearchConfig v-model="researchDraft" id-prefix="published-research-defaults" />
+      <div class="chips">
+        <UiButton
+          variant="primary"
+          :label="site.t('site.runtime.save_research_defaults')"
+          @click="saveResearchDefaults"
+        />
+        <UiButton
+          :label="site.t('site.runtime.reset_research_defaults')"
+          @click="resetResearchDefaults"
+        />
+      </div>
+      <div class="status" role="status" aria-live="polite">{{ researchStatus }}</div>
+    </UiCard>
 
     <UiCard class="card stack" heading-id="local-model-heading">
       <h3 id="local-model-heading">{{ site.t("site.runtime.local_model_heading") }}</h3>

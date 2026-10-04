@@ -36,10 +36,12 @@ import type {
   ResearchProfile,
   ResearchWorkspaceSnapshot,
 } from "../types/research";
+import type { PipelineConfigOverrideSet } from "../types/pipelines";
 import * as researchActions from "../domain/researchActions";
 import { annotationsWorkspace } from "../domain/sharedAnnotations";
 import { pipelinesApi } from "../api/pipelines";
 import { normalizedResearchConfig } from "../domain/researchPayloads";
+import { overridesForPipeline, setStageOverride } from "../domain/pipelineOverrides";
 import { getResearchJob } from "../domain/sharedResearchJobs";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { followResource } from "../realtime/follow";
@@ -91,6 +93,7 @@ const canCreateDatabase = computed(() => auth.can("page.vector"));
 const starting = ref(false);
 const workspace = ref<ResearchWorkspaceSnapshot | null>(null);
 const config = ref<ResearchConfig | null>(null);
+const runPipelineOverrides = ref<PipelineConfigOverrideSet | null>(null);
 const prompt = ref("");
 const instructions = ref("");
 const preset = ref("balanced");
@@ -137,6 +140,9 @@ const effectivePipeline = computed(() => {
 });
 const pipelineOverrideActive = computed(() =>
   Boolean(String(config.value?.pipeline_id || "").trim()),
+);
+const settingsPipelineOverrides = computed(() =>
+  overridesForPipeline(config.value?.pipeline_config_overrides, effectivePipeline.value),
 );
 const metadataFields = computed(() => {
   const fields = new Set<string>();
@@ -363,8 +369,32 @@ function persistDraft() {
 }
 function updateConfig(patch: Partial<ResearchConfig>) {
   if (!config.value) return;
+  // Controls on Research are a one-run draft. Settings owns persisted defaults.
   config.value = { ...config.value, ...patch };
-  config.value = researchActions.updateResearchConfig(patch) as ResearchConfig;
+}
+function applyPresetStageOverrides(values: {
+  fetchK: number;
+  lambdaMult: number;
+  rrfK: number;
+  rerankTopN: number;
+}) {
+  const pipeline = effectivePipeline.value;
+  if (!pipeline) return;
+  let overrides = runPipelineOverrides.value;
+  for (const stage of pipeline.stages) {
+    if (
+      stage.strategy === "retrieve.chroma_similarity" ||
+      stage.strategy === "retrieve.lexical_bm25"
+    )
+      overrides = setStageOverride(pipeline, overrides, stage.id, "fetch_k", values.fetchK);
+    else if (stage.strategy === "select.mmr")
+      overrides = setStageOverride(pipeline, overrides, stage.id, "lambda_mult", values.lambdaMult);
+    else if (stage.strategy === "fusion.rrf")
+      overrides = setStageOverride(pipeline, overrides, stage.id, "rrf_k", values.rrfK);
+    else if (stage.strategy === "rerank.cross_encoder")
+      overrides = setStageOverride(pipeline, overrides, stage.id, "top_k", values.rerankTopN);
+  }
+  runPipelineOverrides.value = overrides;
 }
 function applyPreset(value: string) {
   preset.value = value;
@@ -381,32 +411,22 @@ function applyPreset(value: string) {
     preset.value = "balanced";
     return;
   }
-  // Hybrid = the balanced search plus the researcher's own evidence, which the API pins in the packet.
+  // Hybrid = balanced retrieval plus the researcher's pinned evidence. Presets
+  // now express stage tuning as one-run overrides rather than mutating Settings.
   const common = {
     skip_retrieval: false,
-    reranker: "cross_encoder",
     search_types: ["similarity", "lexical", "mmr"],
   };
-  if (value === "balanced" || value === "hybrid")
-    updateConfig({ ...common, k: 64, fetch_k: 500, lambda_mult: 0.7, rrf_k: 60, rerank_top_n: 24 });
-  else if (value === "precision")
-    updateConfig({
-      ...common,
-      k: 40,
-      fetch_k: 320,
-      lambda_mult: 0.82,
-      rrf_k: 60,
-      rerank_top_n: 16,
-    });
-  else if (value === "recall")
-    updateConfig({
-      ...common,
-      k: 96,
-      fetch_k: 1000,
-      lambda_mult: 0.58,
-      rrf_k: 60,
-      rerank_top_n: 32,
-    });
+  if (value === "balanced" || value === "hybrid") {
+    updateConfig({ ...common, k: 64 });
+    applyPresetStageOverrides({ fetchK: 500, lambdaMult: 0.7, rrfK: 60, rerankTopN: 24 });
+  } else if (value === "precision") {
+    updateConfig({ ...common, k: 40 });
+    applyPresetStageOverrides({ fetchK: 320, lambdaMult: 0.82, rrfK: 60, rerankTopN: 16 });
+  } else if (value === "recall") {
+    updateConfig({ ...common, k: 96 });
+    applyPresetStageOverrides({ fetchK: 1000, lambdaMult: 0.58, rrfK: 60, rerankTopN: 32 });
+  }
 }
 function changeProfile(id: string) {
   updateConfig({ provider_profile_id: id });
@@ -432,6 +452,8 @@ async function runResearch() {
       generation: generation.value,
       skip_retrieval: preset.value === "evidence" || config.value.skip_retrieval,
       config: { ...config.value, prompt: prompt.value, instructions: instructions.value },
+      settings_pipeline_overrides: settingsPipelineOverrides.value,
+      run_pipeline_overrides: runPipelineOverrides.value,
     })) as ResearchJob;
     sessionJobIds.value.add(job.id);
     activeJob.value = job;
@@ -660,6 +682,7 @@ function prepareRerun() {
   if (route.query.job) void router.replace({ path: "/rag" });
   const next = researchActions.prepareResearchRerun(activeJob.value) as ResearchConfig;
   config.value = { ...next };
+  runPipelineOverrides.value = next.run_pipeline_overrides || null;
   prompt.value = next.prompt || "";
   instructions.value = next.instructions || "";
   preset.value = inferPreset(next);
@@ -690,8 +713,10 @@ function applySettings(payload: {
   config: Partial<ResearchConfig>;
   generation: Record<string, unknown>;
   model: string;
+  runPipelineOverrides: PipelineConfigOverrideSet | null;
 }) {
   updateConfig(payload.config);
+  runPipelineOverrides.value = payload.runPipelineOverrides;
   generation.value = { ...payload.generation };
   model.value = payload.model || profileModel(selectedProfile.value);
   preset.value = "custom";
@@ -903,6 +928,7 @@ onBeforeUnmount(() => {
         :pipeline-strategies="workspace?.pipeline_strategies || []"
         :pipeline-assignment="workspace?.pipeline_assignment || null"
         :pipeline-override-allowed="workspace?.pipeline_override_allowed || false"
+        :run-pipeline-overrides="runPipelineOverrides"
         @apply="applySettings"
         @discover="discoverModels"
       />

@@ -322,6 +322,27 @@ class PipelineService:
 
         return any(visit(stage_id) for stage_id in stages if stage_id not in visited)
 
+    def validate_stage_config(
+        self,
+        *,
+        stage_id: str,
+        strategy_id: str,
+        config: dict[str, Any],
+    ) -> list[PipelineValidationIssue]:
+        """Validate one stage configuration against its registered strategy schema."""
+
+        spec = self.registry.get(strategy_id)
+        if spec is None:
+            return [
+                PipelineValidationIssue(
+                    level="error",
+                    code="unknown_strategy",
+                    stage_id=stage_id,
+                    message=f"Stage {stage_id!r} references unknown strategy {strategy_id!r}.",
+                )
+            ]
+        return self._validate_config(stage_id, config, spec.config_schema)
+
     @staticmethod
     def _validate_config(
         stage_id: str,

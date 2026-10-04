@@ -217,6 +217,10 @@ export function createConfigState() {
       // run or rerun pins an immutable pipeline version these fields preserve it.
       pipeline_id: "",
       pipeline_version: null,
+      // Settings-level stage configuration overrides are keyed by exact
+      // Pipeline Studio identity (pipeline_id@version). Research run overrides
+      // are intentionally ephemeral and are never stored here.
+      pipeline_config_overrides: {},
       source_collection: "",
       locales: ["en", "fr"],
       search_types: ["similarity", "lexical", "mmr"],

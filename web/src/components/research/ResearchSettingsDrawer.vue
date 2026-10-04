@@ -20,10 +20,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import PipelineStageList from "../pipelines/PipelineStageList.vue";
+import PipelineConfigOverridesEditor from "../pipelines/PipelineConfigOverridesEditor.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 import { useI18nStore } from "../../stores/i18n";
+import { clonePipelineConfigOverrides, overridesForPipeline } from "../../domain/pipelineOverrides";
 import type {
   PipelineAssignment,
+  PipelineConfigOverrideSet,
   PipelineDefinition,
   PipelineStrategy,
 } from "../../types/pipelines";
@@ -48,12 +51,14 @@ const props = withDefaults(
     pipelineStrategies?: PipelineStrategy[];
     pipelineAssignment?: PipelineAssignment | null;
     pipelineOverrideAllowed?: boolean;
+    runPipelineOverrides?: PipelineConfigOverrideSet | null;
   }>(),
   {
     pipelineOptions: () => [],
     pipelineStrategies: () => [],
     pipelineAssignment: null,
     pipelineOverrideAllowed: false,
+    runPipelineOverrides: null,
   },
 );
 const emit = defineEmits<{
@@ -62,6 +67,7 @@ const emit = defineEmits<{
       config: Partial<ResearchConfig>;
       generation: Record<string, unknown>;
       model: string;
+      runPipelineOverrides: PipelineConfigOverrideSet | null;
     },
   ];
   discover: [];
@@ -73,6 +79,7 @@ const activeSection = ref<SettingsSection>("retrieval");
 const draft = ref<Partial<ResearchConfig>>({});
 const generationDraft = ref<Record<string, unknown>>({});
 const modelDraft = ref("");
+const runOverrideDraft = ref<PipelineConfigOverrideSet | null>(null);
 const extraOptions = ref("{}");
 const settingsError = ref("");
 const selectedProfile = computed(
@@ -104,6 +111,9 @@ const selectedPipeline = computed(() => {
     ) || assignedPipeline.value
   );
 });
+const settingsOverridesForSelectedPipeline = computed(() =>
+  overridesForPipeline(props.config.pipeline_config_overrides, selectedPipeline.value),
+);
 const pipelineSelection = computed({
   get: () => {
     const id = String(draft.value.pipeline_id || "").trim();
@@ -115,11 +125,13 @@ const pipelineSelection = computed({
     if (!raw) {
       draft.value.pipeline_id = "";
       draft.value.pipeline_version = null;
+      runOverrideDraft.value = null;
       return;
     }
     const split = raw.lastIndexOf("@");
     draft.value.pipeline_id = split > 0 ? raw.slice(0, split) : raw;
     draft.value.pipeline_version = split > 0 ? Number(raw.slice(split + 1)) || null : null;
+    runOverrideDraft.value = null;
   },
 });
 const activeSectionTitle = computed(
@@ -164,6 +176,7 @@ function sync() {
     use_prior_claim_memory: props.config.use_prior_claim_memory,
     memory_profile_id: props.config.memory_profile_id,
   };
+  runOverrideDraft.value = clonePipelineConfigOverrides(props.runPipelineOverrides);
   generationDraft.value = { ...props.generation };
   modelDraft.value = props.model || "";
   const raw = props.generation.extra_options;
@@ -218,12 +231,13 @@ function togglePromptMetadata(
 
 function resetSection(section: SettingsSection) {
   const source = props.config;
-  if (section === "pipeline")
+  if (section === "pipeline") {
     Object.assign(draft.value, {
       pipeline_id: source.pipeline_id || "",
       pipeline_version: source.pipeline_version || null,
     });
-  else if (section === "retrieval")
+    runOverrideDraft.value = clonePipelineConfigOverrides(props.runPipelineOverrides);
+  } else if (section === "retrieval")
     Object.assign(draft.value, {
       locales: [...(source.locales || [])],
       search_types: [...(source.search_types || [])],
@@ -277,6 +291,7 @@ function apply() {
     config: draft.value,
     generation: generationDraft.value,
     model: modelDraft.value.trim(),
+    runPipelineOverrides: runOverrideDraft.value,
   });
   close();
 }
@@ -482,6 +497,28 @@ defineExpose({ open, close });
               <PipelineStageList :pipeline="selectedPipeline" :strategies="pipelineStrategies" />
             </div>
 
+            <fieldset
+              v-if="selectedPipeline"
+              class="research-settings-card pipeline-run-overrides-card"
+            >
+              <legend>{{ i18n.t("research.run_pipeline_overrides", "Run overrides") }}</legend>
+              <p>
+                {{
+                  i18n.t(
+                    "research.run_pipeline_overrides_help",
+                    "These settings apply only to this run. They override both Pipeline Studio configuration and any Settings overrides for this exact pipeline version.",
+                  )
+                }}
+              </p>
+              <PipelineConfigOverridesEditor
+                v-model="runOverrideDraft"
+                :pipeline="selectedPipeline"
+                :strategies="pipelineStrategies"
+                :inherited-overrides="settingsOverridesForSelectedPipeline"
+                layer="run"
+              />
+            </fieldset>
+
             <aside v-if="!researcher" class="research-settings-note">
               <AppIcon name="gear" />
               <p>
@@ -504,7 +541,14 @@ defineExpose({ open, close });
               <div>
                 <span class="section-label">02</span>
                 <h3 id="research-settings-retrieval-title">{{ i18n.t("research.retrieval") }}</h3>
-                <p>{{ i18n.t("research.retrieval_expert_help") }}</p>
+                <p>
+                  {{
+                    i18n.t(
+                      "research.retrieval_run_help",
+                      "Choose request-level routing and scope for this run. To override a Pipeline Studio stage value, use Run overrides under Pipeline chain.",
+                    )
+                  }}
+                </p>
               </div>
               <button class="research-text-action" type="button" @click="resetSection('retrieval')">
                 <AppIcon name="refresh" />{{ i18n.t("research.reset_section") }}
@@ -559,110 +603,53 @@ defineExpose({ open, close });
               </fieldset>
 
               <fieldset class="research-settings-card">
-                <legend>{{ i18n.t("research.candidate_pool") }}</legend>
-                <p>{{ i18n.t("research.candidate_pool_help") }}</p>
-                <label class="research-toggle-setting automatic-sizing-toggle"
-                  ><input v-model="draft.automatic_sizing" type="checkbox" /><span
-                    ><b>{{ i18n.t("research.automatic_sizing", "Automatic sizing") }}</b
-                    ><small>{{
+                <legend>{{ i18n.t("research.request_controls", "Run inputs") }}</legend>
+                <p>
+                  {{
+                    i18n.t(
+                      "research.request_controls_help",
+                      "These values shape this Research request without rewriting stage configuration. Stage-level changes belong under Run overrides in Pipeline chain.",
+                    )
+                  }}
+                </p>
+                <label class="research-toggle-setting automatic-sizing-toggle">
+                  <input v-model="draft.automatic_sizing" type="checkbox" />
+                  <span>
+                    <b>{{ i18n.t("research.automatic_sizing", "Automatic sizing") }}</b>
+                    <small>{{
                       i18n.t(
                         "research.automatic_sizing_help",
-                        "Adapt candidate depth to median Record size, collapse short adjacent hits before reranking, and add same-document neighbors to short selected passages. k and fetch_k remain bounded baselines; reranking and the total evidence budget stay capped.",
+                        "Adapt retrieval depth to Record size while preserving the effective pipeline configuration.",
                       )
-                    }}</small></span
-                  ></label
-                >
+                    }}</small>
+                  </span>
+                </label>
                 <div class="research-settings-grid compact">
-                  <label
-                    ><span
-                      ><code>k</code>{{ i18n.t("research.k_label") }}
-                      <UiTooltip :text="i18n.t('research.k_help')" /></span
-                    ><input
+                  <label>
+                    <span>
+                      <code>k</code>{{ i18n.t("research.k_label") }}
+                      <UiTooltip :text="i18n.t('research.k_help')" />
+                    </span>
+                    <input
                       v-model.number="draft.k"
                       class="control"
                       type="number"
                       min="1"
                       max="500"
-                  /></label>
-                  <label
-                    ><span
-                      ><code>fetch_k</code>{{ i18n.t("research.fetch_k_label") }}
-                      <UiTooltip :text="i18n.t('help.glossary.fetch_k.definition')" /></span
-                    ><input
-                      v-model.number="draft.fetch_k"
-                      class="control"
-                      type="number"
-                      min="1"
-                      max="5000"
-                  /></label>
-                  <label
-                    ><span
-                      ><code>MMR λ</code>{{ i18n.t("research.lambda_label") }}
-                      <UiTooltip :text="i18n.t('help.glossary.mmr_lambda.definition')" /></span
-                    ><input
-                      v-model.number="draft.lambda_mult"
-                      class="control"
-                      type="number"
-                      step="0.05"
-                      min="0"
-                      max="1"
-                  /></label>
-                  <label
-                    ><span
-                      ><code>RRF k</code>{{ i18n.t("research.rrf_label") }}
-                      <UiTooltip :text="i18n.t('help.glossary.rrf_k.definition')" /></span
-                    ><input v-model.number="draft.rrf_k" class="control" type="number" min="1"
-                  /></label>
-                </div>
-              </fieldset>
-
-              <fieldset class="research-settings-card wide">
-                <legend>{{ i18n.t("research.reranking_decomposition") }}</legend>
-                <p>{{ i18n.t("research.reranking_decomposition_help") }}</p>
-                <div class="research-settings-grid three">
-                  <label
-                    ><span
-                      >{{ i18n.t("research.rerank_top_n") }}
-                      <UiTooltip :text="i18n.t('help.glossary.rerank_top_n.definition')" /></span
-                    ><input
-                      v-model.number="draft.rerank_top_n"
-                      class="control"
-                      type="number"
-                      min="1"
-                      max="500"
-                  /></label>
-                  <label
-                    ><span
-                      >{{ i18n.t("research.reranker") }}
-                      <UiTooltip :text="i18n.t('help.glossary.cross_encoder.definition')" /></span
-                    ><select v-model="draft.reranker" class="control">
-                      <option value="cross_encoder">{{ i18n.t("research.cross_encoder") }}</option>
-                      <option value="lexical">{{ i18n.t("research.lexical_fallback") }}</option>
-                      <option value="none">{{ i18n.t("research.none") }}</option>
-                    </select></label
-                  >
-                  <label
-                    ><span
-                      >{{ i18n.t("research.decomposition_tokens") }}
-                      <UiTooltip
-                        :text="i18n.t('help.glossary.query_decomposition.definition')" /></span
-                    ><input
-                      v-model.number="draft.query_decomposition_num_predict"
-                      class="control"
-                      type="number"
-                      min="64"
-                      max="8192"
-                  /></label>
-                  <label class="wide"
-                    ><span>{{ i18n.t("research.cross_encoder_model") }}</span
-                    ><input v-model="draft.cross_encoder_model" class="control"
-                  /></label>
-                  <label class="research-toggle-setting wide"
-                    ><input v-model="draft.query_decomposition" type="checkbox" /><span
-                      ><b>{{ i18n.t("research.query_decomposition") }}</b
-                      ><small>{{ i18n.t("research.query_decomposition_help") }}</small></span
-                    ></label
-                  >
+                    />
+                  </label>
+                  <label class="research-toggle-setting">
+                    <input v-model="draft.query_decomposition" type="checkbox" />
+                    <span>
+                      <b>{{ i18n.t("research.query_decomposition") }}</b>
+                      <small>{{
+                        i18n.t(
+                          "research.query_decomposition_run_help",
+                          "Allow the selected pipeline's query-decomposition stage for this run. Its stage configuration is overridden separately.",
+                        )
+                      }}</small>
+                    </span>
+                  </label>
                 </div>
               </fieldset>
             </div>
@@ -679,49 +666,20 @@ defineExpose({ open, close });
                 <h3 id="research-settings-evidence-title">
                   {{ i18n.t("research.evidence_citations") }}
                 </h3>
-                <p>{{ i18n.t("research.evidence_citations_help") }}</p>
+                <p>
+                  {{
+                    i18n.t(
+                      "research.evidence_citations_run_help",
+                      "Citation, memory, metadata, and evaluation controls apply to this run. Evidence-packing stage limits are configured under Run overrides.",
+                    )
+                  }}
+                </p>
               </div>
               <button class="research-text-action" type="button" @click="resetSection('evidence')">
                 <AppIcon name="refresh" />{{ i18n.t("research.reset_section") }}
               </button>
             </div>
             <div class="research-settings-card-grid">
-              <fieldset class="research-settings-card wide">
-                <legend>{{ i18n.t("research.evidence_budget") }}</legend>
-                <p>{{ i18n.t("research.evidence_budget_help") }}</p>
-                <div class="research-settings-grid two">
-                  <label
-                    ><span>{{ i18n.t("research.record_char_limit") }}</span
-                    ><input
-                      v-model.number="draft.evidence_record_char_limit"
-                      class="control"
-                      type="number"
-                      min="500"
-                      max="100000"
-                    /><small
-                      >{{
-                        Number(draft.evidence_record_char_limit || 0).toLocaleString(i18n.locale)
-                      }}
-                      {{ i18n.t("research.characters") }}</small
-                    ></label
-                  >
-                  <label
-                    ><span>{{ i18n.t("research.total_char_limit") }}</span
-                    ><input
-                      v-model.number="draft.evidence_total_char_limit"
-                      class="control"
-                      type="number"
-                      min="5000"
-                      max="1000000"
-                    /><small
-                      >{{
-                        Number(draft.evidence_total_char_limit || 0).toLocaleString(i18n.locale)
-                      }}
-                      {{ i18n.t("research.characters") }}</small
-                    ></label
-                  >
-                </div>
-              </fieldset>
               <fieldset class="research-settings-card">
                 <legend>{{ i18n.t("research.source_binding") }}</legend>
                 <p>{{ i18n.t("research.source_binding_help") }}</p>
