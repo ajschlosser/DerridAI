@@ -18,6 +18,7 @@
 
 import { WORKS_DB_STATUSES, WORKS_SORTS } from "./worksWorkspace";
 import { viewConfig } from "./runtimeConstants";
+import { stripNonShareableSearchParams } from "./shareableUrlPolicy";
 import { compressUrlState, decompressUrlState } from "./urlState";
 import { viewFromPath, viewPathMap } from "./viewPaths";
 
@@ -173,6 +174,10 @@ export function createUrlStateCodec(deps: UrlStateCodecDeps) {
   function urlFromState() {
     const url = new URL(location.href);
     const params = url.searchParams;
+    // Unknown route-native parameters remain forward-compatible, but
+    // credential-like and transient editor/runtime state is never carried into
+    // a copied or canonical workspace URL.
+    stripNonShareableSearchParams(params);
     for (const key of [
       "view",
       "file",
