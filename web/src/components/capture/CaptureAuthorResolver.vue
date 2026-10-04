@@ -23,9 +23,9 @@ import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 
 /**
- * Find the person a capture is about. Results are people only (the API filters by Wikidata
- * "instance of human"), each with dates, description, QID and aliases, and the user always chooses:
- * a single result is never selected automatically.
+ * Find the person a capture is about. When the local Gutenberg collection is
+ * installed, results can be resolved entirely from its contributor catalogue;
+ * otherwise the API can return Wikidata people. The user always chooses.
  */
 const props = defineProps<{ modelValue: AuthorCandidate | null }>();
 const emit = defineEmits<{ "update:modelValue": [AuthorCandidate | null] }>();
@@ -53,6 +53,10 @@ async function search() {
   } finally {
     busy.value = false;
   }
+}
+
+function isLocalGutenberg(person: AuthorCandidate) {
+  return person.wikidata_qid.startsWith("gutenberg:");
 }
 
 function lifespan(person: AuthorCandidate) {
@@ -124,7 +128,10 @@ function lifespan(person: AuthorCandidate) {
           >
           <span v-if="person.description" class="ar-desc">{{ person.description }}</span>
           <small class="ar-meta">
-            <span>{{ i18n.tf("capture.author.qid", { qid: person.wikidata_qid }) }}</span>
+            <span v-if="!isLocalGutenberg(person)">{{
+              i18n.tf("capture.author.qid", { qid: person.wikidata_qid })
+            }}</span>
+            <span v-else>{{ i18n.t("capture.provider.gutenberg") }}</span>
             <span v-if="Object.keys(person.wikisource_sitelinks).length">
               ·
               {{
