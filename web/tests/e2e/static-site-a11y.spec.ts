@@ -647,9 +647,9 @@ test("Settings persists Research defaults while Research keeps per-run overrides
   await defaults.getByLabel("MMR diversity (lambda)").fill("0.6");
   await defaults.getByRole("checkbox", { name: "Glas" }).check();
   await defaults.getByRole("button", { name: "Save Research defaults" }).click();
-  await expect(defaults.getByRole("status")).toContainText(
-    "Research defaults saved in this browser.",
-  );
+  await expect(
+    defaults.getByRole("status").filter({ hasText: "Research defaults saved in this browser." }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Research" }).click();
   await page.getByText("Run settings", { exact: true }).click();
