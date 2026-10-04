@@ -126,9 +126,15 @@ export function clearStageOverride(
   return next;
 }
 
-export function pipelineConfiguredValue(stage: PipelineStage, key: string, rule: Record<string, unknown>) {
+export function pipelineConfiguredValue(
+  stage: PipelineStage,
+  key: string,
+  _rule: Record<string, unknown>,
+) {
+  // Only persisted stage configuration belongs to the Pipeline Studio layer.
+  // A registry/schema default may be useful when seeding a new override, but
+  // presenting it as pipeline-owned would make provenance misleading.
   if (Object.prototype.hasOwnProperty.call(stage.config || {}, key)) return stage.config[key];
-  if (Object.prototype.hasOwnProperty.call(rule, "default")) return rule.default;
   return undefined;
 }
 
