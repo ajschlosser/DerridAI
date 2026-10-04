@@ -24,15 +24,15 @@ Read [docs/CODE_READABILITY.md](docs/CODE_READABILITY.md) before structural refa
 
 ## Choose the owning area first
 
-| Change | Primary guide |
-| --- | --- |
-| FastAPI/domain/persistence | [`api/README.md`](api/README.md), then [`api/app/README.md`](api/app/README.md) |
-| Vue application | [`web/README.md`](web/README.md), then [`web/src/README.md`](web/src/README.md) |
-| Reusable frontend UI | [`web/src/components/README.md`](web/src/components/README.md) |
-| Frontend domain helpers | [`web/src/domain/README.md`](web/src/domain/README.md) |
-| Corpus Builder | [`web/src/features/corpus-builder/README.md`](web/src/features/corpus-builder/README.md) and [`web/src/components/corpus-builder/README.md`](web/src/components/corpus-builder/README.md) |
-| Pipeline Studio | [`api/app/pipelines/README.md`](api/app/pipelines/README.md) and [`web/src/components/pipelines/README.md`](web/src/components/pipelines/README.md) |
-| Tests | [`tests/README.md`](tests/README.md) and [`web/tests/README.md`](web/tests/README.md) |
+| Change                     | Primary guide                                                                                                                                                                             |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FastAPI/domain/persistence | [`api/README.md`](api/README.md), then [`api/app/README.md`](api/app/README.md)                                                                                                           |
+| Vue application            | [`web/README.md`](web/README.md), then [`web/src/README.md`](web/src/README.md)                                                                                                           |
+| Reusable frontend UI       | [`web/src/components/README.md`](web/src/components/README.md)                                                                                                                            |
+| Frontend domain helpers    | [`web/src/domain/README.md`](web/src/domain/README.md)                                                                                                                                    |
+| Corpus Builder             | [`web/src/features/corpus-builder/README.md`](web/src/features/corpus-builder/README.md) and [`web/src/components/corpus-builder/README.md`](web/src/components/corpus-builder/README.md) |
+| Pipeline Studio            | [`api/app/pipelines/README.md`](api/app/pipelines/README.md) and [`web/src/components/pipelines/README.md`](web/src/components/pipelines/README.md)                                       |
+| Tests                      | [`tests/README.md`](tests/README.md) and [`web/tests/README.md`](web/tests/README.md)                                                                                                     |
 
 Do not start in a compatibility monolith merely because a symbol is re-exported there. Follow the local README to the module that owns the invariant.
 
