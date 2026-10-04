@@ -99,6 +99,15 @@ from .semantic_identity_store import (
 from .system_store import system_store
 
 
+def _metadata_enrichment_active(build: dict[str, Any]) -> bool:
+    """Whether reviewer edits can race an automatic metadata worker."""
+    stage = str(build.get("stage") or "")
+    return str(build.get("status") or "") in {"queued", "running"} and (
+        stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun"}
+        or stage.startswith("metadata_enrichment:")
+    )
+
+
 def _serialize_record_mutation(method):
     """Serialize manager-level read/modify/write record transactions.
 
@@ -707,14 +716,7 @@ class ReviewActionsMixin:
         reasons.append("Reviewed text changed; rerun only the metadata families that need reconsideration.")
         target["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
         build = self.repo.get_build(build_id)
-        build_stage = str(build.get("stage") or "")
-        enrichment_active = (
-            str(build.get("status") or "") in {"queued", "running"}
-            and (
-                build_stage in {"enriching", "metadata_retry", "metadata_enrichment_rerun"}
-                or build_stage.startswith("metadata_enrichment:")
-            )
-        )
+        enrichment_active = _metadata_enrichment_active(build)
         if enrichment_active:
             # A worker may already hold the pre-edit Record snapshot. Its stale
             # completion will be rejected by the source/revision guard; this
@@ -881,6 +883,14 @@ class ReviewActionsMixin:
         target["metadata_decisions"] = decision_log[-100:]
         target["metadata_reviewed_at"] = iso_now()
         _mark_human_touch(target, [key for key in changes if key not in skipped])
+        build = self.repo.get_build(build_id)
+        enrichment_active = _metadata_enrichment_active(build)
+        if enrichment_active and any(key not in skipped for key in changes):
+            requeue_record_metadata(
+                target,
+                "Reviewer metadata changed during automatic enrichment; rerun against current human authority.",
+                force=True,
+            )
         profile = self._profile_for(build_id)
         # A due blind recheck reopens an *earlier* decision, so scheduled records
         # other than the target must be considered and persisted when they change.
@@ -898,6 +908,10 @@ class ReviewActionsMixin:
         _settle_enrichment_review_reason(target)
         target["record_revision"] = current_revision + 1
         self._rewrite_targeted_record(build_id, target, previous_record)
+        if enrichment_active and any(key not in skipped for key in changes):
+            latest_build = self.repo.get_build(build_id)
+            _prepend_metadata_priority(latest_build, record_id)
+            self.repo.save_build(latest_build)
         # Return the record as persisted after authoritative state derivation.
         persisted = target
         schema = self._schema_for(build_id)
