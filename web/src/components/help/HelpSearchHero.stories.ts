@@ -54,6 +54,16 @@ export const SearchResults: Story = {
   },
 };
 
+export const FrenchLengthStress: Story = {
+  args: {
+    modelValue:
+      "Comment vérifier la provenance documentaire, les attributions discursives et les paramètres de recherche configurables?",
+    searching: true,
+    matchCount: 18,
+  },
+  parameters: { locale: "fr-CA" },
+};
+
 export const NarrowViewport: Story = {
   args: {
     modelValue: "FieldAssertion and evidence provenance",
