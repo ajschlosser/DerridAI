@@ -103,7 +103,7 @@ const duration = computed(() => {
           :label="pipelineRunStatusLabel(run.status, t)"
           :tone="pipelineRunTone(run.status)"
         />
-        <span>{{ formatPipelineDate(run.started_at, i18n.locale) }} · {{ duration }}</span>
+        <span>{{ formatPipelineDate(run.started_at, i18n.locale, i18n.timeZone) }} · {{ duration }}</span>
       </p>
       <UiButton
         v-if="configuration.catalogKey"
