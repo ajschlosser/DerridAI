@@ -114,8 +114,11 @@ def _metadata_family_states(rows: list[dict[str, Any]]) -> list[str]:
     states: list[str] = []
     for row in rows:
         row_status = row.get("metadata_stage_status") if isinstance(row.get("metadata_stage_status"), dict) else {}
+        enrichment_state = str(row.get("metadata_enrichment_state") or "").strip().casefold()
         for family in metadata_families:
-            fallback = "complete" if row.get("metadata_complete") else "queued"
+            # Family telemetry describes execution, not whether scholarly metadata
+            # is already schema-complete from deterministic or inherited values.
+            fallback = "complete" if enrichment_state == "complete" else "queued"
             states.append(str(row_status.get(family) or fallback))
     return states
 
