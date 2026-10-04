@@ -124,6 +124,83 @@ function publicationPackage() {
   };
 }
 
+function multiAuthorPublicationPackage() {
+  const derrida = record("j1", "Writing and Difference", "method doubt metaphysics", {
+    document_author: "Jacques Derrida",
+  });
+  const descartes = record(
+    "d1",
+    "Meditations on First Philosophy",
+    "I will suppose that everything I see is false and examine what can be doubted.",
+    {
+      document_author: "René Descartes",
+      citation: "René Descartes, Meditations on First Philosophy",
+    },
+  );
+  const nietzsche = record("n1", "Beyond Good and Evil", "perspectivism values genealogy", {
+    document_author: "Friedrich Nietzsche",
+    citation: "Friedrich Nietzsche, Beyond Good and Evil",
+  });
+
+  return {
+    manifest: {
+      format: "derridai-static-site-v5",
+      publication_id: "pub-multi-author",
+      title: "Three philosophers",
+      locale: "en-US",
+      works: [
+        { work: "Writing and Difference", record_count: 1, authors: ["Jacques Derrida"] },
+        {
+          work: "Meditations on First Philosophy",
+          record_count: 1,
+          authors: ["René Descartes"],
+        },
+        { work: "Beyond Good and Evil", record_count: 1, authors: ["Friedrich Nietzsche"] },
+      ],
+      vector_index: {
+        model: "bge-m3:latest",
+        revision: "fixture-revision",
+        dimension: 2,
+        distance_metric: "cosine",
+        text_field: "text",
+      },
+      features: {
+        browse: true,
+        lexical_search: true,
+        semantic_search: true,
+        local_annotations: true,
+        research: true,
+      },
+    },
+    chunks: [
+      {
+        id: "work-1",
+        work: "Writing and Difference",
+        record_count: 1,
+        records_b64: base64Json([derrida]),
+        vector_ids: ["j1"],
+        vectors_b64: base64Float32([[1, 0]]),
+      },
+      {
+        id: "work-2",
+        work: "Meditations on First Philosophy",
+        record_count: 1,
+        records_b64: base64Json([descartes]),
+        vector_ids: ["d1"],
+        vectors_b64: base64Float32([[0, 1]]),
+      },
+      {
+        id: "work-3",
+        work: "Beyond Good and Evil",
+        record_count: 1,
+        records_b64: base64Json([nietzsche]),
+        vector_ids: ["n1"],
+        vectors_b64: base64Float32([[-1, 0]]),
+      },
+    ],
+  };
+}
+
 describe("DerridAI SDK", () => {
   it("searches publication records without a DerridAI server", async () => {
     const client = await createClient({
@@ -184,6 +261,73 @@ describe("DerridAI SDK", () => {
     });
     expect(generationRequests[0]?.evidencePacket.evidence[0].recordId).toBe("g1");
     expect(generationRequests[0]?.prompt).toContain("Position holder: Hegel");
+  });
+
+  it("matches possessive author names in published keyword search", async () => {
+    const client = await createClient({
+      dataSource: dataSources.inline(multiAuthorPublicationPackage()),
+      storage: new MemoryStorage(),
+    });
+
+    const response = await client.search({
+      query: "What does Descartes’s account say about doubt?",
+      mode: "keyword",
+    });
+
+    expect(response.results[0]?.record.record_id).toBe("d1");
+  });
+
+  it("reserves named publication authors in Research evidence and prompt attribution", async () => {
+    const generationRequests: GenerationRequest[] = [];
+    const client = await createClient({
+      dataSource: dataSources.inline(multiAuthorPublicationPackage()),
+      storage: new MemoryStorage(),
+      embeddings: {
+        descriptor: () => ({
+          type: "host",
+          model: "bge-m3:latest",
+          revision: "fixture-revision",
+        }),
+        async embed() {
+          // Deliberately points the broad semantic ranking toward Derrida. The named-author
+          // route must still reserve Descartes evidence instead of treating similarity as scope.
+          return {
+            vectors: [[1, 0]],
+            provider: {
+              type: "host",
+              model: "bge-m3:latest",
+              revision: "fixture-revision",
+            },
+          };
+        },
+      },
+      generation: {
+        descriptor: () => ({ type: "host", model: "qwen3:8b" }),
+        async generate(request) {
+          generationRequests.push(request);
+          return { text: "Descartes grounds the answer in the cited passage [E1]." };
+        },
+      },
+    });
+
+    const response = await client.research({
+      question: "What does Descartes’s account say about doubt?",
+      retrieval: { mode: "hybrid", evidenceLimit: 1 },
+    });
+
+    expect(response.evidencePacket.evidence[0]).toMatchObject({
+      recordId: "d1",
+      documentAuthor: "René Descartes",
+      work: "Meditations on First Philosophy",
+    });
+    expect(response.retrieval.results[0]?.record.record_id).toBe("d1");
+    expect(generationRequests[0]?.prompt).toContain("Document author: René Descartes");
+    expect(generationRequests[0]?.prompt).toContain(
+      "Meditations on First Philosophy — René Descartes",
+    );
+    expect(generationRequests[0]?.prompt).not.toContain(
+      "Do not attribute a quoted or analyzed position to Derrida",
+    );
   });
 
   it("falls back to keyword retrieval when the embedding model needs a local index that is not built", async () => {
