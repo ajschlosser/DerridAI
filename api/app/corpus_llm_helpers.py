@@ -30,16 +30,17 @@ import httpx
 from pydantic import ValidationError
 
 from .config import settings
+from .llm_failures import FailureDisposition, combine_failure_dispositions
 from .models import OllamaTouchupOptions
 from .structured_json import parse_json_object
 
 
 class StructuredOutputError(ValueError):
-    """Every attempt of one or more provider roles failed to return a valid structured answer.
+    """Every provider role failed to return a validated structured answer.
 
-    ``failures`` holds one ``"<role> <provider>/<model>: <error>"`` entry per role that ran, and
-    ``timed_out`` says whether the last role stopped on a read timeout (pipeline timeout edges
-    route on it).
+    Human-readable ``failures`` remain available for administrator diagnostics.
+    ``failure_details`` carries only stable operational facts so graph execution
+    and recovery policy never need to parse those rendered messages.
     """
 
     def __init__(
@@ -49,11 +50,20 @@ class StructuredOutputError(ValueError):
         failures: list[str],
         timed_out: bool = False,
         truncated: bool = False,
+        failure_details: list[FailureDisposition] | None = None,
     ) -> None:
         super().__init__(message)
         self.failures = failures
         self.timed_out = timed_out
         self.truncated = truncated
+        self.failure_details = list(failure_details or [])
+        disposition = combine_failure_dispositions(self.failure_details)
+        self.failure_disposition = disposition
+        self.failure_code = disposition.code
+        self.failure_class = disposition.failure_class
+        self.retryable = disposition.retryable
+        self.retry_after_seconds = disposition.retry_after_seconds
+        self.capability_mismatch = disposition.capability_mismatch
 
 
 _TRANSPORT_MARKERS = (
