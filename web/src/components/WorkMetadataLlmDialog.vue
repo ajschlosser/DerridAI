@@ -132,7 +132,7 @@ async function start() {
         />
       </section>
 
-      <section class="metadata-lookup-summary" aria-label="Summary">
+      <section class="metadata-lookup-summary">
         <div>
           <b>{{ i18n.t("works.background_operation") }}</b>
           <small>{{ i18n.t("works.background_operation_help") }}</small>
@@ -145,10 +145,7 @@ async function start() {
     </div>
 
     <template #footer>
-      <span class="metadata-footer-note">
-        {{ current.scopeCount.toLocaleString() }}
-        {{ i18n.t("works.lookup_scope") }}
-      </span>
+      <span class="metadata-footer-note">{{ current.scopeSummary }}</span>
       <div class="metadata-footer-actions">
         <UiButton :label="i18n.t('ui.cancel')" @click="close()" />
         <UiButton
