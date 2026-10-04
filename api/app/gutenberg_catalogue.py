@@ -170,7 +170,6 @@ class GutenbergOfflineService:
                 (ARCHIVE_URL, str(self.archive_path)),
             )
             self._backfill_normalized(db)
-        self._init_library_db(self.library_db_path)
         self._migrate_legacy_books()
 
     @staticmethod
@@ -226,6 +225,7 @@ class GutenbergOfflineService:
             rows = db.execute("SELECT etext_id,path,content FROM gutenberg_books ORDER BY etext_id").fetchall()
         if not rows:
             return
+        self._init_library_db(self.library_db_path)
         imported = 0
         with sqlite3.connect(self.library_db_path) as library:
             for etext_id, raw_path, stored in rows:
@@ -809,6 +809,8 @@ class GutenbergOfflineService:
         return sorted(results, key=lambda row: row["etext_id"])
 
     def text(self, etext_id: int) -> tuple[str, dict[str, Any]] | None:
+        if not self.library_db_path.is_file():
+            return None
         with sqlite3.connect(self.library_db_path) as library:
             row = library.execute(
                 "SELECT content,content_sha256,byte_length,archive_member FROM gutenberg_texts WHERE etext_id=?",
