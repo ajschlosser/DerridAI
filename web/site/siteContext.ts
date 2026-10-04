@@ -28,6 +28,7 @@ import type {
   PublicationRecord,
   ResearchRequest,
   ResearchResponse,
+  SearchMode,
   SearchRequest,
   SearchResponse,
   SearchWarning,
@@ -53,6 +54,30 @@ export interface PublishedSitePackage {
   };
   chunks: unknown[];
 }
+
+export type PublishedResearchMode = "auto" | SearchMode;
+
+export interface PublishedResearchSettings {
+  mode: PublishedResearchMode;
+  /** Ranked retrieval records retained before evidence selection (k). */
+  k: number;
+  /** Candidate pool considered before final ranking (fetch_k). */
+  fetchK: number;
+  /** Evidence records supplied to the generator after diversification (top_n). */
+  topN: number;
+  mmrLambda: number;
+  /** Empty means every Work in the publication. */
+  works: string[];
+}
+
+export const PUBLISHED_RESEARCH_DEFAULTS: PublishedResearchSettings = {
+  mode: "auto",
+  k: 24,
+  fetchK: 500,
+  topN: 10,
+  mmrLambda: 0.72,
+  works: [],
+};
 
 export interface LocalModelSettings {
   model: string;
@@ -298,6 +323,7 @@ export function createPublishedSiteContext() {
   const providersKey = `derridai.site.providers.${publicationId}`;
   const localModelKey = `derridai.site.local-model.${publicationId}`;
   const endpointsKey = `derridai.site.endpoints.${publicationId}`;
+  const researchDefaultsKey = `derridai.site.research-defaults.${publicationId}`;
 
   const availableLocales = Object.keys(publication.strings || {});
   const languageMetadata = Array.isArray(publication.languages) ? publication.languages : [];
@@ -316,6 +342,67 @@ export function createPublishedSiteContext() {
   const activeDevice = ref("");
   const client = ref<SdkClient | null>(null);
   const capabilities = ref<ClientCapabilities | null>(null);
+
+  function normalizeResearchSettings(
+    raw: Partial<PublishedResearchSettings> | null | undefined,
+  ): PublishedResearchSettings {
+    const mode: PublishedResearchMode = ["auto", "keyword", "semantic", "hybrid"].includes(
+      String(raw?.mode || ""),
+    )
+      ? (raw?.mode as PublishedResearchMode)
+      : PUBLISHED_RESEARCH_DEFAULTS.mode;
+    const integer = (value: unknown, fallback: number, minimum: number, maximum: number) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed)
+        ? Math.max(minimum, Math.min(maximum, Math.round(parsed)))
+        : fallback;
+    };
+    const k = integer(raw?.k, PUBLISHED_RESEARCH_DEFAULTS.k, 1, 500);
+    const fetchK = Math.max(
+      k,
+      integer(raw?.fetchK, PUBLISHED_RESEARCH_DEFAULTS.fetchK, 1, 5000),
+    );
+    const topN = Math.min(
+      k,
+      integer(raw?.topN, PUBLISHED_RESEARCH_DEFAULTS.topN, 1, 100),
+    );
+    const lambda = Number(raw?.mmrLambda);
+    const mmrLambda = Number.isFinite(lambda)
+      ? Math.max(0, Math.min(1, lambda))
+      : PUBLISHED_RESEARCH_DEFAULTS.mmrLambda;
+    const availableWorks = new Set(
+      (publication.works || []).map((item) => String(item.work || "").trim()).filter(Boolean),
+    );
+    const works = Array.isArray(raw?.works)
+      ? [...new Set(raw.works.map(String).map((value) => value.trim()).filter((value) => availableWorks.has(value)))]
+      : [];
+    return { mode, k, fetchK, topN, mmrLambda, works };
+  }
+
+  function loadResearchDefaults(): PublishedResearchSettings {
+    try {
+      return normalizeResearchSettings(
+        JSON.parse(readLocal(researchDefaultsKey) || "{}") as Partial<PublishedResearchSettings>,
+      );
+    } catch {
+      return normalizeResearchSettings(PUBLISHED_RESEARCH_DEFAULTS);
+    }
+  }
+
+  const researchDefaults = ref<PublishedResearchSettings>(loadResearchDefaults());
+
+  function updateResearchDefaults(
+    value: Partial<PublishedResearchSettings>,
+  ): PublishedResearchSettings {
+    const next = normalizeResearchSettings(value);
+    researchDefaults.value = next;
+    writeLocal(researchDefaultsKey, JSON.stringify(next));
+    return next;
+  }
+
+  function resetResearchDefaults(): PublishedResearchSettings {
+    return updateResearchDefaults(PUBLISHED_RESEARCH_DEFAULTS);
+  }
 
   const publishedBrowserProfile = {
     model: "Xenova/multilingual-e5-small",
@@ -1024,7 +1111,11 @@ export function createPublishedSiteContext() {
         return;
       }
       if (event.type === "generation-start") {
-        setStatus(t("site.runtime.activity_llm_generation"));
+        setStatus(
+          t("site.runtime.activity_llm_generation", {
+            count: event.evidenceCount ?? "",
+          }),
+        );
         return;
       }
       if (event.type !== "load-progress") return;
@@ -1039,6 +1130,64 @@ export function createPublishedSiteContext() {
           work: event.work || "",
         }),
       );
+    });
+  }
+
+  function subscribeResearchProgress(
+    setProgress: (progress: { message: string; stage: number }) => void,
+  ): () => void {
+    if (!client.value) return () => undefined;
+    return client.value.events.subscribe((event: ClientEvent) => {
+      if (event.type === "search-start") {
+        setProgress({ message: t("site.runtime.activity_research_retrieving"), stage: 1 });
+        return;
+      }
+      if (event.type === "embedding-start") {
+        setProgress({ message: t("site.runtime.activity_vector_embedding"), stage: 1 });
+        return;
+      }
+      if (event.type === "retrieval-complete") {
+        setProgress({
+          message: t("site.runtime.activity_research_retrieved", { count: event.resultCount }),
+          stage: 2,
+        });
+        return;
+      }
+      if (event.type === "evidence-selected") {
+        setProgress({
+          message: t("site.runtime.activity_research_evidence_selected", {
+            count: event.evidenceCount,
+          }),
+          stage: 2,
+        });
+        return;
+      }
+      if (event.type === "generation-start") {
+        setProgress({
+          message: t("site.runtime.activity_llm_generation", {
+            count: event.evidenceCount ?? "",
+          }),
+          stage: 3,
+        });
+        return;
+      }
+      if (event.type === "generation-complete") {
+        setProgress({ message: t("site.runtime.activity_research_finalizing"), stage: 3 });
+        return;
+      }
+      if (event.type !== "load-progress") return;
+      setProgress({
+        message: t("site.runtime.loading_progress", {
+          stage:
+            event.stage === "vectors"
+              ? t("site.runtime.loading_vectors")
+              : t("site.runtime.loading_records"),
+          current: event.completed,
+          total: event.total,
+          work: event.work || "",
+        }),
+        stage: 1,
+      });
     });
   }
 
@@ -1292,6 +1441,7 @@ export function createPublishedSiteContext() {
     localModel,
     activeDevice,
     transformerSuggestions,
+    researchDefaults,
     recordCount,
     t,
     languageLabel,
@@ -1300,11 +1450,15 @@ export function createPublishedSiteContext() {
     warningText,
     sourceEmbeddingModel,
     semanticReady,
+    normalizeResearchSettings,
+    updateResearchDefaults,
+    resetResearchDefaults,
     setLocaleAndRebuild,
     setTheme,
     setHighContrast,
     markTutorial,
     subscribeProgress,
+    subscribeResearchProgress,
     refreshCapabilities,
     updateLocalModel,
     testLocalModel,
