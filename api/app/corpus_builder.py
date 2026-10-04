@@ -297,6 +297,7 @@ from .field_assertions import (
     project_record_assertions,
 )
 from .language_segmentation import ends_sentence_text, starts_mid_sentence_text
+from .llm_failures import FailureDisposition, failure_disposition
 from .language_segmentation import (
     profile_metadata as language_segmentation_profile,
 )
@@ -3604,6 +3605,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             raise LookupError("No review provider is configured for this build.")
 
         all_failures: list[str] = []
+        all_failure_details: list[FailureDisposition] = []
         timed_out = False
         any_truncated = False
 
@@ -3854,6 +3856,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             except StructuredCompletionError as exc:
                 failure = exc.last_error or exc
                 all_failures.append(f"{role} {provider}/{model}: {failure}")
+                all_failure_details.append(failure_disposition(exc))
                 timed_out = timed_out or exc.timed_out
                 any_truncated = any_truncated or exc.truncated
 
@@ -3864,6 +3867,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             failures=all_failures,
             timed_out=timed_out,
             truncated=any_truncated,
+            failure_details=all_failure_details,
         )
 
     def _document_manifest_call(
