@@ -17,6 +17,7 @@
  */
 
 import { computed, nextTick, ref, watch } from "vue";
+import { activeValueEditor } from "../../../domain/focus";
 
 export type ReviewInspectorTab = "metadata" | "evidence" | "source" | "semantic";
 export type ReviewWorkspaceMode = "record" | "metadata" | "source";
@@ -96,6 +97,7 @@ export function useCorpusReviewWorkspace() {
   function focusFirstMetadataBlocker() {
     reviewInspectorTab.value = "metadata";
     void nextTick(() => {
+      if (activeValueEditor()) return;
       // Focus View has its own inspector; the workspace's is hidden underneath it.
       const root = focusView.value
         ? document.querySelector<HTMLElement>(".focus-inspector-body")
@@ -119,6 +121,7 @@ export function useCorpusReviewWorkspace() {
     reviewWorkspaceMode.value = mode;
     if (mode !== "record") reviewInspectorTab.value = mode;
     void nextTick(() => {
+      if (activeValueEditor()) return;
       if (mode === "record") reviewPaneEl.value?.focus?.({ preventScroll: true });
       else reviewInspectorEl.value?.focus?.({ preventScroll: true });
     });
