@@ -58,6 +58,10 @@ function identity(person: AuthorCandidate) {
   return person.identity_id || (person.wikidata_qid ? `wikidata:${person.wikidata_qid}` : "");
 }
 
+function isChosen(person: AuthorCandidate) {
+  return Boolean(props.modelValue && identity(props.modelValue) === identity(person));
+}
+
 function lifespan(person: AuthorCandidate) {
   const year = (value: number | null) =>
     value === null
@@ -110,20 +114,14 @@ function lifespan(person: AuthorCandidate) {
         v-for="person in results"
         :key="identity(person)"
         class="ar-person"
-        :class="{
-          'is-chosen': props.modelValue
-            ? identity(props.modelValue) === identity(person)
-            : false,
-        }"
+        :class="{ 'is-chosen': isChosen(person) }"
         :data-identity="identity(person)"
       >
         <input
           type="radio"
           :name="`${id}-person`"
           :value="identity(person)"
-          :checked="
-            props.modelValue ? identity(props.modelValue) === identity(person) : false
-          "
+          :checked="isChosen(person)"
           @change="emit('update:modelValue', person)"
         />
         <span class="ar-copy">
