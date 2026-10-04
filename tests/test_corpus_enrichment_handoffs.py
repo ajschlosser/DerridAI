@@ -839,6 +839,28 @@ def test_restart_resume_does_not_repeat_completed_review_pending_pass(prepared, 
         restarted._executor.shutdown(wait=True)
 
 
+@pytest.mark.parametrize("state", [None, "queued", "running", "stale", "failed"])
+def test_scholarly_completeness_does_not_finish_unrun_enrichment(prepared, state):
+    repo, bid, manager = prepared
+    record = repo.get_record(bid, "r1")
+    record["metadata_complete"] = True
+    record.pop("metadata_stage_status", None)
+    if state is None:
+        record.pop("metadata_enrichment_state", None)
+    else:
+        record["metadata_enrichment_state"] = state
+    repo.update_record(bid, record)
+
+    rows = manager._initialize_build_enrichment(bid, {})
+
+    assert rows[0]["metadata_complete"] is True
+    assert rows[0]["metadata_enrichment_state"] == "queued"
+    assert rows[0]["metadata_enrichment_finished"] is False
+    assert rows[1]["metadata_enrichment_state"] == "complete"
+    assert rows[1]["metadata_enrichment_finished"] is True
+    assert repo.get_build(bid)["metadata_enriched_count"] == 1
+
+
 @pytest.mark.parametrize("state", ["running", "queued", "stale", "failed"])
 def test_resume_requeues_only_unfinished_or_invalidated_passes(prepared, state):
     repo, bid, manager = prepared
