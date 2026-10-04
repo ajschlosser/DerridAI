@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import {
+  isPlaceholderValue,
   metadataValueText,
   unwrapMetadataValue,
   usableListOptions,
@@ -418,13 +419,16 @@ const llmSuggestionBatch = computed(() => {
       String(info.method || "").includes("llm") ||
       String(info.derivation_method || "") === "model";
     if (!modelDerived || !unresolved.value.has(field)) continue;
+    const unwrappedValue = unwrapMetadataValue(value);
+    const placeholderAbsence =
+      typeof unwrappedValue === "string" && isPlaceholderValue(unwrappedValue);
     const suggestedAbsence =
-      value === null || value === undefined || value === ""
-        ? info.suggested_absence === true ||
-          info.evaluation_status === "no_supported_value" ||
-          info.reason_code === "no_supported_value" ||
-          info.reason_code === "required_no_supported_value"
-        : false;
+      (value === null || value === undefined || value === "" || placeholderAbsence) &&
+      (placeholderAbsence ||
+        info.suggested_absence === true ||
+        info.evaluation_status === "no_supported_value" ||
+        info.reason_code === "no_supported_value" ||
+        info.reason_code === "required_no_supported_value");
     if (suggestedAbsence) {
       changes[field] = null;
       confirmedAbsentFields.push(field);
