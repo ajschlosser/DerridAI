@@ -30,6 +30,7 @@ export type ResearchStore = {
   embedding_model?: string;
   filter_fields?: string[];
   schema_id?: string;
+  source_works?: string[];
 };
 
 export type ResearchProfile = {
@@ -203,6 +204,8 @@ export type ResearchConfig = {
   pipeline_id?: string;
   pipeline_version?: number | null;
   source_collection: string;
+  /** Empty means all works in the selected collection. */
+  work_filter: string[];
   locales: string[];
   search_types: string[];
   k: number;
