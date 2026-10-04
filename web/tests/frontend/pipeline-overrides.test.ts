@@ -49,7 +49,6 @@ describe("pipeline configuration override layers", () => {
       pipeline: 24,
       settings: 32,
       run: 48,
-      effective: undefined,
       value: 48,
       source: "run",
     });
