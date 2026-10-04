@@ -150,14 +150,17 @@ class GutenbergOfflineService:
             archive_columns = {
                 row[1] for row in db.execute("PRAGMA table_info(gutenberg_archive)")
             }
-            for column, ddl in (
-                ("etag", "TEXT"),
-                ("last_modified", "TEXT"),
-                ("retry_count", "INTEGER NOT NULL DEFAULT 0"),
-                ("next_retry_at", "TEXT"),
-            ):
-                if column not in archive_columns:
-                    db.execute(f"ALTER TABLE gutenberg_archive ADD COLUMN {column} {ddl}")
+            if "etag" not in archive_columns:
+                db.execute("ALTER TABLE gutenberg_archive ADD COLUMN etag TEXT")
+            if "last_modified" not in archive_columns:
+                db.execute("ALTER TABLE gutenberg_archive ADD COLUMN last_modified TEXT")
+            if "retry_count" not in archive_columns:
+                db.execute(
+                    "ALTER TABLE gutenberg_archive "
+                    "ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0"
+                )
+            if "next_retry_at" not in archive_columns:
+                db.execute("ALTER TABLE gutenberg_archive ADD COLUMN next_retry_at TEXT")
             db.execute("""CREATE TABLE IF NOT EXISTS gutenberg_books (
                 etext_id INTEGER PRIMARY KEY, title TEXT NOT NULL DEFAULT '',
                 author TEXT NOT NULL DEFAULT '', language TEXT NOT NULL DEFAULT '',
@@ -1224,7 +1227,6 @@ class GutenbergOfflineService:
         except Exception:
             chunk_path.unlink(missing_ok=True)
             raise
-
 
 
 gutenberg_offline = GutenbergOfflineService()
