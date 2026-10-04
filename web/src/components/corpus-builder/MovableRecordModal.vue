@@ -68,14 +68,13 @@ function moveFromKeyboard(event: KeyboardEvent) {
   if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
   event.preventDefault();
   const step = event.shiftKey ? 48 : 16;
-  position.value = {
-    x:
-      position.value.x +
-      (event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0),
-    y:
-      position.value.y +
-      (event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0),
-  };
+  let x = position.value.x;
+  let y = position.value.y;
+  if (event.key === "ArrowLeft") x -= step;
+  if (event.key === "ArrowRight") x += step;
+  if (event.key === "ArrowUp") y -= step;
+  if (event.key === "ArrowDown") y += step;
+  position.value = { x, y };
 }
 function onKeydown(event: KeyboardEvent) {
   if (event.key === "Escape") {
