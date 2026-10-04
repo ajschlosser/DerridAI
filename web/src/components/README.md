@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 `web/src/components/` contains DerridAI's Vue presentation layer: design-system primitives, application shell, reusable dialogs and controls, and domain-specific workspaces.
 
-Components render and coordinate interaction; canonical scholarly authority remains on the backend. Complex state rules should be extracted into domain modules or composables rather than duplicated across views.
+Components render and coordinate interaction; canonical scholarly authority remains on the backend. Complex state rules should be extracted into domain modules or composables rather than duplicated across views. See [`docs/CODE_READABILITY.md`](../../../docs/CODE_READABILITY.md) for naming and comment conventions.
 
 ## Component layers
 
