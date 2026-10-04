@@ -56,11 +56,21 @@ def build_factory(tmp_path, monkeypatch):
     managers = []
 
     def make(count=3, pending=None):
-        records = [
-            {"text": f"Source {index}: " + "documentary evidence " * 100,
-             "metadata_complete": pending is not None and index >= pending}
-            for index in range(count)
-        ]
+        records = []
+        for index in range(count):
+            already_enriched = pending is not None and index >= pending
+            record = {
+                "text": f"Source {index}: " + "documentary evidence " * 100,
+                "metadata_complete": already_enriched,
+            }
+            if already_enriched:
+                record["metadata_enrichment_state"] = "complete"
+                record["metadata_stage_status"] = {
+                    "discourse": "complete",
+                    "quotation": "complete",
+                    "indexing": "complete",
+                }
+            records.append(record)
         repo, build = install(tmp_path, records)
         monkeypatch.setattr(cb.PdfCorpusBuildManager, "_schedule_metadata_exemplar_projection", lambda *args: None)
         manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
