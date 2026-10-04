@@ -58,4 +58,12 @@ The directory currently includes application-view/workflow coverage, Corpus Buil
 - Keep tests deterministic and isolate application state between scenarios.
 - Add a focused browser regression when the failure depends on real layout, scrolling, routing, focus, or composed async behavior that happy-dom cannot represent reliably.
 
-Run from `web/` with `npm run test:e2e`; focused workflow and accessibility commands are also available through the package scripts.
+Run from `web/` after building the artifacts the suite serves:
+
+```bash
+npm run build
+npm run build-storybook
+npm run test:e2e
+```
+
+Focused characterization/workflow/accessibility commands are also available through the package scripts. Their Playwright configs fail fast when the expected build is absent; this is deliberate CI parity, not a reason to point the test at an arbitrary dev server.
