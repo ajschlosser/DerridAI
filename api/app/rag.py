@@ -1038,6 +1038,8 @@ def _selected_evidence_candidates(request: RAGRunRequest, store: ChromaStore) ->
             record.pop("updates", None)
         if not record:
             continue
+        if request.work_filter and str(record.get("work") or "") not in set(request.work_filter):
+            continue
         logical = str(record.get("record_id") or chroma_id or len(resolved))
         key = f"{collection or 'workspace'}::{logical}"
         if key in seen:
@@ -1054,6 +1056,22 @@ def _selected_evidence_candidates(request: RAGRunRequest, store: ChromaStore) ->
             "selected_evidence": True,
         })
     return resolved
+
+
+def _research_work_where(work_filter: Sequence[str]) -> dict[str, Any] | None:
+    """Return the exact Chroma predicate for a run's selected works.
+
+    Work filtering happens before candidate ranking so k/fetch_k retain their
+    meaning inside the requested scholarly scope instead of being applied to a
+    corpus-wide candidate pool and filtered afterward.
+    """
+
+    works = [str(work).strip() for work in work_filter if str(work).strip()]
+    if not works:
+        return None
+    if len(works) == 1:
+        return {"work": works[0]}
+    return {"work": {"$in": works}}
 
 
 def _candidate_diagnostic(item: Mapping[str, Any], rank: int) -> dict[str, Any]:
@@ -1280,6 +1298,7 @@ def run_rag_pipeline(
             "No selected language collection matches the requested locale scope."
         )
 
+    work_where = _research_work_where(request.work_filter)
     requested_retrieve_k = max(1, int(request.k))
     semantic_fetch_k = max(requested_retrieve_k, runtime_settings.semantic_fetch_k)
     lexical_fetch_k = max(requested_retrieve_k, runtime_settings.lexical_fetch_k)
@@ -1368,6 +1387,7 @@ def run_rag_pipeline(
                         collection["name"],
                         query,
                         min(collection_semantic_fetch_k, max(1, collection["count"])),
+                        work_where,
                     ),
                     collection,
                     locale_codes,
@@ -1414,6 +1434,7 @@ def run_rag_pipeline(
                     collection["name"],
                     query,
                     min(collection_lexical_fetch_k, max(1, collection["count"])),
+                    work_where,
                 ),
                 collection,
                 locale_codes,
@@ -1537,6 +1558,7 @@ def run_rag_pipeline(
             + [str(item.get("collection")) for item in selected_candidates if item.get("collection")]
         )),
             "retrieval_skipped": bool(request.skip_retrieval),
+            "work_filter": list(request.work_filter),
             "selected_evidence_count": len(selected_candidates),
             "routes": [
                 {
