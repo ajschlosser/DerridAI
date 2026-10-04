@@ -791,18 +791,7 @@ const scenarios: Scenario[] = [
     },
   },
   // Works dialogs.
-  {
-    name: "dialog-works-populate-all",
-    contains: ["Populate metadata with LLM"],
-    nav: "Works",
-    load: true,
-    target: "dialog",
-    steps: async (page) => {
-      await worksHeaderAction(/Populate all metadata/)(page);
-      await expect(page.locator("dialog[open]").last()).toBeVisible();
-    },
-  },
-  {
+  // Work metadata lookup is Vue-owned now; its component/composable tests cover that dialog.\n  {
     name: "dialog-works-separate",
     contains: ["Separate works from a JSONL file"],
     nav: "Works",
