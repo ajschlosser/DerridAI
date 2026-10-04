@@ -150,6 +150,9 @@ const runtime = vi.hoisted(() => ({
   setTranslationDictionary: vi.fn(),
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
+vi.mock("../../src/domain/sharedCorpusHydration", () => ({
+  ensureCorpusWorkspaceLoaded: () => runtime.ensureCorpusWorkspaceLoaded(),
+}));
 vi.mock("../../src/domain/semanticMapSources", () => ({
   listSemanticMapSources: vi.fn(() => ({
     records: [{ id: "record-1", work: "Glas", concepts: [], topics: ["writing"], persons: [] }],

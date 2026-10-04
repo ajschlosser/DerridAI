@@ -21,6 +21,7 @@ import { toast } from "../composables/notifications";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
+import { exportStoreJsonl } from "../domain/storeExport";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { chromaApi } from "../api/chroma";
 import { isAbortError } from "../api/graphql/client";
@@ -1429,12 +1430,12 @@ onBeforeUnmount(() => {
                       <UiButton
                         :label="i18n.t('vector.open_db_jsonl')"
                         icon="download"
-                        @click="runtime.exportStoreJsonl({ loadTab: true })"
+                        @click="exportStoreJsonl({ loadTab: true })"
                       />
                       <UiButton
                         :label="i18n.t('vector.download_db_jsonl')"
                         icon="download"
-                        @click="runtime.exportStoreJsonl({ downloadFile: true })"
+                        @click="exportStoreJsonl({ downloadFile: true })"
                       />
                     </div>
                   </div>

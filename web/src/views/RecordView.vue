@@ -22,7 +22,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { decompressUrlState } from "../domain/urlState";
 import { useAuthStore } from "../stores/auth";
 import { useRoute } from "vue-router";
-import * as runtime from "../runtime/runtime.js";
+import { sharedRecordWorkspace as recordWorkspace } from "../domain/sharedRecordWorkspace";
 import { openSemanticRecord } from "../domain/semanticMapSources";
 import { navigateTo } from "../domain/sharedNavigation";
 import { useI18nStore } from "../stores/i18n";
@@ -146,8 +146,8 @@ async function loadTraceability(current: RecordWorkspaceSnapshot) {
   graphLoading.value = true;
   try {
     const [graph, model] = await Promise.all([
-      runtime.getRecordObjectGraph(current.record),
-      runtime.getDerridaiNormativeModel(),
+      recordWorkspace.getRecordObjectGraph(current.record),
+      recordWorkspace.getDerridaiNormativeModel(),
     ]);
     if (request !== graphRequest) return;
     objectGraph.value = graph as ResearchObjectGraph;
@@ -164,7 +164,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const next = (await runtime.getRecordWorkspaceSnapshot()) as RecordWorkspaceSnapshot;
+    const next = (await recordWorkspace.getRecordWorkspaceSnapshot()) as RecordWorkspaceSnapshot;
     if (request !== readRequest) return;
     if (next.record_id !== snapshot.value.record_id) editOpen.value = false;
     snapshot.value = next;
@@ -205,11 +205,11 @@ async function refreshAfter(action: () => Promise<unknown> | unknown) {
 }
 async function previous() {
   clearSelection();
-  await refreshAfter(() => runtime.recordWorkspaceNavigate(-1));
+  await refreshAfter(() => recordWorkspace.recordWorkspaceNavigate(-1));
 }
 async function next() {
   clearSelection();
-  await refreshAfter(() => runtime.recordWorkspaceNavigate(1));
+  await refreshAfter(() => recordWorkspace.recordWorkspaceNavigate(1));
 }
 function isTypingTarget(target: EventTarget | null) {
   const element = target as HTMLElement | null;
@@ -227,23 +227,23 @@ function handleKeyboard(event: KeyboardEvent) {
 }
 function setFind(value: string) {
   snapshot.value = { ...snapshot.value, find_query: value };
-  runtime.setRecordWorkspaceFind(value);
+  recordWorkspace.setRecordWorkspaceFind(value);
 }
 async function toggleEvidence() {
-  await refreshAfter(() => runtime.toggleCurrentRecordEvidence());
+  await refreshAfter(() => recordWorkspace.toggleCurrentRecordEvidence());
 }
 async function toggleReview() {
-  await refreshAfter(() => runtime.toggleCurrentRecordReviewSelection());
+  await refreshAfter(() => recordWorkspace.toggleCurrentRecordReviewSelection());
 }
 async function saveChanges(changes: Record<string, unknown>) {
-  await refreshAfter(() => runtime.saveCurrentRecordChanges(changes));
+  await refreshAfter(() => recordWorkspace.saveCurrentRecordChanges(changes));
   editOpen.value = false;
 }
 async function quickChange(changes: Record<string, unknown>) {
-  await refreshAfter(() => runtime.saveCurrentRecordChanges(changes));
+  await refreshAfter(() => recordWorkspace.saveCurrentRecordChanges(changes));
 }
 function metadataSearch(field: string, value: string, contains = false) {
-  runtime.searchCurrentRecordMetadata(field, value, { contains });
+  recordWorkspace.searchCurrentRecordMetadata(field, value, { contains });
 }
 function openAnnotation(selection?: { field: string; quote: string }) {
   annotationField.value = selection?.field || "text";
@@ -309,7 +309,7 @@ async function removeAnnotation(id: string) {
   await refreshAfter(() => annotationsService.removeFromCurrentRecord(id));
 }
 async function action(name: string, payload: Record<string, unknown> = {}) {
-  await refreshAfter(() => runtime.currentRecordPrimaryAction(name, payload));
+  await refreshAfter(() => recordWorkspace.currentRecordPrimaryAction(name, payload));
 }
 function startResize(event: PointerEvent) {
   if (window.innerWidth < 1180) return;
@@ -420,9 +420,9 @@ onBeforeUnmount(() => {
         {{ snapshot.reason || i18n.t("record.no_record_help") }}
       </p>
       <div>
-        <button type="button" @click="runtime.navigateRecordWorkspace('global')">
+        <button type="button" @click="recordWorkspace.navigateRecordWorkspace('global')">
           {{ i18n.t("nav.search") }}</button
-        ><button type="button" @click="runtime.navigateRecordWorkspace('works')">
+        ><button type="button" @click="recordWorkspace.navigateRecordWorkspace('works')">
           {{ i18n.t("nav.works") }}
         </button>
       </div>
@@ -453,9 +453,9 @@ onBeforeUnmount(() => {
         @edit="editOpen = true"
         @evidence="toggleEvidence"
         @review="toggleReview"
-        @copy-inline="runtime.copyCurrentRecordCitation('inline')"
-        @copy-full="runtime.copyCurrentRecordCitation('full')"
-        @copy-json="runtime.copyCurrentRecordJson()"
+        @copy-inline="recordWorkspace.copyCurrentRecordCitation('inline')"
+        @copy-full="recordWorkspace.copyCurrentRecordCitation('full')"
+        @copy-json="recordWorkspace.copyCurrentRecordJson()"
         @upsert="action('upsert')"
         @llm="action('llm')"
         @ocr="action('ocr')"
@@ -495,7 +495,7 @@ onBeforeUnmount(() => {
           v-if="snapshot.collection"
           type="button"
           class="record-context-link"
-          @click="runtime.navigateRecordWorkspace('global')"
+          @click="recordWorkspace.navigateRecordWorkspace('global')"
         >
           {{ i18n.t("record.collection") }}: {{ snapshot.collection }}
         </button>

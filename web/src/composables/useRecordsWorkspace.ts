@@ -17,7 +17,16 @@
  */
 
 import { getCurrentScope, onScopeDispose, ref, watch } from "vue";
-import * as runtime from "../runtime/runtime.js";
+import { ensureCorpusWorkspaceLoaded } from "../domain/sharedCorpusHydration";
+import {
+  createSubsetFile,
+  defaultSubsetName as sharedDefaultSubsetName,
+  subsetFields as sharedSubsetFields,
+  subsetSourceRecords as sharedSubsetSourceRecords,
+  subsetSources as sharedSubsetSources,
+  triggerExport,
+  triggerMerge,
+} from "../domain/sharedRecordFileCommands";
 import { recordsWorkspace } from "../domain/sharedRecordsWorkspace";
 import { closeFile as closeWorkspaceFile } from "../domain/sharedFileLifecycle";
 import { state } from "../domain/sharedUrlState";
@@ -68,7 +77,7 @@ export function useRecordsWorkspace() {
     load();
     activation = (async () => {
       try {
-        const result = await runtime.ensureCorpusWorkspaceLoaded?.();
+        const result = await ensureCorpusWorkspaceLoaded();
         if (disposed) return;
         if (result?.status === "error") throw result.error;
         load();
@@ -158,25 +167,25 @@ export function useRecordsWorkspace() {
     load();
   }
   function subsetSources(): SubsetSource[] {
-    return runtime.subsetSources?.() || [];
+    return sharedSubsetSources() || [];
   }
   function subsetFields(): SubsetField[] {
-    return runtime.subsetFields?.() || [];
+    return sharedSubsetFields() || [];
   }
   function subsetSourceRecords(source: string): Record<string, unknown>[] {
-    return runtime.subsetSourceRecords?.(source) || [];
+    return sharedSubsetSourceRecords(source) || [];
   }
   function defaultSubsetName(): string {
-    return runtime.defaultSubsetName?.() || "subset.jsonl";
+    return sharedDefaultSubsetName() || "subset.jsonl";
   }
   async function createSubset(request: SubsetRequest) {
-    const created = await runtime.createSubsetFile(request);
+    const created = await createSubsetFile(request);
     load();
     return created;
   }
   async function run(command: string) {
-    if (command === "merge") await runtime.triggerMerge?.();
-    else if (command === "export") await runtime.triggerExport?.();
+    if (command === "merge") triggerMerge();
+    else if (command === "export") triggerExport();
     else await recordsWorkspace.recordsListCommand(command);
     load();
   }

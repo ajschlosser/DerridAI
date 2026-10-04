@@ -26,10 +26,12 @@ const mocks = vi.hoisted(() => ({
   model: vi.fn(),
   semantic: vi.fn(),
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({
-  getRecordWorkspaceSnapshot: mocks.snapshot,
-  getRecordObjectGraph: mocks.graph,
-  getDerridaiNormativeModel: mocks.model,
+vi.mock("../../src/domain/sharedRecordWorkspace", () => ({
+  sharedRecordWorkspace: {
+    getRecordWorkspaceSnapshot: mocks.snapshot,
+    getRecordObjectGraph: mocks.graph,
+    getDerridaiNormativeModel: mocks.model,
+  },
 }));
 vi.mock("../../src/composables/useNewerData", () => ({
   useNewerData: () => ({ hasNewer: ref(false), acknowledge: vi.fn() }),

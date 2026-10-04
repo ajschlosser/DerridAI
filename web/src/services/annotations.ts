@@ -18,6 +18,8 @@
 
 import type { AnnotationWorkspaceItem, AnnotationsWorkspaceSnapshot } from "../types/annotations";
 import * as runtime from "../runtime/runtime.js";
+import { annotationsWorkspace } from "../domain/sharedAnnotations";
+import { sharedRecordWorkspace as recordWorkspace } from "../domain/sharedRecordWorkspace";
 
 export interface CreateAnnotationInput {
   scope?: "text" | "record" | "work";
@@ -46,14 +48,15 @@ export interface AnnotationService {
 
 export const annotationsService: AnnotationService = {
   loadWorkspace: (force) =>
-    runtime.loadAnnotationsWorkspace(force) as Promise<AnnotationsWorkspaceSnapshot>,
-  setQuery: (value) => runtime.setAnnotationsWorkspaceQuery(value),
-  setView: (value) => runtime.setAnnotationsWorkspaceView(value),
-  openRecord: (annotation) => runtime.openAnnotationsWorkspaceRecord(annotation),
-  openWork: (work) => runtime.openAnnotationsWorkspaceWork(work),
+    annotationsWorkspace.loadAnnotationsWorkspace(force) as Promise<AnnotationsWorkspaceSnapshot>,
+  setQuery: (value) => annotationsWorkspace.setAnnotationsWorkspaceQuery(value),
+  setView: (value) => annotationsWorkspace.setAnnotationsWorkspaceView(value),
+  openRecord: (annotation) => annotationsWorkspace.openAnnotationsWorkspaceRecord(annotation),
+  openWork: (work) => annotationsWorkspace.openAnnotationsWorkspaceWork(work),
   openWorkAnnotations: (work) => runtime.openWorkAnnotations(work),
-  removeWorkspaceItem: (annotation) => runtime.removeAnnotationsWorkspaceItem(annotation),
-  addToCurrentRecord: (input) => runtime.addCurrentRecordAnnotation(input),
-  removeFromCurrentRecord: (id) => runtime.removeCurrentRecordAnnotation(id),
-  replyToAnnotation: (id, input) => runtime.replyToCurrentAnnotation(id, input),
+  removeWorkspaceItem: (annotation) =>
+    annotationsWorkspace.removeAnnotationsWorkspaceItem(annotation),
+  addToCurrentRecord: (input) => recordWorkspace.addCurrentRecordAnnotation(input),
+  removeFromCurrentRecord: (id) => recordWorkspace.removeCurrentRecordAnnotation(id),
+  replyToAnnotation: (id, input) => recordWorkspace.replyToCurrentAnnotation(id, input),
 };

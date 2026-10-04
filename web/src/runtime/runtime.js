@@ -101,11 +101,9 @@ import {
 import { compactNumber } from "../domain/numberFormatting";
 import { normalizeResearcherToken } from "../domain/researcherContentFilter";
 import { filterOpsForField } from "../domain/searchFilterSchema";
-import { stripLigaturesAndArtifacts } from "../domain/textCleanup";
 import {
   compactRecordHistory,
   isResponseCacheStore,
-  normalizePdfLinkChanges,
   pdfLinks,
   ragEvidenceRecordPayload,
   recordPayload,
@@ -171,6 +169,8 @@ import {
   storeReceipt,
 } from "../domain/storeAvailability";
 import { registerOperationHooks } from "../domain/operationHooks";
+import { registerOperationProgress } from "../domain/operationProgressHooks";
+import { exportStoreJsonl } from "../domain/storeExport";
 import {
   searchFacets as sharedSearchFacets,
   evidenceSelection as sharedEvidenceSelection,
@@ -185,6 +185,8 @@ import {
   recordFields,
   dbSearchWhere,
 } from "../domain/sharedRecordHelpers";
+import { sharedPdfLinking } from "../domain/sharedPdfLinking";
+import { sharedRecordWorkspace } from "../domain/sharedRecordWorkspace";
 import { recordPresenters as sharedRecordPresenters } from "../domain/sharedRecordPresenters";
 import { providerProfilesService, warmupProviderProfile } from "../domain/sharedProviderProfiles";
 import { searchWorkspace } from "../domain/sharedSearchWorkspace";
@@ -192,7 +194,6 @@ import { getTableColumns, tableAvailableFields } from "../domain/tableColumns";
 import { recordsWorkspace as sharedRecordsWorkspace } from "../domain/sharedRecordsWorkspace";
 import { activateFile, searchByMetadata } from "../domain/workspaceActions";
 import { pageInfo, setActiveStore, setListFilterValue } from "../domain/listPaging";
-import { createRecordWorkspace } from "../domain/recordWorkspace";
 import { createWorksWorkspace } from "../domain/worksWorkspace";
 import { createJobsWorkspace } from "../domain/jobsWorkspace";
 import {
@@ -242,7 +243,6 @@ import {
 } from "../domain/sharedWorkspaceStorage";
 import * as sharedRecordEditing from "../domain/sharedRecordEditing";
 import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
-import { createPdfLinking } from "../domain/pdfLinking";
 import { clearFileDerivedState as clearFileDerivedStateOf } from "../domain/fileDerivedState";
 import { closeFile, importFiles } from "../domain/sharedFileLifecycle";
 import {
@@ -268,12 +268,10 @@ import {
 import { createRuntimeState } from "./runtimeState";
 import { createVectorCollectionBridge } from "./vectorCollectionBridge";
 import { refreshStores } from "../domain/sharedStores";
-import { createCorpusWorkspaceHydration } from "../domain/corpusWorkspaceHydration";
 import { canAccessPage, canUse, hasCapability, isResearcher } from "../domain/sharedSession";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { applyAppearance } from "../domain/sharedAppearance";
 import { relativeTimeLabel } from "../domain/relativeTimeLabel";
-import { createRecordSubsets } from "../domain/recordSubsets";
 
 pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 
@@ -440,51 +438,7 @@ const {
   currentRecordPrimaryAction,
   searchCurrentRecordMetadata,
   navigateRecordWorkspace,
-} = createRecordWorkspace({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  activeFile: (...args) => activeFile(...args),
-  api: (...args) => api(...args),
-  applyRecordChanges: (...args) => applyRecordChanges(...args),
-  canAccessPage: (...args) => canAccessPage(...args),
-  canUse: (...args) => canUse(...args),
-  cleanRecord: (...args) => cleanRecord(...args),
-  copyJsonToClipboard: (...args) => copyJsonToClipboard(...args),
-  dbEvidenceKey: (...args) => dbEvidenceKey(...args),
-  evidenceIsSelected: (...args) => evidenceIsSelected(...args),
-  hasCapability: (...args) => hasCapability(...args),
-  hasCorpusDb: (...args) => hasCorpusDb(...args),
-  isResearcher: (...args) => isResearcher(...args),
-  linkPdfPage: (...args) => linkPdfPage(...args),
-  loadStorePage: (...args) => loadStorePage(...args),
-  loadedPdfPagesForRecord: (...args) => loadedPdfPagesForRecord(...args),
-  navigateTo: (...args) => navigateTo(...args),
-  normalizedRecordAnnotation: (...args) => normalizedRecordAnnotation(...args),
-  openLoadedPdfPage: (...args) => openLoadedPdfPage(...args),
-  openPdfExplorerWorkspace: (...args) => openPdfExplorerWorkspace(...args),
-  openRecordHistoryBrowser: (...args) => openRecordHistoryBrowser(...args),
-  openTouchup,
-  pdfDisplayTitle: (...args) => pdfDisplayTitle(...args),
-  persistPrefs: (...args) => persistPrefs(...args),
-  refreshServerAnnotations: (...args) => refreshServerAnnotations(...args),
-  refreshStores: (...args) => refreshStores(...args),
-  researcherDbRecords: (...args) => researcherDbRecords(...args),
-  reviewKey: (...args) => reviewKey(...args),
-  searchByMetadata: (...args) => searchByMetadata(...args),
-  selectedIndex: (...args) => selectedIndex(...args),
-  selectedRecord: (...args) => selectedRecord(...args),
-  setReviewSelected: (...args) => setReviewSelected(...args),
-  shell: (...args) => shell(...args),
-  syncUrl: (...args) => syncUrl(...args),
-  toggleDbEvidence: (...args) => toggleDbEvidence(...args),
-  toggleWorkspaceEvidence: (...args) => toggleWorkspaceEvidence(...args),
-  tr: (...args) => tr(...args),
-  uid: (...args) => uid(...args),
-  unlinkAllPdfLinks: (...args) => unlinkAllPdfLinks(...args),
-  unlinkPdfLink: (...args) => unlinkPdfLink(...args),
-  upsertRows: (...args) => upsertRows(...args),
-  workspaceEvidenceKey: (...args) => workspaceEvidenceKey(...args),
-});
+} = sharedRecordWorkspace;
 const {
   describeAdminWork,
   worksSnapshotBase,
@@ -645,18 +599,7 @@ const {
   linkPdfPage,
   unlinkPdfLink,
   unlinkAllPdfLinks,
-} = createPdfLinking({
-  state,
-  // Wrapped so each helper is looked up when it is called: several are declared later in this module.
-  allRows: (...args) => allRows(...args),
-  applyRecordChanges: (...args) => applyRecordChanges(...args),
-  normalizePdfLinkChanges: (...args) => normalizePdfLinkChanges(...args),
-  pdfLinks: (...args) => pdfLinks(...args),
-  renderView: (...args) => renderView(...args),
-  shell: (...args) => shell(...args),
-  tr: (...args) => tr(...args),
-  trf: (...args) => trf(...args),
-});
+} = sharedPdfLinking;
 const {
   notifyOperationsChanged,
   operationsBridge,
@@ -746,6 +689,11 @@ const {
   tr: (...args) => tr(...args),
   trf: (...args) => trf(...args),
   uid: (...args) => uid(...args),
+});
+registerOperationProgress({
+  show: showOperationProgress,
+  update: updateOperationProgress,
+  hide: hideOperationProgress,
 });
 const {
   openJobDetails,
@@ -1063,17 +1011,6 @@ function viewDisabledReason(view) {
   return "";
 }
 
-// Subset files for the Vue Records view: the sources, fields and file creation, over the loaded files.
-const { subsetSources, subsetSourceRecords, subsetFields, defaultSubsetName, createSubsetFile } =
-  createRecordSubsets({
-    state,
-    cloneAuditValue,
-    downloadBlob: (...args) => downloadBlob(...args),
-    label: (...args) => label(...args),
-    navigateTo: (...args) => navigateTo(...args),
-    persistFileNow: (...args) => persistFileNow(...args),
-    uid,
-  });
 const {
   openMergeDialog,
   openBulkFieldEditor,
@@ -1112,63 +1049,6 @@ function relativeTime(value) {
 // selection, URL serialization, and the existing LLM review workflows.
 
 /** @param {{field?: string, op?: string, value?: string}} [options] */
-
-function cleanRecord(f, i) {
-  const c = stripLigaturesAndArtifacts(f.records[i].text);
-  if (!c.changed) return toast(tr("runtime.toast.no_ligatures"), { tone: "warning" });
-  const changed = applyRecordChanges(f, i, { text: c.text }, { source: "ocr_cleanup" });
-  shell();
-  renderView();
-  toast(
-    trf(
-      changed === 1
-        ? "runtime.toast.tracked_changes_applied_one"
-        : "runtime.toast.tracked_changes_applied_many",
-      {
-        count: changed,
-      },
-    ),
-    { tone: "success" },
-  );
-}
-
-function exportMenu() {
-  const dialog = document.createElement("dialog");
-  dialog.innerHTML = `<div class="dh"><h2 style="margin:0;font-size:16px">${esc(tr("export.title"))}</h2><button class="btn" data-close>${esc(tr("ui.close"))}</button></div><div class="db"><div class="tools"><button class="btn" data-export="current">${esc(tr("export.current"))}</button><button class="btn" data-export="changed">${esc(tr("export.changed"))}</button><button class="btn" data-export="all">${esc(tr("export.all"))}</button><button class="btn" data-export="aggregate">${esc(tr("export.aggregate"))}</button><button class="btn" data-export="both">${esc(tr("export.changed_aggregate"))}</button></div></div>`;
-  document.body.appendChild(dialog);
-  showAppModal(dialog);
-  dialog.querySelector("[data-close]").onclick = () => {
-    dialog.close();
-    dialog.remove();
-  };
-  dialog.querySelectorAll("[data-export]").forEach(
-    (button) =>
-      (button.onclick = () => {
-        doExport(button.dataset.export);
-        dialog.close();
-        dialog.remove();
-      }),
-  );
-}
-function doExport(kind) {
-  const current = activeFile(),
-    changed = state.files.filter((f) => f.dirty.size);
-  if (kind === "current" && current) download(current.name, fileJsonl(current));
-  if (kind === "changed")
-    changed.forEach((f, i) => setTimeout(() => download(f.name, fileJsonl(f)), i * 160));
-  if (kind === "all")
-    state.files.forEach((f, i) => setTimeout(() => download(f.name, fileJsonl(f)), i * 160));
-  if (kind === "aggregate" || kind === "both")
-    download(
-      "derridai-aggregate.jsonl",
-      state.files
-        .flatMap((f) => f.records)
-        .map((r) => JSON.stringify(r))
-        .join("\n") + "\n",
-    );
-  if (kind === "both")
-    changed.forEach((f, i) => setTimeout(() => download(f.name, fileJsonl(f)), 250 + i * 160));
-}
 
 async function currentPdfPageText() {
   const result = await extractPdfPageSmart(state.pdf.page);
@@ -1387,106 +1267,6 @@ async function refreshStoreWorks(force = false) {
   state.storeWorksStore = state.activeStore;
   if (state.storeWork && !state.storeWorks.includes(state.storeWork)) state.storeWork = "";
 }
-async function exportStoreJsonl({
-  store = state.activeStore,
-  work = null,
-  downloadFile = false,
-  loadTab = false,
-  navigate = true,
-  silent = false,
-} = {}) {
-  if (!store)
-    return silent ? null : toast(tr("records.toast.select_collection"), { tone: "warning" });
-  const params = new URLSearchParams();
-  if (work) params.set("work", work);
-  const op = silent ? null : showOperationProgress(`Exporting ${store}`, 1);
-  try {
-    if (op)
-      updateOperationProgress(
-        op,
-        0,
-        1,
-        work ? `Reading work: ${work}` : "Reading complete collection…",
-      );
-    const payload = await api(
-      `/api/stores/${encodeURIComponent(store)}/export${params.toString() ? `?${params}` : ""}`,
-    );
-    const records = payload.records || [];
-    const suffix = work
-      ? `-${String(work)
-          .replace(/[^a-z0-9]+/gi, "-")
-          .replace(/^-|-$/g, "")}`
-      : "";
-    const name = `${store}${suffix}.jsonl`;
-    const jsonl =
-      records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : "");
-    if (downloadFile) download(name, jsonl);
-    if (loadTab) {
-      const file = {
-        id: uid(),
-        name,
-        records: records.map((record) => cloneAuditValue(record)),
-        errors: [],
-        dirty: new Set(),
-        imported_at: new Date().toISOString(),
-        imported_from_chroma: store,
-      };
-      // Reloading the same collection/work replaces its clean earlier copy instead of duplicating every record.
-      const previous = state.files.findIndex(
-        (item) =>
-          item.imported_from_chroma === store &&
-          item.name === name &&
-          !(item.dirty && item.dirty.size),
-      );
-      if (previous >= 0) {
-        file.id = state.files[previous].id;
-        state.files.splice(previous, 1, file);
-      } else state.files.push(file);
-      invalidateCorpusCache();
-      await persistFileNow(file);
-      state.activeFileId = file.id;
-      persistPrefs();
-      if (navigate) navigateTo("list", { fileId: file.id });
-    }
-    if (op) {
-      updateOperationProgress(op, 1, 1, `${records.length.toLocaleString()} records exported`);
-      setTimeout(() => hideOperationProgress(op), 600);
-    }
-    if (!loadTab && !silent)
-      toast(
-        trf("dynamic.exported_records", {
-          count: records.length.toLocaleString(),
-          collection: store,
-        }),
-        { tone: "success" },
-      );
-    return records;
-  } catch (error) {
-    if (op) {
-      updateOperationProgress(op, 0, 1, `Failed: ${error.message}`);
-      setTimeout(() => hideOperationProgress(op), 1800);
-    }
-    if (!silent)
-      toast(trf("runtime.toast.chroma_export_failed", { detail: error.message }), {
-        tone: "danger",
-      });
-    return null;
-  }
-}
-const ensureCorpusWorkspaceLoaded = createCorpusWorkspaceHydration({
-  isResearcher,
-  hasFiles: () => Boolean(state.files.length),
-  hasStores: () => Boolean(state.stores.length),
-  refreshStores,
-  recordStores,
-  activeStore: () => state.activeStore,
-  setActiveStore: (name) => {
-    state.activeStore = name;
-  },
-  exportStore: (name) =>
-    exportStoreJsonl({ store: name, loadTab: true, navigate: false, silent: true }),
-  exportFailure: () => tr("records.hydration_export_failed"),
-});
 const vectorCollectionBridge = createVectorCollectionBridge({
   state,
   workIndex,
@@ -1771,11 +1551,6 @@ function toggleSidebar() {
   persistPrefs();
   shell();
 }
-function triggerMerge() {
-  return canUse("manageCorpus")
-    ? openMergeDialog()
-    : toast(tr("runtime.toast.cannot_merge_files"), { tone: "warning" });
-}
 function triggerBulkEdit() {
   return canUse("editLocalRecords")
     ? openBulkFieldEditor()
@@ -1800,11 +1575,6 @@ function triggerUpsertQueue() {
   return canUse("manageCorpus")
     ? openUpsertQueue()
     : toast(tr("runtime.toast.cannot_manage_dbs"), { tone: "warning" });
-}
-function triggerExport() {
-  return canUse("manageCorpus")
-    ? exportMenu()
-    : toast(tr("runtime.toast.cannot_export"), { tone: "warning" });
 }
 function triggerEdit() {
   return canUse("editLocalRecords")
@@ -2252,12 +2022,6 @@ export {
   renderView,
   toggleSidebar,
   activateFile,
-  triggerMerge,
-  subsetSources,
-  subsetSourceRecords,
-  subsetFields,
-  defaultSubsetName,
-  createSubsetFile,
   triggerBulkEdit,
   triggerOcrClean,
   triggerReviewFlagged,
@@ -2270,7 +2034,6 @@ export {
   touchupSubmitBackground,
   touchupApplyResults,
   triggerUpsertQueue,
-  triggerExport,
   triggerEdit,
   getProviderProfilesForUi,
   getProviderRequestConfigForUi,
@@ -2289,8 +2052,6 @@ export {
   notifyVectorStoresChanged,
   openCollectionCreationWizard,
   upsertRows,
-  exportStoreJsonl,
-  ensureCorpusWorkspaceLoaded,
   persistPrefs,
   lookupRecord,
   copyJsonToClipboard,
