@@ -20,39 +20,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
-## Post-0.81.0 maintenance
+## 0.82.0 — Gloucester
 
-Repository cleanup after the Fall River release removed transient implementation
-artifacts that no longer described current `master`:
-
-- Automatic metadata evidence recovery now defaults to
-  `evidence.recovery.cascade@2`: direct textual support still exits early, while
-  semantic retrieval, CrossEncoder reranking, and MMR only build a bounded
-  shortlist. Relevance scores cannot establish evidence; candidates must pass
-  deterministic support validation or a closed-choice support decision before
-  provenance. The model sees at most four ranked candidates in the normal path,
-  restoring richer evidence suggestions without reviving cascade v1's
-  relevance-as-evidence behavior.
-- Metadata review now represents a model-proposed absence as cELF no-value
-  state rather than inserting fallback text into a scholarly field, applies
-  reviewer decisions optimistically through their review-state projections,
-  advances through the Metadata queue when the last decision is made, and
-  suppresses evidence-confidence percentages when no source span is bound.
-- Deleted obsolete progress, plan, and branch-handoff documents:
-  `CBI_PROGRESS.md`,
-  `docs/CORPUS_BUILDER_HAPPY_PATH_UX_PLAN.md`,
-  `docs/CORPUS_BUILDER_HAPPY_PATH_UX_HANDOFF.md`,
-  `docs/GRAPH_NORMALIZATION_PLAN.md`,
-  `docs/GRAPH_NORMALIZATION_HANDOFF.md`,
-  `docs/TOOLTIPS_HELP_HANDOFF.md`, and
-  `docs/PIPELINE_STUDIO_WORKFLOW_SEMANTICS_IMPLEMENTATION.md`.
-- Deleted the one-off `scripts/runtime-refactor/` migration helpers now that
-  their runtime/CSS extraction campaign is historical.
-- Deleted the stray source backup
-  `web/src/components/OperationsPanel.vue.pre-a11y-fix.bak`; Git history is
-  the authoritative backup.
-- Current architecture, requirements, user documentation, release notes,
-  compatibility tests, and legacy characterization baselines were retained.
+Gloucester consolidates the rapid post-Fall River work into a release centered on
+progressive and concurrent Corpus Builder review, stricter metadata/evidence
+semantics, executable typed Pipeline Studio workflows, portable research-site
+publication and the TypeScript SDK, realtime/progressive loading, large-corpus
+review performance, semantic/Works/Settings/Help redesigns, cELF clarification,
+accessibility hardening, offline Gutenberg installation, and continued legacy
+frontend runtime retirement. See [0.82.0](docs/notes/0.82.0.md) for the complete
+release note.
 
 ## 0.81.0 — Fall River
 
