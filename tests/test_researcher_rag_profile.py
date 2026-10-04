@@ -29,10 +29,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from fastapi import HTTPException
-
 from app.models import RAGRunRequest
 from app.provider_profile_options import profile_generation_options
+from fastapi import HTTPException
 
 
 def test_researcher_rag_uses_approved_model_and_not_browser_overrides():
