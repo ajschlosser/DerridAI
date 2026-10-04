@@ -60,7 +60,7 @@ const stories = [
 for (const scheme of ["light", "dark"] as const) {
   for (const [id, root] of stories) {
     test(`${id} has no WCAG 2.2 AA violations (${scheme})`, async ({ page }) => {
-      await page.emulateMedia({ colorScheme: scheme });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.goto(`/iframe.html?id=${id}&viewMode=story`);
       await page.evaluate((value) => {
         document.documentElement.dataset.colorScheme = value;
