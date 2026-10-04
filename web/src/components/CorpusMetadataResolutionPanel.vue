@@ -39,6 +39,7 @@ import { assertionConflict, currentFieldAssertions } from "../domain/fieldAssert
 import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
 import { corpusBuilderApi, type MetadataPrecedents } from "../api/corpus";
 import { reviewableMetadataFieldNames } from "../features/corpus-builder/domain/recordMetadata";
+import { activeValueEditor } from "../domain/focus";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldPrecedents from "./CorpusFieldPrecedents.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
@@ -71,7 +72,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   resolve: [field: string, value: unknown];
   noValue: [field: string];
-  resolveMany: [changes: Record<string, unknown>];
+  resolveMany: [changes: Record<string, unknown>, confirmedAbsentFields: string[]];
   source: [field: string];
   resolveWithEvidence: [field: string, value: unknown, text: string];
   resolveWithHumanSource: [field: string, value: unknown, note: string];
@@ -407,22 +408,33 @@ const enrichmentPending = computed(() => ["queued", "running"].includes(enrichme
 const constraints = computed(() =>
   metadataConstraints({}, props.record as Record<string, unknown>),
 );
-const llmSuggestions = computed(() => {
-  const out: Record<string, unknown> = {};
+const llmSuggestionBatch = computed(() => {
+  const changes: Record<string, unknown> = {};
+  const confirmedAbsentFields: string[] = [];
   for (const field of activeFields.value) {
     const info = status(field);
     const value = fieldValue(field);
-    if (
-      String(info.method || "").includes("llm") &&
-      unresolved.value.has(field) &&
-      value !== null &&
-      value !== undefined &&
-      value !== ""
-    )
-      out[field] = value;
+    const modelDerived =
+      String(info.method || "").includes("llm") ||
+      String(info.derivation_method || "") === "model";
+    if (!modelDerived || !unresolved.value.has(field)) continue;
+    const suggestedAbsence =
+      value === null || value === undefined || value === ""
+        ? info.suggested_absence === true ||
+          info.evaluation_status === "no_supported_value" ||
+          info.reason_code === "no_supported_value" ||
+          info.reason_code === "required_no_supported_value"
+        : false;
+    if (suggestedAbsence) {
+      changes[field] = null;
+      confirmedAbsentFields.push(field);
+    } else if (value !== null && value !== undefined && value !== "") {
+      changes[field] = value;
+    }
   }
-  return out;
+  return { changes, confirmedAbsentFields };
 });
+const llmSuggestions = computed(() => llmSuggestionBatch.value.changes);
 const llmSuggestionCount = computed(() => Object.keys(llmSuggestions.value).length);
 type MemoryHint = { value: unknown; similarity: number; support: number; absence?: boolean };
 /** Less certain values earlier reviews attached to matching source spans (never pre-filled). */
@@ -564,6 +576,14 @@ function decided(field: string) {
 function tryAdvance() {
   const from = advanceFrom.value;
   if (from === null || props.busy || props.savingField || props.batchSaving) return;
+  const activeEditor = activeValueEditor();
+  const activeField = activeEditor?.closest<HTMLElement>("[data-field]")?.dataset.field || "";
+  if (activeEditor && activeField !== from) {
+    // A delayed save/refresh may finish after the reviewer has already begun
+    // typing somewhere else. Their editor wins; never steal its focus.
+    advanceFrom.value = null;
+    return;
+  }
   advanceFrom.value = null;
   const order = decisionFields.value;
   const start = Math.max(0, order.indexOf(from));
@@ -677,7 +697,11 @@ function displayValue(field: string) {
           class="btn small primary"
           :disabled="busy || batchSaving"
           @click="
-            emit('resolveMany', llmSuggestions);
+            emit(
+              'resolveMany',
+              llmSuggestionBatch.changes,
+              llmSuggestionBatch.confirmedAbsentFields,
+            );
             decided('');
           "
         >
