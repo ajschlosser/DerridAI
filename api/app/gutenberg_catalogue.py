@@ -297,12 +297,13 @@ class GutenbergOfflineService:
             catalogue_rows = int(db.execute("SELECT COUNT(*) FROM gutenberg_catalogue_books").fetchone()[0])
         # Readiness belongs to the installed database, not the disposable ZIP.
         # This keeps a verified local collection usable during updates and after the archive is deleted.
-        library_status, installed_count, imported_texts = self._library_state()
-        archive["imported_texts"] = imported_texts
+        library_status, installed_count, installed_texts = self._library_state()
+        staging_texts = self._library_count(self.staging_library_db_path) if self.staging_library_db_path.is_file() else 0
+        archive["imported_texts"] = staging_texts if archive["status"] == "unpacking" else installed_texts
         archive["ready"] = (
             library_status == "ready"
-            and imported_texts > 0
-            and imported_texts == installed_count
+            and installed_texts > 0
+            and installed_texts == installed_count
         )
         declared_count = int(catalogue.get("item_count") or 0)
         search_ready = (
