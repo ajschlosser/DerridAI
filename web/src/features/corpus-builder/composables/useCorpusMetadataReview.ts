@@ -470,21 +470,27 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     );
   }
 
-  async function resolveMetadataSuggestions(changes: Record<string, unknown>) {
+  async function resolveMetadataSuggestions(
+    changes: Record<string, unknown>,
+    confirmedAbsentFields: string[] = [],
+  ) {
+    const normalizedChanges = { ...changes };
+    const absent = new Set(confirmedAbsentFields.map(String));
+    for (const field of absent) normalizedChanges[field] = null;
     if (
       !options.currentBuild.value ||
       !options.selectedRecord.value ||
-      !Object.keys(changes).length
+      !Object.keys(normalizedChanges).length
     ) {
       return;
     }
-    for (const [field, value] of Object.entries(changes)) {
+    for (const [field, value] of Object.entries(normalizedChanges)) {
       rememberMetadataValues(field, value);
     }
     const viewport = options.captureReviewViewport();
     metadataSavingField.value = "__batch__";
     metadataSavedField.value = "";
-    const context = applyOptimisticMetadataDecision(changes);
+    const context = applyOptimisticMetadataDecision(normalizedChanges, absent);
     if (!context) {
       metadataSavingField.value = "";
       return;
@@ -495,13 +501,14 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     await options.restoreReviewViewport(viewport, { inspector: true });
     options.queueRecordRequest(
       context.recordId,
-      Object.keys(changes),
+      Object.keys(normalizedChanges),
       async (rebase) => {
         const result = await corpusBuilderApi.metadataDecisionBatch(
           context.buildId,
           context.recordId,
-          changes,
+          normalizedChanges,
           rebase ? undefined : context.expectedRevision,
+          [...absent],
         );
         options.applyAuthoritativeRecord(result.record, result.build);
         const summary = describeDecisionResult(result, options.tf);
