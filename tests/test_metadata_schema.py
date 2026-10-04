@@ -971,6 +971,47 @@ def test_boolean_false_is_supported_value_not_missing_value():
     assert "Structured-output contradiction" not in parsed.field_assessments.is_direct_quote.reason
 
 
+def test_boolean_assessment_echo_must_match_materialized_metadata_value():
+    schema = ms.default_schema()
+    response = ms.response_model_for(schema, "quotation")
+    quotation_fields = [field.name for field in schema.fields_in("quotation")]
+    scalar_fields = [name for name in quotation_fields if name != "quotation_chain"]
+    assessments = {
+        name: {
+            "confidence": 0.98,
+            "needs_review": False,
+            "reason": "No supported quotation relation applies.",
+            "outcome": "no_supported_value",
+            **({"assessed_value": True} if name == "is_direct_quote" else {}),
+        }
+        for name in quotation_fields
+    }
+    assessments["is_direct_quote"].update(
+        reason="A direct quotation is clearly present.",
+        outcome="supported_value",
+    )
+    parsed = response.model_validate(
+        {
+            "metadata": {
+                **{name: None for name in scalar_fields},
+                "is_direct_quote": False,
+                "quotation_chain": [],
+            },
+            "field_assessments": assessments,
+            "field_evidence": {},
+            "review_reason": "",
+        }
+    )
+
+    assert parsed.metadata.is_direct_quote is False
+    assessment = parsed.field_assessments.is_direct_quote
+    assert assessment.assessed_value is True
+    assert assessment.outcome == "uncertain"
+    assert assessment.needs_review is True
+    assert "assessed_value=True" in assessment.reason
+    assert "metadata value=False" in assessment.reason
+
+
 def test_open_fields_reject_pos_ner_and_foreign_closed_vocabulary_leakage():
     schema = ms.default_schema()
     response = ms.response_model_for(schema, "quotation")
