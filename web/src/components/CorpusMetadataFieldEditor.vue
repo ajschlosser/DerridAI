@@ -33,6 +33,7 @@ import {
 import { useRecordTextSelection } from "../composables/useRecordTextSelection";
 import CorpusFieldSelectionPreview from "./CorpusFieldSelectionPreview.vue";
 import {
+  isPlaceholderValue,
   metadataValueText,
   unwrapMetadataValue,
   usableListOptions,
@@ -155,6 +156,10 @@ const hasValue = (value: unknown) =>
 const leakedAssessment = (value: unknown) =>
   typeof value === "string" &&
   /^\s*confidence\s*:\s*(?:null|[\d.]+)\s*,\s*needs_review\s*:/i.test(value);
+const modelPlaceholder = (value: unknown) =>
+  isLlm.value &&
+  typeof unwrapMetadataValue(value) === "string" &&
+  isPlaceholderValue(unwrapMetadataValue(value));
 const resolvedValue = computed(() => {
   const status = props.status || {};
   if (
@@ -167,13 +172,14 @@ const resolvedValue = computed(() => {
     return normalizeMetadataFieldValue(props.field, status.prefilled_value);
   if (
     hasValue(props.value) &&
-    !(props.control === "multi-combobox" && leakedAssessment(props.value))
+    !(props.control === "multi-combobox" && leakedAssessment(props.value)) &&
+    !modelPlaceholder(props.value)
   )
     return normalizeMetadataFieldValue(props.field, withoutTransportItems(props.value));
   // Backward compatibility for records created before populated-but-unverified
   // proposals were written into the record itself. Confidence affects review
   // state, not whether the reviewer may see the proposed value.
-  if (!status.blind && hasValue(status.proposed_value))
+  if (!status.blind && hasValue(status.proposed_value) && !modelPlaceholder(status.proposed_value))
     return normalizeMetadataFieldValue(props.field, status.proposed_value);
   if (hasValue(props.constraint?.value))
     return normalizeMetadataFieldValue(props.field, props.constraint?.value);
@@ -189,9 +195,13 @@ const resolvedValue = computed(() => {
  */
 const suggestedAbsence = computed(() => {
   const status = props.status || {};
+  const placeholderReturned = [props.value, status.proposed_value, status.llm_value].some(
+    modelPlaceholder,
+  );
   return (
     !hasValue(resolvedValue.value) &&
-    (status.suggested_absence === true ||
+    (placeholderReturned ||
+      status.suggested_absence === true ||
       status.evaluation_status === "no_supported_value" ||
       status.reason_code === "no_supported_value" ||
       status.reason_code === "required_no_supported_value")
