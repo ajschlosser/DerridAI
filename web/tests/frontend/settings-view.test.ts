@@ -263,7 +263,7 @@ describe("SettingsView", () => {
     expect(wrapper.text()).not.toContain("Retrieval & indexing");
     expect(wrapper.text()).not.toContain("Data & storage");
     expect(wrapper.text()).not.toContain("NUKE DerridAI workspace");
-    expect(wrapper.text()).not.toContain("Save RAG defaults");
+    expect(wrapper.text()).not.toContain("Save Research configuration");
   });
 
   it("shows copyright and version on Overview without a git commit for researchers", async () => {
@@ -305,7 +305,7 @@ describe("SettingsView", () => {
 
     await wrapper
       .findAll("button")
-      .find((button) => button.text().includes("Save RAG defaults"))
+      .find((button) => button.text().includes("Save Research configuration"))
       ?.trigger("click");
     await flushPromises();
 
@@ -325,7 +325,7 @@ describe("SettingsView", () => {
     await wrapper.get("#settings-field-rag-locale-fr").setValue(false);
     await wrapper
       .findAll("button")
-      .find((button) => button.text().includes("Save RAG defaults"))
+      .find((button) => button.text().includes("Save Research configuration"))
       ?.trigger("click");
     await flushPromises();
     expect((wrapper.get("#settings-field-rag-k").element as HTMLInputElement).value).toBe("12");
