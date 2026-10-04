@@ -111,22 +111,14 @@ function lexicalScores(
       }
       let score = 0;
       for (const term of queryTerms) {
-        const termFrequency = frequencies.get(term) ?? 0;
-        if (!termFrequency) continue;
-        const matchingDocumentCount = documentFrequency.get(term) ?? 0;
-        const inverseDocumentFrequency = Math.log(
-          1 + (count - matchingDocumentCount + 0.5) / (matchingDocumentCount + 0.5),
-        );
-        const termSaturation = 1.2;
-        const lengthNormalization = 0.75;
+        const tf = frequencies.get(term) ?? 0;
+        if (!tf) continue;
+        const df = documentFrequency.get(term) ?? 0;
+        const idf = Math.log(1 + (count - df + 0.5) / (df + 0.5));
+        const k1 = 1.2;
+        const b = 0.75;
         score +=
-          (inverseDocumentFrequency *
-            (termFrequency * (termSaturation + 1))) /
-          (termFrequency +
-            termSaturation *
-              (1 -
-                lengthNormalization +
-                (lengthNormalization * doc.terms.length) / averageLength));
+          (idf * (tf * (k1 + 1))) / (tf + k1 * (1 - b + (b * doc.terms.length) / averageLength));
       }
       if (query && doc.body.includes(query.toLocaleLowerCase(locale))) score += 2.5;
       return { record: doc.record, score, lexicalScore: score };
@@ -134,29 +126,19 @@ function lexicalScores(
     .sort(compareScored);
 }
 
-function cosine(leftVector?: ArrayLike<number>, rightVector?: ArrayLike<number>): number {
-  if (
-    !leftVector ||
-    !rightVector ||
-    !leftVector.length ||
-    leftVector.length !== rightVector.length
-  ) {
-    return -1;
+function cosine(a?: ArrayLike<number>, b?: ArrayLike<number>): number {
+  if (!a || !b || !a.length || a.length !== b.length) return -1;
+  let dot = 0;
+  let aa = 0;
+  let bb = 0;
+  for (let index = 0; index < a.length; index += 1) {
+    const x = Number(a[index]);
+    const y = Number(b[index]);
+    dot += x * y;
+    aa += x * x;
+    bb += y * y;
   }
-
-  let dotProduct = 0;
-  let leftMagnitudeSquared = 0;
-  let rightMagnitudeSquared = 0;
-  for (let index = 0; index < leftVector.length; index += 1) {
-    const leftValue = Number(leftVector[index]);
-    const rightValue = Number(rightVector[index]);
-    dotProduct += leftValue * rightValue;
-    leftMagnitudeSquared += leftValue * leftValue;
-    rightMagnitudeSquared += rightValue * rightValue;
-  }
-
-  if (!leftMagnitudeSquared || !rightMagnitudeSquared) return -1;
-  return dotProduct / Math.sqrt(leftMagnitudeSquared * rightMagnitudeSquared);
+  return aa && bb ? dot / Math.sqrt(aa * bb) : -1;
 }
 
 function compareScored(left: ScoredRecord, right: ScoredRecord): number {
