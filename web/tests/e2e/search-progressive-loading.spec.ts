@@ -140,6 +140,7 @@ test("database result columns can be resized without a pointing device", async (
   await page.locator(".search-command-input input").fill("sign");
   await page.locator(".search-run-button").click();
   await expect(page.locator(".search-results-panel")).toContainText("Of Grammatology");
+  await page.getByRole("button", { name: "Compact table", exact: true }).click();
 
   const resizer = page.locator(".search-column-resizer").first();
   await resizer.focus();
