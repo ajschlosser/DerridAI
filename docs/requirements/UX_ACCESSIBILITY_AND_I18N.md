@@ -70,7 +70,30 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 | **PRD-A11Y-007** | Supported semantic color pairs MUST meet applicable WCAG contrast requirements in supported themes.                         | Token tests fail before known foreground/background combinations fall below defined contrast thresholds.                                              | PRD-G-026, PRD-G-029   | [Design Tokens](../DESIGN_TOKENS.md)  | **Direct:** [design tokens](../../web/tests/frontend/design-tokens.test.ts)                                                                                                                                                                                                                                       |
 | **PRD-A11Y-008** | Content MUST tolerate increased text spacing/reflow without hiding required controls or information.                        | Representative components remain usable under WCAG text-spacing changes and narrow layouts.                                                           | PRD-G-026, PRD-G-028   | product accessibility                 | **Direct/Partial:** [operations panel](../../web/tests/e2e/operations-panel.spec.ts); [app views](../../web/tests/e2e/app-views.spec.ts)                                                                                                                                                                          |
 
-The current application-wide engineering sweep and the manual/large-scope work still required before claiming full conformance are tracked in [WCAG 2.2 AA Web Application Sweep](../WCAG_2_2_AA_SWEEP.md).
+### Deferred WCAG 2.2 AA sweep TODOs
+
+The October 2026 engineering sweep fixed low-impact issues and left the following larger work
+explicitly deferred. Do not claim complete WCAG 2.2 AA conformance until these items are closed or
+an applicable WCAG exception is documented.
+
+- [ ] **2.5.7 Dragging Movements:** add a non-drag way to create document layout regions in
+  `DocumentStructureConfigurator.vue` and `DocumentLayoutRegionLayer.vue`.
+- [ ] **2.4.11 Focus Not Obscured:** run route-complete keyboard traversal with the operation
+  dock, sticky bars, drawers, Focus Review, and dialogs open; add regressions for failures.
+- [ ] **1.4.10 Reflow / 1.4.12 Text Spacing:** test every substantive route at 320 CSS px and
+  with WCAG text-spacing overrides; fix clipping and overlap found.
+- [ ] **2.5.8 Target Size:** add rendered-hitbox coverage for relation maps, semantic maps,
+  custom SVG targets, and bespoke compact controls.
+- [ ] **1.4.11 Non-text Contrast:** complete a forced-colors/high-contrast pass on custom graph
+  boundaries, selection states, status marks, and focus indicators.
+- [ ] **3.3.7 Redundant Entry:** review multi-step Corpus Builder, capture/import, and
+  administrative workflows for repeated data entry.
+- [ ] **3.3.8 Accessible Authentication:** verify password-manager fill, paste, autofill, and
+  any deployment-specific MFA or identity-provider flow.
+- [ ] **3.2.6 Consistent Help:** verify Help access remains in a consistent relative location
+  across routes, modal workspaces, and narrow-screen shell states.
+- [ ] **Screen-reader behavior:** complete NVDA plus Firefox/Chrome and VoiceOver plus Safari
+  passes for names, live regions, modal boundaries, graph navigation, and focus return.
 
 ## Internationalization requirements
 
