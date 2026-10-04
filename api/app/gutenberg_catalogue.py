@@ -231,19 +231,19 @@ class GutenbergOfflineService:
             catalogue = dict(db.execute("SELECT * FROM gutenberg_catalogue WHERE id=1").fetchone())
             archive = dict(db.execute("SELECT * FROM gutenberg_archive WHERE id=1").fetchone())
             catalogue_rows = int(db.execute("SELECT COUNT(*) FROM gutenberg_catalogue_books").fetchone()[0])
-            book_rows = int(db.execute("SELECT COUNT(*) FROM gutenberg_books").fetchone()[0])
-            content_rows = int(db.execute("SELECT COUNT(*) FROM gutenberg_books WHERE content <> ''").fetchone()[0])
-            legacy_path_row = db.execute(
-                "SELECT path FROM gutenberg_books WHERE content = '' AND path <> '' LIMIT 1"
+            # Never scan the multi-gigabyte content column from a status request.
+            # The persisted import counter is authoritative for database-backed
+            # installs. One primary-key row supports pre-migration file installs.
+            legacy_sample = db.execute(
+                "SELECT path FROM gutenberg_books ORDER BY etext_id LIMIT 1"
             ).fetchone()
 
         # Installed texts are authoritative. The 11 GB transport archive is a
         # staging artifact and may be deleted after a successful import.
-        legacy_path_ready = bool(legacy_path_row and Path(str(legacy_path_row[0])).is_file())
-        archive["ready"] = archive["status"] == "ready" and book_rows > 0 and (
-            content_rows > 0 or legacy_path_ready
-        )
-        archive["local_text_count"] = book_rows
+        imported = int(archive.get("items_done") or 0)
+        legacy_path_ready = bool(legacy_sample and legacy_sample[0] and Path(str(legacy_sample[0])).is_file())
+        archive["ready"] = archive["status"] == "ready" and (imported > 0 or legacy_path_ready)
+        archive["local_text_count"] = imported
 
         declared_count = int(catalogue.get("item_count") or 0)
         search_ready = (
