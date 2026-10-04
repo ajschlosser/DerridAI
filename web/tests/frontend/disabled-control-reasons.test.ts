@@ -17,7 +17,7 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
-import "../../src/runtime/runtimeBridge";
+import "../../src/domain/appBootstrap";
 import { decorateDisabledControls } from "../../src/domain/disabledControls";
 import { setTranslationDictionary } from "../../src/domain/sharedTranslate";
 

@@ -27,7 +27,7 @@ vi.mock("../../src/domain/sharedNavigation", async (importOriginal) => ({
   syncUrl: vi.fn(),
 }));
 
-import "../../src/runtime/runtimeBridge";
+import "../../src/domain/appBootstrap";
 import { sharedPdfLinking } from "../../src/domain/sharedPdfLinking";
 import { sharedRecordWorkspace } from "../../src/domain/sharedRecordWorkspace";
 import { state } from "../../src/domain/sharedUrlState";

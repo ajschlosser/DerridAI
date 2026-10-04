@@ -20,7 +20,7 @@ import { bindJobsState } from "../state/jobsState";
 import { bindWorkspaceGroups } from "../state/workspaceState";
 
 // Initial value of the legacy runtime's single mutable workspace state. Moved verbatim from
-// runtime.js so the shape has one home; the runtime still owns the instance it creates.
+// the old runtime so the shape has one home; the runtime still owns the instance it creates.
 
 export function createRuntimeState() {
   const state = {

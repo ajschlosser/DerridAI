@@ -27,7 +27,7 @@ vi.mock("../../src/domain/sharedNavigation", async (importOriginal) => ({
   syncUrl: vi.fn(),
 }));
 
-import "../../src/runtime/runtimeBridge";
+import "../../src/domain/appBootstrap";
 import { state } from "../../src/domain/sharedUrlState";
 import { jobsState } from "../../src/state/jobsState";
 import { syncUrl } from "../../src/domain/sharedNavigation";

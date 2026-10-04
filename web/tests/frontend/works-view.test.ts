@@ -153,7 +153,7 @@ vi.mock("../../src/domain/shellSnapshot", () => ({
   getShellSnapshot: (...args: unknown[]) =>
     (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
+vi.mock("../../src/domain/appBootstrap", () => ({ ...runtime }));
 vi.mock("../../src/domain/sharedWorksWorkspace", () => ({
   worksWorkspace: {
     ...runtime,

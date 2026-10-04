@@ -59,7 +59,7 @@ vi.mock("../../src/domain/shellSnapshot", () => ({
   getShellSnapshot: (...args: unknown[]) =>
     (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({
+vi.mock("../../src/domain/appBootstrap", () => ({
   ...runtime,
   __v_isRef: false,
   __v_isReadonly: false,
