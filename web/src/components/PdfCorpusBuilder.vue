@@ -281,6 +281,7 @@ const topologyPolicy = ref<CorpusTopologyPolicy>({
   records_per_page: null,
 });
 const sourcePageScope = ref<number[]>([]);
+const sourcePageScopeValid = ref(true);
 function applyCorpusBuildRequest(request: Record<string, unknown>) {
   applyBuildRequest(request);
   const savedScope =
@@ -290,6 +291,7 @@ function applyCorpusBuildRequest(request: Record<string, unknown>) {
   sourcePageScope.value = Array.isArray(savedScope.pages)
     ? savedScope.pages.map(Number).filter((page) => Number.isInteger(page) && page > 0)
     : [];
+  sourcePageScopeValid.value = true;
   const saved =
     request.topology_policy && typeof request.topology_policy === "object"
       ? (request.topology_policy as Partial<CorpusTopologyPolicy>)
@@ -550,6 +552,7 @@ watch(
     documentMetadata.value = {};
     missingMetadataPromptFields.value = [];
     sourcePageScope.value = [];
+    sourcePageScopeValid.value = true;
     topologyPolicy.value = {
       mode: "semantic",
       source_units_per_record: 1,
@@ -674,6 +677,17 @@ const {
   tf: (key, values) => i18n.tf(key, values),
 });
 async function startBuild(fromMetadataPrompt = false) {
+  if (!sourcePageScopeValid.value) {
+    setMessage(
+      i18n.t(
+        "pdf_corpus.source_scope_fix_before_build",
+        "Fix the page selection in Document Structure & Pagination before starting the build.",
+      ),
+      "error",
+    );
+    openSetupSection("structure");
+    return;
+  }
   if (!fromMetadataPrompt && missingDocumentFields.value.length) {
     // Snapshot the unresolved fields before opening the checkpoint. If this used
     // the live computed list, each keystroke would make a newly supplied field
@@ -2812,6 +2826,7 @@ defineExpose({
           :disabled="
             busy !== '' || Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)
           "
+          @validity="sourcePageScopeValid = $event"
         />
         <CorpusTopologyPolicyControl
           v-if="selectedAsset && selectedAsset.media_kind !== 'audio'"
