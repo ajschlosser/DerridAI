@@ -196,7 +196,7 @@ class _StreamResponse:
 class _ResettingStreamResponse(_StreamResponse):
     def iter_bytes(self, chunk_size=None):
         assert chunk_size
-        yield b"partial"
+        yield b"do"
         raise httpx.ReadError("connection reset by peer")
 
 
