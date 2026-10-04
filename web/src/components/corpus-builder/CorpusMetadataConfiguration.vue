@@ -63,7 +63,7 @@ const schemaSummary = computed(() => {
   >
     <AudioSpeakerAssignments
       v-if="props.mediaKind === 'audio' && props.speakers?.length"
-      :speakers="props.speakers"
+      :speakers="props.speakers || []"
       :assignments="props.voiceAssignments"
       :disabled="props.disabled || props.voiceAssignmentsBusy"
       @save="emit('saveVoiceAssignments', $event)"
