@@ -96,15 +96,13 @@ def transcribe_entire_file(path: Path) -> dict[str, Any]:
         )
     base = str(config["base_url"])
     model = str(config["model"])
-    # Multipart form data is a sequence so the timestamp key can be repeated.
-    # OpenAI-compatible providers that support verbose timestamps return both
-    # segment boundaries and word boundaries from this request.
-    form = [
-        ("model", model),
-        ("response_format", "verbose_json"),
-        ("timestamp_granularities[]", "segment"),
-        ("timestamp_granularities[]", "word"),
-    ]
+    # HTTPX expands sequence-valued form fields into repeated keys. Providers
+    # that support verbose timestamps therefore receive both requested granularities.
+    form = {
+        "model": model,
+        "response_format": "verbose_json",
+        "timestamp_granularities[]": ["segment", "word"],
+    }
     try:
         with path.open("rb") as handle:
             response = httpx.post(
