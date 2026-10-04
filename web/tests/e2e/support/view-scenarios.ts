@@ -88,7 +88,7 @@ export const scenarios: Scenario[] = [
   },
   {
     id: "languages-policy-needed",
-    path: "/languages",
+    path: "/locale",
     ready: (p) => p.getByRole("heading", { name: /Deutsch/ }),
     steps: async (p) => {
       await p.getByRole("button", { name: /de-DE/ }).click();
@@ -96,7 +96,7 @@ export const scenarios: Scenario[] = [
   },
   {
     id: "languages-install-dialog",
-    path: "/languages",
+    path: "/locale",
     ready: (p) => p.getByRole("dialog"),
     steps: async (p) => {
       await p.getByRole("button", { name: /Install language/ }).click();
@@ -104,7 +104,7 @@ export const scenarios: Scenario[] = [
   },
   {
     id: "languages-translation-report",
-    path: "/languages",
+    path: "/locale",
     fixtures: {
       "/api/i18n/languages/fr-CA": {
         ...LANGUAGES[1],
@@ -119,7 +119,7 @@ export const scenarios: Scenario[] = [
   },
   {
     id: "languages-job-running",
-    path: "/languages",
+    path: "/locale",
     fixtures: { "/api/jobs": { jobs: [runningJob] }, "/api/jobs/job-lang-1": runningJob },
     ready: (p) => p.getByText(/Batch 3 of 9/).first(),
   },
