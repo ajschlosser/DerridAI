@@ -212,6 +212,11 @@ function setRecordListElement(element: HTMLElement | null) {
 }
 // The queue list holds lightweight rows; full Records are read one at a time when opened.
 const metadataFacetsActive = ref(false);
+// A saved metadata decision is already authoritative from the reviewer's point of
+// view. Keep background queue/realtime refreshes from repainting older server state
+// while its serialized mutation is still in flight; failure recovery is the only
+// path that deliberately reloads and reopens the field.
+const recordSaveQueue = new RecordMutationQueue();
 const reviewRecords = useCorpusReviewRecords({
   selectedBuildId,
   reviewerKey: computed(() => String(useAuthStore().user?.id ?? "")),
@@ -224,7 +229,10 @@ const reviewRecords = useCorpusReviewRecords({
   selectedRecordId,
   selectedRecord,
   hasActiveDraft: () =>
-    editingText.value || metadataEditorDirty.value || advancedMetadataDirty.value,
+    editingText.value ||
+    metadataEditorDirty.value ||
+    advancedMetadataDirty.value ||
+    recordSaveQueue.hasPending(selectedRecordId.value),
   activateRecord,
   onSelectionCleared: () => {
     sourceBlocks.value = [];
@@ -423,7 +431,6 @@ const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
 const decisionDock = ref<InstanceType<typeof CorpusRecordDecisionDock> | null>(null);
 const configurationSection = ref<CorpusSetupSectionId | "">("source");
-const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
 const missingMetadataPromptOpen = ref(false);
 const missingMetadataPromptFields = ref<MissingDocumentField[]>([]);
