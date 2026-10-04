@@ -880,7 +880,7 @@ def test_transient_provider_failure_becomes_retry_pending_and_recovers(
 
     record["metadata_stage_status"]["discourse"] = "queued"
     ledger["state"] = "queued"
-    ledger["automatic_recovery_attempts"] = 1
+    ledger["automatic_recovery_inflight_attempt"] = 1
     ledger.pop("next_automatic_recovery_attempt", None)
 
     second = manager._execute_metadata_tasks(
