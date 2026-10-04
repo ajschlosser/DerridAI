@@ -131,7 +131,7 @@ beforeEach(() => {
 });
 afterEach(() => mounted.splice(0).forEach((w) => w.unmount()));
 describe("Research progressive reads", () => {
-  it("only clears an unavailable pipeline override after visibility succeeds", async () => {
+  it("clears an unavailable per-run pipeline override without rewriting saved defaults", async () => {
     mocks.snapshot.mockResolvedValue({
       ...snapshot(),
       config: { ...snapshot().config, pipeline_id: "retired", pipeline_version: 1 },
@@ -143,7 +143,7 @@ describe("Research progressive reads", () => {
     expect(mocks.update).not.toHaveBeenCalled();
     pending.resolve({ assignment: null, pipelines: [], strategies: [], override_allowed: false });
     await flushPromises();
-    expect(mocks.update).toHaveBeenCalledWith({ pipeline_id: "", pipeline_version: null });
+    expect(mocks.update).not.toHaveBeenCalled();
     expect(w.find(".research-pipelines-status").exists()).toBe(false);
   });
   it("keeps optional run and pipeline reads independent of the composer", async () => {
@@ -251,6 +251,26 @@ describe("Research progressive reads", () => {
     expect(mocks.snapshot).toHaveBeenCalledTimes(1);
     expect(w.get(".answer").text()).toContain("Recovered");
   });
+  it("announces the long LLM generation stage from selected evidence", async () => {
+    mocks.snapshot.mockResolvedValue({
+      ...snapshot(),
+      jobs: [
+        {
+          id: "run-1",
+          status: "running",
+          stage: "generation",
+          request: { selected_evidence: [{ collection: "corpus", chroma_id: "1" }] },
+        },
+      ],
+    });
+    const w = render();
+    await flushPromises();
+    expect(w.find(".research-run-progress").text()).toContain(
+      "research.progress_generation_selected",
+    );
+    expect(w.find(".research-run-progress").attributes("role")).toBe("status");
+  });
+
   it("ignores a late answer after a different answer is selected", async () => {
     mocks.route.query = { job: "a" };
     const pending = deferred<any>();
