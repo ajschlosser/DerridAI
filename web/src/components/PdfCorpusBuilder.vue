@@ -544,16 +544,20 @@ const showReviewWorkspace = computed(
     workspaceMode.value === "review" && hasRecordTopology.value && !awaitingManifestReview.value,
 );
 const documentMetadata = ref<Record<string, unknown>>({});
-watch(selectedAssetId, () => {
-  documentMetadata.value = {};
-  missingMetadataPromptFields.value = [];
-  sourcePageScope.value = [];
-  topologyPolicy.value = {
-    mode: "semantic",
-    source_units_per_record: 1,
-    records_per_page: null,
-  };
-});
+watch(
+  selectedAssetId,
+  () => {
+    documentMetadata.value = {};
+    missingMetadataPromptFields.value = [];
+    sourcePageScope.value = [];
+    topologyPolicy.value = {
+      mode: "semantic",
+      source_units_per_record: 1,
+      records_per_page: null,
+    };
+  },
+  { flush: "sync" },
+);
 const effectiveSetupDocumentMetadata = computed<Record<string, unknown>>(() => ({
   ...((selectedAsset.value?.initial_metadata || {}) as Record<string, unknown>),
   ...documentMetadata.value,
