@@ -2716,7 +2716,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'pdf_corpus.library.importing': 'Importation…',
  'pdf_corpus.library.matching_parts': '{count} parties correspondantes',
  'pdf_corpus.library.words': '{count} mots',
- 'pdf_corpus.library.collection_needed': 'Installez la base locale complète des textes Gutenberg pour la capture d’auteur et les importations hors ligne. Les livres individuels peuvent toujours être téléchargés directement avant l’installation.',
+ 'pdf_corpus.library.collection_needed': 'Installez la base locale complète des textes Gutenberg pour la capture d’auteur et les importations hors ligne. Une importation individuelle peut toujours télécharger directement un texte vérifié avant l’installation.',
  'pdf_corpus.library.catalogue_needed': 'Récupérez le catalogue pour chercher dans le Projet Gutenberg.',
  'pdf_corpus.assign_selected_evidence_short': 'Enregistrer avec la sélection comme preuve',
  'pdf_corpus.evidence_selection_label': 'Sélection comme preuve',
