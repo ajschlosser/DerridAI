@@ -570,6 +570,12 @@ jobs:
           pip install -r /tmp/derridai-publication-requirements.txt
           cd web
           npm ci --no-audit --no-fund
+          npx prettier --write \
+            site/PublishedProvidersView.vue \
+            site/PublishedResearchConfig.vue \
+            site/PublishedResearchView.vue \
+            site/siteContext.ts \
+            tests/e2e/static-site-a11y.spec.ts
           npx playwright install --with-deps chromium
           npm run build:sdk
           npm run build:site
@@ -580,6 +586,11 @@ jobs:
           path: |
             api/app/site_assets/derridai-site.js
             api/app/site_assets/derridai-sdk.js
+            web/site/PublishedProvidersView.vue
+            web/site/PublishedResearchConfig.vue
+            web/site/PublishedResearchView.vue
+            web/site/siteContext.ts
+            web/tests/e2e/static-site-a11y.spec.ts
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
