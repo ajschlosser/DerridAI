@@ -50,12 +50,15 @@ const preview = computed(
   () => `${text.value.slice(0, 5000)}${text.value.length > 5000 ? "…" : ""}`,
 );
 const meta = computed(() => {
-  const v = version.value;
-  if (!v || !current.value) return "";
-  const when = v.timestamp
-    ? current.value.formatTimestamp(v.timestamp)
+  const selectedVersion = version.value;
+  if (!selectedVersion || !current.value) return "";
+
+  const when = selectedVersion.timestamp
+    ? current.value.formatTimestamp(selectedVersion.timestamp)
     : i18n.t("records.history.before_edits");
-  return `${when}${v.source ? ` · ${v.source}` : ""}${v.model ? ` · ${v.model}` : ""}`;
+  const source = selectedVersion.source ? ` · ${selectedVersion.source}` : "";
+  const model = selectedVersion.model ? ` · ${selectedVersion.model}` : "";
+  return `${when}${source}${model}`;
 });
 
 // A native modal <dialog> traps focus, makes the page inert and returns focus to the opener on close.
