@@ -19,7 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import * as runtime from "../runtime/runtime.js";
+import { annotationsWorkspace } from "../domain/sharedAnnotations";
+import { sharedRecordWorkspace } from "../domain/sharedRecordWorkspace";
 import { useI18nStore } from "../stores/i18n";
 import UiButton from "../components/ui/UiButton.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
@@ -58,7 +59,7 @@ const latestModel = createLatestRequest();
 async function readTrace(signal: AbortSignal) {
   if (!store.value) {
     const bare = { record_id: recordId.value };
-    return { record: bare, graph: await runtime.getRecordObjectGraph(bare) };
+    return { record: bare, graph: await sharedRecordWorkspace.getRecordObjectGraph(bare) };
   }
   const { vector_store } = await execute(
     StoredRecordTraceDocument,
@@ -110,7 +111,7 @@ async function loadModel() {
   modelLoading.value = true;
   modelError.value = "";
   try {
-    const value = await runtime.getDerridaiNormativeModel();
+    const value = await sharedRecordWorkspace.getDerridaiNormativeModel();
     if (ticket.current()) model.value = value as DerridaiNormativeModel;
   } catch (exc) {
     if (!ticket.current() || isAbortError(exc)) return;
@@ -133,7 +134,7 @@ function submit() {
   void router.push({ query: { ...route.query, record: id } });
 }
 function openRecord() {
-  runtime.openAnnotationsWorkspaceRecord({
+  annotationsWorkspace.openAnnotationsWorkspaceRecord({
     server: true,
     source: store.value,
     record_id: recordId.value,

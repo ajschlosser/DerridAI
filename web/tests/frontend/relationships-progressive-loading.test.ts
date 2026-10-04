@@ -23,10 +23,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import RelationshipBrowserView from "../../src/views/RelationshipBrowserView.vue";
 import RecordTraceabilityExplorer from "../../src/components/record/RecordTraceabilityExplorer.vue";
 const reads = vi.hoisted(() => ({ trace: vi.fn(), model: vi.fn(), execute: vi.fn() }));
-vi.mock("../../src/runtime/runtime.js", () => ({
-  getRecordObjectGraph: reads.trace,
-  getDerridaiNormativeModel: reads.model,
-  openAnnotationsWorkspaceRecord: vi.fn(),
+vi.mock("../../src/domain/sharedRecordWorkspace", () => ({
+  sharedRecordWorkspace: {
+    getRecordObjectGraph: reads.trace,
+    getDerridaiNormativeModel: reads.model,
+  },
+}));
+vi.mock("../../src/domain/sharedAnnotations", () => ({
+  annotationsWorkspace: { openAnnotationsWorkspaceRecord: vi.fn() },
 }));
 vi.mock("../../src/api/graphql/client", () => ({
   execute: reads.execute,

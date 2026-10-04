@@ -121,7 +121,7 @@ import { RecordMutationQueue } from "../domain/recordMutationQueue";
 import { hideSourceWarnings, sourceWarningsHidden } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
 import { allEvidenceBlockIds } from "../domain/metadataEvidence";
-import * as runtime from "../runtime/runtime.js";
+import { pdfState } from "../state/workspaceState";
 import { getDefaultProviderProfileId } from "../domain/sharedProviderProfiles";
 
 const i18n = useI18nStore();
@@ -2118,7 +2118,7 @@ function nextSourcePage() {
 }
 
 async function useCurrentPdf() {
-  const file = runtime.state.pdf.file as File | null;
+  const file = pdfState.pdf.file as File | null;
   if (!file) {
     setMessage(i18n.t("pdf_corpus.open_pdf_first"), "error");
     return;
