@@ -22,6 +22,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 See [the frontend workspace](../README.md) and [the project architecture](../../docs/ARCHITECTURE.md).
 
+See also [the code readability guide](../../docs/CODE_READABILITY.md) before reorganizing or extracting frontend code.
+
 ## Dependency map
 
 ```mermaid
@@ -86,6 +88,18 @@ This is an architectural direction, not a claim that every legacy import is alre
 Put route composition in `views/`, not reusable components. Put reusable visual behavior in `components/`; if it belongs to a cohesive feature and needs orchestration, use `features/`. Put stateful Vue coordination in a composable and keep transform/presentation logic in `domain/` when it can remain framework-light. Network effects belong in `api/` or `realtime/`, not in presentation helpers.
 
 Do not use frontend state as scholarly authority. Canonical corpus, review, assertion, evidence, and provenance state is owned by the backend; optimistic UI must reconcile with server results.
+
+## Placement decision guide
+
+- Does it only choose what a route renders? Put it in `views/`.
+- Is it reusable visual behavior or interaction? Put it in `components/`.
+- Does it coordinate several pieces of one product workflow? Prefer a focused `features/<name>/` package.
+- Does it own Vue reactivity, lifecycle, request cancellation, or async coordination? Put it in a composable.
+- Can it be a deterministic function over arguments? Prefer `domain/`.
+- Does it perform HTTP/GraphQL/WebSocket transport? Keep that effect in `api/` or `realtime/`.
+- Is it application-wide reactive state? Use `stores/`/`state/`; do not turn browser state into scholarly authority.
+
+Compatibility imports are not ownership signals. Trace the call to the focused module before deciding where new behavior belongs.
 
 ## Critical local maps
 
