@@ -20,6 +20,22 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 This is the human-developer entry point for working on DerridAI. Read [AGENTS.md](AGENTS.md) when using coding agents, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing subsystem boundaries, and [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) before changing provenance, metadata, evidence, or scholarly semantics.
 
+Read [docs/CODE_READABILITY.md](docs/CODE_READABILITY.md) before structural refactors. It defines the repository's naming/commenting conventions and the rule that readability changes must preserve provenance, authority, cancellation, conflict, and stale-state safeguards.
+
+## Choose the owning area first
+
+| Change | Primary guide |
+| --- | --- |
+| FastAPI/domain/persistence | [`api/README.md`](api/README.md), then [`api/app/README.md`](api/app/README.md) |
+| Vue application | [`web/README.md`](web/README.md), then [`web/src/README.md`](web/src/README.md) |
+| Reusable frontend UI | [`web/src/components/README.md`](web/src/components/README.md) |
+| Frontend domain helpers | [`web/src/domain/README.md`](web/src/domain/README.md) |
+| Corpus Builder | [`web/src/features/corpus-builder/README.md`](web/src/features/corpus-builder/README.md) and [`web/src/components/corpus-builder/README.md`](web/src/components/corpus-builder/README.md) |
+| Pipeline Studio | [`api/app/pipelines/README.md`](api/app/pipelines/README.md) and [`web/src/components/pipelines/README.md`](web/src/components/pipelines/README.md) |
+| Tests | [`tests/README.md`](tests/README.md) and [`web/tests/README.md`](web/tests/README.md) |
+
+Do not start in a compatibility monolith merely because a symbol is re-exported there. Follow the local README to the module that owns the invariant.
+
 ## Supported development environment
 
 CI is the compatibility baseline: Python 3.12, Node 22, npm via the checked-in `web/package-lock.json`, Chromium for Playwright, and Docker Compose for the full local stack. Using newer runtimes can expose dependency behavior that CI does not exercise; reproduce a CI failure on the CI versions before treating it as an application defect.
@@ -166,6 +182,15 @@ Browser jobs share the Chromium cache while avoiding concurrent writes. Composed
 - Release notes go in `docs/notes/<version>.md` and are indexed in `CHANGELOG.md`; do not put release notes in the README.
 - Never commit `.env`, `data/`, API keys, provider credentials, generated build output, or local browser/test artifacts.
 
+## Common contributor traps
+
+- `web/src/runtime/runtime.js` is a compatibility layer. New feature logic belongs in typed domain/composable/component modules when an owning boundary already exists.
+- `api/app/corpus_builder.py` and `api/app/chroma_store.py` remain large compatibility/orchestration surfaces. Prefer focused `corpus_*`, `source_*`, pipeline, query, or store modules rather than adding another unrelated responsibility.
+- Chroma and browser caches are derived/rebuildable. Do not use them as a shortcut around canonical Records, revisions, FieldAssertions, review decisions, or evidence bindings.
+- GraphQL is read-only. Commands and mutations belong in REST; realtime messages notify clients to refetch and are not canonical state.
+- Generated GraphQL/SDK/site assets must be changed through their generators. A hand edit may appear correct locally and still fail the freshness gate.
+- The default host-provider URLs use `host.docker.internal`; Compose maps that name to the host gateway so the same documented setup works on Docker Desktop and native Docker Engine.
+- Playwright/Storybook suites use built artifacts and dedicated ports. Build first, and change the configured test port when one is occupied rather than reusing an arbitrary running dev server.
 ## Before handing a change to another developer
 
 Run the smallest set of checks that covers the change, then report exactly what ran. For a cross-cutting change, the expected local handoff is:
