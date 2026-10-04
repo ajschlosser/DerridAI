@@ -25,6 +25,7 @@ import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.
 import UiCombobox from "./ui/UiCombobox.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
+import { activeValueEditor } from "../domain/focus";
 import {
   groupOptionsBySuggestion,
   matchOption,
@@ -82,6 +83,7 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const labelId = `${useId()}-label`;
+const root = ref<HTMLElement | null>(null);
 const editing = ref(Boolean(props.open));
 const dirty = ref(false);
 const draft = ref<unknown>("");
@@ -235,6 +237,10 @@ function editableValue() {
   if (text) return matchOption(options, text) ?? text;
   return props.status?.blind ? "" : (suggestedOptions.value[0] ?? "");
 }
+function activeEditorInside() {
+  const active = activeValueEditor();
+  return Boolean(active && root.value?.contains(active));
+}
 watch(
   () => [
     props.field,
@@ -246,7 +252,7 @@ watch(
     props.options,
   ],
   () => {
-    if (!dirty.value) draft.value = editableValue();
+    if (!dirty.value && !activeEditorInside()) draft.value = editableValue();
   },
   { immediate: true, deep: true },
 );
@@ -255,14 +261,21 @@ watch(
   (value) => {
     if (value) {
       editing.value = true;
-      dirty.value = false;
-      draft.value = editableValue();
-    } else if (!dirty.value) {
+      if (!activeEditorInside()) {
+        dirty.value = false;
+        draft.value = editableValue();
+      }
+    } else if (!dirty.value && !activeEditorInside()) {
       // A pending field that has just been decided folds back into its one-line summary.
       editing.value = false;
     }
   },
 );
+function onFocusout(event: FocusEvent) {
+  const next = event.relatedTarget;
+  if (next instanceof Node && root.value?.contains(next)) return;
+  if (!props.open && !dirty.value) editing.value = false;
+}
 
 watch(
   () => props.prefill?.key,
@@ -533,6 +546,7 @@ const traceRows = computed(() => {
 
 <template>
   <article
+    ref="root"
     class="metadata-field"
     :data-field="field"
     :data-mode="editing ? 'edit' : 'view'"
@@ -543,6 +557,7 @@ const traceRows = computed(() => {
     :data-review-state="open ? 'pending' : 'settled'"
     :aria-labelledby="labelId"
     @keydown="onKeydown"
+    @focusout="onFocusout"
   >
     <!-- A decided field is one line: what it is, its value, where the value came from. -->
     <div v-if="!editing" class="field-row">
