@@ -52,12 +52,12 @@ function roleChanged(event: Event) {
 function formatLogin(value?: string | null) {
   if (!value) return i18n.t("users.never");
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(i18n.locale);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(i18n.locale, { timeZone: i18n.timeZone });
 }
 
 function createdDate(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(i18n.locale);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(i18n.locale, { timeZone: i18n.timeZone });
 }
 </script>
 
