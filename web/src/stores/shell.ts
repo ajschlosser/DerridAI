@@ -19,7 +19,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { getNavItems } from "../domain/navItems";
-import * as runtime from "../runtime/runtimeBridge";
+import { getShellSnapshot } from "../domain/shellSnapshot";
 
 export interface ShellFile {
   id: string;
@@ -86,7 +86,7 @@ export const useShellStore = defineStore("shell", () => {
   const navReady = ref(false);
 
   function sync() {
-    snapshot.value = runtime.getShellSnapshot() as ShellSnapshot;
+    snapshot.value = getShellSnapshot() as ShellSnapshot;
     navReady.value = true;
   }
 

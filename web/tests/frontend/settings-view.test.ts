@@ -102,6 +102,10 @@ vi.mock("../../src/domain/sharedRecordEditing", () => ({
   clearAllUpdates: runtime.clearAllUpdates,
 }));
 // The shell store still reads its snapshot through the runtime bridge.
+vi.mock("../../src/domain/shellSnapshot", () => ({
+  getShellSnapshot: (...args: unknown[]) =>
+    (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
+}));
 vi.mock("../../src/runtime/runtime.js", () => ({
   ...runtime,
   __v_isRef: false,

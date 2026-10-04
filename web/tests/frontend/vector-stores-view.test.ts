@@ -34,6 +34,10 @@ const runtime = vi.hoisted(() => ({
   triggerUpsertQueue: vi.fn(),
   getShellSnapshot: vi.fn(() => ({})),
 }));
+vi.mock("../../src/domain/shellSnapshot", () => ({
+  getShellSnapshot: (...args: unknown[]) =>
+    (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
+}));
 vi.mock("../../src/domain/sharedDbPresence", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/domain/sharedDbPresence")>()),
   pendingUpsertRows: runtime.pendingUpsertRows,

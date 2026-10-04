@@ -43,6 +43,10 @@ vi.mock("../../src/domain/researchActions", () => ({
 vi.mock("../../src/domain/sharedAnnotations", () => ({ annotationsWorkspace: {} }));
 // Vue's template proxy probes the namespace for reactivity flags; a strict module
 // mock throws on unknown keys, so declare them.
+vi.mock("../../src/domain/shellSnapshot", () => ({
+  getShellSnapshot: (...args: unknown[]) =>
+    (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
+}));
 vi.mock("../../src/runtime/runtime.js", () => ({
   ...runtime,
   __v_isRef: false,

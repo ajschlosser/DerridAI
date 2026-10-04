@@ -62,6 +62,10 @@ const runtime = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
 }));
 vi.mock("../../src/domain/navItems", () => ({ getNavItems: runtime.getNavItems }));
+vi.mock("../../src/domain/shellSnapshot", () => ({
+  getShellSnapshot: (...args: unknown[]) =>
+    (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
+}));
 vi.mock("../../src/runtime/runtime.js", () => ({
   ...runtime,
   __v_isRef: false,
