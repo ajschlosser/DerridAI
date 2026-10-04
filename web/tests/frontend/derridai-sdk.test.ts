@@ -263,6 +263,51 @@ describe("DerridAI SDK", () => {
     expect(generationRequests[0]?.prompt).toContain("Position holder: Hegel");
   });
 
+  it("applies multi-Work Research scope and reports evidence/generation progress", async () => {
+    const progress: Array<{ type: string; count?: number }> = [];
+    const client = await createClient({
+      dataSource: dataSources.inline(multiAuthorPublicationPackage()),
+      storage: new MemoryStorage(),
+      generation: {
+        descriptor: () => ({ type: "host", model: "qwen3:8b" }),
+        async generate() {
+          return { text: "The selected evidence supports the answer [E1]." };
+        },
+      },
+    });
+    const unsubscribe = client.events.subscribe((event) => {
+      if (event.type === "evidence-selected") {
+        progress.push({ type: event.type, count: event.evidenceCount });
+      } else if (event.type === "generation-start") {
+        progress.push({ type: event.type, count: event.evidenceCount });
+      }
+    });
+
+    const response = await client.research({
+      question: "What do these texts say about doubt and critique?",
+      retrieval: {
+        mode: "keyword",
+        limit: 2,
+        fetchLimit: 2,
+        evidenceLimit: 2,
+        filters: {
+          work: ["Meditations on First Philosophy", "Beyond Good and Evil"],
+        },
+      },
+    });
+    unsubscribe();
+
+    expect(response.retrieval.results.map((item) => item.record.work).sort()).toEqual([
+      "Beyond Good and Evil",
+      "Meditations on First Philosophy",
+    ]);
+    expect(response.evidencePacket.evidence).toHaveLength(2);
+    expect(progress).toEqual([
+      { type: "evidence-selected", count: 2 },
+      { type: "generation-start", count: 2 },
+    ]);
+  });
+
   it("matches possessive author names in published keyword search", async () => {
     const client = await createClient({
       dataSource: dataSources.inline(multiAuthorPublicationPackage()),
