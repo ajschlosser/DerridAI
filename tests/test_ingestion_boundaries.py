@@ -546,6 +546,41 @@ def test_diarization_failure_preserves_transcript_and_timed_evidence(
         repo.update_document_layout(asset["asset_id"], {})
 
 
+def test_audio_word_speaker_provenance_persists_with_asset(monkeypatch, tmp_path):
+    transcript = {
+        "text": "Hello there.",
+        "language": "en",
+        "segments": [{"start": 0.0, "end": 2.0, "text": "Hello there."}],
+        "words": [
+            {"start": 0.0, "end": 0.8, "word": "Hello"},
+            {"start": 0.9, "end": 1.8, "word": "there."},
+        ],
+    }
+    turns = [
+        {
+            "start": 0.0,
+            "end": 2.0,
+            "speaker": "SPEAKER_1",
+            "provider_speaker": "speaker-a",
+        }
+    ]
+    monkeypatch.setattr(audio, "probe_audio", lambda path: 2.0)
+    monkeypatch.setattr(audio, "transcribe_entire_file", lambda path: transcript)
+    monkeypatch.setattr(audio, "diarize_with_whisperx", lambda path: turns)
+
+    repo = PdfCorpusRepository(tmp_path)
+    asset = repo.save_asset(b"audio-v3", filename="clip.wav")
+    reloaded = repo.get_asset(asset["asset_id"])
+    blocks = repo.load_blocks(asset["asset_id"])
+
+    assert reloaded["source_transcription"] == transcript
+    assert reloaded["source_diarization"] == turns
+    assert reloaded["audio_provenance"]["alignment_status"] == "provider_word_timestamps"
+    assert reloaded["audio_provenance"]["speaker_assignment_method"] == "word_overlap"
+    assert blocks[0]["provider_speaker"] == "speaker-a"
+    assert [word["word"] for word in blocks[0]["source_words"]] == ["Hello", "there."]
+
+
 def test_audio_human_correction_is_revision(tmp_path):
     repo, build = install_review_build(
         tmp_path,
