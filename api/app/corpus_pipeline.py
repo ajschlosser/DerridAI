@@ -44,24 +44,34 @@ def select_source_pages(
     are validated against the extracted page representation so a typo cannot
     silently produce an incomplete corpus.
     """
-    requested = sorted({int(page) for page in ((source_scope or {}).get("pages") or [])})
+    raw_pages = (source_scope or {}).get("pages") or []
+    requested = sorted({
+        value
+        for item in raw_pages
+        if not isinstance(item, bool)
+        for value in [int(item)]
+        if value > 0
+    })
     if not requested:
         return blocks, []
 
-    available = {
-        int(page.get("pdf_page"))
-        for page in (asset.get("pages") or [])
-        if isinstance(page, dict) and page.get("pdf_page") is not None
-    }
+    available: set[int] = set()
+    for page_info in asset.get("pages") or []:
+        if not isinstance(page_info, dict):
+            continue
+        value = page_info.get("pdf_page")
+        if isinstance(value, (int, str)) and str(value).isdigit():
+            available.add(int(value))
     if not available:
-        available = {
-            int(block.get("page"))
-            for block in blocks
-            if block.get("page") is not None
-        }
-    missing = [page for page in requested if page not in available]
+        for block in blocks:
+            value = block.get("page")
+            if isinstance(value, (int, str)) and str(value).isdigit():
+                available.add(int(value))
+    missing = [value for value in requested if value not in available]
     if missing:
-        rendered = ", ".join(map(str, missing[:10]))
+        rendered = ", ".join(
+            str(value) for index, value in enumerate(missing) if index < 10
+        )
         suffix = "…" if len(missing) > 10 else ""
         raise ValueError(f"Selected source page(s) are not available: {rendered}{suffix}")
 
