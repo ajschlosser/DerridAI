@@ -314,6 +314,36 @@ describe("a field's decision controls", () => {
     wrapper.unmount();
   });
 
+  it("keeps an active typed draft mounted and focused through asynchronous field settlement", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      attachTo: document.body,
+      props: {
+        field: "speaker",
+        value: "Jacques Derrida",
+        control: "text",
+        open: true,
+        status: { status: "unresolved", method: "llm" },
+      },
+    });
+    const editor = wrapper.get("textarea");
+    (editor.element as HTMLTextAreaElement).focus();
+    await editor.setValue("Reviewer draft");
+    expect(document.activeElement).toBe(editor.element);
+
+    await wrapper.setProps({
+      open: false,
+      value: "Background refresh",
+      status: { status: "human_confirmed", method: "human" },
+    });
+    await nextTick();
+
+    const stillEditing = wrapper.get("textarea");
+    expect(stillEditing.element).toBe(editor.element);
+    expect((stillEditing.element as HTMLTextAreaElement).value).toBe("Reviewer draft");
+    expect(document.activeElement).toBe(editor.element);
+    wrapper.unmount();
+  });
+
   it("shows a model-proposed absence as a starred no-value state without filling the field", () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
       props: {
