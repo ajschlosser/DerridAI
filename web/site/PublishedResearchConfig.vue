@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
+import UiCheckbox from "../src/components/ui/UiCheckbox.vue";
 import UiField from "../src/components/ui/UiField.vue";
 import UiInput from "../src/components/ui/UiInput.vue";
 import UiSelect from "../src/components/ui/UiSelect.vue";
@@ -177,20 +178,16 @@ function toggleWork(work: string, checked: boolean) {
         }}
       </p>
       <div class="published-work-options">
-        <label v-for="item in site.publication.works" :key="item.work" class="published-work-option">
-          <input
-            type="checkbox"
-            :checked="modelValue.works.includes(String(item.work))"
-            :disabled="disabled"
-            @change="
-              toggleWork(
-                String(item.work),
-                ($event.target as HTMLInputElement).checked,
-              )
-            "
-          />
-          <span>{{ item.work }}</span>
-        </label>
+        <UiCheckbox
+          v-for="item in site.publication.works"
+          :key="item.work"
+          class="published-work-option"
+          :input-id="`${idPrefix}-work-${String(item.work).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`"
+          :label="String(item.work)"
+          :model-value="modelValue.works.includes(String(item.work))"
+          :disabled="disabled"
+          @update:model-value="toggleWork(String(item.work), $event)"
+        />
       </div>
     </fieldset>
   </div>
@@ -230,25 +227,6 @@ function toggleWork(work: string, checked: boolean) {
   overflow: auto;
 }
 .published-work-option {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  min-height: var(--control-height-small);
-  padding: var(--space-2);
-  border-radius: var(--radius-control);
-}
-.published-work-option:focus-within {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-.published-work-option input {
-  flex: 0 0 auto;
-  width: 1.125rem;
-  height: 1.125rem;
-  margin-top: 0.125rem;
-}
-.published-work-option span {
   min-width: 0;
-  overflow-wrap: anywhere;
 }
 </style>
