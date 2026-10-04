@@ -93,6 +93,20 @@ async function submit() {
           </select>
         </div>
       </div>
+      <div v-if="i18n.missingBrowserLocale" class="auth-locale-notice" role="status">
+        <div>
+          <strong>{{
+            i18n.tf("locale.browser_language_missing", { locale: i18n.missingBrowserLocale })
+          }}</strong>
+          <span>{{ i18n.t("locale.install_requires_admin") }}</span>
+        </div>
+        <a
+          class="btn"
+          :href="`/locale?install=${encodeURIComponent(i18n.missingBrowserLocale)}`"
+        >
+          {{ i18n.t("locale.install_browser_language") }}
+        </a>
+      </div>
       <div class="auth-heading">
         <p>
           {{ auth.bootstrapRequired ? i18n.t("auth.first_run") : i18n.t("auth.required") }}
@@ -166,6 +180,25 @@ async function submit() {
   background: var(--card);
   box-shadow: var(--shadow-overlay);
   padding: 24px;
+}
+.auth-locale-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--tone-info-border);
+  border-radius: var(--radius-control);
+  background: var(--tone-info-bg);
+  color: var(--tone-info-fg);
+}
+.auth-locale-notice > div {
+  display: grid;
+  gap: 2px;
+}
+.auth-locale-notice span {
+  font-size: 0.8125rem;
 }
 .auth-form {
   display: grid;
