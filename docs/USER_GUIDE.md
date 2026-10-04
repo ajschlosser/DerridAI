@@ -1365,7 +1365,10 @@ store without treating every store as a database.
   it is opened; an older empty cache is not presented as current. If a refresh
   fails, the last successfully loaded precedents remain visible with an explicit
   out-of-date warning and retry action instead of being replaced by an empty
-  state. **Metadata examples** shows the raw index rows without those joins, for
+  state. Access-denied reads clear the retained precedents; they stay hidden until
+  a retry succeeds. Changing the signed-in account, role, or capabilities clears
+  the old view and reads the projection under the new access scope.
+  **Metadata examples** shows the raw index rows without those joins, for
   debugging the index itself.
   Pending blind second-opinion values are excluded from shared examples and
   cross-field matching until resolved; disputed, invalid, and unresolved

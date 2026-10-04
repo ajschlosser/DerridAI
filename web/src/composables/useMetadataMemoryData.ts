@@ -65,7 +65,7 @@ export function useMetadataMemoryData(applied: Ref<MetadataMemoryListFilters>) {
   });
   const readError = computed(() => serviceError.value || transportError.value);
   const ready = computed(() => Boolean(payload.value));
-  const waiting = computed(() => !ready.value && !readError.value);
+  const waiting = computed(() => !ready.value && (loading.value || !readError.value));
   const refreshing = computed(() => loading.value && ready.value);
 
   watch(
