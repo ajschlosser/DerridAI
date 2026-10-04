@@ -143,10 +143,11 @@ def test_unsupported_language_and_untagged_schemas_are_skipped():
     assert nlp.language_code("Français") == "fr" and nlp.language_code("en-US") == "en"
 
 
-def test_only_english_and_french_have_bundled_default_models():
+def test_english_french_and_latin_have_bundled_default_models():
     assert nlp.DEFAULT_MODELS == {
         "en": "en_core_web_sm",
         "fr": "fr_core_news_sm",
+        "la": "la_core_web_sm",
     }
 
 

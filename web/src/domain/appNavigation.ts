@@ -62,7 +62,7 @@ export const NAV_TARGETS: Record<string, NavigationTarget> = {
   config: { path: "/settings/overview", runtimeView: "config" },
   users: { path: "/users" },
   roles: { path: "/roles" },
-  languages: { path: "/languages" },
+  languages: { path: "/locale" },
   operations: { path: "/operations" },
   help: { path: "/help" },
 };

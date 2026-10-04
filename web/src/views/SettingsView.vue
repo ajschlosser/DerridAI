@@ -912,7 +912,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 v-if="isAdmin"
                 icon="language"
                 :label="i18n.t('language.manage')"
-                @click="go('/languages')"
+                @click="go('/locale')"
               />
             </template>
           </SettingsSection>

@@ -58,13 +58,18 @@ export function pipelineRunStatusLabel(status: string, t: PipelineTranslator) {
   return labels[status] || status;
 }
 
-export function formatPipelineDate(value: string | null | undefined, locale: string) {
+export function formatPipelineDate(
+  value: string | null | undefined,
+  locale: string,
+  timeZone?: string,
+) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone,
   }).format(date);
 }
 

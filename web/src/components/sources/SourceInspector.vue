@@ -83,6 +83,7 @@ function formatDate(value: unknown) {
   if (!raw) return "";
   try {
     return new Intl.DateTimeFormat(i18n.locale || undefined, {
+      timeZone: i18n.timeZone,
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(raw));

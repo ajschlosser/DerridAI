@@ -47,6 +47,7 @@ function when(value?: string) {
   if (!value) return "";
   try {
     return new Intl.DateTimeFormat(i18n.locale || undefined, {
+      timeZone: i18n.timeZone,
       hour: "numeric",
       minute: "2-digit",
     }).format(new Date(value));

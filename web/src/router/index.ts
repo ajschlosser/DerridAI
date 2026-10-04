@@ -451,6 +451,10 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   },
   {
     path: "/languages",
+    redirect: (to) => ({ name: "languages", query: to.query }),
+  },
+  {
+    path: "/locale",
     name: "languages",
     component: () => import("../views/LanguagesView.vue"),
     meta: {
@@ -458,7 +462,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
       navId: "languages",
       navSection: "System",
       titleKey: "language.manage",
-      titleFallback: "Languages",
+      titleFallback: "Locale",
       capability: "page.languages",
       adminOnly: true,
       vueNative: true,

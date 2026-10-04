@@ -54,7 +54,7 @@ test("Languages dictionary stays usable while policy reads fail and retry", asyn
     });
   });
   const start = Date.now();
-  await page.getByRole("button", { name: "Manage languages", exact: true }).click();
+  await page.getByRole("button", { name: "Locale", exact: true }).click();
   const identity = page.locator(".language-identity-card");
   await expect(identity).toBeVisible();
   const useful = Date.now() - start;

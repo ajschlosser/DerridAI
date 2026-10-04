@@ -50,12 +50,15 @@ const catalog = [
   },
   {
     ...base,
-    pack_id: "propp-fr",
-    language: "fr",
-    engine: "propp-fr",
-    label: "Propp",
+    pack_id: "spacy-la-latincy-sm",
+    language: "la",
+    engine: "spacy",
+    tier: "sm",
+    label: "LatinCy la_core_web_sm 3.9.8",
     installable: false,
-    worker_bundled: false,
+    installed: true,
+    bundled: true,
+    worker_bundled: true,
   },
 ];
 
@@ -73,13 +76,13 @@ describe("Document Intelligence language packs", () => {
     });
   });
 
-  it("installs an installable pack on request and never offers to install a reference-only source", async () => {
+  it("installs runtime packs and presents bundled Latin without removal actions", async () => {
     documentNlpApi.installPack.mockResolvedValue({ id: "nlp-pack-1", status: "queued" });
     const wrapper = mount(DocumentNlpLanguagePacks);
     await flushPromises();
 
-    expect(row(wrapper, "propp-fr").findAll("button")).toHaveLength(0);
-    expect(row(wrapper, "propp-fr").text()).toContain("propp-fr");
+    expect(row(wrapper, "spacy-la-latincy-sm").text()).toContain("LatinCy");
+    expect(row(wrapper, "spacy-la-latincy-sm").findAll("button")).toHaveLength(0);
 
     await row(wrapper, "booknlp-en-small").get("button").trigger("click");
     await flushPromises();

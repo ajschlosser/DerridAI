@@ -16,16 +16,32 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { systemApi, type LanguageInfo } from "../api/system";
 import { englishDefault, COMMON_KEY_ALIASES } from "../i18n/englishDefault";
 import * as runtime from "../runtime/runtimeBridge";
+import {
+  AUTO_TIME_ZONE,
+  LOCALE_STORAGE_KEY,
+  TIME_ZONE_STORAGE_KEY,
+  browserLocaleCodes,
+  detectBrowserTimeZone,
+  detectInstalledBrowserLocale,
+  resolveTimeZone,
+  supportedTimeZones,
+} from "../domain/localePreferences";
 
 let languageEventBridgeInstalled = false;
 
 export const useI18nStore = defineStore("i18n", () => {
-  const locale = ref(localStorage.getItem("derridai-locale") || "en-US");
+  const locale = ref("en-US");
+  const browserLocale = ref("");
+  const missingBrowserLocale = ref("");
+  const browserTimeZone = ref(detectBrowserTimeZone());
+  const timeZonePreference = ref(localStorage.getItem(TIME_ZONE_STORAGE_KEY) || AUTO_TIME_ZONE);
+  const timeZone = computed(() => resolveTimeZone(timeZonePreference.value, browserTimeZone.value));
+  const timeZones = computed(() => supportedTimeZones(browserTimeZone.value));
   const languages = ref<LanguageInfo[]>([]);
   const dictionary = ref<Record<string, string>>({});
   const baseDictionary = ref<Record<string, string>>({});
@@ -82,7 +98,7 @@ export const useI18nStore = defineStore("i18n", () => {
     }
   }
 
-  async function setLocale(code: string) {
+  async function setLocale(code: string, options: { persist?: boolean } = {}) {
     loading.value = true;
     try {
       const [data, base] = await Promise.all([
@@ -92,7 +108,10 @@ export const useI18nStore = defineStore("i18n", () => {
       locale.value = data.code;
       dictionary.value = data.dictionary || {};
       baseDictionary.value = base.dictionary || {};
-      localStorage.setItem("derridai-locale", data.code);
+      if (options.persist !== false) {
+        localStorage.setItem(LOCALE_STORAGE_KEY, data.code);
+        missingBrowserLocale.value = "";
+      }
       document.documentElement.lang = data.code;
       document.documentElement.dir = directionForLocale(data.code);
       runtime.setTranslationDictionary(data.code, dictionary.value, baseDictionary.value, {
@@ -105,11 +124,36 @@ export const useI18nStore = defineStore("i18n", () => {
     }
   }
 
+  function browserMatch() {
+    const detected = detectInstalledBrowserLocale(languages.value, browserLocaleCodes());
+    browserLocale.value = detected.requested;
+    return detected;
+  }
+
+  function setTimeZone(value: string) {
+    const requested = value || AUTO_TIME_ZONE;
+    timeZonePreference.value =
+      requested === AUTO_TIME_ZONE || supportedTimeZones(browserTimeZone.value).includes(requested)
+        ? requested
+        : AUTO_TIME_ZONE;
+    localStorage.setItem(TIME_ZONE_STORAGE_KEY, timeZonePreference.value);
+    document.documentElement.dataset.timeZone = timeZone.value;
+  }
+
   async function refreshLanguagesFromEvent() {
-    const requested = locale.value;
     await loadLanguages();
-    const available = languages.value.some((item) => item.code === requested);
-    await setLocale(available ? requested : "en-US");
+    const saved = localStorage.getItem(LOCALE_STORAGE_KEY) || "";
+    const savedLanguage = languages.value.find(
+      (item) => item.code.toLowerCase() === saved.toLowerCase(),
+    );
+    if (savedLanguage) {
+      missingBrowserLocale.value = "";
+      await setLocale(savedLanguage.code, { persist: false });
+      return;
+    }
+    const detected = browserMatch();
+    missingBrowserLocale.value = detected.requested && !detected.match ? detected.requested : "";
+    await setLocale(detected.match || "en-US", { persist: Boolean(detected.match) });
   }
 
   if (typeof window !== "undefined" && !languageEventBridgeInstalled) {
@@ -123,11 +167,18 @@ export const useI18nStore = defineStore("i18n", () => {
 
   async function initialize() {
     await loadLanguages();
-    const available = languages.value.some((item) => item.code === locale.value)
-      ? locale.value
-      : "en-US";
+    browserTimeZone.value = detectBrowserTimeZone();
+    document.documentElement.dataset.timeZone = timeZone.value;
+    const saved = localStorage.getItem(LOCALE_STORAGE_KEY) || "";
+    const savedLanguage = languages.value.find(
+      (item) => item.code.toLowerCase() === saved.toLowerCase(),
+    );
+    const detected = browserMatch();
+    const available = savedLanguage?.code || detected.match || "en-US";
+    missingBrowserLocale.value =
+      !savedLanguage && detected.requested && !detected.match ? detected.requested : "";
     try {
-      await setLocale(available);
+      await setLocale(available, { persist: Boolean(savedLanguage || detected.match) });
     } catch (exc) {
       // Localization must never prevent the sign-in/application shell from
       // loading. Vue labels already provide English fallbacks.
@@ -143,6 +194,12 @@ export const useI18nStore = defineStore("i18n", () => {
 
   return {
     locale,
+    browserLocale,
+    missingBrowserLocale,
+    browserTimeZone,
+    timeZonePreference,
+    timeZone,
+    timeZones,
     languages,
     dictionary,
     baseDictionary,
@@ -152,6 +209,7 @@ export const useI18nStore = defineStore("i18n", () => {
     directionForLocale,
     loadLanguages,
     setLocale,
+    setTimeZone,
     initialize,
   };
 });

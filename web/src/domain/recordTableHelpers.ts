@@ -16,13 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { storedTimeZone } from "./localePreferences";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
 export function formatTimestamp(value: Any): string {
   if (!value) return "";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+  const locale =
+    typeof document !== "undefined" ? document.documentElement.lang || undefined : undefined;
+  return Number.isNaN(date.getTime())
+    ? String(value)
+    : date.toLocaleString(locale, { timeZone: storedTimeZone() });
 }
 
 export function toggleSort(sort: Any, key: Any): void {

@@ -209,6 +209,11 @@ onBeforeUnmount(() => {
               :label="i18n.tf('settings.nlp_packs_installing', { percent: percent(pack) })"
             />
             <UiStatusBadge
+              v-else-if="pack.bundled && pack.installed"
+              tone="success"
+              :label="i18n.t('settings.nlp_packs_bundled', 'Bundled')"
+            />
+            <UiStatusBadge
               v-else-if="pack.installed"
               tone="success"
               :label="i18n.t('settings.nlp_packs_installed')"
@@ -250,7 +255,7 @@ onBeforeUnmount(() => {
                 @click="install(pack)"
               />
               <UiButton
-                v-if="pack.installed"
+                v-if="pack.installed && !pack.bundled"
                 size="small"
                 :label="i18n.t('settings.nlp_packs_uninstall')"
                 :disabled="Boolean(busy)"

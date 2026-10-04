@@ -436,7 +436,7 @@ function openLanguages() {
   if (isResearcher.value) navigateTo("config");
   else
     window.dispatchEvent(
-      new CustomEvent("derridai:navigate-native", { detail: { path: "/languages" } }),
+      new CustomEvent("derridai:navigate-native", { detail: { path: "/locale" } }),
     );
 }
 

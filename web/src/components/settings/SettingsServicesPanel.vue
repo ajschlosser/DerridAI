@@ -51,7 +51,9 @@ function providerChecked(profile: ProviderProfile) {
   const stamp = props.providerStatuses?.[profile.id]?.checked_at;
   if (!stamp) return i18n.t("settings.not_checked");
   const date = new Date(stamp);
-  return Number.isNaN(date.getTime()) ? stamp : date.toLocaleString(i18n.locale);
+  return Number.isNaN(date.getTime())
+    ? stamp
+    : date.toLocaleString(i18n.locale, { timeZone: i18n.timeZone });
 }
 function updateAudio(patch: Partial<{ base_url: string; model: string; api_key: string }>) {
   emit("update-audio-draft", { ...props.audioDraft, ...patch });

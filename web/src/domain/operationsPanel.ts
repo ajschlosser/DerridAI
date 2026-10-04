@@ -18,6 +18,7 @@
 
 // Pure view logic for the Home page Operations panel: which section an operation belongs in,
 // filtering, elapsed time / ETA, and locale-aware duration and relative-time text.
+import { storedTimeZone } from "./localePreferences";
 import { isActiveJobStatus, jobProgressPercent } from "./operationsDock";
 
 /** What the panel needs to know about one background operation (built by the runtime bridge). */
@@ -169,15 +170,28 @@ export function relativeTime(iso: string | null, nowMs: number, locale: string):
 export function absoluteTime(iso: string | null, locale: string): string {
   const then = time(iso);
   return then
-    ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
-        new Date(then),
-      )
+    ? new Intl.DateTimeFormat(locale, {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: storedTimeZone(),
+      }).format(new Date(then))
     : "";
 }
 
-const localDayKey = (ms: number) => {
-  const date = new Date(ms);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const localDayKey = (ms: number, timeZone: string) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(ms));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+};
+
+const dayNumber = (key: string) => {
+  const [year, month, day] = key.split("-").map(Number);
+  return Date.UTC(year, month - 1, day) / 86_400_000;
 };
 
 export interface DayGroup {
@@ -193,21 +207,20 @@ export function groupByDay(
   locale: string,
 ): DayGroup[] {
   const groups = new Map<string, DayGroup>();
-  const today = new Date(nowMs);
-  today.setHours(0, 0, 0, 0);
+  const timeZone = storedTimeZone();
+  const todayKey = localDayKey(nowMs, timeZone);
+  const todayNumber = dayNumber(todayKey);
   const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   for (const view of views) {
     const ms = endedOrStarted(view) || nowMs;
-    const key = localDayKey(ms);
+    const key = localDayKey(ms, timeZone);
     let group = groups.get(key);
     if (!group) {
-      const day = new Date(ms);
-      day.setHours(0, 0, 0, 0);
-      const diff = Math.round((day.getTime() - today.getTime()) / 86_400_000);
+      const diff = dayNumber(key) - todayNumber;
       const label =
         diff >= -1 && diff <= 0
           ? relative.format(diff, "day")
-          : new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(day);
+          : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone }).format(new Date(ms));
       group = { key, label: label.charAt(0).toLocaleUpperCase(locale) + label.slice(1), items: [] };
       groups.set(key, group);
     }

@@ -1,11 +1,15 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-# Deterministic offline POS/NER candidates. English and French ship in the Docker image
-# with spaCy's small pipelines so those languages work out of the box without pulling the
-# much larger model packages during every image build. Other languages are installed
-# explicitly by an administrator through the Document NLP language-pack workflow.
-spacy>=3.8,<4
+# Deterministic offline POS/NER candidates. English, French, and Latin ship in the
+# Docker image with small spaCy pipelines. Other languages are installed explicitly
+# by an administrator through the Document NLP language-pack workflow.
+# LatinCy 3.9.8 requires spaCy >=3.8.11,<3.9.0; the official 3.8 pipelines share
+# that minor-series compatibility boundary.
+spacy>=3.8.11,<3.9
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
 fr_core_news_sm @ https://github.com/explosion/spacy-models/releases/download/fr_core_news_sm-3.8.0/fr_core_news_sm-3.8.0-py3-none-any.whl
+la_core_web_sm @ https://huggingface.co/latincy/la_core_web_sm/resolve/a2606c802678e5030a829b2e060a330722ca5884/la_core_web_sm-3.9.8-py3-none-any.whl
+latincy-preprocess>=0.2.0,<0.6.0
+la-latincy-lookups>=1.0.0,<1.1.0
 # Tokenizer/morphology dependencies declared by spaCy language packs installed on demand
 # (Settings -> System -> Language packs): Japanese (Sudachi) and
 # Chinese (pkuseg). Model packs themselves are downloaded and digest-verified by an
