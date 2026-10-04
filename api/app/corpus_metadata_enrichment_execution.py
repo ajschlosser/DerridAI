@@ -2096,7 +2096,16 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 or not isinstance(evidence_info.get("confidence"), (int, float))
                 or float(evidence_info.get("confidence")) <= minimum
             )
-            auto = autofill(field, record.get(field), confidence, evidence_info)
+            assessment_outcome = str(assessment.get("outcome") or "")
+            # A model may be confident about an answer while simultaneously
+            # declaring the field uncertain or unsupported. Confidence can
+            # override a soft needs_review flag, but it must never override the
+            # model's structured epistemic outcome.
+            auto = (
+                None
+                if assessment_outcome in {"uncertain", "no_supported_value"}
+                else autofill(field, record.get(field), confidence, evidence_info)
+            )
             if auto:
                 auto["value_source"] = "llm"
                 auto["verification_status"] = "auto_resolved"
@@ -2246,7 +2255,12 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "reason_code": "ambiguous", "reason": reason or "The model could not determine a supported value.",
                 }
                 continue
-            auto = autofill(field, value, confidence, evidence_info)
+            assessment_outcome = str(assessment.get("outcome") or "")
+            auto = (
+                None
+                if assessment_outcome in {"uncertain", "no_supported_value"}
+                else autofill(field, value, confidence, evidence_info)
+            )
             if auto:
                 auto["value_source"] = "llm"
                 auto["verification_status"] = "auto_resolved"
