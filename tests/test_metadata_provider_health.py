@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import pytest
+
 from app.llm_failures import FailureDisposition
 from app.metadata_provider_health import (
     MetadataProviderCircuitOpen,
