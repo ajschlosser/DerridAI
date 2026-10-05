@@ -20,6 +20,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
+from .. import research_threads
 from ..auth import AuthUser
 from ..config import settings
 from ..content_filter import enforce_researcher_text
@@ -37,6 +38,7 @@ from ..models import (
 from ..pipelines.access import resolve_research_pipeline
 from ..pipelines.overrides import resolve_pipeline_config
 from ..provider_profile_options import profile_generation_options
+from ..research_thread_store import ThreadBusy, ThreadNotFound
 from ..researcher_view import sanitize_rag_job
 from ..services import (
     capture_jobs,
@@ -112,6 +114,18 @@ def create_llm_tool_job(body: LLMToolJobCreate, request: Request) -> dict[str, A
 
 @router.post("/api/jobs/rag")
 def create_rag_job(body: RAGRunRequest, request: Request) -> dict[str, Any]:
+    """Start a Research run; every run is persisted as a turn of a Research thread."""
+    return start_research_run(body, request, thread_id=body.thread_id)
+
+
+def start_research_run(
+    body: RAGRunRequest,
+    request: Request,
+    *,
+    thread_id: str | None = None,
+    retry_turn_id: str | None = None,
+) -> dict[str, Any]:
+    """Shared by the job and thread routes so both apply identical validation."""
     try:
         user = request_user(request)
         if user.role != "admin":
@@ -188,9 +202,22 @@ def create_rag_job(body: RAGRunRequest, request: Request) -> dict[str, Any]:
                     "auto_grade_generation": grade_generation or None,
                 })
             body = RAGRunRequest(**payload)
-        return rag_jobs.create(body, owner=user.username)
+        return research_threads.start_run(
+            rag_jobs,
+            body,
+            owner=user.username,
+            thread_id=thread_id,
+            retry_turn_id=retry_turn_id,
+        )
     except HTTPException:
         raise
+    except ThreadNotFound as exc:
+        raise HTTPException(status_code=404, detail="Research thread not found.") from exc
+    except ThreadBusy as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="This Research thread already has a question in progress.",
+        ) from exc
     except ValueError as exc:
         # UI payloads are validated client-side as well. A stale profile or
         # server-owned policy conflict is semantically unprocessable, not a

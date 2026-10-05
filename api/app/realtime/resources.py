@@ -69,5 +69,7 @@ DATA_RESOURCES: dict[str, DataResource] = {
     "vector_collections": DataResource(capability="corpus.read"),
     "metadata_exemplars": DataResource(),
     "response_library": DataResource(),
+    # GET /api/research/threads requires rag.run (route_policy.py); the key carries no ids or text.
+    "research_threads": DataResource(capability="rag.run"),
     "corpus_records": DataResource(capability="corpus.read"),
 }

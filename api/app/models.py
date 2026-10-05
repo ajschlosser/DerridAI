@@ -447,6 +447,10 @@ class RAGEvidenceSelection(BaseModel):
 class RAGRunRequest(BaseModel):
     prompt: str = Field(min_length=1)
     instructions: str | None = None
+    # Research thread linkage. Only identifiers travel from the client; the
+    # server loads any thread content itself and never accepts prior answers.
+    thread_id: str | None = Field(default=None, min_length=1, max_length=80)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=120)
     # Pipeline identity is resolved server-side from the active Research
     # assignment unless an authorized caller explicitly selects another
     # executable version. Persisting it on the request makes each run auditable.

@@ -23,7 +23,7 @@ import time
 import uuid
 from typing import Any
 
-from . import operation_events
+from . import operation_events, research_threads
 from .chroma_store import ChromaStore
 from .concurrency import (
     CapacityCancelled,
@@ -123,8 +123,17 @@ class RAGJobManager(PersistentJobStateMixin):
             "ollama_waiting": ollama.waiting,
         }
 
-    def create(self, body: RAGRunRequest, *, owner: str | None = None) -> dict[str, Any]:
+    def create(
+        self,
+        body: RAGRunRequest,
+        *,
+        owner: str | None = None,
+        turn_id: str | None = None,
+    ) -> dict[str, Any]:
         job_id = str(uuid.uuid4())
+        if turn_id:
+            # Bind before the worker can finish so completion always finds the turn.
+            research_threads.bind_job(turn_id, str(owner or ""), job_id)
         request_summary = body.model_dump(
             exclude={"api_key", "auto_grade_api_key", "selected_evidence"}
         )
@@ -173,6 +182,7 @@ class RAGJobManager(PersistentJobStateMixin):
                 "source_collection": body.source_collection,
                 "prompt": body.prompt,
                 "owner": owner,
+                "turn_id": turn_id,
                 "status": "queued",
                 "created_at": iso_now(),
                 "started_at": None,
@@ -888,6 +898,8 @@ class RAGJobManager(PersistentJobStateMixin):
                 provider_permit.release()
             with self._lock:
                 self._threads.pop(job_id, None)
+                finished = self._copy(self._jobs[job_id], include_result=False)
+            research_threads.sync_turn_from_job(finished)
             self._persist_job(job_id)
 
     def list(self) -> JobPayloadList:

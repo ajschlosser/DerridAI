@@ -219,7 +219,7 @@ def test_capability_resources_reach_holders_of_the_read_capability_only():
     from app.realtime.resources import follows_any_resource
 
     reader = Subscriber(username="ann", role="researcher", capabilities=frozenset({"corpus.read"}))
-    other = Subscriber(username="bob", role="researcher", capabilities=frozenset({"rag.run"}))
+    other = Subscriber(username="bob", role="researcher", capabilities=frozenset({"page.faq"}))
     admin = Subscriber(username="root", role="admin")
 
     for key in ("corpus_records", "vector_collections"):
@@ -235,6 +235,9 @@ def test_capability_resources_reach_holders_of_the_read_capability_only():
     for key in ("response_library", "users", "roles", "pipelines", "pipeline_runs", "pipeline_benchmarks", "metadata_exemplars"):
         assert not DATA_RESOURCES[key].allows(holder), key
     assert follows_any_resource(reader) and not follows_any_resource(other)
+    # Research threads follow rag.run (the capability their REST reads require).
+    runner = Subscriber(username="cy", role="researcher", capabilities=frozenset({"rag.run"}))
+    assert DATA_RESOURCES["research_threads"].allows(runner) and not DATA_RESOURCES["research_threads"].allows(other)
 
     # The new flag cannot loosen owned or administrator-only audiences.
     job = Audience(owner="ann", admin_only=False, capability="rag.jobs.own")
