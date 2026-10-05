@@ -55,6 +55,71 @@ describe("RecordEditSheet metadata cardinality", () => {
     wrapper.unmount();
   });
 
+  it("uses the pinned schema for custom grouping and cardinality", async () => {
+    const schema = {
+      id: "custom",
+      groups: [
+        {
+          key: "analysis",
+          label: "Analysis",
+          intro: "",
+          fields_heading: "",
+          notes: [],
+          trailer: "",
+          footer: "",
+        },
+      ],
+      fields: [
+        {
+          field_id: "field-tension",
+          name: "conceptual_tension",
+          label: "Conceptual tension",
+          type: "list",
+          group: "analysis",
+          role: "scholarly",
+          scope: "record",
+          values: [],
+          strict: false,
+          instruction: "",
+          definitions_heading: "",
+          evidence: false,
+          assess: false,
+          review: false,
+          retrieval_profile: {
+            enabled: true,
+            max_items: 6,
+            min_similarity: 0,
+            include_corrections: true,
+            include_confirmed_absence: true,
+          },
+          pos_tags: [],
+          ner_tags: [],
+        },
+      ],
+    };
+    const wrapper = mount(RecordEditSheet, {
+      attachTo: document.body,
+      props: {
+        open: true,
+        schema: schema as never,
+        record: {
+          record_id: "r1",
+          conceptual_tension: ["presence", "absence"],
+          speaker: "Legacy speaker",
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Analysis");
+    const tension = fieldLabel(wrapper, "Conceptual tension");
+    expect((tension.get("input").element as HTMLInputElement).value).toBe("presence, absence");
+    expect(tension.get("small").text()).toContain("Separate multiple values");
+    expect(wrapper.text()).not.toContain("Quotation provenance");
+
+    wrapper.unmount();
+  });
+
   it("does not infer known scalar cardinality from a legacy array value", async () => {
     const wrapper = mount(RecordEditSheet, {
       attachTo: document.body,

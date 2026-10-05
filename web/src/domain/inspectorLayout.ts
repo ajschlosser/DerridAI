@@ -17,6 +17,8 @@
  */
 
 import { assertionFieldsByTab } from "./fieldAssertions";
+import { metadataRegistryGroups, type MetadataRegistryField } from "./metadataFieldRegistry";
+import type { MetadataSchema } from "../api/metadataSchemas";
 
 const STORAGE_KEY = "derridai.record.inspectorLayout.v1";
 
@@ -77,9 +79,58 @@ export const INSPECTOR_FIELD_CATALOG: Record<InspectorTabKey, string[]> = {
   ],
 };
 
+const SCHEMA_OVERVIEW_COMPATIBILITY_FIELDS = [
+  "document_author",
+  "edition",
+  "year",
+  "publication_year",
+  "publisher",
+  "translator",
+  "document_language",
+  "original_language",
+  "__pages",
+  "needs_review",
+  "review_reason",
+];
+
+function inspectorTabForSchemaField(field: MetadataRegistryField): InspectorTabKey {
+  const semanticId = String(field.semanticCompatibilityId || "");
+  const group = String(field.group || "").toLowerCase();
+  if (semanticId.startsWith("derridai.indexing.") || group.includes("index")) return "indexing";
+  if (
+    semanticId.startsWith("derridai.quotation.") ||
+    group.includes("quotation") ||
+    ["derridai.region_type", "derridai.primary_text"].includes(semanticId)
+  )
+    return "overview";
+  if (field.scope === "corpus") return "overview";
+  return "provenance";
+}
+
+function schemaInspectorCatalog(schema: MetadataSchema): Record<InspectorTabKey, string[]> {
+  const out: Record<InspectorTabKey, string[]> = {
+    overview: [...SCHEMA_OVERVIEW_COMPATIBILITY_FIELDS],
+    provenance: [],
+    indexing: [],
+  };
+  for (const group of metadataRegistryGroups(schema)) {
+    for (const item of group.fields) {
+      if (item.role === "operational" || item.scope !== "record") continue;
+      out[inspectorTabForSchemaField(item)].push(item.name);
+    }
+  }
+  return {
+    overview: [...new Set(out.overview)],
+    provenance: [...new Set(out.provenance)],
+    indexing: [...new Set(out.indexing)],
+  };
+}
+
 export function inspectorFieldCatalog(
   record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
 ): Record<InspectorTabKey, string[]> {
+  if (schema) return schemaInspectorCatalog(schema);
   const asserted = assertionFieldsByTab(record || {});
   return {
     overview: [...new Set([...INSPECTOR_FIELD_CATALOG.overview, ...asserted.overview])],
@@ -102,7 +153,36 @@ function field(name: string): InspectorLayoutRow {
   return { id: uid(), kind: "field", field: name };
 }
 
-export function defaultInspectorLayout(record?: Record<string, unknown> | null): InspectorLayout {
+function schemaInspectorLayout(schema: MetadataSchema): InspectorLayout {
+  const layout: InspectorLayout = {
+    overview: [heading("Record context"), ...SCHEMA_OVERVIEW_COMPATIBILITY_FIELDS.map(field)],
+    provenance: [],
+    indexing: [],
+  };
+  for (const group of metadataRegistryGroups(schema)) {
+    const byTab: Record<InspectorTabKey, MetadataRegistryField[]> = {
+      overview: [],
+      provenance: [],
+      indexing: [],
+    };
+    for (const item of group.fields) {
+      if (item.role === "operational" || item.scope !== "record") continue;
+      byTab[inspectorTabForSchemaField(item)].push(item);
+    }
+    for (const tab of INSPECTOR_TABS) {
+      if (!byTab[tab].length) continue;
+      layout[tab].push(heading(group.label || group.key));
+      layout[tab].push(...byTab[tab].map((item) => field(item.name)));
+    }
+  }
+  return layout;
+}
+
+export function defaultInspectorLayout(
+  record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
+): InspectorLayout {
+  if (schema) return schemaInspectorLayout(schema);
   const asserted = assertionFieldsByTab(record || {});
   const base: InspectorLayout = {
     overview: [
@@ -170,9 +250,10 @@ export function defaultInspectorLayout(record?: Record<string, unknown> | null):
 export function normalizeInspectorLayout(
   raw: unknown,
   record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
 ): InspectorLayout {
-  const fallback = defaultInspectorLayout(record);
-  const catalog = inspectorFieldCatalog(record);
+  const fallback = defaultInspectorLayout(record, schema);
+  const catalog = inspectorFieldCatalog(record, schema);
   if (!raw || typeof raw !== "object") return fallback;
   const source = raw as Record<string, unknown>;
   const next = { ...fallback };
@@ -237,32 +318,41 @@ export function unusedInspectorFields(
   tab: InspectorTabKey,
   rows: InspectorLayoutRow[],
   record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
 ): string[] {
   const used = new Set(
     rows
       .filter((row): row is { id: string; kind: "field"; field: string } => row.kind === "field")
       .map((row) => row.field),
   );
-  return inspectorFieldCatalog(record)[tab].filter((name) => !used.has(name));
+  return inspectorFieldCatalog(record, schema)[tab].filter((name) => !used.has(name));
 }
 
-export function loadInspectorLayout(record?: Record<string, unknown> | null): InspectorLayout {
+export function loadInspectorLayout(
+  record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
+): InspectorLayout {
   try {
     return normalizeInspectorLayout(
       JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"),
       record,
+      schema,
     );
   } catch {
-    return defaultInspectorLayout(record);
+    return defaultInspectorLayout(record, schema);
   }
 }
 
 export function saveInspectorLayout(
   layout: InspectorLayout,
   record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
 ) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeInspectorLayout(layout, record)));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(normalizeInspectorLayout(layout, record, schema)),
+    );
   } catch {
     /* browser storage may be unavailable */
   }

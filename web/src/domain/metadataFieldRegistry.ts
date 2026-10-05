@@ -17,7 +17,12 @@
  */
 
 import { isPlaceholderValue } from "./metadataValues";
-import type { SchemaField } from "../api/metadataSchemas";
+import type {
+  MetadataSchema,
+  SchemaField,
+  SchemaFieldRole,
+  SchemaFieldScope,
+} from "../api/metadataSchemas";
 export type MetadataControl =
   | "enum"
   | "combobox"
@@ -30,6 +35,149 @@ export interface MetadataFieldSpec {
   allowedValues?: string[];
   suggestionFields?: string[];
   allowCustom?: boolean;
+}
+
+export interface MetadataRegistryField extends MetadataFieldSpec {
+  fieldId: string;
+  name: string;
+  semanticCompatibilityId?: string | null;
+  label: string;
+  group: string;
+  role: SchemaFieldRole;
+  scope: SchemaFieldScope;
+  type: SchemaField["type"];
+  review: boolean;
+  evidence: boolean;
+  assess: boolean;
+}
+
+export interface MetadataRegistryGroup {
+  key: string;
+  label: string;
+  fields: MetadataRegistryField[];
+}
+
+const CORE_REGISTRY_FIELDS = [
+  {
+    field_id: "derridai.region_type",
+    name: "region_type",
+    semantic_compatibility_id: "derridai.region_type",
+    label: "Region type",
+    type: "choice",
+    group: "discourse",
+    role: "structural",
+    scope: "record",
+    review: true,
+    evidence: true,
+    assess: true,
+  },
+  {
+    field_id: "derridai.primary_text",
+    name: "primary_text",
+    semantic_compatibility_id: "derridai.primary_text",
+    label: "Primary text",
+    type: "boolean",
+    group: "discourse",
+    role: "structural",
+    scope: "record",
+    review: true,
+    evidence: true,
+    assess: true,
+  },
+  {
+    field_id: "derridai.discourse_role",
+    name: "discourse_role",
+    semantic_compatibility_id: "derridai.discourse_role",
+    label: "Discourse role",
+    type: "choice",
+    group: "discourse",
+    role: "structural",
+    scope: "record",
+    review: true,
+    evidence: true,
+    assess: true,
+  },
+] as const;
+
+function registryField(
+  field: SchemaField | (typeof CORE_REGISTRY_FIELDS)[number],
+  regionTypes: string[],
+  discourseRoles: string[],
+): MetadataRegistryField {
+  const schemaField = "values" in field ? (field as SchemaField) : undefined;
+  const spec = metadataFieldSpec(field.name, regionTypes, discourseRoles, schemaField);
+  return {
+    fieldId: field.field_id,
+    name: field.name,
+    semanticCompatibilityId: field.semantic_compatibility_id ?? null,
+    label: field.label || field.name,
+    group: field.group,
+    role: (field.role || "scholarly") as SchemaFieldRole,
+    scope: (field.scope || "record") as SchemaFieldScope,
+    type: field.type,
+    review: Boolean(field.review),
+    evidence: Boolean(field.evidence),
+    assess: Boolean(field.assess),
+    ...spec,
+  };
+}
+
+/**
+ * Canonical frontend projection of the pinned metadata schema.
+ *
+ * UI surfaces should consume this registry rather than re-declaring field
+ * names, cardinality, control type, or group membership. The three locked core
+ * fields are the only synthetic entries; ordinary scholarly fields come from
+ * the schema verbatim.
+ */
+export function metadataRegistryFields(
+  schema: MetadataSchema | null | undefined,
+  regionTypes: string[] = [],
+  discourseRoles: string[] = [],
+): MetadataRegistryField[] {
+  if (!schema) return [];
+  const seen = new Set<string>();
+  const fields: MetadataRegistryField[] = [];
+  for (const core of CORE_REGISTRY_FIELDS) {
+    if (seen.has(core.name)) continue;
+    seen.add(core.name);
+    fields.push(registryField(core, regionTypes, discourseRoles));
+  }
+  for (const field of schema.fields || []) {
+    if (!field?.name || seen.has(field.name)) continue;
+    seen.add(field.name);
+    fields.push(registryField(field, regionTypes, discourseRoles));
+  }
+  return fields;
+}
+
+export function metadataRegistryGroups(
+  schema: MetadataSchema | null | undefined,
+  regionTypes: string[] = [],
+  discourseRoles: string[] = [],
+): MetadataRegistryGroup[] {
+  if (!schema) return [];
+  const fields = metadataRegistryFields(schema, regionTypes, discourseRoles);
+  const grouped = new Map<string, MetadataRegistryField[]>();
+  for (const field of fields) {
+    const items = grouped.get(field.group) || [];
+    items.push(field);
+    grouped.set(field.group, items);
+  }
+
+  const groups: MetadataRegistryGroup[] = [];
+  const emitted = new Set<string>();
+  for (const group of schema.groups || []) {
+    const items = grouped.get(group.key) || [];
+    if (!items.length) continue;
+    emitted.add(group.key);
+    groups.push({ key: group.key, label: group.label || group.key, fields: items });
+  }
+  for (const [key, items] of grouped) {
+    if (emitted.has(key)) continue;
+    groups.push({ key, label: key.replaceAll("_", " "), fields: items });
+  }
+  return groups;
 }
 
 const SPEAKER_FIELDS = [

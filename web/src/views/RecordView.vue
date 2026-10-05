@@ -40,6 +40,8 @@ import type { RecordWorkspaceSnapshot } from "../types/record";
 import type { DerridaiNormativeModel, ResearchObjectGraph } from "../types/researchObjectGraph";
 import { useSemanticMapStore } from "../stores/semanticMap";
 import { annotationsService } from "../services/annotations";
+import { currentFieldAssertions } from "../domain/fieldAssertions";
+import { metadataSchemasApi, type MetadataSchema } from "../api/metadataSchemas";
 
 const i18n = useI18nStore();
 const shell = useShellStore();
@@ -56,6 +58,9 @@ const normativeModel = ref<DerridaiNormativeModel | null>(null);
 const graphLoading = ref(false);
 const graphError = ref("");
 let graphRequest = 0;
+let schemaRequest = 0;
+const recordSchema = ref<MetadataSchema | null>(null);
+const schemaCache = new Map<string, MetadataSchema | null>();
 const editOpen = ref(false);
 const inspectorCollapsed = ref(false);
 const inspectorWidth = ref(
@@ -79,6 +84,35 @@ const recordSemanticLoading = ref(false);
 const showRecordMap = computed(
   () => semanticMap.enabled && semanticMap.placement === "record" && snapshot.value.available,
 );
+
+function schemaIdForRecord(value: Record<string, unknown>): string {
+  const explicit = String(value.schema_id || "").trim();
+  const ids = new Set<string>(explicit ? [explicit] : []);
+  for (const assertion of currentFieldAssertions(value)) {
+    const id = String(assertion.schema_id || "").trim();
+    if (id) ids.add(id);
+  }
+  return ids.size === 1 ? [...ids][0] : "";
+}
+
+async function loadRecordSchema(value: Record<string, unknown>) {
+  const request = ++schemaRequest;
+  recordSchema.value = null;
+  const schemaId = schemaIdForRecord(value);
+  if (!schemaId) return;
+  if (schemaCache.has(schemaId)) {
+    if (request === schemaRequest) recordSchema.value = schemaCache.get(schemaId) || null;
+    return;
+  }
+  try {
+    const loaded = await metadataSchemasApi.get(schemaId);
+    schemaCache.set(schemaId, loaded);
+    if (request === schemaRequest) recordSchema.value = loaded;
+  } catch {
+    schemaCache.set(schemaId, null);
+    if (request === schemaRequest) recordSchema.value = null;
+  }
+}
 
 async function loadSemanticMap() {
   const request = ++semanticRequest;
@@ -168,6 +202,7 @@ async function load() {
     if (request !== readRequest) return;
     if (next.record_id !== snapshot.value.record_id) editOpen.value = false;
     snapshot.value = next;
+    void loadRecordSchema(next.record || {});
     void loadTraceability(snapshot.value);
     loadSemanticMap();
   } catch (exc) {
@@ -363,6 +398,8 @@ function clearSelection() {
   readRequest += 1;
   graphRequest += 1;
   semanticRequest += 1;
+  schemaRequest += 1;
+  recordSchema.value = null;
   snapshot.value = { available: false, mode: "workspace" };
   objectGraph.value = null;
   normativeModel.value = null;
@@ -548,6 +585,7 @@ onBeforeUnmount(() => {
           :normative-model="normativeModel"
           :graph-loading="graphLoading"
           :graph-error="graphError"
+          :schema="recordSchema"
           @search="metadataSearch"
           @change="quickChange"
           @add-annotation="openAnnotation()"
@@ -565,6 +603,7 @@ onBeforeUnmount(() => {
       <RecordEditSheet
         :open="editOpen"
         :record="record"
+        :schema="recordSchema"
         @close="editOpen = false"
         @save="saveChanges"
       />

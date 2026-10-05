@@ -50,7 +50,7 @@ import {
   selectedRecord,
 } from "./sharedRecordScopes";
 import { tr, trf } from "./sharedTranslate";
-import { selectedIndex, state } from "./sharedUrlState";
+import { state } from "./sharedUrlState";
 import { fileTimers, persistFileNow } from "./sharedWorkspacePersistence";
 import { persistPrefs, shell, workspaceDb } from "./sharedWorkspaceStorage";
 import { dbUnavailableReason, hasCorpusDb } from "./storeAvailability";
@@ -93,7 +93,6 @@ export const recordDialogs = createRecordDialogs({
   renderView,
   restoreRecordHistoryVersion,
   sameValue,
-  selectedIndex,
   selectedRecord,
   selectedReviewItems: () => selectedReviewItems(state),
   shell,

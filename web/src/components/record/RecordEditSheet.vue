@@ -20,18 +20,31 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
-import { metadataFieldSpec } from "../../domain/metadataFieldRegistry";
+import {
+  metadataFieldSpec,
+  metadataRegistryFields,
+  metadataRegistryGroups,
+} from "../../domain/metadataFieldRegistry";
+import type { MetadataSchema } from "../../api/metadataSchemas";
 
-const props = withDefaults(defineProps<{ open: boolean; record: Record<string, unknown> }>(), {
-  open: false,
-  record: () => ({}),
-});
+const props = withDefaults(
+  defineProps<{
+    open: boolean;
+    record: Record<string, unknown>;
+    schema?: MetadataSchema | null;
+  }>(),
+  {
+    open: false,
+    record: () => ({}),
+    schema: null,
+  },
+);
 const emit = defineEmits<{ close: []; save: [changes: Record<string, unknown>] }>();
 const i18n = useI18nStore();
 const dialog = ref<HTMLDialogElement | null>(null);
 const draft = ref<Record<string, unknown>>({});
 const original = ref<Record<string, unknown>>({});
-const groups = [
+const legacyGroups = [
   {
     key: "source",
     label: "record.group_source",
@@ -126,19 +139,41 @@ const groups = [
   },
   { key: "text", label: "record.group_text", fallback: "Text", fields: ["text"] },
 ];
-const knownFields = new Set(groups.flatMap((group) => group.fields));
+
+const schemaRegistryFields = computed(() => metadataRegistryFields(props.schema));
+const schemaRegistryFieldMap = computed(() =>
+  Object.fromEntries(schemaRegistryFields.value.map((field) => [field.name, field])),
+);
+const compatibilityGroups = legacyGroups.filter((group) =>
+  ["source", "quality", "language", "citation", "text"].includes(group.key),
+);
+const groups = computed(() =>
+  props.schema
+    ? [
+        compatibilityGroups[0],
+        ...metadataRegistryGroups(props.schema).map((group) => ({
+          key: `schema:${group.key}`,
+          label: group.label,
+          fallback: group.label,
+          fields: group.fields.map((field) => field.name),
+        })),
+        ...compatibilityGroups.slice(1),
+      ]
+    : legacyGroups,
+);
+const knownFields = computed(() => new Set(groups.value.flatMap((group) => group.fields)));
 const additionalFields = computed(() =>
   Object.keys(draft.value)
     .filter(
       (key) =>
-        !knownFields.has(key) &&
+        !knownFields.value.has(key) &&
         !key.startsWith("_") &&
         !["updates", "annotations", "text_length", "pdf_pages", "pdf_links"].includes(key),
     )
     .sort(),
 );
 const visibleGroups = computed(() =>
-  groups
+  groups.value
     .map((group) => ({
       ...group,
       fields: group.fields.filter((field) =>
@@ -174,24 +209,30 @@ const changes = computed(() => {
 });
 const dirtyCount = computed(() => Object.keys(changes.value).length);
 function fieldLabel(key: string) {
-  return i18n.t(`field.${key}`);
+  const schemaLabel = schemaRegistryFieldMap.value[key]?.label;
+  return schemaLabel ? i18n.t(`field.${key}`, schemaLabel) : i18n.t(`field.${key}`);
 }
 function isArrayField(key: string) {
-  const control = metadataFieldSpec(key, [], []).control;
+  const control =
+    schemaRegistryFieldMap.value[key]?.control || metadataFieldSpec(key, [], []).control;
   if (control === "multi-combobox") return true;
   // Known first-party fields keep their declared scalar contract even when an
   // older record happens to contain an array. Only unknown/custom fields fall
   // back to runtime shape when no schema definition is available here.
-  if (knownFields.has(key)) return false;
+  if (knownFields.value.has(key)) return false;
   return Array.isArray(original.value[key]);
 }
 function isBooleanField(key: string) {
+  const control = schemaRegistryFieldMap.value[key]?.control;
+  if (control) return control === "boolean";
   return (
     typeof original.value[key] === "boolean" ||
     ["primary_text", "is_direct_quote", "needs_review", "document_is_translation"].includes(key)
   );
 }
 function isNumberField(key: string) {
+  const control = schemaRegistryFieldMap.value[key]?.control;
+  if (control) return control === "number";
   return (
     typeof original.value[key] === "number" ||
     [
