@@ -156,6 +156,48 @@ class _LexicalOnlyStore:
         ]
 
 
+class _SystemCollectionStore:
+    def list_stores(self):
+        return [
+            {
+                "name": "_response_cache",
+                "count": 1,
+                "collection_role": "general",
+                "language_codes": [],
+                "metadata": {"derridai_system_collection": "response_cache"},
+            }
+        ]
+
+    def lexical_search(self, name, query, limit):
+        raise AssertionError("System collections must be rejected before retrieval starts.")
+
+
+def test_research_dry_run_rejects_system_collection_before_retrieval() -> None:
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="_response_cache",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"system collection \(response_cache\).*cannot be used as a Research source collection",
+    ):
+        run_rag_pipeline(
+            request,
+            _SystemCollectionStore(),
+            stop_after_context=True,
+        )
+
+
 def test_research_dry_run_stops_before_generation(monkeypatch) -> None:
     def forbidden_chat(**kwargs):
         raise AssertionError("dry-run comparison must not generate an answer")
