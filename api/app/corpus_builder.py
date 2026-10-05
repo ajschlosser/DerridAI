@@ -879,6 +879,16 @@ class RecordStateConflict(ValueError):
     """A conditional Record write lost a concurrent canonical-state race."""
 
 
+def _is_sqlite_lock_error(exc: BaseException) -> bool:
+    """Return whether SQLite rejected work because another writer still owns the database."""
+
+    return isinstance(exc, sqlite3.OperationalError) and (
+        "database is locked" in str(exc).casefold()
+        or "database table is locked" in str(exc).casefold()
+        or "database schema is locked" in str(exc).casefold()
+    )
+
+
 class PdfCorpusRepository:
     def __init__(self, root: Path | None = None) -> None:
         self.root = root or corpus_root()
@@ -4375,7 +4385,12 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             self._update(build_id, stage="constructing_topology")
             records = self._construct_build_topology(build_id, request, resume, scope)
             self._update(build_id, stage="enriching")
-            records = self._schedule_build_enrichment(build_id, request, scope.manifest, records)
+            records = self._schedule_build_enrichment_with_lock_recovery(
+                build_id,
+                request,
+                scope.manifest,
+                records,
+            )
             self._update(build_id, stage="finalizing_review")
             self._finalize_build_review(build_id, scope, records)
             if AutonomousPolicy.from_request(request).enabled:
@@ -4386,18 +4401,34 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             else:
                 self._update(build_id, status="cancelled", stage="cancelled", finished_at=iso_now(), error=str(exc), resumable=True, paused=False, retrying_segmentation=False)
         except Exception as exc:
-            # Checkpoints intentionally survive a failed stage. The user can repair
-            # provider configuration and resume instead of restarting a long book.
+            # Checkpoints intentionally survive a failed stage. SQLite writer
+            # contention is operational/transient, so do not turn it into a
+            # terminal scholarly build failure after the bounded automatic retry.
             stage = str(self.repo.get_build(build_id).get("stage") or "unknown")
-            self._update(
-                build_id,
-                status="failed",
-                stage="failed",
-                finished_at=iso_now(),
-                error=f"{stage}: {exc}",
-                resumable=True,
-                retrying_segmentation=False,
-            )
+            if _is_sqlite_lock_error(exc):
+                self._update(
+                    build_id,
+                    status="interrupted",
+                    stage="interrupted",
+                    interrupted_stage=stage,
+                    finished_at=iso_now(),
+                    error=(
+                        f"{stage}: SQLite remained busy while checkpointing. "
+                        "Completed enrichment checkpoints were preserved; resume to continue."
+                    ),
+                    resumable=True,
+                    retrying_segmentation=False,
+                )
+            else:
+                self._update(
+                    build_id,
+                    status="failed",
+                    stage="failed",
+                    finished_at=iso_now(),
+                    error=f"{stage}: {exc}",
+                    resumable=True,
+                    retrying_segmentation=False,
+                )
         finally:
             with self._lock:
                 self._cancel.discard(build_id)
@@ -5055,6 +5086,55 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             raise RecordStateConflict(
                 "Records changed during enrichment queue setup; retry against the current corpus."
             ) from exc
+
+    def _schedule_build_enrichment_with_lock_recovery(
+        self,
+        build_id: str,
+        request: dict[str, Any],
+        manifest: dict[str, Any],
+        records: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Retry transient SQLite writer contention without discarding enrichment progress.
+
+        Each enrichment family and completed Record is checkpointed independently.
+        If a competing review/projection writer temporarily owns SQLite, rerunning
+        the scheduler is safe: completed families remain complete and unfinished
+        Records are reconstructed from the canonical store before the next attempt.
+        """
+
+        delays = (0.25, 0.75, 1.5, 3.0)
+        current_records = records
+        for attempt in range(len(delays) + 1):
+            try:
+                return self._schedule_build_enrichment(
+                    build_id,
+                    request,
+                    manifest,
+                    current_records,
+                )
+            except sqlite3.OperationalError as exc:
+                if not _is_sqlite_lock_error(exc):
+                    raise
+                if attempt >= len(delays):
+                    raise
+                delay = delays[attempt]
+                self._append_warning(
+                    build_id,
+                    (
+                        "Metadata checkpoint storage was temporarily busy; "
+                        f"retrying enrichment from saved checkpoints in {delay:g}s."
+                    ),
+                )
+                self._update(
+                    build_id,
+                    stage="enriching",
+                    metadata_last_progress_at=iso_now(),
+                    resumable=True,
+                )
+                time.sleep(delay)
+                current_records = self.repo.load_records(build_id)
+        raise AssertionError("unreachable")
+
 
     def _schedule_build_enrichment(
         self, build_id: str, request: dict[str, Any], manifest: dict[str, Any], records: list[dict[str, Any]],
