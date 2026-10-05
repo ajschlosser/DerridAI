@@ -36,7 +36,7 @@ from .field_assertions import (
     migrate_record_assertions,
     project_record_assertions,
 )
-from .rag import _citation_strings
+from .corpus_citations import _citation_strings
 from .text_noise import DEFAULT_NOISE_THRESHOLD
 from .text_noise import median_score as median_text_noise
 from .text_noise import threshold_from_records as record_noise_threshold
