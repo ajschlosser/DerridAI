@@ -21,9 +21,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Sequence
 from enum import IntEnum
 from pathlib import Path
-from typing import Sequence
 
 from pydantic import ValidationError
 
