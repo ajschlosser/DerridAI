@@ -560,7 +560,10 @@ CURRENT REVIEWED RECORD TEXT:
             if str(unit.get("source_unit_id") or unit.get("unit_id") or "")
         }
         units_by_id = active_source_unit_map(source_units or [])
-        use_source_units = bool(units_by_id)
+        use_source_units = source_units is not None and bool(
+            all_units_by_id
+            or any(record.get("source_unit_ids") for record in records)
+        )
         topology_map = units_by_id if use_source_units else block_map
 
         def topology_ids(record: dict[str, Any]) -> list[str]:
