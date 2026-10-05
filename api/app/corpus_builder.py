@@ -214,7 +214,10 @@ from .corpus_record_quality import (
     _trash_quality_report,
     iso_now,
 )
-from .corpus_record_restructure import synchronize_record_source_projection
+from .corpus_record_restructure import (
+    reconcile_recoverable_source_unit_references,
+    synchronize_record_source_projection,
+)
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
 from .corpus_review_aggregates import record_review_aggregate
 from .corpus_review_queue import (
@@ -5344,16 +5347,40 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             )
         return self._reconcile_and_validate(build_id)
 
-    def _reconcile_and_validate(self, build_id: str) -> dict[str, Any]:
-        """Validate current topology without restoring a settled worker snapshot."""
+    def _reconcile_and_validate(
+        self,
+        build_id: str,
+        *,
+        repair_source_topology: bool = False,
+    ) -> dict[str, Any]:
+        """Validate current topology without restoring a settled worker snapshot.
+
+        Autonomous publication may additionally reconcile stale references from
+        retired SourceUnits to provably equivalent active descendants. The repair
+        is deterministic, preserves the retired lineage rows, and records every
+        changed Record mapping in its audit history.
+        """
         base: dict[str, Any] = {}
         build: dict[str, Any] = {}
+        reconciliation_id = (
+            f"publication-finalize-{uuid.uuid4().hex[:12]}"
+            if repair_source_topology
+            else ""
+        )
 
         def validate_current(records: list[dict[str, Any]]) -> None:
             nonlocal base, build
             with self._lock:
                 base = self.repo.get_build(build_id)
             build = json.loads(json.dumps(base))
+            if repair_source_topology:
+                source_units = self.repo.source_units_for_validation(build_id)
+                if source_units:
+                    reconcile_recoverable_source_unit_references(
+                        records,
+                        source_units,
+                        transaction_id=reconciliation_id,
+                    )
             self._validate_record_states(build, records)
 
         def committed() -> None:
@@ -5862,7 +5889,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             accept_unreviewed
             and str(build.get("status") or "") not in {"queued", "running"}
         ):
-            build = self._reconcile_and_validate(build_id)
+            build = self._reconcile_and_validate(
+                build_id,
+                repair_source_topology=True,
+            )
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
         self._refresh_workflow_fields(build)
