@@ -22,9 +22,10 @@ import os
 import platform
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Literal
 
 from .corpus_cli_config import CorpusProcessingConfig
 from .corpus_output_profiles import (
