@@ -66,6 +66,8 @@ interface CorpusReviewDecisionsOptions {
   refreshBuild: () => Promise<void>;
   refreshRecords: (reset?: boolean, preferredId?: string) => Promise<void>;
   reconcileRecords?: (recordIds: readonly string[]) => Promise<void>;
+  /** Put the reviewer directly into the actionable source-remediation flow. */
+  focusSourceBlocker?: () => void | Promise<void>;
   focusFirstMetadataBlocker: () => void;
   setMessage: (message: string, tone?: MessageTone) => void;
   t: (key: string, fallback?: string) => string;
@@ -277,6 +279,7 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
           if (result.blocker === "source_problem") {
             options.reviewInspectorTab.value = "source";
             options.reviewQueue.value = "source";
+            await options.focusSourceBlocker?.();
             options.setMessage(options.t("pdf_corpus.accept_blocked_source"), "error");
           } else {
             options.reviewInspectorTab.value = "metadata";
