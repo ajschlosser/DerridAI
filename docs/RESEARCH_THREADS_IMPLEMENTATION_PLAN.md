@@ -876,6 +876,14 @@ Events should allow the frontend to refresh:
 
 Do not stream full evidence packets through broad list events. Continue using REST for authoritative final results.
 
+## 22.0 Implementation status
+
+Update this section as phases land; it is the single place that records progress.
+
+- **Phase B (persistence): done on `feature/research-threads`.** `api/app/research_thread_store.py` owns the `research_threads` / `research_turns` tables on the system SQLite database (owner-scoped CRUD, atomic ordinals, idempotent append via `(thread_id, idempotency_key)`, one active turn per thread, job/run/response linkage, failed/cancelled turns, in-place retry that increments `attempt` rather than duplicating the visible question, tombstone deletion that drops turns and keeps the legacy-materialization key, and idempotent legacy singleton materialization from caller-supplied response summaries). Covered by `tests/test_research_thread_store.py`.
+- **Decisions made in Phase B:** non-owners (including administrators) get `ThreadNotFound`; no admin widening. Retry reuses the same turn identity with a new attempt. Deleting a thread never touches the response cache or canonical provenance.
+- **Not started:** Phase A requirements/spec entries and first-turn characterization tests, and Phases C through J. Next is Phase C (router, `RAGJobManager` linkage, realtime invalidation); legacy materialization still needs a caller that lists completed responses from the response cache.
+
 ## 22. Detailed implementation sequence
 
 The agent should implement in small reviewable commits. Do not combine architectural storage, prompt changes, and large UI changes in one commit.
