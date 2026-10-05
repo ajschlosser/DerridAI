@@ -860,6 +860,35 @@ def test_review_fields_come_from_the_schema(tmp_path):
     assert "stance" in default._profile_for(dbid)["review_metadata_fields"]
 
 
+def test_record_review_state_prefers_explicit_schema_over_stale_profile():
+    from app.corpus_review_state import _sync_record_metadata_state
+    from app.field_assertions import create_unresolved_assertion
+
+    schema = notes_schema()
+    record = {
+        "record_id": "r-schema-review",
+        "record_revision": 1,
+        "text": "A calm passage.",
+        "metadata_field_status": {},
+    }
+    create_unresolved_assertion(
+        record,
+        "mood",
+        schema=schema,
+        method="test",
+        reason="Needs a reviewer decision.",
+    )
+
+    _sync_record_metadata_state(
+        record,
+        {"required_metadata_fields": [], "review_metadata_fields": ["speaker"]},
+        schema,
+    )
+
+    assert record["metadata_review_fields"] == ["mood"]
+    assert "speaker" not in record["metadata_review_fields"]
+
+
 def test_a_reported_position_needs_a_position_holder_only_when_the_schema_has_one():
     profile_without = {"schema_field_names": ["region_type", "mood"]}
     profile_with = {"schema_field_names": ["region_type", "position_holder"]}
