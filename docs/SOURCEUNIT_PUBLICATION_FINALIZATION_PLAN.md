@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # SourceUnit publication finalization implementation plan
 
-Status: implementation complete on `fix/unreviewed-topology-finalization` / PR #532; final merge pending.
+Status: complete. PR #532 merged to `master` as `f2f5f1889feba6e8c36a01f4e569c5a7d84e74aa`.
 
 This plan addresses the publication failure in which **Use suggestions as-is** can still receive:
 
@@ -267,7 +267,7 @@ Legend: checked means implemented on the feature branch; unchecked means still p
 - [x] Format check is green on the final code head.
 - [x] Reproduce the reported failure shape with a reduced synthetic SourceUnit publication regression. The original local corpus build is not available in repository tooling, so no claim is made that the user's exact local build was replayed.
 - [x] Merge the latest `master` into the feature branch before final validation; sync PR #534 completed without conflicts.
-- [ ] Merge PR #532.
+- [x] Merge PR #532 to `master` (`f2f5f1889feba6e8c36a01f4e569c5a7d84e74aa`).
 
 ## Completion definition
 
