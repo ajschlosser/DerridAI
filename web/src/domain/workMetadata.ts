@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { currentFieldAssertions } from "./fieldAssertions";
+import { currentFieldAssertions, type FieldAssertionView } from "./fieldAssertions";
+import type { MetadataSchema } from "../api/metadataSchemas";
 import { WORK_METADATA_LLM_FIELDS } from "./runtimeConstants";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -131,35 +132,46 @@ export interface WorkMetadataPresentationRow {
   empty: boolean;
 }
 
-const WORK_METADATA_EXCLUDED_ASSERTION_FIELDS = new Set([
-  "region_type",
-  "primary_text",
-  "discourse_role",
-  "speaker",
-  "position_holder",
-  "target",
-  "stance",
-  "proposition_status",
-  "claim_scope",
-  "semantic_function",
-  "is_direct_quote",
-  "quoted_speaker",
-  "quoted_author",
-  "quoted_work",
-  "quoted_position_holder",
-  "quoted_addressee",
-  "quoted_referent",
-  "quotation_chain",
-  "topics",
-  "concepts",
-  "persons",
-  "works_referenced",
-  "institutions_referenced",
-  "locations_referenced",
-  "events_referenced",
-  "groups_referenced",
-  "languages_referenced",
+const RECORD_SCOPED_SEMANTIC_IDS = new Set([
+  "derridai.region_type",
+  "derridai.primary_text",
+  "derridai.discourse_role",
+  "derridai.speaker",
+  "derridai.position_holder",
+  "derridai.target",
+  "derridai.stance",
+  "derridai.proposition_status",
+  "derridai.claim_scope",
 ]);
+
+function legacyAssertionBelongsToWork(assertion: FieldAssertionView): boolean {
+  const fieldId = String(assertion.field_id || "").trim();
+  if (!fieldId) return false;
+  if (fieldId.startsWith("derridai.document.")) return true;
+  if (
+    RECORD_SCOPED_SEMANTIC_IDS.has(fieldId) ||
+    fieldId.startsWith("derridai.indexing.") ||
+    fieldId.startsWith("derridai.quotation.")
+  )
+    return false;
+
+  // Pre-scope custom assertions are retained as a compatibility case. New
+  // schema-aware callers resolve them from the pinned field scope below.
+  return !fieldId.startsWith("derridai.");
+}
+
+function schemaFieldScope(
+  assertion: FieldAssertionView,
+  schema: MetadataSchema | null | undefined,
+): "record" | "corpus" | null {
+  if (!schema) return null;
+  const fieldId = String(assertion.field_id || "");
+  const fieldName = String(assertion.field_name || "");
+  const configured = (schema.fields || []).find(
+    (field) => field.field_id === fieldId || field.name === fieldName,
+  );
+  return configured?.scope || "record";
+}
 
 const DOCUMENT_FIELD_IDENTITIES: Record<string, string> = {
   document_title: "derridai.document.title",
@@ -186,7 +198,10 @@ const DOCUMENT_FIELD_IDENTITIES: Record<string, string> = {
  * they already have dedicated review/insight presentations. Custom assertions
  * are not required to be added to another Works-specific whitelist to appear.
  */
-export function workMetadataPresentationRows(rows: Loose[]): WorkMetadataPresentationRow[] {
+export function workMetadataPresentationRows(
+  rows: Loose[],
+  schema: MetadataSchema | null = null,
+): WorkMetadataPresentationRow[] {
   const identities = new Map<string, string>();
   const discovered: string[] = [];
   const prepared = (rows || []).map((row) => {
@@ -199,13 +214,20 @@ export function workMetadataPresentationRows(rows: Loose[]): WorkMetadataPresent
     };
   });
 
+  for (const field of schema?.fields || []) {
+    if ((field.scope || "record") !== "corpus" || field.role === "operational") continue;
+    identities.set(field.name, field.field_id || `legacy.${field.name}`);
+    if (!discovered.includes(field.name)) discovered.push(field.name);
+  }
+
   for (const { assertions } of prepared) {
     for (const assertion of assertions) {
       const field = String(assertion.field_name || "").trim();
       const fieldId = String(assertion.field_id || "").trim();
-      if (!field || WORK_METADATA_EXCLUDED_ASSERTION_FIELDS.has(field)) continue;
-      if (fieldId.startsWith("derridai.indexing.") || fieldId.startsWith("derridai.quotation."))
-        continue;
+      if (!field) continue;
+      const scope = schemaFieldScope(assertion, schema);
+      if (scope === "record") continue;
+      if (scope === null && !legacyAssertionBelongsToWork(assertion)) continue;
       if (!identities.has(field)) identities.set(field, fieldId || `legacy.${field}`);
       if (!discovered.includes(field)) discovered.push(field);
     }
