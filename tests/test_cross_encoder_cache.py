@@ -29,7 +29,11 @@ def test_cross_encoder_uses_cache_folder_and_single_flight_loading(monkeypatch, 
     fake_module.__version__ = "5.test"
     fake_module.CrossEncoder = FakeCrossEncoder
     monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
-    monkeypatch.setattr(cross_encoder.settings, "rag_model_cache", str(tmp_path))
+    monkeypatch.setattr(
+        cross_encoder,
+        "settings",
+        types.SimpleNamespace(rag_model_cache=str(tmp_path)),
+    )
     cross_encoder._MODEL_CACHE.clear()
 
     def run_once():
