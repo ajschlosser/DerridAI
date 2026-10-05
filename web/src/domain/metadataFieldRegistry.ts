@@ -17,7 +17,12 @@
  */
 
 import { isPlaceholderValue } from "./metadataValues";
-import type { MetadataSchema, SchemaField, SchemaFieldRole, SchemaFieldScope } from "../api/metadataSchemas";
+import type {
+  MetadataSchema,
+  SchemaField,
+  SchemaFieldRole,
+  SchemaFieldScope,
+} from "../api/metadataSchemas";
 export type MetadataControl =
   | "enum"
   | "combobox"
@@ -31,7 +36,6 @@ export interface MetadataFieldSpec {
   suggestionFields?: string[];
   allowCustom?: boolean;
 }
-
 
 export interface MetadataRegistryField extends MetadataFieldSpec {
   fieldId: string;
