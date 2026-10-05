@@ -982,6 +982,8 @@ At this stage, a follow-up may still run as an isolated question if context work
 
 Done when the server can deterministically produce a bounded advisory context packet for a follow-up.
 
+- **Phases F/G implemented (2026-10-05), on `feat/research-threads-f-j`.** Follow-ups evolve the existing bilingual query transformation, using the immutable server-owned attempt snapshot through the structured completion helper. Original questions/instructions remain authoritative; failures visibly fall back to the original question and cancellation propagates. Generation receives an explicit advisory/non-evidentiary history section with historical markers neutralized and delimiter-safe JSON. Current evidence alone supplies citation bindings; response and claim memory remain separate. Query/generation contracts are versioned. Frontend follow-up exposure and Pipeline Studio configuration follow in H.
+
 ### Phase F — contextualized retrieval query
 
 1. Evolve query decomposition or add contextualization stage.
