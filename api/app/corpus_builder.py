@@ -5823,10 +5823,15 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build = self.repo.get_build(build_id)
         if self.repo.records_projection_dirty(build_id):
             self.repo.refresh_records_projection(build_id)
-        # Publication owns the final authoritative reconciliation too. The web
-        # client normally requests it first, but direct API callers and stale
-        # readiness state must not publish against obsolete legacy topology.
-        if str(build.get("status") or "") not in {"queued", "running"}:
+        # "Use suggestions as-is" owns a final authoritative reconciliation.
+        # The web client normally requests it first, but direct API callers and
+        # stale readiness state must not evaluate autonomous publication against
+        # obsolete legacy topology. Strict reviewed publication keeps its existing
+        # lifecycle and relies on the normal readiness reconciliation.
+        if (
+            accept_unreviewed
+            and str(build.get("status") or "") not in {"queued", "running"}
+        ):
             build = self._reconcile_and_validate(build_id)
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
