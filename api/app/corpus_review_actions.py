@@ -84,7 +84,7 @@ from .metadata_schema import MetadataSchema
 from .nlp_annotations import annotate_record
 from .pipelines.corpus_reviewer_evidence_choice import ReviewerEvidenceChoiceSession
 from .provenance_memory import persist_record_decision
-from .rag import _citation_strings
+from .corpus_citations import _citation_strings
 from .reviewer_context import current_reviewer
 from .semantic_identity import ValueEquivalenceResult, canonical_value_key
 from .semantic_identity_registry import compare_field_values
