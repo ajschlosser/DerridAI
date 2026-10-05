@@ -64,11 +64,9 @@ def test_initial_linux_target_rejects_arm64():
 
 
 def test_release_artifact_names_match_installed_platform_conventions():
-    assert release_artifact_name("1.2.3", "linux-x86_64") == "derridai-1.2.3-linux-x86_64"
-    assert release_artifact_name("1.2.3", "macos-arm64") == "derridai-1.2.3-macos-arm64"
-    assert release_artifact_name("1.2.3", "windows-x86_64") == (
-        "derridai-1.2.3-windows-x86_64.exe"
-    )
+    assert release_artifact_name("linux-x86_64") == "derridai-linux-x86_64"
+    assert release_artifact_name("macos-arm64") == "derridai-macos-arm64"
+    assert release_artifact_name("windows-x86_64") == "derridai-windows-x86_64.exe"
     assert executable_name("windows-x86_64") == "derridai.exe"
     assert executable_name("macos-arm64") == "derridai"
 
