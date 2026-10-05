@@ -394,6 +394,8 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'faq.grade_conceptual_precision': 'Précision conceptuelle',
  'faq.grade_coverage': 'Couverture',
  'faq.grade_interpretive_usefulness': 'Utilité interprétative',
+ 'faq.grade_overall': 'Global',
+ 'runtime.no_summary_returned': 'Aucun résumé n\'a été retourné.',
  'faq.grade_query_relevance': 'Pertinence par rapport à la question',
  'faq.grade_raw_output': 'Sortie technique brute',
  'faq.grade_raw_output_help': 'La sortie brute de l’évaluateur est conservée pour l’auditabilité et le débogage.',
