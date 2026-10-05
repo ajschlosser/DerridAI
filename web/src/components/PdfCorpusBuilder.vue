@@ -1617,6 +1617,21 @@ function metadataBlockingFields(record: CorpusRecord | null): string[] {
 const selectedMetadataBlocked = computed(
   () => metadataBlockingFields(selectedRecord.value).length > 0,
 );
+
+/**
+ * A source-quality blocker must land on a control that can actually clear it.
+ * The Source inspector is useful for comparison, but resolution is recorded
+ * when the reviewer saves trustworthy reviewed text with the source issue
+ * explicitly marked resolved. Open that guided flow instead of leaving the
+ * reviewer on a read-only source panel with only an error message.
+ */
+function focusSourceBlocker() {
+  setReviewWorkspaceMode("record");
+  reviewInspectorTab.value = "source";
+  resolveSourceOnTextSave.value = true;
+  recordSourceWarningOpen.value = true;
+}
+
 const {
   setDisposition,
   attemptAccept,
@@ -1658,6 +1673,7 @@ const {
   refreshBuild,
   refreshRecords,
   reconcileRecords: reviewRecords.refreshRows,
+  focusSourceBlocker,
   focusFirstMetadataBlocker,
   setMessage,
   t: (key, fallback) => i18n.t(key, fallback),
@@ -3605,6 +3621,8 @@ defineExpose({
       @close="acknowledgeRecordSourceWarning"
       @edit-text="
         recordSourceWarningOpen = false;
+        setReviewWorkspaceMode('record');
+        resolveSourceOnTextSave = true;
         beginTextEdit();
       "
       @open-source="
