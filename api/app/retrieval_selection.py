@@ -27,6 +27,8 @@ import math
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from .research_semantics import source_author
+
 
 def cosine_similarity(left: Any, right: Any) -> float:
     """Return cosine similarity without relying on NumPy truthiness."""
@@ -209,8 +211,8 @@ def source_aware_select[Candidate: Mapping[str, Any]](
         if left_work and left_work == right_work:
             penalty += 0.12
 
-        left_author = str(left.get("document_author") or "").strip().casefold()
-        right_author = str(right.get("document_author") or "").strip().casefold()
+        left_author = source_author(left).casefold()
+        right_author = source_author(right).casefold()
         if left_author and left_author == right_author:
             # Work/source diversity alone can still collapse onto a prolific
             # author represented by many distinct documents. Penalize repeated
