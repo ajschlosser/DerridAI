@@ -136,15 +136,18 @@ The default release channel is GitHub release assets because generated binaries 
 build products rather than source. A release publishes:
 
 ```text
-derridai-<version>-linux-x86_64
-derridai-<version>-windows-x86_64.exe
-derridai-<version>-macos-arm64
-derridai-<version>-macos-x86_64
-SHA256SUMS
+derridai-linux-x86_64
+derridai-windows-x86_64.exe
+derridai-macos-arm64
+derridai-macos-x86_64
+derridai-linux-x86_64.sha256
+derridai-windows-x86_64.exe.sha256
+derridai-macos-arm64.sha256
+derridai-macos-x86_64.sha256
 binary-manifest.json
 ```
 
-This gives curl/wget installation without forcing binary churn into Git history.
+The release tag carries the version while the asset filename stays stable. This makes `releases/latest/download/<asset>` usable directly by curl/wget without forcing binary churn into Git history.
 
 Example final installation shape:
 
