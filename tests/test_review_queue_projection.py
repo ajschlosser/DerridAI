@@ -1238,3 +1238,31 @@ def test_review_facets_discover_custom_metadata_without_legacy_whitelist():
 
     assert facets["conceptual_tension"] == ["presence / absence"]
     assert facets["motifs"] == ["difference", "trace"]
+
+
+def test_review_projection_maps_deterministic_speakers_to_schema_semantic_field():
+    schema = default_schema()
+    schema = schema.model_copy(
+        update={
+            "fields": [
+                field.model_copy(update={"name": "textual_voice"})
+                if field.name == "speaker"
+                else field
+                for field in schema.fields
+            ]
+        }
+    )
+    record = ready_record("r-semantic-speaker", "b-semantic-speaker")
+    record.pop("speaker", None)
+    record["deterministic_ingest"] = {"speakers": ["Jacques Derrida"]}
+
+    connection = sqlite3.connect(":memory:")
+    connection.execute(
+        "CREATE TABLE corpus_records(record_id TEXT PRIMARY KEY, ordinal INTEGER)"
+    )
+    corpus_queue_projection.initialize(connection)
+    corpus_queue_projection.update_rows(connection, [(0, record)], schema=schema)
+
+    facets = corpus_queue_projection.facets(connection)
+    assert facets["textual_voice"] == ["Jacques Derrida"]
+    assert "speaker" not in facets
