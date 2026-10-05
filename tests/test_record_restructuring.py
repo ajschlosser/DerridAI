@@ -434,6 +434,115 @@ def test_reconciliation_can_recover_unique_projection_when_stale_unit_is_missing
     assert events[0]["method"] == "unique_source_projection_match"
 
 
+def test_reconciliation_resolves_duplicate_active_ownership_when_projection_is_unique():
+    from app.corpus_record_restructure import repair_record_source_topology
+
+    units = [
+        {
+            "source_unit_id": "u-left",
+            "unit_id": "u-left",
+            "source_block_ids": ["b1"],
+            "text": "Alpha",
+            "active": True,
+        },
+        {
+            "source_unit_id": "u-right",
+            "unit_id": "u-right",
+            "source_block_ids": ["b1"],
+            "text": "Beta",
+            "active": True,
+        },
+    ]
+    records = [
+        {
+            "record_id": "r1",
+            "source_unit_ids": ["u-left"],
+            "source_block_ids": ["b1"],
+            "source_extracted_text": "Alpha",
+            "text": "Alpha",
+        },
+        {
+            "record_id": "r2",
+            "source_unit_ids": ["u-left"],
+            "source_block_ids": ["b1"],
+            "source_extracted_text": "Beta",
+            "text": "Beta",
+        },
+    ]
+
+    events = repair_record_source_topology(
+        records, units, source_block_ids={"b1"}
+    )
+
+    assert records[0]["source_unit_ids"] == ["u-left"]
+    assert records[1]["source_unit_ids"] == ["u-right"]
+    assert [event["record_id"] for event in events] == ["r2"]
+    assert events[0]["method"] == "unique_source_projection_match"
+    assert events[0]["source_text_conserved"] is True
+
+
+def test_reconciliation_keeps_duplicate_active_ownership_when_ambiguous():
+    from app.corpus_record_restructure import repair_record_source_topology
+
+    units = [
+        {
+            "source_unit_id": "u1",
+            "unit_id": "u1",
+            "source_block_ids": ["b1"],
+            "text": "Alpha",
+            "active": True,
+        }
+    ]
+    records = [
+        {
+            "record_id": record_id,
+            "source_unit_ids": ["u1"],
+            "source_block_ids": ["b1"],
+            "source_extracted_text": "Alpha",
+            "text": "Alpha",
+        }
+        for record_id in ("r1", "r2")
+    ]
+
+    events = repair_record_source_topology(
+        records, units, source_block_ids={"b1"}
+    )
+
+    assert events == []
+    assert [record["source_unit_ids"] for record in records] == [["u1"], ["u1"]]
+
+
+def test_source_projection_reconciliation_is_audited():
+    from app.corpus_record_restructure import synchronize_record_source_projection
+
+    units = [
+        {
+            "source_unit_id": "u1",
+            "unit_id": "u1",
+            "source_block_ids": ["b1"],
+            "text": "Alpha",
+            "active": True,
+        }
+    ]
+    records = [{
+        "record_id": "r1",
+        "source_unit_ids": ["u1"],
+        "source_block_ids": ["b1"],
+        "source_extracted_text": "stale projection",
+        "text": "Reviewed wording may differ",
+    }]
+
+    changed = synchronize_record_source_projection(records, units)
+
+    assert changed == 1
+    assert records[0]["source_extracted_text"] == "Alpha"
+    history = records[0]["source_projection_reconciliation_history"]
+    assert history[-1]["method"] == "derive_from_active_source_units"
+    assert history[-1]["source_unit_ids"] == ["u1"]
+    assert history[-1]["previous_source_projection_hash"]
+    assert history[-1]["source_projection_hash"]
+    assert history[-1]["source_text_conserved"] is False
+
 def test_reordered_sourceunits_are_blocking():
     blocks = [
         {"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"},
