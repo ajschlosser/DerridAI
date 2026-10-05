@@ -34,7 +34,7 @@ from .models import (
     WorkMetadataRequest,
     WorkMetadataSeed,
 )
-from .llm_transport import chat_complete, structured_chat_complete
+from .rag import chat_complete, structured_chat_complete
 from .work_metadata_sources import (
     applicable_fields_for,
     canonical_source_type,
