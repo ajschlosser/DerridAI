@@ -260,12 +260,17 @@ def publishable_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _source_validation_blocker_message(validation: dict[str, Any]) -> str:
     """Explain the remaining source-integrity gate without hiding it behind a 409."""
     base = "Publication is blocked until source coverage and text-fidelity validation pass."
-    issues = [
-        item
-        for item in validation.get("validation_issues") or []
-        if isinstance(item, dict)
-        and str(item.get("code") or "").startswith("source_")
-    ]
+    raw_issues = validation.get("validation_issues")
+    issues: list[dict[str, Any]] = (
+        [
+            item
+            for item in raw_issues
+            if isinstance(item, dict)
+            and str(item.get("code") or "").startswith("source_")
+        ]
+        if isinstance(raw_issues, list)
+        else []
+    )
     if issues:
         details: list[str] = []
         for item in issues[:4]:
