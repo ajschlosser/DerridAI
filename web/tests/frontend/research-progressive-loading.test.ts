@@ -160,12 +160,13 @@ describe("Research progressive reads", () => {
     mocks.runs.mockResolvedValue([liveJob]);
     render();
     await flushPromises();
-    const options = mocks.follow.mock.calls
-      .map((call) => call[0])
-      .find((item) => item.topic === "job:live");
-    expect(options).toBeTruthy();
-    expect(options.onEvent({ type: "llm.token" })).toBe(false);
-    expect(options.onEvent({ type: "job.updated" })).toBe(true);
+    const calls = mocks.follow.mock.calls as unknown as Array<
+      [{ topic: string; onEvent: (event: { type: string }) => boolean }]
+    >;
+    const options = calls.map((call) => call[0]).find((item) => item.topic === "job:live");
+    expect(options).toBeDefined();
+    expect(options!.onEvent({ type: "llm.token" })).toBe(false);
+    expect(options!.onEvent({ type: "job.updated" })).toBe(true);
   });
 
   it("retries the original turn without enabling follow-ups or duplicating a click", async () => {
