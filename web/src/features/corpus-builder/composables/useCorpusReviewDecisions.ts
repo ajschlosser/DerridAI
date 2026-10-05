@@ -73,6 +73,23 @@ interface CorpusReviewDecisionsOptions {
 }
 
 export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) {
+  async function dispositionWasPersisted(
+    buildId: string,
+    recordId: string,
+    disposition: "pending" | "accepted" | "rejected",
+    expectedRevision: number,
+  ) {
+    try {
+      const status = await corpusBuilderApi.reviewStatus(buildId, recordId);
+      return (
+        status.review_disposition === disposition &&
+        Number(status.record_revision || 0) >= expectedRevision + 1
+      );
+    } catch {
+      return false;
+    }
+  }
+
   async function setDisposition(disposition: "pending" | "accepted" | "rejected") {
     if (options.reviewLocked.value) {
       options.setMessage(options.t("pdf_corpus.review_preparing_help"));
@@ -104,29 +121,36 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
 
       options.selectedRecord.value = row;
       await options.restoreReviewViewport(viewport, { record: true, inspector: true });
-      options.queueRecordRequest(id, ["review disposition"], async (rebase) => {
-        if (disposition === "pending") {
-          const result = await corpusBuilderApi.disposition(
-            buildId,
-            id,
-            "pending",
-            "",
-            rebase ? undefined : expectedRevision,
-          );
-          options.applyAuthoritativeRecord(result);
-          return result;
-        }
-        const result = await corpusBuilderApi.reviewDecision(
-          buildId,
-          id,
-          "rejected",
-          "",
-          rebase ? undefined : expectedRevision,
-          options.reviewQueue.value,
-        );
-        options.applyAuthoritativeRecord(result.record, result.build);
-        return result;
-      });
+      options.queueRecordRequest(
+        id,
+        ["review disposition"],
+        async (rebase) => {
+          try {
+            const result = await corpusBuilderApi.disposition(
+              buildId,
+              id,
+              "pending",
+              "",
+              rebase ? undefined : expectedRevision,
+            );
+            options.applyAuthoritativeRecord(result);
+            return result;
+          } catch (error) {
+            // A browser timeout is ambiguous: the server may have committed the
+            // human decision before the response was lost. Read authoritative
+            // state before declaring failure or retrying a non-idempotent write.
+            if (!(await dispositionWasPersisted(buildId, id, "pending", expectedRevision))) {
+              throw error;
+            }
+            if (options.currentBuild.value?.build_id === buildId) {
+              await options.refreshBuild();
+              await options.reconcileRecords?.([id]);
+            }
+          }
+        },
+        undefined,
+        false,
+      );
       return;
     }
 
@@ -201,14 +225,39 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
       id,
       ["review disposition"],
       async (rebase) => {
-        const result = await corpusBuilderApi.reviewDecision(
-          buildId,
-          id,
-          disposition,
-          "",
-          rebase ? undefined : expectedRevision,
-          decisionQueue,
-        );
+        const result = await corpusBuilderApi
+          .reviewDecision(
+            buildId,
+            id,
+            disposition,
+            "",
+            rebase ? undefined : expectedRevision,
+            decisionQueue,
+          )
+          .catch(async (error) => {
+            // Do not roll back a reviewer decision merely because its response
+            // missed the browser timeout. Confirm the persisted disposition first.
+            if (!(await dispositionWasPersisted(buildId, id, disposition, expectedRevision))) {
+              throw error;
+            }
+            if (options.currentBuild.value?.build_id === buildId) {
+              await options.refreshBuild();
+              await options.reconcileRecords?.([id]);
+            }
+            return null;
+          });
+        if (result === null) {
+          if (stillFollowingDecision()) {
+            options.setMessage(
+              options.t(
+                disposition === "accepted"
+                  ? "pdf_corpus.accepted_notice"
+                  : "pdf_corpus.rejected_notice",
+              ),
+            );
+          }
+          return;
+        }
         if (options.currentBuild.value?.build_id !== buildId) return;
         options.currentBuild.value = result.build;
         options.syncBuildInRail(result.build);

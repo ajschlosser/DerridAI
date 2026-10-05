@@ -361,6 +361,35 @@ def test_empty_metadata_issue_summary_is_authoritative(tmp_path: Path):
     assert not any(b["code"] == "required_metadata" for b in refreshed["publication_readiness"]["blockers"])
 
 
+def test_post_run_reconciliation_recomputes_source_validation_and_actionable_issues(tmp_path: Path):
+    """Cleanup derives publication blockers from persisted Records, not stale run state."""
+    first = rec("r1", "b1")
+    first.update({"text": "text 1", "text_length": 6, "pdf_pages": [1]})
+    second = rec("r2", "b2")
+    second.update({"text": "text 2", "text_length": 6, "pdf_pages": [1]})
+    repo, build = install_repo(tmp_path, [first, second])
+    # Simulate interrupted post-run state: b2 exists in the source but its Record
+    # projection is absent, while the stored build still claims validation passed.
+    repo.save_records(build["build_id"], [first])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+
+    reconciled = manager.reconcile_review_state(build["build_id"])
+
+    assert reconciled["validation"]["source_valid"] is False
+    issue = next(
+        item
+        for item in reconciled["validation"]["validation_issues"]
+        if item["code"] == "source_coverage"
+    )
+    assert issue["field"] == "b2"
+    blocker = next(
+        item
+        for item in reconciled["publication_readiness"]["blockers"]
+        if item["code"] == "source_validation"
+    )
+    assert blocker["count"] >= 1
+
+
 def test_source_problem_filter_is_first_class(tmp_path: Path):
     """page_records(source_problem=True) returns only records with source-quality issues."""
     repo, build = install_repo(tmp_path, [rec("r1","b1",source_problem=True), rec("r2","b2")])
@@ -438,6 +467,7 @@ def test_review_decision_and_record_view_never_touch_the_whole_corpus(tmp_path: 
 
     monkeypatch.setattr(repo, "save_records", forbidden)
     monkeypatch.setattr(repo, "load_records", forbidden)
+    monkeypatch.setattr(repo, "load_blocks", forbidden)
     monkeypatch.setattr(manager, "_rewrite_and_validate", forbidden)
 
     viewed = manager.record_view(bid, "r2")
