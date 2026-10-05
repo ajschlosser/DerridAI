@@ -277,12 +277,12 @@ export function createWorksWorkspace(deps: Deps) {
 
     const metadata = workMetadataPresentationRows(item.rows, workMetadataSchema(item.rows)).map(
       (item) => ({
-      field_id: item.field_id,
-      field: item.field,
-      field_label: label(item.field),
-      mixed: item.mixed,
-      value: item.mixed ? "" : String(display(item.value)),
-      unique_count: item.unique_count,
+        field_id: item.field_id,
+        field: item.field,
+        field_label: label(item.field),
+        mixed: item.mixed,
+        value: item.mixed ? "" : String(display(item.value)),
+        unique_count: item.unique_count,
         empty: item.empty,
       }),
     );
