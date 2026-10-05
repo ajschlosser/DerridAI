@@ -25,10 +25,9 @@ from __future__ import annotations
 import json
 
 import pytest
-from pydantic import ValidationError
-
 from app.corpus_cli import ExitCode, main
 from app.corpus_cli_config import CorpusProcessingConfig, load_processing_config
+from pydantic import ValidationError
 
 
 def test_minimal_yaml_uses_versioned_defaults(tmp_path):
