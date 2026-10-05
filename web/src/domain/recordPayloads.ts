@@ -185,28 +185,31 @@ function assertionFieldNames(source: Loose): string[] {
 }
 
 function customMetadataFields(source: Loose, baseFields: string[]): string[] {
+  const assertedFields = assertionFieldNames(source);
+  if (assertedFields.length) return assertedFields;
+
+  // Compatibility for records that predate FieldAssertion. New schema-defined
+  // scholarly metadata is assertion-native; legacy records may still expose
+  // materialized scalar/list values without assertion history.
   const base = new Set(baseFields);
-  return [
-    ...assertionFieldNames(source),
-    ...Object.keys(source).filter(
-      (key) =>
-        !base.has(key) &&
-        !NON_METADATA_TRANSPORT_FIELDS.has(key) &&
-        !key.startsWith("_") &&
-        ![
-          "record_id",
-          "text",
-          "source_spans",
-          "source_units",
-          "source_unit_ids",
-          "source_block_ids",
-        ].includes(key) &&
-        (typeof source[key] === "string" ||
-          typeof source[key] === "number" ||
-          typeof source[key] === "boolean" ||
-          Array.isArray(source[key])),
-    ),
-  ];
+  return Object.keys(source).filter(
+    (key) =>
+      !base.has(key) &&
+      !NON_METADATA_TRANSPORT_FIELDS.has(key) &&
+      !key.startsWith("_") &&
+      ![
+        "record_id",
+        "text",
+        "source_spans",
+        "source_units",
+        "source_unit_ids",
+        "source_block_ids",
+      ].includes(key) &&
+      (typeof source[key] === "string" ||
+        typeof source[key] === "number" ||
+        typeof source[key] === "boolean" ||
+        Array.isArray(source[key])),
+  );
 }
 
 export function upsertRecordPayload(record: unknown, chromaId: string | null = null): Loose {
