@@ -2941,6 +2941,8 @@ class ChromaStore:
         store: str,
         query: str,
         n_results: int,
+        where: dict[str, Any] | None = None,
+        where_document: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         col = self._collection(store)
         count = col.count()
@@ -2953,11 +2955,16 @@ class ChromaStore:
             provider=provider,
             model=model,
         )
-        payload = col.query(
-            query_embeddings=[vector],
-            n_results=min(max(1, n_results), count),
-            include=["documents", "metadatas", "distances", "embeddings"],
-        )
+        query_args: dict[str, Any] = {
+            "query_embeddings": [vector],
+            "n_results": min(max(1, n_results), count),
+            "include": ["documents", "metadatas", "distances", "embeddings"],
+        }
+        if where:
+            query_args["where"] = where
+        if where_document:
+            query_args["where_document"] = where_document
+        payload = col.query(**query_args)
         ids = (payload.get("ids") or [[]])[0]
         documents = (payload.get("documents") or [[]])[0]
         metadatas = (payload.get("metadatas") or [[]])[0]
@@ -3076,6 +3083,7 @@ class ChromaStore:
         query: str,
         fetch_k: int,
         where: dict[str, Any] | None = None,
+        where_document: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Dense candidates with embeddings and metric-aware relevance, for MMR selection.
 
@@ -3094,12 +3102,16 @@ class ChromaStore:
             provider=provider,
             model=model,
         )
-        payload = col.query(
-            query_embeddings=[query_vector],
-            n_results=min(fetch_k, count),
-            where=where,
-            include=["documents", "metadatas", "distances", "embeddings"],
-        )
+        query_args: dict[str, Any] = {
+            "query_embeddings": [query_vector],
+            "n_results": min(fetch_k, count),
+            "include": ["documents", "metadatas", "distances", "embeddings"],
+        }
+        if where:
+            query_args["where"] = where
+        if where_document:
+            query_args["where_document"] = where_document
+        payload = col.query(**query_args)
         ids = (payload.get("ids") or [[]])[0]
         docs = (payload.get("documents") or [[]])[0]
         metas = (payload.get("metadatas") or [[]])[0]
@@ -3171,7 +3183,14 @@ class ChromaStore:
             rows = [row for row in rows if matches(row)]
         return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows[:n_results]]
 
-    def keyword_search(self, store: str, query: str, n_results: int, where: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def keyword_search(
+        self,
+        store: str,
+        query: str,
+        n_results: int,
+        where: dict[str, Any] | None = None,
+        where_document: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Case-insensitive record-text search with metadata filtering.
 
         Chroma's ``$contains`` document filter is case-sensitive on some
@@ -3184,12 +3203,19 @@ class ChromaStore:
         args: dict[str, Any] = {"include": ["documents", "metadatas"], "limit": n_results}
         if where:
             args["where"] = where
+        if where_document:
+            args["where_document"] = where_document
         if not needle:
             rows = self._decode_result(col.get(**args))
             return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows]
 
         fast_args = dict(args)
-        fast_args["where_document"] = {"$contains": needle}
+        query_document_filter = {"$contains": needle}
+        fast_args["where_document"] = (
+            {"$and": [where_document, query_document_filter]}
+            if where_document
+            else query_document_filter
+        )
         try:
             rows = self._decode_result(col.get(**fast_args))
         except Exception as exc:
@@ -3202,6 +3228,8 @@ class ChromaStore:
         scan_args: dict[str, Any] = {"include": ["documents", "metadatas"]}
         if where:
             scan_args["where"] = where
+        if where_document:
+            scan_args["where_document"] = where_document
         # Keep the fallback predictable on very large corpora while making the
         # common researcher search robust across capitalization differences.
         try:
@@ -3230,6 +3258,7 @@ class ChromaStore:
         query: str,
         n_results: int,
         where: dict[str, Any] | None = None,
+        where_document: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Bounded BM25-style lexical ranking over stored record text/metadata.
 
@@ -3240,11 +3269,19 @@ class ChromaStore:
         """
         query = str(query or "").strip()
         if not query:
-            return self.keyword_search(store, query, n_results, where)
+            return self.keyword_search(
+                store,
+                query,
+                n_results,
+                where,
+                where_document,
+            )
         col = self._collection(store)
         scan_args: dict[str, Any] = {"include": ["documents", "metadatas"]}
         if where:
             scan_args["where"] = where
+        if where_document:
+            scan_args["where_document"] = where_document
         try:
             scan_args["limit"] = min(max(n_results * 100, 2000), 20000)
             candidates = self._decode_result(col.get(**scan_args))
@@ -3258,7 +3295,13 @@ class ChromaStore:
 
         query_tokens = self._lexical_tokens(query)
         if not query_tokens:
-            return self.keyword_search(store, query, n_results, where)
+            return self.keyword_search(
+                store,
+                query,
+                n_results,
+                where,
+                where_document,
+            )
         query_terms = list(dict.fromkeys(query_tokens))
         docs: list[tuple[dict[str, Any], list[str], str]] = []
         document_frequencies = {term: 0 for term in query_terms}
