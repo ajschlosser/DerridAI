@@ -38,6 +38,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
+from app.persistence_errors import PersistenceBusyError
+
 # Isolate Corpus Builder tests from optional vector-store dependencies.  The
 # production module imports these helpers from app.rag, while this test only
 # exercises structured-output and source-record behavior.
@@ -529,6 +531,90 @@ def test_resume_submission_failure_is_visible_and_recoverable(monkeypatch, tmp_p
     assert failed["status"] == "failed"
     assert failed["resumable"] is True
     assert "Executor unavailable" in failed["error"]
+
+
+def test_enrichment_retries_transient_storage_contention(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build = _build(repo)
+    attempts = []
+
+    def flaky(*args):
+        attempts.append(len(attempts))
+        if len(attempts) < 3:
+            raise PersistenceBusyError("storage busy")
+        return [{"record_id": "settled"}]
+
+    monkeypatch.setattr(manager, "_schedule_build_enrichment", flaky)
+    monkeypatch.setattr(cb.time, "sleep", lambda _delay: None)
+
+    result = manager._schedule_build_enrichment_with_lock_recovery(
+        build["build_id"], {}, {}, []
+    )
+
+    assert result == [{"record_id": "settled"}]
+    assert len(attempts) == 3
+    assert repo.get_build(build["build_id"])["resumable"] is True
+    manager._executor.shutdown(wait=True)
+
+
+def test_exhausted_storage_contention_interrupts_instead_of_borking_build(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build = _build(repo)
+
+    monkeypatch.setattr(
+        manager,
+        "_prepare_build_scope",
+        lambda *_args, **_kwargs: types.SimpleNamespace(manifest={}),
+    )
+    monkeypatch.setattr(manager, "_construct_build_topology", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        manager,
+        "_schedule_build_enrichment_with_lock_recovery",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            PersistenceBusyError("storage busy")
+        ),
+    )
+
+    manager._run(build["build_id"], {})
+
+    interrupted = repo.get_build(build["build_id"])
+    assert interrupted["status"] == "interrupted"
+    assert interrupted["stage"] == "interrupted"
+    assert interrupted["interrupted_stage"] == "enriching"
+    assert interrupted["resumable"] is True
+    assert "checkpoints were preserved" in interrupted["error"]
+    manager._executor.shutdown(wait=True)
+
+
+def test_failed_build_resume_retires_orphaned_metadata_operation(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(
+        status="failed",
+        stage="failed",
+        resumable=True,
+        error="enriching: database is locked",
+        metadata_operation={"state": "running", "operation_id": "op-lock"},
+    )
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    submissions = []
+    monkeypatch.setattr(
+        manager._executor,
+        "submit",
+        lambda *args, **kwargs: submissions.append((args, kwargs)),
+    )
+
+    resumed = manager.resume(build["build_id"], {})
+
+    assert resumed["status"] == "queued"
+    assert resumed["error"] is None
+    assert resumed["metadata_operation"]["state"] == "failed"
+    assert resumed["metadata_operation"]["operation_id"] == "op-lock"
+    assert len(submissions) == 1
+    manager._executor.shutdown(wait=True)
 
 
 def test_restart_retires_orphaned_metadata_operation_without_replay(tmp_path):

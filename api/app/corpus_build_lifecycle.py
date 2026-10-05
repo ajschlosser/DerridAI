@@ -251,8 +251,32 @@ class BuildLifecycleMixin:
             return build
         if build.get("status") in {"published"}:
             raise ValueError("Published builds are immutable; create a new build instead.")
-        if (build.get("metadata_operation") or {}).get("state") in {"queued", "running", "cancelling"}:
-            raise ValueError("Wait for the active metadata operation to finish before resuming.")
+        operation = (
+            dict(build.get("metadata_operation") or {})
+            if isinstance(build.get("metadata_operation"), dict)
+            else {}
+        )
+        if operation.get("state") in {"queued", "running", "cancelling"}:
+            # A build that is no longer active cannot still have a live metadata
+            # operation. Older failure paths could leave this child state stuck
+            # as "running", which made an otherwise resumable failed build
+            # impossible to restart. Close that orphaned operation in place and
+            # let the normal checkpoint-aware resume path continue.
+            if build.get("status") in {"failed", "interrupted", "cancelled", "blocked"}:
+                operation.update(
+                    {
+                        "state": "failed",
+                        "finished_at": iso_now(),
+                        "error": (
+                            operation.get("error")
+                            or "The parent build stopped before this metadata operation settled; resume will continue from saved checkpoints."
+                        ),
+                    }
+                )
+                build["metadata_operation"] = operation
+                self.repo.save_build(build)
+            else:
+                raise ValueError("Wait for the active metadata operation to finish before resuming.")
         request = dict(build.get("request") or {})
         for key, value in overrides.items():
             if value is None:

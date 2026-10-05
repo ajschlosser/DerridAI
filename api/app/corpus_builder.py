@@ -334,6 +334,7 @@ from .operation_events import (
     note_resource_changed,
 )
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
+from .persistence_errors import PersistenceBusyError
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
 from .rag import _citation_strings, chat_complete
@@ -877,6 +878,16 @@ def _apply_synthetic_record_pages(records: list[dict[str, Any]], records_per_pag
 
 class RecordStateConflict(ValueError):
     """A conditional Record write lost a concurrent canonical-state race."""
+
+
+def _is_sqlite_lock_error(exc: BaseException) -> bool:
+    """Adapter-local recognition of SQLite's transient lock vocabulary."""
+
+    return isinstance(exc, sqlite3.OperationalError) and (
+        "database is locked" in str(exc).casefold()
+        or "database table is locked" in str(exc).casefold()
+        or "database schema is locked" in str(exc).casefold()
+    )
 
 
 class PdfCorpusRepository:
@@ -1847,18 +1858,20 @@ class PdfCorpusRepository:
 
     @contextmanager
     def _records_db(self, build_id: str) -> Iterator[sqlite3.Connection]:
+        """Open the SQLite adapter and translate native contention at its boundary."""
+
         path = self.build_records_db_path(build_id)
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(path, timeout=30)
-        # Corpus Builder performs frequent short canonical writes while review,
-        # enrichment checkpoints, and derived projections can hold coherent read
-        # snapshots. WAL lets those readers coexist with the single SQLite writer
-        # instead of turning an ordinary enrichment checkpoint into a 30-second
-        # lock failure. Keep an explicit busy timeout as protection against true
-        # writer/writer contention across repository instances or processes.
-        connection.execute("PRAGMA busy_timeout=30000")
         try:
+            # Corpus Builder performs frequent short canonical writes while review,
+            # enrichment checkpoints, and derived projections can hold coherent read
+            # snapshots. WAL lets those readers coexist with the single SQLite writer
+            # instead of turning an ordinary enrichment checkpoint into a 30-second
+            # lock failure. Keep an explicit busy timeout as protection against true
+            # writer/writer contention across repository instances or processes.
+            connection.execute("PRAGMA busy_timeout=30000")
             stat = path.stat()
             identity = (stat.st_dev, stat.st_ino, int(connection.execute("PRAGMA schema_version").fetchone()[0]))
             if self._initialized_record_databases.get(build_id) != identity:
@@ -1873,6 +1886,10 @@ class PdfCorpusRepository:
                         del self._initialized_record_databases[next(iter(self._initialized_record_databases))]
             with connection:
                 yield connection
+        except sqlite3.OperationalError as exc:
+            if _is_sqlite_lock_error(exc):
+                raise PersistenceBusyError("Canonical Record storage is temporarily busy.") from exc
+            raise
         finally:
             connection.close()
 
@@ -4375,7 +4392,12 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             self._update(build_id, stage="constructing_topology")
             records = self._construct_build_topology(build_id, request, resume, scope)
             self._update(build_id, stage="enriching")
-            records = self._schedule_build_enrichment(build_id, request, scope.manifest, records)
+            records = self._schedule_build_enrichment_with_lock_recovery(
+                build_id,
+                request,
+                scope.manifest,
+                records,
+            )
             self._update(build_id, stage="finalizing_review")
             self._finalize_build_review(build_id, scope, records)
             if AutonomousPolicy.from_request(request).enabled:
@@ -4386,18 +4408,34 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             else:
                 self._update(build_id, status="cancelled", stage="cancelled", finished_at=iso_now(), error=str(exc), resumable=True, paused=False, retrying_segmentation=False)
         except Exception as exc:
-            # Checkpoints intentionally survive a failed stage. The user can repair
-            # provider configuration and resume instead of restarting a long book.
+            # Checkpoints intentionally survive a failed stage. Transient storage
+            # contention is operational, so do not turn it into a
+            # terminal scholarly build failure after the bounded automatic retry.
             stage = str(self.repo.get_build(build_id).get("stage") or "unknown")
-            self._update(
-                build_id,
-                status="failed",
-                stage="failed",
-                finished_at=iso_now(),
-                error=f"{stage}: {exc}",
-                resumable=True,
-                retrying_segmentation=False,
-            )
+            if isinstance(exc, PersistenceBusyError):
+                self._update(
+                    build_id,
+                    status="interrupted",
+                    stage="interrupted",
+                    interrupted_stage=stage,
+                    finished_at=iso_now(),
+                    error=(
+                        f"{stage}: Durable storage remained busy while checkpointing. "
+                        "Completed enrichment checkpoints were preserved; resume to continue."
+                    ),
+                    resumable=True,
+                    retrying_segmentation=False,
+                )
+            else:
+                self._update(
+                    build_id,
+                    status="failed",
+                    stage="failed",
+                    finished_at=iso_now(),
+                    error=f"{stage}: {exc}",
+                    resumable=True,
+                    retrying_segmentation=False,
+                )
         finally:
             with self._lock:
                 self._cancel.discard(build_id)
@@ -5056,6 +5094,53 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 "Records changed during enrichment queue setup; retry against the current corpus."
             ) from exc
 
+    def _schedule_build_enrichment_with_lock_recovery(
+        self,
+        build_id: str,
+        request: dict[str, Any],
+        manifest: dict[str, Any],
+        records: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Retry transient storage contention without discarding enrichment progress.
+
+        Each enrichment family and completed Record is checkpointed independently.
+        If a competing review/projection writer temporarily owns storage, rerunning
+        the scheduler is safe: completed families remain complete and unfinished
+        Records are reconstructed from the canonical store before the next attempt.
+        """
+
+        delays = (0.25, 0.75, 1.5, 3.0)
+        current_records = records
+        for attempt in range(len(delays) + 1):
+            try:
+                return self._schedule_build_enrichment(
+                    build_id,
+                    request,
+                    manifest,
+                    current_records,
+                )
+            except PersistenceBusyError:
+                if attempt >= len(delays):
+                    raise
+                delay = delays[attempt]
+                self._append_warning(
+                    build_id,
+                    (
+                        "Metadata checkpoint storage was temporarily busy; "
+                        f"retrying enrichment from saved checkpoints in {delay:g}s."
+                    ),
+                )
+                self._update(
+                    build_id,
+                    stage="enriching",
+                    metadata_last_progress_at=iso_now(),
+                    resumable=True,
+                )
+                time.sleep(delay)
+                current_records = self.repo.load_records(build_id)
+        raise AssertionError("unreachable")
+
+
     def _schedule_build_enrichment(
         self, build_id: str, request: dict[str, Any], manifest: dict[str, Any], records: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
@@ -5077,7 +5162,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
 
         if pending:
             # Records share the bounded family pool. Family checkpoints and
-            # completed results persist through targeted SQLite writes; JSONL
+            # completed results persist through targeted canonical-store writes; JSONL
             # remains a dirty-tracked projection until explicit refresh/export.
             with (
                 ThreadPoolExecutor(
