@@ -4865,7 +4865,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         )
                     ]
                     if stale_active:
-                        updates: dict[str, Any] = {
+                        stale_updates: dict[str, Any] = {
                             "metadata_active_tasks": [
                                 item
                                 for item in active_before
@@ -4886,10 +4886,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                             live_record.get("metadata_requeue_requested")
                             and str(live_status.get(task_name) or "") == "queued"
                         ):
-                            updates["metadata_tasks_queued"] = (
+                            stale_updates["metadata_tasks_queued"] = (
                                 int(build.get("metadata_tasks_queued") or 0) + 1
                             )
-                        self._update(build_id, **updates)
+                        self._update(build_id, **stale_updates)
                 return
             merged = current[0]
 
