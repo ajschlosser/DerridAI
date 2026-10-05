@@ -594,6 +594,7 @@ def repair_record_source_topology(
     units: list[dict[str, Any]],
     *,
     source_block_ids: set[str] | None = None,
+    transaction_id: str = "",
 ) -> list[dict[str, Any]]:
     """Repair only provably equivalent stale Record-to-SourceUnit bindings.
 
@@ -842,6 +843,7 @@ def repair_record_source_topology(
             continue
         event = {
             "event_id": f"source-topology-{uuid.uuid4().hex}",
+            "transaction_id": transaction_id or None,
             "at": iso_now(),
             "method": method,
             "previous_source_unit_ids": previous_ids,
