@@ -121,7 +121,7 @@ test("manage a thread through rename, archive, restore, and confirmed deletion",
   const mutations: { method: string; body?: Record<string, unknown> }[] = [];
   await mockBackend(page, {
     fixtures: {
-      "/api/research/threads": (url) => ({
+      "/api/research/threads": (url: URL) => ({
         threads:
           deleted || (record.archived_at && url.searchParams.get("include_archived") !== "true")
             ? []

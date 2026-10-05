@@ -22,7 +22,7 @@ import type {
   ResearchThreadSummary,
 } from "../types/researchThreads";
 
-const path = (id: string) => `/api/research/threads/${encodeURIComponent(id)}`;
+const THREADS_PATH = "/api/research/threads";
 
 /** Thread authority is SQLite; answer/evidence bodies use the existing authorized run APIs. */
 export const researchThreadsApi = {
@@ -33,10 +33,15 @@ export const researchThreadsApi = {
       search: options.search ?? "",
       include_archived: String(options.includeArchived ?? false),
     });
-    return apiRequest<{ threads: ResearchThreadSummary[] }>(`/api/research/threads?${query}`);
+    return apiRequest<{ threads: ResearchThreadSummary[] }>(`${THREADS_PATH}?${query}`);
   },
-  get: (id: string) => apiRequest<ResearchThreadDetail>(path(id)),
+  get: (id: string) =>
+    apiRequest<ResearchThreadDetail>(`${THREADS_PATH}/${encodeURIComponent(id)}`),
   patch: (id: string, patch: { title?: string; archived?: boolean }) =>
-    apiRequest<ResearchThread>(path(id), { method: "PATCH", body: JSON.stringify(patch) }),
-  remove: (id: string) => apiRequest<void>(path(id), { method: "DELETE" }),
+    apiRequest<ResearchThread>(`${THREADS_PATH}/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  remove: (id: string) =>
+    apiRequest<void>(`${THREADS_PATH}/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };
