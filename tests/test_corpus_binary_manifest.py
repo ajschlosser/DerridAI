@@ -21,7 +21,6 @@ from __future__ import annotations
 import hashlib
 
 import pytest
-
 from app.corpus_binary_manifest import (
     executable_name,
     normalize_architecture,
