@@ -116,7 +116,9 @@ def select_thread_context(
     for index, turn in enumerate(reversed(previous[-32:])):
         if selected_count >= policy.max_turns:
             break
-        source = "immediate_previous" if index == 0 else "recent_fallback"
+        source: Literal["immediate_previous", "recent_fallback"] = (
+            "immediate_previous" if index == 0 else "recent_fallback"
+        )
         items = [
             ThreadContextItem(
                 turn["turn_id"], turn["ordinal"], "user", turn["user_question"], source
