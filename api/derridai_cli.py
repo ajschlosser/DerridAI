@@ -16,11 +16,9 @@
 
 """Compilation entry point for the target-native DerridAI CLI executable."""
 
-# Keep the first packaging milestone debuggable. Onefile comes only after the
-# standalone distribution passes end-to-end tests on every target OS.
-# nuitka-project: --mode=standalone
-# nuitka-project: --output-filename=derridai
-# nuitka-project: --python-flag=isolated
+# Packaging mode and compiler options are owned by scripts/build_cli_binary.py.
+# Keeping them out of this source file prevents a hidden standalone option from
+# conflicting with later onefile release builds.
 
 from app.corpus_cli import main
 
