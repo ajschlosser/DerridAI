@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 from app.models import RAGRunRequest
 from app.pipelines.comparison import compare_research_dry_runs
-from app.rag import run_rag_pipeline
+from app.rag import _cross_encoder_rerank, _lexical_rerank, run_rag_pipeline
 
 
 def _result(pipeline_id: str, ids: list[str], *, elapsed: float = 0.1):
@@ -323,3 +323,67 @@ def test_balanced_research_reserves_explicitly_named_author_scope() -> None:
         for item in result["retrieval"]["explicit_scope_groups"]
         if item["matched"]
     } == {"Jacques Derrida", "Emmanuel Levinas"}
+
+
+
+def test_lexical_rerank_distinguishes_source_author_from_mentioned_author() -> None:
+    docs = [
+        {
+            "record": {
+                "record_id": "d1",
+                "document_author": "Jacques Derrida",
+                "work": "Adieu to Emmanuel Levinas",
+                "quoted_author": "Emmanuel Levinas",
+                "text": "Levinas is discussed throughout this passage.",
+            },
+            "relevance": 0.5,
+        },
+        {
+            "record": {
+                "record_id": "l1",
+                "document_author": "Emmanuel Levinas",
+                "work": "Totality and Infinity",
+                "text": "The face resists possession.",
+            },
+            "relevance": 0.5,
+        },
+    ]
+
+    ranked = _lexical_rerank("cite Emmanuel Levinas", docs, 2)
+
+    assert ranked[0]["record"]["record_id"] == "l1"
+
+
+def test_cross_encoder_receives_source_identity_separately_from_mentions(monkeypatch) -> None:
+    captured = {}
+
+    def fake_predict(pairs, **kwargs):
+        captured["pairs"] = pairs
+        return [0.5], {"model": kwargs.get("model_name")}
+
+    monkeypatch.setattr("app.rag.predict_scores", fake_predict)
+    docs = [
+        {
+            "record": {
+                "record_id": "d1",
+                "document_author": "Jacques Derrida",
+                "work": "Adieu to Emmanuel Levinas",
+                "quoted_author": "Emmanuel Levinas",
+                "text": "A passage mentioning Levinas.",
+            }
+        }
+    ]
+
+    ranked, warning, _telemetry = _cross_encoder_rerank(
+        "cite Levinas",
+        docs,
+        1,
+        "test-model",
+        timeout_seconds=1,
+    )
+
+    assert warning is None
+    assert ranked is not None
+    candidate_text = captured["pairs"][0][1]
+    assert "Document author: Jacques Derrida" in candidate_text
+    assert "Quoted author: Emmanuel Levinas" in candidate_text
