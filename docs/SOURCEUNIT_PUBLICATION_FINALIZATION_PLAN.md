@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # SourceUnit publication finalization implementation plan
 
-Status: in progress on `fix/unreviewed-topology-finalization` / PR #532.
+Status: implementation complete on `fix/unreviewed-topology-finalization` / PR #532; final merge pending.
 
 This plan addresses the publication failure in which **Use suggestions as-is** can still receive:
 
@@ -262,11 +262,11 @@ Legend: checked means implemented on the feature branch; unchecked means still p
 - [x] Verify genuine missing source coverage still blocks autonomous publication.
 - [x] Preserve the existing three-argument `validate_records` seam used by coordination/integration wrappers.
 - [x] Update the user guide with the released behavior contract.
-- [ ] Full backend lint, type, and test CI is green on the final head.
-- [ ] Frontend/static/build CI is green on the final head.
-- [ ] Format check is green on the final head.
-- [ ] Exercise a previously failing real Corpus Builder build, when a reproducible local build is available.
-- [ ] Rebase or merge latest `master` if the PR base moves materially before merge.
+- [x] Full backend lint, type, and test CI is green on the final code head: run #3919 passed 2,491 tests with 29 skips.
+- [x] Frontend lint, unit, static, build, and aggregate CI is green on the final code head.
+- [x] Format check is green on the final code head.
+- [x] Reproduce the reported failure shape with a reduced synthetic SourceUnit publication regression. The original local corpus build is not available in repository tooling, so no claim is made that the user's exact local build was replayed.
+- [x] Merge the latest `master` into the feature branch before final validation; sync PR #534 completed without conflicts.
 - [ ] Merge PR #532.
 
 ## Completion definition
