@@ -294,7 +294,17 @@ describe("works workspace commands", () => {
       id: "scope-test",
       name: "Scoped",
       description: "",
-      groups: [{ key: "custom", label: "Custom", intro: "", fields_heading: "", notes: [], trailer: "", footer: "" }],
+      groups: [
+        {
+          key: "custom",
+          label: "Custom",
+          intro: "",
+          fields_heading: "",
+          notes: [],
+          trailer: "",
+          footer: "",
+        },
+      ],
       fields: [
         {
           field_id: "field-corpus-theme",
