@@ -18,6 +18,7 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readGlobalCss } from "./global-css";
 
 // Contrast tests read colours straight from the CSS. Rules now say var(--muted) rather than a hex,
 // so these helpers resolve a value to the light-theme colour the token stands for.
@@ -35,7 +36,7 @@ function lightDefinitions(source: string, into: Map<string, string>) {
 }
 export function lightTokens(extraCss = ""): Map<string, string> {
   const tokens = new Map<string, string>();
-  for (const css of [read("src/style.css"), read("src/styles/tokens.css"), extraCss])
+  for (const css of [readGlobalCss(), read("src/styles/tokens.css"), extraCss])
     lightDefinitions(css, tokens);
   return tokens;
 }

@@ -1,0 +1,545 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.preset-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.preset {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 9px;
+  padding: 8px 9px;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 730;
+  color: var(--text-2);
+}
+.preset:hover {
+  border-color: var(--tone-ok-edge);
+  background: var(--accent-soft);
+  color: var(--accent-fg);
+}
+.field-groups {
+  display: grid;
+  gap: 11px;
+}
+.field-group {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--card);
+  overflow: hidden;
+}
+.field-group h4 {
+  margin: 0;
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--line);
+  background: var(--soft);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.check-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  padding: 6px;
+}
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 6px;
+  border-radius: 7px;
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+.check-item:hover {
+  background: var(--soft);
+}
+.check-item input {
+  margin-top: 1px;
+  accent-color: var(--accent);
+}
+.field-risk {
+  margin-left: auto;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.spinner {
+  width: 31px;
+  height: 31px;
+  margin: 0 auto 13px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.proposal {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  overflow: hidden;
+  box-shadow: 0 2px 9px rgba(26, 33, 29, 0.025);
+}
+.proposalhead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.proposalhead input {
+  accent-color: var(--accent);
+}
+.proposalhead b {
+  font-size: 0.75rem;
+}
+
+.proposalbody {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+.proposal-col {
+  min-width: 0;
+  padding: 11px 12px;
+}
+.proposal-col + .proposal-col {
+  border-left: 1px solid var(--line);
+  background: var(--card);
+}
+.proposal-label {
+  margin-bottom: 5px;
+  font-size: 0.75rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+.box {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  color: var(--text);
+}
+.reason {
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.text-diff {
+  font-family: Georgia, serif;
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+/* record editor */
+.editor-body {
+  display: grid;
+  gap: 11px;
+}
+.editor-section {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+.editor-section h3 {
+  margin: 0 0 11px;
+  font-size: 0.75rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+.editor-grid .field {
+  margin: 0;
+}
+.editor-grid .field-full {
+  grid-column: 1 / -1;
+}
+.boolean-control {
+  min-height: 35px;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--text) !important;
+  font-size: 0.75rem !important;
+}
+.boolean-control input {
+  width: auto !important;
+  accent-color: var(--accent);
+}
+@media (max-width: 720px) {
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
+  .editor-grid .field-full {
+    grid-column: auto;
+  }
+}
+
+/* 0.3.0 — persistence and audit history */
+.select-col {
+  width: 42px;
+  min-width: 42px;
+  text-align: center;
+}
+.select-col input,
+.row-select {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+tbody tr.row-selected {
+  background: var(--soft);
+}
+tbody tr.row-selected:hover {
+  background: var(--soft);
+}
+.batch-llm-dialog {
+  width: min(1260px, calc(100% - 28px));
+}
+.batch-progress {
+  padding: 12px 16px 0;
+}
+.batch-progress-bar {
+  height: 7px;
+  background: var(--soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.batch-progress-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+.small-spinner {
+  width: 17px !important;
+  height: 17px !important;
+  border-width: 2px !important;
+  margin: 0 !important;
+  flex: 0 0 auto;
+}
+.compact-proposal {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  margin: 0;
+  box-shadow: none;
+}
+.compact-proposal:first-of-type {
+  border-top: 0;
+}
+.compact-empty {
+  padding: 24px;
+}
+
+/* 0.4.0: progressive LLM queue, robust Chroma browser, PDF linking */
+.compact-select {
+  max-width: 210px;
+}
+.llm-param-grid .field {
+  margin: 0;
+}
+.llm-param-grid .field-full {
+  grid-column: 1/-1;
+}
+.advanced-options {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 8px 10px;
+}
+.advanced-options summary,
+.effective-options summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+.advanced-options textarea {
+  min-height: 90px;
+  font:
+    12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.live-queue {
+  display: grid;
+  gap: 9px;
+}
+.llm-queue-card.active {
+  border-color: var(--tone-ok-edge);
+  box-shadow: 0 0 0 3px rgba(66, 115, 98, 0.08);
+}
+.llm-queue-card.error-card {
+  border-color: var(--tone-danger-edge);
+}
+.effective-options {
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+.effective-options pre {
+  max-height: 160px;
+  overflow: auto;
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+}
+.linked-record {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 9px;
+  padding: 8px 10px;
+  color: var(--text);
+}
+.linked-record:hover {
+  background: var(--accent-soft);
+  border-color: var(--line);
+}
+.linked-record b {
+  font-size: 0.8125rem;
+}
+.linked-record span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.compact-toolbar {
+  margin-bottom: 9px;
+}
+.compact-toolbar .toolbar {
+  margin: 0;
+}
+
+.storeitem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+}
+.card-inset {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+.empty-store {
+  min-height: 440px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.editor-body .info {
+  margin-bottom: 12px;
+}
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.crumb-path,
+.crumb-home {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crumb-sep {
+  color: #a7aaa5;
+}
+.breadcrumbs strong {
+  color: var(--text);
+  font-weight: 750;
+}
+.llm-model-row select,
+#touchModel {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.queue-header .tools {
+  justify-content: flex-end;
+}
+.proposalhead {
+  min-height: 42px;
+}
+.operation-progress.show {
+  opacity: 1;
+  transform: none;
+}
+.scroll-cell {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  padding-bottom: 2px;
+}
+.chroma-id-col,
+.record-id-col {
+  min-width: 0;
+}
+
+.section-label {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.filterpanel {
+  padding: 15px;
+}
+.filters {
+  gap: 9px;
+}
+.filter-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.filter-cell > span {
+  font-size: 0.8125rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.filter-cell .control {
+  width: 100%;
+  min-width: 0;
+}
+.filter-remove {
+  align-self: end;
+  width: 34px;
+  padding: 0;
+}
+
+.autocomplete {
+  position: relative;
+  min-width: 0;
+}
+.autocomplete > input.control {
+  width: 100%;
+}
+.autocomplete-list {
+  position: absolute;
+  z-index: 80;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 270px;
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 14px 38px rgba(25, 32, 28, 0.16);
+}
+.autocomplete-option {
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 8px;
+  border-radius: 7px;
+  color: var(--text);
+}
+.autocomplete-option:hover {
+  background: var(--accent-soft);
+}
+.autocomplete-option b {
+  font-size: 0.8125rem;
+}
+.autocomplete-option span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.autocomplete-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+/* 0.4.2: PDF unlinking, Chroma ownership/model controls, copyright */
+.linked-record-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 6px;
+}
+.linked-record-row .linked-record {
+  min-width: 0;
+}
+.unlink-pdf-link {
+  align-self: stretch;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .linked-record-row {
+    grid-template-columns: 1fr;
+  }
+}

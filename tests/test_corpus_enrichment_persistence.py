@@ -26,6 +26,7 @@ import copy
 import json
 import os
 import platform
+import sqlite3
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -207,6 +208,41 @@ def test_initial_handoff_rolls_back_record_and_summary_on_projection_failure(
     assert repo.get_record(build_id, "r1") == baseline[0]
     assert not notifications
     assert not repo.get_build(build_id).get("metadata_first_settled_at")
+
+
+def test_enrichment_checkpoint_commits_while_review_snapshot_is_open(build_factory):
+    """A long review read must not make an enrichment checkpoint fail with SQLITE_BUSY."""
+
+    repo, build_id, manager = build_factory(count=1)
+    snapshot = _completed(repo.get_record(build_id, "r1"))
+    path = repo.build_records_db_path(build_id)
+
+    with sqlite3.connect(path, timeout=1) as reader:
+        reader.execute("BEGIN")
+        assert reader.execute(
+            "SELECT payload FROM corpus_records WHERE record_id='r1'"
+        ).fetchone()
+        assert reader.execute("PRAGMA journal_mode").fetchone()[0].casefold() == "wal"
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(
+                manager._persist_build_metadata_stage,
+                build_id,
+                3,
+                snapshot,
+                "discourse",
+                "complete",
+                None,
+            )
+            # In rollback-journal mode this commit waits for the reader and then
+            # eventually raises "database is locked". WAL permits it immediately.
+            future.result(timeout=5)
+
+        reader.rollback()
+
+    stored = repo.get_record(build_id, "r1")
+    assert stored["speaker"] == "Model speaker"
+    assert stored["metadata_stage_status"]["discourse"] == "complete"
 
 
 def test_initial_family_checkpoint_noop_does_not_write_or_notify(build_factory, monkeypatch):

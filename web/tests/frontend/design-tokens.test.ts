@@ -18,11 +18,12 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readGlobalCss } from "./helpers/global-css";
 
 // The tokens are CSS, so the contrast guarantees are checked against the CSS itself. If a token
 // value changes, this fails before an unreadable colour pair ships.
 const tokens = readFileSync("src/styles/tokens.css", "utf8");
-const styles = readFileSync("src/style.css", "utf8");
+const styles = readGlobalCss();
 const providerProfileSelect = readFileSync("src/components/ProviderProfileSelect.vue", "utf8");
 
 function block(css: string, selector: string): string {

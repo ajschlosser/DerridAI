@@ -1,0 +1,248 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Record annotations: evidence context, note content, authorship, and action
+   have distinct visual regions. */
+.record-annotation-section {
+  margin-top: 22px !important;
+  padding: 18px 0 2px !important;
+  border-top: 1px solid var(--tone-info-edge) !important;
+}
+.record-annotation-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+.record-annotation-heading > div {
+  display: grid;
+  gap: 3px;
+}
+.record-annotation-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.record-annotation-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78125rem;
+}
+.record-annotations {
+  display: grid;
+  gap: 10px !important;
+}
+.record-annotation {
+  display: grid !important;
+  grid-template-columns: minmax(180px, 0.9fr) minmax(260px, 1.5fr) auto !important;
+  gap: 14px !important;
+  align-items: start;
+  padding: 13px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px !important;
+  background: var(--card) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+.record-annotation-context {
+  display: grid;
+  gap: 7px;
+}
+.record-annotation-context blockquote {
+  margin: 0 !important;
+  max-height: 130px;
+  overflow: auto;
+  padding: 9px 10px !important;
+  border-left: 3px solid var(--ui-accent) !important;
+  background: var(--card) !important;
+  border-radius: 0 7px 7px 0;
+  font:
+    12.5px/1.5 Georgia,
+    serif;
+}
+.record-annotation-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.record-annotation-body > p {
+  margin: 0 !important;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.record-annotation-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.record-annotation-remove {
+  align-self: start;
+  white-space: nowrap;
+}
+.record-find-control {
+  display: grid !important;
+  grid-template-columns: minmax(150px, 1fr) auto !important;
+  overflow: visible !important;
+}
+.record-find-clear {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px !important;
+  border-left: 1px solid var(--line) !important;
+  white-space: nowrap;
+}
+.record-find-clear svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Record annotations are now a vertical evidence timeline rather than a cramped 3-column grid. */
+.record-annotation-section {
+  margin: 28px 18px 8px !important;
+  padding: 20px 0 0 !important;
+  border-top: 1px solid var(--line) !important;
+}
+.record-annotation-heading {
+  margin: 0 0 14px !important;
+  align-items: center !important;
+}
+.record-annotations {
+  display: grid;
+  gap: 12px !important;
+  margin: 0 !important;
+}
+.record-annotation-context {
+  display: grid;
+  gap: 8px;
+}
+.record-annotation-context blockquote {
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 11px 12px !important;
+  border-left: 3px solid var(--ui-accent) !important;
+  border-radius: 0 8px 8px 0 !important;
+  background: var(--card) !important;
+  font-size: 0.8125rem !important;
+  line-height: 1.55 !important;
+}
+.record-annotation-body {
+  display: grid;
+  gap: 9px;
+}
+.record-annotation-body > p {
+  font-size: 0.84375rem !important;
+  line-height: 1.6 !important;
+}
+.record-annotation-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.8125rem !important;
+  color: var(--muted);
+}
+
+@media (max-width: 800px) {
+  .workspace-search-card-grid {
+    grid-template-columns: 1fr;
+  }
+  .collection-wizard-dialog .workflow-step-body {
+    grid-template-columns: 1fr !important;
+  }
+  .collection-wizard-dialog .wizard-sync-summary {
+    grid-template-columns: 1fr !important;
+  }
+  .collection-wizard-dialog .wizard-sync-summary .info {
+    grid-column: auto !important;
+  }
+  .record-annotation-section {
+    margin-inline: 0 !important;
+  }
+}
+.collection-wizard-dialog .workflow-step-body {
+  grid-template-columns: 1fr !important;
+}
+.collection-wizard-dialog .vector-provider-options label {
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  min-height: unset !important;
+  padding: 12px 14px !important;
+}
+.collection-wizard-dialog .wizard-sync-summary {
+  grid-template-columns: 1fr !important;
+  gap: 6px !important;
+}
+.collection-wizard-dialog .wizard-sync-summary > span {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  min-width: 0 !important;
+}
+.collection-wizard-dialog .wizard-sync-summary .info {
+  grid-column: auto !important;
+  padding: 10px 12px !important;
+}
+.collection-wizard-dialog .wizard-work-list {
+  max-height: 230px !important;
+}
+.record-annotation-section {
+  margin: 28px 27px 20px !important;
+  padding-top: 20px !important;
+}
+@media (max-width: 720px) {
+  .record-annotation-section {
+    margin: 22px 20px 16px !important;
+  }
+}
+.record-annotation-section {
+  margin: 28px 27px 20px !important;
+  padding-top: 20px !important;
+}
+@media (max-width: 720px) {
+  .record-annotation-section {
+    margin: 22px 20px 16px !important;
+  }
+}
+
+/* Dictionary install: explain the workflow instead of exposing ambiguous controls. */
+
+/* Record history: readable, modern, and consistent with the rest of the app. */
+.record-history-dialog {
+  font-size: 0.875rem;
+}
+.record-history-body {
+  gap: 12px;
+}
+.record-find-clear {
+  min-height: 36px !important;
+  padding: 0 10px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 8px !important;
+  background: var(--card) !important;
+  color: var(--muted) !important;
+}
+.record-find-clear:hover {
+  background: var(--soft) !important;
+  color: var(--text-2) !important;
+}
+.record-find-clear svg {
+  width: 14px;
+  height: 14px;
+}

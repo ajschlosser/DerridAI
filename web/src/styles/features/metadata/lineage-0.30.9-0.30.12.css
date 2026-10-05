@@ -1,0 +1,56 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* 0.30.10 final layout refinements */
+.metadata-inline-link,
+.metadata-heading-link,
+.metadata-result-pill {
+  border: 0;
+  background: transparent;
+  color: var(--accent-fg);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ui-accent) 32%, transparent);
+  text-underline-offset: 2px;
+}
+.metadata-inline-link:hover,
+.metadata-heading-link:hover,
+.metadata-result-pill:hover {
+  text-decoration-color: currentColor;
+}
+.metadata-heading-link {
+  font: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+.metadata-result-pill {
+  display: inline-flex;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  text-decoration: none;
+  font-size: 0.8125rem !important;
+}
+.metadata-result-pill:hover {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+}

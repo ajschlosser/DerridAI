@@ -1,0 +1,188 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* 0.40.8 — Corpus Builder visibility on Home. */
+.dashboard-corpus-builds {
+  padding: 15px 16px;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+.dashboard-corpus-builds .dashboard-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0;
+}
+.dashboard-corpus-builds .dashboard-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.dashboard-corpus-builds .dashboard-card-title > b {
+  font-size: 0.8125rem;
+}
+.dashboard-corpus-builds .dashboard-title-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--ui-accent-soft, #edf4f0);
+  color: var(--accent-fg);
+}
+.dashboard-corpus-builds .dashboard-title-icon svg {
+  width: 15px;
+  height: 15px;
+}
+.dashboard-corpus-active {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--tone-ok-fg);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+}
+.dashboard-corpus-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.dashboard-corpus-list {
+  display: grid;
+  gap: 6px;
+}
+.dashboard-corpus-row {
+  appearance: none;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) minmax(92px, 130px);
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    background 0.12s ease;
+}
+.dashboard-corpus-row:hover {
+  border-color: var(--tone-ok-edge);
+  background: var(--card);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.045);
+}
+.dashboard-corpus-row:focus-visible {
+  outline: 3px solid var(--ui-accent-focus, var(--accent));
+  outline-offset: 2px;
+}
+.dashboard-corpus-state {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #89928d;
+  box-shadow: 0 0 0 3px #f2f4f3;
+}
+.dashboard-corpus-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.dashboard-corpus-copy b {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dashboard-corpus-copy small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: none;
+}
+.dashboard-corpus-progress {
+  display: grid;
+  grid-template-columns: auto;
+  gap: 4px;
+  justify-items: end;
+}
+.dashboard-corpus-progress > b {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.dashboard-corpus-progress > i {
+  display: block;
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--soft);
+  overflow: hidden;
+}
+.dashboard-corpus-progress > i > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ui-accent, var(--accent));
+}
+.dashboard-corpus-empty {
+  padding: 13px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--soft);
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+@media (max-width: 700px) {
+  .dashboard-corpus-builds .dashboard-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .dashboard-corpus-row {
+    grid-template-columns: 10px minmax(0, 1fr);
+  }
+  .dashboard-corpus-progress {
+    grid-column: 2;
+    width: 100%;
+    justify-items: start;
+  }
+  .dashboard-corpus-progress > i {
+    width: 100%;
+  }
+}
+.dashboard-metric-dots button {
+  background: var(--muted);
+}
+.dashboard-corpus-state {
+  background: var(--muted);
+  box-shadow: 0 0 0 3px var(--soft);
+}

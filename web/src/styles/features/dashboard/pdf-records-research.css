@@ -1,0 +1,64 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.dash-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.dash-chart-head .dash-chart-title {
+  margin: 0;
+}
+.dash-chart-foot {
+  padding-left: 38px;
+}
+.dash-chart-foot span:nth-child(2) {
+  text-align: center;
+}
+.dash-chart-foot span:last-child {
+  text-align: right;
+}
+.dash-chart-note {
+  max-width: 420px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+.ui-collapsed > .cardhead,
+.ui-collapsed > .dash-chart-head,
+.ui-collapsed > .section-title-row,
+.ui-collapsed > .toolbar,
+.ui-collapsed > .collapsible-inline-head {
+  margin: 0 !important;
+  border: 0 !important;
+}
+
+.tablewrap.ui-collapsed {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.pdf-text-card .cardhead {
+  align-items: flex-start;
+}
+.pdf-text-card .search {
+  width: min(220px, 100%);
+}

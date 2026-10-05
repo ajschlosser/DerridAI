@@ -1,0 +1,130 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Dashboard overview icons are deliberately visible and scannable. */
+.dashboard-overview-icon {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px;
+  background: var(--ui-accent-soft);
+  color: var(--accent-fg) !important;
+  display: grid !important;
+  place-items: center !important;
+  margin-bottom: 2px;
+}
+.dashboard-overview-icon svg {
+  width: 19px !important;
+  height: 19px !important;
+  stroke-width: 1.9;
+}
+.dashboard-overview-grid button:hover .dashboard-overview-icon {
+  background: var(--ui-accent);
+  color: var(--accent-on) !important;
+}
+
+/* Work-metric carousel. */
+.dashboard-metric-carousel {
+  position: relative;
+  overflow: hidden;
+}
+.dashboard-metric-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dashboard-metric-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+}
+.dashboard-metric-arrow {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--text-2);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.dashboard-metric-arrow:hover {
+  background: var(--ui-accent-soft);
+  border-color: color-mix(in srgb, var(--ui-accent) 30%, var(--line));
+  color: var(--accent-fg);
+}
+.dashboard-metric-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin-top: 4px;
+} /* 24x24 target (WCAG 2.5.8) drawing a 7px dot (3:1 against white, WCAG 1.4.11): the padding is the hit area. */
+.dashboard-metric-dots button {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  padding: 8.5px;
+  border: 0;
+  border-radius: 50%;
+  background: #7a8aa0;
+  background-clip: content-box;
+  cursor: pointer;
+}
+.dashboard-record-state {
+  display: inline-flex;
+  align-self: start;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+/* Modern carousel controls for Works. */
+.dashboard-work-carousel-shell {
+  position: relative;
+}
+@media (max-width: 620px) {
+  .collection-wizard-dialog .workflow-steps {
+    top: 80px;
+    padding-inline: 16px;
+  }
+  .collection-wizard-dialog .workflow-steps li b {
+    display: none;
+  }
+  .collection-wizard-dialog .workflow-step-body,
+  .collection-wizard-dialog .workflow-dialog-actions {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .collection-wizard-dialog .wizard-sync-summary {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-metric-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .dashboard-work-carousel-shell > .carousel-arrow {
+    display: none;
+  }
+}

@@ -19,6 +19,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readGlobalCss } from "./helpers/global-css";
 
 // Ratchet: literal colours in declarations cannot be themed, so they are what breaks dark mode,
 // increased contrast and forced colours. The remaining ones are theme-independent solid fills
@@ -56,7 +57,7 @@ describe("design token usage", () => {
   it("keeps legacy runtime dialog and overlay surfaces themeable", () => {
     const lightSurface =
       /(?:\.dh, \.da|\.card|\.topbar|\.file-tabs|\.breadcrumb-bar|\.operation-stack-toolbar|\.record-selection-toolbar)\s*\{[^}]*background(?:-color)?\s*:\s*(?:rgba?\([^}]*255|#fff)/s;
-    expect(readFileSync("src/style.css", "utf8")).not.toMatch(lightSurface);
+    expect(readGlobalCss()).not.toMatch(lightSurface);
   });
 
   it("does not add literal colours to component styles", () => {
@@ -80,15 +81,15 @@ describe("design token usage", () => {
     expect(total).toBeLessThanOrEqual(MAX_LITERALS.views);
   });
   it("uses no translucent-white backgrounds", () => {
-    const sources = [...vueFiles("src/components"), ...vueFiles("src/views"), "src/style.css"];
-    const offenders = sources.filter((file) =>
-      whiteOverlayBackground.test(readFileSync(file, "utf8")),
+    const sources = [...vueFiles("src/components"), ...vueFiles("src/views")].map((file) =>
+      readFileSync(file, "utf8"),
+    );
+    const offenders = [...sources, readGlobalCss()].filter((text) =>
+      whiteOverlayBackground.test(text),
     );
     expect(offenders).toEqual([]);
   });
   it("does not add literal colours to the global stylesheet", () => {
-    expect(literalsIn(readFileSync("src/style.css", "utf8"))).toBeLessThanOrEqual(
-      MAX_LITERALS.stylesheet,
-    );
+    expect(literalsIn(readGlobalCss())).toBeLessThanOrEqual(MAX_LITERALS.stylesheet);
   });
 });

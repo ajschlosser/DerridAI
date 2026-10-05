@@ -1,0 +1,47 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* 0.6.0 — stacked operations, work browser, configuration, auto-improve */
+.operation-progress-stack {
+  position: fixed;
+  z-index: 170;
+  right: 18px;
+  bottom: 18px;
+  width: min(410px, calc(100vw - 36px));
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+}
+.operation-progress-stack .operation-progress {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  pointer-events: auto;
+}
+
+/* Operation cards now stack without covering each other. */
+.operation-progress-stack {
+  max-height: 70vh;
+  overflow: auto;
+  padding-top: 4px;
+}
+.operation-progress {
+  box-sizing: border-box;
+}

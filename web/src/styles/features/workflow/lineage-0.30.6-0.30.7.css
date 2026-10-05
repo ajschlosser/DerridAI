@@ -1,0 +1,126 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.workflow-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(var(--card), var(--card));
+}
+.workflow-dialog-head h2 {
+  margin: 3px 0 5px;
+  font-size: 1.4375rem;
+  color: var(--text);
+}
+.workflow-dialog-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78125rem;
+}
+.workflow-steps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin: 0;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.workflow-steps li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.workflow-steps li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 34px;
+  right: 10px;
+  top: 50%;
+  height: 1px;
+  background: var(--soft);
+}
+.workflow-steps li > span {
+  position: relative;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--soft);
+  color: var(--muted);
+  font-weight: 800;
+}
+.workflow-steps li.active {
+  color: var(--accent-fg);
+}
+.workflow-steps li.active > span,
+.workflow-steps li.done > span {
+  background: var(--ui-accent);
+  color: var(--accent-on);
+}
+.workflow-step-body {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.38fr) minmax(0, 1fr);
+  gap: 26px;
+  padding: 22px;
+}
+.workflow-step-copy h3 {
+  margin: 5px 0 8px;
+  font-size: 1.1875rem;
+  color: var(--text-2);
+}
+.workflow-step-copy p {
+  margin: 0;
+  font-size: 0.78125rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.workflow-fields {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+.workflow-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: sticky;
+  bottom: 0;
+  padding: 14px 22px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--card) 97%, transparent);
+  backdrop-filter: blur(8px);
+}
+.workflow-action-spacer {
+  flex: 1;
+}
+.dashboard-metric-dots button.active {
+  width: 38px;
+  border-radius: 999px;
+  background: var(--ui-accent);
+  background-clip: content-box;
+}
