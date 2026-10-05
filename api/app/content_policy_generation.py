@@ -44,7 +44,7 @@ from .content_filter import (
     normalize_policy_term,
 )
 from .models import OllamaTouchupOptions
-from .llm_transport import chat_complete
+from .rag import chat_complete
 from .structured_completion import StructuredAttemptContext, complete_structured_json
 
 logger = logging.getLogger(__name__)
