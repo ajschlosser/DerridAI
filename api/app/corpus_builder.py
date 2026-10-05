@@ -5562,11 +5562,12 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             existing = dict(build.get("validation") or {})
             record_id = str(record.get("record_id") or "")
             list_fields = (
-                "text_fidelity_errors", "source_order_errors", "page_mapping_errors",
+                "source_reference_errors", "text_fidelity_errors",
+                "source_order_errors", "page_mapping_errors",
                 "printed_page_label_errors", "metadata_schema_errors",
-                "relationship_errors", "human_ownership_errors", "record_content_errors",
-                "citation_errors", "suspicious_record_sizes",
-                "metadata_evidence_errors",
+                "relationship_errors", "human_ownership_errors",
+                "record_content_errors", "citation_errors",
+                "suspicious_record_sizes", "metadata_evidence_errors",
             )
             for field in list_fields:
                 prior = existing.get(field)
