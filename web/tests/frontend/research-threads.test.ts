@@ -109,6 +109,7 @@ beforeEach(() => {
 afterEach(() => {
   mounted.splice(0).forEach((wrapper) => wrapper.unmount());
   client.clear();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 function browser(id = "a", jobId = "job-a") {
