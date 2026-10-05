@@ -144,6 +144,20 @@ describe("record payloads", () => {
             value: "Emmanuel Levinas",
           },
         ],
+        "field-conceptual-tension": [
+          {
+            field_id: "field-conceptual-tension",
+            field_name: "conceptual_tension",
+            value: ["presence", "absence"],
+          },
+        ],
+        "derridai.speaker": [
+          {
+            field_id: "derridai.speaker",
+            field_name: "speaker",
+            value: "Jacques Derrida",
+          },
+        ],
       },
       metadata_field_status: {
         renamed_position_holder: { status: "human_confirmed" },
