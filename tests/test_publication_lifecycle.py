@@ -321,7 +321,10 @@ def test_accept_unreviewed_finalizes_sourceunit_topology_before_publication(tmp_
     repo.save_source_units(build_id,units)
 
     common={
-        **base,
+        **{
+            key:value for key,value in base.items()
+            if key not in {"field_assertions","current_field_assertions"}
+        },
         "accepted":False,
         "rejected":False,
         "review_disposition":"pending",
