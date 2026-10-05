@@ -27,7 +27,7 @@ import math
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from .research_semantics import source_author
+from .research_semantics import source_author, source_work_label
 
 
 def cosine_similarity(left: Any, right: Any) -> float:
@@ -206,8 +206,8 @@ def source_aware_select[Candidate: Mapping[str, Any]](
         if left_source and left_source == right_source:
             penalty += 0.28
 
-        left_work = str(left.get("work") or "")
-        right_work = str(right.get("work") or "")
+        left_work = source_work_label(left)
+        right_work = source_work_label(right)
         if left_work and left_work == right_work:
             penalty += 0.12
 
