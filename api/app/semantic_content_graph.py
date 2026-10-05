@@ -188,26 +188,67 @@ def _feature_summary(
     )[:limit]
 
 
-def _records_digest(records: list[dict[str, Any]]) -> str:
-    material = [
-        {
-            "record_id": record.get("record_id"),
-            "revision": record.get("record_revision"),
-            "text": hashlib.sha256(str(record.get("text") or "").encode("utf-8")).hexdigest(),
-            "speaker": record.get("speaker"),
-            "position_holder": record.get("position_holder"),
-            "target": record.get("target"),
-            "stance": record.get("stance"),
-            "persons": record.get("persons"),
-            "concepts": record.get("concepts"),
-            "works_referenced": record.get("works_referenced"),
-            "topics": record.get("topics"),
-            "quoted_speaker": record.get("quoted_speaker"),
-            "quoted_author": record.get("quoted_author"),
-            "quoted_work": record.get("quoted_work"),
+_SEMANTIC_FIELD_FALLBACKS: dict[str, tuple[str, ...]] = {
+    "derridai.speaker": ("speaker",),
+    "derridai.position_holder": ("position_holder",),
+    "derridai.target": ("target",),
+    "derridai.stance": ("stance",),
+    "derridai.quotation.speaker": ("quoted_speaker",),
+    "derridai.quotation.author": ("quoted_author",),
+    "derridai.quotation.work": ("quoted_work",),
+    "derridai.indexing.persons": ("persons",),
+    "derridai.indexing.concepts": ("concepts",),
+    "derridai.indexing.works_referenced": ("works_referenced",),
+    "derridai.indexing.topics": ("topics",),
+}
+
+
+def _fields_for_semantic_role(schema: Any, semantic_id: str) -> list[str]:
+    """Resolve storage fields for one stable scholarly semantic role.
+
+    Schema-aware builds use semantic compatibility identity, so renaming a field
+    does not disable graph behavior. The literal-name fallback is deliberately
+    limited to schema-less legacy records.
+    """
+    if schema is None:
+        return list(_SEMANTIC_FIELD_FALLBACKS.get(semantic_id, ()))
+    try:
+        return list(schema.fields_for_semantic_compatibility_id(semantic_id))
+    except (AttributeError, TypeError):
+        return list(_SEMANTIC_FIELD_FALLBACKS.get(semantic_id, ()))
+
+
+def _semantic_values(
+    record: dict[str, Any],
+    schema: Any,
+    semantic_id: str,
+) -> list[tuple[str, str]]:
+    values: list[tuple[str, str]] = []
+    for field in _fields_for_semantic_role(schema, semantic_id):
+        values.extend((field, value) for value in _values(record.get(field)))
+    return values
+
+
+def _records_digest(records: list[dict[str, Any]], schema: Any = None) -> str:
+    semantic_ids = tuple(_SEMANTIC_FIELD_FALLBACKS)
+    material = []
+    for record in records:
+        semantic_metadata = {
+            semantic_id: {
+                field: record.get(field)
+                for field in _fields_for_semantic_role(schema, semantic_id)
+                if field in record
+            }
+            for semantic_id in semantic_ids
         }
-        for record in records
-    ]
+        material.append(
+            {
+                "record_id": record.get("record_id"),
+                "revision": record.get("record_revision"),
+                "text": hashlib.sha256(str(record.get("text") or "").encode("utf-8")).hexdigest(),
+                "semantic_metadata": semantic_metadata,
+            }
+        )
     return hashlib.sha256(
         json.dumps(material, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
     ).hexdigest()
@@ -537,40 +578,31 @@ def build_semantic_content_graph(
         observe(node_id, label, _REVIEWED if _authority(record, [field]) == "human_confirmed" else _OBSERVED)
         return node_id
 
+    indexing_roles = (
+        ("derridai.indexing.persons", "person"),
+        ("derridai.indexing.concepts", "concept"),
+        ("derridai.indexing.works_referenced", "work"),
+        ("derridai.indexing.topics", "topic"),
+    )
+
     for record in records:
         migrate_record_assertions(record, schema)
         record_id = str(record.get("record_id") or "")
-        field_nodes: dict[str, list[str]] = {}
-        for field, kind in (
-            ("persons", "person"),
-            ("concepts", "concept"),
-            ("works_referenced", "work"),
-            ("topics", "topic"),
-        ):
-            ids: list[str] = []
-            for label in _values(record.get(field)):
+        cooccurrence_nodes: list[str] = []
+        for semantic_id, kind in indexing_roles:
+            for field, label in _semantic_values(record, schema, semantic_id):
                 node_id = metadata_node(kind, label, field, record)
                 graph.mention(
                     node_id,
                     record_id,
                     count=0 if node_id in cluster_nodes.values() else 1,
                 )
-                ids.append(node_id)
-            field_nodes[field] = ids
+                cooccurrence_nodes.append(node_id)
 
-        # Co-occurrence is an observational relation only.  It never means the
+        # Co-occurrence is an observational relation only. It never means the
         # nodes agree, influence one another, converse, or stand in any stronger
         # semantic relationship.
-        cooccurrence_nodes = list(
-            dict.fromkeys(
-                [
-                    *field_nodes["persons"],
-                    *field_nodes["concepts"],
-                    *field_nodes["works_referenced"],
-                    *field_nodes["topics"],
-                ]
-            )
-        )
+        cooccurrence_nodes = list(dict.fromkeys(cooccurrence_nodes))
         local_doc = record.get("document_intelligence")
         if isinstance(local_doc, dict):
             for mention in local_doc.get("entities") or []:
@@ -590,23 +622,32 @@ def build_semantic_content_graph(
                 symmetric=True,
             )
 
-        # The existing scholarly attribution fields can project stronger directed
-        # relations without another model call.  Their assertion/evidence state is
-        # carried onto the graph edge.
-        holders = _values(record.get("position_holder"))
-        targets = _values(record.get("target"))
-        stance = str(record.get("stance") or "").strip()
+        # Scholarly attribution relations are selected by stable semantic identity,
+        # not by mutable storage names. Assertion/evidence state is still carried
+        # from the concrete fields that supplied each relation.
+        holders = _semantic_values(record, schema, "derridai.position_holder")
+        targets = _semantic_values(record, schema, "derridai.target")
+        stances = _semantic_values(record, schema, "derridai.stance")
+        stance_field, stance = stances[0] if stances else ("", "")
         if holders and targets:
-            supporting = ["position_holder", "target"] + (["stance"] if stance else [])
             predicate = stance or "addresses"
-            for holder in holders:
-                source = metadata_node("person", holder, "position_holder", record)
-                for target in targets:
+            for holder_field, holder in holders:
+                source = metadata_node("person", holder, holder_field, record)
+                for target_field, target in targets:
+                    supporting = [holder_field, target_field]
+                    if stance_field:
+                        supporting.append(stance_field)
                     # target is polymorphic in scholarly prose: it may be a
                     # person, work, concept, institution, etc. Reuse an entity
                     # already established by the document/indexing layer before
                     # falling back to a concept node.
-                    target_id = metadata_node("concept", target, "target", record, prefer_existing=True)
+                    target_id = metadata_node(
+                        "concept",
+                        target,
+                        target_field,
+                        record,
+                        prefer_existing=True,
+                    )
                     graph.edge(
                         source,
                         predicate,
@@ -619,16 +660,17 @@ def build_semantic_content_graph(
                         supporting_fields=supporting,
                     )
 
-        speakers = _values(record.get("speaker"))
-        quoted_speakers = _values(record.get("quoted_speaker"))
-        quoted_authors = _values(record.get("quoted_author"))
-        quoted_works = _values(record.get("quoted_work"))
-        for speaker in speakers:
-            source = metadata_node("person", speaker, "speaker", record)
-            for quoted_field, quoted in [
-                *(("quoted_speaker", value) for value in quoted_speakers),
-                *(("quoted_author", value) for value in quoted_authors),
-            ]:
+        speakers = _semantic_values(record, schema, "derridai.speaker")
+        quoted_people = [
+            *_semantic_values(record, schema, "derridai.quotation.speaker"),
+            *_semantic_values(record, schema, "derridai.quotation.author"),
+        ]
+        quoted_authors = _semantic_values(record, schema, "derridai.quotation.author")
+        quoted_works = _semantic_values(record, schema, "derridai.quotation.work")
+        for speaker_field, speaker in speakers:
+            source = metadata_node("person", speaker, speaker_field, record)
+            for quoted_field, quoted in quoted_people:
+                supporting = [speaker_field, quoted_field]
                 target = metadata_node("person", quoted, quoted_field, record)
                 graph.edge(
                     source,
@@ -637,14 +679,15 @@ def build_semantic_content_graph(
                     relation_kind="semantic",
                     record_id=record_id,
                     derivation_method="field_assertion_projection",
-                    authority_status=_authority(record, ["speaker", "quoted_speaker"]),
-                    evidence_refs=_evidence(record, ["speaker", "quoted_speaker", "quoted_author"]),
-                    supporting_fields=["speaker", "quoted_speaker", "quoted_author"],
+                    authority_status=_authority(record, supporting),
+                    evidence_refs=_evidence(record, supporting),
+                    supporting_fields=supporting,
                 )
-        for author in quoted_authors:
-            source = metadata_node("person", author, "quoted_author", record)
-            for work in quoted_works:
-                target = metadata_node("work", work, "quoted_work", record)
+        for author_field, author in quoted_authors:
+            source = metadata_node("person", author, author_field, record)
+            for work_field, work in quoted_works:
+                supporting = [author_field, work_field]
+                target = metadata_node("work", work, work_field, record)
                 graph.edge(
                     source,
                     "quoted_work",
@@ -652,9 +695,9 @@ def build_semantic_content_graph(
                     relation_kind="semantic",
                     record_id=record_id,
                     derivation_method="field_assertion_projection",
-                    authority_status=_authority(record, ["quoted_author", "quoted_work"]),
-                    evidence_refs=_evidence(record, ["quoted_author", "quoted_work"]),
-                    supporting_fields=["quoted_author", "quoted_work"],
+                    authority_status=_authority(record, supporting),
+                    evidence_refs=_evidence(record, supporting),
+                    supporting_fields=supporting,
                 )
 
         # BookNLP speaker clusters support a useful dialogue-proximity observation
@@ -768,7 +811,7 @@ def build_semantic_content_graph(
         "identity_version": SEMANTIC_IDENTITY_VERSION,
         # Document Intelligence node ids that now resolve to a merged identity node.
         "node_aliases": node_aliases,
-        "records_digest": _records_digest(records),
+        "records_digest": _records_digest(records, schema),
         "document_intelligence_sha256": analysis.get("text_sha256"),
         "profile": profile,
         "nodes": nodes,

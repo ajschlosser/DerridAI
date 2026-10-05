@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+from app.metadata_schema import default_schema
 from app.semantic_content_graph import build_semantic_content_graph
 
 
@@ -363,3 +364,146 @@ def test_fiction_agent_patient_observation_is_directed_and_keeps_verb():
     assert edge["record_ids"] == ["r1"]
     alice = source
     assert alice["character_profile"]["actions_as_agent"][0]["label"] == "help"
+
+
+def _renamed_default_schema(renames):
+    schema = default_schema()
+    return schema.model_copy(
+        update={
+            "fields": [
+                field.model_copy(update={"name": renames.get(field.name, field.name)})
+                for field in schema.fields
+            ]
+        }
+    )
+
+
+def test_graph_uses_semantic_identity_when_attribution_fields_are_renamed():
+    schema = _renamed_default_schema(
+        {
+            "position_holder": "interlocutor",
+            "target": "object_of_stance",
+            "stance": "orientation",
+        }
+    )
+    record = {
+        "record_id": "r-semantic",
+        "record_revision": 1,
+        "text": "Heidegger questions presence.",
+        "interlocutor": "Martin Heidegger",
+        "object_of_stance": "presence",
+        "orientation": "questions",
+        "metadata_field_status": {
+            "interlocutor": {"status": "human_confirmed"},
+            "object_of_stance": {"status": "human_confirmed"},
+            "orientation": {"status": "human_confirmed"},
+        },
+        "metadata_evidence": {
+            "interlocutor": {"block_ids": ["b1"]},
+            "object_of_stance": {"block_ids": ["b1"]},
+            "orientation": {"block_ids": ["b1"]},
+        },
+    }
+
+    graph = build_semantic_content_graph([record], {"profile": "scholarly"}, schema=schema)
+
+    relation = _edge(graph, "questions")
+    assert relation["authority_status"] == "human_confirmed"
+    assert relation["supporting_fields"] == [
+        "interlocutor",
+        "object_of_stance",
+        "orientation",
+    ]
+    assert {item["field"] for item in relation["evidence_refs"]} == {
+        "interlocutor",
+        "object_of_stance",
+        "orientation",
+    }
+
+
+def test_graph_uses_semantic_identity_when_indexing_fields_are_renamed():
+    schema = _renamed_default_schema(
+        {
+            "persons": "people_index",
+            "concepts": "idea_index",
+            "works_referenced": "work_index",
+            "topics": "topic_index",
+        }
+    )
+    record = {
+        "record_id": "r-index",
+        "record_revision": 1,
+        "text": "Levinas discusses hospitality in Totality and Infinity.",
+        "people_index": ["Emmanuel Levinas"],
+        "idea_index": ["hospitality"],
+        "work_index": ["Totality and Infinity"],
+        "topic_index": ["ethics"],
+    }
+
+    graph = build_semantic_content_graph([record], {"profile": "scholarly"}, schema=schema)
+
+    typed_labels = {(node["type"], node["label"]) for node in graph["nodes"]}
+    assert ("person", "Emmanuel Levinas") in typed_labels
+    assert ("concept", "hospitality") in typed_labels
+    assert ("work", "Totality and Infinity") in typed_labels
+    assert ("topic", "ethics") in typed_labels
+    assert any(edge["predicate"] == "co_occurs" for edge in graph["edges"])
+
+
+def test_graph_uses_semantic_identity_when_quotation_fields_are_renamed():
+    schema = _renamed_default_schema(
+        {
+            "speaker": "textual_voice",
+            "quoted_author": "citation_author",
+            "quoted_work": "citation_work",
+        }
+    )
+    record = {
+        "record_id": "r-quote",
+        "record_revision": 1,
+        "text": "Derrida quotes Levinas's Totality and Infinity.",
+        "textual_voice": "Jacques Derrida",
+        "citation_author": "Emmanuel Levinas",
+        "citation_work": "Totality and Infinity",
+        "metadata_field_status": {
+            "textual_voice": {"status": "human_confirmed"},
+            "citation_author": {"status": "human_confirmed"},
+            "citation_work": {"status": "human_confirmed"},
+        },
+    }
+
+    graph = build_semantic_content_graph([record], {"profile": "scholarly"}, schema=schema)
+
+    quotes = _edge(graph, "quotes")
+    quoted_work = _edge(graph, "quoted_work")
+    assert quotes["supporting_fields"] == ["textual_voice", "citation_author"]
+    assert quoted_work["supporting_fields"] == ["citation_author", "citation_work"]
+
+
+def test_schema_aware_graph_does_not_assign_builtin_semantics_to_unrelated_custom_fields():
+    schema = default_schema()
+    schema = schema.model_copy(
+        update={
+            "fields": [
+                *schema.fields,
+                schema.fields[0].model_copy(
+                    update={
+                        "field_id": "field-unrelated-person-list",
+                        "name": "cast",
+                        "label": "Cast",
+                        "semantic_compatibility_id": None,
+                    }
+                ),
+            ]
+        }
+    )
+    record = {
+        "record_id": "r-custom",
+        "record_revision": 1,
+        "text": "A custom list should remain ordinary metadata.",
+        "cast": ["Not a graph person"],
+    }
+
+    graph = build_semantic_content_graph([record], {"profile": "scholarly"}, schema=schema)
+
+    assert all(node["label"] != "Not a graph person" for node in graph["nodes"])

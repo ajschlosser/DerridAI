@@ -29,7 +29,6 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Any
 
-from .corpus_metadata import ALLOWED_METADATA_FIELDS
 from .corpus_review_state import (
     _decorate_review_state,
     _matches_review_queue,
@@ -201,7 +200,7 @@ def _compute_observed_metadata_values(records: list[dict[str, Any]], *, present:
     another reviewer's sealed first answer merely because that value happens to
     populate a filter's suggestion list. Call within the caller's ``reviewer_scope``.
     """
-    metadata_values: dict[str, set[str]] = {field: set() for field in ALLOWED_METADATA_FIELDS}
+    metadata_values: dict[str, set[str]] = {}
     for raw in records:
         record = copy.deepcopy(raw)
         if present:
