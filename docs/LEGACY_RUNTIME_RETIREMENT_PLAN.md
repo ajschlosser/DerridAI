@@ -317,29 +317,13 @@ Task branch for Step 1: `task/router-single-source-of-truth`
   - [x] Step 51 (2026-10-04): reconciliation. `runtime/` and `runtime.js` no longer exist, so the unticked Step 2, 3 and 4 boxes (and their last sub-items: the remaining plain `createRuntimeState` fields, `syncUrl`/`navigateTo`, `pauseRuntime`/`triggerImport`) are ticked; each was completed by a later step (`sharedNavigation`, `jobsPause`, `sharedFileLifecycle`, `sessionState`). `createRuntimeState` still declares `jobsPollTimer`, which `domain/jobsWorkspace.ts` reads and writes. What is left is not retirement but verification: confirm the sticky-navigation symptom from section 1 no longer reproduces (needs a browser session), and review the 15 stale `legacy-dom-baseline` snapshots noted under Step 2.
   - [x] Step 52 (2026-10-04, after PR #528): validation on master with the runtime retired: `npm run build` then `npm run test:e2e:legacy` (APP_PORT=5217) passes all 71 tests, so none of the legacy DOM baselines is stale any more (the 15 recorded under Step 2 were fixed by later work, not regenerated). The retirement is complete; the only open item is a manual check that the sticky-navigation symptom from section 1 no longer reproduces in a real browser session.
 
-Notes for the next session:
+Status (2026-10-04): the retirement is complete (Steps 51 and 52). The only open item is a manual check, in a real
+browser session, that the sticky-navigation symptom from section 1 no longer reproduces.
 
-- Step 2 is complete on branch `task/migrate-toast-modal-callers` (worktree `../DerridAI-toasts`, four commits after
-  `origin/master` at e84d5e0c). It is **not pushed and has no PR**: push it, open the PR against `master`, and
-  tick Step 2 in the list above after CI.
-- Validation run: `vue-tsc` (app and tests), full Vitest (233 files, 1402 tests), production and Storybook builds,
-  the locale/release Python tests, the legacy e2e suite, and axe (WCAG 2.2 AA tags, light and dark) on the
-  Notifications story. Not run: Docker, the full e2e suite.
-- Open question: 15 `legacy-dom-baseline` snapshots (research-\*, backup/restore) were already stale on master
-  (the "Automatic sizing" Settings control). Decide whether to regenerate them, delete the ones whose surface is
-  already Vue-native, or leave them until Step 3 retires each dialog family. Check whether CI runs
-  `test:e2e:legacy` as a blocking job first.
-- Next: Step 3 (make `home`, `rag` and `corpus-builder` Vue-native, port `domain/*Dialogs.ts` family by family),
-  retiring each family's snapshots with it.
-- Navigation debt from Step 1 is unchanged: `state.view` still follows the router only for paths in
-  `pathViewMap`, (the runtime's own `popstate` listener was removed in Step 4; see `router/runtimeLocationSync.ts`).
-- `npm run format:repo:check` reports unrelated files in this environment (generated `sdk/dist`, `.pytest_cache`).
+Gotchas worth keeping:
+
+- `npm run format:repo:check` reports unrelated files in some environments (generated `sdk/dist`, `.pytest_cache`).
 - Never run Prettier over `web/tests/e2e/**/*-snapshots`; it fails on them and rewrites some.
-- Step 3 correction (2026-10-01): `home`, `rag` and `corpus-builder` already render Vue views; what keeps them tied to
-  the runtime is their `runtime.*` / `runtime.state` reads (Step 4). Step 3 is therefore the imperative dialogs only.
-  Pattern used for the first slice: a composable holds the request, a host component mounted in `App.vue` renders it
-  in a native modal `<dialog>`, and the legacy function stays as a thin forwarder until its callers move.
-- Legacy e2e gotchas: `vite preview` serves `web/dist`, so run `npm run build` first; port 5199 may be held by a stale
-  server from another worktree (use `APP_PORT=<free port>`). A ported dialog's baseline is retired by adding `contains`
-  to its scenario, listing the name in `nonSnapshotScenarios` (`scripts/check-legacy-snapshots.mjs`) and deleting the
-  `.html`; done for the separate-works, edit-metadata and remove-work dialogs.
+- Legacy e2e: `vite preview` serves `web/dist`, so run `npm run build` first; port 5199 may be held by a stale server
+  from another worktree (use `APP_PORT=<free port>`). A ported dialog's baseline is retired by adding `contains` to its
+  scenario, listing the name in `nonSnapshotScenarios` (`scripts/check-legacy-snapshots.mjs`) and deleting the `.html`.
