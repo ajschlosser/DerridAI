@@ -93,7 +93,6 @@ export const recordDialogs = createRecordDialogs({
   renderView,
   restoreRecordHistoryVersion,
   sameValue,
-  selectedIndex,
   selectedRecord,
   selectedReviewItems: () => selectedReviewItems(state),
   shell,
