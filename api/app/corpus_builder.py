@@ -64,7 +64,6 @@ from .concurrency import (
 )
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
-from .persistence_errors import PersistenceBusyError
 from .corpus_build_lifecycle import BuildLifecycleMixin
 from .corpus_editorial_memory import EditorialMemoryMixin
 from .corpus_enrichment_helpers import (
@@ -335,6 +334,7 @@ from .operation_events import (
     note_resource_changed,
 )
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
+from .persistence_errors import PersistenceBusyError
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
 from .rag import _citation_strings, chat_complete
