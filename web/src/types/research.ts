@@ -139,6 +139,7 @@ export type ResearchClaimProvenance = {
 };
 
 export type ResearchResult = {
+  research_thread?: Record<string, unknown> | null;
   prompt?: string;
   answer?: string;
   raw_answer?: string;

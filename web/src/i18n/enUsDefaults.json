@@ -9635,5 +9635,16 @@
   "pipelines.strategy.query_research_contextualize.label": "Bilingual follow-up contextualization",
   "pipelines.strategy.query_research_contextualize.description": "Resolve conversational references in the bilingual query call, preserve the original question, and report fallback.",
   "pipelines.data_type.thread_context": "Advisory thread context",
-  "research.threads_import_legacy": "Import saved answers as threads (next batch)"
+  "research.threads_import_legacy": "Import saved answers as threads (next batch)",
+  "research.thread_context_audit": "Follow-up context and retrieval query",
+  "pipelines.config.max_turns.label": "Maximum prior turns",
+  "pipelines.config.max_turns.help": "Keep the preceding completed turn and at most this many prior turns.",
+  "pipelines.config.max_characters.label": "History character budget",
+  "pipelines.config.max_characters.help": "Bound the advisory history separately from documentary evidence.",
+  "pipelines.config.max_answer_characters.label": "Prior answer character limit",
+  "pipelines.config.max_answer_characters.help": "Oversized preceding answers fail visibly; older oversized answers are omitted with warnings.",
+  "pipelines.config.include_answers.label": "Include prior generated answers",
+  "pipelines.config.include_answers.help": "Prior answers remain advisory and cannot supply citation support.",
+  "pipelines.config.semantic.label": "Rank older turns locally",
+  "pipelines.config.semantic.help": "Use an already loaded local ranker; fall back to recent turns when unavailable."
 }

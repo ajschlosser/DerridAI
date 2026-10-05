@@ -159,6 +159,10 @@ function openRelationships(index: number, mode: "trace" | "model") {
             @open-record="openRecord"
             @open-relationships="openRelationships"
           />
+          <details v-if="result.research_thread">
+            <summary>{{ i18n.t("research.thread_context_audit") }}</summary>
+            <pre>{{ JSON.stringify(result.research_thread, null, 2) }}</pre>
+          </details>
         </details>
       </template>
       <p v-else-if="!answer.isFetching.value && !answer.error.value">

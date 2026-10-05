@@ -547,6 +547,7 @@ test("Library imports legacy singletons and preserves thread search URL state", 
   await search.fill("Levinas");
   await search.press("Tab");
   await expect(page).toHaveURL(/thread_q=Levinas/);
+  await page.emulateMedia({ reducedMotion: "reduce" });
   for (const theme of ["light", "dark"]) {
     await page.evaluate(
       (value) => document.documentElement.setAttribute("data-color-scheme", value),

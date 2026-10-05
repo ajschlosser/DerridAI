@@ -21,7 +21,7 @@ import { toast } from "../composables/notifications";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ResearchThreadBrowser from "../components/research/ResearchThreadBrowser.vue";
-import { researchThreadsApi } from "../api/researchThreads";
+import { useLegacyThreadImport } from "../features/research/useLegacyThreadImport";
 import type { ResearchTurn } from "../types/researchThreads";
 import AppIcon from "../components/AppIcon.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
@@ -41,42 +41,21 @@ import {
   rerunResponseFaqRecord,
 } from "../domain/sharedResponseFaq";
 
-const importBusy = ref(false);
-const importError = ref("");
-const importOffset = ref(0);
-const importHasMore = ref(true);
-const libraryRefresh = ref(0);
-let importRequest = 0;
-async function importLegacy() {
-  if (importBusy.value || !auth.can("rag.run")) return;
-  const request = ++importRequest;
-  importBusy.value = true;
-  importError.value = "";
-  try {
-    const result = await researchThreadsApi.importLegacy(importOffset.value);
-    if (request !== importRequest) return;
-    importOffset.value = result.next_offset;
-    importHasMore.value = result.has_more;
-    ++libraryRefresh.value;
-  } catch (error) {
-    if (request === importRequest)
-      importError.value = error instanceof Error ? error.message : String(error);
-  } finally {
-    if (request === importRequest) {
-      importBusy.value = false;
-      if (importHasMore.value && !importError.value) void importLegacy();
-    }
-  }
-}
+const {
+  busy: importBusy,
+  error: importError,
+  hasMore: importHasMore,
+  refreshKey: libraryRefresh,
+  retry: importLegacy,
+} = useLegacyThreadImport();
+let pendingThreadQuery: Record<string, string | undefined> = {};
 function libraryFilters(value: { search: string; offset: number; includeArchived: boolean }) {
-  void router.replace({
-    query: {
-      ...route.query,
-      thread_q: value.search || undefined,
-      thread_offset: value.offset ? String(value.offset) : undefined,
-      thread_archived: value.includeArchived ? "true" : undefined,
-    },
-  });
+  pendingThreadQuery = {
+    thread_q: value.search || undefined,
+    thread_offset: value.offset ? String(value.offset) : undefined,
+    thread_archived: value.includeArchived ? "true" : undefined,
+  };
+  void router.replace({ query: { ...route.query, ...pendingThreadQuery } });
 }
 function selectLibraryThread(id: string) {
   void router.push({ path: "/rag", query: { thread: id } });
@@ -86,21 +65,6 @@ function openLibraryTurn(turn: ResearchTurn) {
 }
 const i18n = useI18nStore();
 const auth = useAuthStore();
-watch(
-  () => [auth.user?.id, auth.user?.role, auth.can("rag.run")],
-  () => {
-    ++importRequest;
-    importBusy.value = false;
-    importError.value = "";
-    importOffset.value = 0;
-    importHasMore.value = true;
-    if (auth.can("rag.run")) void importLegacy();
-  },
-  { immediate: true },
-);
-onBeforeUnmount(() => {
-  ++importRequest;
-});
 const router = useRouter();
 const route = useRoute();
 const routeText = (value: unknown) =>
@@ -208,7 +172,14 @@ async function syncFaqUrl() {
   try {
     await router.replace({
       path: "/faq",
-      query: { ...route.query, q: undefined, page: undefined, id: undefined, ...next },
+      query: {
+        ...route.query,
+        ...pendingThreadQuery,
+        q: undefined,
+        page: undefined,
+        id: undefined,
+        ...next,
+      },
     });
   } finally {
     writingRoute = false;

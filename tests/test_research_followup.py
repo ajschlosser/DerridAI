@@ -10,7 +10,11 @@ import pytest
 sys.modules.setdefault("chromadb", types.SimpleNamespace())
 from app import rag
 from app.models import RAGRunRequest
-from app.research_followup import advisory_context, contextual_query_prompt, validate_contextual_query
+from app.research_followup import (
+    advisory_context,
+    contextual_query_prompt,
+    validate_contextual_query,
+)
 
 
 def audit(question="What about Levinas?"):
@@ -81,7 +85,7 @@ def test_pipeline_keeps_original_question_current_evidence_and_visible_fallback(
     assert result["query_metadata"]["response_language"] == "en"
     assert result["query_metadata"]["prompt_instructions"] == "Keep negation"
     assert "RESPONSE MEMORY" in calls[-1] and "CLAIM MEMORY" in calls[-1]
-    assert "<CURRENT_QUESTION>\n" + question in calls[-1]
+    assert ("<CURRENT_QUESTION>\n" if history else "<MASTER PROMPT>\n") + question in calls[-1]
     if history:
         assert len(calls) == 2
         assert result["research_thread"]["context_consumed"]

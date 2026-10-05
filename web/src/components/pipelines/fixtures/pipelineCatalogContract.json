@@ -13,7 +13,10 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["source_provenance", "citation_binding"],
+      "required_guarantees": [
+        "source_provenance",
+        "citation_binding"
+      ],
       "run_inputs": [
         {
           "name": "query",
@@ -83,7 +86,11 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["direct_support", "source_provenance", "reviewer_approval"],
+      "required_guarantees": [
+        "direct_support",
+        "source_provenance",
+        "reviewer_approval"
+      ],
       "run_inputs": [
         {
           "name": "query",
@@ -153,7 +160,10 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["source_provenance", "reviewer_approval"],
+      "required_guarantees": [
+        "source_provenance",
+        "reviewer_approval"
+      ],
       "run_inputs": [
         {
           "name": "query",
@@ -223,7 +233,10 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["source_provenance", "reviewer_approval"],
+      "required_guarantees": [
+        "source_provenance",
+        "reviewer_approval"
+      ],
       "run_inputs": [
         {
           "name": "query",
@@ -293,7 +306,11 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["backend_validation", "source_provenance", "reviewer_approval"],
+      "required_guarantees": [
+        "backend_validation",
+        "source_provenance",
+        "reviewer_approval"
+      ],
       "run_inputs": [
         {
           "name": "context",
@@ -363,7 +380,9 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["access_outside_pipeline"],
+      "required_guarantees": [
+        "access_outside_pipeline"
+      ],
       "run_inputs": [
         {
           "name": "query",
@@ -433,7 +452,9 @@
       "output_type": "context_packet",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["reviewed_precedents_only"],
+      "required_guarantees": [
+        "reviewed_precedents_only"
+      ],
       "run_inputs": [
         {
           "name": "query",
@@ -503,7 +524,9 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["reviewed_precedents_only"],
+      "required_guarantees": [
+        "reviewed_precedents_only"
+      ],
       "run_inputs": [
         {
           "name": "query",
@@ -573,7 +596,10 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["backend_validation", "reviewer_approval"],
+      "required_guarantees": [
+        "backend_validation",
+        "reviewer_approval"
+      ],
       "run_inputs": [
         {
           "name": "context",
@@ -643,7 +669,9 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": false,
-      "required_guarantees": ["eligible_memory_only"],
+      "required_guarantees": [
+        "eligible_memory_only"
+      ],
       "run_inputs": [
         {
           "name": "query",
@@ -713,7 +741,9 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": false,
-      "required_guarantees": ["eligible_memory_only"],
+      "required_guarantees": [
+        "eligible_memory_only"
+      ],
       "run_inputs": [
         {
           "name": "query",
@@ -783,7 +813,9 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["backend_validation"],
+      "required_guarantees": [
+        "backend_validation"
+      ],
       "run_inputs": [
         {
           "name": "context",
@@ -853,7 +885,10 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["backend_validation", "text_conservation"],
+      "required_guarantees": [
+        "backend_validation",
+        "text_conservation"
+      ],
       "run_inputs": [
         {
           "name": "context",
@@ -923,7 +958,10 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["backend_validation", "reviewer_approval"],
+      "required_guarantees": [
+        "backend_validation",
+        "reviewer_approval"
+      ],
       "run_inputs": [
         {
           "name": "context",
@@ -1513,7 +1551,9 @@
       "complexity": {
         "time": "O(P)",
         "space": "O(P)",
-        "variables": ["P"],
+        "variables": [
+          "P"
+        ],
         "driver": "storage",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -1567,7 +1607,11 @@
       "complexity": {
         "time": "O(N·L + k log k)",
         "space": "O(N)",
-        "variables": ["N", "L", "k"],
+        "variables": [
+          "N",
+          "L",
+          "k"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": true,
@@ -1621,7 +1665,9 @@
       "complexity": {
         "time": "O(n)",
         "space": "O(n)",
-        "variables": ["n"],
+        "variables": [
+          "n"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -1689,7 +1735,9 @@
       "complexity": {
         "time": "O(n log n)",
         "space": "O(n)",
-        "variables": ["n"],
+        "variables": [
+          "n"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -1761,7 +1809,9 @@
       "complexity": {
         "time": "O(n log n)",
         "space": "O(n)",
-        "variables": ["n"],
+        "variables": [
+          "n"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -1788,13 +1838,19 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "structured_output"],
+      "capabilities": [
+        "chat_model",
+        "structured_output"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["primary", "review"],
+            "enum": [
+              "primary",
+              "review"
+            ],
             "default": "primary"
           },
           "attempts": {
@@ -1830,7 +1886,10 @@
       "complexity": {
         "time": "O(P + g)",
         "space": "O(P + g)",
-        "variables": ["P", "g"],
+        "variables": [
+          "P",
+          "g"
+        ],
         "driver": "llm_generation",
         "model_calls": "attempts",
         "scales_with_scope": false,
@@ -1857,13 +1916,20 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "closed_choice"],
+      "capabilities": [
+        "chat_model",
+        "closed_choice"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["chain", "primary", "review"],
+            "enum": [
+              "chain",
+              "primary",
+              "review"
+            ],
             "default": "chain"
           },
           "attempts": {
@@ -1874,7 +1940,10 @@
           },
           "candidate_scope": {
             "type": "string",
-            "enum": ["all", "input_or_all"],
+            "enum": [
+              "all",
+              "input_or_all"
+            ],
             "default": "all"
           },
           "candidate_limit": {
@@ -1910,7 +1979,11 @@
       "complexity": {
         "time": "O(S·L + g)",
         "space": "O(S·L)",
-        "variables": ["S", "L", "g"],
+        "variables": [
+          "S",
+          "L",
+          "g"
+        ],
         "driver": "llm_generation",
         "model_calls": "attempts",
         "scales_with_scope": false,
@@ -1937,13 +2010,19 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "structured_output"],
+      "capabilities": [
+        "chat_model",
+        "structured_output"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["primary", "review"],
+            "enum": [
+              "primary",
+              "review"
+            ],
             "default": "primary"
           },
           "attempts": {
@@ -1979,7 +2058,10 @@
       "complexity": {
         "time": "O(P + g)",
         "space": "O(P + g)",
-        "variables": ["P", "g"],
+        "variables": [
+          "P",
+          "g"
+        ],
         "driver": "llm_generation",
         "model_calls": "attempts",
         "scales_with_scope": false,
@@ -2006,7 +2088,9 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model"],
+      "capabilities": [
+        "chat_model"
+      ],
       "config_schema": {},
       "inputs": [
         {
@@ -2051,7 +2135,10 @@
       "complexity": {
         "time": "O(P + g)",
         "space": "O(P + g)",
-        "variables": ["P", "g"],
+        "variables": [
+          "P",
+          "g"
+        ],
         "driver": "llm_generation",
         "model_calls": "1",
         "scales_with_scope": false,
@@ -2078,7 +2165,9 @@
       "output_type": "evaluation",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model"],
+      "capabilities": [
+        "chat_model"
+      ],
       "config_schema": {},
       "inputs": [
         {
@@ -2114,7 +2203,10 @@
       "complexity": {
         "time": "O(P + g)",
         "space": "O(P + g)",
-        "variables": ["P", "g"],
+        "variables": [
+          "P",
+          "g"
+        ],
         "driver": "llm_generation",
         "model_calls": "1",
         "scales_with_scope": false,
@@ -2141,13 +2233,19 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "structured_output"],
+      "capabilities": [
+        "chat_model",
+        "structured_output"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["primary", "review"],
+            "enum": [
+              "primary",
+              "review"
+            ],
             "default": "primary"
           },
           "attempts": {
@@ -2183,7 +2281,10 @@
       "complexity": {
         "time": "O(P + g)",
         "space": "O(P + g)",
-        "variables": ["P", "g"],
+        "variables": [
+          "P",
+          "g"
+        ],
         "driver": "llm_generation",
         "model_calls": "attempts",
         "scales_with_scope": false,
@@ -2210,13 +2311,19 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "structured_output"],
+      "capabilities": [
+        "chat_model",
+        "structured_output"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["primary", "review"],
+            "enum": [
+              "primary",
+              "review"
+            ],
             "default": "primary"
           },
           "attempts": {
@@ -2252,7 +2359,10 @@
       "complexity": {
         "time": "O(P + g)",
         "space": "O(P + g)",
-        "variables": ["P", "g"],
+        "variables": [
+          "P",
+          "g"
+        ],
         "driver": "llm_generation",
         "model_calls": "attempts",
         "scales_with_scope": false,
@@ -2279,13 +2389,19 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "structured_output"],
+      "capabilities": [
+        "chat_model",
+        "structured_output"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["primary", "review"],
+            "enum": [
+              "primary",
+              "review"
+            ],
             "default": "primary"
           },
           "attempts": {
@@ -2321,7 +2437,10 @@
       "complexity": {
         "time": "O(P + g)",
         "space": "O(P + g)",
-        "variables": ["P", "g"],
+        "variables": [
+          "P",
+          "g"
+        ],
         "driver": "llm_generation",
         "model_calls": "attempts",
         "scales_with_scope": false,
@@ -2382,7 +2501,9 @@
       "complexity": {
         "time": "O(n)",
         "space": "O(n)",
-        "variables": ["n"],
+        "variables": [
+          "n"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -2450,7 +2571,10 @@
       "complexity": {
         "time": "O(n·L)",
         "space": "O(n·L)",
-        "variables": ["n", "L"],
+        "variables": [
+          "n",
+          "L"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -2513,7 +2637,10 @@
       "complexity": {
         "time": "O(n·L)",
         "space": "O(n·L)",
-        "variables": ["n", "L"],
+        "variables": [
+          "n",
+          "L"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -2567,7 +2694,9 @@
       "complexity": {
         "time": "O(q)",
         "space": "O(q)",
-        "variables": ["q"],
+        "variables": [
+          "q"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -2648,7 +2777,9 @@
       "output_type": "query",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model"],
+      "capabilities": [
+        "chat_model"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -2693,7 +2824,10 @@
       "complexity": {
         "time": "O(P + g)",
         "space": "O(P + g)",
-        "variables": ["P", "g"],
+        "variables": [
+          "P",
+          "g"
+        ],
         "driver": "llm_generation",
         "model_calls": "0 or 1",
         "scales_with_scope": false,
@@ -2720,7 +2854,9 @@
       "output_type": "query",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model"],
+      "capabilities": [
+        "chat_model"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -2756,7 +2892,10 @@
       "complexity": {
         "time": "O(q + g)",
         "space": "O(q + g)",
-        "variables": ["q", "g"],
+        "variables": [
+          "q",
+          "g"
+        ],
         "driver": "llm_generation",
         "model_calls": "1",
         "scales_with_scope": false,
@@ -2783,7 +2922,9 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["cross_encoder"],
+      "capabilities": [
+        "cross_encoder"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -2841,7 +2982,11 @@
       "complexity": {
         "time": "O(n·(q + L)²)",
         "space": "O(n)",
-        "variables": ["n", "q", "L"],
+        "variables": [
+          "n",
+          "q",
+          "L"
+        ],
         "driver": "model_inference",
         "model_calls": "n",
         "scales_with_scope": false,
@@ -2904,7 +3049,10 @@
       "complexity": {
         "time": "O(n·L + n log n)",
         "space": "O(n)",
-        "variables": ["n", "L"],
+        "variables": [
+          "n",
+          "L"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -2931,7 +3079,10 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["embedding", "chroma"],
+      "capabilities": [
+        "embedding",
+        "chroma"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -2976,7 +3127,12 @@
       "complexity": {
         "time": "O(q + d·log N + k)",
         "space": "O(k·d)",
-        "variables": ["q", "d", "N", "k"],
+        "variables": [
+          "q",
+          "d",
+          "N",
+          "k"
+        ],
         "driver": "embedding",
         "model_calls": "1",
         "scales_with_scope": true,
@@ -3003,7 +3159,10 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["embedding", "chroma"],
+      "capabilities": [
+        "embedding",
+        "chroma"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -3044,7 +3203,12 @@
       "complexity": {
         "time": "O(q + d·log N + k)",
         "space": "O(k·d)",
-        "variables": ["q", "d", "N", "k"],
+        "variables": [
+          "q",
+          "d",
+          "N",
+          "k"
+        ],
         "driver": "embedding",
         "model_calls": "1",
         "scales_with_scope": true,
@@ -3121,7 +3285,11 @@
       "complexity": {
         "time": "O(min(N, C)·L)",
         "space": "O(N)",
-        "variables": ["N", "C", "L"],
+        "variables": [
+          "N",
+          "C",
+          "L"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": true,
@@ -3184,7 +3352,10 @@
       "complexity": {
         "time": "O(N·L)",
         "space": "O(N)",
-        "variables": ["N", "L"],
+        "variables": [
+          "N",
+          "L"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": true,
@@ -3211,7 +3382,10 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["embedding", "chroma"],
+      "capabilities": [
+        "embedding",
+        "chroma"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -3247,7 +3421,12 @@
       "complexity": {
         "time": "O(q + d·log N + k)",
         "space": "O(k·d)",
-        "variables": ["q", "d", "N", "k"],
+        "variables": [
+          "q",
+          "d",
+          "N",
+          "k"
+        ],
         "driver": "embedding",
         "model_calls": "1",
         "scales_with_scope": true,
@@ -3274,7 +3453,10 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["embedding", "chroma"],
+      "capabilities": [
+        "embedding",
+        "chroma"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -3315,7 +3497,12 @@
       "complexity": {
         "time": "O(q + d·log N + k)",
         "space": "O(k·d)",
-        "variables": ["q", "d", "N", "k"],
+        "variables": [
+          "q",
+          "d",
+          "N",
+          "k"
+        ],
         "driver": "embedding",
         "model_calls": "1",
         "scales_with_scope": true,
@@ -3369,7 +3556,9 @@
       "complexity": {
         "time": "O(k)",
         "space": "O(k)",
-        "variables": ["k"],
+        "variables": [
+          "k"
+        ],
         "driver": "storage",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -3396,7 +3585,9 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["embedding"],
+      "capabilities": [
+        "embedding"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -3437,7 +3628,10 @@
       "complexity": {
         "time": "O(N·d)",
         "space": "O(N·d)",
-        "variables": ["N", "d"],
+        "variables": [
+          "N",
+          "d"
+        ],
         "driver": "embedding",
         "model_calls": "1",
         "scales_with_scope": true,
@@ -3509,7 +3703,9 @@
       "complexity": {
         "time": "O(N)",
         "space": "O(N)",
-        "variables": ["N"],
+        "variables": [
+          "N"
+        ],
         "driver": "storage",
         "model_calls": "0",
         "scales_with_scope": true,
@@ -3581,7 +3777,10 @@
       "complexity": {
         "time": "O(N·L)",
         "space": "O(N)",
-        "variables": ["N", "L"],
+        "variables": [
+          "N",
+          "L"
+        ],
         "driver": "storage",
         "model_calls": "0",
         "scales_with_scope": true,
@@ -3644,7 +3843,10 @@
       "complexity": {
         "time": "O(N·L)",
         "space": "O(N)",
-        "variables": ["N", "L"],
+        "variables": [
+          "N",
+          "L"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": true,
@@ -3712,7 +3914,9 @@
       "complexity": {
         "time": "O(n log n)",
         "space": "O(n)",
-        "variables": ["n"],
+        "variables": [
+          "n"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -3766,7 +3970,9 @@
       "complexity": {
         "time": "O(n log n)",
         "space": "O(n)",
-        "variables": ["n"],
+        "variables": [
+          "n"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -3857,7 +4063,11 @@
       "complexity": {
         "time": "O(n·k²·d)",
         "space": "O(n·d)",
-        "variables": ["n", "k", "d"],
+        "variables": [
+          "n",
+          "k",
+          "d"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -3920,7 +4130,10 @@
       "complexity": {
         "time": "O(n·k)",
         "space": "O(n)",
-        "variables": ["n", "k"],
+        "variables": [
+          "n",
+          "k"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -3992,7 +4205,9 @@
       "complexity": {
         "time": "O(n log n)",
         "space": "O(n)",
-        "variables": ["n"],
+        "variables": [
+          "n"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -4046,7 +4261,9 @@
       "complexity": {
         "time": "O(g)",
         "space": "O(g)",
-        "variables": ["g"],
+        "variables": [
+          "g"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": false,
@@ -4073,7 +4290,9 @@
       "output_type": "candidate_set",
       "deterministic": true,
       "invokes_llm": false,
-      "capabilities": ["evidence_validation"],
+      "capabilities": [
+        "evidence_validation"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -4118,7 +4337,10 @@
       "complexity": {
         "time": "O(N·L)",
         "space": "O(N)",
-        "variables": ["N", "L"],
+        "variables": [
+          "N",
+          "L"
+        ],
         "driver": "cpu",
         "model_calls": "0",
         "scales_with_scope": true,
@@ -4172,7 +4394,9 @@
       "complexity": {
         "time": "O(n)",
         "space": "O(n)",
-        "variables": ["n"],
+        "variables": [
+          "n"
+        ],
         "driver": "storage",
         "model_calls": "0",
         "scales_with_scope": false,

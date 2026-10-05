@@ -58,6 +58,10 @@ def saved_turn_result(turn: dict[str, Any], owner: str, cache: Any) -> dict[str,
         or record.get("question") != turn["user_question"]
     ):
         raise ThreadNotFound(turn["turn_id"])
+    from .pipelines.store import pipeline_store
+    trace = pipeline_store.get_run(str(turn["research_run_id"]))
+    if trace is not None and trace.owner != owner:
+        raise ThreadNotFound(turn["turn_id"])
     return {
         "id": turn["research_run_id"], "owner": owner, "turn_id": turn["turn_id"],
         "thread_id": turn["thread_id"], "status": "completed", "prompt": turn["user_question"],
@@ -71,7 +75,9 @@ def saved_turn_result(turn: dict[str, Any], owner: str, cache: Any) -> dict[str,
             "research_thread": audit,
             "pipeline": record.get("pipeline") or {},
             "prompt_contract": record.get("prompt_contract"),
-            "query_contract": record.get("query_contract"), "response_cache": {"record_id": record_id},
+            "query_contract": record.get("query_contract"),
+            "pipeline_trace": trace.model_dump(mode="json") if trace else None,
+            "auto_grade": record.get("grade"), "response_cache": {"record_id": record_id},
         }),
         "result_source": "saved_response",
     }

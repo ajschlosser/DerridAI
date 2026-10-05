@@ -66,7 +66,7 @@ const i18n = useI18nStore();
         type="search"
         :value="search"
         maxlength="200"
-        @change="emit('search', ($event.target as HTMLInputElement).value)"
+        @input="emit('search', ($event.target as HTMLInputElement).value)"
       />
     </label>
     <label class="research-thread-archive-filter">
@@ -177,7 +177,6 @@ const i18n = useI18nStore();
           </article>
         </li>
       </ol>
-      <p>{{ i18n.t("research.thread_context_pending") }}</p>
     </section>
   </section>
 </template>
