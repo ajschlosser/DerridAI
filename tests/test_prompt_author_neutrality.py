@@ -74,7 +74,7 @@ def test_builtin_prompt_sources_do_not_hardcode_authors_or_works() -> None:
 def test_record_audit_and_research_prompts_use_document_author_context() -> None:
     assert "record_context.document_author" in llm.SYSTEM_PROMPT
     assert "default author" in llm.SYSTEM_PROMPT
-    assert "document_author from each evidence record" in rag.FOCUSED_PROMPT
+    assert "source-document author" in rag.FOCUSED_PROMPT
     assert "Do not equate document authorship with proposition ownership" in rag.FOCUSED_PROMPT
     root = Path(__file__).resolve().parents[1]
     enrichment_source = (root / "api/app/corpus_metadata_enrichment_execution.py").read_text(

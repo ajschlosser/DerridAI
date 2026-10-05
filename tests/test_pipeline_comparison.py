@@ -319,7 +319,7 @@ def test_balanced_research_reserves_explicitly_named_author_scope() -> None:
     assert authors == {"Jacques Derrida", "Emmanuel Levinas"}
     assert result["retrieval"]["explicit_scope_seed_count"] == 2
     assert {
-        item["document_author"]
+        item["source_document_author"]
         for item in result["retrieval"]["explicit_scope_groups"]
         if item["matched"]
     } == {"Jacques Derrida", "Emmanuel Levinas"}
@@ -385,5 +385,5 @@ def test_cross_encoder_receives_source_identity_separately_from_mentions(monkeyp
     assert warning is None
     assert ranked is not None
     candidate_text = captured["pairs"][0][1]
-    assert "Document author: Jacques Derrida" in candidate_text
+    assert "Source document author: Jacques Derrida" in candidate_text
     assert "Quoted author: Emmanuel Levinas" in candidate_text
