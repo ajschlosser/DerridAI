@@ -3594,6 +3594,15 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             if progress is not None:
                 build["progress"] = max(0.0, min(1.0, float(progress)))
             build.update(changes)
+            # Once cancellation is acknowledged, ordinary worker progress must
+            # not visually erase the cancelling state while in-flight work
+            # unwinds. Terminal cancellation/failure updates still replace it.
+            if (
+                build.get("cancel_requested")
+                and str(build.get("status") or "") in {"queued", "running"}
+                and str(build.get("stage") or "") not in {"cancelled", "paused"}
+            ):
+                build["stage"] = "cancelling"
             current_stage = str(build.get("stage") or "")
             current_status = str(build.get("status") or "")
             if current_stage != prior_stage or current_status != prior_status:
