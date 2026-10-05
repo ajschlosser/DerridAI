@@ -1765,6 +1765,31 @@ class PdfCorpusRepository:
             self.save_source_units(build_id, normalized)
         return normalized
 
+    def source_units_for_validation(self, build_id: str) -> list[dict[str, Any]]:
+        """Read a normalized SourceUnit snapshot without performing durable writes.
+
+        Validation callbacks may run optimistically and be retried when canonical
+        Record/build state changes. Calling load_source_units() there is unsafe for
+        legacy builds because its on-demand migration persists source_units.jsonl
+        and changes build projection state during the callback itself. This helper
+        performs the same normalization in memory and leaves persistence to explicit
+        migration/structural-edit paths.
+        """
+        build = self.get_build(build_id)
+        path = self.build_source_units_path(build_id)
+        rows: list[dict[str, Any]] = []
+        if path.exists():
+            with path.open("r", encoding="utf-8") as handle:
+                rows = [json.loads(line) for line in handle if line.strip()]
+        blocks = self.load_blocks(str(build["asset_id"]))
+        from .corpus_record_restructure import normalize_source_units
+
+        return normalize_source_units(
+            rows,
+            blocks,
+            source_document_id=str(build["asset_id"]),
+        )
+
     def normalize_source_units(self, build_id: str) -> list[dict[str, Any]]:
         """Public migration helper for builds created before source units existed."""
         return self.load_source_units(build_id)
@@ -5360,17 +5385,20 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         )
         build["source_quality"] = page_source_quality_report(blocks)
         profile = self._profile_of_build(build)
-        source_units = self.repo.load_source_units(str(build["build_id"]))
+        source_units = self.repo.source_units_for_validation(str(build["build_id"]))
         # source_extracted_text is a deterministic projection of the authoritative
         # SourceUnits. Reconcile it before validation so structural edits are not
         # judged against stale legacy block projections.
         synchronize_record_source_projection(records, source_units)
-        validation = self.validate_records(
-            blocks,
-            records,
-            profile,
-            source_units=source_units,
-        )
+        validation_profile = {
+            **profile,
+            "_validation_source_units": source_units,
+            "_check_corpus_conservation": True,
+        }
+        # Keep the public three-argument validate_records call shape. Several
+        # coordination tests and integrations wrap this method to observe/retry
+        # validation, and topology support must not bypass that seam.
+        validation = self.validate_records(blocks, records, validation_profile)
         build["record_count"] = len(records)
         build["validation"] = validation
         # Metadata completion is derived from persisted record state, never from a
@@ -5552,13 +5580,12 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 build.get("manifest") or {},
                 bounds_confirmed=bool(build.get("manifest_confirmed_at")),
             )
-            local = self.validate_records(
-                blocks,
-                [record],
-                profile,
-                source_units=self.repo.load_source_units(build_id),
-                check_corpus_conservation=False,
-            )
+            local_profile = {
+                **profile,
+                "_validation_source_units": self.repo.source_units_for_validation(build_id),
+                "_check_corpus_conservation": False,
+            }
+            local = self.validate_records(blocks, [record], local_profile)
             existing = dict(build.get("validation") or {})
             record_id = str(record.get("record_id") or "")
             list_fields = (
