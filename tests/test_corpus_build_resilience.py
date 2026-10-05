@@ -28,11 +28,12 @@ need vector-store dependencies; `_blocks` and `_build` are shared helpers below.
 from __future__ import annotations
 
 import json
-import sqlite3
 import sys
 import types
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+from app.persistence_errors import PersistenceBusyError
 
 import pytest
 
@@ -541,7 +542,7 @@ def test_enrichment_retries_transient_sqlite_writer_contention(monkeypatch, tmp_
     def flaky(*args):
         attempts.append(len(attempts))
         if len(attempts) < 3:
-            raise sqlite3.OperationalError("database is locked")
+            raise PersistenceBusyError("storage busy")
         return [{"record_id": "settled"}]
 
     monkeypatch.setattr(manager, "_schedule_build_enrichment", flaky)
@@ -572,7 +573,7 @@ def test_exhausted_sqlite_contention_interrupts_instead_of_borking_build(monkeyp
         manager,
         "_schedule_build_enrichment_with_lock_recovery",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            sqlite3.OperationalError("database is locked")
+            PersistenceBusyError("storage busy")
         ),
     )
 
