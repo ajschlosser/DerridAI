@@ -64,6 +64,7 @@ from .concurrency import (
 )
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
+from .persistence_errors import PersistenceBusyError
 from .corpus_build_lifecycle import BuildLifecycleMixin
 from .corpus_editorial_memory import EditorialMemoryMixin
 from .corpus_enrichment_helpers import (
@@ -880,7 +881,7 @@ class RecordStateConflict(ValueError):
 
 
 def _is_sqlite_lock_error(exc: BaseException) -> bool:
-    """Return whether SQLite rejected work because another writer still owns the database."""
+    """Adapter-local recognition of SQLite's transient lock vocabulary."""
 
     return isinstance(exc, sqlite3.OperationalError) and (
         "database is locked" in str(exc).casefold()
@@ -1857,18 +1858,20 @@ class PdfCorpusRepository:
 
     @contextmanager
     def _records_db(self, build_id: str) -> Iterator[sqlite3.Connection]:
+        """Open the SQLite adapter and translate native contention at its boundary."""
+
         path = self.build_records_db_path(build_id)
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(path, timeout=30)
-        # Corpus Builder performs frequent short canonical writes while review,
-        # enrichment checkpoints, and derived projections can hold coherent read
-        # snapshots. WAL lets those readers coexist with the single SQLite writer
-        # instead of turning an ordinary enrichment checkpoint into a 30-second
-        # lock failure. Keep an explicit busy timeout as protection against true
-        # writer/writer contention across repository instances or processes.
-        connection.execute("PRAGMA busy_timeout=30000")
         try:
+            # Corpus Builder performs frequent short canonical writes while review,
+            # enrichment checkpoints, and derived projections can hold coherent read
+            # snapshots. WAL lets those readers coexist with the single SQLite writer
+            # instead of turning an ordinary enrichment checkpoint into a 30-second
+            # lock failure. Keep an explicit busy timeout as protection against true
+            # writer/writer contention across repository instances or processes.
+            connection.execute("PRAGMA busy_timeout=30000")
             stat = path.stat()
             identity = (stat.st_dev, stat.st_ino, int(connection.execute("PRAGMA schema_version").fetchone()[0]))
             if self._initialized_record_databases.get(build_id) != identity:
@@ -1883,6 +1886,10 @@ class PdfCorpusRepository:
                         del self._initialized_record_databases[next(iter(self._initialized_record_databases))]
             with connection:
                 yield connection
+        except sqlite3.OperationalError as exc:
+            if isinstance(exc, PersistenceBusyError):
+                raise PersistenceBusyError("Canonical Record storage is temporarily busy.") from exc
+            raise
         finally:
             connection.close()
 
@@ -4413,7 +4420,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     interrupted_stage=stage,
                     finished_at=iso_now(),
                     error=(
-                        f"{stage}: SQLite remained busy while checkpointing. "
+                        f"{stage}: Durable storage remained busy while checkpointing. "
                         "Completed enrichment checkpoints were preserved; resume to continue."
                     ),
                     resumable=True,
@@ -5094,10 +5101,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         manifest: dict[str, Any],
         records: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Retry transient SQLite writer contention without discarding enrichment progress.
+        """Retry transient storage contention without discarding enrichment progress.
 
         Each enrichment family and completed Record is checkpointed independently.
-        If a competing review/projection writer temporarily owns SQLite, rerunning
+        If a competing review/projection writer temporarily owns storage, rerunning
         the scheduler is safe: completed families remain complete and unfinished
         Records are reconstructed from the canonical store before the next attempt.
         """
@@ -5112,9 +5119,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     manifest,
                     current_records,
                 )
-            except sqlite3.OperationalError as exc:
-                if not _is_sqlite_lock_error(exc):
-                    raise
+            except PersistenceBusyError:
                 if attempt >= len(delays):
                     raise
                 delay = delays[attempt]
