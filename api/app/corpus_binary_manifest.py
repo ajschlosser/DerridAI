@@ -64,10 +64,14 @@ def executable_name(target: BinaryTarget) -> str:
     return "derridai.exe" if target.startswith("windows-") else "derridai"
 
 
-def release_artifact_name(version: str, target: BinaryTarget) -> str:
-    """Return the versioned onefile release-asset filename."""
+def release_artifact_name(target: BinaryTarget) -> str:
+    """Return the stable per-release asset filename.
+
+    The Git tag carries the version, so a stable asset name lets the installer use
+    the GitHub releases/latest/download path without querying the API.
+    """
     suffix = ".exe" if target.startswith("windows-") else ""
-    return f"derridai-{version}-{target}{suffix}"
+    return f"derridai-{target}{suffix}"
 
 
 def sha256_file(path: str | Path) -> str:
