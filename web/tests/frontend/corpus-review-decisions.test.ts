@@ -22,6 +22,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const corpusBuilderApi = vi.hoisted(() => ({
   disposition: vi.fn(),
   reviewDecision: vi.fn(),
+  reviewStatus: vi.fn(),
   bulkDisposition: vi.fn(),
   undoReview: vi.fn(),
   redoReview: vi.fn(),
@@ -103,6 +104,8 @@ function setup(beforeDecision?: () => Promise<boolean>) {
   const advanceFrom = vi.fn(async () => undefined);
   const refreshBuild = vi.fn(async () => undefined);
   const refreshRecords = vi.fn(async () => undefined);
+  const reconcileRecords = vi.fn(async () => undefined);
+  const focusSourceBlocker = vi.fn(async () => undefined);
   const focusFirstMetadataBlocker = vi.fn();
   const setMessage = vi.fn();
 
@@ -136,10 +139,15 @@ function setup(beforeDecision?: () => Promise<boolean>) {
     getSelectionVersion,
     refreshBuild,
     refreshRecords,
+    reconcileRecords,
+    focusSourceBlocker,
     focusFirstMetadataBlocker,
     setMessage,
     t: (key) => key,
-    tf: (key) => key,
+    tf: (key, values) =>
+      key === "pdf_corpus.accept_blocked_metadata"
+        ? `Confirm the required metadata before accepting this record: ${values.fields}.`
+        : key,
   });
 
   return {
@@ -160,6 +168,9 @@ function setup(beforeDecision?: () => Promise<boolean>) {
     syncBuildInRail,
     selectRecord,
     advanceFrom,
+    refreshBuild,
+    reconcileRecords,
+    focusSourceBlocker,
     setMessage,
     focusFirstMetadataBlocker,
   };
@@ -208,7 +219,53 @@ describe("Corpus Builder review decisions", () => {
     expect(state.selectedRecord.value).toEqual(authoritative);
     expect(state.reviewInspectorTab.value).toBe("metadata");
     expect(state.focusFirstMetadataBlocker).toHaveBeenCalled();
-    expect(state.setMessage).toHaveBeenCalledWith("pdf_corpus.accept_blocked_metadata");
+    expect(state.setMessage).toHaveBeenCalledWith(
+      "Confirm the required metadata before accepting this record: record.speaker.",
+      "error",
+    );
+  });
+
+  it("interpolates metadata blockers even if the reviewer navigates away before the save returns", async () => {
+    const state = setup();
+    corpusBuilderApi.reviewDecision.mockResolvedValue({
+      blocked: true,
+      blocker: "metadata",
+      blocking_fields: ["speaker", "position_holder"],
+      record: record({ record_revision: 2 }),
+      build: { build_id: "b1", review_queue_counts: {} },
+    });
+
+    await state.decisions.setDisposition("accepted");
+    state.getSelectionVersion.mockReturnValue(1);
+    await state.queued[0].request(false);
+
+    expect(state.setMessage).toHaveBeenCalledWith(
+      "Confirm the required metadata before accepting this record: record.speaker, record.position_holder.",
+      "error",
+    );
+    expect(state.setMessage).not.toHaveBeenCalledWith(
+      expect.stringContaining("{fields}"),
+      expect.anything(),
+    );
+  });
+
+  it("uses generic metadata blocker copy when the server returns no field list", async () => {
+    const state = setup();
+    corpusBuilderApi.reviewDecision.mockResolvedValue({
+      blocked: true,
+      blocker: "metadata",
+      blocking_fields: [],
+      record: record({ record_revision: 2 }),
+      build: { build_id: "b1", review_queue_counts: {} },
+    });
+
+    await state.decisions.setDisposition("accepted");
+    await state.queued[0].request(false);
+
+    expect(state.setMessage).toHaveBeenCalledWith(
+      "pdf_corpus.accept_blocked_metadata_generic",
+      "error",
+    );
   });
 
   it("routes source blockers to the source review queue", async () => {
@@ -226,6 +283,7 @@ describe("Corpus Builder review decisions", () => {
 
     expect(state.reviewInspectorTab.value).toBe("source");
     expect(state.reviewQueue.value).toBe("source");
+    expect(state.focusSourceBlocker).toHaveBeenCalledTimes(1);
     expect(state.setMessage).toHaveBeenCalledWith("pdf_corpus.accept_blocked_source", "error");
   });
 
@@ -325,6 +383,51 @@ describe("Corpus Builder review decisions", () => {
     await state.queued[0].request(false);
     expect(state.selectedRecordId.value).toBe("r1");
     expect(state.selectRecord).not.toHaveBeenCalled();
+  });
+
+  it("keeps an accepted decision when the response times out after the server committed it", async () => {
+    const state = setup();
+    corpusBuilderApi.reviewDecision.mockRejectedValue(
+      new Error("Network error · timed out after 30s"),
+    );
+    corpusBuilderApi.reviewStatus.mockResolvedValue({
+      record_id: "r1",
+      record_revision: 2,
+      review_disposition: "accepted",
+      accepted: true,
+      rejected: false,
+      needs_review: false,
+    });
+
+    await state.decisions.attemptAccept();
+    expect(state.selectedRecord.value?.review_disposition).toBe("accepted");
+
+    await expect(state.queued[0].request(false)).resolves.toBeUndefined();
+
+    expect(corpusBuilderApi.reviewStatus).toHaveBeenCalledWith("b1", "r1");
+    expect(state.refreshBuild).toHaveBeenCalled();
+    expect(state.reconcileRecords).toHaveBeenCalledWith(["r1"]);
+    expect(state.selectedRecord.value?.review_disposition).toBe("accepted");
+  });
+
+  it("treats a timeout as a failure when authoritative state did not advance", async () => {
+    const state = setup();
+    const timeout = new Error("Network error · timed out after 30s");
+    corpusBuilderApi.reviewDecision.mockRejectedValue(timeout);
+    corpusBuilderApi.reviewStatus.mockResolvedValue({
+      record_id: "r1",
+      record_revision: 1,
+      review_disposition: "pending",
+      accepted: false,
+      rejected: false,
+      needs_review: true,
+    });
+
+    await state.decisions.attemptAccept();
+
+    await expect(state.queued[0].request(false)).rejects.toBe(timeout);
+    expect(state.refreshBuild).not.toHaveBeenCalled();
+    expect(state.reconcileRecords).not.toHaveBeenCalled();
   });
 
   it("rolls back only the failed decision without replacing a later selection", async () => {

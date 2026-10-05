@@ -27,7 +27,7 @@ import {
   state,
 } from "./sharedUrlState";
 import { persistPrefs, refreshShell, shell } from "./sharedWorkspaceStorage";
-import { unmountOperationsPanel } from "../runtime/operationsPanelHost";
+import { unmountOperationsPanel } from "./operationsPanelHost";
 
 // Navigation over the shared workspace state, usable without the legacy runtime. The runtime uses this same instance
 // (one URL-sync hook, one snapshot). `renderView` is the tail of every view transition: unmount the legacy operations

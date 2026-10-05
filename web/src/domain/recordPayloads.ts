@@ -99,9 +99,10 @@ export function normalizePdfLinkChanges(record: Loose, links: Loose[]): Loose {
   return changes;
 }
 
-// 0.30.11 packet discipline: API boundaries receive only fields required by
-// the operation. Audit history is intentionally opt-in because it can dwarf
-// the rest of a record after repeated edits.
+// API boundaries receive only fields required by the operation. These lists
+// contain structural/bibliographic context only; scholarly metadata is
+// discovered from the record and FieldAssertions below, so ordinary schema
+// fields never need to be added to a transport whitelist.
 export const TOUCHUP_TRANSPORT_CONTEXT_FIELDS = [
   "record_id",
   "work",
@@ -110,30 +111,7 @@ export const TOUCHUP_TRANSPORT_CONTEXT_FIELDS = [
   "year",
   "page_start",
   "page_end",
-  "region_type",
-  "region_author",
-  "primary_text",
-  "speaker",
-  "position_holder",
-  "target",
-  "discourse_role",
-  "proposition_status",
-  "semantic_function",
-  "stance",
-  "claim_scope",
   "text",
-  "topics",
-  "concepts",
-  "persons",
-  "works_referenced",
-  "is_direct_quote",
-  "quoted_speaker",
-  "quoted_author",
-  "quoted_work",
-  "quoted_position_holder",
-  "quoted_addressee",
-  "quoted_referent",
-  "quotation_chain",
   "inline_citation",
   "full_citation",
   "needs_review",
@@ -151,22 +129,9 @@ export const RAG_EVIDENCE_TRANSPORT_FIELDS = [
   "page_start",
   "page_end",
   "translator",
-  "speaker",
-  "position_holder",
-  "target",
-  "discourse_role",
-  "proposition_status",
-  "stance",
   "text",
-  "topics",
-  "concepts",
-  "persons",
   "document_language",
   "document_languages",
-  "quoted_speaker",
-  "quoted_author",
-  "quoted_work",
-  "quoted_position_holder",
   "field_assertions",
   "current_field_assertions",
 ];
@@ -220,28 +185,31 @@ function assertionFieldNames(source: Loose): string[] {
 }
 
 function customMetadataFields(source: Loose, baseFields: string[]): string[] {
+  const assertedFields = assertionFieldNames(source);
+  if (assertedFields.length) return assertedFields;
+
+  // Compatibility for records that predate FieldAssertion. New schema-defined
+  // scholarly metadata is assertion-native; legacy records may still expose
+  // materialized scalar/list values without assertion history.
   const base = new Set(baseFields);
-  return [
-    ...assertionFieldNames(source),
-    ...Object.keys(source).filter(
-      (key) =>
-        !base.has(key) &&
-        !NON_METADATA_TRANSPORT_FIELDS.has(key) &&
-        !key.startsWith("_") &&
-        ![
-          "record_id",
-          "text",
-          "source_spans",
-          "source_units",
-          "source_unit_ids",
-          "source_block_ids",
-        ].includes(key) &&
-        (typeof source[key] === "string" ||
-          typeof source[key] === "number" ||
-          typeof source[key] === "boolean" ||
-          Array.isArray(source[key])),
-    ),
-  ];
+  return Object.keys(source).filter(
+    (key) =>
+      !base.has(key) &&
+      !NON_METADATA_TRANSPORT_FIELDS.has(key) &&
+      !key.startsWith("_") &&
+      ![
+        "record_id",
+        "text",
+        "source_spans",
+        "source_units",
+        "source_unit_ids",
+        "source_block_ids",
+      ].includes(key) &&
+      (typeof source[key] === "string" ||
+        typeof source[key] === "number" ||
+        typeof source[key] === "boolean" ||
+        Array.isArray(source[key])),
+  );
 }
 
 export function upsertRecordPayload(record: unknown, chromaId: string | null = null): Loose {

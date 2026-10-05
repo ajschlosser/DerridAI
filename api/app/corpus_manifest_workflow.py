@@ -51,6 +51,11 @@ from .corpus_models import (
     RecordMetadataModel,
 )
 from .corpus_record_quality import iso_now
+from .corpus_record_restructure import (
+    active_source_unit_map,
+    record_source_unit_ids,
+    source_unit_root_block_ids,
+)
 from .corpus_segmentation import (
     _apply_manifest_metadata,
     _normalize_text,
@@ -404,7 +409,21 @@ CURRENT REVIEWED RECORD TEXT:
         if missing_document_fields:
             blockers.append({"code": "required_document_metadata", "count": len(missing_document_fields), "fields": missing_document_fields})
         if validation and not bool(validation.get("source_valid", validation.get("valid", True))):
-            blockers.append({"code": "source_validation", "count": len(validation.get("missing_block_ids") or []) + len(validation.get("text_fidelity_errors") or []) + len(validation.get("source_order_errors") or [])})
+            source_validation_count = sum(
+                len(validation.get(key) or [])
+                for key in (
+                    "missing_block_ids",
+                    "missing_source_unit_ids",
+                    "duplicate_block_ids",
+                    "unknown_source_unit_ids",
+                    "source_reference_errors",
+                    "source_conservation_errors",
+                    "text_fidelity_errors",
+                    "source_order_errors",
+                    "page_mapping_errors",
+                )
+            )
+            blockers.append({"code": "source_validation", "count": source_validation_count})
         if validation and not bool(validation.get("metadata_valid", validation.get("valid", True))):
             validation_issues = validation.get("validation_issues")
             if isinstance(validation_issues, list):
@@ -499,18 +518,127 @@ CURRENT REVIEWED RECORD TEXT:
 
 
     @staticmethod
-    def validate_records(blocks: list[dict[str, Any]], records: list[dict[str, Any]], profile: dict[str, Any]) -> dict[str, Any]:
-        source_ids = [block["block_id"] for block in blocks]
+    def validate_records(
+        blocks: list[dict[str, Any]],
+        records: list[dict[str, Any]],
+        profile: dict[str, Any],
+        *,
+        source_units: list[dict[str, Any]] | None = None,
+        check_corpus_conservation: bool = True,
+    ) -> dict[str, Any]:
+        """Validate Records against immutable extraction roots and current SourceUnit topology.
+
+        Legacy extraction blocks remain the evidence/citation coordinate. Once a
+        structural edit creates SourceUnits, however, ownership and fidelity must
+        be validated against those units rather than flattening them back into
+        source_block_ids. That distinction allows two legitimate fragments of one
+        extraction block without reporting a false duplicate or fidelity error.
+        """
+        if source_units is None:
+            candidate_units = profile.get("_validation_source_units")
+            source_units = (
+                candidate_units
+                if isinstance(candidate_units, list)
+                else None
+            )
+        if "_check_corpus_conservation" in profile:
+            check_corpus_conservation = bool(
+                profile.get("_check_corpus_conservation")
+            )
+
+        block_map = {
+            str(block["block_id"]): block
+            for block in blocks
+            if block.get("block_id")
+        }
+        source_ids = list(block_map)
+        source_id_set = set(source_ids)
         source_index = {block_id: index for index, block_id in enumerate(source_ids)}
-        used_ids = [block_id for record in records for block_id in record.get("source_block_ids") or []]
-        missing = [block_id for block_id in source_ids if block_id not in used_ids]
+        all_units_by_id = {
+            str(unit.get("source_unit_id") or unit.get("unit_id")): unit
+            for unit in source_units or []
+            if str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+        }
+        units_by_id = active_source_unit_map(source_units or [])
+        use_source_units = source_units is not None and bool(
+            all_units_by_id
+            or any(record.get("source_unit_ids") for record in records)
+        )
+        topology_map = units_by_id if use_source_units else block_map
+
+        def topology_ids(record: dict[str, Any]) -> list[str]:
+            if use_source_units:
+                return record_source_unit_ids(record)
+            return [
+                str(value)
+                for value in record.get("source_block_ids") or []
+                if str(value)
+            ]
+
+        roots_cache: dict[str, list[str]] = {}
+
+        def roots_for(unit_id: str) -> list[str]:
+            if unit_id in roots_cache:
+                return roots_cache[unit_id]
+            if use_source_units:
+                roots = source_unit_root_block_ids(
+                    unit_id,
+                    all_units_by_id,
+                    source_id_set,
+                )
+            else:
+                roots = [unit_id] if unit_id in source_id_set else []
+            roots_cache[unit_id] = roots
+            return roots
+
+        used_ids = [
+            unit_id
+            for record in records
+            for unit_id in topology_ids(record)
+        ]
+        owners_by_unit: dict[str, list[str]] = {}
+        for record in records:
+            record_id = str(record.get("record_id") or "")
+            for unit_id in topology_ids(record):
+                owners_by_unit.setdefault(unit_id, []).append(record_id)
+
         usage_counts = Counter(used_ids)
-        duplicates = sorted(block_id for block_id, count in usage_counts.items() if count > 1)
-        block_map = {block["block_id"]: block for block in blocks}
+        duplicates = sorted(
+            unit_id
+            for unit_id, count in usage_counts.items()
+            if count > 1
+        )
+        unknown_source_unit_ids = sorted(
+            unit_id
+            for unit_id in set(used_ids)
+            if unit_id not in topology_map
+        )
+        covered_root_ids = {
+            root
+            for unit_id in used_ids
+            for root in roots_for(unit_id)
+        }
+        missing = [
+            block_id
+            for block_id in source_ids
+            if block_id not in covered_root_ids
+        ]
+        relevant_active_unit_ids = {
+            unit_id
+            for unit_id in units_by_id
+            if roots_for(unit_id)
+        }
+        missing_source_unit_ids = sorted(
+            unit_id
+            for unit_id in relevant_active_unit_ids
+            if unit_id not in usage_counts
+        )
+
         fidelity_errors: list[str] = []
         order_errors: list[str] = []
         page_errors: list[str] = []
         printed_page_errors: list[str] = []
+        reference_errors: list[dict[str, str]] = []
         evidence_errors: list[dict[str, str]] = []
         citation_errors: list[str] = []
         metadata_schema_errors: list[dict[str, str]] = []
@@ -518,78 +646,199 @@ CURRENT REVIEWED RECORD TEXT:
         human_ownership_errors: list[dict[str, str]] = []
         record_content_errors: list[dict[str, str]] = []
         suspicious: list[dict[str, Any]] = []
+        projected_source_parts: list[str] = []
         previous_last = -1
         min_conf = float(profile.get("min_metadata_confidence") or 0.65)
 
         for record in records:
             record_id = str(record.get("record_id") or "")
-            ids = [str(value) for value in record.get("source_block_ids") or []]
+            ids = topology_ids(record)
+            unknown_for_record = [
+                unit_id
+                for unit_id in ids
+                if unit_id not in topology_map
+            ]
+            for unit_id in unknown_for_record:
+                reference_errors.append(
+                    {
+                        "record_id": record_id,
+                        "field": unit_id,
+                        "reason": "Record references a missing or inactive source unit",
+                    }
+                )
+
             expected = "\n\n".join(
-                block_map[block_id]["text"].strip()
-                for block_id in ids
-                if block_id in block_map and block_map[block_id]["text"].strip()
+                str(topology_map[unit_id].get("text") or "").strip()
+                for unit_id in ids
+                if unit_id in topology_map
+                and str(topology_map[unit_id].get("text") or "").strip()
             )
-            # Reviewed/cleaned text is allowed to differ from the immutable PDF
-            # extraction. Source fidelity validates the preserved extraction, not
-            # the editorial layer that intentionally repairs layout/OCR noise.
-            fidelity_text = record.get("source_extracted_text") if record.get("source_extracted_text") is not None else record.get("text")
+            projected_source_parts.append(expected)
+            # Reviewed/cleaned text is allowed to differ from immutable extraction.
+            # Source fidelity validates the derived extraction projection, not the
+            # editorial layer that intentionally repairs layout/OCR noise.
+            fidelity_text = (
+                record.get("source_extracted_text")
+                if record.get("source_extracted_text") is not None
+                else record.get("text")
+            )
             if _normalize_text(expected) != _normalize_text(fidelity_text or ""):
                 fidelity_errors.append(record_id)
 
-            indexes = [source_index[value] for value in ids if value in source_index]
-            if indexes:
-                if indexes != sorted(indexes) or any(b != a + 1 for a, b in zip(indexes, indexes[1:])):
-                    order_errors.append(record_id)
-                if indexes[0] <= previous_last:
-                    order_errors.append(record_id)
-                previous_last = max(previous_last, indexes[-1])
+            if use_source_units:
+                root_indexes = [
+                    source_index[root]
+                    for unit_id in ids
+                    for root in roots_for(unit_id)
+                    if root in source_index
+                ]
+                collapsed_indexes = [
+                    value
+                    for index, value in enumerate(root_indexes)
+                    if index == 0 or value != root_indexes[index - 1]
+                ]
+                if collapsed_indexes:
+                    if collapsed_indexes != sorted(collapsed_indexes):
+                        order_errors.append(record_id)
+                    if any(
+                        right != left + 1
+                        for left, right in zip(
+                            collapsed_indexes,
+                            collapsed_indexes[1:],
+                        )
+                    ):
+                        order_errors.append(record_id)
+                    # Equality is valid here: two adjacent SourceUnits may be
+                    # fragments of the same immutable extraction block.
+                    if collapsed_indexes[0] < previous_last:
+                        order_errors.append(record_id)
+                    previous_last = max(previous_last, collapsed_indexes[-1])
+            else:
+                indexes = [
+                    source_index[value]
+                    for value in ids
+                    if value in source_index
+                ]
+                if indexes:
+                    if indexes != sorted(indexes) or any(
+                        right != left + 1
+                        for left, right in zip(indexes, indexes[1:])
+                    ):
+                        order_errors.append(record_id)
+                    if indexes[0] <= previous_last:
+                        order_errors.append(record_id)
+                    previous_last = max(previous_last, indexes[-1])
 
-            group = [block_map[value] for value in ids if value in block_map]
-            # Each block is validated against the locator its medium defines:
-            # timed media (audio) by a well-formed time range, paged media by a
-            # physical page. A block with neither is a mapping error, never skipped.
-            timed = bool(group) and all(block.get("locator_kind") == "time" for block in group)
+            group = [
+                topology_map[value]
+                for value in ids
+                if value in topology_map
+            ]
+            # Each source coordinate is validated according to its medium.
+            timed = bool(group) and all(
+                item.get("locator_kind") == "time"
+                for item in group
+            )
             if timed:
-                for block in group:
-                    start, end = block.get("start"), block.get("end")
-                    if not (isinstance(start, (int, float)) and isinstance(end, (int, float))) or start < 0 or end < start:
+                for item in group:
+                    start, end = item.get("start"), item.get("end")
+                    if (
+                        not isinstance(start, (int, float))
+                        or not isinstance(end, (int, float))
+                        or start < 0
+                        or end < start
+                    ):
                         page_errors.append(record_id)
             else:
                 try:
-                    expected_pdf_pages = sorted({int(block["page"]) for block in group})
+                    expected_pdf_pages = sorted(
+                        {int(item["page"]) for item in group}
+                    )
                 except (KeyError, TypeError, ValueError):
                     page_errors.append(record_id)
                     expected_pdf_pages = None
-                actual_pdf_pages = sorted(int(value) for value in record.get("pdf_pages") or [] if isinstance(value, int))
-                if expected_pdf_pages is not None and expected_pdf_pages != actual_pdf_pages:
+                actual_pdf_pages = sorted(
+                    int(value)
+                    for value in record.get("pdf_pages") or []
+                    if isinstance(value, int)
+                )
+                if (
+                    expected_pdf_pages is not None
+                    and expected_pdf_pages != actual_pdf_pages
+                ):
                     page_errors.append(record_id)
                 expected_start, expected_end = _scholarly_page_range(group)
-                if record.get("page_start") != expected_start or record.get("page_end") != expected_end:
+                if (
+                    record.get("page_start") != expected_start
+                    or record.get("page_end") != expected_end
+                ):
                     page_errors.append(record_id)
-            source_labels = [str(block.get("printed_page_label") or "").strip() for block in group]
-            disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+
+            source_labels = [
+                str(item.get("printed_page_label") or "").strip()
+                for item in group
+            ]
+            disposition = str(
+                record.get("review_disposition")
+                or (
+                    "accepted"
+                    if record.get("accepted")
+                    else "rejected"
+                    if record.get("rejected")
+                    else "pending"
+                )
+            )
             if disposition == "rejected":
-                # Keep rejected records in topology/source validation so the workspace
-                # remains auditable, but exclude them from publication-facing
-                # metadata/content requirements.
+                # Rejected records remain part of topology/source validation so
+                # the source stays auditable, but their publication metadata does
+                # not need to be complete.
                 continue
             if ids and not timed and not any(source_labels):
                 printed_page_errors.append(record_id)
 
             try:
-                RecordMetadataModel.model_validate({
-                    key: record.get(key)
-                    for key in RecordMetadataModel.model_fields
-                    if key in record
-                })
+                RecordMetadataModel.model_validate(
+                    {
+                        key: record.get(key)
+                        for key in RecordMetadataModel.model_fields
+                        if key in record
+                    }
+                )
             except ValidationError as exc:
-                metadata_schema_errors.append({"record_id": record_id, "reason": str(exc)[:1200]})
+                metadata_schema_errors.append(
+                    {
+                        "record_id": record_id,
+                        "reason": str(exc)[:1200],
+                    }
+                )
 
             if not str(record.get("text") or "").strip():
-                record_content_errors.append({"record_id": record_id, "reason": "record text is empty"})
-            if str(record.get("discourse_role") or "") == "reported_position" and "position_holder" in (profile.get("schema_field_names") or ["position_holder"]) and not record.get("position_holder"):
-                relationship_errors.append({"record_id": record_id, "reason": "reported_position requires a position_holder"})
-            touched = {str(value) for value in (record.get("human_touched_fields") or [])}
+                record_content_errors.append(
+                    {
+                        "record_id": record_id,
+                        "reason": "record text is empty",
+                    }
+                )
+            if (
+                str(record.get("discourse_role") or "") == "reported_position"
+                and "position_holder"
+                in (
+                    profile.get("schema_field_names")
+                    or ["position_holder"]
+                )
+                and not record.get("position_holder")
+            ):
+                relationship_errors.append(
+                    {
+                        "record_id": record_id,
+                        "reason": "reported_position requires a position_holder",
+                    }
+                )
+
+            touched = {
+                str(value)
+                for value in (record.get("human_touched_fields") or [])
+            }
             migrate_record_assertions(record)
             for field in touched:
                 if field.startswith("__"):
@@ -600,27 +849,67 @@ CURRENT REVIEWED RECORD TEXT:
                     and assertion.derivation_method == "model"
                     and assertion.authority_status == "unreviewed"
                 ):
-                    human_ownership_errors.append({
-                        "record_id": record_id,
-                        "field": field,
-                        "reason": f"{field} is human-touched but its current model assertion remains unreviewed",
-                    })
+                    human_ownership_errors.append(
+                        {
+                            "record_id": record_id,
+                            "field": field,
+                            "reason": (
+                                f"{field} is human-touched but its current model "
+                                "assertion remains unreviewed"
+                            ),
+                        }
+                    )
 
-            evidence = record.get("metadata_evidence") if isinstance(record.get("metadata_evidence"), dict) else {}
-            valid_ids = set(ids)
-            for field in (profile.get("attribution_evidence_fields") or ATTRIBUTION_EVIDENCE_FIELDS):
+            evidence = (
+                record.get("metadata_evidence")
+                if isinstance(record.get("metadata_evidence"), dict)
+                else {}
+            )
+            # Evidence remains bound to immutable extraction blocks. SourceUnits
+            # are topology/provenance coordinates and do not invalidate existing
+            # block-level evidence when a block is split.
+            valid_evidence_ids = {
+                str(value)
+                for value in record.get("source_block_ids") or []
+                if str(value)
+            }
+            for field in (
+                profile.get("attribution_evidence_fields")
+                or ATTRIBUTION_EVIDENCE_FIELDS
+            ):
                 value = record.get(field)
                 if value in (None, "", []):
                     continue
-                info = evidence.get(field) if isinstance(evidence.get(field), dict) else None
+                info = (
+                    evidence.get(field)
+                    if isinstance(evidence.get(field), dict)
+                    else None
+                )
                 if not info:
-                    evidence_errors.append({"record_id": record_id, "field": field, "reason": "missing evidence"})
+                    evidence_errors.append(
+                        {
+                            "record_id": record_id,
+                            "field": field,
+                            "reason": "missing evidence",
+                        }
+                    )
                     continue
-                bound = [str(v) for v in info.get("block_ids") or [] if str(v) in valid_ids]
-                # Spans the reviewer cited elsewhere in the same source count, kept distinct in the record;
-                # so does an explicit, human-made "own knowledge" attestation, which cites no span at all.
-                bound += [str(v) for v in info.get("external_block_ids") or [] if str(v) in source_index]
-                attested = info.get("source_kind") == "reviewer_knowledge" and info.get("reviewed_by") == "human"
+                bound = [
+                    str(value)
+                    for value in info.get("block_ids") or []
+                    if str(value) in valid_evidence_ids
+                ]
+                # Explicit external spans from the same source and human
+                # own-knowledge attestations remain valid alternatives.
+                bound += [
+                    str(value)
+                    for value in info.get("external_block_ids") or []
+                    if str(value) in source_index
+                ]
+                attested = (
+                    info.get("source_kind") == "reviewer_knowledge"
+                    and info.get("reviewed_by") == "human"
+                )
                 try:
                     confidence = float(info.get("confidence") or 0)
                 except (TypeError, ValueError):
@@ -628,47 +917,202 @@ CURRENT REVIEWED RECORD TEXT:
                 if attested:
                     continue
                 if not bound:
-                    evidence_errors.append({"record_id": record_id, "field": field, "reason": "no valid source block"})
+                    evidence_errors.append(
+                        {
+                            "record_id": record_id,
+                            "field": field,
+                            "reason": "no valid source block",
+                        }
+                    )
                 elif confidence < min_conf:
-                    evidence_errors.append({"record_id": record_id, "field": field, "reason": f"confidence {confidence:.2f} below {min_conf:.2f}"})
+                    evidence_errors.append(
+                        {
+                            "record_id": record_id,
+                            "field": field,
+                            "reason": (
+                                f"confidence {confidence:.2f} below "
+                                f"{min_conf:.2f}"
+                            ),
+                        }
+                    )
 
             if record.get("work") and record.get("document_author"):
-                if not str(record.get("inline_citation") or "").strip() or not str(record.get("full_citation") or "").strip():
+                if (
+                    not str(record.get("inline_citation") or "").strip()
+                    or not str(record.get("full_citation") or "").strip()
+                ):
                     citation_errors.append(record_id)
 
             length = len(record.get("text") or "")
-            if length < int(profile.get("soft_min_chars") or 0) or length > int(profile.get("soft_max_chars") or 10**9):
-                suspicious.append({
-                    "record_id": record_id,
-                    "text_length": length,
-                    "reason": "Length is an audit warning only; it did not create or change a semantic boundary.",
-                })
+            if (
+                length < int(profile.get("soft_min_chars") or 0)
+                or length > int(profile.get("soft_max_chars") or 10**9)
+            ):
+                suspicious.append(
+                    {
+                        "record_id": record_id,
+                        "text_length": length,
+                        "reason": (
+                            "Length is an audit warning only; it did not create "
+                            "or change a semantic boundary."
+                        ),
+                    }
+                )
 
-        source_valid = not missing and not duplicates and not fidelity_errors and not order_errors and not page_errors
-        metadata_valid = not evidence_errors and not citation_errors and not printed_page_errors and not metadata_schema_errors and not relationship_errors and not human_ownership_errors and not record_content_errors
+        conservation_errors: list[str] = []
+        if check_corpus_conservation:
+            original_text = "\n\n".join(
+                str(block_map[block_id].get("text") or "").strip()
+                for block_id in source_ids
+                if str(block_map[block_id].get("text") or "").strip()
+            )
+            projected_text = "\n\n".join(
+                value
+                for value in projected_source_parts
+                if value
+            )
+
+            def conservation_key(value: str) -> str:
+                return "".join(_normalize_text(value).split())
+
+            if conservation_key(original_text) != conservation_key(projected_text):
+                conservation_errors.append("corpus")
+
+        source_valid = not any(
+            (
+                missing,
+                missing_source_unit_ids,
+                duplicates,
+                unknown_source_unit_ids,
+                reference_errors,
+                fidelity_errors,
+                order_errors,
+                page_errors,
+                conservation_errors,
+            )
+        )
+        metadata_valid = not any(
+            (
+                evidence_errors,
+                citation_errors,
+                printed_page_errors,
+                metadata_schema_errors,
+                relationship_errors,
+                human_ownership_errors,
+                record_content_errors,
+            )
+        )
 
         validation_issues: list[dict[str, str]] = []
         seen_issues: set[tuple[str, str, str, str]] = set()
 
-        def add_issue(code: str, item: Any, *, default_reason: str = "") -> None:
+        def add_issue(
+            code: str,
+            item: Any,
+            *,
+            default_reason: str = "",
+        ) -> None:
             if isinstance(item, dict):
                 record_value = str(item.get("record_id") or "")
                 field_value = str(item.get("field") or "")
-                reason_value = str(item.get("reason") or default_reason or code.replace("_", " "))
+                reason_value = str(
+                    item.get("reason")
+                    or default_reason
+                    or code.replace("_", " ")
+                )
             else:
                 record_value = str(item or "")
                 field_value = ""
                 reason_value = default_reason or code.replace("_", " ")
-            key = (code, record_value, field_value, reason_value)
+            key = (
+                code,
+                record_value,
+                field_value,
+                reason_value,
+            )
             if key in seen_issues:
                 return
             seen_issues.add(key)
-            validation_issues.append({
-                "code": code,
-                "record_id": record_value,
-                "field": field_value,
-                "reason": reason_value,
-            })
+            validation_issues.append(
+                {
+                    "code": code,
+                    "record_id": record_value,
+                    "field": field_value,
+                    "reason": reason_value,
+                }
+            )
+
+        for block_id in missing:
+            add_issue(
+                "source_coverage",
+                {
+                    "field": str(block_id),
+                    "reason": (
+                        "immutable source block is not represented by the "
+                        "current SourceUnit topology"
+                    ),
+                },
+            )
+        for unit_id in missing_source_unit_ids:
+            add_issue(
+                "source_coverage",
+                {
+                    "field": unit_id,
+                    "reason": "active source unit is not covered by any Record",
+                },
+            )
+        for unit_id in duplicates:
+            owners = owners_by_unit.get(unit_id) or [""]
+            for record_id in owners:
+                add_issue(
+                    "source_duplicate",
+                    {
+                        "record_id": record_id,
+                        "field": unit_id,
+                        "reason": (
+                            "active source unit is assigned to more than one Record"
+                        ),
+                    },
+                )
+        for item in reference_errors:
+            add_issue("source_reference", item)
+        for record_id in sorted(set(fidelity_errors)):
+            add_issue(
+                "source_fidelity",
+                record_id,
+                default_reason=(
+                    "record extraction no longer matches its declared "
+                    "SourceUnits"
+                ),
+            )
+        for record_id in sorted(set(order_errors)):
+            add_issue(
+                "source_order",
+                record_id,
+                default_reason=(
+                    "record SourceUnits are discontinuous or out of document "
+                    "order"
+                ),
+            )
+        for record_id in sorted(set(page_errors)):
+            add_issue(
+                "source_page_mapping",
+                record_id,
+                default_reason=(
+                    "record page or time mapping does not match its declared "
+                    "SourceUnits"
+                ),
+            )
+        for _ in conservation_errors:
+            add_issue(
+                "source_conservation",
+                {
+                    "reason": (
+                        "the ordered SourceUnit extraction no longer reproduces "
+                        "the declared source scope"
+                    )
+                },
+            )
 
         for item in evidence_errors:
             add_issue("metadata_evidence", item)
@@ -681,7 +1125,11 @@ CURRENT REVIEWED RECORD TEXT:
         for item in record_content_errors:
             add_issue("record_content", item)
         for record_value in sorted(set(citation_errors)):
-            add_issue("citation", record_value, default_reason="citation is missing or incomplete")
+            add_issue(
+                "citation",
+                record_value,
+                default_reason="citation is missing or incomplete",
+            )
         for record_value in sorted(set(printed_page_errors)):
             add_issue(
                 "printed_page_label",
@@ -691,10 +1139,25 @@ CURRENT REVIEWED RECORD TEXT:
 
         return {
             "source_block_count": len(source_ids),
-            "used_block_count": len(used_ids),
-            "coverage": (len(set(used_ids) & set(source_ids)) / len(source_ids)) if source_ids else 1.0,
+            "source_unit_count": (
+                len(relevant_active_unit_ids)
+                if use_source_units
+                else len(source_ids)
+            ),
+            "used_block_count": len(covered_root_ids),
+            "used_source_unit_count": len(set(used_ids)),
+            "coverage": (
+                len(covered_root_ids & source_id_set) / len(source_ids)
+                if source_ids
+                else 1.0
+            ),
             "missing_block_ids": missing,
+            "missing_source_unit_ids": missing_source_unit_ids,
             "duplicate_block_ids": duplicates,
+            "duplicate_source_unit_ids": duplicates if use_source_units else [],
+            "unknown_source_unit_ids": unknown_source_unit_ids,
+            "source_reference_errors": reference_errors,
+            "source_conservation_errors": conservation_errors,
             "text_fidelity_errors": fidelity_errors,
             "source_order_errors": sorted(set(order_errors)),
             "page_mapping_errors": sorted(set(page_errors)),

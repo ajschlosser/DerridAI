@@ -21,6 +21,7 @@ import { computed, ref, watch } from "vue";
 import { chromaApi } from "../../api/chroma";
 import { pipelinesApi } from "../../api/pipelines";
 import { pipelineKey } from "../../domain/pipelinePresentation";
+import { researchSourceCollections } from "../../domain/vectorCollections";
 import { dataKey } from "../../realtime/resourceKeys";
 import { queryClient, useDataQuery } from "../../realtime/dataQuery";
 import PipelineBenchmarkCaseList from "./PipelineBenchmarkCaseList.vue";
@@ -53,7 +54,7 @@ const casesQuery = useDataQuery("pipeline_benchmarks", () =>
 );
 const collectionsQuery = useDataQuery("vector_collections", () => chromaApi.collections());
 const cases = computed(() => casesQuery.data.value?.cases ?? []);
-const collections = computed(() => collectionsQuery.data.value ?? []);
+const collections = computed(() => researchSourceCollections(collectionsQuery.data.value ?? []));
 const loading = computed(() => casesQuery.isPending.value || collectionsQuery.isPending.value);
 const selectedCaseKey = ref("");
 

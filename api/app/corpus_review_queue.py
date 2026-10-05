@@ -29,7 +29,6 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Any
 
-from .corpus_metadata import ALLOWED_METADATA_FIELDS
 from .corpus_review_state import (
     _decorate_review_state,
     _matches_review_queue,
@@ -178,22 +177,44 @@ def select_queue(
 # repository's cached list, which is replaced (never mutated) when any Record changes, so identity
 # is a sound key; the list itself is held so its id cannot be reused while the entry lives.
 _FACET_MEMO_CAPACITY = 8
-_facet_memo: dict[tuple[int, str], tuple[list[dict[str, Any]], dict[str, list[str]]]] = {}
+_facet_memo: dict[tuple[int, str, int], tuple[list[dict[str, Any]], dict[str, list[str]]]] = {}
 
 
-def observed_metadata_values(records: list[dict[str, Any]]) -> dict[str, list[str]]:
-    key = (id(records), str(current_reviewer.get() or ""))
+def _semantic_field_names(
+    schema: Any | None,
+    semantic_id: str,
+    fallback: tuple[str, ...],
+) -> list[str]:
+    """Resolve a scholarly semantic role without assuming the default storage name."""
+    if schema is None:
+        return list(fallback)
+    resolver = getattr(schema, "fields_for_semantic_compatibility_id", None)
+    if not callable(resolver):
+        return list(fallback)
+    return list(resolver(semantic_id))
+
+
+def observed_metadata_values(
+    records: list[dict[str, Any]],
+    schema: Any | None = None,
+) -> dict[str, list[str]]:
+    key = (id(records), str(current_reviewer.get() or ""), id(schema))
     hit = _facet_memo.get(key)
     if hit is not None and hit[0] is records:
         return {field: list(values) for field, values in hit[1].items()}
-    result = _compute_observed_metadata_values(records)
+    result = _compute_observed_metadata_values(records, schema=schema)
     _facet_memo[key] = (records, result)
     while len(_facet_memo) > _FACET_MEMO_CAPACITY:
         _facet_memo.pop(next(iter(_facet_memo)))
     return {field: list(values) for field, values in result.items()}
 
 
-def _compute_observed_metadata_values(records: list[dict[str, Any]], *, present: bool = True) -> dict[str, list[str]]:
+def _compute_observed_metadata_values(
+    records: list[dict[str, Any]],
+    *,
+    present: bool = True,
+    schema: Any | None = None,
+) -> dict[str, list[str]]:
     """Every non-placeholder value seen for a metadata field, for build-wide facets.
 
     Computed over the reviewer-presented view of every stored Record, not the raw
@@ -201,7 +222,7 @@ def _compute_observed_metadata_values(records: list[dict[str, Any]], *, present:
     another reviewer's sealed first answer merely because that value happens to
     populate a filter's suggestion list. Call within the caller's ``reviewer_scope``.
     """
-    metadata_values: dict[str, set[str]] = {field: set() for field in ALLOWED_METADATA_FIELDS}
+    metadata_values: dict[str, set[str]] = {}
     for raw in records:
         record = copy.deepcopy(raw)
         if present:
@@ -222,9 +243,15 @@ def _compute_observed_metadata_values(records: list[dict[str, Any]], *, present:
         if isinstance(deterministic_ingest, dict):
             speakers = deterministic_ingest.get("speakers")
             if isinstance(speakers, (list, tuple)):
+                speaker_fields = _semantic_field_names(
+                    schema,
+                    "derridai.speaker",
+                    ("speaker",),
+                )
                 for speaker in speakers:
                     if isinstance(speaker, str) and speaker.strip() and not is_placeholder(speaker):
-                        metadata_values.setdefault("speaker", set()).add(speaker.strip())
+                        for field in speaker_fields:
+                            metadata_values.setdefault(field, set()).add(speaker.strip())
         field_status = record.get("metadata_field_status")
         if isinstance(field_status, dict):
             for field, status in field_status.items():

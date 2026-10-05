@@ -27,6 +27,7 @@ import hashlib
 import json
 import sys
 import types
+import zipfile
 from pathlib import Path
 
 sys.modules.setdefault("chromadb", types.SimpleNamespace())
@@ -285,22 +286,426 @@ def test_accept_unreviewed_publishes_suggestions_and_preserves_prior_decisions(t
     assert stored["r3"]["review_disposition"]=="rejected"
 
 
-def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp_path:Path):
-    """Bypassing review never bypasses text-conservation validation or an in-progress build."""
+def test_accept_unreviewed_finalizes_sourceunit_topology_before_publication(tmp_path:Path):
+    """Autonomous publication accepts current topology without legacy-block false positives."""
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     build=_install_publishable(repo)
-    for patch,expected in (({"status":"running"},"finished processing"),({"validation":{"valid":False,"missing_block_ids":["b1"]}},"text-fidelity")):
-        current=repo.get_build(build["build_id"])
-        current.update({"status":"ready","validation":{"valid":True},**patch})
-        repo.save_build(current)
-        manager._refresh_workflow_fields=lambda b:None
-        try:
-            manager.publish(build["build_id"],accept_unreviewed=True)
-        except ValueError as exc:
-            assert expected in str(exc)
-        else:
-            raise AssertionError(f"unreviewed publication should be blocked by {patch}")
+    build_id=build["build_id"]
+    base=repo.load_records(build_id)[0]
+
+    units=repo.load_source_units(build_id)
+    units[0]["active"]=False
+    template=dict(units[0])
+    units.extend([
+        {
+            **template,
+            "source_unit_id":"u-left",
+            "unit_id":"u-left",
+            "source_block_ids":["b1"],
+            "parent_unit_ids":["b1"],
+            "consumed_ranges":[{"unit_id":"b1","start":0,"end":6}],
+            "text":"Record",
+            "active":True,
+        },
+        {
+            **template,
+            "source_unit_id":"u-right",
+            "unit_id":"u-right",
+            "source_block_ids":["b1"],
+            "parent_unit_ids":["b1"],
+            "consumed_ranges":[{"unit_id":"b1","start":7,"end":11}],
+            "text":"text",
+            "active":True,
+        },
+    ])
+    repo.save_source_units(build_id,units)
+
+    common={
+        **{
+            key:value for key,value in base.items()
+            if key not in {"field_assertions","current_field_assertions"}
+        },
+        "accepted":False,
+        "rejected":False,
+        "review_disposition":"pending",
+        "needs_review":True,
+        "source_block_ids":["b1"],
+        "pdf_pages":[1],
+        "page_start":None,
+        "page_end":None,
+    }
+    left={
+        **json.loads(json.dumps(common)),
+        "record_id":"r-left",
+        "text":"Record",
+        "text_length":6,
+        "source_unit_ids":["u-left"],
+        # Reproduces the stale structural projection that used to trigger
+        # text_fidelity_errors during publication reconciliation.
+        "source_extracted_text":"Record text",
+    }
+    right={
+        **json.loads(json.dumps(common)),
+        "record_id":"r-right",
+        "text":"text",
+        "text_length":4,
+        "source_unit_ids":["u-right"],
+        "source_extracted_text":"Record text",
+    }
+    repo.save_records(build_id,[left,right])
+
+    publication=manager.publish(build_id,accept_unreviewed=True)
+
+    assert publication["record_count"]==2
+    refreshed=repo.get_build(build_id)
+    assert refreshed["validation"]["source_valid"] is True
+    assert refreshed["validation"]["duplicate_block_ids"]==[]
+    assert refreshed["validation"]["text_fidelity_errors"]==[]
+    stored={row["record_id"]:row for row in repo.load_records(build_id)}
+    assert stored["r-left"]["source_extracted_text"]=="Record"
+    assert stored["r-right"]["source_extracted_text"]=="text"
+    # Re-projection is deterministic but not silent: the immutable publication
+    # retains hashes and conservation status for the derived-state correction.
+    published={
+        row["record_id"]:row
+        for row in iter_jsonl_zst(
+            repo.publication_path(publication["publication_id"]),
+            rehydrate_evidence=False,
+        )
+    }
+    left_projection=published["r-left"]["source_projection_reconciliation_history"][-1]
+    right_projection=published["r-right"]["source_projection_reconciliation_history"][-1]
+    assert left_projection["method"]=="derive_from_active_source_units"
+    assert right_projection["method"]=="derive_from_active_source_units"
+    assert left_projection["source_text_conserved"] is False
+    assert right_projection["source_text_conserved"] is False
+    assert left_projection["previous_source_projection_hash"]
+    assert left_projection["source_projection_hash"]
+
+
+def test_accept_unreviewed_repairs_retired_sourceunit_reference_with_audit_history(tmp_path:Path):
+    """Autonomous finalization may follow proven lineage without flattening it."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    units=repo.load_source_units(build_id)
+    units[0]["active"]=False
+    units[0]["successor_unit_ids"]=["u-current"]
+    units.append({
+        **units[0],
+        "source_unit_id":"u-current",
+        "unit_id":"u-current",
+        "source_block_ids":["b1"],
+        "parent_unit_ids":["b1"],
+        "successor_unit_ids":[],
+        "text":"Record text",
+        "active":True,
+        "transaction_id":"structural-1",
+    })
+    repo.save_source_units(build_id,units)
+    rows=repo.load_records(build_id)
+    rows[0]["source_unit_ids"]=["b1"]
+    rows[0]["source_extracted_text"]="Record text"
+    repo.save_records(build_id,rows)
+
+    publication=manager.publish(build_id,accept_unreviewed=True)
+
+    assert publication["record_count"]==1
+    stored=repo.load_records(build_id)[0]
+    assert stored["source_unit_ids"]==["u-current"]
+    [event]=stored["source_topology_reconciliation_history"]
+    assert event["method"]=="deterministic_active_descendant_reconciliation"
+    assert event["prior_source_unit_ids"]==["b1"]
+    assert event["source_unit_ids"]==["u-current"]
+    persisted_units={row["source_unit_id"]:row for row in repo.load_source_units(build_id)}
+    assert persisted_units["b1"]["active"] is False
+    assert persisted_units["u-current"]["active"] is True
+
+
+def test_accept_unreviewed_retires_exact_redundant_root_before_validation(tmp_path:Path):
+    """An exact compatibility root plus replacement child is migrated, not double-counted."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    units=repo.load_source_units(build_id)
+    root=units[0]
+    # Reproduce an older store that left the compatibility root active while
+    # persisting an exact active replacement. The Record already owns the child,
+    # so the active root otherwise appears as a false uncovered SourceUnit.
+    units.append({
+        **root,
+        "source_unit_id":"u-current",
+        "unit_id":"u-current",
+        "source_block_ids":["b1"],
+        "parent_unit_ids":["b1"],
+        "text":"Record text",
+        "active":True,
+        "transaction_id":"legacy-structural-1",
+    })
+    repo.save_source_units(build_id,units)
+    rows=repo.load_records(build_id)
+    rows[0]["source_unit_ids"]=["u-current"]
+    rows[0]["source_extracted_text"]="Record text"
+    repo.save_records(build_id,rows)
+
+    publication=manager.publish(build_id,accept_unreviewed=True)
+
+    assert publication["record_count"]==1
+    persisted={row["source_unit_id"]:row for row in repo.load_source_units(build_id)}
+    assert persisted["b1"]["active"] is False
+    assert persisted["u-current"]["active"] is True
+    [event]=persisted["b1"]["topology_reconciliation_history"]
+    assert event["method"]=="retire_redundant_compatibility_root"
+    assert event["successor_unit_ids"]==["u-current"]
+    validation=repo.get_build(build_id)["validation"]
+    # Page/metadata review findings may keep the broad source_valid flag false in
+    # this minimal fixture. The conservation keys that gate autonomous publication
+    # must all be clear after retiring the redundant compatibility root.
+    assert validation["missing_source_unit_ids"]==[]
+    assert validation["unknown_source_unit_ids"]==[]
+    assert validation["source_reference_errors"]==[]
+    assert validation["source_conservation_errors"]==[]
+    assert validation["text_fidelity_errors"]==[]
+    assert validation["source_order_errors"]==[]
+
+
+def test_accept_unreviewed_does_not_retire_nonconserving_redundant_root(tmp_path:Path):
+    """A child that does not reconstruct its root remains a real publication blocker."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    units=repo.load_source_units(build_id)
+    root=units[0]
+    units.append({
+        **root,
+        "source_unit_id":"u-lossy",
+        "unit_id":"u-lossy",
+        "source_block_ids":["b1"],
+        "parent_unit_ids":["b1"],
+        "text":"Record",
+        "active":True,
+        "transaction_id":"legacy-lossy-1",
+    })
+    repo.save_source_units(build_id,units)
+    rows=repo.load_records(build_id)
+    rows[0]["source_unit_ids"]=["u-lossy"]
+    rows[0]["source_extracted_text"]="Record"
+    rows[0]["text"]="Record"
+    rows[0]["text_length"]=6
+    repo.save_records(build_id,rows)
+
+    try:
+        manager.publish(build_id,accept_unreviewed=True)
+    except ValueError as exc:
+        message=str(exc)
+        assert "source coverage and text-fidelity" in message
+        assert "unfinished corpus archive" in message
+    else:
+        raise AssertionError("lossy replacement topology must remain blocked")
+
+    persisted={row["source_unit_id"]:row for row in repo.load_source_units(build_id)}
+    assert persisted["b1"]["active"] is True
+    assert "topology_reconciliation_history" not in persisted["b1"]
+
+
+def test_unfinished_export_preserves_internal_topology_and_does_not_publish(tmp_path:Path):
+    """Researchers can inspect a blocked/draft corpus without changing its authority."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    rows=repo.load_records(build_id)
+    rows[0].update({
+        "accepted":False,
+        "review_disposition":"pending",
+        "needs_review":True,
+        "source_extracted_text":"Record text",
+    })
+    repo.save_records(build_id,rows)
+    current=repo.get_build(build_id)
+    current["status"]="awaiting_review"
+    current["stage"]="review"
+    current["validation"]={
+        "valid":False,
+        "source_valid":False,
+        "validation_issues":[{
+            "code":"source_fidelity",
+            "record_id":"r1",
+            "field":"",
+            "reason":"inspection fixture",
+        }],
+    }
+    repo.save_build(current)
+
+    artifact=manager.create_unfinished_export(build_id)
+
+    assert artifact["filename"]=="test.unfinished-corpus.zip"
+    assert not repo.get_build(build_id).get("publication")
+    with zipfile.ZipFile(artifact["path"]) as archive:
+        names=set(archive.namelist())
+        assert {
+            "README.txt",
+            "export_manifest.json",
+            "build.json",
+            "records.jsonl",
+            "source_units.jsonl",
+            "source_units_persisted.jsonl",
+            "source_blocks.jsonl",
+            "retired_records.json",
+            "evidence_remap_pending.json",
+        } <= names
+        manifest=json.loads(archive.read("export_manifest.json"))
+        assert manifest["artifact_kind"]=="unfinished_corpus_export"
+        assert manifest["celf_publication"] is False
+        assert manifest["publication_ready"] is False
+        assert manifest["source_unit_store_present"] is False
+        assert manifest["persisted_source_unit_count"]==0
+        assert archive.read("source_units_persisted.jsonl")==b""
+        exported_records=[
+            json.loads(line)
+            for line in archive.read("records.jsonl").decode().splitlines()
+            if line
+        ]
+        assert exported_records[0]["review_disposition"]=="pending"
+        assert exported_records[0]["source_extracted_text"]=="Record text"
+        source_units=[
+            json.loads(line)
+            for line in archive.read("source_units.jsonl").decode().splitlines()
+            if line
+        ]
+        assert source_units
+        assert all("source_unit_id" in row for row in source_units)
+
+
+def test_accept_unreviewed_repairs_recoverable_duplicate_active_ownership(tmp_path:Path):
+    """A stale duplicate binding is repaired only when each projection has one exact owner."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    base=repo.load_records(build_id)[0]
+
+    units=repo.load_source_units(build_id)
+    units[0]["active"]=False
+    template=dict(units[0])
+    units.extend([
+        {
+            **template,
+            "source_unit_id":"u-left",
+            "unit_id":"u-left",
+            "source_block_ids":["b1"],
+            "parent_unit_ids":["b1"],
+            "text":"Record",
+            "active":True,
+        },
+        {
+            **template,
+            "source_unit_id":"u-right",
+            "unit_id":"u-right",
+            "source_block_ids":["b1"],
+            "parent_unit_ids":["b1"],
+            "text":"text",
+            "active":True,
+        },
+    ])
+    repo.save_source_units(build_id,units)
+
+    common={
+        **{
+            key:value for key,value in base.items()
+            if key not in {"field_assertions","current_field_assertions"}
+        },
+        "accepted":False,
+        "rejected":False,
+        "review_disposition":"pending",
+        "needs_review":True,
+        "source_block_ids":["b1"],
+        "pdf_pages":[1],
+        "page_start":None,
+        "page_end":None,
+    }
+    left={
+        **json.loads(json.dumps(common)),
+        "record_id":"r-left",
+        "text":"Record",
+        "text_length":6,
+        "source_unit_ids":["u-left"],
+        "source_extracted_text":"Record",
+    }
+    right={
+        **json.loads(json.dumps(common)),
+        "record_id":"r-right",
+        "text":"text",
+        "text_length":4,
+        # Stale topology: both Records point at u-left even though the retained
+        # source projection proves that this Record belongs to u-right.
+        "source_unit_ids":["u-left"],
+        "source_extracted_text":"text",
+    }
+    repo.save_records(build_id,[left,right])
+
+    publication=manager.publish(build_id,accept_unreviewed=True)
+
+    assert publication["record_count"]==2
+    stored={row["record_id"]:row for row in repo.load_records(build_id)}
+    assert stored["r-left"]["source_unit_ids"]==["u-left"]
+    assert stored["r-right"]["source_unit_ids"]==["u-right"]
+    history=stored["r-right"]["source_topology_reconciliation_history"]
+    assert history[-1]["method"]=="unique_source_projection_match"
+    assert history[-1]["previous_source_unit_ids"]==["u-left"]
+    assert history[-1]["source_unit_ids"]==["u-right"]
+    assert history[-1]["transaction_id"].startswith("publication-finalize-")
+    assert history[-1]["previous_source_projection_hash"]
+    assert history[-1]["reconciled_source_projection_hash"]
+    published={
+        row["record_id"]:row
+        for row in iter_jsonl_zst(
+            repo.publication_path(publication["publication_id"]),
+            rehydrate_evidence=False,
+        )
+    }
+    published_history=published["r-right"]["source_topology_reconciliation_history"]
+    assert published_history[-1]["event_id"]==history[-1]["event_id"]
+    assert published_history[-1]["source_text_conserved"] is True
+    refreshed=repo.get_build(build_id)
+    assert refreshed["validation"]["duplicate_source_unit_ids"]==[]
+    assert refreshed["validation"]["missing_source_unit_ids"]==[]
+    assert refreshed["validation"]["source_conservation_errors"]==[]
+
+def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp_path:Path):
+    """Bypassing review never bypasses actual source loss or an in-progress build."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+
+    current=repo.get_build(build_id)
+    current["status"]="running"
+    repo.save_build(current)
+    try:
+        manager.publish(build_id,accept_unreviewed=True)
+    except ValueError as exc:
+        assert "finished processing" in str(exc)
+    else:
+        raise AssertionError("an active build must not publish")
+
+    current=repo.get_build(build_id)
+    current.update({"status":"ready","stage":"ready","validation":{"valid":True}})
+    repo.save_build(current)
+    rows=repo.load_records(build_id)
+    rows[0]["source_block_ids"]=[]
+    rows[0]["source_unit_ids"]=[]
+    repo.save_records(build_id,rows)
+    try:
+        manager.publish(build_id,accept_unreviewed=True)
+    except ValueError as exc:
+        assert "text-fidelity" in str(exc)
+    else:
+        raise AssertionError("actual missing source coverage must still block publication")
 
 
 def test_accept_unreviewed_on_a_fully_reviewed_build_stays_conformant(tmp_path:Path):

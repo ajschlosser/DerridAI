@@ -18,7 +18,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { createWorkspacePersistence } from "../../src/domain/workspacePersistence";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 
 describe("workspace preference persistence", () => {
   it("removes callbacks before saving the structured-clone payload", async () => {

@@ -44,4 +44,6 @@ export const corpusPublicationsApi = {
     }),
   publicationUrl: (publicationId: string) =>
     `${LEGACY_CORPUS_BASE}/publications/${encodeURIComponent(publicationId)}/download`,
+  unfinishedCorpusUrl: (buildId: string) =>
+    `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/download-unfinished`,
 };

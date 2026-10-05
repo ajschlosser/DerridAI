@@ -38,6 +38,7 @@ import threading
 import time
 import unicodedata
 import uuid
+import zipfile
 from collections import Counter
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -214,6 +215,13 @@ from .corpus_record_quality import (
     _record_extraction_quality_issues,
     _trash_quality_report,
     iso_now,
+)
+from .corpus_record_restructure import (
+    normalize_source_units,
+    reconcile_recoverable_source_unit_references,
+    reconcile_redundant_active_source_roots,
+    repair_record_source_topology,
+    synchronize_record_source_projection,
 )
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
 from .corpus_review_aggregates import record_review_aggregate
@@ -1765,6 +1773,32 @@ class PdfCorpusRepository:
             self.save_source_units(build_id, normalized)
         return normalized
 
+    def source_units_for_validation(self, build_id: str) -> list[dict[str, Any]]:
+        """Read an existing SourceUnit topology without migrating legacy builds.
+
+        Validation callbacks may run optimistically while review writes commit.
+        Creating an in-memory SourceUnit migration for a legacy build changes the
+        candidate Record payload by adding source_unit_ids/source_extracted_text,
+        which creates artificial reconciliation conflicts and can overwrite a
+        concurrent review candidate. Only builds with an explicit SourceUnit store
+        use SourceUnit-aware validation; older builds stay on source_block_ids until
+        an explicit structural/migration operation creates that store.
+        """
+        build = self.get_build(build_id)
+        path = self.build_source_units_path(build_id)
+        if not path.exists():
+            return []
+        with path.open("r", encoding="utf-8") as handle:
+            rows = [json.loads(line) for line in handle if line.strip()]
+        blocks = self.load_blocks(str(build["asset_id"]))
+        from .corpus_record_restructure import normalize_source_units
+
+        return normalize_source_units(
+            rows,
+            blocks,
+            source_document_id=str(build["asset_id"]),
+        )
+
     def normalize_source_units(self, build_id: str) -> list[dict[str, Any]]:
         """Public migration helper for builds created before source units existed."""
         return self.load_source_units(build_id)
@@ -2208,7 +2242,11 @@ class PdfCorpusRepository:
                     (payload, record_id),
                 )
                 corpus_document_context.ensure(connection)
-                corpus_queue_projection.update_rows(connection, [(int(row[0]), record)])
+                corpus_queue_projection.update_rows(
+                    connection,
+                    [(int(row[0]), record)],
+                    schema=self._record_schema(build_id),
+                )
                 version = connection.execute(
                     "SELECT state_version FROM review_queue_rows WHERE record_id=?", (record_id,),
                 ).fetchone()
@@ -2302,7 +2340,9 @@ class PdfCorpusRepository:
         )
         corpus_document_context.ensure(connection)
         corpus_queue_projection.update_rows(
-            connection, [(ordinal, record) for ordinal, record, _payload in changed],
+            connection,
+            [(ordinal, record) for ordinal, record, _payload in changed],
+            schema=self._record_schema(build_id),
         )
 
     def _reconcile_records_optimistic(
@@ -2631,7 +2671,10 @@ class PdfCorpusRepository:
         signature = self._schema_signature(schema)
         identity = self._review_projection_schema_identity(schema)
         corpus_queue_projection.ensure(
-            connection, identity, lambda payload: self._decode_migrated(payload, schema, signature),
+            connection,
+            identity,
+            lambda payload: self._decode_migrated(payload, schema, signature),
+            schema=schema,
             rebuild=rebuild,
         )
 
@@ -5304,16 +5347,67 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         self.repo.save_build(build)
         return build
 
-    def _reconcile_and_validate(self, build_id: str) -> dict[str, Any]:
-        """Validate current topology without restoring a settled worker snapshot."""
+    def reconcile_review_state(self, build_id: str) -> dict[str, Any]:
+        """Recompute authoritative review aggregates and publication validation.
+
+        Interactive review keeps individual writes small. This explicit post-run
+        reconciliation is where DerridAI deliberately pays the document-wide
+        validation cost and derives publication readiness from persisted Records.
+        """
+        build = self.repo.get_build(build_id)
+        if str(build.get("status") or "") in {"queued", "running"}:
+            raise ValueError(
+                "Wait for the active corpus operation to finish before reconciling publication readiness."
+            )
+        return self._reconcile_and_validate(build_id)
+
+    def _reconcile_and_validate(
+        self,
+        build_id: str,
+        *,
+        repair_source_topology: bool = False,
+        source_reconciliation_id: str = "",
+    ) -> dict[str, Any]:
+        """Validate current topology without restoring a settled worker snapshot.
+
+        Autonomous publication may additionally reconcile stale references from
+        retired SourceUnits to provably equivalent active descendants. The repair
+        is deterministic, preserves the retired lineage rows, and records every
+        changed Record mapping in its audit history.
+        """
         base: dict[str, Any] = {}
         build: dict[str, Any] = {}
+        reconciliation_id = source_reconciliation_id or (
+            f"publication-finalize-{uuid.uuid4().hex[:12]}"
+            if repair_source_topology
+            else ""
+        )
 
         def validate_current(records: list[dict[str, Any]]) -> None:
             nonlocal base, build
             with self._lock:
                 base = self.repo.get_build(build_id)
             build = json.loads(json.dumps(base))
+            if repair_source_topology:
+                source_units = self.repo.source_units_for_validation(build_id)
+                if source_units:
+                    reconcile_recoverable_source_unit_references(
+                        records,
+                        source_units,
+                        transaction_id=reconciliation_id,
+                    )
+                    # Older/edited builds can also contain duplicated active
+                    # bindings or stale IDs with no direct retired-unit pointer.
+                    # Repair those only when immutable-root lineage plus the
+                    # retained extraction projection identify one exact,
+                    # contiguous active SourceUnit window. The helper records
+                    # before/after bindings and hashes; ambiguous cases remain
+                    # validation blockers.
+                    repair_record_source_topology(
+                        records,
+                        source_units,
+                        transaction_id=reconciliation_id,
+                    )
             self._validate_record_states(build, records)
 
         def committed() -> None:
@@ -5346,7 +5440,22 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         )
         build["source_quality"] = page_source_quality_report(blocks)
         profile = self._profile_of_build(build)
-        validation = self.validate_records(blocks, records, profile)
+        source_units = self.repo.source_units_for_validation(str(build["build_id"]))
+        # source_extracted_text is a deterministic projection of the authoritative
+        # SourceUnits. Reconcile it before validation so structural edits are not
+        # judged against stale legacy block projections. Legacy builds without an
+        # explicit SourceUnit topology stay mutation-free during validation.
+        if source_units:
+            synchronize_record_source_projection(records, source_units)
+        validation_profile = {
+            **profile,
+            "_validation_source_units": source_units,
+            "_check_corpus_conservation": True,
+        }
+        # Keep the public three-argument validate_records call shape. Several
+        # coordination tests and integrations wrap this method to observe/retry
+        # validation, and topology support must not bypass that seam.
+        validation = self.validate_records(blocks, records, validation_profile)
         build["record_count"] = len(records)
         build["validation"] = validation
         # Metadata completion is derived from persisted record state, never from a
@@ -5501,57 +5610,72 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build_id: str,
         record: dict[str, Any],
         previous: dict[str, Any],
+        *,
+        validate_record: bool = True,
     ) -> dict[str, Any]:
-        """Validate and persist one ordinary review edit without corpus scans.
+        """Persist one ordinary review edit and refresh its inexpensive aggregates.
 
         Structural edits continue through ``_rewrite_and_validate`` because they
-        change topology. Ordinary text, metadata, evidence, and disposition
-        edits only need record-local validation plus scalar build-counter deltas.
+        change topology. Text, metadata, and evidence edits still run record-local
+        validation. A disposition-only decision can skip that validation: loading
+        and filtering every source block for a book-length document made a simple
+        Accept/Reject wait on document-scale work. Full source coverage and
+        text-fidelity validation is recomputed by ``reconcile_review_state``
+        before publication.
         """
         build = self.repo.get_build(build_id)
-        blocks = [
-            block for block in self.repo.load_blocks(str(build["asset_id"]))
-            if not block.get("excluded_reason")
-        ]
-        blocks = _manifest_main_text_blocks(
-            blocks,
-            build.get("manifest") or {},
-            bounds_confirmed=bool(build.get("manifest_confirmed_at")),
-        )
         profile = self._profile_of_build(build)
         _sync_record_metadata_state(record, profile)
         _enforce_review_invariants(record)
-        local = self.validate_records(blocks, [record], profile)
-        existing = dict(build.get("validation") or {})
-        record_id = str(record.get("record_id") or "")
-        list_fields = (
-            "text_fidelity_errors", "source_order_errors", "page_mapping_errors",
-            "printed_page_label_errors", "metadata_schema_errors",
-            "relationship_errors", "human_ownership_errors", "record_content_errors",
-            "citation_errors", "suspicious_record_sizes",
-            "metadata_evidence_errors",
-        )
-        for field in list_fields:
-            prior = existing.get(field)
-            if not isinstance(prior, list):
-                continue
-            retained = [
-                item for item in prior
-                if str(item.get("record_id") if isinstance(item, dict) else item) != record_id
+        if validate_record:
+            blocks = [
+                block for block in self.repo.load_blocks(str(build["asset_id"]))
+                if not block.get("excluded_reason")
             ]
-            additions = local.get(field)
-            if isinstance(additions, list):
-                existing[field] = retained + additions
-        existing["metadata_valid"] = not any(
-            existing.get(field) for field in (
-                "metadata_evidence_errors", "metadata_schema_errors",
+            blocks = _manifest_main_text_blocks(
+                blocks,
+                build.get("manifest") or {},
+                bounds_confirmed=bool(build.get("manifest_confirmed_at")),
+            )
+            local_profile = {
+                **profile,
+                "_validation_source_units": self.repo.source_units_for_validation(build_id),
+                "_check_corpus_conservation": False,
+            }
+            local = self.validate_records(blocks, [record], local_profile)
+            existing = dict(build.get("validation") or {})
+            record_id = str(record.get("record_id") or "")
+            list_fields = (
+                "source_reference_errors", "text_fidelity_errors",
+                "source_order_errors", "page_mapping_errors",
+                "printed_page_label_errors", "metadata_schema_errors",
                 "relationship_errors", "human_ownership_errors",
                 "record_content_errors", "citation_errors",
-                "printed_page_label_errors",
+                "suspicious_record_sizes", "metadata_evidence_errors",
             )
-        )
-        existing["valid"] = bool(existing.get("source_valid", True) and existing["metadata_valid"])
-        build["validation"] = existing
+            for field in list_fields:
+                prior = existing.get(field)
+                if not isinstance(prior, list):
+                    continue
+                retained = [
+                    item for item in prior
+                    if str(item.get("record_id") if isinstance(item, dict) else item) != record_id
+                ]
+                additions = local.get(field)
+                if isinstance(additions, list):
+                    existing[field] = retained + additions
+            existing["metadata_valid"] = not any(
+                existing.get(field) for field in (
+                    "metadata_evidence_errors", "metadata_schema_errors",
+                    "relationship_errors", "human_ownership_errors",
+                    "record_content_errors", "citation_errors",
+                    "printed_page_label_errors",
+                )
+            )
+            existing["valid"] = bool(
+                existing.get("source_valid", True) and existing["metadata_valid"]
+            )
+            build["validation"] = existing
         if build.get("publication"):
             history = list(build.get("publication_history") or [])
             history.append(build["publication"])
@@ -5614,6 +5738,171 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
 
 
     # Backward-compatible internal alias for older call sites in this source tree.
+
+
+    def create_unfinished_export(self, build_id: str) -> dict[str, Any]:
+        """Create an inspectable point-in-time archive without publishing it.
+
+        This deliberately bypasses publication readiness. The archive is not a
+        cELF publication and must never be registered as one. It includes the
+        current Records, immutable extraction blocks, current SourceUnits,
+        validation/build state, and structural-review checkpoints so a researcher
+        can inspect an unfinished corpus without losing provenance or flattening
+        the source topology.
+        """
+        with self._lock, self.repo._lock:
+            build = json.loads(json.dumps(self.repo.get_build(build_id)))
+            records = json.loads(json.dumps(self.repo.load_records(build_id)))
+            blocks = json.loads(
+                json.dumps(self.repo.load_blocks(str(build["asset_id"])))
+            )
+            source_unit_path = self.repo.build_source_units_path(build_id)
+            persisted_source_units: list[dict[str, Any]] = []
+            if source_unit_path.exists():
+                with source_unit_path.open("r", encoding="utf-8") as handle:
+                    persisted_source_units = [
+                        json.loads(line)
+                        for line in handle
+                        if line.strip()
+                    ]
+            source_units = normalize_source_units(
+                persisted_source_units,
+                blocks,
+                source_document_id=str(build["asset_id"]),
+            )
+            source_units = json.loads(json.dumps(source_units))
+            persisted_source_units = json.loads(
+                json.dumps(persisted_source_units)
+            )
+            retired_records = self.repo.load_checkpoint(
+                build_id,
+                "retired_records",
+                {},
+            )
+            evidence_remap_pending = self.repo.load_checkpoint(
+                build_id,
+                "evidence_remap_pending",
+                {},
+            )
+
+        reviewer_filter_applied = False
+        if current_reviewer.get():
+            # FileResponse bodies bypass the ordinary JSON response scrubber.
+            # Apply the same blind-second-opinion presentation rule explicitly
+            # before writing an inspection archive for the current reviewer.
+            from .response_filters import scrub_second_opinions
+
+            reviewer_filter_applied = scrub_second_opinions(
+                {
+                    "records": records,
+                    "retired_records": retired_records,
+                }
+            )
+
+        export_id = f"unfinished-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
+        created_at = iso_now()
+        directory = self.repo.build_path(build_id).parent / "exports"
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{export_id}.zip"
+        temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+
+        export_manifest = {
+            "artifact_kind": "unfinished_corpus_export",
+            "celf_publication": False,
+            "publication_ready": bool(
+                (build.get("publication_readiness") or {}).get("can_publish")
+            ),
+            "build_id": build_id,
+            "asset_id": build.get("asset_id"),
+            "created_at": created_at,
+            "record_count": len(records),
+            "source_block_count": len(blocks),
+            "source_unit_count": len(source_units),
+            "persisted_source_unit_count": len(persisted_source_units),
+            "source_unit_store_present": source_unit_path.exists(),
+            "reviewer_filter_applied": reviewer_filter_applied,
+            "build_status": build.get("status"),
+            "build_stage": build.get("stage"),
+            "validation": build.get("validation") or {},
+            "warning": (
+                "Inspection artifact only. This archive may contain unresolved, "
+                "rejected, incomplete, or non-conformant Records and is not an "
+                "immutable cELF publication."
+            ),
+        }
+        readme = """DerridAI unfinished corpus export
+
+This is a point-in-time inspection artifact, not a published corpus.
+
+Contents:
+- export_manifest.json: artifact identity, counts, and validation state
+- build.json: current build/workflow state
+- records.jsonl: every current Record, including pending/rejected/internal audit data
+- source_units.jsonl: normalized validation view of the current SourceUnit topology
+- source_units_persisted.jsonl: exact persisted SourceUnit rows (empty for legacy builds with no store)
+- source_blocks.jsonl: immutable extraction blocks used by the build
+- retired_records.json: structural-edit tombstones, when present
+- evidence_remap_pending.json: unresolved structural evidence remaps, when present
+
+Nothing in this archive is promoted, accepted, flattened, or marked cELF-conformant
+by the act of downloading it. Blind second-opinion values that the current reviewer
+is not permitted to see are filtered exactly as they are in the interactive review UI.
+"""
+
+        def jsonl(rows: list[dict[str, Any]]) -> str:
+            return "".join(
+                json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+                for row in rows
+            )
+
+        try:
+            with zipfile.ZipFile(
+                temporary,
+                "w",
+                compression=zipfile.ZIP_DEFLATED,
+                compresslevel=6,
+            ) as archive:
+                archive.writestr(
+                    "export_manifest.json",
+                    json.dumps(export_manifest, ensure_ascii=False, indent=2, sort_keys=True),
+                )
+                archive.writestr(
+                    "build.json",
+                    json.dumps(build, ensure_ascii=False, indent=2, sort_keys=True),
+                )
+                archive.writestr("records.jsonl", jsonl(records))
+                archive.writestr("source_units.jsonl", jsonl(source_units))
+                archive.writestr(
+                    "source_units_persisted.jsonl",
+                    jsonl(persisted_source_units),
+                )
+                archive.writestr("source_blocks.jsonl", jsonl(blocks))
+                archive.writestr(
+                    "retired_records.json",
+                    json.dumps(retired_records, ensure_ascii=False, indent=2, sort_keys=True),
+                )
+                archive.writestr(
+                    "evidence_remap_pending.json",
+                    json.dumps(
+                        evidence_remap_pending,
+                        ensure_ascii=False,
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                )
+                archive.writestr("README.txt", readme)
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+        source_stem = Path(str(build.get("source_filename") or "corpus")).stem
+        return {
+            "path": path,
+            "filename": f"{source_stem}.unfinished-corpus.zip",
+            "export_id": export_id,
+            "created_at": created_at,
+            "record_count": len(records),
+        }
 
 
     def preview_record(self, build_id: str, record_id: str) -> dict[str, Any]:
@@ -5783,6 +6072,33 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build = self.repo.get_build(build_id)
         if self.repo.records_projection_dirty(build_id):
             self.repo.refresh_records_projection(build_id)
+        # "Use suggestions as-is" owns a final authoritative reconciliation.
+        # The web client normally requests it first, but direct API callers and
+        # stale readiness state must not evaluate autonomous publication against
+        # obsolete legacy topology. Strict reviewed publication keeps its existing
+        # lifecycle and relies on the normal readiness reconciliation.
+        if (
+            accept_unreviewed
+            and str(build.get("status") or "") not in {"queued", "running"}
+        ):
+            reconciliation_id = f"publication-finalize-{uuid.uuid4().hex[:12]}"
+            # Some older SourceUnit stores retained an immutable compatibility
+            # root as active alongside exact replacement descendants. That shape
+            # is redundant rather than lossy, but it looks uncovered to strict
+            # ownership validation. Retire only roots whose descendants exactly
+            # conserve their text, preserve the root row, and record the migration.
+            with self._lock, self.repo._lock:
+                source_units = self.repo.load_source_units(build_id)
+                if reconcile_redundant_active_source_roots(
+                    source_units,
+                    transaction_id=reconciliation_id,
+                ):
+                    self.repo.save_source_units(build_id, source_units)
+            build = self._reconcile_and_validate(
+                build_id,
+                repair_source_topology=True,
+                source_reconciliation_id=reconciliation_id,
+            )
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
         self._refresh_workflow_fields(build)

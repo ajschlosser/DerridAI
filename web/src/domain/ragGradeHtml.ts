@@ -18,25 +18,26 @@
 
 import { esc } from "./html";
 import { normalizeRagGrade } from "./sharedRecordHelpers";
+import { tr } from "./sharedTranslate";
 
 // Research grade card markup, shared by the job dialogs and the operations panel.
 export function ragGradeHtml(grade: Record<string, unknown> = {}): string {
   const normalized = normalizeRagGrade(grade);
   const scoreKeys = [
-    ["query_relevance", "Query relevance"],
-    ["source_binding", "Source binding"],
-    ["claim_traceability", "Claim traceability"],
-    ["attribution_source_discrimination", "Attribution/source discrimination"],
-    ["claim_evidence_fidelity", "Claim/evidence fidelity"],
-    ["conceptual_precision", "Conceptual precision"],
-    ["coverage", "Coverage"],
-    ["interpretive_usefulness", "Interpretive usefulness"],
-    ["overall", "Overall"],
+    ["query_relevance", tr("faq.grade_query_relevance")],
+    ["source_binding", tr("faq.grade_source_binding")],
+    ["claim_traceability", tr("faq.grade_claim_traceability")],
+    ["attribution_source_discrimination", tr("faq.grade_attribution_source_discrimination")],
+    ["claim_evidence_fidelity", tr("faq.grade_claim_evidence_fidelity")],
+    ["conceptual_precision", tr("faq.grade_conceptual_precision")],
+    ["coverage", tr("faq.grade_coverage")],
+    ["interpretive_usefulness", tr("faq.grade_interpretive_usefulness")],
+    ["overall", tr("faq.grade_overall")],
   ];
   const sections: [string, string[]][] = [
-    ["Strengths", [normalized.strengths].flat()],
-    ["Weaknesses", [normalized.weaknesses].flat()],
-    ["Unsupported or risky claims", [normalized.unsupported_or_risky_claims].flat()],
+    [tr("faq.grade_strengths"), [normalized.strengths].flat()],
+    [tr("faq.grade_weaknesses"), [normalized.weaknesses].flat()],
+    [tr("faq.grade_risky_claims"), [normalized.unsupported_or_risky_claims].flat()],
   ];
-  return `<div class="rag-grade-content"><div class="rag-grade-scores">${scoreKeys.map(([key, name]) => `<div><span>${esc(name)}</span><strong>${esc(normalized.score(key))}</strong><small>/10</small></div>`).join("")}</div><section><b>Summary</b><p>${esc(normalized.summary || "No summary returned.")}</p></section>${sections.map(([name, items]) => `<section><b>${esc(name)}</b><ul>${items.map((item) => `<li>${esc(item)}</li>`).join("") || "<li>None reported.</li>"}</ul></section>`).join("")}</div>`;
+  return `<div class="rag-grade-content"><div class="rag-grade-scores">${scoreKeys.map(([key, name]) => `<div><span>${esc(name)}</span><strong>${esc(normalized.score(key))}</strong><small>/10</small></div>`).join("")}</div><section><b>${esc(tr("runtime.summary"))}</b><p>${esc(normalized.summary || tr("runtime.no_summary_returned"))}</p></section>${sections.map(([name, items]) => `<section><b>${esc(name)}</b><ul>${items.map((item) => `<li>${esc(item)}</li>`).join("") || `<li>${esc(tr("runtime.none_reported"))}</li>`}</ul></section>`).join("")}</div>`;
 }

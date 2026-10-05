@@ -216,6 +216,14 @@ describe("PipelineComparisonWorkspace", () => {
     vi.restoreAllMocks();
     vi.spyOn(chromaApi, "collections").mockResolvedValue([
       {
+        name: "_response_cache",
+        count: 7,
+        protected: false,
+        collection_role: "general",
+        language_codes: [],
+        metadata: { derridai_system_collection: "response_cache" },
+      },
+      {
         name: "corpus",
         count: 42,
         protected: false,
@@ -234,6 +242,10 @@ describe("PipelineComparisonWorkspace", () => {
     await wrapper.find("textarea").setValue("What is the trace?");
     const selects = wrapper.findAll("select");
     expect(selects.length).toBe(3);
+    expect(selects[0].findAll("option").map((option) => option.attributes("value"))).not.toContain(
+      "_response_cache",
+    );
+    expect((selects[0].element as HTMLSelectElement).value).toBe("corpus");
     await selects[0].setValue("corpus");
     await selects[1].setValue("research.current@1");
     await selects[2].setValue("research.balanced@1");

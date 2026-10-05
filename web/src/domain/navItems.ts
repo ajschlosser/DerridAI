@@ -22,10 +22,9 @@ import { tr } from "./sharedTranslate";
 import { dbUnavailableReason, hasChromaService } from "./storeAvailability";
 
 export function viewDisabledReason(view: string): string {
-  if (!canAccessPage(view)) return "This workspace is available to administrators only.";
+  if (!canAccessPage(view)) return tr("runtime.disabled.admin_only");
   if (view === "vector" && isResearcher() && !hasChromaService()) return dbUnavailableReason();
-  if (view === "faq" && !hasChromaService())
-    return "ChromaDB is unavailable, so the Response Library cannot be opened.";
+  if (view === "faq" && !hasChromaService()) return tr("runtime.disabled.response_library_chroma");
   return "";
 }
 function translatedNavLabel(item: { id: string; label: string }) {

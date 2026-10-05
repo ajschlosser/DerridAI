@@ -40,6 +40,18 @@ from .pipelines.research import (
 )
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .research_memory import ResponseMemoryIndex, memory_guidance
+from .research_semantics import (
+    CONCEPTS_ID,
+    PERSONS_ID,
+    SOURCE_AUTHOR_ID,
+    SPEAKER_ID,
+    TOPICS_ID,
+    rerank_attribution_context,
+    semantic_text,
+    semantic_value,
+    source_author,
+    source_work_label,
+)
 from .research_sizing import (
     automatic_collection_sizing,
     collapse_adjacent_candidates,
@@ -110,8 +122,8 @@ You are DerridAI, an evidence-grounded scholarly research assistant.
 </EVIDENCE>
 
 Guidelines:
-- Preserve speaker, quoted_speaker, quoted_author, quoted_work, position_holder, stance, target, discourse_role, and proposition_status.
-- Use document_author from each evidence record, when present, as the source-document author. Never substitute a default author when it is absent.
+- Preserve all supplied source-identity, attribution, quotation, stance, target, discourse-role, and proposition-status metadata.
+- Treat the supplied source-document author as document authorship only; never substitute a default author when it is absent.
 - Do not equate document authorship with proposition ownership. Distinguish the source author's own claims from positions the passage quotes, describes, reconstructs, endorses, questions, or criticizes.
 - Use the supplied EVIDENCE as the sole basis for substantive claims.
 - Prior memory is advisory workflow context, not current evidence. Never cite it
@@ -131,6 +143,7 @@ Citation rules:
 def _extract_json(text: str) -> dict[str, Any]:
     """Compatibility wrapper around the shared repair-first structured parser."""
     return parse_json_object(text)
+
 
 
 def _prompt_metadata_value(record: Mapping[str, Any], selector: str) -> tuple[str, Any] | None:
@@ -220,8 +233,8 @@ def _context_string(
             f"<BEGIN EVIDENCE_TAG {tag}>",
             f"evidence_tag=[[{tag}]]",
             f"record_id={record.get('record_id', '')}",
-            f"work={record.get('work', '')}",
-            f"document_author={record.get('document_author', '')}",
+            f"source_work={source_work_label(record)}",
+            f"source_document_author={source_author(record)}",
             *metadata_lines,
             f"citation={inline}",
             f"text={compact_text}",
@@ -272,8 +285,8 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
             field
             for field, value in {
                 "record_id": record.get("record_id"),
-                "work": record.get("work"),
-                "document_author": record.get("document_author"),
+                "work": source_work_label(record),
+                "document_author": source_author(record),
                 "exact_text": record.get("text"),
                 "inline_citation": item.get("inline_citation"),
                 "full_citation": item.get("full_citation"),
@@ -436,22 +449,32 @@ def _tokenize(text: str) -> set[str]:
     }
 
 
+def _rerank_candidate_text(item: Mapping[str, Any]) -> str:
+    """Expose semantic attribution roles to rerankers."""
+
+    record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
+    passage = str(item.get("_rerank_text") or record.get("text") or "")
+    return rerank_attribution_context(record, passage)
+
+
 def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[dict[str, Any]]:
     q = _tokenize(query)
     scored: list[dict[str, Any]] = []
     for index, item in enumerate(docs):
         record = item["record"]
         text = " ".join([
-            str(record.get("work") or ""),
-            str(record.get("speaker") or ""),
-            str(record.get("position_holder") or ""),
-            str(record.get("topics") or ""),
-            str(record.get("concepts") or ""),
-            str(record.get("persons") or ""),
-            str(item.get("_rerank_text") or record.get("text") or ""),
+            source_author(record),
+            source_work_label(record),
+            semantic_text(record, SPEAKER_ID),
+            semantic_text(record, TOPICS_ID),
+            semantic_text(record, CONCEPTS_ID),
+            semantic_text(record, PERSONS_ID),
+            _rerank_candidate_text(item),
         ])
         tokens = _tokenize(text)
         overlap = len(q & tokens) / max(1, len(q))
+        author_tokens = _tokenize(source_author(record))
+        source_author_overlap = len(q & author_tokens) / max(1, len(q))
         retrieval_bonus = 1.0 / (60.0 + index + 1.0)
         similarity = float(
             item.get("relevance")
@@ -459,7 +482,14 @@ def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[
             else _distance_similarity(item.get("distance"))
         )
         row = dict(item)
-        row["rerank_score"] = overlap * 2.0 + similarity + retrieval_bonus
+        # Explicit source-author agreement is stronger evidence of source scope
+        # than merely mentioning the same author in passage text/metadata.
+        row["rerank_score"] = (
+            overlap * 2.0
+            + source_author_overlap
+            + similarity
+            + retrieval_bonus
+        )
         scored.append(row)
     return sorted(
         scored,
@@ -487,11 +517,7 @@ def _cross_encoder_rerank(
         [
             (
                 query,
-                str(
-                    item.get("_rerank_text")
-                    or item["record"].get("text")
-                    or ""
-                ),
+                _rerank_candidate_text(item),
             )
             for item in docs
         ],
@@ -525,6 +551,16 @@ def _resolve_search_collections(
     source = next((item for item in stores if item["name"] == source_name), None)
     if source is None:
         raise ValueError(f"Collection {source_name!r} does not exist.")
+
+    source_metadata = (
+        source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
+    )
+    system_kind = str(source_metadata.get("derridai_system_collection") or "").strip()
+    if system_kind:
+        raise ValueError(
+            f"Collection {source_name!r} is a DerridAI system collection "
+            f"({system_kind}) and cannot be used as a Research source collection."
+        )
 
     requested = list(dict.fromkeys(locales or ["en", "fr"]))
     requested_set = set(requested)
@@ -644,6 +680,126 @@ def _candidate_diagnostics(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, 
         for rank, item in enumerate(rows, start=1)
         if (diagnostic := _candidate_diagnostic(item, rank))["record_id"]
     ]
+
+
+def _normalized_scope_text(value: Any) -> str:
+    """Normalize author/work names for deterministic prompt-scope matching."""
+
+    folded = str(value or "").casefold().replace("’", "'")
+    folded = re.sub(r"'s\b", "", folded)
+    return re.sub(r"[^\wÀ-ÿ]+", " ", folded, flags=re.UNICODE).strip()
+
+
+def _mentions_scope_author(question: str, author: str) -> bool:
+    """Return whether a prompt explicitly names a corpus author."""
+
+    query = _normalized_scope_text(question)
+    normalized_author = _normalized_scope_text(author)
+    if not query or not normalized_author:
+        return False
+    if normalized_author in query:
+        return True
+    parts = [part for part in normalized_author.split() if part]
+    surname = parts[-1] if parts else ""
+    return bool(surname and len(surname) >= 4 and surname in set(query.split()))
+
+
+def _mentioned_work_groups(
+    work_summaries: Sequence[Mapping[str, Any]],
+    question: str,
+    *,
+    max_groups: int = 4,
+) -> list[list[str]]:
+    """Resolve explicitly named works/authors to bounded corpus work groups.
+
+    Named authors and works are routing signals only. They do not establish any
+    scholarly claim or source authority; they reserve retrieval coverage for
+    corpus scopes the researcher explicitly requested.
+    """
+
+    query = _normalized_scope_text(question)
+    if not query:
+        return []
+
+    groups: list[list[str]] = []
+    author_works: dict[str, set[str]] = {}
+    for summary in work_summaries:
+        work = str(summary.get("scope_label") or "").strip()
+        if not work:
+            continue
+        normalized_work = _normalized_scope_text(work)
+        if normalized_work and normalized_work in query:
+            groups.append([work])
+
+        author_values = summary.get("source_authors")
+        if not isinstance(author_values, (list, tuple, set)):
+            author_values = []
+        for raw_author in author_values:
+            author = str(raw_author or "").strip()
+            if not author or not _mentions_scope_author(question, author):
+                continue
+            key = _normalized_scope_text(author)
+            author_works.setdefault(key, set()).add(work)
+
+    groups.extend(sorted(works) for works in author_works.values())
+
+    distinct: list[list[str]] = []
+    for group in groups:
+        works = sorted({str(work).strip() for work in group if str(work).strip()})
+        if not works:
+            continue
+        # A specifically named work already satisfies the broader author group
+        # containing it; do not consume another reserved evidence slot.
+        if any(set(existing) & set(works) for existing in distinct):
+            continue
+        distinct.append(works)
+        if len(distinct) >= max(1, int(max_groups)):
+            break
+    return distinct
+
+
+def _explicit_scope_work_groups(
+    store: ChromaStore,
+    collections: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[list[str]]:
+    """Collect author/work targets from the searched corpus inventory."""
+
+    work_summaries: dict[str, dict[str, Any]] = {}
+    work_stats = getattr(store, "work_stats", None)
+    if not callable(work_stats):
+        return []
+    for collection in collections:
+        name = str(collection.get("name") or "")
+        if not name:
+            continue
+        try:
+            rows = work_stats(name)
+        except Exception:
+            logger.debug("Could not inspect work inventory for explicit Research scope", exc_info=True)
+            continue
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            work = source_work_label(row)
+            if not work:
+                continue
+            summary = work_summaries.setdefault(
+                work,
+                {"scope_label": work, "source_authors": set()},
+            )
+            author = source_author(row)
+            if author:
+                summary["source_authors"].add(author)
+
+    normalized = [
+        {
+            "scope_label": item["scope_label"],
+            "source_authors": sorted(item["source_authors"]),
+        }
+        for item in work_summaries.values()
+    ]
+    return _mentioned_work_groups(normalized, question)
 
 
 def _scope_rag_candidates(
@@ -1012,6 +1168,99 @@ def run_rag_pipeline(
                 row["search_rank"] = rank
                 raw_results.append(row)
 
+    # Explicitly named authors/works are corpus-scope constraints, not merely
+    # generation instructions. Query decomposition may correctly move wording
+    # such as "cite the named author" into prompt_instructions; if retrieval used only the
+    # cleaned research question, that target could disappear before evidence
+    # selection. Reserve one relevant Record for each named in-corpus scope.
+    explicit_scope_text = "\n".join(
+        value
+        for value in (
+            str(request.prompt or "").strip(),
+            str(request.instructions or "").strip(),
+        )
+        if value
+    )
+    explicit_scope_groups = _explicit_scope_work_groups(
+        store,
+        collections,
+        explicit_scope_text,
+    )
+    explicit_scope_seed_ids: set[str] = set()
+    explicit_scope_seed_detail: list[dict[str, Any]] = []
+    scoped_query = "\n".join(
+        value
+        for value in (
+            query_metadata["prompt_query"],
+            query_metadata["prompt_query_fr"],
+            explicit_scope_text,
+        )
+        if value
+    ).strip()
+
+    for group_index, works in enumerate(explicit_scope_groups, start=1):
+        existing = next(
+            (
+                item
+                for item in raw_results
+                if source_work_label(item.get("record") or {}) in works
+            ),
+            None,
+        )
+        seed = existing
+        if seed is None:
+            for collection in collections:
+                try:
+                    scoped_rows = _scope_rag_candidates(
+                        store.lexical_search(
+                            collection["name"],
+                            scoped_query,
+                            min(4, max(1, int(collection.get("count") or 1))),
+                            {"work": {"$in": works}},
+                        ),
+                        collection,
+                        set(
+                            collection.get("_rag_locales")
+                            or collection.get("language_codes")
+                            or []
+                        ),
+                    )
+                except Exception:
+                    logger.debug(
+                        "Explicit Research scope retrieval failed for %s",
+                        works,
+                        exc_info=True,
+                    )
+                    continue
+                if scoped_rows:
+                    seed = dict(scoped_rows[0])
+                    seed["collection"] = collection["name"]
+                    seed["search_type"] = "explicit_scope"
+                    seed["search_rank"] = 1
+                    raw_results.append(seed)
+                    break
+
+        if seed is None:
+            explicit_scope_seed_detail.append(
+                {"works": works, "matched": False, "record_id": None}
+            )
+            continue
+        record = seed.get("record") if isinstance(seed.get("record"), Mapping) else {}
+        logical = str(record.get("record_id") or seed.get("id") or "")
+        if not logical:
+            continue
+        explicit_scope_seed_ids.add(logical)
+        explicit_scope_seed_detail.append(
+            {
+                "works": works,
+                "matched": True,
+                "record_id": logical,
+                "scope_label": source_work_label(record),
+                "source_document_author": semantic_value(record, SOURCE_AUTHOR_ID),
+                "group": group_index,
+            }
+        )
+
     # Deduplicate by logical record ID, retaining a retrieval-rank fusion score.
     update("deduplicate", 0, 1, f"Fusing {len(raw_results)} retrieval hits")
     dedup: dict[str, dict[str, Any]] = {}
@@ -1049,6 +1298,12 @@ def run_rag_pipeline(
                 dedup[logical]["distance"] = item.get("distance")
                 dedup[logical]["distance_metric"] = item.get("distance_metric")
                 dedup[logical]["relevance"] = float(new_relevance)
+
+    for logical in explicit_scope_seed_ids:
+        if logical not in dedup:
+            continue
+        dedup[logical]["explicit_scope_seed"] = True
+        dedup[logical]["selection_role"] = "explicit_scope_seed"
 
     for item in selected_candidates:
         record = item["record"]
@@ -1134,10 +1389,14 @@ def run_rag_pipeline(
         effective_reranker = "none"
 
     update("rerank", 0, 1, effective_reranker)
-    rerank_query = (
-        query_metadata["prompt_query"]
-        + "\n"
-        + query_metadata["prompt_query_fr"]
+    rerank_query = "\n".join(
+        value
+        for value in (
+            query_metadata["prompt_query"],
+            query_metadata["prompt_query_fr"],
+            explicit_scope_text,
+        )
+        if value
     ).strip()
     requested_top_n = (
         len(ranking_candidates)
@@ -1147,18 +1406,26 @@ def run_rag_pipeline(
     selected_pool = [
         item for item in ranking_candidates if item.get("selected_evidence")
     ]
+    scope_seed_pool = [
+        item
+        for item in ranking_candidates
+        if item.get("explicit_scope_seed") and not item.get("selected_evidence")
+    ]
+    pinned_pool = selected_pool + scope_seed_pool
     retrieved_pool = [
-        item for item in ranking_candidates if not item.get("selected_evidence")
+        item
+        for item in ranking_candidates
+        if not item.get("selected_evidence") and not item.get("explicit_scope_seed")
     ]
     effective_top_n = (
         len(ranking_candidates)
         if request.skip_retrieval
         else min(
-            max(requested_top_n, len(selected_pool)),
+            max(requested_top_n, len(pinned_pool)),
             max(1, len(ranking_candidates)),
         )
     )
-    remaining_slots = max(0, effective_top_n - len(selected_pool))
+    remaining_slots = max(0, effective_top_n - len(pinned_pool))
     post_diversity = pipeline_plan.post_rerank_diversity
     rerank_pool_limit = min(
         len(retrieved_pool),
@@ -1175,7 +1442,7 @@ def run_rag_pipeline(
     cross_encoder_calls = 0
 
     if request.skip_retrieval:
-        reranked = selected_pool or ranking_candidates
+        reranked = pinned_pool or ranking_candidates
         for item in reranked:
             item["rerank_score"] = item.get("rerank_score", 1.0)
         reranked_retrieved: list[dict[str, Any]] = []
@@ -1187,6 +1454,15 @@ def run_rag_pipeline(
             row["rerank_score"] = max(
                 1.0,
                 float(item.get("rerank_score") or 0.0),
+            )
+            selected_ranked.append(row)
+        for item in scope_seed_pool:
+            row = dict(item)
+            row["selection_role"] = "explicit_scope_seed"
+            row["rerank_score"] = float(
+                item.get("rerank_score")
+                if item.get("rerank_score") is not None
+                else item.get("rrf_score") or 0.0
             )
             selected_ranked.append(row)
 
@@ -1306,6 +1582,7 @@ def run_rag_pipeline(
             "requested_top_n": requested_top_n,
             "rerank_pool_count": len(reranked_retrieved),
             "selected_evidence_pinned": len(selected_pool),
+            "explicit_scope_seeds_pinned": len(scope_seed_pool),
             "active_stage_id": active_rerank_stage_id,
             "fallback_condition": fallback_condition,
             "cross_encoder_calls": cross_encoder_calls,
@@ -1365,7 +1642,8 @@ def run_rag_pipeline(
                 "stage_id": pipeline_plan.diversity_stage_id,
                 "input_count": len(reranked_retrieved),
                 "output_count": len(diversified),
-                "selected_evidence_pinned": len(selected_ranked),
+                "selected_evidence_pinned": len(selected_pool),
+                "explicit_scope_seeds_pinned": len(scope_seed_pool),
                 "lambda_mult": (
                     runtime_settings.diversity_lambda
                     if post_diversity == "mmr"
@@ -1496,6 +1774,8 @@ def run_rag_pipeline(
         "query_decomposition_num_predict": runtime_settings.query_decomposition_num_predict,
         "skip_retrieval": request.skip_retrieval,
         "selected_evidence_count": len(selected_candidates),
+        "explicit_scope_groups": explicit_scope_seed_detail,
+        "explicit_scope_seed_count": len(explicit_scope_seed_ids),
         "response_language": request.response_language,
         "evidence_record_char_limit": runtime_settings.evidence_record_char_limit,
         "evidence_total_char_limit": runtime_settings.evidence_total_char_limit,

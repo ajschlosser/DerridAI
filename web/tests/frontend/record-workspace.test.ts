@@ -18,7 +18,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { createRecordWorkspace } from "../../src/domain/recordWorkspace";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 
 // The rendered Record view is covered by the legacy baseline's record scenarios (recorded before this logic moved);
 // these pin the commands that do not need a full workspace to run.

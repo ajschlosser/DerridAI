@@ -204,7 +204,7 @@ class ReviewActionsMixin:
         _progressive_metadata_index: Any
 
         def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]], *, persist_records: bool = True) -> dict[str, Any]: ...
-        def _rewrite_targeted_record(self, build_id: str, record: dict[str, Any], previous: dict[str, Any]) -> dict[str, Any]: ...
+        def _rewrite_targeted_record(self, build_id: str, record: dict[str, Any], previous: dict[str, Any], *, validate_record: bool = True) -> dict[str, Any]: ...
         def _profile_for(self, build_id: str) -> dict[str, Any]: ...
         def _profile_of_build(self, build: dict[str, Any]) -> dict[str, Any]: ...
         def _schema_for(self, build_id: str) -> MetadataSchema: ...
@@ -424,7 +424,7 @@ class ReviewActionsMixin:
             target["review_reason"] = str(reason or target.get("review_reason") or "Pending human review.")
         _mark_human_touch(target, ["__review__"])
         target["record_revision"] = current_revision + 1
-        self._rewrite_targeted_record(build_id, target, previous_record)
+        self._rewrite_targeted_record(build_id, target, previous_record, validate_record=False)
         if promoted_fields:
             self._persist_review_audit_bindings(
                 build_id,
@@ -486,7 +486,7 @@ class ReviewActionsMixin:
         target["review_reason"] = "" if disposition == "accepted" else str(reason or "Rejected during human review.")
         _mark_human_touch(target, ["__review__"])
         target["record_revision"] = current_revision + 1
-        build = self._rewrite_targeted_record(build_id, target, previous_record)
+        build = self._rewrite_targeted_record(build_id, target, previous_record, validate_record=False)
         if promoted_fields:
             self._persist_review_audit_bindings(
                 build_id,

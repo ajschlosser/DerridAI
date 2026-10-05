@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 from app.models import RAGRunRequest
 from app.pipelines.comparison import compare_research_dry_runs
-from app.rag import run_rag_pipeline
+from app.rag import _cross_encoder_rerank, _lexical_rerank, run_rag_pipeline
 
 
 def _result(pipeline_id: str, ids: list[str], *, elapsed: float = 0.1):
@@ -156,6 +156,48 @@ class _LexicalOnlyStore:
         ]
 
 
+class _SystemCollectionStore:
+    def list_stores(self):
+        return [
+            {
+                "name": "_response_cache",
+                "count": 1,
+                "collection_role": "general",
+                "language_codes": [],
+                "metadata": {"derridai_system_collection": "response_cache"},
+            }
+        ]
+
+    def lexical_search(self, name, query, limit):
+        raise AssertionError("System collections must be rejected before retrieval starts.")
+
+
+def test_research_dry_run_rejects_system_collection_before_retrieval() -> None:
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="_response_cache",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"system collection \(response_cache\).*cannot be used as a Research source collection",
+    ):
+        run_rag_pipeline(
+            request,
+            _SystemCollectionStore(),
+            stop_after_context=True,
+        )
+
+
 def test_research_dry_run_stops_before_generation(monkeypatch) -> None:
     def forbidden_chat(**kwargs):
         raise AssertionError("dry-run comparison must not generate an answer")
@@ -189,3 +231,159 @@ def test_research_dry_run_stops_before_generation(monkeypatch) -> None:
     assert "text" not in result["diagnostics"]["pre_rerank"][0]
     assert [item["record"]["record_id"] for item in result["evidence"]] == ["r1"]
     assert all(stage["name"] != "generation" for stage in result["stages"])
+
+
+class _ExplicitScopeStore:
+    def list_stores(self):
+        return [
+            {
+                "name": "corpus",
+                "count": 3,
+                "collection_role": "general",
+                "language_codes": ["en"],
+            }
+        ]
+
+    def work_stats(self, name):
+        assert name == "corpus"
+        return [
+            {"work": "Of Grammatology", "document_author": "Jacques Derrida", "count": 2},
+            {"work": "Totality and Infinity", "document_author": "Emmanuel Levinas", "count": 1},
+        ]
+
+    def lexical_search(self, name, query, limit, where=None):
+        assert name == "corpus"
+        derrida = {
+            "id": "derrida-1",
+            "record": {
+                "record_id": "d1",
+                "work": "Of Grammatology",
+                "document_author": "Jacques Derrida",
+                "year": 1976,
+                "page_start": 65,
+                "text": "The trace is not a presence.",
+            },
+            "distance": None,
+            "relevance": 0.95,
+        }
+        levinas = {
+            "id": "levinas-1",
+            "record": {
+                "record_id": "l1",
+                "work": "Totality and Infinity",
+                "document_author": "Emmanuel Levinas",
+                "year": 1969,
+                "page_start": 43,
+                "text": "The face resists possession and thematic reduction.",
+            },
+            "distance": None,
+            "relevance": 0.70,
+        }
+        if where:
+            works = set((where.get("work") or {}).get("$in") or [])
+            return [row for row in (derrida, levinas) if row["record"]["work"] in works][:limit]
+        # Reproduce the regression: broad retrieval is monopolized by the
+        # largest author/work before explicit scope targeting runs.
+        return [derrida][:limit]
+
+
+def test_balanced_research_reserves_explicitly_named_author_scope() -> None:
+    request = RAGRunRequest(
+        prompt=(
+            "Explain the relation between alterity and trace. "
+            "Cite Derrida and Levinas explicitly."
+        ),
+        pipeline_id="research.balanced",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        rerank_top_n=1,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+
+    authors = {
+        item["record"]["document_author"]
+        for item in result["evidence"]
+    }
+    assert authors == {"Jacques Derrida", "Emmanuel Levinas"}
+    assert result["retrieval"]["explicit_scope_seed_count"] == 2
+    assert {
+        item["source_document_author"]
+        for item in result["retrieval"]["explicit_scope_groups"]
+        if item["matched"]
+    } == {"Jacques Derrida", "Emmanuel Levinas"}
+
+
+
+def test_lexical_rerank_distinguishes_source_author_from_mentioned_author() -> None:
+    docs = [
+        {
+            "record": {
+                "record_id": "d1",
+                "document_author": "Jacques Derrida",
+                "work": "Adieu to Emmanuel Levinas",
+                "quoted_author": "Emmanuel Levinas",
+                "text": "Levinas is discussed throughout this passage.",
+            },
+            "relevance": 0.5,
+        },
+        {
+            "record": {
+                "record_id": "l1",
+                "document_author": "Emmanuel Levinas",
+                "work": "Totality and Infinity",
+                "text": "The face resists possession.",
+            },
+            "relevance": 0.5,
+        },
+    ]
+
+    ranked = _lexical_rerank("cite Emmanuel Levinas", docs, 2)
+
+    assert ranked[0]["record"]["record_id"] == "l1"
+
+
+def test_cross_encoder_receives_source_identity_separately_from_mentions(monkeypatch) -> None:
+    captured = {}
+
+    def fake_predict(pairs, **kwargs):
+        captured["pairs"] = pairs
+        return [0.5], {"model": kwargs.get("model_name")}
+
+    monkeypatch.setattr("app.rag.predict_scores", fake_predict)
+    docs = [
+        {
+            "record": {
+                "record_id": "d1",
+                "document_author": "Jacques Derrida",
+                "work": "Adieu to Emmanuel Levinas",
+                "quoted_author": "Emmanuel Levinas",
+                "text": "A passage mentioning Levinas.",
+            }
+        }
+    ]
+
+    ranked, warning, _telemetry = _cross_encoder_rerank(
+        "cite Levinas",
+        docs,
+        1,
+        "test-model",
+        timeout_seconds=1,
+    )
+
+    assert warning is None
+    assert ranked is not None
+    candidate_text = captured["pairs"][0][1]
+    assert "Source document author: Jacques Derrida" in candidate_text
+    assert "Quoted author: Emmanuel Levinas" in candidate_text

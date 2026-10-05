@@ -756,6 +756,17 @@ def get_pdf_corpus_build(build_id: str) -> dict[str, Any]:
     return build
 
 
+@router.post("/api/pdf/corpus-builds/{build_id}/reconcile")
+def reconcile_pdf_corpus_build(build_id: str) -> dict[str, Any]:
+    """Recompute authoritative review aggregates and publication validation."""
+    try:
+        return pdf_corpus_builds.reconcile_review_state(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/api/pdf/corpus-builds/{build_id}/llm-live-output")
 def get_pdf_corpus_llm_live_output(build_id: str, request: Request) -> dict[str, Any]:
     """Current unvalidated model drafts for an administrator who opened Model activity."""
@@ -1444,6 +1455,33 @@ def decide_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRevie
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-status")
+def get_pdf_corpus_record_review_status(build_id: str, record_id: str) -> dict[str, Any]:
+    """Small authoritative read used to resolve ambiguous background-save outcomes."""
+    try:
+        record = pdf_corpus_repository.get_record(build_id, record_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    disposition = str(
+        record.get("review_disposition")
+        or (
+            "accepted"
+            if record.get("accepted")
+            else "rejected"
+            if record.get("rejected")
+            else "pending"
+        )
+    )
+    return {
+        "record_id": str(record.get("record_id") or record_id),
+        "record_revision": int(record.get("record_revision") or 1),
+        "review_disposition": disposition,
+        "accepted": disposition == "accepted",
+        "rejected": disposition == "rejected",
+        "needs_review": bool(record.get("needs_review")),
+    }
+
+
 @router.post("/api/pdf/corpus-builds/{build_id}/records/disposition")
 def bulk_pdf_corpus_record_disposition(build_id: str, body: PdfCorpusBulkDisposition) -> dict[str, Any]:
     try:
@@ -1691,6 +1729,20 @@ def rerun_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCor
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/download-unfinished")
+def download_unfinished_pdf_corpus_build(build_id: str) -> FileResponse:
+    """Download current build state for inspection without publishing it."""
+    try:
+        artifact = pdf_corpus_builds.create_unfinished_export(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    return FileResponse(
+        artifact["path"],
+        media_type="application/zip",
+        filename=str(artifact["filename"]),
+    )
 
 
 @router.post("/api/pdf/corpus-builds/{build_id}/publish")

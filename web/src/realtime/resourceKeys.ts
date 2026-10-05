@@ -27,6 +27,7 @@ export const DATA_RESOURCES = [
   "vector_collections",
   "metadata_exemplars",
   "response_library",
+  "research_threads",
   "corpus_records",
 ] as const;
 export type DataResource = (typeof DATA_RESOURCES)[number];

@@ -138,6 +138,526 @@ def test_stale_revision_is_refused(tmp_path):
         manager.split(bid, "r2", offset=10, expected_revision=9)
 
 
+def test_sourceunit_topology_does_not_duplicate_a_split_legacy_block():
+    """Two active SourceUnit fragments may share one immutable extraction root."""
+    blocks = [
+        {
+            "block_id": "b1",
+            "page": 1,
+            "bbox": [0, 0, 1, 1],
+            "type": "paragraph",
+            "text": "Alpha Beta",
+        }
+    ]
+    units = [
+        {
+            **blocks[0],
+            "source_unit_id": "b1",
+            "unit_id": "b1",
+            "source_block_ids": ["b1"],
+            "text": "Alpha Beta",
+            "active": False,
+        },
+        {
+            **blocks[0],
+            "source_unit_id": "u-left",
+            "unit_id": "u-left",
+            "source_block_ids": ["b1"],
+            "parent_unit_ids": ["b1"],
+            "consumed_ranges": [{"unit_id": "b1", "start": 0, "end": 5}],
+            "text": "Alpha",
+            "active": True,
+        },
+        {
+            **blocks[0],
+            "source_unit_id": "u-right",
+            "unit_id": "u-right",
+            "source_block_ids": ["b1"],
+            "parent_unit_ids": ["b1"],
+            "consumed_ranges": [{"unit_id": "b1", "start": 6, "end": 10}],
+            "text": "Beta",
+            "active": True,
+        },
+    ]
+    records = [
+        {
+            "record_id": "r-left",
+            "text": "Alpha",
+            "source_extracted_text": "Alpha",
+            "source_unit_ids": ["u-left"],
+            "source_block_ids": ["b1"],
+            "pdf_pages": [1],
+            "page_start": None,
+            "page_end": None,
+            "review_disposition": "rejected",
+        },
+        {
+            "record_id": "r-right",
+            "text": "Beta",
+            "source_extracted_text": "Beta",
+            "source_unit_ids": ["u-right"],
+            "source_block_ids": ["b1"],
+            "pdf_pages": [1],
+            "page_start": None,
+            "page_end": None,
+            "review_disposition": "rejected",
+        },
+    ]
+
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks,
+        records,
+        {},
+        source_units=units,
+    )
+
+    assert validation["source_valid"] is True
+    assert validation["missing_block_ids"] == []
+    assert validation["missing_source_unit_ids"] == []
+    assert validation["duplicate_block_ids"] == []
+    assert validation["text_fidelity_errors"] == []
+    assert validation["source_order_errors"] == []
+    assert validation["source_conservation_errors"] == []
+
+
+def test_sourceunit_root_resolution_crosses_retired_generations():
+    """A current unit may descend through retired replacement units to one extraction root."""
+    blocks = [{"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"}]
+    units = [
+        {**blocks[0], "source_unit_id": "b1", "unit_id": "b1", "source_block_ids": ["b1"], "active": False},
+        {**blocks[0], "source_unit_id": "u1", "unit_id": "u1", "source_block_ids": ["b1"], "parent_unit_ids": ["b1"], "text": "Alpha", "active": False},
+        {**blocks[0], "source_unit_id": "u2", "unit_id": "u2", "source_block_ids": ["b1"], "parent_unit_ids": ["u1"], "text": "Alpha", "active": True},
+    ]
+    records = [{
+        "record_id": "r1",
+        "text": "Alpha",
+        "source_extracted_text": "Alpha",
+        "source_unit_ids": ["u2"],
+        "source_block_ids": ["b1"],
+        "pdf_pages": [1],
+        "page_start": None,
+        "page_end": None,
+        "review_disposition": "rejected",
+    }]
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks, records, {}, source_units=units
+    )
+    assert validation["source_valid"] is True
+    assert validation["missing_block_ids"] == []
+
+
+def test_duplicate_active_sourceunit_ownership_is_blocking():
+    blocks = [{"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"}]
+    units = [{
+        **blocks[0],
+        "source_unit_id": "u1",
+        "unit_id": "u1",
+        "source_block_ids": ["b1"],
+        "parent_unit_ids": ["b1"],
+        "text": "Alpha",
+        "active": True,
+    }]
+    base = {
+        "text": "Alpha",
+        "source_extracted_text": "Alpha",
+        "source_unit_ids": ["u1"],
+        "source_block_ids": ["b1"],
+        "pdf_pages": [1],
+        "page_start": None,
+        "page_end": None,
+        "review_disposition": "rejected",
+    }
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks,
+        [{**base, "record_id": "r1"}, {**base, "record_id": "r2"}],
+        {},
+        source_units=units,
+    )
+    assert validation["source_valid"] is False
+    assert validation["duplicate_source_unit_ids"] == ["u1"]
+    assert any(
+        issue["code"] == "source_duplicate" and issue["field"] == "u1"
+        for issue in validation["validation_issues"]
+    )
+
+
+def test_inactive_sourceunit_reference_is_blocking():
+    blocks = [{"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"}]
+    units = [{
+        **blocks[0],
+        "source_unit_id": "u-old",
+        "unit_id": "u-old",
+        "source_block_ids": ["b1"],
+        "parent_unit_ids": ["b1"],
+        "text": "Alpha",
+        "active": False,
+    }]
+    records = [{
+        "record_id": "r1",
+        "text": "Alpha",
+        "source_extracted_text": "Alpha",
+        "source_unit_ids": ["u-old"],
+        "source_block_ids": ["b1"],
+        "pdf_pages": [1],
+        "page_start": None,
+        "page_end": None,
+        "review_disposition": "rejected",
+    }]
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks, records, {}, source_units=units
+    )
+    assert validation["source_valid"] is False
+    assert validation["unknown_source_unit_ids"] == ["u-old"]
+    assert validation["source_reference_errors"][0]["field"] == "u-old"
+
+
+def test_reconciliation_repairs_retired_sourceunit_to_conserving_descendants():
+    from app.corpus_record_restructure import repair_record_source_topology
+
+    units = [
+        {
+            "source_unit_id": "u-old",
+            "unit_id": "u-old",
+            "source_block_ids": ["b1"],
+            "text": "Alpha Beta",
+            "active": False,
+        },
+        {
+            "source_unit_id": "u-left",
+            "unit_id": "u-left",
+            "source_block_ids": ["b1"],
+            "parent_unit_ids": ["u-old"],
+            "text": "Alpha",
+            "active": True,
+        },
+        {
+            "source_unit_id": "u-right",
+            "unit_id": "u-right",
+            "source_block_ids": ["b1"],
+            "parent_unit_ids": ["u-old"],
+            "text": "Beta",
+            "active": True,
+        },
+    ]
+    records = [{
+        "record_id": "r1",
+        "source_unit_ids": ["u-old"],
+        "source_block_ids": ["b1"],
+        "source_extracted_text": "Alpha Beta",
+        "text": "Alpha Beta",
+    }]
+
+    events = repair_record_source_topology(records, units)
+
+    assert records[0]["source_unit_ids"] == ["u-left", "u-right"]
+    assert events[0]["method"] == "active_descendant_lineage"
+    history = records[0]["source_topology_reconciliation_history"]
+    assert history[-1]["previous_source_unit_ids"] == ["u-old"]
+    assert history[-1]["source_unit_ids"] == ["u-left", "u-right"]
+    assert history[-1]["source_text_conserved"] is True
+
+
+def test_reconciliation_does_not_guess_ambiguous_sourceunit_ownership():
+    from app.corpus_record_restructure import repair_record_source_topology
+
+    units = [
+        {
+            "source_unit_id": "u-old",
+            "unit_id": "u-old",
+            "source_block_ids": ["b1"],
+            "text": "Alpha",
+            "active": False,
+        },
+        {
+            "source_unit_id": "u-new",
+            "unit_id": "u-new",
+            "source_block_ids": ["b1"],
+            "parent_unit_ids": ["u-old"],
+            "text": "Alpha",
+            "active": True,
+        },
+    ]
+    records = [
+        {
+            "record_id": "r1",
+            "source_unit_ids": ["u-old"],
+            "source_block_ids": ["b1"],
+            "source_extracted_text": "Alpha",
+            "text": "Alpha",
+        },
+        {
+            "record_id": "r2",
+            "source_unit_ids": ["u-old"],
+            "source_block_ids": ["b1"],
+            "source_extracted_text": "Alpha",
+            "text": "Alpha",
+        },
+    ]
+
+    events = repair_record_source_topology(records, units)
+
+    assert events == []
+    assert records[0]["source_unit_ids"] == ["u-old"]
+    assert records[1]["source_unit_ids"] == ["u-old"]
+
+
+def test_reconciliation_can_recover_unique_projection_when_stale_unit_is_missing():
+    from app.corpus_record_restructure import repair_record_source_topology
+
+    units = [
+        {
+            "source_unit_id": "u-left",
+            "unit_id": "u-left",
+            "source_block_ids": ["b1"],
+            "text": "Alpha",
+            "active": True,
+        },
+        {
+            "source_unit_id": "u-right",
+            "unit_id": "u-right",
+            "source_block_ids": ["b1"],
+            "text": "Beta",
+            "active": True,
+        },
+    ]
+    records = [{
+        "record_id": "r1",
+        "source_unit_ids": ["missing-old-unit"],
+        "source_block_ids": ["b1"],
+        "source_extracted_text": "Alpha Beta",
+        "text": "Reviewed wording may differ",
+    }]
+
+    events = repair_record_source_topology(records, units)
+
+    assert records[0]["source_unit_ids"] == ["u-left", "u-right"]
+    assert events[0]["method"] == "unique_source_projection_match"
+
+
+def test_reconciliation_resolves_duplicate_active_ownership_when_projection_is_unique():
+    from app.corpus_record_restructure import repair_record_source_topology
+
+    units = [
+        {
+            "source_unit_id": "u-left",
+            "unit_id": "u-left",
+            "source_block_ids": ["b1"],
+            "text": "Alpha",
+            "active": True,
+        },
+        {
+            "source_unit_id": "u-right",
+            "unit_id": "u-right",
+            "source_block_ids": ["b1"],
+            "text": "Beta",
+            "active": True,
+        },
+    ]
+    records = [
+        {
+            "record_id": "r1",
+            "source_unit_ids": ["u-left"],
+            "source_block_ids": ["b1"],
+            "source_extracted_text": "Alpha",
+            "text": "Alpha",
+        },
+        {
+            "record_id": "r2",
+            "source_unit_ids": ["u-left"],
+            "source_block_ids": ["b1"],
+            "source_extracted_text": "Beta",
+            "text": "Beta",
+        },
+    ]
+
+    events = repair_record_source_topology(
+        records, units, source_block_ids={"b1"}
+    )
+
+    assert records[0]["source_unit_ids"] == ["u-left"]
+    assert records[1]["source_unit_ids"] == ["u-right"]
+    assert [event["record_id"] for event in events] == ["r2"]
+    assert events[0]["method"] == "unique_source_projection_match"
+    assert events[0]["source_text_conserved"] is True
+
+
+def test_reconciliation_keeps_duplicate_active_ownership_when_ambiguous():
+    from app.corpus_record_restructure import repair_record_source_topology
+
+    units = [
+        {
+            "source_unit_id": "u1",
+            "unit_id": "u1",
+            "source_block_ids": ["b1"],
+            "text": "Alpha",
+            "active": True,
+        }
+    ]
+    records = [
+        {
+            "record_id": record_id,
+            "source_unit_ids": ["u1"],
+            "source_block_ids": ["b1"],
+            "source_extracted_text": "Alpha",
+            "text": "Alpha",
+        }
+        for record_id in ("r1", "r2")
+    ]
+
+    events = repair_record_source_topology(
+        records, units, source_block_ids={"b1"}
+    )
+
+    assert events == []
+    assert [record["source_unit_ids"] for record in records] == [["u1"], ["u1"]]
+
+
+def test_source_projection_reconciliation_is_audited():
+    from app.corpus_record_restructure import synchronize_record_source_projection
+
+    units = [
+        {
+            "source_unit_id": "u1",
+            "unit_id": "u1",
+            "source_block_ids": ["b1"],
+            "text": "Alpha",
+            "active": True,
+        }
+    ]
+    records = [{
+        "record_id": "r1",
+        "source_unit_ids": ["u1"],
+        "source_block_ids": ["b1"],
+        "source_extracted_text": "stale projection",
+        "text": "Reviewed wording may differ",
+    }]
+
+    changed = synchronize_record_source_projection(records, units)
+
+    assert changed == 1
+    assert records[0]["source_extracted_text"] == "Alpha"
+    history = records[0]["source_projection_reconciliation_history"]
+    assert history[-1]["method"] == "derive_from_active_source_units"
+    assert history[-1]["source_unit_ids"] == ["u1"]
+    assert history[-1]["previous_source_projection_hash"]
+    assert history[-1]["source_projection_hash"]
+    assert history[-1]["source_text_conserved"] is False
+
+def test_reordered_sourceunits_are_blocking():
+    blocks = [
+        {"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"},
+        {"block_id": "b2", "page": 1, "type": "paragraph", "text": "Beta"},
+    ]
+    units = [
+        {**blocks[0], "source_unit_id": "u1", "unit_id": "u1", "source_block_ids": ["b1"], "parent_unit_ids": ["b1"], "text": "Alpha", "active": True},
+        {**blocks[1], "source_unit_id": "u2", "unit_id": "u2", "source_block_ids": ["b2"], "parent_unit_ids": ["b2"], "text": "Beta", "active": True},
+    ]
+    records = [
+        {
+            "record_id": "r2",
+            "text": "Beta",
+            "source_extracted_text": "Beta",
+            "source_unit_ids": ["u2"],
+            "source_block_ids": ["b2"],
+            "pdf_pages": [1],
+            "page_start": None,
+            "page_end": None,
+            "review_disposition": "rejected",
+        },
+        {
+            "record_id": "r1",
+            "text": "Alpha",
+            "source_extracted_text": "Alpha",
+            "source_unit_ids": ["u1"],
+            "source_block_ids": ["b1"],
+            "pdf_pages": [1],
+            "page_start": None,
+            "page_end": None,
+            "review_disposition": "rejected",
+        },
+    ]
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks, records, {}, source_units=units
+    )
+    assert validation["source_valid"] is False
+    assert validation["source_order_errors"]
+    assert validation["source_conservation_errors"] == ["corpus"]
+
+
+def test_timed_sourceunit_locator_mismatch_is_blocking():
+    blocks = [{
+        "block_id": "b1",
+        "locator_kind": "time",
+        "start": 10.0,
+        "end": 20.0,
+        "type": "transcript",
+        "text": "Alpha",
+    }]
+    units = [{
+        **blocks[0],
+        "source_unit_id": "u1",
+        "unit_id": "u1",
+        "source_block_ids": ["b1"],
+        "parent_unit_ids": ["b1"],
+        "start": 20.0,
+        "end": 10.0,
+        "text": "Alpha",
+        "active": True,
+    }]
+    records = [{
+        "record_id": "r1",
+        "text": "Alpha",
+        "source_extracted_text": "Alpha",
+        "source_unit_ids": ["u1"],
+        "source_block_ids": ["b1"],
+        "review_disposition": "rejected",
+    }]
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks, records, {}, source_units=units
+    )
+    assert validation["source_valid"] is False
+    assert validation["page_mapping_errors"] == ["r1"]
+
+
+def test_block_bound_evidence_survives_sourceunit_partition():
+    blocks = [{"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"}]
+    units = [{
+        **blocks[0],
+        "source_unit_id": "u1",
+        "unit_id": "u1",
+        "source_block_ids": ["b1"],
+        "parent_unit_ids": ["b1"],
+        "text": "Alpha",
+        "active": True,
+    }]
+    records = [{
+        "record_id": "r1",
+        "text": "Alpha",
+        "source_extracted_text": "Alpha",
+        "source_unit_ids": ["u1"],
+        "source_block_ids": ["b1"],
+        "pdf_pages": [1],
+        "page_start": None,
+        "page_end": None,
+        "speaker": "Derrida",
+        "metadata_evidence": {
+            "speaker": {
+                "block_ids": ["b1"],
+                "confidence": 1.0,
+                "reviewed_by": "human",
+            }
+        },
+        "review_disposition": "pending",
+    }]
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks,
+        records,
+        {"attribution_evidence_fields": ["speaker"], "min_metadata_confidence": 0.65},
+        source_units=units,
+    )
+    assert validation["metadata_evidence_errors"] == []
+
+
 def test_text_conservation_guard_refuses_lost_or_invented_text():
     from app.corpus_record_restructure import assert_text_conserved
 

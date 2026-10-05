@@ -110,6 +110,26 @@ from app.config import APP_VERSION  # noqa: E402
 
 def _manager(tmp_path: Path):
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    # The unfinished-export path reads immutable extraction blocks. Install a
+    # minimal real asset fixture instead of relying on a dangling build asset ID.
+    repo.asset_meta_path("a").write_text(
+        json.dumps({
+            "asset_id": "a",
+            "media_kind": "text",
+            "filename": "x.txt",
+            "block_count": 1,
+        }),
+        encoding="utf-8",
+    )
+    repo.asset_blocks_path("a").write_text(
+        json.dumps({
+            "block_id": "b1",
+            "text": "t",
+            "type": "paragraph",
+            "page": 1,
+        }) + "\n",
+        encoding="utf-8",
+    )
     build = repo.create_build({
         "asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 1,
         "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": APP_VERSION,
@@ -179,6 +199,24 @@ def test_precedents_do_not_show_a_second_reviewer_the_first_answer(tmp_path):
     assert "assertion" in mine and "assertion" not in theirs
 
 
+def test_unfinished_export_hides_sealed_second_opinion_values(tmp_path):
+    import zipfile
+
+    m, repo, bid = _manager(tmp_path)
+    repo.save_records(bid, [record(review_disposition="pending")])
+    token = current_reviewer.set("user-2")
+    try:
+        artifact = m.create_unfinished_export(bid)
+    finally:
+        current_reviewer.reset(token)
+
+    with zipfile.ZipFile(artifact["path"]) as archive:
+        exported = archive.read("records.jsonl").decode("utf-8")
+        manifest = json.loads(archive.read("export_manifest.json"))
+    assert "assertion" not in exported
+    assert manifest["reviewer_filter_applied"] is True
+
+
 def test_the_ledger_export_does_not_carry_sealed_values(tmp_path):
     from app.enrichment_ledger import EnrichmentLedger
 
@@ -198,6 +236,9 @@ def test_the_ledger_export_does_not_carry_sealed_values(tmp_path):
 # hides a pending second opinion in any record it finds, and the channels tested above cover what it cannot see.
 CARRIES_RECORDS = {
     ("GET", "/api/pdf/corpus-builds/{build_id}/records"),
+    # Binary inspection export is scrubbed explicitly before the ZIP is written,
+    # because FileResponse cannot be rewritten by the JSON response middleware.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/download-unfinished"),
     # Semantic graph nodes/edges may project reviewer-visible metadata values.
     ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph/view"),
@@ -217,6 +258,8 @@ CARRIES_RECORDS = {
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/accept"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/disposition"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-decision"),
+    # Minimal review-status is still derived from one authoritative Record.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-status"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/disposition"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/metadata"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/review/undo"),
@@ -258,6 +301,9 @@ BUILD_LEVEL = {
     ("DELETE", "/api/pdf/corpus-builds/{build_id}"),
     ("GET", "/api/pdf/corpus-builds"),
     ("GET", "/api/pdf/corpus-builds/{build_id}"),
+    # Reconciliation returns the same build-level readiness/validation shape after
+    # recomputing it from persisted Records; it does not return Record field values.
+    ("POST", "/api/pdf/corpus-builds/{build_id}/reconcile"),
     # Provider annotations derive only from source text; no reviewer decisions are embedded.
     ("GET", "/api/pdf/corpus-builds/{build_id}/document-intelligence"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/provider-profile"),

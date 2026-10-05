@@ -21,6 +21,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { chromaApi } from "../../api/chroma";
 import { pipelinesApi } from "../../api/pipelines";
 import { pipelineKey } from "../../domain/pipelinePresentation";
+import { researchSourceCollections } from "../../domain/vectorCollections";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   EvidencePipelineComparisonResult,
@@ -210,7 +211,7 @@ async function loadCollections() {
   collectionsLoading.value = true;
   error.value = "";
   try {
-    collections.value = await chromaApi.collections();
+    collections.value = researchSourceCollections(await chromaApi.collections());
     collectionsLoaded.value = true;
     if (!collection.value && collections.value.length) {
       collection.value = collections.value[0].name;

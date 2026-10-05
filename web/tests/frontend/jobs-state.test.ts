@@ -19,7 +19,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { jobsState, subscribeToJobChanges, touchJobs } from "../../src/state/jobsState";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 import { useJobsStore } from "../../src/stores/jobs";
 
 describe("jobs state shared between the runtime and Vue", () => {

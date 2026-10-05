@@ -120,6 +120,53 @@ def test_source_aware_selection_avoids_adjacent_duplicate_context() -> None:
     assert "diversity_score" in selected[1]
 
 
+
+def test_source_aware_selection_penalizes_repeated_document_author() -> None:
+    candidates = [
+        {
+            "id": "d1",
+            "score": 1.0,
+            "record": {
+                "source_document_id": "derrida-a",
+                "document_author": "Jacques Derrida",
+                "work": "Of Grammatology",
+                "page_start": 10,
+                "text": "trace writing supplement difference",
+            },
+        },
+        {
+            "id": "d2",
+            "score": 0.97,
+            "record": {
+                "source_document_id": "derrida-b",
+                "document_author": "Jacques Derrida",
+                "work": "Writing and Difference",
+                "page_start": 80,
+                "text": "structure play sign absence",
+            },
+        },
+        {
+            "id": "l1",
+            "score": 0.90,
+            "record": {
+                "source_document_id": "levinas-a",
+                "document_author": "Emmanuel Levinas",
+                "work": "Totality and Infinity",
+                "page_start": 40,
+                "text": "alterity face infinity exteriority",
+            },
+        },
+    ]
+
+    selected = source_aware_select(
+        candidates,
+        limit=2,
+        relevance=lambda row: float(row["score"]),
+    )
+
+    assert [row["id"] for row in selected] == ["d1", "l1"]
+
+
 @pytest.mark.parametrize("limit", [0, 1, 7, 30])
 @pytest.mark.parametrize("weight", [0.0, 0.5, 1.0])
 def test_mmr_matches_exhaustive_selection(limit: int, weight: float) -> None:
