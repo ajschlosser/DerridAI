@@ -38,6 +38,7 @@ import threading
 import time
 import unicodedata
 import uuid
+import zipfile
 from collections import Counter
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -215,6 +216,7 @@ from .corpus_record_quality import (
     iso_now,
 )
 from .corpus_record_restructure import (
+    normalize_source_units,
     reconcile_recoverable_source_unit_references,
     synchronize_record_source_projection,
 )
@@ -5711,6 +5713,138 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
 
 
     # Backward-compatible internal alias for older call sites in this source tree.
+
+
+    def create_unfinished_export(self, build_id: str) -> dict[str, Any]:
+        """Create an inspectable point-in-time archive without publishing it.
+
+        This deliberately bypasses publication readiness. The archive is not a
+        cELF publication and must never be registered as one. It includes the
+        current Records, immutable extraction blocks, current SourceUnits,
+        validation/build state, and structural-review checkpoints so a researcher
+        can inspect an unfinished corpus without losing provenance or flattening
+        the source topology.
+        """
+        with self._lock, self.repo._lock:
+            build = json.loads(json.dumps(self.repo.get_build(build_id)))
+            records = json.loads(json.dumps(self.repo.load_records(build_id)))
+            blocks = json.loads(
+                json.dumps(self.repo.load_blocks(str(build["asset_id"])))
+            )
+            source_units = self.repo.source_units_for_validation(build_id)
+            if not source_units:
+                source_units = normalize_source_units(
+                    [],
+                    blocks,
+                    source_document_id=str(build["asset_id"]),
+                )
+            source_units = json.loads(json.dumps(source_units))
+            retired_records = self.repo.load_checkpoint(
+                build_id,
+                "retired_records",
+                {},
+            )
+            evidence_remap_pending = self.repo.load_checkpoint(
+                build_id,
+                "evidence_remap_pending",
+                {},
+            )
+
+        export_id = f"unfinished-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
+        created_at = iso_now()
+        directory = self.repo.build_path(build_id).parent / "exports"
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{export_id}.zip"
+        temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+
+        export_manifest = {
+            "artifact_kind": "unfinished_corpus_export",
+            "celf_publication": False,
+            "publication_ready": bool(
+                (build.get("publication_readiness") or {}).get("can_publish")
+            ),
+            "build_id": build_id,
+            "asset_id": build.get("asset_id"),
+            "created_at": created_at,
+            "record_count": len(records),
+            "source_block_count": len(blocks),
+            "source_unit_count": len(source_units),
+            "build_status": build.get("status"),
+            "build_stage": build.get("stage"),
+            "validation": build.get("validation") or {},
+            "warning": (
+                "Inspection artifact only. This archive may contain unresolved, "
+                "rejected, incomplete, or non-conformant Records and is not an "
+                "immutable cELF publication."
+            ),
+        }
+        readme = """DerridAI unfinished corpus export
+
+This is a point-in-time inspection artifact, not a published corpus.
+
+Contents:
+- export_manifest.json: artifact identity, counts, and validation state
+- build.json: current build/workflow state
+- records.jsonl: every current Record, including pending/rejected/internal audit data
+- source_units.jsonl: current SourceUnit topology, including active/retired lineage rows
+- source_blocks.jsonl: immutable extraction blocks used by the build
+- retired_records.json: structural-edit tombstones, when present
+- evidence_remap_pending.json: unresolved structural evidence remaps, when present
+
+Nothing in this archive is promoted, accepted, flattened, or marked cELF-conformant
+by the act of downloading it.
+"""
+
+        def jsonl(rows: list[dict[str, Any]]) -> str:
+            return "".join(
+                json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+                for row in rows
+            )
+
+        try:
+            with zipfile.ZipFile(
+                temporary,
+                "w",
+                compression=zipfile.ZIP_DEFLATED,
+                compresslevel=6,
+            ) as archive:
+                archive.writestr(
+                    "export_manifest.json",
+                    json.dumps(export_manifest, ensure_ascii=False, indent=2, sort_keys=True),
+                )
+                archive.writestr(
+                    "build.json",
+                    json.dumps(build, ensure_ascii=False, indent=2, sort_keys=True),
+                )
+                archive.writestr("records.jsonl", jsonl(records))
+                archive.writestr("source_units.jsonl", jsonl(source_units))
+                archive.writestr("source_blocks.jsonl", jsonl(blocks))
+                archive.writestr(
+                    "retired_records.json",
+                    json.dumps(retired_records, ensure_ascii=False, indent=2, sort_keys=True),
+                )
+                archive.writestr(
+                    "evidence_remap_pending.json",
+                    json.dumps(
+                        evidence_remap_pending,
+                        ensure_ascii=False,
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                )
+                archive.writestr("README.txt", readme)
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+        source_stem = Path(str(build.get("source_filename") or "corpus")).stem
+        return {
+            "path": path,
+            "filename": f"{source_stem}.unfinished-corpus.zip",
+            "export_id": export_id,
+            "created_at": created_at,
+            "record_count": len(records),
+        }
 
 
     def preview_record(self, build_id: str, record_id: str) -> dict[str, Any]:
