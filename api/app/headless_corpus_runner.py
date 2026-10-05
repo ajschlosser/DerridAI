@@ -28,10 +28,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .corpus_cli_config import CorpusProcessingConfig
-from .corpus_output_profiles import (
-    atomic_copy,
-    write_research_jsonl_zst,
-)
+from .corpus_output_profiles import atomic_copy, write_research_jsonl_zst
 from .metadata_schema import MetadataSchema
 
 
