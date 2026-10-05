@@ -1766,21 +1766,22 @@ class PdfCorpusRepository:
         return normalized
 
     def source_units_for_validation(self, build_id: str) -> list[dict[str, Any]]:
-        """Read a normalized SourceUnit snapshot without performing durable writes.
+        """Read an existing SourceUnit topology without migrating legacy builds.
 
-        Validation callbacks may run optimistically and be retried when canonical
-        Record/build state changes. Calling load_source_units() there is unsafe for
-        legacy builds because its on-demand migration persists source_units.jsonl
-        and changes build projection state during the callback itself. This helper
-        performs the same normalization in memory and leaves persistence to explicit
-        migration/structural-edit paths.
+        Validation callbacks may run optimistically while review writes commit.
+        Creating an in-memory SourceUnit migration for a legacy build changes the
+        candidate Record payload by adding source_unit_ids/source_extracted_text,
+        which creates artificial reconciliation conflicts and can overwrite a
+        concurrent review candidate. Only builds with an explicit SourceUnit store
+        use SourceUnit-aware validation; older builds stay on source_block_ids until
+        an explicit structural/migration operation creates that store.
         """
         build = self.get_build(build_id)
         path = self.build_source_units_path(build_id)
-        rows: list[dict[str, Any]] = []
-        if path.exists():
-            with path.open("r", encoding="utf-8") as handle:
-                rows = [json.loads(line) for line in handle if line.strip()]
+        if not path.exists():
+            return []
+        with path.open("r", encoding="utf-8") as handle:
+            rows = [json.loads(line) for line in handle if line.strip()]
         blocks = self.load_blocks(str(build["asset_id"]))
         from .corpus_record_restructure import normalize_source_units
 
@@ -5388,8 +5389,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         source_units = self.repo.source_units_for_validation(str(build["build_id"]))
         # source_extracted_text is a deterministic projection of the authoritative
         # SourceUnits. Reconcile it before validation so structural edits are not
-        # judged against stale legacy block projections.
-        synchronize_record_source_projection(records, source_units)
+        # judged against stale legacy block projections. Legacy builds without an
+        # explicit SourceUnit topology stay mutation-free during validation.
+        if source_units:
+            synchronize_record_source_projection(records, source_units)
         validation_profile = {
             **profile,
             "_validation_source_units": source_units,
