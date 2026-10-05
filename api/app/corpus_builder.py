@@ -64,6 +64,7 @@ from .concurrency import (
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
 from .corpus_build_lifecycle import BuildLifecycleMixin
+from .corpus_citations import _citation_strings
 from .corpus_editorial_memory import EditorialMemoryMixin
 from .corpus_enrichment_helpers import (
     _enrichment_pass_indices as _enrichment_pass_indices,
@@ -301,6 +302,7 @@ from .language_segmentation import (
     profile_metadata as language_segmentation_profile,
 )
 from .llm_failures import FailureDisposition, failure_disposition
+from .llm_transport import chat_complete
 from .main_text_start import infer_main_text_start
 from .memory_prefill import prefill_records
 from .metadata_exemplar_projection import (
@@ -328,8 +330,6 @@ from .operation_events import (
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
-from .corpus_citations import _citation_strings
-from .llm_transport import chat_complete
 from .record_semantic_map import build_semantic_map_projections
 from .reviewer_context import current_reviewer
 from .run_guidance import find_guidance_matches
