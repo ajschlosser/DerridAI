@@ -2516,6 +2516,7 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
  'pdf_corpus.accept_all': 'Accept all',
  'pdf_corpus.accept_all_queue': 'Accept queue',
  'pdf_corpus.accept_blocked_metadata': 'Confirm the required metadata before accepting this record: {fields}.',
+ 'pdf_corpus.accept_blocked_metadata_generic': 'Required metadata still needs review before this record can be accepted.',
  'pdf_corpus.accept_blocked_source': 'This record has a source-extraction problem. Inspect the source, correct or '
                                      'confirm the reviewed text, then save with “Mark this record-level source issue '
                                      'resolved” selected; or reject the record.',

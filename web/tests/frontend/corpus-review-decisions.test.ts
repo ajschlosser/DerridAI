@@ -144,7 +144,10 @@ function setup(beforeDecision?: () => Promise<boolean>) {
     focusFirstMetadataBlocker,
     setMessage,
     t: (key) => key,
-    tf: (key) => key,
+    tf: (key, values) =>
+      key === "pdf_corpus.accept_blocked_metadata"
+        ? `Confirm the required metadata before accepting this record: ${values.fields}.`
+        : key,
   });
 
   return {
@@ -216,7 +219,53 @@ describe("Corpus Builder review decisions", () => {
     expect(state.selectedRecord.value).toEqual(authoritative);
     expect(state.reviewInspectorTab.value).toBe("metadata");
     expect(state.focusFirstMetadataBlocker).toHaveBeenCalled();
-    expect(state.setMessage).toHaveBeenCalledWith("pdf_corpus.accept_blocked_metadata");
+    expect(state.setMessage).toHaveBeenCalledWith(
+      "Confirm the required metadata before accepting this record: record.speaker.",
+      "error",
+    );
+  });
+
+  it("interpolates metadata blockers even if the reviewer navigates away before the save returns", async () => {
+    const state = setup();
+    corpusBuilderApi.reviewDecision.mockResolvedValue({
+      blocked: true,
+      blocker: "metadata",
+      blocking_fields: ["speaker", "position_holder"],
+      record: record({ record_revision: 2 }),
+      build: { build_id: "b1", review_queue_counts: {} },
+    });
+
+    await state.decisions.setDisposition("accepted");
+    state.getSelectionVersion.mockReturnValue(1);
+    await state.queued[0].request(false);
+
+    expect(state.setMessage).toHaveBeenCalledWith(
+      "Confirm the required metadata before accepting this record: record.speaker, record.position_holder.",
+      "error",
+    );
+    expect(state.setMessage).not.toHaveBeenCalledWith(
+      expect.stringContaining("{fields}"),
+      expect.anything(),
+    );
+  });
+
+  it("uses generic metadata blocker copy when the server returns no field list", async () => {
+    const state = setup();
+    corpusBuilderApi.reviewDecision.mockResolvedValue({
+      blocked: true,
+      blocker: "metadata",
+      blocking_fields: [],
+      record: record({ record_revision: 2 }),
+      build: { build_id: "b1", review_queue_counts: {} },
+    });
+
+    await state.decisions.setDisposition("accepted");
+    await state.queued[0].request(false);
+
+    expect(state.setMessage).toHaveBeenCalledWith(
+      "pdf_corpus.accept_blocked_metadata_generic",
+      "error",
+    );
   });
 
   it("routes source blockers to the source review queue", async () => {

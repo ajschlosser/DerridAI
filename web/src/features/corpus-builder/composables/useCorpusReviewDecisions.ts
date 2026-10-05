@@ -92,6 +92,15 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
     }
   }
 
+  function metadataBlockerMessage(blockingFields: readonly string[] = []) {
+    const fields = blockingFields
+      .map((field) => options.t(`record.${field}`, field.replace(/_/g, " ")))
+      .join(", ");
+    return fields
+      ? options.tf("pdf_corpus.accept_blocked_metadata", { fields })
+      : options.t("pdf_corpus.accept_blocked_metadata_generic");
+  }
+
   async function setDisposition(disposition: "pending" | "accepted" | "rejected") {
     if (options.reviewLocked.value) {
       options.setMessage(options.t("pdf_corpus.review_preparing_help"));
@@ -268,7 +277,12 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
         if (result.blocked) {
           restoreAffectedRow(result.record);
           if (!stillFollowingDecision()) {
-            options.setMessage(options.t("pdf_corpus.accept_blocked_metadata"));
+            options.setMessage(
+              result.blocker === "source_problem"
+                ? options.t("pdf_corpus.accept_blocked_source")
+                : metadataBlockerMessage(result.blocking_fields || []),
+              "error",
+            );
             return;
           }
           options.selectedRecord.value = result.record;
@@ -283,10 +297,7 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
             options.setMessage(options.t("pdf_corpus.accept_blocked_source"), "error");
           } else {
             options.reviewInspectorTab.value = "metadata";
-            const fields = (result.blocking_fields || [])
-              .map((field) => options.t(`record.${field}`, field.replace(/_/g, " ")))
-              .join(", ");
-            options.setMessage(options.tf("pdf_corpus.accept_blocked_metadata", { fields }));
+            options.setMessage(metadataBlockerMessage(result.blocking_fields || []), "error");
             await nextTick();
             options.focusFirstMetadataBlocker();
           }
