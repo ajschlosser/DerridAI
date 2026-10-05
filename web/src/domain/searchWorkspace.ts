@@ -539,12 +539,7 @@ export function createSearchWorkspace(deps: Deps) {
     syncUrl({ replace: true });
   }
   function addSearchAdvancedFilter(
-    {
-      field = "",
-      op = "eq",
-      value = "",
-      kind = "text",
-    }: {
+    { field = "", op = "eq", value = "", kind = "text" }: {
       field?: string;
       op?: string;
       value?: string;
