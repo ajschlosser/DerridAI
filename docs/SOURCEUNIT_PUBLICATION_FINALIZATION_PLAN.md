@@ -269,6 +269,33 @@ Legend: checked means implemented on the feature branch; unchecked means still p
 - [x] Merge the latest `master` into the feature branch before final validation; sync PR #534 completed without conflicts.
 - [x] Merge PR #532 to `master` (`f2f5f1889feba6e8c36a01f4e569c5a7d84e74aa`).
 
+## Follow-up hardening after the first merge
+
+The first merged implementation exposed two additional real-build compatibility
+shapes that the reduced regression did not cover. PR #539 hardens them without
+weakening the cELF gate:
+
+- stale Record references may follow persisted retired-SourceUnit lineage to
+  exact active descendants; the Record keeps a before/after reconciliation
+  history with source hashes;
+- an older SourceUnit store may contain an immutable compatibility root that is
+  still active alongside replacement descendants. The root may be retired only
+  when the descendants exactly conserve its text. The root row is retained with
+  successor links and a topology-reconciliation audit event;
+- ambiguous, duplicate, non-conserving, or missing mappings remain blockers and
+  are now named in the publication error instead of collapsing into an opaque
+  generic 409;
+- **Download unfinished corpus** provides a non-publication ZIP for inspection.
+  It contains raw Records, exact persisted SourceUnit rows, a separate normalized
+  validation view, immutable extraction blocks, validation/build state, retired
+  Record tombstones, and pending evidence remaps. Its manifest declares
+  `celf_publication: false`, and blind second-opinion visibility rules are
+  applied before the archive is written.
+
+This follow-up deliberately treats migration/finalization as provenance repair,
+not scholarly acceptance. It never deletes retired topology or turns an
+unreviewed assertion into a human-reviewed one.
+
 ## Completion definition
 
 This work is complete when **Use suggestions as-is** can publish a source-conserving corpus whose current topology is expressed through SourceUnits without forcing the reviewer to manually clear stale legacy topology/text-fidelity errors, while the same path still refuses a corpus with genuine missing, duplicated, invented, or reordered source material.
