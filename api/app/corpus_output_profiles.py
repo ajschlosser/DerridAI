@@ -28,9 +28,10 @@ import json
 import os
 import shutil
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .corpus_metadata import MANIFEST_INHERITED_FIELDS
 from .metadata_schema import CORE_FIELDS, MetadataSchema
