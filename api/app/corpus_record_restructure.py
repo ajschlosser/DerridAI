@@ -300,11 +300,18 @@ def repair_record_source_topology(
     immutable_roots = set(source_block_ids or ())
     if not immutable_roots:
         immutable_roots = {
-            str(unit.get("block_id") or "")
+            str(value)
             for unit in units
-            if not (unit.get("parent_unit_ids") or [])
-            and str(unit.get("block_id") or "")
+            for value in unit.get("source_block_ids") or []
+            if str(value) and str(value) not in all_units
         }
+        immutable_roots.update(
+            str(unit.get("source_unit_id") or unit.get("unit_id"))
+            for unit in units
+            if str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+            and str(unit.get("source_unit_id") or unit.get("unit_id"))
+            == str(unit.get("block_id") or "")
+        )
 
     def active_descendants(unit_id: str) -> list[str]:
         return [
