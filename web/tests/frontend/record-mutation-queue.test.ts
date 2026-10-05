@@ -196,6 +196,52 @@ describe("RecordMutationQueue", () => {
     expect(contexts).toEqual([false, true]);
   });
 
+  it("waits for every in-flight review mutation before cleanup continues", async () => {
+    const queue = new RecordMutationQueue();
+    const finished: string[] = [];
+    let releaseFirst!: () => void;
+    let releaseSecond!: () => void;
+    const first = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const second = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+
+    queue.enqueue(
+      "r1",
+      async () => {
+        await first;
+        finished.push("r1");
+      },
+      vi.fn(),
+    );
+    queue.enqueue(
+      "r2",
+      async () => {
+        await second;
+        finished.push("r2");
+      },
+      vi.fn(),
+    );
+
+    let settled = false;
+    const waiting = queue.waitForAll().then(() => {
+      settled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+
+    releaseFirst();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+
+    releaseSecond();
+    await waiting;
+    expect(finished.sort()).toEqual(["r1", "r2"]);
+    expect(settled).toBe(true);
+  });
+
   it("reports whether another mutation is queued behind the running one", async () => {
     const queue = new RecordMutationQueue();
     const seen: boolean[] = [];
