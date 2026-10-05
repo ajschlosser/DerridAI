@@ -97,11 +97,13 @@ describe("search workspace commands", () => {
       kind: "number",
     });
 
-    expect(ctx.state.globalFilters.map((filter: Record<string, unknown>) => ({
-      field: filter.field,
-      op: filter.op,
-      value: filter.value,
-    }))).toEqual([
+    expect(
+      ctx.state.globalFilters.map((filter: Record<string, unknown>) => ({
+        field: filter.field,
+        op: filter.op,
+        value: filter.value,
+      })),
+    ).toEqual([
       { field: "conceptual_score", op: "gte", value: "0.7" },
       { field: "motifs", op: "has", value: "trace" },
       { field: "conceptual_score", op: "eq", value: "invalid-for-number" },
