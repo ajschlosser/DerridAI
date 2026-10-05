@@ -2429,12 +2429,15 @@ def run_rag_pipeline(
 
     # Advisory memory is chosen after the evidence packet exists so validated-claim
     # support can be checked against the Records this answer may actually cite.
+    excluded_thread_response_ids: list[str] = []
+    if thread_audit:
+        excluded_thread_response_ids = [
+            str(item["response_id"])
+            for item in (thread_audit.get("context_selection") or {}).get("items", [])
+            if item.get("role") == "assistant" and item.get("response_id")
+        ]
     prior_response_memory, prior_claim_memory, memory_detail = memory_guidance(
         query_metadata["prompt_query"],
-        **({"excluded_response_ids": [item["response_id"] for item in
-            (thread_audit.get("context_selection") or {}).get("items", [])
-            if item.get("role") == "assistant" and item.get("response_id")]}
-           if thread_audit else {}),
         use_responses=request.use_prior_response_memory,
         use_claims=request.use_prior_claim_memory,
         owner=owner,
@@ -2442,6 +2445,7 @@ def run_rag_pipeline(
         system_store=system_store,
         response_index_factory=lambda: ResponseMemoryIndex(store),
         claim_index_factory=lambda: ClaimMemoryIndex(store),
+        excluded_response_ids=excluded_thread_response_ids,
     )
     warnings.extend(memory_detail["warnings"])
 
