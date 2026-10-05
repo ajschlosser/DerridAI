@@ -220,6 +220,212 @@ def test_sourceunit_topology_does_not_duplicate_a_split_legacy_block():
     assert validation["source_conservation_errors"] == []
 
 
+def test_sourceunit_root_resolution_crosses_retired_generations():
+    """A current unit may descend through retired replacement units to one extraction root."""
+    blocks = [{"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"}]
+    units = [
+        {**blocks[0], "source_unit_id": "b1", "unit_id": "b1", "source_block_ids": ["b1"], "active": False},
+        {**blocks[0], "source_unit_id": "u1", "unit_id": "u1", "source_block_ids": ["b1"], "parent_unit_ids": ["b1"], "text": "Alpha", "active": False},
+        {**blocks[0], "source_unit_id": "u2", "unit_id": "u2", "source_block_ids": ["b1"], "parent_unit_ids": ["u1"], "text": "Alpha", "active": True},
+    ]
+    records = [{
+        "record_id": "r1",
+        "text": "Alpha",
+        "source_extracted_text": "Alpha",
+        "source_unit_ids": ["u2"],
+        "source_block_ids": ["b1"],
+        "pdf_pages": [1],
+        "page_start": None,
+        "page_end": None,
+        "review_disposition": "rejected",
+    }]
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks, records, {}, source_units=units
+    )
+    assert validation["source_valid"] is True
+    assert validation["missing_block_ids"] == []
+
+
+def test_duplicate_active_sourceunit_ownership_is_blocking():
+    blocks = [{"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"}]
+    units = [{
+        **blocks[0],
+        "source_unit_id": "u1",
+        "unit_id": "u1",
+        "source_block_ids": ["b1"],
+        "parent_unit_ids": ["b1"],
+        "text": "Alpha",
+        "active": True,
+    }]
+    base = {
+        "text": "Alpha",
+        "source_extracted_text": "Alpha",
+        "source_unit_ids": ["u1"],
+        "source_block_ids": ["b1"],
+        "pdf_pages": [1],
+        "page_start": None,
+        "page_end": None,
+        "review_disposition": "rejected",
+    }
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks,
+        [{**base, "record_id": "r1"}, {**base, "record_id": "r2"}],
+        {},
+        source_units=units,
+    )
+    assert validation["source_valid"] is False
+    assert validation["duplicate_source_unit_ids"] == ["u1"]
+    assert any(
+        issue["code"] == "source_duplicate" and issue["field"] == "u1"
+        for issue in validation["validation_issues"]
+    )
+
+
+def test_inactive_sourceunit_reference_is_blocking():
+    blocks = [{"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"}]
+    units = [{
+        **blocks[0],
+        "source_unit_id": "u-old",
+        "unit_id": "u-old",
+        "source_block_ids": ["b1"],
+        "parent_unit_ids": ["b1"],
+        "text": "Alpha",
+        "active": False,
+    }]
+    records = [{
+        "record_id": "r1",
+        "text": "Alpha",
+        "source_extracted_text": "Alpha",
+        "source_unit_ids": ["u-old"],
+        "source_block_ids": ["b1"],
+        "pdf_pages": [1],
+        "page_start": None,
+        "page_end": None,
+        "review_disposition": "rejected",
+    }]
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks, records, {}, source_units=units
+    )
+    assert validation["source_valid"] is False
+    assert validation["unknown_source_unit_ids"] == ["u-old"]
+    assert validation["source_reference_errors"][0]["field"] == "u-old"
+
+
+def test_reordered_sourceunits_are_blocking():
+    blocks = [
+        {"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"},
+        {"block_id": "b2", "page": 1, "type": "paragraph", "text": "Beta"},
+    ]
+    units = [
+        {**blocks[0], "source_unit_id": "u1", "unit_id": "u1", "source_block_ids": ["b1"], "parent_unit_ids": ["b1"], "text": "Alpha", "active": True},
+        {**blocks[1], "source_unit_id": "u2", "unit_id": "u2", "source_block_ids": ["b2"], "parent_unit_ids": ["b2"], "text": "Beta", "active": True},
+    ]
+    records = [
+        {
+            "record_id": "r2",
+            "text": "Beta",
+            "source_extracted_text": "Beta",
+            "source_unit_ids": ["u2"],
+            "source_block_ids": ["b2"],
+            "pdf_pages": [1],
+            "page_start": None,
+            "page_end": None,
+            "review_disposition": "rejected",
+        },
+        {
+            "record_id": "r1",
+            "text": "Alpha",
+            "source_extracted_text": "Alpha",
+            "source_unit_ids": ["u1"],
+            "source_block_ids": ["b1"],
+            "pdf_pages": [1],
+            "page_start": None,
+            "page_end": None,
+            "review_disposition": "rejected",
+        },
+    ]
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks, records, {}, source_units=units
+    )
+    assert validation["source_valid"] is False
+    assert validation["source_order_errors"]
+    assert validation["source_conservation_errors"] == ["corpus"]
+
+
+def test_timed_sourceunit_locator_mismatch_is_blocking():
+    blocks = [{
+        "block_id": "b1",
+        "locator_kind": "time",
+        "start": 10.0,
+        "end": 20.0,
+        "type": "transcript",
+        "text": "Alpha",
+    }]
+    units = [{
+        **blocks[0],
+        "source_unit_id": "u1",
+        "unit_id": "u1",
+        "source_block_ids": ["b1"],
+        "parent_unit_ids": ["b1"],
+        "start": 20.0,
+        "end": 10.0,
+        "text": "Alpha",
+        "active": True,
+    }]
+    records = [{
+        "record_id": "r1",
+        "text": "Alpha",
+        "source_extracted_text": "Alpha",
+        "source_unit_ids": ["u1"],
+        "source_block_ids": ["b1"],
+        "review_disposition": "rejected",
+    }]
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks, records, {}, source_units=units
+    )
+    assert validation["source_valid"] is False
+    assert validation["page_mapping_errors"] == ["r1"]
+
+
+def test_block_bound_evidence_survives_sourceunit_partition():
+    blocks = [{"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"}]
+    units = [{
+        **blocks[0],
+        "source_unit_id": "u1",
+        "unit_id": "u1",
+        "source_block_ids": ["b1"],
+        "parent_unit_ids": ["b1"],
+        "text": "Alpha",
+        "active": True,
+    }]
+    records = [{
+        "record_id": "r1",
+        "text": "Alpha",
+        "source_extracted_text": "Alpha",
+        "source_unit_ids": ["u1"],
+        "source_block_ids": ["b1"],
+        "pdf_pages": [1],
+        "page_start": None,
+        "page_end": None,
+        "speaker": "Derrida",
+        "metadata_evidence": {
+            "speaker": {
+                "block_ids": ["b1"],
+                "confidence": 1.0,
+                "reviewed_by": "human",
+            }
+        },
+        "review_disposition": "pending",
+    }]
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks,
+        records,
+        {"attribution_evidence_fields": ["speaker"], "min_metadata_confidence": 0.65},
+        source_units=units,
+    )
+    assert validation["metadata_evidence_errors"] == []
+
+
 def test_text_conservation_guard_refuses_lost_or_invented_text():
     from app.corpus_record_restructure import assert_text_conserved
 
