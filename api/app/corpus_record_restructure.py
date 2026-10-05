@@ -308,6 +308,117 @@ def _unique_contiguous_source_unit_match(
     return matches[0] if len(matches) == 1 else []
 
 
+def reconcile_redundant_active_source_roots(
+    units: list[dict[str, Any]],
+    *,
+    transaction_id: str,
+) -> int:
+    """Retire compatibility roots only when active descendants exactly conserve them.
+
+    Older SourceUnit stores can contain both an immutable block-shaped root unit and
+    active replacement units descended from that root. Treating both as active
+    creates a false uncovered-unit publication blocker. This migration is safe only
+    when the descendants' concatenated text exactly conserves the root (ignoring
+    whitespace). The root row is retained as a retired lineage node with successors
+    and an audit event; nothing is deleted or flattened.
+    """
+    by_id = {
+        str(unit.get("source_unit_id") or unit.get("unit_id")): unit
+        for unit in units
+        if str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+    }
+    children: dict[str, list[str]] = {}
+    for unit in units:
+        child_id = str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+        if not child_id:
+            continue
+        for parent in unit.get("parent_unit_ids") or []:
+            parent_id = str(parent)
+            if parent_id:
+                children.setdefault(parent_id, []).append(child_id)
+
+    def active_descendants(root_id: str) -> list[str]:
+        resolved: list[str] = []
+        seen: set[str] = {root_id}
+
+        def visit(unit_id: str) -> None:
+            if unit_id in seen:
+                return
+            seen.add(unit_id)
+            unit = by_id.get(unit_id)
+            if not unit:
+                return
+            if unit.get("active"):
+                resolved.append(unit_id)
+                return
+            successors = [
+                str(value)
+                for value in unit.get("successor_unit_ids") or []
+                if str(value)
+            ]
+            for child_id in successors or children.get(unit_id, []):
+                visit(child_id)
+
+        root = by_id.get(root_id) or {}
+        successors = [
+            str(value)
+            for value in root.get("successor_unit_ids") or []
+            if str(value)
+        ]
+        for child_id in successors or children.get(root_id, []):
+            visit(child_id)
+        return list(dict.fromkeys(resolved))
+
+    changed = 0
+    now = iso_now()
+    for root_id, root in by_id.items():
+        if not root.get("active"):
+            continue
+        # Compatibility roots use their immutable extraction block ID as both
+        # SourceUnit ID and block_id. Replacement units have independent IDs.
+        if str(root.get("block_id") or "") != root_id:
+            continue
+        descendants = active_descendants(root_id)
+        if not descendants:
+            continue
+        root_text = str(root.get("text") or "")
+        descendant_text = JOIN.join(
+            str((by_id.get(unit_id) or {}).get("text") or "")
+            for unit_id in descendants
+        )
+        if _squash(root_text) != _squash(descendant_text):
+            continue
+
+        prior_successors = [
+            str(value)
+            for value in root.get("successor_unit_ids") or []
+            if str(value)
+        ]
+        root["active"] = False
+        root["retired_at"] = root.get("retired_at") or now
+        root["retired_transaction_id"] = (
+            root.get("retired_transaction_id") or transaction_id
+        )
+        root["successor_unit_ids"] = list(
+            dict.fromkeys([*prior_successors, *descendants])
+        )
+        history = list(root.get("topology_reconciliation_history") or [])
+        history.append(
+            {
+                "transaction_id": transaction_id,
+                "at": now,
+                "method": "retire_redundant_compatibility_root",
+                "source_unit_id": root_id,
+                "successor_unit_ids": descendants,
+                "source_text_hash": source_unit_text_hash(root_text),
+                "successor_text_hash": source_unit_text_hash(descendant_text),
+            }
+        )
+        root["topology_reconciliation_history"] = history[-50:]
+        changed += 1
+    return changed
+
+
 def reconcile_recoverable_source_unit_references(
     records: list[dict[str, Any]],
     units: list[dict[str, Any]],
