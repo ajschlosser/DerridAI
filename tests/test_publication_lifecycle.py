@@ -365,6 +365,23 @@ def test_accept_unreviewed_finalizes_sourceunit_topology_before_publication(tmp_
     stored={row["record_id"]:row for row in repo.load_records(build_id)}
     assert stored["r-left"]["source_extracted_text"]=="Record"
     assert stored["r-right"]["source_extracted_text"]=="text"
+    # Re-projection is deterministic but not silent: the immutable publication
+    # retains hashes and conservation status for the derived-state correction.
+    published={
+        row["record_id"]:row
+        for row in iter_jsonl_zst(
+            repo.publication_path(publication["publication_id"]),
+            rehydrate_evidence=False,
+        )
+    }
+    left_projection=published["r-left"]["source_projection_reconciliation_history"][-1]
+    right_projection=published["r-right"]["source_projection_reconciliation_history"][-1]
+    assert left_projection["method"]=="derive_from_active_source_units"
+    assert right_projection["method"]=="derive_from_active_source_units"
+    assert left_projection["source_text_conserved"] is False
+    assert right_projection["source_text_conserved"] is False
+    assert left_projection["previous_source_projection_hash"]
+    assert left_projection["source_projection_hash"]
 
 
 def test_accept_unreviewed_repairs_retired_sourceunit_reference_with_audit_history(tmp_path:Path):
@@ -641,6 +658,19 @@ def test_accept_unreviewed_repairs_recoverable_duplicate_active_ownership(tmp_pa
     assert history[-1]["method"]=="unique_source_projection_match"
     assert history[-1]["previous_source_unit_ids"]==["u-left"]
     assert history[-1]["source_unit_ids"]==["u-right"]
+    assert history[-1]["transaction_id"].startswith("publication-finalize-")
+    assert history[-1]["previous_source_projection_hash"]
+    assert history[-1]["reconciled_source_projection_hash"]
+    published={
+        row["record_id"]:row
+        for row in iter_jsonl_zst(
+            repo.publication_path(publication["publication_id"]),
+            rehydrate_evidence=False,
+        )
+    }
+    published_history=published["r-right"]["source_topology_reconciliation_history"]
+    assert published_history[-1]["event_id"]==history[-1]["event_id"]
+    assert published_history[-1]["source_text_conserved"] is True
     refreshed=repo.get_build(build_id)
     assert refreshed["validation"]["duplicate_source_unit_ids"]==[]
     assert refreshed["validation"]["missing_source_unit_ids"]==[]
