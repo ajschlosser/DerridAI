@@ -201,9 +201,7 @@ describe("inspector layout", () => {
 
     const layout = defaultInspectorLayout({}, schema as never);
     expect(
-      layout.provenance.some(
-        (row) => row.kind === "field" && row.field === "conceptual_tension",
-      ),
+      layout.provenance.some((row) => row.kind === "field" && row.field === "conceptual_tension"),
     ).toBe(true);
     expect(
       layout.indexing.some((row) => row.kind === "field" && row.field === "people_index"),
