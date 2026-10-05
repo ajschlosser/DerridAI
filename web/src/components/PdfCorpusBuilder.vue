@@ -460,8 +460,31 @@ async function publishUnreviewed() {
 /** A successful publication lands on the Publish workspace, which shows the published snapshot. */
 async function publishAndShow(options: { acceptUnreviewed?: boolean } = {}) {
   const result = await publish({ download: false, ...options });
-  if (result) await switchWorkspace("publish");
+  // publish() reconciles the persisted build before attempting publication. Even
+  // when blockers remain, take the reviewer to the readiness workspace so the
+  // resulting source/metadata findings are visible and actionable.
+  if (currentBuild.value) await switchWorkspace("publish");
   return result;
+}
+
+async function reconcileAndOpenPublish() {
+  const build = currentBuild.value;
+  if (!build) return;
+  const buildId = build.build_id;
+  busy.value = "reconcile";
+  try {
+    await recordSaveQueue.waitForAll();
+    if (currentBuild.value?.build_id !== buildId) return;
+    const reconciled = await corpusBuilderApi.reconcile(buildId);
+    if (currentBuild.value?.build_id !== buildId) return;
+    currentBuild.value = reconciled;
+    syncBuildInRail(reconciled);
+    await switchWorkspace("publish");
+  } catch (exc) {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  } finally {
+    if (currentBuild.value?.build_id === buildId) busy.value = "";
+  }
 }
 const textCleanupOpen = ref(false);
 const sourceTranscriptionOpen = ref(false);
@@ -996,7 +1019,7 @@ function returnToReadiness() {
   reviewRequested.value = false;
   reviewQueue.value = "all";
   recordQuery.value = "";
-  void switchWorkspace("publish");
+  void reconcileAndOpenPublish();
 }
 let remediationAdvancing = false;
 watch(fixRemaining, async (remaining, previous) => {
@@ -1786,7 +1809,16 @@ async function reviewFromPublish(action: () => unknown, code = "") {
 async function reviewValidationFromPublish() {
   const first = fixIssues.value.find((item) => item?.record_id);
   if (first) {
+    const code = String(first.code || "");
+    if (code.startsWith("source_")) {
+      await reviewFromPublish(() => openValidationIssueQueue(String(first.record_id)), "source_validation");
+      return;
+    }
     await reviewFromPublish(() => fixValidationIssue(first));
+    return;
+  }
+  if (fixIssues.value.some((item) => String(item?.code || "").startsWith("source_"))) {
+    await reviewFromPublish(() => openSourceIssueQueue(), "source_validation");
     return;
   }
   await reviewFromPublish(() => openValidationIssueQueue(), "metadata_validation");
@@ -3011,7 +3043,7 @@ defineExpose({
       @resume="resumeBuild"
       @delete="deleteBuild"
       @open-review="switchWorkspace('review')"
-      @open-publish="switchWorkspace('publish')"
+      @open-publish="reconcileAndOpenPublish"
       @confirm-manifest="confirmManifest"
       @acknowledge-warnings="acknowledgeBuildWarnings"
     >
@@ -3170,7 +3202,7 @@ defineExpose({
             reviewQueue = 'all';
             recordQuery = '';
           "
-          @open-publish="switchWorkspace('publish')"
+          @open-publish="reconcileAndOpenPublish"
         />
       </template>
       <template #record>
