@@ -218,6 +218,7 @@ from .corpus_record_quality import (
 from .corpus_record_restructure import (
     normalize_source_units,
     reconcile_recoverable_source_unit_references,
+    reconcile_redundant_active_source_roots,
     synchronize_record_source_projection,
 )
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
@@ -5354,6 +5355,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build_id: str,
         *,
         repair_source_topology: bool = False,
+        source_reconciliation_id: str = "",
     ) -> dict[str, Any]:
         """Validate current topology without restoring a settled worker snapshot.
 
@@ -5364,7 +5366,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         """
         base: dict[str, Any] = {}
         build: dict[str, Any] = {}
-        reconciliation_id = (
+        reconciliation_id = source_reconciliation_id or (
             f"publication-finalize-{uuid.uuid4().hex[:12]}"
             if repair_source_topology
             else ""
@@ -6023,9 +6025,23 @@ by the act of downloading it.
             accept_unreviewed
             and str(build.get("status") or "") not in {"queued", "running"}
         ):
+            reconciliation_id = f"publication-finalize-{uuid.uuid4().hex[:12]}"
+            # Some older SourceUnit stores retained an immutable compatibility
+            # root as active alongside exact replacement descendants. That shape
+            # is redundant rather than lossy, but it looks uncovered to strict
+            # ownership validation. Retire only roots whose descendants exactly
+            # conserve their text, preserve the root row, and record the migration.
+            with self._lock, self.repo._lock:
+                source_units = self.repo.load_source_units(build_id)
+                if reconcile_redundant_active_source_roots(
+                    source_units,
+                    transaction_id=reconciliation_id,
+                ):
+                    self.repo.save_source_units(build_id, source_units)
             build = self._reconcile_and_validate(
                 build_id,
                 repair_source_topology=True,
+                source_reconciliation_id=reconciliation_id,
             )
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
